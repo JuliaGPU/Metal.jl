@@ -40,7 +40,7 @@ include("libcmt.jl")
 #end
 
 #
-Base.convert(::Type{NsRange}, range::UnitRange{T}) where T<:Integer = 
+Base.convert(::Type{NsRange}, range::UnitRange{T}) where T<:Integer =
 	NsRange(first(range), length(range))
 #
 
@@ -56,6 +56,11 @@ include("wrappers/buffer.jl")
 include("wrappers/cmd-queue.jl")
 include("wrappers/cmd-buffer.jl")
 include("wrappers/compute-pipeline-state.jl")
-include("wrappers/compute-comm-enc.jl")
+
+include("wrappers/memory.jl")
+
+include("wrappers/command_enc.jl")
+include("wrappers/command_enc_blit.jl")
+include("wrappers/command_enc_compute.jl")
 
 end # module

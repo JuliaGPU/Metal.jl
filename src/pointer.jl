@@ -2,7 +2,6 @@
 
 export MtlPtr, MTL_NULL, PtrOrMtlPtr
 
-
 #
 # CUDA pointer
 #
@@ -25,7 +24,7 @@ end
 # constructor
 MtlPtr{T}(x::Union{Int,UInt,MtlPtr}) where {T} = Base.bitcast(MtlPtr{T}, x)
 
-const CU_NULL = MtlPtr{Cvoid}(0)
+const MTL_NULL = MtlPtr{Cvoid}(0)
 
 
 ## getters
@@ -35,19 +34,18 @@ Base.eltype(::Type{<:MtlPtr{T}}) where {T} = T
 
 ## conversions
 
-# to and from integers
-## pointer to integer
+# pointer to integer
 Base.convert(::Type{T}, x::MtlPtr) where {T<:Integer} = T(UInt(x))
 ## integer to pointer
 Base.convert(::Type{MtlPtr{T}}, x::Union{Int,UInt}) where {T} = MtlPtr{T}(x)
 Int(x::MtlPtr)  = Base.bitcast(Int, x)
 UInt(x::MtlPtr) = Base.bitcast(UInt, x)
 
-# between regular and CUDA pointers
+# between regular and Metal pointers
 Base.convert(::Type{<:Ptr}, p::MtlPtr) =
     throw(ArgumentError("cannot convert a GPU pointer to a CPU pointer"))
 
-# between CUDA pointers
+# between Metal pointers
 Base.convert(::Type{MtlPtr{T}}, p::MtlPtr) where {T} = Base.bitcast(MtlPtr{T}, p)
 
 # defer conversions to unsafe_convert

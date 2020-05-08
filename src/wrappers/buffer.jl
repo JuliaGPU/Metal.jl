@@ -14,13 +14,13 @@ mutable struct MtlBuffer <: MtlResource
 end
 
 Base.convert(::Type{MTLBuffer}, lib::MtlBuffer) = lib.ptr
-Base.unsafe_convert(::Type{MTLBuffer}, lib::MtlBuffer) = convert(MTLBuffer, lib.ptr) 
+Base.unsafe_convert(::Type{MTLBuffer}, lib::MtlBuffer) = convert(MTLBuffer, lib.ptr)
 
 Base.:(==)(a::MtlBuffer, b::MtlBuffer) = a.ptr == b.ptr
 Base.hash(lib::MtlBuffer, h::UInt) = hash(lib.ptr, h)
 
 function unsafe_destroy!(buf::MtlBuffer)
-	if buf.ptr !== C_NULL 
+	if buf.ptr !== C_NULL
 		mtBufferRelease(buf)
 	end
 end
@@ -31,7 +31,7 @@ function MtlBuffer(dev::MtlDevice, bytesize::Integer, opts::MtResourceOptions)
 	finalizer(unsafe_destroy!, obj)
 	return obj
 end
-MtlBuffer(dev::MtlDevice, T::Type, len::Integer, opts::MtResourceOptions) = 
+MtlBuffer(dev::MtlDevice, T::Type, len::Integer, opts::MtResourceOptions) =
 	MtlBuffer(dev, sizeof(T)*len, opts)
 
 ## constructors from heap
@@ -49,9 +49,9 @@ function MtlBuffer(heap::MtlHeap, bytesize::Integer, opts::MtResourceOptions, of
 	finalizer(unsafe_destroy!, obj)
 	return obj
 end
-MtlBuffer(heap::MtlHeap, T::Type, len::Integer, opts::MtResourceOptions) = 
+MtlBuffer(heap::MtlHeap, T::Type, len::Integer, opts::MtResourceOptions) =
 	MtlBuffer(heap, sizeof(T)*len, opts)
-MtlBuffer(heap::MtlHeap, T::Type, len::Integer, opts::MtResourceOptions, offset::Integer) = 
+MtlBuffer(heap::MtlHeap, T::Type, len::Integer, opts::MtResourceOptions, offset::Integer) =
 	MtlBuffer(heap, sizeof(T)*len, opts, offset)
 
 
@@ -61,7 +61,7 @@ DidModifyRange!(buf::MtlBuffer, range) = mtBufferDidModifyRange(buf, range)
 
 
 # Views on different device
-NewBuffer(buf::MtlBuffer, d::MtlDevice) = 
+NewBuffer(buf::MtlBuffer, d::MtlDevice) =
 	mtBufferNewRemoteBufferViewForDevice(buf, d);
 
 function ParentBuffer(buf::MtlBuffer)

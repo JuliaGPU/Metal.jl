@@ -34,6 +34,7 @@ const MtDevice = Cvoid
 const MtRenderDesc = Cvoid
 const MtRenderPipeline = Cvoid
 const MtCommandQueue = Cvoid
+const MtCommandEncoder = Cvoid
 const MtBlitCommandEncoder = Cvoid
 const MtLibrary = Cvoid
 const MtFunction = Cvoid
@@ -66,6 +67,96 @@ const MtRenderCommandEncoder = Cvoid
 const MtComputeCommandEncoder = Cvoid
 const MtResourceStateCommandEncoder = Cvoid
 const MtCounterSampleBuffer = Cvoid
+
+@cenum MtPrimitiveType::UInt32 begin
+    MtPrimitiveTypePoint = 0
+    MtPrimitiveTypeLine = 1
+    MtPrimitiveTypeLineStrip = 2
+    MtPrimitiveTypeTriangle = 3
+    MtPrimitiveTypeTriangleStrip = 4
+end
+
+@cenum MtVisibilityResultMode::UInt32 begin
+    MtVisibilityResultModeDisabled = 0
+    MtVisibilityResultModeBoolean = 1
+    MtVisibilityResultModeCounting = 2
+end
+
+
+struct MtScissorRect
+    x::UInt32
+    y::UInt32
+    width::UInt32
+    height::UInt32
+end
+
+struct MtViewport
+    originX::Cdouble
+    originY::Cdouble
+    width::Cdouble
+    height::Cdouble
+    znear::Cdouble
+    zfar::Cdouble
+end
+
+@cenum MtCullMode::UInt32 begin
+    MtCullModeNone = 0
+    MtCullModeFront = 1
+    MtCullModeBack = 2
+end
+
+@cenum MtWinding::UInt32 begin
+    MtWindingClockwise = 0
+    MtWindingCounterClockwise = 1
+end
+
+@cenum MtDepthClipMode::UInt32 begin
+    MtDepthClipModeClip = 0
+    MtDepthClipModeClamp = 1
+end
+
+@cenum MtTriangleFillMode::UInt32 begin
+    MtTriangleFillModeFill = 0
+    MtTriangleFillModeLines = 1
+end
+
+
+struct MtDrawPrimitivesIndirectArguments
+    vertexCount::UInt32
+    instanceCount::UInt32
+    vertexStart::UInt32
+    baseInstance::UInt32
+end
+
+struct MtDrawIndexedPrimitivesIndirectArguments
+    indexCount::UInt32
+    instanceCount::UInt32
+    indexStart::UInt32
+    baseVertex::Int32
+    baseInstance::UInt32
+end
+
+struct MtDrawPatchIndirectArguments
+    patchCount::UInt32
+    instanceCount::UInt32
+    patchStart::UInt32
+    baseInstance::UInt32
+end
+
+struct MtQuadTessellationFactorsHalf
+    edgeTessellationFactor::NTuple{4, UInt16}
+    insideTessellationFactor::NTuple{2, UInt16}
+end
+
+struct MtTriangleTessellationFactorsHalf
+    edgeTessellationFactor::NTuple{3, UInt16}
+    insideTessellationFactor::UInt16
+end
+
+@cenum MtRenderStages::UInt32 begin
+    MtRenderStageVertex = 1
+    MtRenderStageFragment = 2
+end
 
 @cenum MtLoadAction::UInt32 begin
     MtLoadActionDontCare = 0
@@ -438,95 +529,4 @@ end
 
 
 const MtCommandBufferOnCompleteFn = Ptr{Cvoid}
-
-@cenum MtPrimitiveType::UInt32 begin
-    MtPrimitiveTypePoint = 0
-    MtPrimitiveTypeLine = 1
-    MtPrimitiveTypeLineStrip = 2
-    MtPrimitiveTypeTriangle = 3
-    MtPrimitiveTypeTriangleStrip = 4
-end
-
-@cenum MtVisibilityResultMode::UInt32 begin
-    MtVisibilityResultModeDisabled = 0
-    MtVisibilityResultModeBoolean = 1
-    MtVisibilityResultModeCounting = 2
-end
-
-
-struct MtScissorRect
-    x::UInt32
-    y::UInt32
-    width::UInt32
-    height::UInt32
-end
-
-struct MtViewport
-    originX::Cdouble
-    originY::Cdouble
-    width::Cdouble
-    height::Cdouble
-    znear::Cdouble
-    zfar::Cdouble
-end
-
-@cenum MtCullMode::UInt32 begin
-    MtCullModeNone = 0
-    MtCullModeFront = 1
-    MtCullModeBack = 2
-end
-
-@cenum MtWinding::UInt32 begin
-    MtWindingClockwise = 0
-    MtWindingCounterClockwise = 1
-end
-
-@cenum MtDepthClipMode::UInt32 begin
-    MtDepthClipModeClip = 0
-    MtDepthClipModeClamp = 1
-end
-
-@cenum MtTriangleFillMode::UInt32 begin
-    MtTriangleFillModeFill = 0
-    MtTriangleFillModeLines = 1
-end
-
-
-struct MtDrawPrimitivesIndirectArguments
-    vertexCount::UInt32
-    instanceCount::UInt32
-    vertexStart::UInt32
-    baseInstance::UInt32
-end
-
-struct MtDrawIndexedPrimitivesIndirectArguments
-    indexCount::UInt32
-    instanceCount::UInt32
-    indexStart::UInt32
-    baseVertex::Int32
-    baseInstance::UInt32
-end
-
-struct MtDrawPatchIndirectArguments
-    patchCount::UInt32
-    instanceCount::UInt32
-    patchStart::UInt32
-    baseInstance::UInt32
-end
-
-struct MtQuadTessellationFactorsHalf
-    edgeTessellationFactor::NTuple{4, UInt16}
-    insideTessellationFactor::NTuple{2, UInt16}
-end
-
-struct MtTriangleTessellationFactorsHalf
-    edgeTessellationFactor::NTuple{3, UInt16}
-    insideTessellationFactor::UInt16
-end
-
-@cenum MtRenderStages::UInt32 begin
-    MtRenderStageVertex = 1
-    MtRenderStageFragment = 2
-end
-
 
