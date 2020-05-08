@@ -1,0 +1,6 @@
+mkpath("build")
+cd("build")
+run(`cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_LIBRARY_OUTPUT_DIRECTORY=../ ../../cmt/`)
+run(`make -j20 VERBOSE=1`)
+cd("..")
+rm("build", recursive=true, force=true)
