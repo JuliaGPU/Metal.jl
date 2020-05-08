@@ -1,4 +1,8 @@
-export 
+#	This wraps the low level Metal Buffer in a
+# 	MtlBuffer object.
+# 	Probably you are more interested in memory.jl
+
+export
 	MtlBuffer, contents
 
 const MTLBuffer = Ptr{MtBuffer}

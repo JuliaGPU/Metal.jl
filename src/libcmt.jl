@@ -779,6 +779,12 @@ function mtNewCommandBuffer(cmdq)
           cmdq)
 end
 
+function mtNewCommandBufferWithUnretainedReferences(cmdq)
+    ccall((:mtNewCommandBufferWithUnretainedReferences, cmt_lib), Ptr{MtCommandBuffer},
+          (Ptr{MtCommandQueue},),
+          cmdq)
+end
+
 function mtCommandBufferOnComplete(cmdb, sender, oncomplete)
     ccall((:mtCommandBufferOnComplete, cmt_lib), Cvoid,
           (Ptr{MtCommandQueue}, Ptr{Cvoid}, MtCommandBufferOnCompleteFn),
@@ -1153,6 +1159,137 @@ function mtComputeCommandEncoderUseHeaps(cce, heaps, count)
     ccall((:mtComputeCommandEncoderUseHeaps, cmt_lib), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtHeap}}, NsUInteger),
           cce, heaps, count)
+end
+
+function mtBlitCommandEncoderCopyFromBufferToBuffer(bce, src, src_offset, dst, dst_offset,
+                                                    size)
+    ccall((:mtBlitCommandEncoderCopyFromBufferToBuffer, cmt_lib), Cvoid,
+          (Ptr{MtBlitCommandEncoder}, Ptr{MtBuffer}, NsUInteger, Ptr{MtBuffer},
+           NsUInteger, NsUInteger),
+          bce, src, src_offset, dst, dst_offset, size)
+end
+
+function MtBlitCommandEncoderFillBuffer(bce, src, range, val)
+    ccall((:MtBlitCommandEncoderFillBuffer, cmt_lib), Cvoid,
+          (Ptr{MtBlitCommandEncoder}, Ptr{MtBuffer}, NsRange, UInt8),
+          bce, src, range, val)
+end
+
+function MtBlitCommandEncoderGenerateMipmaps(bce, texture)
+    ccall((:MtBlitCommandEncoderGenerateMipmaps, cmt_lib), Cvoid,
+          (Ptr{MtBlitCommandEncoder}, Ptr{MtTexture}),
+          bce, texture)
+end
+
+function MtBlitCommandEncoderCopyIndirectCommandBuffer(bce, src, range, dst, dst_index)
+    ccall((:MtBlitCommandEncoderCopyIndirectCommandBuffer, cmt_lib), Cvoid,
+          (Ptr{MtBlitCommandEncoder}, Ptr{MtIndirectCommandBuffer}, NsRange,
+           Ptr{MtIndirectCommandBuffer}, NsUInteger),
+          bce, src, range, dst, dst_index)
+end
+
+function MtBlitCommandEncoderOptimizeIndirectCommandBuffer(bce, buffer, range)
+    ccall((:MtBlitCommandEncoderOptimizeIndirectCommandBuffer, cmt_lib), Cvoid,
+          (Ptr{MtBlitCommandEncoder}, Ptr{MtIndirectCommandBuffer}, NsRange),
+          bce, buffer, range)
+end
+
+function MtBlitCommandEncoderResetCommandsInBuffer(bce, buffer, range)
+    ccall((:MtBlitCommandEncoderResetCommandsInBuffer, cmt_lib), Cvoid,
+          (Ptr{MtBlitCommandEncoder}, Ptr{MtIndirectCommandBuffer}, NsRange),
+          bce, buffer, range)
+end
+
+function MtBlitCommandEncoderSynchronizeResource(bce, resource)
+    ccall((:MtBlitCommandEncoderSynchronizeResource, cmt_lib), Cvoid,
+          (Ptr{MtBlitCommandEncoder}, Ptr{MtResource}),
+          bce, resource)
+end
+
+function MtBlitCommandEncoderSynchronizeTexture(bce, texture, slice, level)
+    ccall((:MtBlitCommandEncoderSynchronizeTexture, cmt_lib), Cvoid,
+          (Ptr{MtBlitCommandEncoder}, Ptr{MtTexture}, NsUInteger, NsUInteger),
+          bce, texture, slice, level)
+end
+
+function MtBlitCommandEncoderUpdateFence(icb, fence)
+    ccall((:MtBlitCommandEncoderUpdateFence, cmt_lib), Cvoid,
+          (Ptr{MtIndirectCommandBuffer}, Ptr{MtFence}),
+          icb, fence)
+end
+
+function MtBlitCommandEncoderWaitForFence(icb, fence)
+    ccall((:MtBlitCommandEncoderWaitForFence, cmt_lib), Cvoid,
+          (Ptr{MtIndirectCommandBuffer}, Ptr{MtFence}),
+          icb, fence)
+end
+
+function MtBlitCommandEncoderOptimizeContentsForGPUAccess(icb, tex)
+    ccall((:MtBlitCommandEncoderOptimizeContentsForGPUAccess, cmt_lib), Cvoid,
+          (Ptr{MtIndirectCommandBuffer}, Ptr{MtTexture}),
+          icb, tex)
+end
+
+function MtBlitCommandEncoderOptimizeContentsForGPUAccessSliceLevel(icb, tex, slice, level)
+    ccall((:MtBlitCommandEncoderOptimizeContentsForGPUAccessSliceLevel, cmt_lib), Cvoid,
+          (Ptr{MtIndirectCommandBuffer}, Ptr{MtTexture}, NsUInteger, NsUInteger),
+          icb, tex, slice, level)
+end
+
+function MtBlitCommandEncoderOptimizeContentsForCPUAccess(icb, tex)
+    ccall((:MtBlitCommandEncoderOptimizeContentsForCPUAccess, cmt_lib), Cvoid,
+          (Ptr{MtIndirectCommandBuffer}, Ptr{MtTexture}),
+          icb, tex)
+end
+
+function MtBlitCommandEncoderOptimizeContentsForCPUAccessSliceLevel(icb, tex, slice, level)
+    ccall((:MtBlitCommandEncoderOptimizeContentsForCPUAccessSliceLevel, cmt_lib), Cvoid,
+          (Ptr{MtIndirectCommandBuffer}, Ptr{MtTexture}, NsUInteger, NsUInteger),
+          icb, tex, slice, level)
+end
+
+function MtBlitCommandEncoderSampleCountersInBuffer(icb, sbuf, sampleindex, barrier)
+    ccall((:MtBlitCommandEncoderSampleCountersInBuffer, cmt_lib), Cvoid,
+          (Ptr{MtIndirectCommandBuffer}, Ptr{MtCounterSampleBuffer}, NsUInteger, Bool),
+          icb, sbuf, sampleindex, barrier)
+end
+
+function MtBlitCommandEncoderResolveCounters(icb, sbuf, range, dst, dst_offset)
+    ccall((:MtBlitCommandEncoderResolveCounters, cmt_lib), Cvoid,
+          (Ptr{MtIndirectCommandBuffer}, Ptr{MtCounterSampleBuffer}, NsRange,
+           Ptr{MtBuffer}, NsUInteger),
+          icb, sbuf, range, dst, dst_offset)
+end
+
+function mtNewIndirectCommandBuffer(device, desc, maxCount, options)
+    ccall((:mtNewIndirectCommandBuffer, cmt_lib), Ptr{MtIndirectCommandBuffer},
+          (Ptr{MtDevice}, Ptr{MtIndirectCommandBufferDescriptor}, NsUInteger,
+           MtResourceOptions),
+          device, desc, maxCount, options)
+end
+
+function mtIndirectCommandBufferSize(icb)
+    ccall((:mtIndirectCommandBufferSize, cmt_lib), NsUInteger,
+          (Ptr{MtIndirectCommandBuffer},),
+          icb)
+end
+
+function mtIndirectCommandBufferComputeCommandAtIndex(icb, index)
+    ccall((:mtIndirectCommandBufferComputeCommandAtIndex, cmt_lib), Ptr{MtIndirectComputeCommand},
+          (Ptr{MtIndirectCommandBuffer}, NsUInteger),
+          icb, index)
+end
+
+function mtIndirectCommandBufferRenderCommandAtIndex(icb, index)
+    ccall((:mtIndirectCommandBufferRenderCommandAtIndex, cmt_lib), Ptr{MtIndirectRenderCommand},
+          (Ptr{MtIndirectCommandBuffer}, NsUInteger),
+          icb, index)
+end
+
+function mtIndirectCommandBufferResetWithRange(icb, range)
+    ccall((:mtIndirectCommandBufferResetWithRange, cmt_lib), Cvoid,
+          (Ptr{MtIndirectCommandBuffer}, NsRange),
+          icb, range)
 end
 
 function mtRetain(obj)

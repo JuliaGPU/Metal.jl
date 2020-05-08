@@ -34,6 +34,7 @@ const MtDevice = Cvoid
 const MtRenderDesc = Cvoid
 const MtRenderPipeline = Cvoid
 const MtCommandQueue = Cvoid
+const MtBlitCommandEncoder = Cvoid
 const MtLibrary = Cvoid
 const MtFunction = Cvoid
 const MtRenderPassDesc = Cvoid
@@ -42,6 +43,10 @@ const MtCommandBuffer = Cvoid
 const MtDrawable = Cvoid
 const MtVertexDescriptor = Cvoid
 const MtTextureDescriptor = Cvoid
+const MtIndirectCommandBufferDescriptor = Cvoid
+const MtIndirectCommandBuffer = Cvoid
+const MtIndirectComputeCommand = Cvoid
+const MtIndirectRenderCommand = Cvoid
 const MtDepthStencil = Cvoid
 const MtBuffer = Cvoid
 const MtCompileOptions = Cvoid
@@ -59,8 +64,8 @@ const MtComputePipelineState = Cvoid
 const MtSamplerState = Cvoid
 const MtRenderCommandEncoder = Cvoid
 const MtComputeCommandEncoder = Cvoid
-const MtBlitCommandEncoder = Cvoid
 const MtResourceStateCommandEncoder = Cvoid
+const MtCounterSampleBuffer = Cvoid
 
 @cenum MtLoadAction::UInt32 begin
     MtLoadActionDontCare = 0
@@ -174,6 +179,12 @@ end
 @cenum MtHeapType::UInt32 begin
     MtHeapTypeAutomatic = 0
     MtHeapTypePlacement = 1
+end
+
+@cenum MtBlitOption::UInt32 begin
+    MtBlitOptionNone = 0
+    MtBlitOptionDepthFromDepthStencil = 1
+    MtBlitOptionStencilFromDepthStencil = 2
 end
 
 @cenum MtPixelFormat::UInt32 begin
