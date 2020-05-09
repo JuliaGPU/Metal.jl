@@ -33,13 +33,9 @@ bufferA = MtlBuffer(dev, Float32, bufferSize, MetalCore.MtResourceStorageModeSha
 bufferB = MtlBuffer(dev, Float32, bufferSize, MetalCore.MtResourceStorageModeShared)
 bufferC = MtlBuffer(dev, Float32, bufferSize, MetalCore.MtResourceStorageModeShared)
 
-ptrA = convert(Ptr{Float32}, contents(bufferA))
-ptrB = convert(Ptr{Float32}, contents(bufferB))
-ptrC = convert(Ptr{Float32}, contents(bufferC))
-
-vecA = unsafe_wrap(Vector{Float32}, ptrA, bufferSize)
-vecB = unsafe_wrap(Vector{Float32}, ptrB, bufferSize)
-vecC = unsafe_wrap(Vector{Float32}, ptrC, bufferSize)
+vecA = unsafe_wrap(Vector{Float32}, convert(Ptr{Float32}, contents(bufferA)), bufferSize)
+vecB = unsafe_wrap(Vector{Float32}, convert(Ptr{Float32}, contents(bufferB)), bufferSize)
+vecC = unsafe_wrap(Vector{Float32}, convert(Ptr{Float32}, contents(bufferC)), bufferSize)
 
 using Random
 rand!.([vecA, vecB])
@@ -52,31 +48,22 @@ fun = MtlFunction(lib, "add_arrays")
 pip_addfun = MtlComputePipelineState(dev, fun)
 queue = MetalCore.global_queue(dev) #MtlCommandQueue(dev)
 
-## Compute
-cmdBuffer = MtlCommandBuffer(queue)
-computeEncoder = MtlComputeCommandEncoder(cmdBuffer)
-
-## add compute
-MetalCore.set_function!(computeEncoder, pip_addfun)
-MetalCore.set_buffer!(computeEncoder, bufferA, 0, 0)
-MetalCore.set_buffer!(computeEncoder, bufferB, 0, 1)
-MetalCore.set_buffer!(computeEncoder, bufferC, 0, 2)
-
-gridSize = MetalCore.MtSize(length(vecA), 1, 1)
-
-# Calculate a threadgroup size.
-threadGroupSize = min(length(vecA), pip_addfun.maxTotalThreadsPerThreadgroup)
-threadGroupSize = MetalCore.MtSize(threadGroupSize, 1, 1)
-
-# Encode the compute command.
-MetalCore.dispatchThreads!(computeEncoder, gridSize, threadGroupSize)
-
-#End the compute pass.
-MetalCore.endEncoding!(computeEncoder)
+##
+cmd = MetalCore.commit!(queue) do cmdbuf
+    @info 4
+    MtlComputeCommandEncoder(cmdbuf) do enc
+        MetalCore.set_function!(enc, pip_addfun)
+        MetalCore.set_buffers!(enc,
+                                [bufferA, bufferB, bufferC],
+                                [0,0,0], 1:3)
+        gridSize = MetalCore.MtSize(length(vecA), 1, 1)
+        threadGroupSize = min(length(vecA), pip_addfun.maxTotalThreadsPerThreadgroup)
+        threadGroupSize = MetalCore.MtSize(threadGroupSize, 1, 1)
+        MetalCore.append_current_function!(enc, gridSize, threadGroupSize)
+    end
+end
 
 # Execute
-MetalCore.commit!(cmdBuffer)
-
-MetalCore.waitUntilCompleted(cmdBuffer)
+wait(cmd)
 
 @show vecC

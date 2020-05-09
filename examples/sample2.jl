@@ -18,17 +18,32 @@ vecB = unsafe_wrap(Vector{Float32}, ptrB, bufferSize)
 using Random
 rand!(vecA)
 
-queue = MtlCommandQueue(dev)
+queue = MetalCore.global_queue(dev)
 
+cmdBuffer = MtlCommandBuffer(queue)
+
+blitEncoder = MtlBlitCommandEncoder(cmdBuffer) do enc
+    MetalCore.encode_copy!(enc, bufferA, bufferB, 0, 0, 128*4)
+end
+
+MetalCore.commit!(cmdBuffer)
+
+MetalCore.waitUntilCompleted(cmdBuffer)
+
+vecB .= 0
+MetalCore.commit!(queue) do buffer
+    MtlBlitCommandEncoder(buffer) do enc
+        MetalCore.encode_copy!(enc, bufferA, bufferB, 0, 0, 128*4)
+    end
+end
 
 
 # buffer
-cmdBuffer = MtlCommandBuffer(queue)
-blitEncoder = MtlBlitCommandEncoder(cmdBuffer)
 
 ## add compute
-MetalCore.encode_copy!(blitEncoder, bufferA, bufferB, 0, 0, 128*4)
-MetalCore.endEncoding!(blitEncoder)
 
-MetalCore.commit!(cmdBuffer)
-MetalCore.waitUntilCompleted(cmdBuffer)
+
+#mycfun(asd) = (tuple(1,4); return nothing);#return println("hello", asd)
+#cf = @cfunction(mycfun, Cvoid, (MetalCore.MTLCommandBuffer, ))
+
+#MetalCore.mtCommandBufferAddCompletedHandler(cmdBuffer, cf)
