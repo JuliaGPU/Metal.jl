@@ -25,25 +25,25 @@ Base.:(==)(a::MtlCommandQueue, b::MtlCommandQueue) = a.handle == b.handle
 Base.hash(q::MtlCommandQueue, h::UInt) = hash(q.handle, h)
 
 function MtlCommandQueue(dev::MtlDevice) 
-	queue = mtNewCommandQueue(dev)
-	obj = MtlCommandQueue(queue, dev)
-	finalizer(unsafe_destroy!, obj)
-	return obj
+    queue = mtNewCommandQueue(dev)
+    obj = MtlCommandQueue(queue, dev)
+    finalizer(unsafe_destroy!, obj)
+    return obj
 end
 
 function unsafe_destroy!(queue::MtlCommandQueue)
-	if queue.handle !== C_NULL
-		mtCommandQueueRelease(queue)
-	end
+    if queue.handle !== C_NULL
+        mtCommandQueueRelease(queue)
+    end
 end
 
 function label(l::MtlCommandQueue)
-	ptr = mtCommandQueueLabel(l)
-	return ptr == C_NULL ? "" : unsafe_string(ptr) 
+    ptr = mtCommandQueueLabel(l)
+    return ptr == C_NULL ? "" : unsafe_string(ptr) 
 end
 
 function show(io::IO, ::MIME"text/plain", q::MtlCommandQueue)
-	println(io, "MtlCommandQueue:")
-	println(io, " handle  : ", q.handle)
-	  print(io, " device  : ", q.device)
+    println(io, "MtlCommandQueue:")
+    println(io, " handle  : ", q.handle)
+    print(io, " device  : ", q.device)
 end

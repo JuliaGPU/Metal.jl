@@ -3,11 +3,12 @@ using MetalCore
 @show devices()
 dev = MtlDevice(1)
 
+vecC=rand(Float32, 128)
 
 bufferSize = 128
-bufferA = MtlBuffer(dev, Float32, bufferSize, MetalCore.MtResourceStorageModeShared)
-bufferB = MtlBuffer(dev, Float32, bufferSize, MetalCore.MtResourceStorageModeShared)
-bufferH = MtlBuffer(dev, Float32, bufferSize, MetalCore.MtResourceStorageModePrivate)
+bufferA = MtlBuffer(dev, Float32, bufferSize, MetalCore.Metal.MtResourceStorageModeShared)
+bufferB = MtlBuffer(dev, Float32, bufferSize, MetalCore.Metal.MtResourceStorageModeShared)
+bufferC = MtlBuffer(dev, vecC, MetalCore.Metal.MtResourceStorageModeShared)
 
 ptrA = convert(Ptr{Float32}, contents(bufferA))
 ptrB = convert(Ptr{Float32}, contents(bufferB))
@@ -20,22 +21,14 @@ rand!(vecA)
 
 queue = MetalCore.global_queue(dev)
 
-cmdBuffer = MtlCommandBuffer(queue)
-
-blitEncoder = MtlBlitCommandEncoder(cmdBuffer) do enc
-    MetalCore.encode_copy!(enc, bufferA, bufferB, 0, 0, 128*4)
-end
-
-MetalCore.commit!(cmdBuffer)
-
-MetalCore.waitUntilCompleted(cmdBuffer)
-
 vecB .= 0
-MetalCore.commit!(queue) do buffer
-    MtlBlitCommandEncoder(buffer) do enc
-        MetalCore.encode_copy!(enc, bufferA, bufferB, 0, 0, 128*4)
+MetalCore.Metal.commit!(queue) do buffer
+    MetalCore.Metal.MtlBlitCommandEncoder(buffer) do enc
+        MetalCore.Metal.append_copy!(enc, bufferA, bufferC, 0, 0, 128*4)
     end
 end
+
+MetalCore.Metal.waitUntilCompleted(cmdBuffer)
 
 
 # buffer

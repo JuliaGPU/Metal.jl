@@ -26,22 +26,22 @@ Base.:(==)(a::MtlCommandBuffer, b::MtlCommandBuffer) = a.handle == b.handle
 Base.hash(q::MtlCommandBuffer, h::UInt) = hash(q.handle, h)
 
 # Constructor
-function MtlCommandBuffer(queue::MtlCommandQueue; retain_references=true)
-	if retain_references
-		handle = mtNewCommandBuffer(queue)
-	else
-		handle = mtNewCommandBufferWithUnretainedReferences(queue)
-	end
+function MtlCommandBuffer(queue::MtlCommandQueue; retain_references = true)
+    if retain_references
+        handle = mtNewCommandBuffer(queue)
+    else
+        handle = mtNewCommandBufferWithUnretainedReferences(queue)
+    end
 
-	obj = MtlCommandBuffer(handle, queue)
-	finalizer(unsafe_destroy!, obj)
-	return obj
+    obj = MtlCommandBuffer(handle, queue)
+    finalizer(unsafe_destroy!, obj)
+    return obj
 end
 
 function unsafe_destroy!(cmdbuf::MtlCommandBuffer)
-	if cmdbuf.handle !== C_NULL
-		mtCommandBufferRelease(cmdbuf)
-	end
+    if cmdbuf.handle !== C_NULL
+        mtCommandBufferRelease(cmdbuf)
+    end
 end
 
 ## Properties
@@ -60,7 +60,7 @@ execution_error(q::MtlCommandBuffer) = NsError_maybe(mtCommandBufferError(q))
 
 # Operations
 """
-	enqueue!(q::MtlCommandBuffer)
+    enqueue!(q::MtlCommandBuffer)
 
 Enqueueing a command buffer reserves a place for the command buffer on the command
 queue without committing the command buffer for execution. When this command buffer
@@ -74,7 +74,7 @@ into the command buffers and those threads can complete in any order.
 enqueue!(q::MtlCommandBuffer) = mtCommandBufferEnqueue(q)
 
 """
-	waitUntilScheduled(commandBuffer)
+    waitUntilScheduled(commandBuffer)
 
 Blocks execution of the current thread until the command buffer is scheduled.
 This method returns after the command buffer has been scheduled and all code
@@ -85,8 +85,8 @@ to the GPU for execution.
 waitUntilScheduled(q::MtlCommandBuffer) = mtCommandBufferWaitUntilScheduled(q)
 
 """
-	waitUntilCompleted(cmdbuf::MtlCommandBuffer)
-	Base.wait(cmdbuf::MtlCommandBuffer)
+    waitUntilCompleted(cmdbuf::MtlCommandBuffer)
+    Base.wait(cmdbuf::MtlCommandBuffer)
 
 Blocks execution of the current thread until execution of the command
 buffer is completed.
@@ -97,15 +97,15 @@ waitUntilCompleted(q::MtlCommandBuffer) = mtCommandBufferWaitUntilCompleted(q)
 Base.wait(q::MtlCommandBuffer) = waitUntilCompleted(q)
 
 function show(io::IO, ::MIME"text/plain", q::MtlCommandBuffer)
-	println(io, "MtlCommandBuffer:")
-	println(io, " handle  : ", q.handle)
-	println(io, " queue   : ", q.queue)
-	  print(io, "  status : ", status(q))
+    println(io, "MtlCommandBuffer:")
+    println(io, " handle  : ", q.handle)
+    println(io, " queue   : ", q.queue)
+    print(io, "  status : ", status(q))
 end
 
 ## One-Api like stuff
 """
-	encode_signal!(buf::MtlCommandBuffer, ev::MtlEvent, val::UInt)
+    encode_signal!(buf::MtlCommandBuffer, ev::MtlEvent, val::UInt)
 
 Encodes a command that signals the given event, updating it to a new value.
 
@@ -117,11 +117,11 @@ waiting on the event are allowed to run if the new value is equal to or
 greater than the value for which they are waiting. For shared events, this
 update similarly triggers notification handlers waiting on the event.
 """
-encode_signal!(buf::MtlCommandBuffer, ev::MtlEvent, val::UInt) =
-	mtEncodeSignalEvent(buf, ev, val)
+append_signal!(buf::MtlCommandBuffer, ev::MtlEvent, val::UInt) =
+    mtEncodeSignalEvent(buf, ev, val)
 
 """
-	encode_wait!(buf::MtlCommandBuffer, ev::MtlEvent, val::UInt)
+    encode_wait!(buf::MtlCommandBuffer, ev::MtlEvent, val::UInt)
 
 Encodes a command that blocks the execution of the command buffer
 until the given event reaches the given value.
@@ -134,22 +134,22 @@ GPU executes commands that appear earlier than the wait command,
 but doesn't start any commands that appear after it. Execution continues
 immediately if the event already has an equal or larger value.
 """
-encode_wait!(buf::MtlCommandBuffer, ev::MtlEvent, val::UInt) =
-	mtEncodeWaitForEvent(buf, ev, val)
+append_wait!(buf::MtlCommandBuffer, ev::MtlEvent, val::UInt) =
+    mtEncodeWaitForEvent(buf, ev, val)
 
 ##
 
 commit!(q::MtlCommandBuffer) = mtCommandBufferCommit(q)
-commit!(q::Vector{MtlCommandBuffer}) = map(mtCommandBufferCommit,q)
+commit!(q::Vector{MtlCommandBuffer}) = map(mtCommandBufferCommit, q)
 
-function commit!(f::Base.Callable, queue::MtlCommandQueue; kwargs... )
-	cmdbuf = MtlCommandBuffer(f, queue; kwargs...)
-	commit!(cmdbuf)
-	return cmdbuf
+function commit!(f::Base.Callable, queue::MtlCommandQueue; kwargs...)
+    cmdbuf = MtlCommandBuffer(f, queue; kwargs...)
+    commit!(cmdbuf)
+    return cmdbuf
 end
 
 function MtlCommandBuffer(f::Base.Callable, queue::MtlCommandQueue; kwargs...)
-	cmdbuf = MtlCommandBuffer(queue; kwargs...)
-	f(cmdbuf)
-	return cmdbuf
+    cmdbuf = MtlCommandBuffer(queue; kwargs...)
+    f(cmdbuf)
+    return cmdbuf
 end

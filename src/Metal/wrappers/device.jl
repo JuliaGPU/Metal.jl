@@ -1,5 +1,4 @@
-export
-    MtlDevice, name, devices
+export MtlDevice, name, devices, DefaultDevice
 
 const MTLDevice = Ptr{MtDevice} 
 
@@ -69,7 +68,7 @@ Get an iterator for the compute devices.
 function devices()
     _devices = mtCopyAllDevices()
     devices = Vector{MtlDevice}()
-    for i=0:100
+    for i = 0:100
         _dev = Base.unsafe_load(_devices + i * sizeof(Ptr{MtDevice}))
         _dev == C_NULL && break
         push!(devices, MtlDevice(_dev))

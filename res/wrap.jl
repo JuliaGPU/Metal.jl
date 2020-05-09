@@ -298,11 +298,11 @@ function process(name, headers...; kwargs...)
     ## move to destination
     @info "current dir is $(pwd())"   
     for src in (output_file, common_file, aliases_file)
-        dst = joinpath(dirname(@__DIR__), "src", src)
+        dst = joinpath(dirname(@__DIR__), "src/Metal/api", src)
         @info "Copying from $src to $dst "
         cp(src, dst; force=true)
+        rm(src)
     end
-
 
     return
 end

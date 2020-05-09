@@ -1,17 +1,17 @@
 function unsafe_string_maybe(ptr::Cstring)
-	if ptr == C_NULL
-		return ""
-	else
-		return unsafe_string(ptr)
-	end
+    if ptr == C_NULL
+        return ""
+    else
+        return unsafe_string(ptr)
+    end
 end
 
 function NsError_maybe(ptr::MtlError)
-	if ptr === C_NULL
-		return nothing
-	else
-		return MtlError(ptr)
-	end
+    if ptr === C_NULL
+        return nothing
+    else
+        return MtlError(ptr)
+    end
 end
 
 export @enum_without_prefix
@@ -37,8 +37,12 @@ macro enum_without_prefix(enum, prefix)
     for instance in instances(enum)
         name = String(Symbol(instance))
         @assert startswith(name, prefix)
-        push!(ex.args, :(const $(Symbol(name[length(prefix)+1:end])) = $(mod).$(Symbol(name))))
+        push!(ex.args, :(const $(Symbol(name[length(prefix) + 1:end])) = $(mod).$(Symbol(name))))
     end
 
     return esc(ex)
 end
+
+##
+Base.convert(::Type{MtResourceOptions}, val::UInt32) =
+    MtResourceOptions(val)

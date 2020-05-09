@@ -1,11 +1,7 @@
 # Raw memory management
 
-export Mem, attribute, attribute!, memory_type, is_managed
-
-module Mem
-
-using ..MetalCore
-using ..MetalCore: @enum_without_prefix, #=CUstream,=# MtlDevice, MtSize, MtlBuffer
+export alloc, free
+export Device, Host, Unified
 
 #
 # untyped buffers
@@ -22,9 +18,10 @@ Base.pointer(buf::Buffer) = buf.ptr
 
 Base.sizeof(buf::Buffer) = buf.bytesize
 
-MetalCore.device(buf::Buffer) = device(buf.ctx)
+device(buf::Buffer) = device(buf.ctx)
 
-#MetalCore.heap(buf::Buffer) = device(buf.ctx)
+cpointer(buf::Buffer) = Base.reinterpret(Ptr{Cvoid}, pointer(buf))
+# MetalCore.heap(buf::Buffer) = device(buf.ctx)
 
 # ccall integration
 #
@@ -34,7 +31,7 @@ Base.unsafe_convert(T::Type{<:Union{Ptr,MtlPtr}}, buf::Buffer) = convert(T, buf)
 
 function free(buf::Buffer)
     if pointer(buf) != MTL_NULL
-        MetalCore.mtBufferRelease(buf)
+        mtBufferRelease(cpointer(buf))
     end
 end
 ## device buffer
@@ -47,13 +44,13 @@ A buffer of device memory residing on the GPU. In Metal's language,
 a PrivateBuffer
 """
 struct DeviceBuffer <: Buffer
-    ptr::MtlPtr{Cvoid}
+    ptr::Ptr{Cvoid}
     bytesize::Int
     ctx::MtlDevice
 end
 
-Base.similar(buf::DeviceBuffer, ptr::MtlPtr{Cvoid}=pointer(buf),
-             bytesize::Int=sizeof(buf), ctx::MtlDevice=buf.ctx) =
+Base.similar(buf::DeviceBuffer, ptr::MtlPtr{Cvoid} = pointer(buf),
+             bytesize::Int = sizeof(buf), ctx::MtlDevice = buf.ctx) =
     DeviceBuffer(ptr, bytesize, ctx)
 
 Base.convert(::Type{<:Ptr}, buf::DeviceBuffer) =
@@ -71,7 +68,7 @@ GPU, and requires explicit calls to `unsafe_copyto!`, which wraps `cuMemcpy`,
 for access on the CPU.
 """
 function alloc(::Type{DeviceBuffer}, dev::MtlDevice, bytesize::Integer;
-                hazard_tracking=MtResourceHazardTrackingModeDefault)
+                hazard_tracking = MtResourceHazardTrackingModeDefault)
     opts = MtResourceStorageModePrivate + hazard_tracking
 
     ptr = mtDeviceNewBufferWithLength(dev, bytesize, opts)
@@ -91,13 +88,13 @@ A buffer of pinned memory on the CPU, accessible on the GPU. Implemented as
 a Shared buffer in Metal.
 """
 struct HostBuffer <: Buffer
-    ptr::MtlPtr{Cvoid}
+    ptr::Ptr{Cvoid}
     bytesize::Int
     ctx::MtlDevice
 end
 
-Base.similar(buf::HostBuffer, ptr::Ptr{Cvoid}=pointer(buf), bytesize::Int=sizeof(buf),
-             ctx::MtlDevice=buf.ctx) =
+Base.similar(buf::HostBuffer, ptr::Ptr{Cvoid} = pointer(buf), bytesize::Int = sizeof(buf),
+             ctx::MtlDevice = buf.ctx) =
     HostBuffer(ptr, bytesize, ctx)
 
 # Access the cpu address of this buffer which is the real storage
@@ -112,8 +109,8 @@ Base.convert(::Type{MtlPtr{T}}, buf::HostBuffer) where {T} =
     Mem.alloc(HostBuffer, bytesize::Integer; hazard_tracking=MtResource...Default)
 """
 function alloc(::Type{HostBuffer}, dev::MtlDevice, bytesize::Integer;
-                hazard_tracking=MtResourceHazardTrackingModeDefault,
-                cache_mode=MtResourceCPUCacheModeDefaultCache)
+                hazard_tracking = MtResourceHazardTrackingModeDefault,
+                cache_mode = MtResourceCPUCacheModeDefaultCache)
 
     opts = MtResourceStorageModeShared + hazard_tracking + cache_mode
 
@@ -141,8 +138,8 @@ struct UnifiedBuffer <: Buffer
     ctx::MtlDevice
 end
 
-Base.similar(buf::UnifiedBuffer, ptr::MtlPtr{Cvoid}=pointer(buf),
-             bytesize::Int=sizeof(buf), ctx::MtlDevice=buf.ctx) =
+Base.similar(buf::UnifiedBuffer, ptr::MtlPtr{Cvoid} = pointer(buf),
+             bytesize::Int = sizeof(buf), ctx::MtlDevice = buf.ctx) =
     UnifiedBuffer(ptr, bytesize, ctx)
 
 # Access the cpu address of this buffer which is the real storage
@@ -156,8 +153,8 @@ Base.convert(::Type{MtlPtr{T}}, buf::UnifiedBuffer) where {T} =
     Mem.alloc(HostBuffer, bytesize::Integer; hazard_tracking=MtResource...Default)
 """
 function alloc(::Type{UnifiedBuffer}, dev::MtlDevice, bytesize::Integer;
-                hazard_tracking=MtResourceHazardTrackingModeDefault,
-                cache_mode=MtResourceCPUCacheModeDefaultCache)
+                hazard_tracking = MtResourceHazardTrackingModeDefault,
+                cache_mode = MtResourceCPUCacheModeDefaultCache)
 
     opts = MtResourceStorageModeManaged + hazard_tracking + cache_mode
 
@@ -183,6 +180,23 @@ const Device  = DeviceBuffer
 const Host    = HostBuffer
 const Unified = UnifiedBuffer
 
+#######
+function alloc_wrap(t::Type{<:Union{UnifiedBuffer,HostBuffer}}, dev::MtlDevice, bytesize::Integer, src::Ptr;
+    hazard_tracking = MtResourceHazardTrackingModeDefault,
+    cache_mode = MtResourceCPUCacheModeDefaultCache)
+    if t<:Type{UnifiedBuffer}
+        opts = MtResourceStorageModeManaged + hazard_tracking + cache_mode
+    else
+        opts = MtResourceStorageModeShared + hazard_tracking + cache_mode
+    end
+    
+    ptr = mtDeviceNewBufferWithBytesNoCopy(dev, src, bytesize, opts)
+
+    if t<:Type{UnifiedBuffer}
+        return UnifiedBuffer(reinterpret(MtlPtr{Cvoid}, ptr), bytesize, dev)
+    else
+        return HostBuffer(reinterpret(MtlPtr{Cvoid}, ptr), bytesize, dev)
+    end
 end
 
 #
@@ -190,7 +204,7 @@ end
 #
 
 ## initialization
-#=
+#= 
 """
     Mem.set!(buf::MtlPtr, value::Union{UInt8,UInt16,UInt32}, len::Integer;
              async::Bool=false, stream::CuStream)
@@ -379,5 +393,4 @@ end
 @enum_without_prefix CUmemorytype CU_
 memory_type(x) = CUmemorytype(attribute(Cuint, x, POINTER_ATTRIBUTE_MEMORY_TYPE))
 
-is_managed(x) = convert(Bool, attribute(Cuint, x, POINTER_ATTRIBUTE_IS_MANAGED))
-=#
+is_managed(x) = convert(Bool, attribute(Cuint, x, POINTER_ATTRIBUTE_IS_MANAGED)) =#

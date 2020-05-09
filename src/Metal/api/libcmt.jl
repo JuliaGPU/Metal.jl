@@ -301,6 +301,12 @@ function mtDeviceNewBufferWithBytes(device, ptr, length, opts)
           device, ptr, length, opts)
 end
 
+function mtDeviceNewBufferWithBytesNoCopy(device, ptr, length, opts)
+    ccall((:mtDeviceNewBufferWithBytesNoCopy, cmt_lib), Ptr{MtBuffer},
+          (Ptr{MtDevice}, Ptr{Cvoid}, NsUInteger, MtResourceOptions),
+          device, ptr, length, opts)
+end
+
 function mtComputePipelineDevice(pip)
     ccall((:mtComputePipelineDevice, cmt_lib), Ptr{MtDevice},
           (Ptr{MtComputePipelineState},),
