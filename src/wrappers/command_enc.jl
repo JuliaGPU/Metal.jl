@@ -11,3 +11,4 @@ end
 
 
 endEncoding!(ce::MtlCommandEncoder) = mtCommandEncoderEndEncoding(ce);
+Base.close(ce::MtlCommandEncoder) = endEncoding!(ce)

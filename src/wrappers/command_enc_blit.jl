@@ -19,14 +19,23 @@ function MtlBlitCommandEncoder(cmdbuf::MtlCommandBuffer)
 	return obj
 end
 
-encode_copy!(enc::MtlBlitCommandEncoder,
+## encode in the Command Encoder
+function MtlBlitCommandEncoder(f::Base.Callable, cmdbuf::MtlCommandBuffer)
+	encoder = MtlBlitCommandEncoder(cmdbuf)
+	f(encoder)
+	close(encoder)
+	return encoder
+end
+
+##
+append_copy!(enc::MtlBlitCommandEncoder,
 			 src::Union{MtlPtr,Buffer,MtlBuffer},
 			 dst::Union{MtlPtr,Buffer,MtlBuffer},
 			 src_offset, dst_offset, len) =
 	mtBlitCommandEncoderCopyFromBufferToBuffer(enc, src, src_offset,
 		dst, dst_offset, len)
 
-encode_fillbuffer!(enc::MtlBlitCommandEncoder,
+append_fillbuffer!(enc::MtlBlitCommandEncoder,
 					src::Union{MtlPtr,Buffer,MtlBuffer},
 					val::UInt8, range) =
 	mtBlitCommandEncoderFillBuffer(enc, src, range, val)

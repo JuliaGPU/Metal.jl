@@ -6,6 +6,14 @@ function unsafe_string_maybe(ptr::Cstring)
 	end
 end
 
+function NsError_maybe(ptr::MtlError)
+	if ptr === C_NULL
+		return nothing
+	else
+		return MtlError(ptr)
+	end
+end
+
 export @enum_without_prefix
 
 

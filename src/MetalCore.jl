@@ -63,4 +63,7 @@ include("wrappers/command_enc.jl")
 include("wrappers/command_enc_blit.jl")
 include("wrappers/command_enc_compute.jl")
 
+include("context.jl")
+
+
 end # module

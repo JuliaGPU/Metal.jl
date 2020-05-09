@@ -72,3 +72,6 @@ function ParentBuffer(buf::MtlBuffer)
 		return MtlBuffer(orig)
 	end
 end
+
+##
+handle_array(vec::Vector{MtlBuffer}) = convert.(MetalCore.MTLBuffer, vec)

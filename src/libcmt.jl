@@ -817,13 +817,13 @@ end
 
 function mtCommandBufferAddScheduledHandler(cmdb, handler)
     ccall((:mtCommandBufferAddScheduledHandler, cmt_lib), Cvoid,
-          (Ptr{MtCommandBuffer}, MtCommandBufferHandler),
+          (Ptr{MtCommandBuffer}, MtCommandBufferHandlerFun),
           cmdb, handler)
 end
 
 function mtCommandBufferAddCompletedHandler(cmdb, handler)
     ccall((:mtCommandBufferAddCompletedHandler, cmt_lib), Cvoid,
-          (Ptr{MtCommandBuffer}, MtCommandBufferHandler),
+          (Ptr{MtCommandBuffer}, MtCommandBufferHandlerFun),
           cmdb, handler)
 end
 
@@ -1132,10 +1132,10 @@ function mtComputeCommandEncoderSetBufferOffsetAtIndex(cce, buf, offset, indx)
           cce, buf, offset, indx)
 end
 
-function mtComputeCommandEncoderSetBuffersOffsetsWithRange(cce, buf, offsets, range)
+function mtComputeCommandEncoderSetBuffersOffsetsWithRange(cce, bufs, offsets, range)
     ccall((:mtComputeCommandEncoderSetBuffersOffsetsWithRange, cmt_lib), Cvoid,
-          (Ptr{Ptr{MtComputeCommandEncoder}}, Ptr{Ptr{MtBuffer}}, Ptr{NsUInteger}, NsRange),
-          cce, buf, offsets, range)
+          (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtBuffer}}, Ptr{NsUInteger}, NsRange),
+          cce, bufs, offsets, range)
 end
 
 function mtComputeCommandEncoderBufferSetOffsetAtIndex(cce, offset, indx)
