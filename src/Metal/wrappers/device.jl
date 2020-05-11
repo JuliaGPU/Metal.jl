@@ -1,6 +1,6 @@
-export MtlDevice, name, devices, DefaultDevice
+export MtlDevice, device,  devices, DefaultDevice
 
-const MTLDevice = Ptr{MtDevice} 
+const MTLDevice = Ptr{MtDevice}
 
 """
     MtlDevice(i::Integer)
@@ -16,7 +16,7 @@ struct MtlDevice
 end
 
 Base.convert(::Type{MTLDevice}, dev::MtlDevice) = dev.handle
-Base.unsafe_convert(::Type{MTLDevice}, d::MtlDevice) = convert(MTLDevice, d.handle) 
+Base.unsafe_convert(::Type{MTLDevice}, d::MtlDevice) = convert(MTLDevice, d.handle)
 
 Base.:(==)(a::MtlDevice, b::MtlDevice) = a.handle == b.handle
 Base.hash(dev::MtlDevice, h::UInt) = hash(dev.handle, h)

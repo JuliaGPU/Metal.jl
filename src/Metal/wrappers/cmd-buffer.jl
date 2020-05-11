@@ -1,4 +1,5 @@
-export MtlCommandBuffer
+export
+    MtlCommandBuffer, commit!
 
 const MTLCommandBuffer = Ptr{MtCommandBuffer}
 

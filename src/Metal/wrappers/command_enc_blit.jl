@@ -1,4 +1,5 @@
-export MtlBlitCommandEncoder
+export
+    MtlBlitCommandEncoder, append_copy!, append_fillbuffer!, append_sync!
 
 const MTLBlitCommandEncoder = Ptr{MtBlitCommandEncoder}
 
@@ -27,18 +28,13 @@ end
 
 ##
 # Copy from device to device
-append_copy!(enc::MtlBlitCommandEncoder,
-             src::Union{MtlPtr,Buffer,MtlBuffer},
-             dst::Union{MtlPtr,Buffer,MtlBuffer},
-             src_offset, dst_offset, len) =
-    mtBlitCommandEncoderCopyFromBufferToBuffer(enc, src, src_offset,
-    dst, dst_offset, len)
+append_copy!(enc::MtlBlitCommandEncoder, dst::MtlBuffer, dst_offset, src::MtlBuffer, src_offset, len) =
+    mtBlitCommandEncoderCopyFromBufferToBuffer(enc, src, src_offset-1, dst, dst_offset-1, len)
 
-append_fillbuffer!(enc::MtlBlitCommandEncoder,
-                    src::Union{MtlPtr,Buffer,MtlBuffer},
+append_fillbuffer!(enc::MtlBlitCommandEncoder, src::MtlBuffer,
                     val::UInt8, range) =
     mtBlitCommandEncoderFillBuffer(enc, src, range, val)
 
 # only for managed resources
-append_sync!(enc::MtlBlitCommandEncoder, src::Union{MtlPtr,Buffer,MtlBuffer}) = 
+append_sync!(enc::MtlBlitCommandEncoder, src::MtlBuffer) =
     mtBlitCommandencoderSynchronizeResource!(enc, src)

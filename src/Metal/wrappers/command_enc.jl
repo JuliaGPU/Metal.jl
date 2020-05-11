@@ -1,3 +1,5 @@
+export endEncoding!
+
 abstract type MtlCommandEncoder end
 
 Base.:(==)(a::T, b::T) where {T <: MtlCommandEncoder} = a.handle == b.handle

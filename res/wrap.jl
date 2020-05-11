@@ -36,7 +36,7 @@ function wrap(name, headers...; library="lib$name", include_dirs=dirname.(header
                     clang_includes = [include_dirs..., CLANG_INCLUDE],
                     clang_args = clang_args,
                     header_wrapped = (root, current)->begin
-                        startswith(dirname(current), dirname(root)) 
+                        startswith(dirname(current), dirname(root))
                         #startswith(basename(current), "ze_") && in(root, headers)
                     end,
                     header_library = x->library,
@@ -98,7 +98,7 @@ function apply(text, edit::Edit{Int})
     string(text[1:edit.loc], edit.text, text[nextind(text, edit.loc):end])
 end
 function apply(text, edit::Edit{UnitRange{Int}})
-    # println("Rewriting '$(text[edit.loc])' to '$(edit.text)'")
+    #println("Rewriting '$(text[edit.loc])' to '$(edit.text)'")
     string(text[1:prevind(text, first(edit.loc))], edit.text, text[nextind(text, last(edit.loc)):end])
 end
 
@@ -293,16 +293,29 @@ function process(name, headers...; kwargs...)
     end
 
     ## other patches
-    
+    ##
+    for file in tuple(common_file)
+        text = read(file, String)
+        for type in ("MtBuffer", "MtTexture", "MtResource")
+            orig = "const $type = Cvoid"
+            repl = "struct $type end"
+            text = replace(text, orig=>repl)
+        end
+        write(file, text)
+    end
+
 
     ## move to destination
-    @info "current dir is $(pwd())"   
+    @info "current dir is $(pwd())"
     for src in (output_file, common_file, aliases_file)
         dst = joinpath(dirname(@__DIR__), "src/Metal/api", src)
         @info "Copying from $src to $dst "
         cp(src, dst; force=true)
         rm(src)
     end
+
+    rm("LibTemplate.jl")
+    rm("ctypes.jl")
 
     return
 end

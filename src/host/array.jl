@@ -3,7 +3,7 @@
 export MtlArray
 
 mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
-  ptr::MtlPtr{T}
+  buffer::MtlBuffer{T}
   dims::Dims{N}
 
   dev::MtlDevice
@@ -13,15 +13,13 @@ end
 ## constructors
 
 # type and dimensionality specified, accepting dims as tuples of Ints
-function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}) where {T,N}
+function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Private) where {T,N}
     dev = device()
-    buf = alloc(Device, dev, prod(dims) * sizeof(T))
-    ptr = convert(MtlPtr{T}, buf)
+    buf = alloc(T, dev, prod(dims) * sizeof(T); storage=storage)
 
-    obj = MtlArray{T,N}(ptr, dims, dev)
-    finalizer(obj) do 
-        #free(buf)
-        Metal.mtBufferRelease(obj.ptr)
+    obj = MtlArray{T,N}(buf, dims, dev)
+    finalizer(obj) do arr
+        free(arr.buffer)
     end
     return obj
 end
@@ -41,7 +39,6 @@ Base.similar(a::MtlArray{T,N}) where {T,N} = MtlArray{T,N}(undef, size(a))
 Base.similar(a::MtlArray{T}, dims::Base.Dims{N}) where {T,N} = MtlArray{T,N}(undef, dims)
 Base.similar(a::MtlArray, ::Type{T}, dims::Base.Dims{N}) where {T,N} = MtlArray{T,N}(undef, dims)
 
-
 ## array interface
 
 Base.elsize(::Type{<:MtlArray{T}}) where {T} = sizeof(T)
@@ -49,8 +46,8 @@ Base.elsize(::Type{<:MtlArray{T}}) where {T} = sizeof(T)
 Base.size(x::MtlArray) = x.dims
 Base.sizeof(x::MtlArray) = Base.elsize(x) * length(x)
 
-Base.pointer(x::MtlArray) = x.ptr
-Base.pointer(x::MtlArray, i::Integer) = x.ptr + (i-1) * Base.elsize(x)
+Base.pointer(x::MtlArray) = x.buffer
+#Base.pointer(x::MtlArray, i::Integer) = x.ptr + (i-1) * Base.elsize(x)
 
 
 ## interop with other arrays
@@ -82,8 +79,7 @@ Base.convert(::Type{T}, x::T) where T <: MtlArray = x
 Base.unsafe_convert(::Type{Ptr{T}}, x::MtlArray{T}) where {T} = throw(ArgumentError("cannot take the host address of a $(typeof(x))"))
 Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S,T} = throw(ArgumentError("cannot take the host address of a $(typeof(x))"))
 
-Base.unsafe_convert(::Type{MtlPtr{T}}, x::MtlArray{T}) where {T} = pointer(x)
-Base.unsafe_convert(::Type{MtlPtr{S}}, x::MtlArray{T}) where {S,T} = convert(MtlPtr{S}, Base.unsafe_convert(MtlPtr{T}, x))
+Base.unsafe_convert(t::Type{Metal.MTLBuffer}, x::MtlArray{T}) where {T}   = Base.unsafe_convert(t, pointer(x))
 
 
 ## interop with GPU arrays
@@ -141,12 +137,18 @@ function Base.copyto!(dest::MtlArray{T}, doffs::Integer, src::MtlArray{T}, soffs
   @boundscheck checkbounds(src, soffs)
   @boundscheck checkbounds(src, soffs+n-1)
   # TODO: which device to use here?
-  unsafe_copyto!(dest.dev, dest, doffs, src, soffs, n)
+  if dest.dev == src.dev
+    unsafe_copyto!(dest.dev, dest, doffs, src, soffs, n)
+  else
+    error("Copy between different devices not implemented")
+  end
   return dest
 end
 
 function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::Array{T}, soffs, n) where T
-  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
+  GC.@preserve src dest begin
+    unsafe_copyto!(dev, pointer(dest), doffs, pointer(src, soffs), n)
+  end
   if Base.isbitsunion(T)
     # copy selector bytes
     error("Not implemented")
@@ -154,8 +156,11 @@ function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::Arra
   return dest
 end
 
-function Base.unsafe_copyto!(dev::MtlDevice, dest::Array{T}, doffs, src::MtlArray{T}, soffs, n) where T
-  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
+function Base.unsafe_copyto!(dev::MtlDevice, dest::Array{T}, doff, src::MtlArray{T}, soff, n) where T
+  GC.@preserve src dest begin
+    unsafe_copyto!(dev, pointer(dest, doff), pointer(src), soff, n)
+  end
+  #GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
   if Base.isbitsunion(T)
     # copy selector bytes
     error("Not implemented")
@@ -164,7 +169,8 @@ function Base.unsafe_copyto!(dev::MtlDevice, dest::Array{T}, doffs, src::MtlArra
 end
 
 function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::MtlArray{T}, soffs, n) where T
-  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
+  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest), doffs, pointer(src), soffs, n)
+#  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
   if Base.isbitsunion(T)
     # copy selector bytes
     error("Not implemented")

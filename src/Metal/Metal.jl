@@ -9,19 +9,19 @@ const cmt_lib = joinpath(@__DIR__, "..", "..", "deps", "libcmt_lib.dylib")
 
 # Basic types
 include("api/libcmt_common.jl")
-include("pointer.jl")
+#include("pointer.jl")
 include("error.jl")
 Base.convert(::Type{NsRange}, range::UnitRange{T}) where T <: Integer =
 	NsRange(first(range), length(range))
 
-const MTLdeviceptr = MtlPtr{Cvoid}
-
 # low-level autogeneraed wrappers
+export MtSize
 include("api/libcmt_aliases.jl")
 include("api/libcmt.jl")
 
 # julia wrappers
 include("wrappers/_base.jl")
+include("wrappers/storage_type.jl")
 include("wrappers/resource.jl")
 include("wrappers/device.jl")
 include("wrappers/compile-options.jl")
@@ -34,10 +34,10 @@ include("wrappers/cmd-queue.jl")
 include("wrappers/cmd-buffer.jl")
 include("wrappers/compute-pipeline-state.jl")
 
-include("wrappers/memory.jl")
-
 include("wrappers/command_enc.jl")
 include("wrappers/command_enc_blit.jl")
 include("wrappers/command_enc_compute.jl")
+
+# high-level operations
 
 end # module

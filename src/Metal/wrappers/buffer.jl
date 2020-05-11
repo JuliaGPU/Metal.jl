@@ -1,69 +1,72 @@
-#	This wraps the low level Metal Buffer in a
-# 	MtlBuffer object.
-# 	Probably you are more interested in memory.jl
-
-export MtlBuffer, contents
+export
+    MtlBuffer, content, alloc, free
 
 const MTLBuffer = Ptr{MtBuffer}
 
-mutable struct MtlBuffer{A} <: MtlResource
-    ptr::MTLBuffer
-    bytesize::Int
-    device::MtlDevice
+struct MtlBuffer{T} <: MtlResource
+    handle::MTLBuffer
 end
 
-Base.convert(::Type{MTLBuffer}, lib::MtlBuffer) = lib.ptr
-Base.unsafe_convert(::Type{MTLBuffer}, lib::MtlBuffer) = convert(MTLBuffer, lib.ptr)
+Base.unsafe_convert(::Type{MTLBuffer}, buf::MtlBuffer) = buf.handle
+Base.convert(::Type{MtlBuffer{T}}, buf::MtlBuffer{T2}) where {T,T2} = MtlBuffer{T}(buf.handle)
 
-Base.:(==)(a::MtlBuffer, b::MtlBuffer) = a.ptr == b.ptr
-Base.hash(lib::MtlBuffer, h::UInt) = hash(lib.ptr, h)
+Base.:(==)(a::MtlBuffer, b::MtlBuffer) = a.handle == b.handle
+Base.hash(buf::MtlBuffer, h::UInt) = hash(buf.handle, h)
 
-function unsafe_destroy!(buf::MtlBuffer)
-    if buf.ptr !== C_NULL
-        mtBufferRelease(buf)
-    end
-end
+Base.sizeof(buf::MtlBuffer)          = mtBufferLength(buf)
+Base.length(d::MtlBuffer{T}) where T = Base.bitcast(Int, div(mtBufferLength(d), sizeof(T)))
+device(buf::MtlBuffer)               = MtlDevice(true, mtResourceDevice(buf))
+content(buf::MtlBuffer{T}) where T   = Base.bitcast(Ptr{T}, mtBufferContents(buf))
+
+## Alloc
+alloc_buffer(dev::MtlDevice, bytesize, opts::MtlResourceOptions) =  mtDeviceNewBufferWithLength(dev, bytesize, opts)
+alloc_buffer(dev::MtlHeap, bytesize, opts::MtlResourceOptions) = mtHeapNewBufferWithLength(heap, bytesize, opts)
+alloc_buffer(dev::MtlDevice, bytesize, opts::MtlResourceOptions, ptr::Ptr) = mtDeviceNewBufferWithBytes(dev, ptr, bytesize, opts)
+alloc_buffer(dev::MtlHeap, bytesize, opts::MtlResourceOptions, ptr::Ptr) = mtHeapNewBufferWithBytes(heap, ptr, bytesize, opts)
+
+alloc_buffer(dev, bytesize, opts::Integer) = alloc_buffer(dev, bytesize, Base.bitcast(MtlResourceOptions, UInt32(opts)))
+alloc_buffer(dev, bytesize, opts::Integer, ptr) = alloc_buffer(dev, bytesize, Base.bitcast(MtlResourceOptions, UInt32(opts)), ptr)
+
 ## Constructors from device
-function MtlBuffer(dev::MtlDevice, bytesize::Integer, opts::MtResourceOptions)
-    ptr = mtDeviceNewBufferWithLength(dev, bytesize, opts)
-    obj = MtlBuffer(ptr, bytesize, dev)
-    finalizer(unsafe_destroy!, obj)
-    return obj
-end
-MtlBuffer(dev::MtlDevice, T::Type, len::Integer, opts::MtResourceOptions) =
-    MtlBuffer(dev, sizeof(T) * len, opts)
+function MtlBuffer{T}(dev::Union{MtlDevice,MtlHeap},
+                      length::Integer;
+                      storage = Private,
+                      hazard_tracking = DefaultTracking,
+                      cache_mode = DefaultCPUCache) where {T}
+    opts = storage + hazard_tracking + cache_mode
 
-function MtlBuffer(dev::MtlDevice, ptr::Ptr, bytesize::Integer, opts::MtResourceOptions)
-    ptr = mtDeviceNewBufferWithBytesNoCopy(dev, ptr, bytesize, opts)
-    obj = MtlBuffer(ptr, bytesize, dev)
-    finalizer(unsafe_destroy!, obj)
-    return obj
-end
-MtlBuffer(dev::MtlDevice, arr::Array{T}, opts::MtResourceOptions) where T = MtlBuffer(dev, pointer(arr), length(arr)*sizeof(T), opts) 
+    bytesize = length * sizeof(T)
+    ptr = alloc_buffer(dev, bytesize, opts)
 
-## constructors from heap
-function MtlBuffer(heap::MtlHeap, bytesize::Integer, opts::MtResourceOptions)
-    ptr = mtHeapNewBufferWithLength(heap, bytesize, opts)
-    ptr == C_NULL && error("The heap's type must be MTLHeapTypeAutomatic.")
-    obj = MtlBuffer(ptr, bytesize, dev)
-    finalizer(unsafe_destroy!, obj)
-    return obj
+    dev = dev isa MtlDevice ? dev : device(dev)
+    return MtlBuffer{T}(ptr)
 end
-function MtlBuffer(heap::MtlHeap, bytesize::Integer, opts::MtResourceOptions, offset::Integer)
-    ptr = mtHeapNewBufferWithLengthOffset(heap, bytesize, opts, offset)
-    ptr == C_NULL && error("The heap's type must be MTLHeapTypePlacement.")
-    obj = MtlBuffer(ptr, bytesize, dev, offset)
-    finalizer(unsafe_destroy!, obj)
-    return obj
+
+function MtlBuffer{T}(dev::Union{MtlDevice,MtlHeap},
+                      length::Integer,
+                      ptr::Ptr;
+                      storage = Managed,
+                      hazard_tracking = DefaultTracking,
+                      cache_mode = DefaultCPUCache) where {T}
+
+    storage == Private && error("Can't create a Private copy-allocated buffer.")
+    opts =  storage + hazard_tracking + cache_mode
+
+    bytesize = length * sizeof(T)
+    ptr = alloc_buffer(dev, bytesize, opts, ptr)
+
+    dev = dev isa MtlDevice ? dev : device(dev)
+    return MtlBuffer{T}(ptr)
 end
-MtlBuffer(heap::MtlHeap, T::Type, len::Integer, opts::MtResourceOptions) =
-    MtlBuffer(heap, sizeof(T) * len, opts)
-MtlBuffer(heap::MtlHeap, T::Type, len::Integer, opts::MtResourceOptions, offset::Integer) =
-    MtlBuffer(heap, sizeof(T) * len, opts, offset)
 
+MtlBuffer(T::Type, dev::Union{MtlDevice,MtlHeap}, args...; kwargs...) =
+    MtlBuffer{T}(dev, args...;kwargs...)
+MtlBuffer(dev::Union{MtlDevice,MtlHeap}, args...; kwargs...) =
+    MtlBuffer(Cvoid, dev, args...;kwargs...)
 
-Base.length(d::MtlBuffer) = mtBufferLength(d)
-contents(d::MtlBuffer) = mtBufferContents(d)
+alloc(args...; kwargs...) = MtlBuffer(args...; kwargs...)
+free(buf::MtlBuffer) = (buf.handle !== C_NULL) || mtResourceRelease(buf)
+
 DidModifyRange!(buf::MtlBuffer, range) = mtBufferDidModifyRange(buf, range)
 
 
@@ -80,6 +83,11 @@ function ParentBuffer(buf::MtlBuffer)
     end
 end
 
-
 ##
-handle_array(vec::Vector{MtlBuffer}) = convert.(MetalCore.MTLBuffer, vec)
+function Base.unsafe_wrap(t::Type{<:Array}, buf::MtlBuffer{T}, dims::Dims; own=false) where {T}
+    ptr = content(buf)
+    ptr == C_NULL && error("Can't unsafe_wrap a GPU Private array.")
+    return unsafe_wrap(t, ptr, dims; own=own)
+end
+
+handle_array(vec::Vector{<:MtlBuffer}) = [buf.handle for buf in vec]

@@ -39,7 +39,7 @@ const MtBlitCommandEncoder = Cvoid
 const MtLibrary = Cvoid
 const MtFunction = Cvoid
 const MtRenderPassDesc = Cvoid
-const MtTexture = Cvoid
+struct MtTexture end
 const MtCommandBuffer = Cvoid
 const MtDrawable = Cvoid
 const MtVertexDescriptor = Cvoid
@@ -49,7 +49,7 @@ const MtIndirectCommandBuffer = Cvoid
 const MtIndirectComputeCommand = Cvoid
 const MtIndirectRenderCommand = Cvoid
 const MtDepthStencil = Cvoid
-const MtBuffer = Cvoid
+struct MtBuffer end
 const MtCompileOptions = Cvoid
 const MtEvent = Cvoid
 const MtSharedEvent = Cvoid
@@ -58,7 +58,7 @@ const MtFence = Cvoid
 const MtSharedEventNotificationBlock = Cvoid
 const MtCommandBufferHandlerFun = Ptr{Cvoid}
 const MtSharedEventListener = Cvoid
-const MtResource = Cvoid
+struct MtResource end
 const MtHeap = Cvoid
 const MtHeapDescriptor = Cvoid
 const MtComputePipelineState = Cvoid
@@ -529,4 +529,3 @@ end
 
 
 const MtCommandBufferOnCompleteFn = Ptr{Cvoid}
-

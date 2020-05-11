@@ -1,4 +1,6 @@
-export MtlComputeCommandEncoder, set!, setbuffer!, dispatchThreads!, endEncoding!
+export MtlComputeCommandEncoder
+export set_function!, set_buffer!, dispatchThreads!, endEncoding!
+export set_buffers!, append_current_function!
 
 const MTLComputeCommandEncoder = Ptr{MtComputeCommandEncoder}
 
@@ -24,16 +26,16 @@ end
 set_function!(cce::MtlComputeCommandEncoder, pip::MtlComputePipelineState) =
     mtComputeCommandEncoderSetComputePipelineState(cce, pip)
 
-set_buffer!(cce::MtlComputeCommandEncoder, buf::Union{MtlBuffer,MtlPtr}, offset::Integer, index::Integer) =
+set_buffer!(cce::MtlComputeCommandEncoder, buf::MtlBuffer, offset::Integer, index::Integer) =
     mtComputeCommandEncoderSetBufferOffsetAtIndex(cce, buf, offset, index)
 set_bufferoffset!(cce::MtlComputeCommandEncoder, offset::Integer, index::Integer) =
     mtComputeCommandEncoderBufferSetOffsetAtIndex(cce, offset, index)
-set_buffers!(cce::MtlComputeCommandEncoder, bufs::Vector{MtlBuffer},
+set_buffers!(cce::MtlComputeCommandEncoder, bufs::Vector{<:MtlBuffer},
              offsets::Vector{Int}, indices::UnitRange{Int}) =
     mtComputeCommandEncoderSetBuffersOffsetsWithRange(cce, handle_array(bufs), offsets, indices .- 1)
-set_buffers!(cce::MtlComputeCommandEncoder, bufs::Vector{MtlPtr{T}},
+#=set_buffers!(cce::MtlComputeCommandEncoder, bufs::Vector{MtlPtr{T}},
              offsets::Vector{Int}, indices::UnitRange{Int}) where {T} =
-    mtComputeCommandEncoderSetBuffersOffsetsWithRange(cce, bufs, offsets, indices .- 1)
+    mtComputeCommandEncoderSetBuffersOffsetsWithRange(cce, bufs, offsets, indices .- 1)=#
 
 dispatchThreads!(cce::MtlComputeCommandEncoder, gridSize::MtSize, threadGroupSize::MtSize) =
     mtComputeCommandEncoderDispatchThreadgroups_threadsPerThreadgroup(cce, gridSize, threadGroupSize)

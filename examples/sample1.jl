@@ -29,13 +29,14 @@ kernel void add_arrays(device const float* inA,
 """
 
 bufferSize = 128
-bufferA = MtlBuffer(dev, Float32, bufferSize, MetalCore.MtResourceStorageModeShared)
-bufferB = MtlBuffer(dev, Float32, bufferSize, MetalCore.MtResourceStorageModeShared)
-bufferC = MtlBuffer(dev, Float32, bufferSize, MetalCore.MtResourceStorageModeShared)
+bufferA = MtlBuffer(Float32, dev, bufferSize, storage=Shared)
+bufferB = MtlBuffer(Float32, dev, bufferSize, storage=Shared)
+bufferC = MtlBuffer(Float32, dev, bufferSize, storage=Shared)
 
-vecA = unsafe_wrap(Vector{Float32}, convert(Ptr{Float32}, contents(bufferA)), bufferSize)
-vecB = unsafe_wrap(Vector{Float32}, convert(Ptr{Float32}, contents(bufferB)), bufferSize)
-vecC = unsafe_wrap(Vector{Float32}, convert(Ptr{Float32}, contents(bufferC)), bufferSize)
+#vecA = unsafe_wrap(Vector{Float32}, convert(Ptr{Float32}, content(bufferA)), bufferSize)
+vecA = unsafe_wrap(Vector{Float32}, bufferA, tuple(bufferSize))
+vecB = unsafe_wrap(Vector{Float32}, bufferB, tuple(bufferSize))
+vecC = unsafe_wrap(Vector{Float32}, bufferC, tuple(bufferSize))
 
 using Random
 rand!.([vecA, vecB])
@@ -46,17 +47,16 @@ lib = MtlLibrary(dev, src, opts)
 
 fun = MtlFunction(lib, "add_arrays")
 pip_addfun = MtlComputePipelineState(dev, fun)
-queue = MetalCore.global_queue(dev) #MtlCommandQueue(dev)
+queue = global_queue(dev) #MtlCommandQueue(dev)
 
 ##
 cmd = MetalCore.commit!(queue) do cmdbuf
-    @info 4
     MtlComputeCommandEncoder(cmdbuf) do enc
         MetalCore.set_function!(enc, pip_addfun)
         MetalCore.set_buffers!(enc,
                                 [bufferA, bufferB, bufferC],
                                 [0,0,0], 1:3)
-        gridSize = MetalCore.MtSize(length(vecA), 1, 1)
+        gridSize = MtSize(length(vecA), 1, 1)
         threadGroupSize = min(length(vecA), pip_addfun.maxTotalThreadsPerThreadgroup)
         threadGroupSize = MetalCore.MtSize(threadGroupSize, 1, 1)
         MetalCore.append_current_function!(enc, gridSize, threadGroupSize)
@@ -67,3 +67,6 @@ end
 wait(cmd)
 
 @show vecC
+
+bufferD = alloc(Float32, dev, bufferSize, pointer(vecC), storage=Private) 
+vecD = unsafe_wrap(Vector{Float32}, bufferD, (128,))

@@ -1,3 +1,4 @@
+export MtlEvent, MtlSharedEvent
 
 abstract type MtlAbstractEvent end
 
@@ -16,7 +17,7 @@ mutable struct MtlSharedEvent <: MtlAbstractEvent
 end
 
 Base.convert(::Type{MTLEvent}, ev::MtlAbstractEvent) = ev.handle
-Base.unsafe_convert(::Type{MTLEvent}, ev::MtlAbstractEvent) = convert(MTLEvent, ev.handle) 
+Base.unsafe_convert(::Type{MTLEvent}, ev::MtlAbstractEvent) = convert(MTLEvent, ev.handle)
 
 Base.:(==)(a::MtlAbstractEvent, b::MtlAbstractEvent) = a.handle == b.handle
 Base.hash(ev::MtlAbstractEvent, h::UInt) = hash(ev.handle, h)
@@ -42,7 +43,7 @@ end
 device(ev::MtlAbstractEvent) = ev.device
 function label(l::MtlAbstractEvent)
 	ptr = mtEventLabel(l)
-	return ptr == C_NULL ? "" : unsafe_string(ptr) 
+	return ptr == C_NULL ? "" : unsafe_string(ptr)
 end
 
 # shared event
@@ -62,7 +63,7 @@ function unsafe_destroy!(fun::MtlSharedEventHandle)
 	fun.handle !== C_NULL && mtSharedEventHandleRelease(fun)
 end
 Base.convert(::Type{MTLSharedEventHandle}, lib::MtlSharedEventHandle) = lib.handle
-Base.unsafe_convert(::Type{MTLSharedEventHandle}, lib::MtlSharedEventHandle) = convert(MTLSharedEventHandle, lib.handle) 
+Base.unsafe_convert(::Type{MTLSharedEventHandle}, lib::MtlSharedEventHandle) = convert(MTLSharedEventHandle, lib.handle)
 
 Base.:(==)(a::MtlSharedEventHandle, b::MtlSharedEventHandle) = a.handle == b.handle
 Base.hash(lib::MtlSharedEventHandle, h::UInt) = hash(lib.handle, h)
@@ -72,13 +73,13 @@ Base.hash(lib::MtlSharedEventHandle, h::UInt) = hash(lib.handle, h)
 ## FENCES
 const MTLFence = Ptr{MtFence}
 
-mutable struct MtlFence 
+mutable struct MtlFence
 	handle::MTLFence
 	device::MtlDevice
 end
 
 Base.convert(::Type{MTLFence}, fen::MtlFence) = fen.handle
-Base.unsafe_convert(::Type{MTLFence}, fen::MtlFence) = convert(MTLFence, fen.handle) 
+Base.unsafe_convert(::Type{MTLFence}, fen::MtlFence) = convert(MTLFence, fen.handle)
 
 Base.:(==)(a::MtlFence, b::MtlFence) = a.handle == b.handle
 Base.hash(ev::MtlFence, h::UInt) = hash(ev.handle, h)
@@ -92,6 +93,3 @@ function MtlFence(dev::MtlDevice)
 end
 
 device(fen::MtlFence) = fen.device
-
-
-
