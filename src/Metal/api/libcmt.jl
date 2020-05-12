@@ -277,12 +277,6 @@ function mtMaxThreadsPerThreadgroup(device)
           device)
 end
 
-function mtNewComputePipelineStateWithFunction(device, fun)
-    ccall((:mtNewComputePipelineStateWithFunction, cmt_lib), Ptr{MtComputePipelineState},
-          (Ptr{MtDevice}, Ptr{MtFunction}),
-          device, fun)
-end
-
 function mtDeviceMaxBufferLength(device)
     ccall((:mtDeviceMaxBufferLength, cmt_lib), NsUInteger,
           (Ptr{MtDevice},),
@@ -305,6 +299,26 @@ function mtDeviceNewBufferWithBytesNoCopy(device, ptr, length, opts)
     ccall((:mtDeviceNewBufferWithBytesNoCopy, cmt_lib), Ptr{MtBuffer},
           (Ptr{MtDevice}, Ptr{Cvoid}, NsUInteger, MtResourceOptions),
           device, ptr, length, opts)
+end
+
+function mtNewComputePipelineStateWithFunction(device, fun)
+    ccall((:mtNewComputePipelineStateWithFunction, cmt_lib), Ptr{MtComputePipelineState},
+          (Ptr{MtDevice}, Ptr{MtFunction}),
+          device, fun)
+end
+
+function mtNewComputePipelineStateWithFunctionReflection(device, fun, opt, reflection)
+    ccall((:mtNewComputePipelineStateWithFunctionReflection, cmt_lib), Ptr{MtComputePipelineState},
+          (Ptr{MtDevice}, Ptr{MtFunction}, MtPipelineOption,
+           Ptr{MtComputePipelineReflection}),
+          device, fun, opt, reflection)
+end
+
+function mtNewComputePipelineStateWithDescriptor(device, desc, opt, reflection)
+    ccall((:mtNewComputePipelineStateWithDescriptor, cmt_lib), Ptr{MtComputePipelineState},
+          (Ptr{MtDevice}, Ptr{MtComputePipelineDescriptor}, MtPipelineOption,
+           Ptr{MtComputePipelineReflection}),
+          device, desc, opt, reflection)
 end
 
 function mtComputePipelineDevice(pip)
@@ -343,6 +357,78 @@ function mtComputePipelineStaticThreadgroupMemoryLength(pip)
           pip)
 end
 
+function mtAttributeName(attr)
+    ccall((:mtAttributeName, cmt_lib), Cstring,
+          (Ptr{MtAttribute},),
+          attr)
+end
+
+function mtAttributeIndex(attr)
+    ccall((:mtAttributeIndex, cmt_lib), NsUInteger,
+          (Ptr{MtAttribute},),
+          attr)
+end
+
+function mtAttributeDataType(attr)
+    ccall((:mtAttributeDataType, cmt_lib), MtDataType,
+          (Ptr{MtAttribute},),
+          attr)
+end
+
+function mtAttributeActive(attr)
+    ccall((:mtAttributeActive, cmt_lib), Bool,
+          (Ptr{MtAttribute},),
+          attr)
+end
+
+function mtAttributeIsPatchControlPointData(attr)
+    ccall((:mtAttributeIsPatchControlPointData, cmt_lib), Bool,
+          (Ptr{MtAttribute},),
+          attr)
+end
+
+function mtAttributeIsPatchData(attr)
+    ccall((:mtAttributeIsPatchData, cmt_lib), Bool,
+          (Ptr{MtAttribute},),
+          attr)
+end
+
+function mtVertexAttributeName(attr)
+    ccall((:mtVertexAttributeName, cmt_lib), Cstring,
+          (Ptr{MtVertexAttribute},),
+          attr)
+end
+
+function mtVertexAttributeIndex(attr)
+    ccall((:mtVertexAttributeIndex, cmt_lib), NsUInteger,
+          (Ptr{MtVertexAttribute},),
+          attr)
+end
+
+function mtVertexAttributeDataType(attr)
+    ccall((:mtVertexAttributeDataType, cmt_lib), MtDataType,
+          (Ptr{MtVertexAttribute},),
+          attr)
+end
+
+function mtVertexAttributeActive(attr)
+    ccall((:mtVertexAttributeActive, cmt_lib), Bool,
+          (Ptr{MtVertexAttribute},),
+          attr)
+end
+
+function mtVertexAttributeIsPatchControlPointData(attr)
+    ccall((:mtVertexAttributeIsPatchControlPointData, cmt_lib), Bool,
+          (Ptr{MtVertexAttribute},),
+          attr)
+end
+
+function mtVertexAttributeIsPatchData(attr)
+    ccall((:mtVertexAttributeIsPatchData, cmt_lib), Bool,
+          (Ptr{MtVertexAttribute},),
+          attr)
+end
+
 function mtNewCompileOpts()
     ccall((:mtNewCompileOpts, cmt_lib), Ptr{MtCompileOptions}, ())
 end
@@ -377,6 +463,42 @@ function mtCompileOptsLanguageVersionSet(opts, val)
           opts, val)
 end
 
+function mtFunctionConstantValuesSetWithIndex(funval, value, typ, idx)
+    ccall((:mtFunctionConstantValuesSetWithIndex, cmt_lib), Cvoid,
+          (Ptr{MtFunctionConstantValues}, Ptr{Cvoid}, MtDataType, NsUInteger),
+          funval, value, typ, idx)
+end
+
+function mtFunctionConstantValuesSetWithName(funval, value, typ, name)
+    ccall((:mtFunctionConstantValuesSetWithName, cmt_lib), Cvoid,
+          (Ptr{MtFunctionConstantValues}, Ptr{Cvoid}, MtDataType, Cstring),
+          funval, value, typ, name)
+end
+
+function mtFunctionConstantValuesSetWithRange(funval, value, typ, range)
+    ccall((:mtFunctionConstantValuesSetWithRange, cmt_lib), Cvoid,
+          (Ptr{MtFunctionConstantValues}, Ptr{Cvoid}, MtDataType, NsRange),
+          funval, value, typ, range)
+end
+
+function mtFunctionConstantValuesReset(funval)
+    ccall((:mtFunctionConstantValuesReset, cmt_lib), Cvoid,
+          (Ptr{MtFunctionConstantValues},),
+          funval)
+end
+
+function mtNewFunctionWithName(lib, name)
+    ccall((:mtNewFunctionWithName, cmt_lib), Ptr{MtFunction},
+          (Ptr{MtLibrary}, Cstring),
+          lib, name)
+end
+
+function mtNewFunctionWithNameConstantValues(lib, name, constantValues)
+    ccall((:mtNewFunctionWithNameConstantValues, cmt_lib), Ptr{MtFunction},
+          (Ptr{MtLibrary}, Cstring, Ptr{MtFunctionConstantValues}),
+          lib, name, constantValues)
+end
+
 function mtFunctionRelease(fun)
     ccall((:mtFunctionRelease, cmt_lib), Cvoid,
           (Ptr{MtFunction},),
@@ -403,6 +525,12 @@ end
 
 function mtFunctionName(fun)
     ccall((:mtFunctionName, cmt_lib), Cstring,
+          (Ptr{MtFunction},),
+          fun)
+end
+
+function mtFunctionStageInputAttributes(fun)
+    ccall((:mtFunctionStageInputAttributes, cmt_lib), Ptr{Ptr{MtAttribute}},
           (Ptr{MtFunction},),
           fun)
 end
@@ -447,12 +575,6 @@ function mtLibraryFunctionNames(device)
     ccall((:mtLibraryFunctionNames, cmt_lib), Ptr{Cstring},
           (Ptr{MtLibrary},),
           device)
-end
-
-function mtNewFunctionWithName(lib, name)
-    ccall((:mtNewFunctionWithName, cmt_lib), Ptr{MtFunction},
-          (Ptr{MtLibrary}, Cstring),
-          lib, name)
 end
 
 function mtBufferRelease(buf)
@@ -777,6 +899,126 @@ function mtSampleCount(renderdesc, sampleCount)
     ccall((:mtSampleCount, cmt_lib), Cvoid,
           (Ptr{MtRenderDesc}, UInt32),
           renderdesc, sampleCount)
+end
+
+function mtArgumentName(arg)
+    ccall((:mtArgumentName, cmt_lib), Cstring,
+          (Ptr{MtArgument},),
+          arg)
+end
+
+function mtArgumentActive(arg)
+    ccall((:mtArgumentActive, cmt_lib), Bool,
+          (Ptr{MtArgument},),
+          arg)
+end
+
+function mtArgumentIndex(arg)
+    ccall((:mtArgumentIndex, cmt_lib), NsUInteger,
+          (Ptr{MtArgument},),
+          arg)
+end
+
+function mtArgumentType(arg)
+    ccall((:mtArgumentType, cmt_lib), MtArgumentType,
+          (Ptr{MtArgument},),
+          arg)
+end
+
+function mtArgumentAccess(arg)
+    ccall((:mtArgumentAccess, cmt_lib), MtArgumentAccess,
+          (Ptr{MtArgument},),
+          arg)
+end
+
+function mtArgumentBufferAlignment(arg)
+    ccall((:mtArgumentBufferAlignment, cmt_lib), NsUInteger,
+          (Ptr{MtArgument},),
+          arg)
+end
+
+function mtArgumentBufferDataSize(arg)
+    ccall((:mtArgumentBufferDataSize, cmt_lib), NsUInteger,
+          (Ptr{MtArgument},),
+          arg)
+end
+
+function mtArgumentBufferDataType(arg)
+    ccall((:mtArgumentBufferDataType, cmt_lib), MtDataType,
+          (Ptr{MtArgument},),
+          arg)
+end
+
+function mtArgumentBufferStructType(arg)
+    ccall((:mtArgumentBufferStructType, cmt_lib), Ptr{MtStructType},
+          (Ptr{MtArgument},),
+          arg)
+end
+
+function mtArgumentBufferPointerType(arg)
+    ccall((:mtArgumentBufferPointerType, cmt_lib), Ptr{MtPointerType},
+          (Ptr{MtArgument},),
+          arg)
+end
+
+function mtArgumentArrayLength(arg)
+    ccall((:mtArgumentArrayLength, cmt_lib), NsUInteger,
+          (Ptr{MtArgument},),
+          arg)
+end
+
+function mtArgumentThreadgroupMemoryAlignment(arg)
+    ccall((:mtArgumentThreadgroupMemoryAlignment, cmt_lib), NsUInteger,
+          (Ptr{MtArgument},),
+          arg)
+end
+
+function mtArgumentThreadgroupMemoryDataSize(arg)
+    ccall((:mtArgumentThreadgroupMemoryDataSize, cmt_lib), NsUInteger,
+          (Ptr{MtArgument},),
+          arg)
+end
+
+function mtPointerTypeElementType(ptr)
+    ccall((:mtPointerTypeElementType, cmt_lib), MtDataType,
+          (Ptr{MtPointerType},),
+          ptr)
+end
+
+function mtPointerTypeAccess(ptr)
+    ccall((:mtPointerTypeAccess, cmt_lib), MtArgumentAccess,
+          (Ptr{MtPointerType},),
+          ptr)
+end
+
+function mtPointerTypeAlignment(ptr)
+    ccall((:mtPointerTypeAlignment, cmt_lib), NsUInteger,
+          (Ptr{MtPointerType},),
+          ptr)
+end
+
+function mtPointerTypeDataSize(ptr)
+    ccall((:mtPointerTypeDataSize, cmt_lib), NsUInteger,
+          (Ptr{MtPointerType},),
+          ptr)
+end
+
+function mtPointerTypeElementIsArgumentBuffer(ptr)
+    ccall((:mtPointerTypeElementIsArgumentBuffer, cmt_lib), Bool,
+          (Ptr{MtPointerType},),
+          ptr)
+end
+
+function mtPointerTypeElementStructType(ptr)
+    ccall((:mtPointerTypeElementStructType, cmt_lib), Ptr{MtStructType},
+          (Ptr{MtPointerType},),
+          ptr)
+end
+
+function mtPointerTypeElementArrayType(ptr)
+    ccall((:mtPointerTypeElementArrayType, cmt_lib), Ptr{MtArrayType},
+          (Ptr{MtPointerType},),
+          ptr)
 end
 
 function mtNewCommandBuffer(cmdq)
@@ -1243,6 +1485,42 @@ function mtComputeCommandEncoderUseHeaps(cce, heaps, count)
           cce, heaps, count)
 end
 
+function mtComputeCommandEncoderSetStageInRegion(cce, region)
+    ccall((:mtComputeCommandEncoderSetStageInRegion, cmt_lib), Cvoid,
+          (Ptr{MtComputeCommandEncoder}, MtRegion),
+          cce, region)
+end
+
+function mtComputeCommandEncoderSetStageInRegionWithIndirectBuffer(cce, buf, offset)
+    ccall((:mtComputeCommandEncoderSetStageInRegionWithIndirectBuffer, cmt_lib), Cvoid,
+          (Ptr{MtComputeCommandEncoder}, Ptr{MtBuffer}, NsUInteger),
+          cce, buf, offset)
+end
+
+function mtComputeCommandEncoderDispatchType(cce)
+    ccall((:mtComputeCommandEncoderDispatchType, cmt_lib), MtDispatchType,
+          (Ptr{MtComputeCommandEncoder},),
+          cce)
+end
+
+function mtComputeCommandEncoderMemoryBarrierWithScope(cce, scope)
+    ccall((:mtComputeCommandEncoderMemoryBarrierWithScope, cmt_lib), Cvoid,
+          (Ptr{MtComputeCommandEncoder}, MtBarrierScope),
+          cce, scope)
+end
+
+function mtComputeCommandEncoderMemoryBarrierWithResource(cce, resources, count)
+    ccall((:mtComputeCommandEncoderMemoryBarrierWithResource, cmt_lib), Cvoid,
+          (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtResource}}, NsUInteger),
+          cce, resources, count)
+end
+
+function mtComputeCommandEncoderExecuteCommandInBuffer(cce, resources, count)
+    ccall((:mtComputeCommandEncoderExecuteCommandInBuffer, cmt_lib), Cvoid,
+          (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtResource}}, NsUInteger),
+          cce, resources, count)
+end
+
 function mtNewRenderCommandEncoder(cmdb, pass)
     ccall((:mtNewRenderCommandEncoder, cmt_lib), Ptr{MtRenderCommandEncoder},
           (Ptr{MtCommandBuffer}, Ptr{MtRenderPassDesc}),
@@ -1326,6 +1604,173 @@ function mtCommandQueueRelease(queue)
     ccall((:mtCommandQueueRelease, cmt_lib), Cvoid,
           (Ptr{MtCommandQueue},),
           queue)
+end
+
+function mtNewArgumentDescriptor()
+    ccall((:mtNewArgumentDescriptor, cmt_lib), Ptr{MtArgumentDescriptor}, ())
+end
+
+function mtArgumentDescriptorDataType(desc)
+    ccall((:mtArgumentDescriptorDataType, cmt_lib), MtDataType,
+          (Ptr{MtArgumentDescriptor},),
+          desc)
+end
+
+function mtArgumentDescriptorDataTypeSet(desc, dataType)
+    ccall((:mtArgumentDescriptorDataTypeSet, cmt_lib), Cvoid,
+          (Ptr{MtArgumentDescriptor}, MtDataType),
+          desc, dataType)
+end
+
+function mtArgumentDescriptorIndex(desc)
+    ccall((:mtArgumentDescriptorIndex, cmt_lib), NsUInteger,
+          (Ptr{MtArgumentDescriptor},),
+          desc)
+end
+
+function mtArgumentDescriptorIndexSet(desc, index)
+    ccall((:mtArgumentDescriptorIndexSet, cmt_lib), Cvoid,
+          (Ptr{MtArgumentDescriptor}, NsUInteger),
+          desc, index)
+end
+
+function mtArgumentDescriptorAccess(desc)
+    ccall((:mtArgumentDescriptorAccess, cmt_lib), MtArgumentAccess,
+          (Ptr{MtArgumentDescriptor},),
+          desc)
+end
+
+function mtArgumentDescriptorAccessSet(desc, access)
+    ccall((:mtArgumentDescriptorAccessSet, cmt_lib), Cvoid,
+          (Ptr{MtArgumentDescriptor}, MtArgumentAccess),
+          desc, access)
+end
+
+function mtArgumentDescriptorArrayLength(desc)
+    ccall((:mtArgumentDescriptorArrayLength, cmt_lib), NsUInteger,
+          (Ptr{MtArgumentDescriptor},),
+          desc)
+end
+
+function mtArgumentDescriptorArrayLengthSet(desc, length)
+    ccall((:mtArgumentDescriptorArrayLengthSet, cmt_lib), Cvoid,
+          (Ptr{MtArgumentDescriptor}, NsUInteger),
+          desc, length)
+end
+
+function mtArgumentDescriptorConstantBlockAlignment(desc)
+    ccall((:mtArgumentDescriptorConstantBlockAlignment, cmt_lib), NsUInteger,
+          (Ptr{MtArgumentDescriptor},),
+          desc)
+end
+
+function mtArgumentDescriptorConstantBlockAlignmentSet(desc, alignment)
+    ccall((:mtArgumentDescriptorConstantBlockAlignmentSet, cmt_lib), Cvoid,
+          (Ptr{MtArgumentDescriptor}, NsUInteger),
+          desc, alignment)
+end
+
+function mtArgumentDescriptorTextureType(desc)
+    ccall((:mtArgumentDescriptorTextureType, cmt_lib), MtTextureType,
+          (Ptr{MtArgumentDescriptor},),
+          desc)
+end
+
+function mtArgumentDescriptorTextureTypeSet(desc, textype)
+    ccall((:mtArgumentDescriptorTextureTypeSet, cmt_lib), Cvoid,
+          (Ptr{MtArgumentDescriptor}, MtTextureType),
+          desc, textype)
+end
+
+function mtNewArgumentEncoderWithBufferIndexFromFunction(_function, bufferIndex)
+    ccall((:mtNewArgumentEncoderWithBufferIndexFromFunction, cmt_lib), Ptr{MtArgumentEncoder},
+          (Ptr{MtFunction}, NsUInteger),
+          _function, bufferIndex)
+end
+
+function mtNewArgumentEncoderWithBufferIndexReflectionFromFunction(_function, bufferIndex,
+                                                                   reflection)
+    ccall((:mtNewArgumentEncoderWithBufferIndexReflectionFromFunction, cmt_lib), Ptr{MtArgumentEncoder},
+          (Ptr{MtFunction}, NsUInteger, Ptr{MtAutoreleasedArgument}),
+          _function, bufferIndex, reflection)
+end
+
+function mtNewArgumentEncoderWithBufferIndexFromArgumentBuffer(ae, bufferIndex)
+    ccall((:mtNewArgumentEncoderWithBufferIndexFromArgumentBuffer, cmt_lib), Ptr{MtArgumentEncoder},
+          (Ptr{MtArgumentEncoder}, NsUInteger),
+          ae, bufferIndex)
+end
+
+function mtNewArgumentEncoder(device, arguments, count)
+    ccall((:mtNewArgumentEncoder, cmt_lib), Ptr{MtArgumentEncoder},
+          (Ptr{MtDevice}, Ptr{Ptr{MtArgumentDescriptor}}, UInt64),
+          device, arguments, count)
+end
+
+function mtArgumentEncoderLength(encoder)
+    ccall((:mtArgumentEncoderLength, cmt_lib), NsUInteger,
+          (Ptr{MtArgumentEncoder},),
+          encoder)
+end
+
+function mtArgumentEncoderSetBufferOffsetAtIndex(cce, buf, offset, indx)
+    ccall((:mtArgumentEncoderSetBufferOffsetAtIndex, cmt_lib), Cvoid,
+          (Ptr{MtArgumentEncoder}, Ptr{MtBuffer}, NsUInteger, NsUInteger),
+          cce, buf, offset, indx)
+end
+
+function mtArgumentEncoderSetBuffersOffsetsWithRange(cce, bufs, offsets, range)
+    ccall((:mtArgumentEncoderSetBuffersOffsetsWithRange, cmt_lib), Cvoid,
+          (Ptr{MtArgumentEncoder}, Ptr{Ptr{MtBuffer}}, Ptr{NsUInteger}, NsRange),
+          cce, bufs, offsets, range)
+end
+
+function mtArgumentEncoderSetTextureAtIndex(cce, tex, indx)
+    ccall((:mtArgumentEncoderSetTextureAtIndex, cmt_lib), Cvoid,
+          (Ptr{MtArgumentEncoder}, Ptr{MtTexture}, NsUInteger),
+          cce, tex, indx)
+end
+
+function mtArgumentEncoderSetTexturesWithRange(cce, textures, range)
+    ccall((:mtArgumentEncoderSetTexturesWithRange, cmt_lib), Cvoid,
+          (Ptr{MtArgumentEncoder}, Ptr{Ptr{MtTexture}}, NsRange),
+          cce, textures, range)
+end
+
+function mtArgumentEncoderSetSamplerStateAtIndex(cce, sampler, indx)
+    ccall((:mtArgumentEncoderSetSamplerStateAtIndex, cmt_lib), Cvoid,
+          (Ptr{MtArgumentEncoder}, Ptr{MtSamplerState}, NsUInteger),
+          cce, sampler, indx)
+end
+
+function mtArgumentEncoderSetSamplerStatesWithRange(cce, samplers, range)
+    ccall((:mtArgumentEncoderSetSamplerStatesWithRange, cmt_lib), Cvoid,
+          (Ptr{MtArgumentEncoder}, Ptr{Ptr{MtSamplerState}}, NsRange),
+          cce, samplers, range)
+end
+
+function mtArgumentEncoderConstantDataAtIndex(cce, index)
+    ccall((:mtArgumentEncoderConstantDataAtIndex, cmt_lib), Ptr{Cvoid},
+          (Ptr{MtArgumentEncoder}, NsUInteger),
+          cce, index)
+end
+
+function mtArgumentEncoderSetIndirectCommandBuffer(cce, cbuf, index)
+    ccall((:mtArgumentEncoderSetIndirectCommandBuffer, cmt_lib), Cvoid,
+          (Ptr{MtArgumentEncoder}, Ptr{MtIndirectCommandBuffer}, NsUInteger),
+          cce, cbuf, index)
+end
+
+function mtArgumentEncoderSetIndirectCommandBuffers(cce, cbufs, range)
+    ccall((:mtArgumentEncoderSetIndirectCommandBuffers, cmt_lib), Cvoid,
+          (Ptr{MtArgumentEncoder}, Ptr{Ptr{MtIndirectCommandBuffer}}, NsRange),
+          cce, cbufs, range)
+end
+
+function mtArgumentEncoderAlignment(cce)
+    ccall((:mtArgumentEncoderAlignment, cmt_lib), NsUInteger,
+          (Ptr{MtArgumentEncoder},),
+          cce)
 end
 
 function mtRetain(obj)

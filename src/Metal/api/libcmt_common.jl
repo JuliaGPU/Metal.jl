@@ -24,50 +24,6 @@ struct NsDictionaryStringString
     values::Ptr{Cstring}
 end
 
-struct MtSize
-    width::NsUInteger
-    height::NsUInteger
-    depth::NsUInteger
-end
-
-const MtDevice = Cvoid
-const MtRenderDesc = Cvoid
-const MtRenderPipeline = Cvoid
-const MtCommandQueue = Cvoid
-const MtCommandEncoder = Cvoid
-const MtBlitCommandEncoder = Cvoid
-const MtLibrary = Cvoid
-const MtFunction = Cvoid
-const MtRenderPassDesc = Cvoid
-struct MtTexture end
-const MtCommandBuffer = Cvoid
-const MtDrawable = Cvoid
-const MtVertexDescriptor = Cvoid
-const MtTextureDescriptor = Cvoid
-const MtIndirectCommandBufferDescriptor = Cvoid
-const MtIndirectCommandBuffer = Cvoid
-const MtIndirectComputeCommand = Cvoid
-const MtIndirectRenderCommand = Cvoid
-const MtDepthStencil = Cvoid
-struct MtBuffer end
-const MtCompileOptions = Cvoid
-const MtEvent = Cvoid
-const MtSharedEvent = Cvoid
-const MtSharedEventHandle = Cvoid
-const MtFence = Cvoid
-const MtSharedEventNotificationBlock = Cvoid
-const MtCommandBufferHandlerFun = Ptr{Cvoid}
-const MtSharedEventListener = Cvoid
-struct MtResource end
-const MtHeap = Cvoid
-const MtHeapDescriptor = Cvoid
-const MtComputePipelineState = Cvoid
-const MtSamplerState = Cvoid
-const MtRenderCommandEncoder = Cvoid
-const MtComputeCommandEncoder = Cvoid
-const MtResourceStateCommandEncoder = Cvoid
-const MtCounterSampleBuffer = Cvoid
-
 @cenum MtPrimitiveType::UInt32 begin
     MtPrimitiveTypePoint = 0
     MtPrimitiveTypeLine = 1
@@ -276,6 +232,297 @@ end
     MtBlitOptionNone = 0
     MtBlitOptionDepthFromDepthStencil = 1
     MtBlitOptionStencilFromDepthStencil = 2
+end
+
+@cenum MtLibraryError::UInt32 begin
+    MtLibraryErrorUnsupported = 1
+    MtLibraryErrorInternal = 2
+    MtLibraryErrorCompileFailure = 3
+    MtLibraryErrorCompileWarning = 4
+    MtLibraryErrorFunctionNotFound = 5
+    MtLibraryErrorFileNotFound = 6
+end
+
+@cenum MtBarrierScope::UInt32 begin
+    MtBarrierScopeBuffers = 1
+    MtBarrierScopeTextures = 2
+    MtBarrierScopeRenderTargets = 4
+end
+
+@cenum MtIndirectCommandType::UInt32 begin
+    MIndirectCommandTypeDraw = 1
+    MIndirectCommandTypeDrawIndexed = 2
+    MIndirectCommandTypeDrawPatches = 4
+    MIndirectCommandTypeDrawIndexedPatches = 8
+end
+
+@cenum MtDataType::UInt32 begin
+    MtDataTypeNone = 0
+    MtDataTypeStruct = 1
+    MtDataTypeArray = 2
+    MtDataTypeFloat = 3
+    MtDataTypeFloat2 = 4
+    MtDataTypeFloat3 = 5
+    MtDataTypeFloat4 = 6
+    MtDataTypeFloat2x2 = 7
+    MtDataTypeFloat2x3 = 8
+    MtDataTypeFloat2x4 = 9
+    MtDataTypeFloat3x2 = 10
+    MtDataTypeFloat3x3 = 11
+    MtDataTypeFloat3x4 = 12
+    MtDataTypeFloat4x2 = 13
+    MtDataTypeFloat4x3 = 14
+    MtDataTypeFloat4x4 = 15
+    MtDataTypeHalf = 16
+    MtDataTypeHalf2 = 17
+    MtDataTypeHalf3 = 18
+    MtDataTypeHalf4 = 19
+    MtDataTypeHalf2x2 = 20
+    MtDataTypeHalf2x3 = 21
+    MtDataTypeHalf2x4 = 22
+    MtDataTypeHalf3x2 = 23
+    MtDataTypeHalf3x3 = 24
+    MtDataTypeHalf3x4 = 25
+    MtDataTypeHalf4x2 = 26
+    MtDataTypeHalf4x3 = 27
+    MtDataTypeHalf4x4 = 28
+    MtDataTypeInt = 29
+    MtDataTypeInt2 = 30
+    MtDataTypeInt3 = 31
+    MtDataTypeInt4 = 32
+    MtDataTypeUInt = 33
+    MtDataTypeUInt2 = 34
+    MtDataTypeUInt3 = 35
+    MtDataTypeUInt4 = 36
+    MtDataTypeShort = 37
+    MtDataTypeShort2 = 38
+    MtDataTypeShort3 = 39
+    MtDataTypeShort4 = 40
+    MtDataTypeUShort = 41
+    MtDataTypeUShort2 = 42
+    MtDataTypeUShort3 = 43
+    MtDataTypeUShort4 = 44
+    MtDataTypeChar = 45
+    MtDataTypeChar2 = 46
+    MtDataTypeChar3 = 47
+    MtDataTypeChar4 = 48
+    MtDataTypeUChar = 49
+    MtDataTypeUChar2 = 50
+    MtDataTypeUChar3 = 51
+    MtDataTypeUChar4 = 52
+    MtDataTypeBool = 53
+    MtDataTypeBool2 = 54
+    MtDataTypeBool3 = 55
+    MtDataTypeBool4 = 56
+    MtDataTypeTexture = 58
+    MtDataTypeSampler = 59
+    MtDataTypePointer = 60
+    MtDataTypeRenderPipeline = 78
+    MtDataTypeIndirectCommandBuffer = 80
+end
+
+@cenum MtArgumentAccess::UInt32 begin
+    MtArgumentAccessReadOnly = 0
+    MtArgumentAccessReadWrite = 1
+    MtArgumentAccessWriteOnly = 2
+end
+
+@cenum MtTextureType::UInt32 begin
+    MtTextureType1D = 0
+    MtTextureType1DArray = 1
+    MtTextureType2D = 2
+    MtTextureType2DArray = 3
+    MtTextureType2DMultisample = 4
+    MtTextureTypeCube = 5
+    MtTextureTypeCubeArray = 6
+    MtTextureType3D = 7
+    MtTextureType2DMultisampleArray = 8
+    MtTextureTypeTextureBuffer = 9
+end
+
+@cenum MtTextureSwizzle::UInt32 begin
+    MtTextureSwizzleZero = 0
+    MtTextureSwizzleOne = 1
+    MtTextureSwizzleRed = 2
+    MtTextureSwizzleGreen = 3
+    MtTextureSwizzleBlue = 4
+    MtTextureSwizzleAlpha = 5
+end
+
+@cenum MtAttributeFormat::UInt32 begin
+    MtAttributeFormatInvalid = 0
+    MtAttributeFormatUChar2 = 1
+    MtAttributeFormatUChar3 = 2
+    MtAttributeFormatUChar4 = 3
+    MtAttributeFormatChar2 = 4
+    MtAttributeFormatChar3 = 5
+    MtAttributeFormatChar4 = 6
+    MtAttributeFormatUChar2Normalized = 7
+    MtAttributeFormatUChar3Normalized = 8
+    MtAttributeFormatUChar4Normalized = 9
+    MtAttributeFormatChar2Normalized = 10
+    MtAttributeFormatChar3Normalized = 11
+    MtAttributeFormatChar4Normalized = 12
+    MtAttributeFormatUShort2 = 13
+    MtAttributeFormatUShort3 = 14
+    MtAttributeFormatUShort4 = 15
+    MtAttributeFormatShort2 = 16
+    MtAttributeFormatShort3 = 17
+    MtAttributeFormatShort4 = 18
+    MtAttributeFormatUShort2Normalized = 19
+    MtAttributeFormatUShort3Normalized = 20
+    MtAttributeFormatUShort4Normalized = 21
+    MtAttributeFormatShort2Normalized = 22
+    MtAttributeFormatShort3Normalized = 23
+    MtAttributeFormatShort4Normalized = 24
+    MtAttributeFormatHalf2 = 25
+    MtAttributeFormatHalf3 = 26
+    MtAttributeFormatHalf4 = 27
+    MtAttributeFormatFloat = 28
+    MtAttributeFormatFloat2 = 29
+    MtAttributeFormatFloat3 = 30
+    MtAttributeFormatFloat4 = 31
+    MtAttributeFormatInt = 32
+    MtAttributeFormatInt2 = 33
+    MtAttributeFormatInt3 = 34
+    MtAttributeFormatInt4 = 35
+    MtAttributeFormatUInt = 36
+    MtAttributeFormatUInt2 = 37
+    MtAttributeFormatUInt3 = 38
+    MtAttributeFormatUInt4 = 39
+    MtAttributeFormatInt1010102Normalized = 40
+    MtAttributeFormatUInt1010102Normalized = 41
+    MtAttributeFormatUChar4Normalized_BGRA = 42
+    MtAttributeFormatUChar = 45
+    MtAttributeFormatChar = 46
+    MtAttributeFormatUCharNormalized = 47
+    MtAttributeFormatCharNormalized = 48
+    MtAttributeFormatUShort = 49
+    MtAttributeFormatShort = 50
+    MtAttributeFormatUShortNormalized = 51
+    MtAttributeFormatShortNormalized = 52
+    MtAttributeFormatHalf = 53
+end
+
+@cenum MtStepFunction::UInt32 begin
+    MtStepFunctionConstant = 0
+    MtStepFunctionPerVertex = 1
+    MtStepFunctionPerInstance = 2
+    MtStepFunctionPerPatch = 3
+    MtStepFunctionPerPatchControlPoint = 4
+    MtStepFunctionThreadPositionInGridX = 5
+    MtStepFunctionThreadPositionInGridY = 6
+    MtStepFunctionThreadPositionInGridXIndexed = 7
+    MtStepFunctionThreadPositionInGridYIndexed = 8
+end
+
+@cenum MtPipelineOption::UInt32 begin
+    MtPipelineOptionNone = 0
+    MtPipelineOptionArgumentInfo = 1
+    MtPipelineOptionBufferTypeInfo = 2
+end
+
+@cenum MtArgumentType::UInt32 begin
+    MtArgumentTypeBuffer = 0
+    MtArgumentTypeThreadgroupMemory = 1
+    MtArgumentTypeTexture = 2
+    MtArgumentTypeSampler = 3
+end
+
+
+struct MtSize
+    width::NsUInteger
+    height::NsUInteger
+    depth::NsUInteger
+end
+
+struct MtOrigin
+    x::NsUInteger
+    y::NsUInteger
+    z::NsUInteger
+end
+
+struct MtSizeAndAlign
+    size::NsUInteger
+    align::NsUInteger
+end
+
+const MtDevice = Cvoid
+const MtRenderDesc = Cvoid
+const MtRenderPipeline = Cvoid
+const MtCommandQueue = Cvoid
+const MtCommandEncoder = Cvoid
+const MtBlitCommandEncoder = Cvoid
+const MtLibrary = Cvoid
+const MtRenderPassDesc = Cvoid
+struct MtTexture end
+const MtCommandBuffer = Cvoid
+const MtDrawable = Cvoid
+const MtVertexDescriptor = Cvoid
+const MtTextureDescriptor = Cvoid
+const MtIndirectCommandBufferDescriptor = Cvoid
+const MtIndirectCommandBuffer = Cvoid
+const MtIndirectComputeCommand = Cvoid
+const MtIndirectRenderCommand = Cvoid
+const MtDepthStencil = Cvoid
+struct MtBuffer end
+const MtCompileOptions = Cvoid
+const MtFunction = Cvoid
+const MtFunctionConstant = Cvoid
+const MtFunctionConstantValues = Cvoid
+const MtEvent = Cvoid
+const MtSharedEvent = Cvoid
+const MtSharedEventHandle = Cvoid
+const MtFence = Cvoid
+const MtSharedEventNotificationBlock = Cvoid
+const MtCommandBufferHandlerFun = Ptr{Cvoid}
+const MtSharedEventListener = Cvoid
+struct MtResource end
+const MtHeap = Cvoid
+const MtHeapDescriptor = Cvoid
+const MtAttribute = Cvoid
+const MtVertexAttribute = Cvoid
+const MtComputePipelineState = Cvoid
+const MtSamplerState = Cvoid
+const MtRenderCommandEncoder = Cvoid
+const MtComputeCommandEncoder = Cvoid
+const MtResourceStateCommandEncoder = Cvoid
+const MtCounterSampleBuffer = Cvoid
+const MtArgumentEncoder = Cvoid
+const MtAutoreleasedArgument = Cvoid
+const MtArgument = Cvoid
+const MtArgumentDescriptor = Cvoid
+const MtComputePipelineDescriptor = Cvoid
+const MtComputePipelineReflection = Cvoid
+const MtRenderPipelineReflection = Cvoid
+const MtPointerType = Cvoid
+const MtArrayType = Cvoid
+const MtStructType = Cvoid
+
+struct MtDispatchThreadgroupsIndirectArguments
+    threadgroupsPerGrid::NTuple{3, UInt32}
+end
+
+struct MtStageInRegionIndirectArguments
+    stageInOrigin::NTuple{3, UInt32}
+    stageInSize::NTuple{3, UInt32}
+end
+
+struct MtRegion
+    origin::MtOrigin
+    size::MtSize
+end
+
+struct MtIndirectCommandBufferExecutionRange
+    location::UInt32
+    length::UInt32
+end
+
+struct MtTextureSwizzleChannels
+    red::MtTextureSwizzle
+    green::MtTextureSwizzle
+    blue::MtTextureSwizzle
+    alpha::MtTextureSwizzle
 end
 
 @cenum MtPixelFormat::UInt32 begin
@@ -529,3 +776,4 @@ end
 
 
 const MtCommandBufferOnCompleteFn = Ptr{Cvoid}
+
