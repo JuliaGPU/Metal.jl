@@ -11,8 +11,12 @@ const cmt_lib = joinpath(@__DIR__, "..", "..", "deps", "libcmt_lib.dylib")
 include("api/libcmt_common.jl")
 #include("pointer.jl")
 include("error.jl")
+# convert from 1 based indexing to 0 based indexing
 Base.convert(::Type{NsRange}, range::UnitRange{T}) where T <: Integer =
 	NsRange(first(range), length(range))
+# used for byte ranges.
+Base.convert(::Type{NsRange}, range::StepRange{T}) where T <: Integer =
+	NsRange(first(range)-step(range), length(range)*step(range))
 
 # low-level autogeneraed wrappers
 export MtSize

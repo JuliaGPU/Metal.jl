@@ -43,3 +43,9 @@ const Untracked             = MtResourceHazardTrackingModeUntracked
 const Tracked               = MtResourceHazardTrackingModeTracked
 
 const Default               = DefaultCPUCache
+
+Base.:(==)(a::MtlResourceOptions, b::MtStorageMode) =
+    (UInt(a) >> 4) == UInt(b)
+
+Base.:(==)(a::MtStorageMode, b::MtlResourceOptions) =
+    b == a

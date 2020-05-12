@@ -1,4 +1,4 @@
-export MtlDevice, device,  devices, DefaultDevice
+export MtlDevice, device, devices, DefaultDevice
 
 const MTLDevice = Ptr{MtDevice}
 

@@ -64,11 +64,48 @@ MtlBuffer(T::Type, dev::Union{MtlDevice,MtlHeap}, args...; kwargs...) =
 MtlBuffer(dev::Union{MtlDevice,MtlHeap}, args...; kwargs...) =
     MtlBuffer(Cvoid, dev, args...;kwargs...)
 
+"""
+    alloc(T, device, length, [ptr=nothing]; storage=Default, hazard_tracking=Default, chache_mode=Default)
+    MtlBuffer{T}(device, length...)
+
+Allocates a Metal Buffer on `device` of bytes equal to `length * sizeof(T)`. If a CPU-pointer is passed as
+last argument, then the Metal Buffer is initialized with the content of the memory starting at `ptr`,
+otherwise it's zero-initialized.
+
+! Note: You are responsible for freeing the returned buffer
+
+The storage kwarg controls where the buffer is stored. Possible values are:
+ - Private : Residing on the device
+ - Shared  : Residing on the host
+ - Managed : Keeps two copies of the buffer, on device and on host. Explicit
+ calls must be given to syncronize the two
+ - Memoryless : an iOs specific thing that won't work on Mac.
+
+Note that `Private` buffers can't be directly accessed from the CPU, therefore
+you cannot use this option if you pass a ptr to initialize the memory.
+"""
 alloc(args...; kwargs...) = MtlBuffer(args...; kwargs...)
+
+"""
+    free(buffer::MtlBuffer)
+
+Frees the buffer if the handle is valid.
+This does not protect against double-freeing of the same buffer!
+"""
 free(buf::MtlBuffer) = (buf.handle !== C_NULL) || mtResourceRelease(buf)
 
-DidModifyRange!(buf::MtlBuffer, range) = mtBufferDidModifyRange(buf, range)
+"""
+    DidModifyRange!(buf::MtlBuffer{T}, range::UnitRange)
 
+Notifies the GPU that the range of elements `range`, corresponding to the bytes
+`sizeof(T)*first(range):sizeof(T)*last(range)` have been modified on the CPU, and
+that they should be transferred to the device before executing any following command.
+
+Only valid for `Managed` buffers.
+"""
+function DidModifyRange!(buf::MtlBuffer{T}, range::UnitRange) where {T}
+    mtBufferDidModifyRange(buf, range*sizeof(T))
+end
 
 # Views on different device
 NewBuffer(buf::MtlBuffer, d::MtlDevice) =
@@ -84,7 +121,7 @@ function ParentBuffer(buf::MtlBuffer)
 end
 
 ##
-function Base.unsafe_wrap(t::Type{<:Array}, buf::MtlBuffer{T}, dims::Dims; own=false) where {T}
+function Base.unsafe_wrap(t::Type{<:Array}, buf::MtlBuffer{T}, dims; own=false) where {T}
     ptr = content(buf)
     ptr == C_NULL && error("Can't unsafe_wrap a GPU Private array.")
     return unsafe_wrap(t, ptr, dims; own=own)
