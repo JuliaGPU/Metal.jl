@@ -1,0 +1,73 @@
+abstract type AbstractKernel{F,TT} end
+
+struct Kernel{F,TT}
+    device::MtlDevice
+    mod::MtlLibrary
+    fun::MtlFunction
+end
+
+#launchKernel
+
+##########################################
+# Blocking call to a kernel
+# Should implement somethjing better
+mtlcall(f::MtlFunction, types::Tuple, args...; kwargs...) =
+    mtlcall(f, Base.to_tuple_type(types), args...; kwargs...)
+
+function mtlcall(f::MtlFunction, types::Type, args...; kwargs...)
+    convert_arguments(types, args...) do pointers...
+        launch(f, pointers...; kwargs...)
+    end
+end
+
+##############################################
+# Enqueue a function for execution
+#
+function enqueue_function(f::MtlFunction, args...;
+                blocks::MtlDim=1, threads::MtlDim=1,
+                cce::MtlComputeCommandEncoder)
+    blocks = MtlDim3(blocks)
+    threads = MtlDim3(threads)
+    (blocks.x>0 && blocks.y>0 && blocks.z>0)    || throw(ArgumentError("Grid dimensions should be non-null"))
+    (threads.x>0 && threads.y>0 && threads.z>0) || throw(ArgumentError("Thread dimensions should be non-null"))
+    all(threads .< f.maxTotalThreadsPerThreadgroup) || throw(ArgumentError("Max Thread dimension is $(f.maxTotalThreadsPerThreadgroup)"))
+
+    # Set the function that we are currently encoding
+    MetalCore.set_function!(cce, f)
+    # Encode all arguments
+    MetalCore.encode_arguments!(cce, args...)
+    # Flush everything
+    MetalCore.append_current_function!(cce, blocks, threads)
+    return nothing
+end
+
+#####
+function encode_arguments!(cce::MtlComputeCommandEncoder, args...)
+    for (i, a) in enumerate(args)
+        encode_argument!(cce, i, a)
+    end
+end
+
+function encode_argument!(cce::MtlComputeCommandEncoder, idx::Integer, arg::Nothing)
+    @assert idx > 0
+    #@check api.clSetKernelArg(k.id, cl_uint(idx-1), sizeof(CL_mem), C_NULL)
+    set_bytes!(cce, sizeof(C_NULL), C_NULL, idx-1)
+    return cce
+end
+
+function encode_argument!(cce::MtlComputeCommandEncoder, idx::Integer, arg::MtlBuffer)
+    @assert idx > 0
+    set_buffer!(cce, buf, 0, idx-1)
+    return cce
+end
+
+function encode_argument!(enc::Metal.MtlComputeCommandEncoder, idx::Integer, val::T) where T
+    @assert idx > 0 "Kernel idx must be bigger 0"
+    ref, tsize = to_mtl_ref(val)
+    set_bytes!(cce, ref, tsize, idx-1)
+    return cce
+end
+
+function encode_argument!(enc::Metal.MtlComputeCommandEncoder, idx::Integer, val::MtlDeviceArray)
+    
+end
