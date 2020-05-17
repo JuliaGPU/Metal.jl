@@ -85,14 +85,14 @@ Base.unsafe_convert(t::Type{Metal.MTLBuffer}, x::MtlArray{T}) where {T}   = Base
 ## interop with GPU arrays
 
 # TODO Figure out global
-#=
-function Base.convert(::Type{MtlDeviceArray{T,N,AS.Global}}, a::MtlArray{T,N}) where {T,N}
-  MtlDeviceArray{T,N,AS.Global}(a.dims, DevicePtr{T,AS.Global}(pointer(a)))
+
+function Base.convert(::Type{MtlDeviceArray{T,N,AS.Device}}, a::MtlArray{T,N}) where {T,N}
+  MtlDeviceArray{T,N,AS.Device}(a.dims, DeviceBuffer{T,AS.Device}(pointer(a)))
 end
 
-Adapt.adapt_storage(::KernelAdaptor, xs::MtlArray{T,N}) where {T,N} =
-  convert(MtlDeviceArray{T,N,AS.Global}, xs)
-=#
+Adapt.adapt_storage(::Adaptor, xs::MtlArray{T,N}) where {T,N} =
+  convert(MtlDeviceArray{T,N,AS.Device}, xs)
+
 
 ## interop with CPU arrays
 

@@ -1,5 +1,5 @@
 # memory operations
-function sync_gpu_to_cpu!(dev::MtlDevice, buf::MtlBuffer{T})
+function sync_gpu_to_cpu!(dev::MtlDevice, buf::MtlBuffer{T}) where T
     cmd = Metal.commit!(global_queue(dev)) do cmdbuf
         MtlBlitCommandEncoder(cmdbuf) do enc
             Metal.append_sync!(enc, buf)
@@ -25,7 +25,6 @@ Base.unsafe_copyto!(dev::MtlDevice, dst::Ptr{T}, src::MtlBuffer{T}, N::Integer) 
     unsafe_copyto!(dev, dst, src, 1, n)
 function Base.unsafe_copyto!(dev::MtlDevice, dst::Ptr{T}, src::MtlBuffer{T}, soff::Integer, N::Integer) where T
     storage_type = storage(src)
-
     if storage_type == Private
         tmp_buf = alloc(T, dev, N, storage=Shared)
         Base.unsafe_copyto!(dev, tmp_buf, 1, src, soff, N)
