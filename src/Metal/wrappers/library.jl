@@ -1,6 +1,6 @@
 export MtlLibrary, function_names
 
-const MTLLibrary = Ptr{MtLibrary} 
+const MTLLibrary = Ptr{MtLibrary}
 
 """
     MtlDevice(i::Integer)
@@ -13,7 +13,7 @@ mutable struct MtlLibrary
 end
 
 Base.convert(::Type{MTLLibrary}, lib::MtlLibrary) = lib.handle
-Base.unsafe_convert(::Type{MTLLibrary}, lib::MtlLibrary) = convert(MTLLibrary, lib.handle) 
+Base.unsafe_convert(::Type{MTLLibrary}, lib::MtlLibrary) = convert(MTLLibrary, lib.handle)
 
 Base.:(==)(a::MtlLibrary, b::MtlLibrary) = a.handle == b.handle
 Base.hash(lib::MtlLibrary, h::UInt) = hash(lib.handle, h)
@@ -22,14 +22,14 @@ Base.hash(lib::MtlLibrary, h::UInt) = hash(lib.handle, h)
 device(l::MtlLibrary) = l.device
 function label(l::MtlLibrary)
     ptr = mtLibraryLabel(l)
-    return ptr == C_NULL ? "" : unsafe_string(ptr) 
+    return ptr == C_NULL ? "" : unsafe_string(ptr)
 end
 
 function MtlLibrary(device::MtlDevice, src::String, opts::MtlCompileOptions)
-    handle = mtNewLibraryWithSource(device, src, opts)
-    err = mtGetError()
-    if err != C_NULL
-        throw(MtlError(err))
+    _errptr = Ref{NsError}()
+    handle = mtNewLibraryWithSource(device, src, opts, _errptr)
+    if _errptr[] != C_NULL
+        throw(MtlError(_errptr[]))
     end
     obj = MtlLibrary(handle, device)
     finalizer(unsafe_destroy!, obj)

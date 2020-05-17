@@ -1,4 +1,4 @@
-export 
+export
     MtlComputePipelineState
 
 const MTLComputePipelineState = Ptr{MtComputePipelineState}
@@ -9,7 +9,7 @@ mutable struct MtlComputePipelineState
 end
 
 Base.convert(::Type{MTLComputePipelineState}, q::MtlComputePipelineState) = q.handle
-Base.unsafe_convert(::Type{MTLComputePipelineState}, q::MtlComputePipelineState) = convert(MTLComputePipelineState, q.handle) 
+Base.unsafe_convert(::Type{MTLComputePipelineState}, q::MtlComputePipelineState) = convert(MTLComputePipelineState, q.handle)
 
 Base.:(==)(a::MtlComputePipelineState, b::MtlComputePipelineState) = a.handle == b.handle
 Base.hash(q::MtlComputePipelineState, h::UInt) = hash(q.handle, h)
@@ -21,7 +21,11 @@ function unsafe_destroy!(cce::MtlComputePipelineState)
 end
 
 function MtlComputePipelineState(d::MtlDevice, f::MtlFunction)
-    handle = mtNewComputePipelineStateWithFunction(d, f)
+    _errptr = Ref{NsError}()
+    handle = mtNewComputePipelineStateWithFunction(d, f, _errptr)
+    if _errptr[] != C_NULL
+        throw(MtlError(_errptr[]))
+    end
     obj = MtlComputePipelineState(handle, d)
     finalizer(unsafe_destroy!, obj)
     return obj
@@ -31,14 +35,14 @@ device(l::MtlComputePipelineState) = l.device
 function label(l::MtlComputePipelineState)
     ptr = mtComputePipelineLabel(l)
     if ptr == C_NULL
-        return "" 
+        return ""
     else
-        return unsafe_string(ptr) 
+        return unsafe_string(ptr)
     end
 end
 
 
-Base.propertynames(o::MtlComputePipelineState) = 
+Base.propertynames(o::MtlComputePipelineState) =
     (:maxTotalThreadsPerThreadgroup, :threadExecutionWidth, :staticThreadgroupMemoryLength, :device, :label)
 
 function Base.getproperty(o::MtlComputePipelineState, f::Symbol)

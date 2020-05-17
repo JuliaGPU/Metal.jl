@@ -1,5 +1,5 @@
 export
-    MtlBuffer, content, alloc, free
+    MtlBuffer, content, alloc, free, handle
 
 const MTLBuffer = Ptr{MtBuffer}
 
@@ -17,6 +17,8 @@ Base.sizeof(buf::MtlBuffer)          = mtBufferLength(buf)
 Base.length(d::MtlBuffer{T}) where T = Base.bitcast(Int, div(mtBufferLength(d), sizeof(T)))
 device(buf::MtlBuffer)               = MtlDevice(true, mtResourceDevice(buf))
 content(buf::MtlBuffer{T}) where T   = Base.bitcast(Ptr{T}, mtBufferContents(buf))
+
+handle(buf::MtlBuffer) = buf.handle
 
 ## Alloc
 alloc_buffer(dev::MtlDevice, bytesize, opts::MtlResourceOptions) =  mtDeviceNewBufferWithLength(dev, bytesize, opts)

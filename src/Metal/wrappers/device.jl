@@ -12,7 +12,10 @@ struct MtlDevice
 
     # CuDevice is just an integer, but we need (?) to call cuDeviceGet to make sure this
     # integer is valid. to avoid ambiguity, add a bogus argument (cfr. `checkbounds`)
-    MtlDevice(::Type{Bool}, handle::MTLDevice) = new(handle)
+    function MtlDevice(::Type{Bool}, handle::MTLDevice)
+        handle == C_NULL && error("Invalid device")
+        new(handle)
+    end
 end
 
 Base.convert(::Type{MTLDevice}, dev::MtlDevice) = dev.handle
@@ -21,7 +24,14 @@ Base.unsafe_convert(::Type{MTLDevice}, d::MtlDevice) = convert(MTLDevice, d.hand
 Base.:(==)(a::MtlDevice, b::MtlDevice) = a.handle == b.handle
 Base.hash(dev::MtlDevice, h::UInt) = hash(dev.handle, h)
 
-DefaultDevice() = MtlDevice(mtCreateSystemDefaultDevice())
+function DefaultDevice()
+    try
+        return MtlDevice(mtCreateSystemDefaultDevice())
+    catch err
+        @warn "Error in detecting default device"
+        return MtlDevice(1)
+    end
+end
 MtlDevice() = DefaultDevice()
 MtlDevice(i::Integer) = devices()[i]
 MtlDevice(ptr::MTLDevice) = MtlDevice(Bool, ptr)

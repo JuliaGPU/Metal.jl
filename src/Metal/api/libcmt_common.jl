@@ -17,7 +17,8 @@ struct NsRange
     length::NsUInteger
 end
 
-const NsError = Cvoid
+const NsError_s = Cvoid
+const NsError = Ptr{NsError_s}
 
 struct NsDictionaryStringString
     keys::Ptr{Cstring}
@@ -327,6 +328,11 @@ end
     MtArgumentAccessWriteOnly = 2
 end
 
+@cenum MtArgumentBuffersTier::UInt32 begin
+    MtArgumentBuffersTier1 = 0
+    MtArgumentBuffersTier2 = 1
+end
+
 @cenum MtTextureType::UInt32 begin
     MtTextureType1D = 0
     MtTextureType1DArray = 1
@@ -493,11 +499,13 @@ const MtAutoreleasedArgument = Cvoid
 const MtArgument = Cvoid
 const MtArgumentDescriptor = Cvoid
 const MtComputePipelineDescriptor = Cvoid
-const MtComputePipelineReflection = Cvoid
-const MtRenderPipelineReflection = Cvoid
 const MtPointerType = Cvoid
 const MtArrayType = Cvoid
 const MtStructType = Cvoid
+const MtComputePipelineReflection_s = Cvoid
+const MtRenderPipelineReflection_s = Cvoid
+const MtComputePipelineReflection = Ptr{MtComputePipelineReflection_s}
+const MtRenderPipelineReflection = Ptr{MtRenderPipelineReflection_s}
 
 struct MtDispatchThreadgroupsIndirectArguments
     threadgroupsPerGrid::NTuple{3, UInt32}
@@ -776,4 +784,5 @@ end
 
 
 const MtCommandBufferOnCompleteFn = Ptr{Cvoid}
+const MtCommandBufferOnCompleteFnNoSender = Ptr{Cvoid}
 

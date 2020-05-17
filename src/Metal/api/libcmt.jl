@@ -2,14 +2,6 @@
 # Automatically generated using Clang.jl
 
 
-function mtClearError()
-    ccall((:mtClearError, cmt_lib), Cvoid, ())
-end
-
-function mtGetError()
-    ccall((:mtGetError, cmt_lib), Ptr{NsError}, ())
-end
-
 function mtErrorRelease(err)
     ccall((:mtErrorRelease, cmt_lib), Cvoid,
           (Ptr{NsError},),
@@ -301,24 +293,24 @@ function mtDeviceNewBufferWithBytesNoCopy(device, ptr, length, opts)
           device, ptr, length, opts)
 end
 
-function mtNewComputePipelineStateWithFunction(device, fun)
+function mtNewComputePipelineStateWithFunction(device, fun, error)
     ccall((:mtNewComputePipelineStateWithFunction, cmt_lib), Ptr{MtComputePipelineState},
-          (Ptr{MtDevice}, Ptr{MtFunction}),
-          device, fun)
+          (Ptr{MtDevice}, Ptr{MtFunction}, Ptr{NsError}),
+          device, fun, error)
 end
 
-function mtNewComputePipelineStateWithFunctionReflection(device, fun, opt, reflection)
+function mtNewComputePipelineStateWithFunctionReflection(device, fun, opt, reflection, error)
     ccall((:mtNewComputePipelineStateWithFunctionReflection, cmt_lib), Ptr{MtComputePipelineState},
           (Ptr{MtDevice}, Ptr{MtFunction}, MtPipelineOption,
-           Ptr{MtComputePipelineReflection}),
-          device, fun, opt, reflection)
+           Ptr{MtComputePipelineReflection}, Ptr{NsError}),
+          device, fun, opt, reflection, error)
 end
 
-function mtNewComputePipelineStateWithDescriptor(device, desc, opt, reflection)
+function mtNewComputePipelineStateWithDescriptor(device, desc, opt, reflection, error)
     ccall((:mtNewComputePipelineStateWithDescriptor, cmt_lib), Ptr{MtComputePipelineState},
           (Ptr{MtDevice}, Ptr{MtComputePipelineDescriptor}, MtPipelineOption,
-           Ptr{MtComputePipelineReflection}),
-          device, desc, opt, reflection)
+           Ptr{MtComputePipelineReflection}, Ptr{NsError}),
+          device, desc, opt, reflection, error)
 end
 
 function mtComputePipelineDevice(pip)
@@ -493,10 +485,10 @@ function mtNewFunctionWithName(lib, name)
           lib, name)
 end
 
-function mtNewFunctionWithNameConstantValues(lib, name, constantValues)
+function mtNewFunctionWithNameConstantValues(lib, name, constantValues, error)
     ccall((:mtNewFunctionWithNameConstantValues, cmt_lib), Ptr{MtFunction},
-          (Ptr{MtLibrary}, Cstring, Ptr{MtFunctionConstantValues}),
-          lib, name, constantValues)
+          (Ptr{MtLibrary}, Cstring, Ptr{MtFunctionConstantValues}, Ptr{NsError}),
+          lib, name, constantValues, error)
 end
 
 function mtFunctionRelease(fun)
@@ -541,16 +533,16 @@ function mtNewDefaultLibrary(device)
           device)
 end
 
-function mtNewLibraryWithFile(device, filepath)
+function mtNewLibraryWithFile(device, filepath, error)
     ccall((:mtNewLibraryWithFile, cmt_lib), Ptr{MtLibrary},
-          (Ptr{MtDevice}, Cstring),
-          device, filepath)
+          (Ptr{MtDevice}, Cstring, Ptr{NsError}),
+          device, filepath, error)
 end
 
-function mtNewLibraryWithSource(device, source, Opts)
+function mtNewLibraryWithSource(device, source, Opts, error)
     ccall((:mtNewLibraryWithSource, cmt_lib), Ptr{MtLibrary},
-          (Ptr{MtDevice}, Cstring, Ptr{MtCompileOptions}),
-          device, source, Opts)
+          (Ptr{MtDevice}, Cstring, Ptr{MtCompileOptions}, Ptr{NsError}),
+          device, source, Opts, error)
 end
 
 function mtLibraryRelease(lib)
@@ -871,10 +863,10 @@ function mtSetFunc(pipDesc, func, functype)
           pipDesc, func, functype)
 end
 
-function mtNewRenderState(device, pipDesc)
+function mtNewRenderState(device, pipDesc, error)
     ccall((:mtNewRenderState, cmt_lib), Ptr{MtRenderPipeline},
-          (Ptr{MtDevice}, Ptr{MtRenderDesc}),
-          device, pipDesc)
+          (Ptr{MtDevice}, Ptr{MtRenderDesc}, Ptr{NsError}),
+          device, pipDesc, error)
 end
 
 function mtColorPixelFormat(renderdesc, index, pixelFormat)
@@ -979,6 +971,16 @@ function mtArgumentThreadgroupMemoryDataSize(arg)
           arg)
 end
 
+function mtNewComputePipelineReflection()
+    ccall((:mtNewComputePipelineReflection, cmt_lib), Ptr{MtComputePipelineReflection}, ())
+end
+
+function mtComputePipelinereflectionArguments(refl)
+    ccall((:mtComputePipelinereflectionArguments, cmt_lib), Ptr{MtArgument},
+          (Ptr{MtComputePipelineReflection},),
+          refl)
+end
+
 function mtPointerTypeElementType(ptr)
     ccall((:mtPointerTypeElementType, cmt_lib), MtDataType,
           (Ptr{MtPointerType},),
@@ -1037,6 +1039,12 @@ function mtCommandBufferOnComplete(cmdb, sender, oncomplete)
     ccall((:mtCommandBufferOnComplete, cmt_lib), Cvoid,
           (Ptr{MtCommandQueue}, Ptr{Cvoid}, MtCommandBufferOnCompleteFn),
           cmdb, sender, oncomplete)
+end
+
+function mtCommandBufferOnCompleteNoSender(cmdb, oncomplete)
+    ccall((:mtCommandBufferOnCompleteNoSender, cmt_lib), Cvoid,
+          (Ptr{MtCommandQueue}, MtCommandBufferOnCompleteFnNoSender),
+          cmdb, oncomplete)
 end
 
 function mtCommandBufferRelease(cmdbuf)
@@ -1711,6 +1719,19 @@ function mtArgumentEncoderLength(encoder)
     ccall((:mtArgumentEncoderLength, cmt_lib), NsUInteger,
           (Ptr{MtArgumentEncoder},),
           encoder)
+end
+
+function mtArgumentEncoderSetArgumentBufferWithOffset(cce, buf, offset)
+    ccall((:mtArgumentEncoderSetArgumentBufferWithOffset, cmt_lib), Cvoid,
+          (Ptr{MtArgumentEncoder}, Ptr{MtBuffer}, NsUInteger),
+          cce, buf, offset)
+end
+
+function mtArgumentEncoderSetArgumentBufferWithOffsetForElement(cce, buf, startOffset,
+                                                                arrayElement)
+    ccall((:mtArgumentEncoderSetArgumentBufferWithOffsetForElement, cmt_lib), Cvoid,
+          (Ptr{MtArgumentEncoder}, Ptr{MtBuffer}, NsUInteger, NsUInteger),
+          cce, buf, startOffset, arrayElement)
 end
 
 function mtArgumentEncoderSetBufferOffsetAtIndex(cce, buf, offset, indx)

@@ -1,5 +1,6 @@
 abstract type StorageMode end
 export MtStorageMode, Shared, Managed, Private
+export ReadUsage, WriteUsage, ReadWriteUsage
 
 # Metal Has 4 storage types
 # Shared  -> Buffer in Host memory, accessed by the GPU. Requires no sync
@@ -49,3 +50,10 @@ Base.:(==)(a::MtlResourceOptions, b::MtStorageMode) =
 
 Base.:(==)(a::MtStorageMode, b::MtlResourceOptions) =
     b == a
+
+##################
+Base.convert(::Type{MtResourceUsage}, val::Integer)    = MtResourceUsage(val)
+
+const ReadUsage = MtResourceUsageRead
+const WriteUsage = MtResourceUsageWrite
+const ReadWriteUsage = convert(MtResourceUsage, MtResourceUsageRead | MtResourceUsageWrite)

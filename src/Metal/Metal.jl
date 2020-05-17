@@ -19,7 +19,7 @@ Base.convert(::Type{NsRange}, range::StepRange{T}) where T <: Integer =
 	NsRange(first(range)-step(range), length(range)*step(range))
 
 # low-level autogeneraed wrappers
-export MtSize
+export MtSize, MtlDim, MtlDim3
 include("api/libcmt_aliases.jl")
 include("api/libcmt.jl")
 
@@ -37,11 +37,15 @@ include("wrappers/buffer.jl")
 include("wrappers/cmd-queue.jl")
 include("wrappers/cmd-buffer.jl")
 include("wrappers/compute-pipeline-state.jl")
+include("wrappers/buffer_argument.jl")
 
 include("wrappers/command_enc.jl")
 include("wrappers/command_enc_blit.jl")
 include("wrappers/command_enc_compute.jl")
 
+include("reflection/reflection_compute.jl")
+
+include("size.jl")
 # high-level operations
 
 end # module
