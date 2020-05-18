@@ -7,14 +7,14 @@ mutable struct MtlError <: Exception
 	domain::String
 	userinfo::String
 
-	ptr::Ptr{NsError}
+	ptr::MTLError
 end
 
 Base.convert(::Type{MTLError}, err::MtlError) = err.ptr
-Base.unsafe_convert(::Type{MTLError}, err::MtlError) = convert(MTLError, err.ptr) 
+Base.unsafe_convert(::Type{MTLError}, err::MtlError) = convert(MTLError, err.ptr)
 
-function MtlError(err::Ptr{NsError})
-	code = mtErrorCode(err) 
+function MtlError(err::MTLError)
+	code = mtErrorCode(err)
 	domain = mtErrorDomain(err) |> unsafe_string
 	userinfo = mtErrorUserInfo(err) |> unsafe_string
 

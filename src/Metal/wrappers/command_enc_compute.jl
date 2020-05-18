@@ -23,15 +23,17 @@ function MtlComputeCommandEncoder(cmdbuf::MtlCommandBuffer; dispatch_type::Union
     return obj
 end
 
+device(cce::MtlComputeCommandEncoder) = device(cce.cmdbuf)
+
 set_function!(cce::MtlComputeCommandEncoder, pip::MtlComputePipelineState) =
     mtComputeCommandEncoderSetComputePipelineState(cce, pip)
 
 set_buffer!(cce::MtlComputeCommandEncoder, buf::MtlBuffer, offset::Integer, index::Integer) =
-    mtComputeCommandEncoderSetBufferOffsetAtIndex(cce, buf, offset, index)
+    mtComputeCommandEncoderSetBufferOffsetAtIndex(cce, buf, offset, index - 1)
 #set_bufferoffset!(cce::MtlComputeCommandEncoder, offset::Integer, index::Integer) =
 #    mtComputeCommandEncoderBufferSetOffsetAtIndex(cce, offset, index)
-set_buffers!(cce::MtlComputeCommandEncoder, bufs::Vector{<:MtlBuffer},
-             offsets::Vector{Int}, indices::UnitRange{Int}) =
+set_buffers!(cce::MtlComputeCommandEncoder, bufs::Vector{T},
+             offsets::Vector{Int}, indices::UnitRange{Int}) where {T<:MtlBuffer} =
     mtComputeCommandEncoderSetBuffersOffsetsWithRange(cce, handle_array(bufs), offsets, indices .- 1)
 #=set_buffers!(cce::MtlComputeCommandEncoder, bufs::Vector{MtlPtr{T}},
              offsets::Vector{Int}, indices::UnitRange{Int}) where {T} =

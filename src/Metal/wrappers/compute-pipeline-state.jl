@@ -21,11 +21,12 @@ function unsafe_destroy!(cce::MtlComputePipelineState)
 end
 
 function MtlComputePipelineState(d::MtlDevice, f::MtlFunction)
-    _errptr = Ref{NsError}()
+    _errptr = Ref{MTLError}()
     handle = mtNewComputePipelineStateWithFunction(d, f, _errptr)
     if _errptr[] != C_NULL
         throw(MtlError(_errptr[]))
     end
+
     obj = MtlComputePipelineState(handle, d)
     finalizer(unsafe_destroy!, obj)
     return obj

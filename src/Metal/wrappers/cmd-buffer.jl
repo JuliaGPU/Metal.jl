@@ -46,7 +46,7 @@ function unsafe_destroy!(cmdbuf::MtlCommandBuffer)
 end
 
 ## Properties
-device(l::MtlCommandBuffer) = mtCommandBufferDevice(l)
+device(l::MtlCommandBuffer) = MtlDevice(Bool, mtCommandBufferDevice(l))
 queue(l::MtlCommandBuffer) = l.queue
 retained_references(l::MtlCommandBuffer) = mtCommandBufferRetainedReferences(l)
 label(l::MtlCommandBuffer) = unsafe_string_maybe(mtCommandBufferLabel(l))
