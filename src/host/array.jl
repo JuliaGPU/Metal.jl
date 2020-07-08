@@ -15,7 +15,7 @@ end
 # type and dimensionality specified, accepting dims as tuples of Ints
 function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Private) where {T,N}
     dev = device()
-    buf = alloc(T, dev, prod(dims) * sizeof(T); storage=storage)
+    buf = alloc(T, dev, prod(dims); storage=storage)
 
     obj = MtlArray{T,N}(buf, dims, dev)
     finalizer(obj) do arr
@@ -182,9 +182,9 @@ end
 ## utilities
 
 zeros(T::Type, dims...) = fill!(MtlArray{T}(undef, dims...), 0)
-Mtls(T::Type, dims...) = fill!(MtlArray{T}(undef, dims...), 1)
+ones(T::Type, dims...) = fill!(MtlArray{T}(undef, dims...), 1)
 zeros(dims...) = zeros(Float32, dims...)
-Mtls(dims...) = Mtls(Float32, dims...)
+ones(dims...) = Mtls(Float32, dims...)
 fill(v, dims...) = fill!(MtlArray{typeof(v)}(undef, dims...), v)
 fill(v, dims::Dims) = fill!(MtlArray{typeof(v)}(undef, dims...), v)
 

@@ -53,8 +53,14 @@ function set_field!(enc::MtlArgumentEncoder, val::Number, index::Integer)
     Base.unsafe_store!(dst, val, 1)
     return
 end
+
 function set_field!(enc::MtlArgumentEncoder, val::NTuple{N,T}, index::Integer) where {N,T}
     dst = Base.bitcast(Ptr{typeof(val)}, mtArgumentEncoderConstantDataAtIndex(enc, index-1))
     Base.unsafe_store!(dst, val, 1)
     return
+end
+
+##
+function encode_argument!(enc::MtlArgumentEncoder, f::MtlFunction, idx::Integer, val::MtlBuffer)
+
 end

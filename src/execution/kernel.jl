@@ -35,39 +35,76 @@ function enqueue_function(f::MtlFunction, args...;
     # Set the function that we are currently encoding
     MetalCore.set_function!(cce, f)
     # Encode all arguments
-    MetalCore.encode_arguments!(cce, args...)
+    MetalCore.encode_arguments!(cce, f, args...)
     # Flush everything
     MetalCore.append_current_function!(cce, blocks, threads)
     return nothing
 end
 
 #####
-function encode_arguments!(cce::MtlComputeCommandEncoder, args...)
+function encode_arguments!(cce::MtlComputeCommandEncoder, f::MtlFunction, args...)
     for (i, a) in enumerate(args)
-        encode_argument!(cce, i, a)
+        encode_argument!(cce, f, i, a)
     end
 end
 
-function encode_argument!(cce::MtlComputeCommandEncoder, idx::Integer, arg::Nothing)
+function encode_argument!(cce::MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, arg::Nothing)
     @assert idx > 0
     #@check api.clSetKernelArg(k.id, cl_uint(idx-1), sizeof(CL_mem), C_NULL)
     set_bytes!(cce, sizeof(C_NULL), C_NULL, idx-1)
     return cce
 end
 
-function encode_argument!(cce::MtlComputeCommandEncoder, idx::Integer, arg::MtlBuffer)
+function encode_argument!(cce::MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, arg::MtlBuffer)
     @assert idx > 0
     set_buffer!(cce, buf, 0, idx-1)
     return cce
 end
 
-function encode_argument!(enc::Metal.MtlComputeCommandEncoder, idx::Integer, val::T) where T
+function encode_argument!(enc::Metal.MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, val::T) where T
     @assert idx > 0 "Kernel idx must be bigger 0"
-    ref, tsize = to_mtl_ref(val)
-    set_bytes!(cce, ref, tsize, idx-1)
+    #if does not contain a buffer we can use setbytes
+    if !contains_mtlbuffer(T)
+        ref, tsize = to_mtl_ref(val)
+        set_bytes!(cce, ref, tsize, idx-1)
+    else
+        #otherwise, we need an argument buffer
+        throw("Not implemented")
+
+        # create an encoder to write into the argument buffer
+        argbuf_enc = MtlArgumentEncoder(f, idx)
+        # allocate the argument buffer
+        argbuf = alloc(Cchar, device(enc), sizeof(argbuf_enc), storage=Shared)
+        # assign the argument buffer to the encoder
+        Metal.assign_argument_buffer!(argbuf_enc, argbuf, 1)
+
+        #
+        for
+        Metal.set_field!(argbuf_enc, size(val), 1)
+        set_buffer!(argbuf_enc, pointer(val), 0, 2)
+
+    end
     return cce
 end
 
-function encode_argument!(enc::Metal.MtlComputeCommandEncoder, idx::Integer, val::MtlDeviceArray)
-    
+function encode_argument!(enc::Metal.MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, val::MtlDeviceArray)
+    @assert contains_mtlbuffer(typeof(val))
+
+    # create an encoder to write into the argument buffer
+    argbuf_enc = MtlArgumentEncoder(f, idx)
+    # allocate the argument buffer
+    argbuf = alloc(Cchar, device(enc), sizeof(argbuf_enc), storage=Shared)
+    # assign the argument buffer to the encoder
+    Metal.assign_argument_buffer!(argbuf_enc, argbuf, 1)
+
+    #
+    Metal.set_field!(argbuf_enc, size(val), 1)
+    set_buffer!(argbuf_enc, pointer(val), 0, 2)
+
+    Metal.use!(enc, pointer(val), Metal.ReadWriteUsage)
+
+    set_buffer!(enc, argbuf, 0, idx)
+    @info "Leaked temporary argument buffer $(argbuf.handle) for argument #$idx"
+    #TODO memmgmt
+    return argbuf
 end

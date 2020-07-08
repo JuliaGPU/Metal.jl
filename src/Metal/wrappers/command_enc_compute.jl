@@ -40,11 +40,28 @@ set_buffers!(cce::MtlComputeCommandEncoder, bufs::Vector{T},
     mtComputeCommandEncoderSetBuffersOffsetsWithRange(cce, bufs, offsets, indices .- 1)=#
 
 set_bytes!(cce::MtlComputeCommandEncoder, ptr::Ptr, length::Integer, index::Integer) =
-    mtComputeCommandEncoderSetBytesLengthAtIndex(cce, ptr, length, index)
+    mtComputeCommandEncoderSetBytesLengthAtIndex(cce, ptr, length, index - 1)
 
 dispatchThreads!(cce::MtlComputeCommandEncoder, gridSize::MtSize, threadGroupSize::MtSize) =
     mtComputeCommandEncoderDispatchThreadgroups_threadsPerThreadgroup(cce, gridSize, threadGroupSize)
 
+# higher level
+set_argument!(cce::MtlComputeCommandEncoder, index::Integer, buf::MtlBuffer, offset::Integer = 0) =
+    set_buffer!(cce, buf, offset, index)
+
+function set_argument!(cce::MtlComputeCommandEncoder, index::Integer, val::T) where T
+    @assert T.isbitstype
+
+    ref = Base.RefValue(val)
+    ptr = Base.unsafe_convert(Ptr{T}, ref)
+    set_bytes!(cce, ptr, sizeof(T), index)
+end
+
+function set_arguments!(cce::MtlComputeCommandEncoder, args...)
+    for (i,arg) = enumerate(args)
+        set_argument!(cce, i, arg)
+    end
+end
 #####
 # encode in the Command Encoder
 function MtlComputeCommandEncoder(f::Base.Callable, cmdbuf::MtlCommandBuffer; kwargs...)

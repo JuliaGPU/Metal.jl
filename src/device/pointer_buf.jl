@@ -23,6 +23,7 @@ Base.convert(::Type{DeviceBuffer{T}},   p::MtlBuffer)     where {T}             
 
 # between CPU pointers, for the purpose of working with `ccall`
 Base.unsafe_convert(::Type{Metal.MTLBuffer}, x::DeviceBuffer{T}) where {T} = reinterpret(Metal.MTLBuffer, x)
+Base.unsafe_convert(::Type{Metal.MTLResource}, x::DeviceBuffer{T}) where {T} = reinterpret(Metal.MTLResource, x)
 
 # between device pointers
 Base.convert(::Type{<:DeviceBuffer}, p::DeviceBuffer)                         = throw(ArgumentError("cannot convert between incompatible device pointer types"))
@@ -106,3 +107,17 @@ end
     call_function(llvm_f, Cvoid, Tuple{DevicePtr{T,A}, T, Int},
                   :((p, convert(T,x), Int(i-one(i)))))
 end
+
+
+## new set methods
+Metal.set_buffer!(cce::MtlArgumentEncoder, buf::DeviceBuffer, offset::Integer, index::Integer) =
+    Metal.mtArgumentEncoderSetBufferOffsetAtIndex(cce, buf, offset, index-1)
+Metal.set_buffers!(cce::MtlArgumentEncoder, bufs::Vector{<:DeviceBuffer},
+             offsets::Vector{Int}, indices::UnitRange{Int}) =
+    Metal.mtArgumentSetBuffersOffsetsWithRange(cce, handle_array(bufs), offsets, indices .- 1)
+
+Metal.use!(cce::MtlComputeCommandEncoder, buf::DeviceBuffer, mode::Metal.MtResourceUsage=ReadWriteUsage) =
+    Metal.mtComputeCommandEncoderUseResourceUsage(cce, buf, mode)
+
+Metal.use!(cce::MtlComputeCommandEncoder, buf::Vector{DeviceBuffer}, mode::Metal.MtResourceUsage=ReadWriteUsage) =
+    Metal.mtComputeCommandEncoderUseResourceCountUsage(cce, handle_array(buf), length(buf), mode)

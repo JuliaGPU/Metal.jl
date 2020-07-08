@@ -3,6 +3,10 @@ export
 
 const MTLBuffer = Ptr{MtBuffer}
 
+# A structure behaving like a pointer, but referincg a
+# Metal buffer.
+#Offset is in bytes starting from 1 (corresponding to 0)
+
 struct MtlBuffer{T} <: MtlResource
     handle::MTLBuffer
 end
@@ -39,6 +43,8 @@ function MtlBuffer{T}(dev::Union{MtlDevice,MtlHeap},
 
     bytesize = length * sizeof(T)
     ptr = alloc_buffer(dev, bytesize, opts)
+
+    @info "Allocating buffer for $length-$T, => $bytesize bytes"
 
     dev = dev isa MtlDevice ? dev : device(dev)
     return MtlBuffer{T}(ptr)
