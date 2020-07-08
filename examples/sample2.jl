@@ -41,15 +41,4 @@ Base.unsafe_copyto!(dev, arr2.buffer, 1, bufferB, 1, 128)
 
 
 
-MetalCore.Metal.waitUntilCompleted(cmdBuffer)*
-
-
-# buffer
-
-## add compute
-
-
-#mycfun(asd) = (tuple(1,4); return nothing);#return println("hello", asd)
-#cf = @cfunction(mycfun, Cvoid, (MetalCore.MTLCommandBuffer, ))
-
-#MetalCore.mtCommandBufferAddCompletedHandler(cmdBuffer, cf)
+MetalCore.Metal.waitUntilCompleted(cmdBuffer)

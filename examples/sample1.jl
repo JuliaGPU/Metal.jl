@@ -7,15 +7,9 @@ dev = MtlDevice(1)
 #lib = MetalCore.LibraryWithFile(d, "default.metallib")
 
 src = """
-/*
-See LICENSE folder for this sample’s licensing information.
-
-Abstract:
-A shader that adds two arrays of floats.
-*/
-
 #include <metal_stdlib>
 using namespace metal;
+
 /// This is a Metal Shading Language (MSL) function equivalent to the add_arrays() C function, used to perform the calculation on a GPU.
 kernel void add_arrays(device const float* inA,
                        device const float* inB,
@@ -67,6 +61,3 @@ end
 wait(cmd)
 
 @show vecC
-
-bufferD = alloc(Float32, dev, bufferSize, pointer(vecC), storage=Private) 
-vecD = unsafe_wrap(Vector{Float32}, bufferD, (128,))
