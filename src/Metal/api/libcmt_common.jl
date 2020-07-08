@@ -17,8 +17,7 @@ struct NsRange
     length::NsUInteger
 end
 
-const NsError_s = Cvoid
-const NsError = Ptr{NsError_s}
+const NsError = Cvoid
 
 struct NsDictionaryStringString
     keys::Ptr{Cstring}
@@ -502,10 +501,8 @@ const MtComputePipelineDescriptor = Cvoid
 const MtPointerType = Cvoid
 const MtArrayType = Cvoid
 const MtStructType = Cvoid
-const MtComputePipelineReflection_s = Cvoid
-const MtRenderPipelineReflection_s = Cvoid
-const MtComputePipelineReflection = Ptr{MtComputePipelineReflection_s}
-const MtRenderPipelineReflection = Ptr{MtRenderPipelineReflection_s}
+const MtComputePipelineReflection = Cvoid
+const MtRenderPipelineReflection = Cvoid
 
 struct MtDispatchThreadgroupsIndirectArguments
     threadgroupsPerGrid::NTuple{3, UInt32}

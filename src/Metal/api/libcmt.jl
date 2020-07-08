@@ -295,21 +295,21 @@ end
 
 function mtNewComputePipelineStateWithFunction(device, fun, error)
     ccall((:mtNewComputePipelineStateWithFunction, cmt_lib), Ptr{MtComputePipelineState},
-          (Ptr{MtDevice}, Ptr{MtFunction}, Ptr{NsError}),
+          (Ptr{MtDevice}, Ptr{MtFunction}, Ptr{Ptr{NsError}}),
           device, fun, error)
 end
 
 function mtNewComputePipelineStateWithFunctionReflection(device, fun, opt, reflection, error)
     ccall((:mtNewComputePipelineStateWithFunctionReflection, cmt_lib), Ptr{MtComputePipelineState},
           (Ptr{MtDevice}, Ptr{MtFunction}, MtPipelineOption,
-           Ptr{MtComputePipelineReflection}, Ptr{NsError}),
+           Ptr{Ptr{MtComputePipelineReflection}}, Ptr{Ptr{NsError}}),
           device, fun, opt, reflection, error)
 end
 
 function mtNewComputePipelineStateWithDescriptor(device, desc, opt, reflection, error)
     ccall((:mtNewComputePipelineStateWithDescriptor, cmt_lib), Ptr{MtComputePipelineState},
           (Ptr{MtDevice}, Ptr{MtComputePipelineDescriptor}, MtPipelineOption,
-           Ptr{MtComputePipelineReflection}, Ptr{NsError}),
+           Ptr{Ptr{MtComputePipelineReflection}}, Ptr{Ptr{NsError}}),
           device, desc, opt, reflection, error)
 end
 
@@ -487,7 +487,7 @@ end
 
 function mtNewFunctionWithNameConstantValues(lib, name, constantValues, error)
     ccall((:mtNewFunctionWithNameConstantValues, cmt_lib), Ptr{MtFunction},
-          (Ptr{MtLibrary}, Cstring, Ptr{MtFunctionConstantValues}, Ptr{NsError}),
+          (Ptr{MtLibrary}, Cstring, Ptr{MtFunctionConstantValues}, Ptr{Ptr{NsError}}),
           lib, name, constantValues, error)
 end
 
@@ -535,13 +535,13 @@ end
 
 function mtNewLibraryWithFile(device, filepath, error)
     ccall((:mtNewLibraryWithFile, cmt_lib), Ptr{MtLibrary},
-          (Ptr{MtDevice}, Cstring, Ptr{NsError}),
+          (Ptr{MtDevice}, Cstring, Ptr{Ptr{NsError}}),
           device, filepath, error)
 end
 
 function mtNewLibraryWithSource(device, source, Opts, error)
     ccall((:mtNewLibraryWithSource, cmt_lib), Ptr{MtLibrary},
-          (Ptr{MtDevice}, Cstring, Ptr{MtCompileOptions}, Ptr{NsError}),
+          (Ptr{MtDevice}, Cstring, Ptr{MtCompileOptions}, Ptr{Ptr{NsError}}),
           device, source, Opts, error)
 end
 
@@ -865,7 +865,7 @@ end
 
 function mtNewRenderState(device, pipDesc, error)
     ccall((:mtNewRenderState, cmt_lib), Ptr{MtRenderPipeline},
-          (Ptr{MtDevice}, Ptr{MtRenderDesc}, Ptr{NsError}),
+          (Ptr{MtDevice}, Ptr{MtRenderDesc}, Ptr{Ptr{NsError}}),
           device, pipDesc, error)
 end
 

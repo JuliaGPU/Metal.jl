@@ -26,11 +26,7 @@ function label(l::MtlLibrary)
 end
 
 function MtlLibrary(device::MtlDevice, src::String, opts::MtlCompileOptions)
-    _errptr = Ref{MTLError}()
-    handle = mtNewLibraryWithSource(device, src, opts, _errptr)
-    if _errptr[] != C_NULL
-        throw(MtlError(_errptr[]))
-    end
+    handle = @mtlthrows _errptr mtNewLibraryWithSource(device, src, opts, _errptr)
 
     obj = MtlLibrary(handle, device)
     finalizer(unsafe_destroy!, obj)
