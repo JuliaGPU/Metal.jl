@@ -5,8 +5,7 @@ dev = MtlDevice(1)
 
 
 #lib = MetalCore.LibraryWithFile(d, "default.metallib")
-
-src = read("src/Metal/kernels/add.metal", String)
+src = read(dirname(pathof(MetalCore))*"/Metal/kernels/add.metal", String)
 
 bufferSize = 128
 bufferA = MtlArray{Float32,1}(undef, tuple(bufferSize), storage=Shared)

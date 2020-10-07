@@ -1,6 +1,6 @@
 using MetalCore
 
-srcpath = "src/Metal/kernels/vadd.metal"
+srcpath = dirname(pathof(MetalCore))*"/Metal/kernels/vadd.metal"
 tmpdir = tempdir()
 
 fname = "vadd"

@@ -2,7 +2,7 @@ using MetalCore
 
 dev = MtlDevice(1)
 
-src = read("src/Metal/kernels/vadd.metal", String)
+src = read(dirname(pathof(MetalCore))*"/Metal/kernels/vadd.metal", String)
 
 bufferSize = 128
 bufferA = MtlArray{Float32,1}(undef, tuple(bufferSize), storage=Shared)
