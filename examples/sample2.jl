@@ -20,7 +20,7 @@ rand!(vecA)
 queue = global_queue(dev)
 
 vecB .= 0
-commit!(queue) do buffer
+cmdBuffer = commit!(queue) do buffer
     MetalCore.Metal.MtlBlitCommandEncoder(buffer) do enc
         MetalCore.Metal.append_copy!(enc, bufferA, 1, bufferC, 1, 128*4)
     end

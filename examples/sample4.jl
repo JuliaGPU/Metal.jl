@@ -61,6 +61,7 @@ Base.unsafe_copyto!(dev, arr2.buffer, 1, bufferB, 1, 128)
 
 
 mycfun(asd) = (println("info"); return nothing);#return println("hello", asd)
-cf = @cfunction(mycfun, Cvoid, (MetalCore.MTLCommandBuffer, ))
+cf = @cfunction(mycfun, Cvoid, (MetalCore.Metal.MTLCommandBuffer, ))
 
-#MetalCore.mtCommandBufferAddCompletedHandler(cmdBuffer, cf)
+# This fails for some reason... should investigate
+#MetalCore.Metal.mtCommandBufferAddCompletedHandler(cmdBuffer, cf)
