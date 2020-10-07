@@ -69,7 +69,7 @@ function encode_argument!(enc::Metal.MtlComputeCommandEncoder, f::MtlFunction, i
         set_bytes!(cce, ref, tsize, idx-1)
     else
         #otherwise, we need an argument buffer
-        throw("Not implemented")
+        throw("Not implemented: If an argument contains a mtlbuffer automatic aragument encoding is not yet supported.")
 
         # create an encoder to write into the argument buffer
         argbuf_enc = MtlArgumentEncoder(f, idx)
@@ -78,11 +78,14 @@ function encode_argument!(enc::Metal.MtlComputeCommandEncoder, f::MtlFunction, i
         # assign the argument buffer to the encoder
         Metal.assign_argument_buffer!(argbuf_enc, argbuf, 1)
 
-        #
-        for
-        Metal.set_field!(argbuf_enc, size(val), 1)
-        set_buffer!(argbuf_enc, pointer(val), 0, 2)
+        # TODO Implement automatic conversion of struct into a assign_argument_buffer
 
+        #for field in val 
+        #    Metal.set_field!(argbuf_enc, size(val), 1)
+        #    set_buffer!(argbuf_enc, pointer(val), 0, 2)
+        #end
+
+        # set argubuf_enc into cce        
     end
     return cce
 end
