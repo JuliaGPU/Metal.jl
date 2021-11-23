@@ -1,21 +1,12 @@
-export MtlDevice, device, devices, DefaultDevice
+export MtlDevice, devices
+
+
+## construction
 
 const MTLDevice = Ptr{MtDevice}
 
-"""
-    MtlDevice(i::Integer)
-
-Get a handle to a compute device.
-"""
 struct MtlDevice
     handle::MTLDevice
-
-    # CuDevice is just an integer, but we need (?) to call cuDeviceGet to make sure this
-    # integer is valid. to avoid ambiguity, add a bogus argument (cfr. `checkbounds`)
-    function MtlDevice(::Type{Bool}, handle::MTLDevice)
-        handle == C_NULL && error("Invalid device")
-        new(handle)
-    end
 end
 
 Base.convert(::Type{MTLDevice}, dev::MtlDevice) = dev.handle
@@ -24,35 +15,30 @@ Base.unsafe_convert(::Type{MTLDevice}, d::MtlDevice) = convert(MTLDevice, d.hand
 Base.:(==)(a::MtlDevice, b::MtlDevice) = a.handle == b.handle
 Base.hash(dev::MtlDevice, h::UInt) = hash(dev.handle, h)
 
-function DefaultDevice()
-    try
-        return MtlDevice(mtCreateSystemDefaultDevice())
-    catch err
-        @warn "Error in detecting default device"
-        return MtlDevice(1)
+"""
+    devices()
+
+Get an iterator for the compute devices.
+"""
+function devices()
+    handles = mtCopyAllDevices()
+    devices = Vector{MtlDevice}()
+    while true
+        handle = unsafe_load(handles, length(devices)+1)
+        handle == C_NULL && break
+        push!(devices, MtlDevice(handle))
     end
+    Libc.free(handles)
+
+    return devices
 end
-MtlDevice() = DefaultDevice()
+
+"""
+    MtlDevice(i::Integer)
+
+Get a handle to a compute device.
+"""
 MtlDevice(i::Integer) = devices()[i]
-MtlDevice(ptr::MTLDevice) = MtlDevice(Bool, ptr)
-
-## Properties
-name(d::MtlDevice) = unsafe_string(mtDeviceName(d))
-
-islowpower(d::MtlDevice) = mtDeviceLowPower(d)
-isheadless(d::MtlDevice) = mtDeviceHeadless(d)
-isremovable(d::MtlDevice) = mtDeviceRemovable(d)
-hasunifiedMemory(d::MtlDevice) = mtDeviceHasUnifiedMemory(d)
-registryId(d::MtlDevice) = mtDeviceRegistryID(d)
-transfer_rate(d::MtlDevice) = mtDeviceMaxTransferRate(d)
-
-# working set size
-max_workingsetsize(d::MtlDevice) = mtDeviceRecommendedMaxWorkingSetSize(d)
-max_threadgroupmemorylength(d::MtlDevice) = mtDeviceMaxThreadgroupMemoryLength(d)
-max_threadspergroup(d::MtlDevice) = mtMaxThreadsPerThreadgroup(d)
-max_bufferlength(d::MtlDevice) = mtDeviceMaxBufferLength(d)
-
-allocatedsize(d::MtlDevice) = mtDeviceCurrentAllocatedSize(d)
 
 function Base.show(io::IO, d::MtlDevice)
     print(io, "MtlDevice($(name(d)))")
@@ -61,29 +47,29 @@ end
 function Base.show(io::IO, ::MIME"text/plain", d::MtlDevice)
     println(io, "MtlDevice:")
     println(io, " name :             ", name(d))
-    println(io, " lowpower :         ", mtDeviceLowPower(d))
-    println(io, " headless :         ", mtDeviceHeadless(d))
-    println(io, " removable :        ", mtDeviceRemovable(d))
-    println(io, " unified memory :   ", mtDeviceHasUnifiedMemory(d))
-    println(io, " id :               ", mtDeviceRegistryID(d))
-    print(io, " transfer rate :    ", mtDeviceMaxTransferRate(d))
+    println(io, " lowpower :         ", is_lowpower(d))
+    println(io, " headless :         ", is_headless(d))
+    println(io, " removable :        ", is_removable(d))
+    println(io, " unified memory :   ", has_unified_memory(d))
+    println(io, " id :               ", registry_id(d))
+    print(io,   " transfer rate :    ", max_transfer_rate(d))
 end
 
-## Iteration
-"""
-    devices()
 
-Get an iterator for the compute devices.
-"""
-function devices()
-    _devices = mtCopyAllDevices()
-    devices = Vector{MtlDevice}()
-    for i = 0:100
-        _dev = Base.unsafe_load(_devices + i * sizeof(Ptr{MtDevice}))
-        _dev == C_NULL && break
-        push!(devices, MtlDevice(_dev))
-    end
-    Base.Libc.free(_devices)
+## properties
 
-    return devices
-end
+name(d::MtlDevice) = unsafe_string(mtDeviceName(d))
+
+is_lowpower(d::MtlDevice) = mtDeviceLowPower(d)
+is_headless(d::MtlDevice) = mtDeviceHeadless(d)
+is_removable(d::MtlDevice) = mtDeviceRemovable(d)
+has_unified_memory(d::MtlDevice) = mtDeviceHasUnifiedMemory(d)
+registry_id(d::MtlDevice) = mtDeviceRegistryID(d)
+max_transfer_rate(d::MtlDevice) = mtDeviceMaxTransferRate(d)
+
+max_workingsetsize(d::MtlDevice) = mtDeviceRecommendedMaxWorkingSetSize(d)
+max_threadgroupmemorylength(d::MtlDevice) = mtDeviceMaxThreadgroupMemoryLength(d)
+max_threadspergroup(d::MtlDevice) = mtMaxThreadsPerThreadgroup(d)
+max_bufferlength(d::MtlDevice) = mtDeviceMaxBufferLength(d)
+
+allocatedsize(d::MtlDevice) = mtDeviceCurrentAllocatedSize(d)

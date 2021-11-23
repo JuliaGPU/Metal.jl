@@ -11,24 +11,22 @@ using LLVM.Interop
 include("../lib/core/MTL.jl")
 @reexport using .MTL
 
-# Device-side types and conversion
+# device functionality
 include("device/pointer_abstract.jl")
 include("device/pointer_ptr.jl")
 include("device/pointer_buf.jl")
 include("device/array.jl")
 include("device/metal.jl")
 
-# Compiler stuff
+# compiler
 include("execution/mtl_type_conversion.jl")
 include("execution/device_type_conversion.jl")
 include("execution/kernel.jl")
 
-include("context.jl")
+include("state.jl")
 
-
-# MtlArrays stuff
+# array abstraction
 include("host/array.jl")
 include("host/memory.jl")
-
 
 end # module

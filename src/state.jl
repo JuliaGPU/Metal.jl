@@ -1,5 +1,5 @@
 export
-    global_queue
+    device, global_queue
 
 # Context management and global state
 function global_queue(dev::MtlDevice)
@@ -8,8 +8,8 @@ function global_queue(dev::MtlDevice)
     end
 end
 
-function MTL.device()
+function device()
     get!(task_local_storage(), :MtlDevice) do
-        DefaultDevice()
+        MtlDevice(1)
     end
 end
