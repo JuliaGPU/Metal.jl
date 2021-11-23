@@ -13,13 +13,13 @@ mtErrorCode(NsError *err) { return [(NSError *)err code]; }
 
 MT_EXPORT
 const char*
-mtErrorDomain(NsError *err) { 
+mtErrorDomain(NsError *err) {
     return Cstring([(NSError *)err domain]);
 }
 
 MT_EXPORT
 const char*
-mtErrorUserInfo(NsError *err) { 
+mtErrorUserInfo(NsError *err) {
     return CstringFromDict([(NSError*)err userInfo]);
 }
 

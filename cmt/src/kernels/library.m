@@ -18,22 +18,16 @@ CF_RETURNS_RETAINED
 MT_EXPORT
 MtLibrary*
 mtNewLibraryWithFile(MtDevice *device, char *filepath, NsError **error) {
-  NSError *_err;
-  MtLibrary* lib = [(id<MTLDevice>)device newLibraryWithFile: mtNSString(filepath) error: &_err];
-  *error = _err;
-  return lib;
+  return [(id<MTLDevice>)device newLibraryWithFile: mtNSString(filepath) error: (NSError**)error];
 }
 
 CF_RETURNS_RETAINED
 MT_EXPORT
 MtLibrary*
 mtNewLibraryWithSource(MtDevice *device, char *source, MtCompileOptions *Opts, NsError **error) {
-  NSError *_err;
-  MtLibrary* lib = [(id<MTLDevice>)device newLibraryWithSource: mtNSString(source) 
-  								                           options: (MTLCompileOptions*)Opts 
-  								                             error: &_err];
-  *error = _err;
-  return lib;
+  return[(id<MTLDevice>)device newLibraryWithSource: mtNSString(source)
+  								                           options: (MTLCompileOptions*)Opts
+  								                             error: (NSError**) error];
 }
 
 /*CF_RETURNS_RETAINED

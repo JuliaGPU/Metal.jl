@@ -6,49 +6,34 @@ CF_RETURNS_RETAINED
 MT_EXPORT
 MtComputePipelineState*
 mtNewComputePipelineStateWithFunction(MtDevice *device, MtFunction* fun, NsError **error) {
-    NSError *_err;
-    MtComputePipelineState *res = [(id<MTLDevice>)device newComputePipelineStateWithFunction: fun error:&_err];
-    *error = _err;
-    return res;
+    return[(id<MTLDevice>)device newComputePipelineStateWithFunction: fun error: (NSError **)error];
 }
 
 CF_RETURNS_RETAINED
 MT_EXPORT
 MtComputePipelineState*
-mtNewComputePipelineStateWithFunctionReflection(MtDevice *device, MtFunction* fun,MtPipelineOption opt, 
+mtNewComputePipelineStateWithFunctionReflection(MtDevice *device, MtFunction* fun,MtPipelineOption opt,
                                         MtComputePipelineReflection **reflection, NsError **error) {
-    NSError *_err;
-    MTLAutoreleasedComputePipelineReflection _refl;
-
-    MtComputePipelineState *res = [(id<MTLDevice>)device 
-                newComputePipelineStateWithFunction: fun 
+    return [(id<MTLDevice>)device
+                newComputePipelineStateWithFunction: fun
                                             options: (MTLPipelineOption)opt
-                                         reflection: &_refl
-                                              error: &_err];
-    *reflection = _refl;
-    *error = _err;
-    return res;
+                                         reflection: (MTLAutoreleasedComputePipelineReflection*) reflection
+                                              error: (NSError **)error];
 }
 
 CF_RETURNS_RETAINED
 MT_EXPORT
 MtComputePipelineState*
-mtNewComputePipelineStateWithDescriptor(MtDevice *device, MtComputePipelineDescriptor* desc, 
-                                        MtPipelineOption opt, 
+mtNewComputePipelineStateWithDescriptor(MtDevice *device, MtComputePipelineDescriptor* desc,
+                                        MtPipelineOption opt,
                                         MtComputePipelineReflection **reflection,
                                         NsError **error) {
-    NSError *_err;
-    MTLAutoreleasedComputePipelineReflection _refl;
-
-    MtComputePipelineState *res = [(id<MTLDevice>)device 
-        newComputePipelineStateWithDescriptor: (MTLComputePipelineDescriptor*)desc 
+    return [(id<MTLDevice>)device
+        newComputePipelineStateWithDescriptor: (MTLComputePipelineDescriptor*)desc
                                       options: (MTLPipelineOption)opt
-                                   reflection: &_refl
-                                        error: &_err];
-    
-    *reflection = _refl;
-    *error = _err;
-    return res;
+                                   reflection: (MTLAutoreleasedComputePipelineReflection*) reflection
+                                        error: (NSError **)error];
+
 }
 
 CF_RETURNS_RETAINED
