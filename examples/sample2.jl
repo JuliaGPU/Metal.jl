@@ -1,4 +1,4 @@
-using MetalCore
+using Metal
 
 @show devices()
 dev = MtlDevice(1)
@@ -21,8 +21,8 @@ queue = global_queue(dev)
 
 vecB .= 0
 cmdBuffer = commit!(queue) do buffer
-    MetalCore.Metal.MtlBlitCommandEncoder(buffer) do enc
-        MetalCore.Metal.append_copy!(enc, bufferA, 1, bufferC, 1, 128*4)
+    MTL.MtlBlitCommandEncoder(buffer) do enc
+        MTL.append_copy!(enc, bufferA, 1, bufferC, 1, 128*4)
     end
 end
 
@@ -33,12 +33,12 @@ ptrD = pointer(vecD)
 Base.unsafe_copyto!(dev, ptrD, bufferB, 0, 128)
 
 ###
-arr2 = MetalCore.MtlArray{Float32,1}(undef, (bufferSize,), storage=MetalCore.Metal.MtResourceStorageModeShared)
-arrptr = MetalCore.Metal.content(arr2.buffer)
+arr2 = MTL.MtlArray{Float32,1}(undef, (bufferSize,), storage=MTL.MtResourceStorageModeShared)
+arrptr = MTL.content(arr2.buffer)
 arrvec = unsafe_wrap(Vector{Float32}, arrptr, bufferSize)
 
 Base.unsafe_copyto!(dev, arr2.buffer, 1, bufferB, 1, 128)
 
 
 
-MetalCore.Metal.waitUntilCompleted(cmdBuffer)
+MTL.waitUntilCompleted(cmdBuffer)

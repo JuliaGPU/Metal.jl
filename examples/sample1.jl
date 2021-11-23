@@ -1,10 +1,10 @@
-using MetalCore
+using Metal
 
 @show devices()
 dev = MtlDevice(1)
 
 
-#lib = MetalCore.LibraryWithFile(d, "default.metallib")
+#lib = MTL.LibraryWithFile(d, "default.metallib")
 
 src = """
 #include <metal_stdlib>
@@ -44,16 +44,16 @@ pip_addfun = MtlComputePipelineState(dev, fun)
 queue = global_queue(dev) #MtlCommandQueue(dev)
 
 ##
-cmd = MetalCore.commit!(queue) do cmdbuf
+cmd = MTL.commit!(queue) do cmdbuf
     MtlComputeCommandEncoder(cmdbuf) do enc
-        MetalCore.set_function!(enc, pip_addfun)
-        MetalCore.set_buffers!(enc,
+        MTL.set_function!(enc, pip_addfun)
+        MTL.set_buffers!(enc,
                                 [bufferA, bufferB, bufferC],
                                 [0,0,0], 1:3)
         gridSize = MtSize(length(vecA), 1, 1)
         threadGroupSize = min(length(vecA), pip_addfun.maxTotalThreadsPerThreadgroup)
-        threadGroupSize = MetalCore.MtSize(threadGroupSize, 1, 1)
-        MetalCore.append_current_function!(enc, gridSize, threadGroupSize)
+        threadGroupSize = MTL.MtSize(threadGroupSize, 1, 1)
+        MTL.append_current_function!(enc, gridSize, threadGroupSize)
     end
 end
 

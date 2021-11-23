@@ -1,4 +1,4 @@
-using MetalCore
+using Metal
 
 dev = MtlDevice(1)
 
@@ -30,23 +30,23 @@ begin
     end
     callback = @cfunction(async_send, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, ))
     #cuLaunchHostFunc(stream, callback, cond)
-    Metal.mtCommandBufferOnComplete(cmdbuf, cbfun, callback)
+    MTL.mtCommandBufferOnComplete(cmdbuf, cbfun, callback)
 end
 
 
 
-MetalCore.Metal.MtlBlitCommandEncoder(cmdbuf) do enc
-    MetalCore.Metal.append_copy!(enc, bufferA, 1, bufferC, 1, 128*4)
+MTL.MtlBlitCommandEncoder(cmdbuf) do enc
+    MTL.append_copy!(enc, bufferA, 1, bufferC, 1, 128*4)
 end
 
-Metal.commit!(cmdbuf)
+MTL.commit!(cmdbuf)
 
 wait(cmdbuf)
 
 
 ###
-arr2 = MetalCore.MtlArray{Float32,1}(undef, (bufferSize,), storage=MetalCore.Metal.MtResourceStorageModeShared)
-arrptr = MetalCore.Metal.content(arr2.buffer)
+arr2 = MTL.MtlArray{Float32,1}(undef, (bufferSize,), storage=MTL.MtResourceStorageModeShared)
+arrptr = MTL.content(arr2.buffer)
 arrvec = unsafe_wrap(Vector{Float32}, arrptr, bufferSize)
 
 Base.unsafe_copyto!(dev, arr2.buffer, 1, bufferB, 1, 128)
@@ -61,7 +61,7 @@ Base.unsafe_copyto!(dev, arr2.buffer, 1, bufferB, 1, 128)
 
 
 mycfun(asd) = (println("info"); return nothing);#return println("hello", asd)
-cf = @cfunction(mycfun, Cvoid, (MetalCore.Metal.MTLCommandBuffer, ))
+cf = @cfunction(mycfun, Cvoid, (MTL.MTLCommandBuffer, ))
 
 # This fails for some reason... should investigate
-#MetalCore.Metal.mtCommandBufferAddCompletedHandler(cmdBuffer, cf)
+#MTL.mtCommandBufferAddCompletedHandler(cmdBuffer, cf)

@@ -1,8 +1,8 @@
 # memory operations
 function sync_gpu_to_cpu!(dev::MtlDevice, buf::MtlBuffer{T}) where T
-    cmd = Metal.commit!(global_queue(dev)) do cmdbuf
+    cmd = MTL.commit!(global_queue(dev)) do cmdbuf
         MtlBlitCommandEncoder(cmdbuf) do enc
-            Metal.append_sync!(enc, buf)
+            MTL.append_sync!(enc, buf)
         end
     end
     wait(cmd)
@@ -12,9 +12,9 @@ end
 Base.unsafe_copyto!(dev::MtlDevice, dst::MtlBuffer{T}, src::MtlBuffer{T}, N::Integer) where T =
     unsafe_copyto!(dev, dst, 1, src, 1, n)
 function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlBuffer{T}, doff, src::MtlBuffer{T}, soff, N::Integer) where T
-    cmd = Metal.commit!(global_queue(dev)) do cmdbuf
+    cmd = MTL.commit!(global_queue(dev)) do cmdbuf
         MtlBlitCommandEncoder(cmdbuf) do enc
-            Metal.append_copy!(enc, dst, doff, src, soff, N * sizeof(T))
+            MTL.append_copy!(enc, dst, doff, src, soff, N * sizeof(T))
         end
     end
     wait(cmd)
@@ -55,15 +55,15 @@ function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlBuffer{T}, doff::Integer,  
         Base.unsafe_copyto!(dev, content(dst)+(doff-1)*sizeof(T), src, N)
     elseif storage_type == Managed
         Base.unsafe_copyto!(dev, content(dst)+(doff-1)*sizeof(T), src, N)
-        Metal.DidModifyRange!(dst, 1:N)
+        MTL.DidModifyRange!(dst, 1:N)
     end
     return dst
 end
 
 function unsafe_fill!(dev::MtlDevice, ptr::MtlBuffer{T}, value::Union{UInt8,Int8}, N::Integer) where T
-    cmd = Metal.commit!(global_queue(dev)) do cmdbuf
+    cmd = MTL.commit!(global_queue(dev)) do cmdbuf
         MtlBlitCommandEncoder(cmdbuf) do enc
-            Metal.append_fill!(enc, src, value, N * sizeof(T))
+            MTL.append_fill!(enc, src, value, N * sizeof(T))
         end
     end
     wait(cmd)

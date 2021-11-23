@@ -8,7 +8,7 @@ function global_queue(dev::MtlDevice)
     end
 end
 
-function Metal.device()
+function MTL.device()
     get!(task_local_storage(), :MtlDevice) do
         DefaultDevice()
     end

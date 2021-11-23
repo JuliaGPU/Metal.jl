@@ -1,8 +1,8 @@
-using MetalCore
+using Metal
 
 dev = MtlDevice(1)
 
-src = read(dirname(pathof(MetalCore))*"/Metal/kernels/vadd.metal", String)
+src = read(dirname(pathof(Metal))*"/Metal/kernels/vadd.metal", String)
 
 bufferSize = 128
 bufferA = MtlArray{Float32,1}(undef, tuple(bufferSize), storage=Shared)
@@ -25,18 +25,18 @@ fun = MtlFunction(lib, "add_vectors")
 pip_addfun = MtlComputePipelineState(dev, fun)
 queue = global_queue(dev) #MtlCommandQueue(dev)
 
-args = MetalCore.mtlconvert.((bufferA, bufferB, bufferC))
+args = MTL.mtlconvert.((bufferA, bufferB, bufferC))
 
-cmd = MetalCore.commit!(queue) do cmdbuf
+cmd = MTL.commit!(queue) do cmdbuf
     MtlComputeCommandEncoder(cmdbuf) do enc
-        MetalCore.Metal.set_function!(enc, pip_addfun)
+        MTL.set_function!(enc, pip_addfun)
 
-        MetalCore.encode_arguments!(enc, fun, args...)
+        MTL.encode_arguments!(enc, fun, args...)
 
         gridSize = MtSize(length(vecA), 1, 1)
         threadGroupSize = min(length(vecA), pip_addfun.maxTotalThreadsPerThreadgroup)
-        threadGroupSize = MetalCore.MtSize(threadGroupSize, 1, 1)
-        MetalCore.append_current_function!(enc, gridSize, threadGroupSize)
+        threadGroupSize = MTL.MtSize(threadGroupSize, 1, 1)
+        MTL.append_current_function!(enc, gridSize, threadGroupSize)
     end
 end
 

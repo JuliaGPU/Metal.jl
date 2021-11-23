@@ -33,11 +33,11 @@ function enqueue_function(f::MtlFunction, args...;
     all(threads .< f.maxTotalThreadsPerThreadgroup) || throw(ArgumentError("Max Thread dimension is $(f.maxTotalThreadsPerThreadgroup)"))
 
     # Set the function that we are currently encoding
-    MetalCore.set_function!(cce, f)
+    MTL.set_function!(cce, f)
     # Encode all arguments
-    MetalCore.encode_arguments!(cce, f, args...)
+    MTL.encode_arguments!(cce, f, args...)
     # Flush everything
-    MetalCore.append_current_function!(cce, blocks, threads)
+    MTL.append_current_function!(cce, blocks, threads)
     return nothing
 end
 
@@ -61,7 +61,7 @@ function encode_argument!(cce::MtlComputeCommandEncoder, f::MtlFunction, idx::In
     return cce
 end
 
-function encode_argument!(enc::Metal.MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, val::T) where T
+function encode_argument!(enc::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, val::T) where T
     @assert idx > 0 "Kernel idx must be bigger 0"
     #if does not contain a buffer we can use setbytes
     if !contains_mtlbuffer(T)
@@ -76,12 +76,12 @@ function encode_argument!(enc::Metal.MtlComputeCommandEncoder, f::MtlFunction, i
         # allocate the argument buffer
         argbuf = alloc(Cchar, device(enc), sizeof(argbuf_enc), storage=Shared)
         # assign the argument buffer to the encoder
-        Metal.assign_argument_buffer!(argbuf_enc, argbuf, 1)
+        MTL.assign_argument_buffer!(argbuf_enc, argbuf, 1)
 
         # TODO Implement automatic conversion of struct into a assign_argument_buffer
 
         #for field in val 
-        #    Metal.set_field!(argbuf_enc, size(val), 1)
+        #    MTL.set_field!(argbuf_enc, size(val), 1)
         #    set_buffer!(argbuf_enc, pointer(val), 0, 2)
         #end
 
@@ -90,7 +90,7 @@ function encode_argument!(enc::Metal.MtlComputeCommandEncoder, f::MtlFunction, i
     return cce
 end
 
-function encode_argument!(enc::Metal.MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, val::MtlDeviceArray)
+function encode_argument!(enc::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, val::MtlDeviceArray)
     @assert contains_mtlbuffer(typeof(val))
 
     # create an encoder to write into the argument buffer
@@ -98,13 +98,13 @@ function encode_argument!(enc::Metal.MtlComputeCommandEncoder, f::MtlFunction, i
     # allocate the argument buffer
     argbuf = alloc(Cchar, device(enc), sizeof(argbuf_enc), storage=Shared)
     # assign the argument buffer to the encoder
-    Metal.assign_argument_buffer!(argbuf_enc, argbuf, 1)
+    MTL.assign_argument_buffer!(argbuf_enc, argbuf, 1)
 
     #
-    Metal.set_field!(argbuf_enc, size(val), 1)
+    MTL.set_field!(argbuf_enc, size(val), 1)
     set_buffer!(argbuf_enc, pointer(val), 0, 2)
 
-    Metal.use!(enc, pointer(val), Metal.ReadWriteUsage)
+    MTL.use!(enc, pointer(val), MTL.ReadWriteUsage)
 
     set_buffer!(enc, argbuf, 0, idx)
     @info "Leaked temporary argument buffer $(argbuf.handle) for argument #$idx"

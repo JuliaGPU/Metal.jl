@@ -1,4 +1,4 @@
-module MetalCore
+module Metal
 
 using Reexport
 using GPUArrays
@@ -7,10 +7,9 @@ using GPUCompiler
 using LLVM
 using LLVM.Interop
 
-# Analogous do MetalApi .
-# API and julian wrappers defined here
-include("Metal/Metal.jl")
-@reexport using .Metal
+# core library
+include("../lib/core/MTL.jl")
+@reexport using .MTL
 
 # Device-side types and conversion
 include("device/pointer_abstract.jl")

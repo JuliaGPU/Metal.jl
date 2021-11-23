@@ -79,7 +79,7 @@ Base.convert(::Type{T}, x::T) where T <: MtlArray = x
 Base.unsafe_convert(::Type{Ptr{T}}, x::MtlArray{T}) where {T} = throw(ArgumentError("cannot take the host address of a $(typeof(x))"))
 Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S,T} = throw(ArgumentError("cannot take the host address of a $(typeof(x))"))
 
-Base.unsafe_convert(t::Type{Metal.MTLBuffer}, x::MtlArray{T}) where {T}   = Base.unsafe_convert(t, pointer(x))
+Base.unsafe_convert(t::Type{MTL.MTLBuffer}, x::MtlArray{T}) where {T}   = Base.unsafe_convert(t, pointer(x))
 
 
 ## interop with GPU arrays

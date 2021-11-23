@@ -17,7 +17,7 @@ Base.convert(::Type{DevicePtr{T,A}}, x::Union{Int,UInt}) where {T,A<:AddressSpac
 
 # between host and device pointers
 #Base.convert(::Type{MtlPtr{T}},  p::DevicePtr)  where {T}                 = Base.bitcast(MtlPtr{T}, p)
-Base.convert(::Type{MtlBuffer{T}},   p::DevicePtr)  where {T}               = MtlBuffer{T}(Base.bitcast(Metal.MTLBuffer, p))
+Base.convert(::Type{MtlBuffer{T}},   p::DevicePtr)  where {T}               = MtlBuffer{T}(Base.bitcast(MTL.MTLBuffer, p))
 #Base.convert(::Type{DevicePtr{T,A}}, p::MtlPtr) where {T,A<:AddressSpace}   = Base.bitcast(DevicePtr{T,A}, p)
 #Base.convert(::Type{DevicePtr{T}},   p::MtlPtr)   where {T}                 = Base.bitcast(DevicePtr{T,AS.Generic}, p)
 #Base.convert(::Type{DevicePtr{T,A}}, p::MtlBuffer) where {T,A<:AddressSpace}   = Base.bitcast(DevicePtr{T,A}, p.handle)
