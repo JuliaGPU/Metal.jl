@@ -1,4 +1,4 @@
-export MtlLibrary, function_names
+export MtlLibrary, MtlLibraryFromFile, function_names
 
 const MTLLibrary = Ptr{MtLibrary}
 
@@ -35,11 +35,8 @@ function MtlLibrary(device::MtlDevice, src::String, opts::MtlCompileOptions)
 end
 
 function MtlLibraryFromFile(device::MtlDevice, path::String)
-    handle = convert(MtlLibrary, mtLibraryWithFile(device, path))
-    err = mtGetError()
-    if err != C_NULL
-        throw(MtError(err))
-    end
+    handle = @mtlthrows _errptr mtNewLibraryWithFile(device, path, _errptr)
+
     obj = MtlLibrary(handle, device)
     finalizer(unsafe_destroy!, obj)
 
