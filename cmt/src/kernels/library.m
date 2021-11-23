@@ -18,7 +18,10 @@ CF_RETURNS_RETAINED
 MT_EXPORT
 MtLibrary*
 mtNewLibraryWithFile(MtDevice *device, char *filepath, NsError **error) {
-  return [(id<MTLDevice>)device newLibraryWithFile: mtNSString(filepath) error:(NSError**)&error];
+  NSError *_err;
+  MtLibrary* lib = [(id<MTLDevice>)device newLibraryWithFile: mtNSString(filepath) error: &_err];
+  *error = _err;
+  return lib;
 }
 
 CF_RETURNS_RETAINED
