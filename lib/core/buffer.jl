@@ -1,52 +1,53 @@
 export
-    MtlBuffer, content, alloc, free, handle
+    MtlBuffer, device, content, alloc, free, handle
 
 const MTLBuffer = Ptr{MtBuffer}
-
-# A structure behaving like a pointer, but referincg a
-# Metal buffer.
-#Offset is in bytes starting from 1 (corresponding to 0)
 
 struct MtlBuffer{T} <: MtlResource
     handle::MTLBuffer
 end
 
 Base.unsafe_convert(::Type{MTLBuffer}, buf::MtlBuffer) = buf.handle
-Base.convert(::Type{MtlBuffer{T}}, buf::MtlBuffer{T2}) where {T,T2} = MtlBuffer{T}(buf.handle)
+Base.convert(::Type{MtlBuffer{T}}, buf::MtlBuffer{T2}) where {T,T2} =
+    MtlBuffer{T}(buf.handle)
 
 Base.:(==)(a::MtlBuffer, b::MtlBuffer) = a.handle == b.handle
 Base.hash(buf::MtlBuffer, h::UInt) = hash(buf.handle, h)
 
-Base.sizeof(buf::MtlBuffer)          = mtBufferLength(buf)
-Base.length(d::MtlBuffer{T}) where T = Base.bitcast(Int, div(mtBufferLength(d), sizeof(T)))
-device(buf::MtlBuffer)               = MtlDevice(true, mtResourceDevice(buf))
+Base.sizeof(buf::MtlBuffer)          = Int(mtBufferLength(buf))
+Base.length(d::MtlBuffer{T}) where T = sizeof(d) ÷ sizeof(T)
+device(buf::MtlBuffer)               = MtlDevice(mtResourceDevice(buf))
 content(buf::MtlBuffer{T}) where T   = Base.bitcast(Ptr{T}, mtBufferContents(buf))
 
 handle(buf::MtlBuffer) = buf.handle
 
 ## Alloc
-alloc_buffer(dev::MtlDevice, bytesize, opts::MtlResourceOptions) =  mtDeviceNewBufferWithLength(dev, bytesize, opts)
-alloc_buffer(dev::MtlHeap, bytesize, opts::MtlResourceOptions) = mtHeapNewBufferWithLength(heap, bytesize, opts)
-alloc_buffer(dev::MtlDevice, bytesize, opts::MtlResourceOptions, ptr::Ptr) = mtDeviceNewBufferWithBytes(dev, ptr, bytesize, opts)
-alloc_buffer(dev::MtlHeap, bytesize, opts::MtlResourceOptions, ptr::Ptr) = mtHeapNewBufferWithBytes(heap, ptr, bytesize, opts)
+alloc_buffer(dev::MtlDevice, bytesize, opts::MtlResourceOptions) =
+    mtDeviceNewBufferWithLength(dev, bytesize, opts)
+alloc_buffer(dev::MtlHeap, bytesize, opts::MtlResourceOptions) =
+    mtHeapNewBufferWithLength(heap, bytesize, opts)
+alloc_buffer(dev::MtlDevice, bytesize, opts::MtlResourceOptions, ptr::Ptr) =
+    mtDeviceNewBufferWithBytes(dev, ptr, bytesize, opts)
+alloc_buffer(dev::MtlHeap, bytesize, opts::MtlResourceOptions, ptr::Ptr) =
+    mtHeapNewBufferWithBytes(heap, ptr, bytesize, opts)
 
-alloc_buffer(dev, bytesize, opts::Integer) = alloc_buffer(dev, bytesize, Base.bitcast(MtlResourceOptions, UInt32(opts)))
-alloc_buffer(dev, bytesize, opts::Integer, ptr) = alloc_buffer(dev, bytesize, Base.bitcast(MtlResourceOptions, UInt32(opts)), ptr)
+alloc_buffer(dev, bytesize, opts::Integer) =
+    alloc_buffer(dev, bytesize, Base.bitcast(MtlResourceOptions, UInt32(opts)))
+alloc_buffer(dev, bytesize, opts::Integer, ptr) =
+    alloc_buffer(dev, bytesize, Base.bitcast(MtlResourceOptions, UInt32(opts)), ptr)
 
 ## Constructors from device
+# TODO: buffer should be untyped
 function MtlBuffer{T}(dev::Union{MtlDevice,MtlHeap},
                       length::Integer;
                       storage = Private,
                       hazard_tracking = DefaultTracking,
                       cache_mode = DefaultCPUCache) where {T}
-    opts = storage + hazard_tracking + cache_mode
+    opts = storage | hazard_tracking | cache_mode
 
     bytesize = length * sizeof(T)
     ptr = alloc_buffer(dev, bytesize, opts)
 
-    @info "Allocating buffer for $length-$T, => $bytesize bytes"
-
-    dev = dev isa MtlDevice ? dev : device(dev)
     return MtlBuffer{T}(ptr)
 end
 
@@ -56,9 +57,8 @@ function MtlBuffer{T}(dev::Union{MtlDevice,MtlHeap},
                       storage = Managed,
                       hazard_tracking = DefaultTracking,
                       cache_mode = DefaultCPUCache) where {T}
-
     storage == Private && error("Can't create a Private copy-allocated buffer.")
-    opts =  storage + hazard_tracking + cache_mode
+    opts =  storage | hazard_tracking | cache_mode
 
     bytesize = length * sizeof(T)
     ptr = alloc_buffer(dev, bytesize, opts, ptr)
@@ -76,9 +76,10 @@ MtlBuffer(dev::Union{MtlDevice,MtlHeap}, args...; kwargs...) =
     alloc(T, device, length, [ptr=nothing]; storage=Default, hazard_tracking=Default, chache_mode=Default)
     MtlBuffer{T}(device, length...)
 
-Allocates a Metal Buffer on `device` of bytes equal to `length * sizeof(T)`. If a CPU-pointer is passed as
-last argument, then the Metal Buffer is initialized with the content of the memory starting at `ptr`,
-otherwise it's zero-initialized.
+Allocates a Metal Buffer on `device` of bytes equal to `length * sizeof(T)`. If
+a CPU-pointer is passed as last argument, then the Metal Buffer is initialized
+with the content of the memory starting at `ptr`, otherwise it's
+zero-initialized.
 
 ! Note: You are responsible for freeing the returned buffer
 
@@ -86,7 +87,7 @@ The storage kwarg controls where the buffer is stored. Possible values are:
  - Private : Residing on the device
  - Shared  : Residing on the host
  - Managed : Keeps two copies of the buffer, on device and on host. Explicit
- calls must be given to syncronize the two
+   calls must be given to syncronize the two
  - Memoryless : an iOs specific thing that won't work on Mac.
 
 Note that `Private` buffers can't be directly accessed from the CPU, therefore
@@ -106,8 +107,9 @@ free(buf::MtlBuffer) = (buf.handle !== C_NULL) || mtResourceRelease(buf)
     DidModifyRange!(buf::MtlBuffer{T}, range::UnitRange)
 
 Notifies the GPU that the range of elements `range`, corresponding to the bytes
-`sizeof(T)*first(range):sizeof(T)*last(range)` have been modified on the CPU, and
-that they should be transferred to the device before executing any following command.
+`sizeof(T)*first(range):sizeof(T)*last(range)` have been modified on the CPU,
+and that they should be transferred to the device before executing any following
+command.
 
 Only valid for `Managed` buffers.
 """

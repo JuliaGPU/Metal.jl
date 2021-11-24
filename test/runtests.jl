@@ -15,4 +15,19 @@ if length(devs) > 1
 end
 
 end
+
+@testset "buffers" begin
+
+dev = first(devices())
+
+buf = MtlBuffer{Int}(dev, 1)
+
+@test sizeof(buf) == 8
+@test length(buf) == 1
+@test device(buf) == dev
+
+free(buf)
+
+end
+
 end
