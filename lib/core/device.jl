@@ -73,3 +73,35 @@ max_threadspergroup(d::MtlDevice) = mtMaxThreadsPerThreadgroup(d)
 max_bufferlength(d::MtlDevice) = mtDeviceMaxBufferLength(d)
 
 allocatedsize(d::MtlDevice) = mtDeviceCurrentAllocatedSize(d)
+
+# Kernel Intrinsics
+nodim_intr = [
+    "dispatch_quadgroups_per_threadgroup", "dispatch_simdgroups_per_threadgroup",
+    "quadgroup_index_in_threadgroup", "quadgroups_per_threadgroup",
+    "simdgroup_index_in_threadgroup", "simdgroups_per_threadgroup",
+    "thread_index_in_quadgroup", "thread_index_in_simdgroup", "thread_index_in_threadgroup",
+    "thread_execution_width", "threads_per_simdgroup"]
+
+for intr in nodim_intr
+    # XXX: these are also available as UInt16 (ushort)
+    @eval $(Symbol(intr))() = ccall($"extern julia.air.$intr.i32", llvmcall, UInt32, ())
+    @eval export $(Symbol(intr))
+end
+
+# ushort vec or uint vec
+dim_intr = [
+    "dispatch_threads_per_threadgroup",
+    "grid_origin", "grid_size",
+    "thread_position_in_grid", "thread_position_in_threadgroup",
+    "threadgroup_position_in_grid", "threadgroups_per_grid",
+    "threads_per_grid", "threads_per_threadgroup"]
+
+for intr in dim_intr
+    # XXX: these are also available as UInt16 (ushort)
+    @eval $(Symbol(intr * "_1d"))() = ccall($"extern julia.air.$intr.i32", llvmcall, UInt32, ())
+    @eval $(Symbol(intr * "_2d"))() = ccall($"extern julia.air.$intr.v2i32", llvmcall, NTuple{2, VecElement{UInt32}}, ())
+    @eval $(Symbol(intr * "_3d"))() = ccall($"extern julia.air.$intr.v3i32", llvmcall, NTuple{3, VecElement{UInt32}}, ())
+    @eval export $(Symbol(intr * "_1d"))
+    @eval export $(Symbol(intr * "_2d"))
+    @eval export $(Symbol(intr * "_3d"))
+end
