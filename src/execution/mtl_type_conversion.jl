@@ -18,7 +18,7 @@ end
 
 # returns true if structure contains a device buffer, false otherwise
 function _contains_mtlbuffer(::Type{T}) where T
-    if T.hasfreetypevars
+    if Base.has_free_typevars(T)
         throw("Only concrete types can be sent to GPU!")
     end
     for typ in T.types
