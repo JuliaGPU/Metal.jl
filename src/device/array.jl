@@ -24,28 +24,28 @@ MtlDeviceArray
 
 struct MtlDeviceArray{T,N,A} <: AbstractArray{T,N}
     shape::Dims{N}
-    ptr::DeviceBuffer{T,A}
-
+    ptr::Core.LLVMPtr{T,A}
     # inner constructors, fully parameterized, exact types (ie. Int not <:Integer)
-    MtlDeviceArray{T,N,A}(shape::Dims{N}, ptr::DeviceBuffer{T,A}) where {T,A,N} = new(shape,ptr)
+    MtlDeviceArray{T,N,A}(shape::Dims{N}, ptr::Core.LLVMPtr{T,A}) where {T,A,N} = new(shape,ptr)
 end
 
 const MtlDeviceVector = MtlDeviceArray{T,1,A} where {T,A}
 const MtlDeviceMatrix = MtlDeviceArray{T,2,A} where {T,A}
 
 # outer constructors, non-parameterized
-MtlDeviceArray(dims::NTuple{N,<:Integer}, p::DeviceBuffer{T,A})                where {T,A,N} = MtlDeviceArray{T,N,A}(dims, p)
-MtlDeviceArray(len::Integer,              p::DeviceBuffer{T,A})                where {T,A}   = MtlDeviceVector{T,A}((len,), p)
+MtlDeviceArray(dims::NTuple{N,<:Integer}, p::Core.LLVMPtr{T,A})                where {T,A,N} = MtlDeviceArray{T,N,A}(dims, p)
+MtlDeviceArray(len::Integer,              p::Core.LLVMPtr{T,A})                where {T,A}   = MtlDeviceVector{T,A}((len,), p)
 
 # outer constructors, partially parameterized
-MtlDeviceArray{T}(dims::NTuple{N,<:Integer},   p::DeviceBuffer{T,A}) where {T,A,N} = MtlDeviceArray{T,N,A}(dims, p)
-MtlDeviceArray{T}(len::Integer,                p::DeviceBuffer{T,A}) where {T,A}   = MtlDeviceVector{T,A}((len,), p)
-MtlDeviceArray{T,N}(dims::NTuple{N,<:Integer}, p::DeviceBuffer{T,A}) where {T,A,N} = MtlDeviceArray{T,N,A}(dims, p)
-MtlDeviceVector{T}(len::Integer,               p::DeviceBuffer{T,A}) where {T,A}   = MtlDeviceVector{T,A}((len,), p)
+MtlDeviceArray{T}(dims::NTuple{N,<:Integer},   p::Core.LLVMPtr{T,A}) where {T,A,N} = MtlDeviceArray{T,N,A}(dims, p)
+MtlDeviceArray{T}(len::Integer,                p::Core.LLVMPtr{T,A}) where {T,A}   = MtlDeviceVector{T,A}((len,), p)
+MtlDeviceArray{T,N}(dims::NTuple{N,<:Integer}, p::Core.LLVMPtr{T,A}) where {T,A,N} = MtlDeviceArray{T,N,A}(dims, p)
+#MtlDeviceVector{T}(len::Integer,               p::Core.LLVMPtr{T,1}) where {T,A}   = MtlDeviceVector{T,A}((len,), p)
 
 # outer constructors, fully parameterized
-MtlDeviceArray{T,N,A}(dims::NTuple{N,<:Integer}, p::DeviceBuffer{T,A}) where {T,A,N} = MtlDeviceArray{T,N,A}(Int.(dims), p)
-MtlDeviceVector{T,A}(len::Integer,               p::DeviceBuffer{T,A}) where {T,A}   = MtlDeviceVector{T,A}((Int(len),), p)
+MtlDeviceArray{T,N,A}(dims::NTuple{N,<:Integer}, p::Core.LLVMPtr{T,A}) where {T,A,N} = MtlDeviceArray{T,N,A}(Int.(dims), p)
+MtlDeviceVector{T,A}(len::Integer,               p::Core.LLVMPtr{T,A}) where {T,A}   = MtlDeviceVector{T,A}((Int(len),), p)
+# MtlDeviceVector{T,A}(len::NTuple{N,<:Integer},               p::Core.LLVMPtr{T,1}) where {T,A}   = MtlDeviceVector{T,A}((Int(len),), p)
 
 
 ## getters
@@ -53,14 +53,21 @@ MtlDeviceVector{T,A}(len::Integer,               p::DeviceBuffer{T,A}) where {T,
 Base.pointer(a::MtlDeviceArray) = a.ptr
 Base.pointer(a::MtlDeviceArray, i::Integer) = pointer(a) + (i - 1) * Base.elsize(a)
 
+# MtlBuffer pointer
+function pointer_buf(a::MtlDeviceArray{T}) where T
+    return DeviceBuffer(MtlBuffer{T}(reinterpret(Ptr{MTL.MtBuffer}, pointer(a))))
+end
+
 Base.elsize(::Type{<:MtlDeviceArray{T}}) where {T} = sizeof(T)
 Base.size(g::MtlDeviceArray) = g.shape
+# Testing to fix argument encoding with the trailing , for vectors
+Base.size(g::MtlDeviceVector) = length(g)
 Base.length(g::MtlDeviceArray) = prod(g.shape)
 
 
 ## conversions
 
-Base.unsafe_convert(::Type{DeviceBuffer{T,A}}, a::MtlDeviceArray{T,N,A}) where {T,A,N} = pointer(a)
+Base.unsafe_convert(::Type{Core.LLVMPtr{T,A}}, a::MtlDeviceArray{T,N,A}) where {T,A,N} = pointer(a)
 
 
 ## indexing intrinsics
@@ -104,6 +111,26 @@ Base.@propagate_inbounds Base.setindex!(A::MtlDeviceArray{T}, x, i1::Int) where 
 
 Base.IndexStyle(::Type{<:MtlDeviceArray}) = Base.IndexLinear()
 
+# TODO: Put this in pointer_ptr.jl?
+Base.@propagate_inbounds Base.getindex(A::Core.LLVMPtr{T}, i1::Int) where {T} =
+    arrayref(A, i1)
+Base.setindex!(A::Core.LLVMPtr{T}, x, i1::Int) where {T} =
+    arrayset(A, convert(T,x)::T, i1)
+
+Base.IndexStyle(::Type{<:Core.LLVMPtr}) = Base.IndexLinear()
+
+@inline function arrayref(A::Core.LLVMPtr{T,AS}, index::Int) where {T,AS}
+    #@boundscheck checkbounds(A, index)
+    align = Base.datatype_alignment(T)
+    unsafe_load(A, index, Val(align))
+end
+
+@inline function arrayset(A::Core.LLVMPtr{T,AS}, x::T, index::Int) where {T,AS}
+    #@boundscheck checkbounds(A, index)
+    align = Base.datatype_alignment(T)
+    unsafe_store!(A, x, index, Val(align))
+    return A
+end
 
 ## const indexing
 
