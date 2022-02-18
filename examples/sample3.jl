@@ -18,7 +18,7 @@ rand!.([vecA, vecB])
 vecC .= 0.0
 
 ## Setup
-src = read(dirname(pathof(Metal))*"/Metal/kernels/vadd.metal", String)
+src = read(dirname(pathof(Metal))*"/../lib/core/kernels/vadd.metal", String)
 opts = MtlCompileOptions()
 lib = MtlLibrary(dev, src, opts)
 
