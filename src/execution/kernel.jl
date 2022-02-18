@@ -1,5 +1,29 @@
 export @metal
 
+# Match Darwin version to MacOS version only caring about M1 release and after
+# Following: https://en.wikipedia.org/wiki/Darwin_(operating_system)#History
+const darwin_to_macos = Dict( 
+                        # Catalina
+                        v"19.2.0" => v"10.15.2",
+                        v"19.3.0" => v"10.15.3",
+                        v"19.4.0" => v"10.15.4",
+                        v"19.5.0" => v"10.15.5",
+                        v"19.6.0" => v"10.15.6",
+                        # Big Sur
+                        v"20.0.0" => v"11.0.0",
+                        v"20.1.0" => v"11.0.0",
+                        v"20.2.0" => v"11.1.0",
+                        v"20.3.0" => v"11.2.0",
+                        v"20.4.0" => v"11.3.0",
+                        v"20.5.0" => v"11.4.0",
+                        v"20.6.0" => v"11.5.0",
+                        # Monterey
+                        v"21.0.0" => v"12.0.0",
+                        v"21.0.1" => v"12.0.0",
+                        v"21.1.0" => v"12.0.1",
+                        v"21.2.0" => v"12.1.0",
+                        v"21.3.0" => v"12.1.0")
+
 macro metal(ex...)
     call = ex[end]
     kwargs = ex[1:end-1]
@@ -114,7 +138,15 @@ end
 function mtlfunction(f::Core.Function, tt::Type=Tuple{}; name=nothing, kwargs...)
     dev = MtlDevice(1)
     source = FunctionSpec(f, tt, true, name)
-    target = MetalCompilerTarget(; kwargs...)
+    # Get MacOS version
+    machine = Sys.MACHINE
+    darwin_v = VersionNumber(machine[findfirst("darwin", machine)[end]+1:end])
+    # Check for unsupported/incomplete kernel version
+    if !(darwin_v in keys(darwin_to_macos))
+        error("Unsupported kernel version of $darwin_v")
+    end
+    macos_v = darwin_to_macos[darwin_v]
+    target = MetalCompilerTarget(macos=macos_v; kwargs...)
     params = MetalCompilerParams()
     job = CompilerJob(target, source, params)
     metallib_path, entry = mtlfunction_compile(job)
@@ -125,7 +157,7 @@ end
 
 
 function mtlfunction_compile(@nospecialize(job::CompilerJob))
-    metallib_path = "test.metallib"
+    metallib_path = tempname()
 
     mi, mi_meta = GPUCompiler.emit_julia(job)
     ir, ir_meta = GPUCompiler.emit_llvm(job, mi)
@@ -188,10 +220,11 @@ function enqueue_function(f::MtlFunction, args...;
     threadgroups = MtlDim3(threadgroups)
     (grids.width>0 && grids.height>0 && grids.depth>0)    || throw(ArgumentError("Grid dimensions should be non-null"))
     (threadgroups.width>0 && threadgroups.height>0 && threadgroups.depth>0) || throw(ArgumentError("Threadgroup dimensions should be non-null"))
-
+    @info "In enque before pipe state" f
     pipeline_state = MtlComputePipelineState(f.lib.device, f)
     # all(threadgroups .< pipeline_state.maxTotalThreadsPerThreadgroup) || throw(ArgumentError("Max Threadgroup dimension is $(pipeline_state.maxTotalThreadsPerThreadgroup)"))
     # Set the function that we are currently encoding
+    @info "In enqueue_function" pipeline_state
     MTL.set_function!(cce, pipeline_state)
     # Encode all arguments
     encode_arguments!(cce, f, args...)
