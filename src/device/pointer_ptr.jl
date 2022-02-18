@@ -8,12 +8,12 @@ provide optimized implementations of operations such as `unsafe_load` and `unsaf
 DevicePtr
 
 # constructors
-DevicePtr{T,A}(x::Union{Int,UInt,DevicePtr}) where {T,A<:AddressSpace} = Base.bitcast(DevicePtr{T,A}, x)
+###DevicePtr{T,A}(x::Union{Int,UInt,DevicePtr}) where {T,A<:AddressSpace} = Base.bitcast(DevicePtr{T,A}, x)
 #DevicePtr{T}(ptr::MtlPtr{T}) where {T} = DevicePtr{T,AS.Generic}(ptr)
 #DevicePtr(ptr::MtlPtr{T}) where {T} = DevicePtr{T,AS.Generic}(ptr)
 
 ## conversions
-Base.convert(::Type{DevicePtr{T,A}}, x::Union{Int,UInt}) where {T,A<:AddressSpace} = DevicePtr{T,A}(x)
+###Base.convert(::Type{DevicePtr{T,A}}, x::Union{Int,UInt}) where {T,A<:AddressSpace} = DevicePtr{T,A}(x)
 
 # between host and device pointers
 #Base.convert(::Type{MtlPtr{T}},  p::DevicePtr)  where {T}                 = Base.bitcast(MtlPtr{T}, p)
@@ -41,73 +41,6 @@ Base.convert(::Type{DevicePtr{T}}, p::DevicePtr{U,A}) where {T,U,A} = Base.unsaf
 
 ## memory operations
 
-@generated function pointerref(p::DevicePtr{T,A}, i::Int, ::Val{align}) where {T,A,align}
-    sizeof(T) == 0 && return T.instance
-    eltyp = convert(LLVMType, T)
-
-    T_int = convert(LLVMType, Int)
-    T_ptr = convert(LLVMType, DevicePtr{T,A})
-
-    T_actual_ptr = LLVM.PointerType(eltyp, convert(Int, A))
-
-    # create a function
-    param_types = [T_ptr, T_int]
-    llvm_f, _ = create_function(eltyp, param_types)
-
-    # generate IR
-    Builder(JuliaContext()) do builder
-        entry = BasicBlock(llvm_f, "entry", JuliaContext())
-        position!(builder, entry)
-
-        ptr = inttoptr!(builder, parameters(llvm_f)[1], T_actual_ptr)
-        ptr = gep!(builder, ptr, [parameters(llvm_f)[2]])
-        ld = load!(builder, ptr)
-
-        if A != AS.Generic
-            metadata(ld)[LLVM.MD_tbaa] = tbaa_addrspace(A)
-        end
-        alignment!(ld, align)
-
-        ret!(builder, ld)
-    end
-
-    call_function(llvm_f, T, Tuple{DevicePtr{T,A}, Int}, :((p, Int(i-one(i)))))
-end
-
-@generated function pointerset(p::DevicePtr{T,A}, x::T, i::Int, ::Val{align}) where {T,A,align}
-    sizeof(T) == 0 && return
-    eltyp = convert(LLVMType, T)
-
-    T_int = convert(LLVMType, Int)
-    T_ptr = convert(LLVMType, DevicePtr{T,A})
-
-    T_actual_ptr = LLVM.PointerType(eltyp, convert(Int, A))
-
-    # create a function
-    param_types = [T_ptr, eltyp, T_int]
-    llvm_f, _ = create_function(LLVM.VoidType(JuliaContext()), param_types)
-
-    # generate IR
-    Builder(JuliaContext()) do builder
-        entry = BasicBlock(llvm_f, "entry", JuliaContext())
-        position!(builder, entry)
-
-        ptr = inttoptr!(builder, parameters(llvm_f)[1], T_actual_ptr)
-        ptr = gep!(builder, ptr, [parameters(llvm_f)[3]])
-        val = parameters(llvm_f)[2]
-        st = store!(builder, val, ptr)
-
-        if A != AS.Generic
-            metadata(st)[LLVM.MD_tbaa] = tbaa_addrspace(A)
-        end
-        alignment!(st, align)
-
-        ret!(builder)
-    end
-
-    call_function(llvm_f, Cvoid, Tuple{DevicePtr{T,A}, T, Int},
-                  :((p, convert(T,x), Int(i-one(i)))))
-end
 
 # operand types supported by llvm.nvvm.ldg.global
 # NOTE: CUDA 8.0 supports more caching modifiers, but those aren't supported by LLVM yet

@@ -87,13 +87,18 @@ Base.unsafe_convert(t::Type{MTL.MTLBuffer}, x::MtlArray{T}) where {T}   = Base.u
 # TODO Figure out global
 
 function Base.convert(::Type{MtlDeviceArray{T,N,AS.Device}}, a::MtlArray{T,N}) where {T,N}
-  MtlDeviceArray{T,N,AS.Device}(a.dims, DeviceBuffer{T,AS.Device}(pointer(a)))
+    MtlDeviceArray{T,N,AS.Device}(a.dims, reinterpret(Core.LLVMPtr{T, 1}, handle(pointer(a)))) # No handle?
 end
 
 Adapt.adapt_storage(::Adaptor, xs::MtlArray{T,N}) where {T,N} =
   convert(MtlDeviceArray{T,N,AS.Device}, xs)
 
+# Adapt.adapt_storage(::Adaptor, xs::MtlArray{T,N}) where {T,N} =
+#   convert(Core.LLVMPtr{T,AS.Device}, xs)
 
+function Base.convert(::Type{Core.LLVMPtr{T,AS.Device}}, a::MtlArray{T}) where {T}
+    reinterpret(Core.LLVMPtr{T, 1}, handle(pointer(a)))
+end
 ## interop with CPU arrays
 
 # We don't convert isbits types in `adapt`, since they are already
@@ -194,7 +199,3 @@ function Base.fill!(A::MtlArray{T}, val) where T
   A
 end
 
-
-## GPUArrays interfaces
-
-GPUArrays.device(x::MtlArray) = x.dev

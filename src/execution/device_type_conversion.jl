@@ -1,7 +1,7 @@
 struct Adaptor end
 
 # convert Metal Buffers Metal device pointers # should be generic
-Adapt.adapt_storage(to::Adaptor, p::MtlBuffer{T}) where {T} = DeviceBuffer{T,AS.Device}(p)
+Adapt.adapt_storage(to::Adaptor, p::MtlBuffer{T}) where {T} = reinterpret(Core.LLVMPtr{T,AS.Device}, handle(p))
 
 # Base.RefValue isn't GPU compatible, so provide a compatible alternative
 struct MtlRefValue{T} <: Ref{T}
