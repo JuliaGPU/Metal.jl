@@ -1,35 +1,13 @@
 export AS, addrspace
 module AS
-    const Generic               = 0
-    const Device                = 1
-    const Constant              = 2
-    const ThreadGroup           = 3
-    const Thread                = 4
-    #struct ThreadGroup_ImgBlock  <: AddressSpace end
+    const Generic               = 0 # No Generic address space?
+    const Device                = 1 # Checked
+    const Constant              = 2 # Checked
+    const ThreadGroup           = 3 # Checked
+    const Thread                = 4 # Ends up same as Device?
+    const ThreadGroup_ImgBlock  = 5 # Like ThreadGroup but only accessible from 
+    const Ray                   = 6
 end
-# abstract type AddressSpace end
-
-# module AS
-
-# import ..AddressSpace
-
-# struct Generic               <: AddressSpace end
-# struct Device                <: AddressSpace end
-# struct Constant              <: AddressSpace end
-# struct ThreadGroup           <: AddressSpace end
-# struct Thread                <: AddressSpace end
-# #struct ThreadGroup_ImgBlock  <: AddressSpace end
-
-# end
-
-# Base.convert(::Type{Int}, ::Type{AS.Generic})              = 0 # exists?
-# Base.convert(::Type{Int}, ::Type{AS.Device})               = 1 # checked
-# Base.(::Type{Int}, ::Type{AS.Constant})             = 2 # checked
-# Base.convert(::Type{Int}, ::Type{AS.ThreadGroup})          = 3 # checked
-# #Base.convert(::Type{Int}, ::Type{AS.ThreadGroup_ImgBlock}) = 4?
-# Base.convert(::Type{Int}, ::Type{AS.Thread})               = 5 # 
-
-# tbaa_addrspace(as::Type{<:AddressSpace}) = tbaa_make_child(lowercase(String(as.name.name)))
 
 """
     AbstractDevicePtr{T,A}
