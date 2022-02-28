@@ -205,11 +205,12 @@ mtlcall(f::MtlFunction, types::Tuple, args...; kwargs...) =
         end
     end
 
-    MTL.commit!(queue) do cmdbuf
+    cmd = MTL.commit!(queue) do cmdbuf
         MtlComputeCommandEncoder(cmdbuf) do cce
             enqueue_function(f, args...; grids, threadgroups, cce)
         end
     end
+    # Should this happen here?
     wait(cmd)
 end
 

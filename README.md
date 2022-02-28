@@ -9,12 +9,18 @@ interesting to developers.**
 
 ## Requirements
 
--  macOS Catalina 10.15 (might also work on 10.14 but untested).
--  A discrete GPU is not necessary.
+-  macOS Catalina 10.15 or newer (might also work on 10.14 but untested).
+-  Mac device with M-series chip
 -  cmake 3.9
 -  command line XCode tools
 -  Julia 1.3
 
+## Current Special Dependencies (for this branch)
+
+- [LLVM](https://github.com/max-Hawkins/llvm-project/commits/tb/metal)
+    - NOTE: This is not that different from [JuliaGPU#tb/metal](https://github.com/JuliaLang/llvm-project/tree/tb/metal)
+- [LLVM.jl](https://github.com/max-Hawkins/LLVM.jl/tree/mh/metal)
+- [GPUCompiler.jl](https://github.com/max-Hawkins/GPUCompiler.jl/tree/tb/metal)
 
 ## Metal API wrapper
 
@@ -36,4 +42,4 @@ prefixed with `Mtl`.
 
 The C library started by forking [rcp/cmt](https://github.com/recp/cmt), to whom
 goes the original credit. This package builds upon the experience of several
-Julia contributors to `CUDA.jl` and `AMDGPU.jl`.
+Julia contributors to `CUDA.jl`, `AMDGPU.jl`, `oneAPI.jl`.
