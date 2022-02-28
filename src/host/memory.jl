@@ -63,8 +63,10 @@ end
 function unsafe_fill!(dev::MtlDevice, ptr::MtlBuffer{T}, value::Union{UInt8,Int8}, N::Integer) where T
     cmd = MTL.commit!(global_queue(dev)) do cmdbuf
         MtlBlitCommandEncoder(cmdbuf) do enc
-            MTL.append_fill!(enc, src, value, N * sizeof(T))
+            MTL.append_fillbuffer!(enc, ptr, value, N * sizeof(T))
         end
     end
     wait(cmd)
 end
+
+# TODO: Implement generic fill since mtBlitCommandEncoderFillBuffer is limiting
