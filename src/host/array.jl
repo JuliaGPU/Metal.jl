@@ -117,6 +117,7 @@ Base.collect(x::MtlArray{T,N}) where {T,N} = copyto!(Array{T,N}(undef, size(x)),
 
 function Base.copyto!(dest::MtlArray{T}, doffs::Integer, src::Array{T}, soffs::Integer,
                       n::Integer) where T
+  n==0 && return dest
   @boundscheck checkbounds(dest, doffs)
   @boundscheck checkbounds(dest, doffs+n-1)
   @boundscheck checkbounds(src, soffs)
@@ -125,8 +126,12 @@ function Base.copyto!(dest::MtlArray{T}, doffs::Integer, src::Array{T}, soffs::I
   return dest
 end
 
+Base.copyto!(dest::MtlArray{T}, src::Array{T}) where {T} =
+    copyto!(dest, 1, src, 1, length(src))
+
 function Base.copyto!(dest::Array{T}, doffs::Integer, src::MtlArray{T}, soffs::Integer,
                       n::Integer) where T
+  n==0 && return dest
   @boundscheck checkbounds(dest, doffs)
   @boundscheck checkbounds(dest, doffs+n-1)
   @boundscheck checkbounds(src, soffs)
@@ -135,8 +140,12 @@ function Base.copyto!(dest::Array{T}, doffs::Integer, src::MtlArray{T}, soffs::I
   return dest
 end
 
+Base.copyto!(dest::Array{T}, src::MtlArray{T}) where {T} =
+    copyto!(dest, 1, src, 1, length(src))
+
 function Base.copyto!(dest::MtlArray{T}, doffs::Integer, src::MtlArray{T}, soffs::Integer,
                       n::Integer) where T
+  n==0 && return dest
   @boundscheck checkbounds(dest, doffs)
   @boundscheck checkbounds(dest, doffs+n-1)
   @boundscheck checkbounds(src, soffs)
@@ -149,6 +158,9 @@ function Base.copyto!(dest::MtlArray{T}, doffs::Integer, src::MtlArray{T}, soffs
   end
   return dest
 end
+
+Base.copyto!(dest::MtlArray{T}, src::MtlArray{T}) where {T} =
+    copyto!(dest, 1, src, 1, length(src))
 
 function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::Array{T}, soffs, n) where T
   GC.@preserve src dest begin
