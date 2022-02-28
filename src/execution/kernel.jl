@@ -22,7 +22,7 @@ const darwin_to_macos = Dict(
                         v"21.0.1" => v"12.0.0",
                         v"21.1.0" => v"12.0.1",
                         v"21.2.0" => v"12.1.0",
-                        v"21.3.0" => v"12.1.0")
+                        v"21.3.0" => v"12.2.0")
 
 macro metal(ex...)
     call = ex[end]
@@ -120,7 +120,7 @@ abstract type AbstractKernel{F,TT} end
     end
 end
 
-# Why is this all necessary? MtlFunction has the lib and function handle. Device doesn't? matter
+# Why is this all necessary? MtlFunction has the lib and function handle.
 struct MtlKernel{F,TT} <: AbstractKernel{F, TT}
     device::MtlDevice
     mod::MtlLibrary
@@ -135,18 +135,21 @@ end
 
 ## host-side API
 
-function mtlfunction(f::Core.Function, tt::Type=Tuple{}; name=nothing, kwargs...)
-    dev = MtlDevice(1)
-    source = FunctionSpec(f, tt, true, name)
-    # Get MacOS version
+# Get MacOS version from Darwin version
+function get_macos_v()
     machine = Sys.MACHINE
     darwin_v = VersionNumber(machine[findfirst("darwin", machine)[end]+1:end])
     # Check for unsupported/incomplete kernel version
     if !(darwin_v in keys(darwin_to_macos))
         error("Unsupported kernel version of $darwin_v")
     end
-    macos_v = darwin_to_macos[darwin_v]
-    target = MetalCompilerTarget(macos=macos_v; kwargs...)
+    return darwin_to_macos[darwin_v]
+end
+
+function mtlfunction(f::Core.Function, tt::Type=Tuple{}; name=nothing, kwargs...)
+    dev = MtlDevice(1)
+    source = FunctionSpec(f, tt, true, name)
+    target = MetalCompilerTarget(macos=get_macos_v(); kwargs...)
     params = MetalCompilerParams()
     job = CompilerJob(target, source, params)
     metallib_path, entry = mtlfunction_compile(job)
@@ -157,7 +160,7 @@ end
 
 
 function mtlfunction_compile(@nospecialize(job::CompilerJob))
-    metallib_path = tempname()
+    metallib_path = tempname() * ".metallib"
 
     mi, mi_meta = GPUCompiler.emit_julia(job)
     ir, ir_meta = GPUCompiler.emit_llvm(job, mi)
@@ -184,7 +187,7 @@ end
 mtlcall(f::MtlFunction, types::Tuple, args...; kwargs...) =
     mtlcall(f, Base.to_tuple_type(types), args...; kwargs...)
 
-function mtlcall(f::MtlFunction, types::Type, args...; kwargs...)
+@inline function mtlcall(f::MtlFunction, types::Type, args...; kwargs...)
     # Handle kwargs here??
     queue = global_queue(f.lib.device)
 
@@ -202,7 +205,7 @@ function mtlcall(f::MtlFunction, types::Type, args...; kwargs...)
         end
     end
 
-    cmd = MTL.commit!(queue) do cmdbuf
+    MTL.commit!(queue) do cmdbuf
         MtlComputeCommandEncoder(cmdbuf) do cce
             enqueue_function(f, args...; grids, threadgroups, cce)
         end

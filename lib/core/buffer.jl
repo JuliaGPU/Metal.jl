@@ -2,7 +2,8 @@ export
     MtlBuffer, device, content, alloc, free, handle
 
 const MTLBuffer = Ptr{MtBuffer}
-
+# From docs: "MSL implements a buffer as a pointer to a built-in or user defined data type described in the
+# device, constant, or threadgroup address space.
 struct MtlBuffer{T} <: MtlResource
     handle::MTLBuffer
 end
