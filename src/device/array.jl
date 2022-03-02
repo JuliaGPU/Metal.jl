@@ -119,15 +119,24 @@ Base.setindex!(A::Core.LLVMPtr{T}, x, i1::Int) where {T} =
 
 Base.IndexStyle(::Type{<:Core.LLVMPtr}) = Base.IndexLinear()
 
+@generated function alignment(::Core.LLVMPtr{T}) where {T}
+    if Base.isbitsunion(T)
+        _, sz, al = Base.uniontype_layout(T)
+        al
+    else
+        Base.datatype_alignment(T)
+    end
+end
+
 @inline function arrayref(A::Core.LLVMPtr{T,AS}, index::Int) where {T,AS}
     #@boundscheck checkbounds(A, index)
-    align = Base.datatype_alignment(T)
+    align = alignment(A)
     unsafe_load(A, index, Val(align))
 end
 
 @inline function arrayset(A::Core.LLVMPtr{T,AS}, x::T, index::Int) where {T,AS}
     #@boundscheck checkbounds(A, index)
-    align = Base.datatype_alignment(T)
+    align = alignment(A)
     unsafe_store!(A, x, index, Val(align))
     return A
 end
