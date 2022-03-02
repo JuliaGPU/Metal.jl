@@ -30,6 +30,7 @@ include("state.jl")
 include("host/array.jl")
 include("host/memory.jl")
 include("broadcast.jl")
+include("random.jl")
 include("gpuarrays.jl")
 
 end # module

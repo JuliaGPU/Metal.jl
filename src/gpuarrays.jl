@@ -13,13 +13,14 @@ struct mtlKernelContext <: AbstractKernelContext end
                                              elements::Int, elements_per_thread::Int) where {F,N}
     kernel = @metal launch=false f(mtlKernelContext(), args...)
 
-    items = 32 # suggest_groupsize(kernel.fun, elements).x
-    return (threads=items, blocks=32)
+    threads = 32 # suggest_groupsize(kernel.fun, elements).x
+    return (threads=threads, blocks=32)
 end
 
 function GPUArrays.gpu_call(::mtlArrayBackend, f, args, threads::Int, blocks::Int;
                             name::Union{String,Nothing})
-    @metal items=threads groups=blocks name=name f(mtlKernelContext(), args...)
+    println("GPUArrays gpu_call $args $threads $blocks")
+    @metal threadgroups=threads grids=blocks name=name f(mtlKernelContext(), args...)
 end
 
 
@@ -59,14 +60,14 @@ GPUArrays.griddim(ctx::mtlKernelContext)   = Metal.threadgroups_per_grid_1d()
 
 GPUArrays.backend(::Type{<:MtlArray}) = mtlArrayBackend()
 
-# const GLOBAL_RNGs = Dict{ZeDevice,GPUArrays.RNG}()
-# function GPUArrays.default_rng(::Type{<:oneArray})
-#     dev = device()
-#     get!(GLOBAL_RNGs, dev) do
-#         N = oneL0.compute_properties(dev).maxTotalGroupSize
-#         state = oneArray{NTuple{4, UInt32}}(undef, N)
-#         rng = GPUArrays.RNG(state)
-#         Random.seed!(rng)
-#         rng
-#     end
-# end
+const GLOBAL_RNGs = Dict{MtlDevice,GPUArrays.RNG}()
+function GPUArrays.default_rng(::Type{<:MtlArray})
+    dev = MtlDevice(1)
+    get!(GLOBAL_RNGs, dev) do
+        N = 128 # Size of default oneAPI working group with barrier, so should be good for Metal
+        state = MtlArray{NTuple{4, UInt32}}(undef, N)
+        rng = GPUArrays.RNG(state)
+        Random.seed!(rng)
+        rng
+    end
+end
