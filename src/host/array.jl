@@ -39,6 +39,11 @@ Base.similar(a::MtlArray{T,N}) where {T,N} = MtlArray{T,N}(undef, size(a))
 Base.similar(a::MtlArray{T}, dims::Base.Dims{N}) where {T,N} = MtlArray{T,N}(undef, dims)
 Base.similar(a::MtlArray, ::Type{T}, dims::Base.Dims{N}) where {T,N} = MtlArray{T,N}(undef, dims)
 
+function Base.copy(a::MtlArray{T,N}) where {T,N}
+  b = similar(a)
+  @inbounds copyto!(b, a)
+end
+
 ## array interface
 
 Base.elsize(::Type{<:MtlArray{T}}) where {T} = sizeof(T)
