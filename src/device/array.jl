@@ -84,13 +84,13 @@ Base.unsafe_convert(::Type{Core.LLVMPtr{T,A}}, a::MtlDeviceArray{T,N,A}) where {
 
 @inline function arrayref(A::MtlDeviceArray{T}, index::Int) where {T}
     #@boundscheck checkbounds(A, index)
-    align = Base.datatype_alignment(T)
+    align = alignment(pointer(A))
     unsafe_load(pointer(A), index, Val(align))
 end
 
 @inline function arrayset(A::MtlDeviceArray{T}, x::T, index::Int) where {T}
     #@boundscheck checkbounds(A, index)
-    align = Base.datatype_alignment(T)
+    align = alignment(pointer(A))
     unsafe_store!(pointer(A), x, index, Val(align))
     return A
 end
