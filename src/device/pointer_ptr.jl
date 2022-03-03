@@ -54,12 +54,12 @@ const LDGTypes = Union{UInt8, UInt16, UInt32, UInt64,
 export unsafe_cached_load
 
 Base.unsafe_load(p::DevicePtr{T}, i::Integer=1, align::Val=Val(1)) where {T} =
-    pointerref(p, Int(i), align)
+    pointerref(p, i, align)
 
 Base.unsafe_store!(p::DevicePtr{T}, x, i::Integer=1, align::Val=Val(1)) where {T} =
-    pointerset(p, convert(T, x), Int(i), align)
+    pointerset(p, convert(T, x), i, align)
 
 # NOTE: fall back to normal pointerref for unsupported types. we could be smarter here,
 #       e.g. destruct/load/reconstruct, but that's too complicated for what it's worth.
 unsafe_cached_load(p::DevicePtr, i::Integer=1, align::Val=Val(1)) =
-    pointerref(p, Int(i), align)
+    pointerref(p, i, align)

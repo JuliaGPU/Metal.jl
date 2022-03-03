@@ -22,11 +22,11 @@ MtlDeviceArray
 # NOTE: we can't support the typical `tuple or series of integer` style construction,
 #       because we're Mtlrrently requiring a trailing pointer argument.
 
-struct MtlDeviceArray{T,N,A} <: AbstractArray{T,N}
-    shape::Dims{N}
+struct MtlDeviceArray{T,N,A} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
+    shape::Dims{N}
     # inner constructors, fully parameterized, exact types (ie. Int not <:Integer)
-    MtlDeviceArray{T,N,A}(shape::Dims{N}, ptr::Core.LLVMPtr{T,A}) where {T,A,N} = new(shape,ptr)
+    MtlDeviceArray{T,N,A}(shape::Dims{N}, ptr::Core.LLVMPtr{T,A}) where {T,A,N} = new(ptr,shape)
 end
 
 const MtlDeviceVector = MtlDeviceArray{T,1,A} where {T,A}
@@ -82,20 +82,20 @@ Base.unsafe_convert(::Type{Core.LLVMPtr{T,A}}, a::MtlDeviceArray{T,N,A}) where {
 
 # FIXME: Bounscheck
 
-@inline function arrayref(A::MtlDeviceArray{T}, index::Int) where {T}
+@inline function arrayref(A::MtlDeviceArray{T}, index::Integer) where {T}
     #@boundscheck checkbounds(A, index)
     align = alignment(pointer(A))
     unsafe_load(pointer(A), index, Val(align))
 end
 
-@inline function arrayset(A::MtlDeviceArray{T}, x::T, index::Int) where {T}
+@inline function arrayset(A::MtlDeviceArray{T}, x::T, index::Integer) where {T}
     #@boundscheck checkbounds(A, index)
     align = alignment(pointer(A))
     unsafe_store!(pointer(A), x, index, Val(align))
     return A
 end
 
-@inline function const_arrayref(A::MtlDeviceArray{T}, index::Int) where {T}
+@inline function const_arrayref(A::MtlDeviceArray{T}, index::Integer) where {T}
     @boundscheck checkbounds(A, index)
     align = Base.datatype_alignment(T)
     unsafe_cached_load(pointer(A), index, Val(align))
@@ -104,17 +104,28 @@ end
 
 ## indexing
 
-Base.@propagate_inbounds Base.getindex(A::MtlDeviceArray{T}, i1::Int) where {T} =
+Base.@propagate_inbounds Base.getindex(A::MtlDeviceArray{T}, i1::Integer) where {T} =
     arrayref(A, i1)
-Base.@propagate_inbounds Base.setindex!(A::MtlDeviceArray{T}, x, i1::Int) where {T} =
+Base.@propagate_inbounds Base.setindex!(A::MtlDeviceArray{T}, x, i1::Integer) where {T} =
     arrayset(A, convert(T,x)::T, i1)
 
-Base.IndexStyle(::Type{<:MtlDeviceArray}) = Base.IndexLinear()
+# preserve the specific integer type when indexing device arrays,
+# to avoid extending 32-bit hardware indices to 64-bit.
+Base.to_index(::MtlDeviceArray, i::Integer) = i
+
+# Base doesn't like Integer indices, so we need our own ND get and setindex! routines.
+# See also: https://github.com/JuliaLang/julia/pull/42289
+Base.@propagate_inbounds Base.getindex(A::MtlDeviceArray,
+                                       I::Union{Integer, CartesianIndex}...) =
+    A[Base._to_linear_index(A, to_indices(A, I)...)]
+Base.@propagate_inbounds Base.setindex!(A::MtlDeviceArray, x,
+                                        I::Union{Integer, CartesianIndex}...) =
+    A[Base._to_linear_index(A, to_indices(A, I)...)] = x
 
 # TODO: Put this in pointer_ptr.jl?
-Base.@propagate_inbounds Base.getindex(A::Core.LLVMPtr{T}, i1::Int) where {T} =
+Base.@propagate_inbounds Base.getindex(A::Core.LLVMPtr{T}, i1::Integer) where {T} =
     arrayref(A, i1)
-Base.setindex!(A::Core.LLVMPtr{T}, x, i1::Int) where {T} =
+Base.setindex!(A::Core.LLVMPtr{T}, x, i1::Integer) where {T} =
     arrayset(A, convert(T,x)::T, i1)
 
 Base.IndexStyle(::Type{<:Core.LLVMPtr}) = Base.IndexLinear()
@@ -128,13 +139,13 @@ Base.IndexStyle(::Type{<:Core.LLVMPtr}) = Base.IndexLinear()
     end
 end
 
-@inline function arrayref(A::Core.LLVMPtr{T,AS}, index::Int) where {T,AS}
+@inline function arrayref(A::Core.LLVMPtr{T,AS}, index::Integer) where {T,AS}
     #@boundscheck checkbounds(A, index)
     align = alignment(A)
     unsafe_load(A, index, Val(align))
 end
 
-@inline function arrayset(A::Core.LLVMPtr{T,AS}, x::T, index::Int) where {T,AS}
+@inline function arrayset(A::Core.LLVMPtr{T,AS}, x::T, index::Integer) where {T,AS}
     #@boundscheck checkbounds(A, index)
     align = alignment(A)
     unsafe_store!(A, x, index, Val(align))
