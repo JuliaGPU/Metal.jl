@@ -56,6 +56,4 @@ export @device_code_lowered, @device_code_typed, @device_code_warntype,
 @eval $(Symbol("@device_code_typed")) = $(getfield(GPUCompiler, Symbol("@device_code_typed")))
 @eval $(Symbol("@device_code_warntype")) = $(getfield(GPUCompiler, Symbol("@device_code_warntype")))
 @eval $(Symbol("@device_code_llvm")) = $(getfield(GPUCompiler, Symbol("@device_code_llvm")))
-# Is there a Metal equivalent?
-# @eval $(Symbol("@device_code_ptx")) = $(getfield(GPUCompiler, Symbol("@device_code_native")))
 @eval $(Symbol("@device_code")) = $(getfield(GPUCompiler, Symbol("@device_code")))

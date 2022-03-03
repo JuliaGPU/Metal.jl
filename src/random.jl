@@ -1,4 +1,4 @@
 using Random
 
-# Random.rand!(A::oneWrappedArray) = Random.rand!(GPUArrays.default_rng(oneArray), A)
-# Random.randn!(A::oneWrappedArray) = Random.randn!(GPUArrays.default_rng(oneArray), A)
+Random.rand!(A::MtlArray) = Random.rand!(GPUArrays.default_rng(MtlArray), A)
+Random.randn!(A::MtlArray) = Random.randn!(GPUArrays.default_rng(MtlArray), A)
