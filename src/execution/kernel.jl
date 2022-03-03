@@ -39,7 +39,7 @@ macro metal(ex...)
 
     # group keyword argument
     macro_kwargs, compiler_kwargs, call_kwargs, other_kwargs =
-        split_kwargs(kwargs, [:launch], [:name], [:grids, :threadgroups, :queue])
+        split_kwargs(kwargs, [:launch], [:name], [:grid, :threads])
     if !isempty(other_kwargs)
         key,val = first(other_kwargs).args
         throw(ArgumentError("Unsupported keyword argument '$key'"))
@@ -164,7 +164,7 @@ function mtlfunction_compile(@nospecialize(job::CompilerJob))
 
     mi, mi_meta = GPUCompiler.emit_julia(job)
     ir, ir_meta = GPUCompiler.emit_llvm(job, mi)
-    obj, asm_meta = GPUCompiler.emit_asm(job, ir; format=LLVM.API.LLVMObjectFile)
+    obj, asm_meta = GPUCompiler.emit_asm(job, ir; strip=true, format=LLVM.API.LLVMObjectFile) # TODO: Undo strip eventually
 
     open(metallib_path, "w") do io
         write(io, obj)
@@ -192,14 +192,14 @@ mtlcall(f::MtlFunction, types::Tuple, args...; kwargs...) =
     queue = global_queue(f.lib.device)
 
     # Process kernel call arguments
-    grids        = 1
-    threadgroups = 1
+    grid    = 1
+    threads = 1
     for kwarg in kwargs
         key = kwarg.first
-        if key == :grids
-            grids = kwarg.second
-        elseif key == :threadgroups
-            threadgroups = kwarg.second
+        if key == :grid
+            grid = kwarg.second
+        elseif key == :threads
+            threads = kwarg.second
         else
             throw(ArgumentError("Unsupported keyword argument '$key'"))
         end
@@ -207,7 +207,7 @@ mtlcall(f::MtlFunction, types::Tuple, args...; kwargs...) =
 
     cmd = MTL.commit!(queue) do cmdbuf
         MtlComputeCommandEncoder(cmdbuf) do cce
-            enqueue_function(f, args...; grids, threadgroups, cce)
+            enqueue_function(f, args...; grid, threads, cce)
         end
     end
     # Should this happen here?
@@ -218,22 +218,22 @@ end
 # Enqueue a function for execution
 #
 function enqueue_function(f::MtlFunction, args...;
-                grids::MtlDim=1, threadgroups::MtlDim=1,
+                grid::MtlDim=1, threads::MtlDim=1,
                 cce::MtlComputeCommandEncoder)
-    grids = MtlDim3(grids)
-    threadgroups = MtlDim3(threadgroups)
-    (grids.width>0 && grids.height>0 && grids.depth>0)    || throw(ArgumentError("Grid dimensions should be non-null"))
-    (threadgroups.width>0 && threadgroups.height>0 && threadgroups.depth>0) || throw(ArgumentError("Threadgroup dimensions should be non-null"))
+    grid = MtlDim3(grid)
+    threads = MtlDim3(threads)
+    (grid.width>0 && grid.height>0 && grid.depth>0)    || throw(ArgumentError("Grid dimensions should be non-null"))
+    (threads.width>0 && threads.height>0 && threads.depth>0) || throw(ArgumentError("Threadgroup dimensions should be non-null"))
     @info "In enque before pipe state" f
     pipeline_state = MtlComputePipelineState(f.lib.device, f)
-    # all(threadgroups .< pipeline_state.maxTotalThreadsPerThreadgroup) || throw(ArgumentError("Max Threadgroup dimension is $(pipeline_state.maxTotalThreadsPerThreadgroup)"))
+    # all(threads .< pipeline_state.maxTotalThreadsPerThreadgroup) || throw(ArgumentError("Max Threadgroup dimension is $(pipeline_state.maxTotalThreadsPerThreadgroup)"))
     # Set the function that we are currently encoding
     @info "In enqueue_function" pipeline_state
     MTL.set_function!(cce, pipeline_state)
     # Encode all arguments
     encode_arguments!(cce, f, args...)
     # Flush everything
-    MTL.append_current_function!(cce, grids, threadgroups)
+    MTL.append_current_function!(cce, grid, threads)
     return nothing
 end
 
