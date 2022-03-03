@@ -121,17 +121,24 @@ abstract type AbstractKernel{F,TT} end
 end
 
 # Why is this all necessary? MtlFunction has the lib and function handle.
-struct MtlKernel{F,TT} <: AbstractKernel{F, TT}
+struct MtlKernel
     device::MtlDevice
-    mod::MtlLibrary
+    lib::MtlLibrary
     fun::MtlFunction
+
+    function MtlKernel(dev, lib_path, fun_name)
+        lib = MtlLibraryFromFile(dev, lib_path)
+        fun = MtlFunction(lib, fun_name)
+        return new(dev, lib, fun)
+        # TODO: Finalizer
+    end
 end
 
 # ## host-side kernels
 
-# struct HostKernel{F,TT} <: AbstractKernel{F,TT}
-#     fun::MtlKernel
-# end
+struct HostKernel{F,TT} <: AbstractKernel{F,TT}
+    fun::MtlKernel
+end
 
 ## host-side API
 
@@ -153,18 +160,23 @@ function mtlfunction(f::Core.Function, tt::Type=Tuple{}; name=nothing, kwargs...
     params = MetalCompilerParams()
     job = CompilerJob(target, source, params)
     metallib_path, entry = mtlfunction_compile(job)
-    lib = MtlLibraryFromFile(dev, metallib_path)
-    fun = MtlFunction(lib, entry)
-    return MtlKernel{job.source.f,job.source.tt}(dev, lib, fun)
+    kernel = MtlKernel(dev, metallib_path, entry)
+    return HostKernel{job.source.f,job.source.tt}(kernel)
 end
 
 
 function mtlfunction_compile(@nospecialize(job::CompilerJob))
     metallib_path = tempname() * ".metallib"
-
+    @info "Metallib_path = $metallib_path"
     mi, mi_meta = GPUCompiler.emit_julia(job)
     ir, ir_meta = GPUCompiler.emit_llvm(job, mi)
-    obj, asm_meta = GPUCompiler.emit_asm(job, ir; strip=true, format=LLVM.API.LLVMObjectFile) # TODO: Undo strip eventually
+    llvm_path = tempname() * ".ll"
+    @info "llvm_path = $llvm_path"
+
+    open(llvm_path, "w") do io
+        write(io, ir)
+    end
+    obj, asm_meta = GPUCompiler.emit_asm(job, ir; strip=false, format=LLVM.API.LLVMObjectFile) # TODO: Undo strip eventually
 
     open(metallib_path, "w") do io
         write(io, obj)
@@ -173,7 +185,7 @@ function mtlfunction_compile(@nospecialize(job::CompilerJob))
     return (metallib_path, LLVM.name(ir_meta.entry))
 end
 
-function (kernel::MtlKernel)(args...; kwargs...)
+function (kernel::HostKernel)(args...; kwargs...)
     call(kernel, map(mtlconvert, args)...; kwargs...)
 end
 
@@ -184,10 +196,10 @@ end
 ##########################################
 # Blocking call to a kernel
 # Should implement somethjing better
-mtlcall(f::MtlFunction, types::Tuple, args...; kwargs...) =
+mtlcall(f::MtlKernel, types::Tuple, args...; kwargs...) =
     mtlcall(f, Base.to_tuple_type(types), args...; kwargs...)
 
-@inline function mtlcall(f::MtlFunction, types::Type, args...; kwargs...)
+@inline function mtlcall(f::MtlKernel, types::Type, args...; kwargs...)
     # Handle kwargs here??
     queue = global_queue(f.lib.device)
 
@@ -217,21 +229,21 @@ end
 ##############################################
 # Enqueue a function for execution
 #
-function enqueue_function(f::MtlFunction, args...;
+function enqueue_function(f::MtlKernel, args...;
                 grid::MtlDim=1, threads::MtlDim=1,
                 cce::MtlComputeCommandEncoder)
     grid = MtlDim3(grid)
     threads = MtlDim3(threads)
     (grid.width>0 && grid.height>0 && grid.depth>0)    || throw(ArgumentError("Grid dimensions should be non-null"))
     (threads.width>0 && threads.height>0 && threads.depth>0) || throw(ArgumentError("Threadgroup dimensions should be non-null"))
-    @info "In enque before pipe state" f
-    pipeline_state = MtlComputePipelineState(f.lib.device, f)
+    @info "In enque before pipe state" f.fun
+    pipeline_state = MtlComputePipelineState(f.device, f.fun)
     # all(threads .< pipeline_state.maxTotalThreadsPerThreadgroup) || throw(ArgumentError("Max Threadgroup dimension is $(pipeline_state.maxTotalThreadsPerThreadgroup)"))
     # Set the function that we are currently encoding
     @info "In enqueue_function" pipeline_state
     MTL.set_function!(cce, pipeline_state)
     # Encode all arguments
-    encode_arguments!(cce, f, args...)
+    encode_arguments!(cce, f.fun, args...)
     # Flush everything
     MTL.append_current_function!(cce, grid, threads)
     return nothing
