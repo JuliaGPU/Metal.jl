@@ -155,34 +155,37 @@ end
 
 function mtlfunction(f::Core.Function, tt::Type=Tuple{}; name=nothing, kwargs...)
     dev = MtlDevice(1)
+    cache = get!(()->Dict{UInt,Any}(), mtlfunction_cache, dev)
     source = FunctionSpec(f, tt, true, name)
     target = MetalCompilerTarget(macos=get_macos_v(); kwargs...)
     params = MetalCompilerParams()
     job = CompilerJob(target, source, params)
-    metallib_path, entry = mtlfunction_compile(job)
-    kernel = MtlKernel(dev, metallib_path, entry)
-    return HostKernel{job.source.f,job.source.tt}(kernel)
+    GPUCompiler.cached_compilation(cache, job,
+                                   mtlfunction_compile, mtlfunction_link)::HostKernel{f,tt}
 end
 
+const mtlfunction_cache = Dict{Any,Any}()
 
 function mtlfunction_compile(@nospecialize(job::CompilerJob))
-    metallib_path = tempname() * ".metallib"
-    @info "Metallib_path = $metallib_path"
     mi, mi_meta = GPUCompiler.emit_julia(job)
     ir, ir_meta = GPUCompiler.emit_llvm(job, mi)
     llvm_path = tempname() * ".ll"
-    @info "llvm_path = $llvm_path"
-
     open(llvm_path, "w") do io
         write(io, ir)
     end
-    obj, asm_meta = GPUCompiler.emit_asm(job, ir; strip=false, format=LLVM.API.LLVMObjectFile) # TODO: Undo strip eventually
 
+    obj, asm_meta = GPUCompiler.emit_asm(job, ir; strip=false, format=LLVM.API.LLVMObjectFile) # TODO: Undo strip eventually
+    metallib_path = tempname() * ".metallib"
     open(metallib_path, "w") do io
         write(io, obj)
     end
-    
-    return (metallib_path, LLVM.name(ir_meta.entry))
+    return (lib_path=metallib_path, entry=LLVM.name(ir_meta.entry))
+end
+
+function mtlfunction_link(@nospecialize(job::CompilerJob), compiled)
+    dev = MtlDevice(1)
+    kernel = MtlKernel(dev, compiled.lib_path, compiled.entry)
+    return HostKernel{job.source.f,job.source.tt}(kernel)
 end
 
 function (kernel::HostKernel)(args...; kwargs...)
@@ -236,11 +239,10 @@ function enqueue_function(f::MtlKernel, args...;
     threads = MtlDim3(threads)
     (grid.width>0 && grid.height>0 && grid.depth>0)    || throw(ArgumentError("Grid dimensions should be non-null"))
     (threads.width>0 && threads.height>0 && threads.depth>0) || throw(ArgumentError("Threadgroup dimensions should be non-null"))
-    @info "In enque before pipe state" f.fun
+
     pipeline_state = MtlComputePipelineState(f.device, f.fun)
     # all(threads .< pipeline_state.maxTotalThreadsPerThreadgroup) || throw(ArgumentError("Max Threadgroup dimension is $(pipeline_state.maxTotalThreadsPerThreadgroup)"))
     # Set the function that we are currently encoding
-    @info "In enqueue_function" pipeline_state
     MTL.set_function!(cce, pipeline_state)
     # Encode all arguments
     encode_arguments!(cce, f.fun, args...)
