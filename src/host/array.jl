@@ -92,7 +92,7 @@ Base.unsafe_convert(t::Type{MTL.MTLBuffer}, x::MtlArray{T}) where {T}   = Base.u
 # TODO Figure out global
 
 function Base.convert(::Type{MtlDeviceArray{T,N,AS.Device}}, a::MtlArray{T,N}) where {T,N}
-    MtlDeviceArray{T,N,AS.Device}(a.dims, reinterpret(Core.LLVMPtr{T, 1}, handle(pointer(a)))) # No handle?
+    MtlDeviceArray{T,N,AS.Device}(a.dims, reinterpret(Core.LLVMPtr{T, 1}, content(pointer(a))))
 end
 
 Adapt.adapt_storage(::Adaptor, xs::MtlArray{T,N}) where {T,N} =
@@ -211,8 +211,8 @@ fill(v, dims...) = fill!(MtlArray{typeof(v)}(undef, dims...), v)
 fill(v, dims::Dims) = fill!(MtlArray{typeof(v)}(undef, dims...), v)
 
 function Base.fill!(A::MtlArray{T}, val) where T
-  B = [convert(T, val)]
-  unsafe_fill!(A.dev, pointer(A), pointer(B), length(A))
+  B = convert(T, val)
+  unsafe_fill!(A.dev, pointer(A), B, length(A))
   A
 end
 

@@ -75,11 +75,6 @@ Base.unsafe_convert(::Type{Core.LLVMPtr{T,A}}, a::MtlDeviceArray{T,N,A}) where {
 # NOTE: these intrinsics are now implemented using plain and simple pointer operations;
 #       when adding support for isbits union arrays we will need to implement that here.
 
-# ??metal?? cuda
-# TODO: arrays as allocated by the MtlDA APIs are 256-byte aligned. we should keep track of
-#       this information, because it enables optimizations like Load Store Vectorization
-#       (cfr. shared memory and its wider-than-datatype alignment)
-
 # FIXME: Bounscheck
 
 @inline function arrayref(A::MtlDeviceArray{T}, index::Integer) where {T}
@@ -170,7 +165,7 @@ Base.Experimental.Const(A::MtlDeviceArray) = Const(A)
 Base.IndexStyle(::Type{<:Const}) = IndexLinear()
 Base.size(C::Const) = size(C.a)
 Base.axes(C::Const) = axes(C.a)
-Base.@propagate_inbounds Base.getindex(A::Const, i1::Int) = const_arrayref(A.a, i1)
+Base.@propagate_inbounds Base.getindex(A::Const, i1::Integer) = const_arrayref(A.a, i1)
 
 
 ## other

@@ -32,8 +32,8 @@ append_copy!(enc::MtlBlitCommandEncoder, dst::MtlBuffer, dst_offset, src::MtlBuf
     mtBlitCommandEncoderCopyFromBufferToBuffer(enc, src, src_offset-1, dst, dst_offset-1, len)
 
 append_fillbuffer!(enc::MtlBlitCommandEncoder, src::MtlBuffer,
-                    val::UInt8, range) =
-    mtBlitCommandEncoderFillBuffer(enc, src, range, val)
+                    val::Union{Int8, UInt8}, range) =
+    mtBlitCommandEncoderFillBuffer(enc, src, UnitRange(0:range-1), val)
 
 # only for managed resources
 append_sync!(enc::MtlBlitCommandEncoder, src::MtlBuffer) =
