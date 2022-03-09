@@ -174,16 +174,14 @@ end
 function mtlfunction_compile(@nospecialize(job::CompilerJob), ctx::Context)
     mi, mi_meta = GPUCompiler.emit_julia(job)
     ir, ir_meta = GPUCompiler.emit_llvm(job, mi; ctx)
-    llvm_path = tempname() * ".ll"
-    open(llvm_path, "w") do io
-        write(io, ir)
-    end
 
     obj, asm_meta = GPUCompiler.emit_asm(job, ir; strip=false, format=LLVM.API.LLVMObjectFile) # TODO: Undo strip eventually
     metallib_path = tempname() * ".metallib"
     open(metallib_path, "w") do io
         write(io, obj)
     end
+    # TODO: this shouldn't write to a file, but return a buffer
+    #       and load that using newLibraryWithData
     return (lib_path=metallib_path, entry=LLVM.name(ir_meta.entry))
 end
 
