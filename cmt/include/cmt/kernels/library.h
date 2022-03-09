@@ -27,6 +27,10 @@ MtLibrary*
 mtNewLibraryWithSource(MtDevice *device, char *source, MtCompileOptions *Opts, NsError **error);
 
 MT_EXPORT
+MtLibrary*
+mtNewLibraryWithData(MtDevice *device, void* buffer, size_t size, NsError **error);
+
+MT_EXPORT
 void
 mtLibraryRelease(MtLibrary *lib);
 

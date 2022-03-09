@@ -125,8 +125,8 @@ struct MtlKernel
     lib::MtlLibrary
     fun::MtlFunction
 
-    function MtlKernel(dev, lib_path, fun_name)
-        lib = MtlLibraryFromFile(dev, lib_path)
+    function MtlKernel(dev, image, fun_name)
+        lib = MtlLibraryFromData(dev, image)
         fun = MtlFunction(lib, fun_name)
         return new(dev, lib, fun)
         # TODO: Finalizer
@@ -175,19 +175,13 @@ function mtlfunction_compile(@nospecialize(job::CompilerJob), ctx::Context)
     mi, mi_meta = GPUCompiler.emit_julia(job)
     ir, ir_meta = GPUCompiler.emit_llvm(job, mi; ctx)
 
-    obj, asm_meta = GPUCompiler.emit_asm(job, ir; strip=false, format=LLVM.API.LLVMObjectFile) # TODO: Undo strip eventually
-    metallib_path = tempname() * ".metallib"
-    open(metallib_path, "w") do io
-        write(io, obj)
-    end
-    # TODO: this shouldn't write to a file, but return a buffer
-    #       and load that using newLibraryWithData
-    return (lib_path=metallib_path, entry=LLVM.name(ir_meta.entry))
+    image, asm_meta = GPUCompiler.emit_asm(job, ir; strip=false, format=LLVM.API.LLVMObjectFile) # TODO: Undo strip eventually
+    return (image, entry=LLVM.name(ir_meta.entry))
 end
 
 function mtlfunction_link(@nospecialize(job::CompilerJob), compiled)
     dev = MtlDevice(1)
-    kernel = MtlKernel(dev, compiled.lib_path, compiled.entry)
+    kernel = MtlKernel(dev, compiled.image, compiled.entry)
     return HostKernel{job.source.f,job.source.tt}(kernel)
 end
 

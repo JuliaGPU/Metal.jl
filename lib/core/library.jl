@@ -1,4 +1,4 @@
-export MtlLibrary, MtlLibraryFromFile, function_names
+export MtlLibrary, MtlLibraryFromFile, MtlLibraryFromData, function_names
 
 const MTLLibrary = Ptr{MtLibrary}
 
@@ -36,6 +36,17 @@ end
 
 function MtlLibraryFromFile(device::MtlDevice, path::String)
     handle = @mtlthrows _errptr mtNewLibraryWithFile(device, path, _errptr)
+
+    obj = MtlLibrary(handle, device)
+    finalizer(unsafe_destroy!, obj)
+
+    return obj
+end
+
+function MtlLibraryFromData(device::MtlDevice, data)
+    GC.@preserve data begin
+        handle = @mtlthrows _errptr mtNewLibraryWithData(device, pointer(data), sizeof(data), _errptr)
+    end
 
     obj = MtlLibrary(handle, device)
     finalizer(unsafe_destroy!, obj)

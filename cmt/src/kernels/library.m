@@ -25,17 +25,20 @@ CF_RETURNS_RETAINED
 MT_EXPORT
 MtLibrary*
 mtNewLibraryWithSource(MtDevice *device, char *source, MtCompileOptions *Opts, NsError **error) {
-  return[(id<MTLDevice>)device newLibraryWithSource: mtNSString(source)
+  return [(id<MTLDevice>)device newLibraryWithSource: mtNSString(source)
   								                           options: (MTLCompileOptions*)Opts
   								                             error: (NSError**) error];
 }
 
-/*CF_RETURNS_RETAINED
+CF_RETURNS_RETAINED
 MT_EXPORT
 MtLibrary*
-mtLibraryWithData(MtDevice *device, char *filepath, NsError *error) {
-  return [(id<MTLDevice>)device newLibraryWithFile: mtNSString(filepath) error:(NSError**)&error];
-}*/
+mtNewLibraryWithData(MtDevice *device, void* buffer, size_t size, NsError **error) {
+  dispatch_data_t dispatch_data =
+    dispatch_data_create(buffer, size, dispatch_get_main_queue(),
+                         DISPATCH_DATA_DESTRUCTOR_DEFAULT);
+  return [(id<MTLDevice>)device newLibraryWithData: dispatch_data error:(NSError**)error];
+}
 
 MT_EXPORT
 void

@@ -545,6 +545,12 @@ function mtNewLibraryWithSource(device, source, Opts, error)
           device, source, Opts, error)
 end
 
+function mtNewLibraryWithData(device, buffer, size, error)
+    ccall((:mtNewLibraryWithData, cmt_lib), Ptr{MtLibrary},
+          (Ptr{MtDevice}, Ptr{Cvoid}, Csize_t, Ptr{Ptr{NsError}}),
+          device, buffer, size, error)
+end
+
 function mtLibraryRelease(lib)
     ccall((:mtLibraryRelease, cmt_lib), Cvoid,
           (Ptr{MtLibrary},),
