@@ -33,7 +33,6 @@ macro metal(ex...)
     f = call.args[1]
     args = call.args[2:end]
 
-    @info "Kernel " f args
     code = quote end
     vars, var_exprs = assign_args!(code, args)
 
