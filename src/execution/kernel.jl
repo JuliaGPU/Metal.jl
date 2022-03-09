@@ -166,8 +166,14 @@ end
 const mtlfunction_cache = Dict{Any,Any}()
 
 function mtlfunction_compile(@nospecialize(job::CompilerJob))
+    # TODO: on 1.9, this actually creates a context. cache those.
+    JuliaContext() do ctx
+        mtlfunction_compile(job, ctx)
+    end
+end
+function mtlfunction_compile(@nospecialize(job::CompilerJob), ctx::Context)
     mi, mi_meta = GPUCompiler.emit_julia(job)
-    ir, ir_meta = GPUCompiler.emit_llvm(job, mi)
+    ir, ir_meta = GPUCompiler.emit_llvm(job, mi; ctx)
     llvm_path = tempname() * ".ll"
     open(llvm_path, "w") do io
         write(io, ir)
