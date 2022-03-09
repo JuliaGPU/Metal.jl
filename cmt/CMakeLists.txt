@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.9)
 
-set(CMAKE_BUILD_TYPE Debug)
-
 project(cmt VERSION 1.0.1 DESCRIPTION "C Metal Wrapper"
 			LANGUAGES C OBJC)
 
@@ -57,13 +55,5 @@ set_target_properties(cmt_lib PROPERTIES
 
 target_link_libraries(cmt_lib ${FOUNDATION_LIBRARY} ${METAL_LIBRARY})
 
-#configure_file(mylib.pc.in mylib.pc @ONLY)
-
-#include(GNUInstallDirs)
-
-#install(TARGETS mylib
-#    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-#    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-
-#install(FILES ${CMAKE_BINARY_DIR}/mylib.pc
-#    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig)
+install(TARGETS cmt_lib
+        LIBRARY DESTINATION lib)

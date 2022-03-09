@@ -2,8 +2,9 @@ module MTL
 
 import Libdl
 using CEnum
+using Scratch
 
-const cmt_lib = joinpath(@__DIR__, "..", "..", "deps", "libcmt_lib.dylib")
+const cmt_lib = joinpath(@get_scratch!("cmt"), "lib", "libcmt_lib.dylib")
 
 ## source code includes
 
