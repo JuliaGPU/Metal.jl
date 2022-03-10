@@ -56,8 +56,6 @@ extern "C" {
 #include "argument_descriptor.h"
 #include "argument_encoder.h"
 
-
-
 MT_EXPORT
 void*
 mtRetain(void *obj);

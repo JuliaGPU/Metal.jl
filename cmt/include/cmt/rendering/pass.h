@@ -14,16 +14,19 @@ extern "C" {
 #include "cmt/enums.h"
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtRenderPassDesc*
 mtNewPass(void);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtPassTexture(MtRenderPassDesc *pass,
               int               colorAttch,
               MtTexture        *tex);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtPassLoadAction(MtRenderPassDesc *pass,
                  int               colorAttch,

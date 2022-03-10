@@ -9,6 +9,7 @@
 
 CF_RETURNS_RETAINED
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtLibrary*
 mtNewDefaultLibrary(MtDevice *device) {
   return [(id<MTLDevice>)device newDefaultLibrary];
@@ -16,6 +17,7 @@ mtNewDefaultLibrary(MtDevice *device) {
 
 CF_RETURNS_RETAINED
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtLibrary*
 mtNewLibraryWithFile(MtDevice *device, char *filepath, NsError **error) {
   return [(id<MTLDevice>)device newLibraryWithFile: mtNSString(filepath) error: (NSError**)error];
@@ -23,6 +25,7 @@ mtNewLibraryWithFile(MtDevice *device, char *filepath, NsError **error) {
 
 CF_RETURNS_RETAINED
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtLibrary*
 mtNewLibraryWithSource(MtDevice *device, char *source, MtCompileOptions *Opts, NsError **error) {
   return [(id<MTLDevice>)device newLibraryWithSource: mtNSString(source)
@@ -32,6 +35,7 @@ mtNewLibraryWithSource(MtDevice *device, char *source, MtCompileOptions *Opts, N
 
 CF_RETURNS_RETAINED
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtLibrary*
 mtNewLibraryWithData(MtDevice *device, void* buffer, size_t size, NsError **error) {
   dispatch_data_t dispatch_data =
@@ -47,18 +51,21 @@ mtLibraryRelease(MtLibrary *lib) {
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtDevice*
 mtLibraryDevice(MtLibrary *lib) {
 	return [(id<MTLLibrary>)lib device];
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 const char*
 mtLibraryLabel(MtLibrary *lib) {
 	return Cstring([(id<MTLLibrary>)lib label]);
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtLibraryFunctionNames(MtLibrary *lib, size_t* count, const char** names) {
   NSArray<NSString*> *_names = [(id<MTLLibrary>)lib functionNames];

@@ -15,15 +15,18 @@ extern "C" {
 
 // Create Pipeline
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtComputePipelineState*
 mtNewComputePipelineStateWithFunction(MtDevice *device, MtFunction* fun, NsError **error);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtComputePipelineState*
 mtNewComputePipelineStateWithFunctionReflection(MtDevice *device, MtFunction* fun,MtPipelineOption opt, 
                                         MtComputePipelineReflection **reflection, NsError **error);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtComputePipelineState*
 mtNewComputePipelineStateWithDescriptor(MtDevice *device, MtComputePipelineDescriptor* desc, 
 										MtPipelineOption opt, 
@@ -32,6 +35,7 @@ mtNewComputePipelineStateWithDescriptor(MtDevice *device, MtComputePipelineDescr
 
 // properties
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtDevice*
 mtComputePipelineDevice(MtComputePipelineState *pip);
 
@@ -40,19 +44,23 @@ void
 mtComputePipelineRelease(MtComputePipelineState *pip);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 const char*
 mtComputePipelineLabel(MtComputePipelineState *pip);
 
 // attributes
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 NsUInteger
 mtComputePipelineMaxTotalThreadsPerThreadgroup(MtComputePipelineState *pip);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 NsUInteger
 mtComputePipelineThreadExecutionWidth(MtComputePipelineState *pip);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 NsUInteger
 mtComputePipelineStaticThreadgroupMemoryLength(MtComputePipelineState *pip);
 

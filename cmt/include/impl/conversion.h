@@ -1,3 +1,8 @@
+/*
+ * Copyright (c), Recep Aslantas.
+ * MIT License (MIT), http://opensource.org/licenses/MIT
+ */
+
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 #import "cmt/types.h"

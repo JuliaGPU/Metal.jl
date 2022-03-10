@@ -9,6 +9,7 @@
 #import "cmt/memory/vertex.h"
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtVertexDescriptor*
 mtVertexDescNew() {
   MTLVertexDescriptor *mvertDesc;
@@ -17,6 +18,7 @@ mtVertexDescNew() {
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtVertexAttrib(MtVertexDescriptor * __restrict vertex,
                uint32_t                        attribIndex,
@@ -35,6 +37,7 @@ mtVertexAttrib(MtVertexDescriptor * __restrict vertex,
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtVertexLayout(MtVertexDescriptor * __restrict vertex,
                uint32_t                        layoutIndex,
@@ -53,6 +56,7 @@ mtVertexLayout(MtVertexDescriptor * __restrict vertex,
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtSetVertexDesc(MtRenderPipeline   * __restrict pipeline,
                 MtVertexDescriptor * __restrict vert) {

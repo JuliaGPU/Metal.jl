@@ -84,7 +84,7 @@ typedef enum MtVertexFormat {
   MtVertexFormatShortNormalized  = 52,
   
   MtVertexFormatHalf = 53
-} MtVertexFormat;
+} MtVertexFormat MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0));
 
 typedef enum MtVertexStepFunction {
   MtVertexStepFunctionConstant             = 0,
@@ -92,7 +92,7 @@ typedef enum MtVertexStepFunction {
   MtVertexStepFunctionPerInstance          = 2,
   MtVertexStepFunctionPerPatch             = 3,
   MtVertexStepFunctionPerPatchControlPoint = 4
-} MtVertexStepFunction;
+} MtVertexStepFunction MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0));
 
 /*
 typedef struct MtVertexAttribDesc {
@@ -109,10 +109,12 @@ typedef struct MtVertexBufferLayoutDesc {
 */
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtVertexDescriptor*
 mtVertexDescNew(void);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtVertexAttrib(MtVertexDescriptor * __restrict vertex,
                uint32_t                        attribIndex,
@@ -121,6 +123,7 @@ mtVertexAttrib(MtVertexDescriptor * __restrict vertex,
                uint32_t                        bufferIndex);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtVertexLayout(MtVertexDescriptor * __restrict vertex,
                uint32_t                        layoutIndex,
@@ -129,8 +132,13 @@ mtVertexLayout(MtVertexDescriptor * __restrict vertex,
                MtVertexStepFunction            stepFunction);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtSetVertexDesc(MtRenderPipeline   * __restrict pipeline,
                 MtVertexDescriptor * __restrict vert);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* cmt_vertex_h */

@@ -1,3 +1,8 @@
+/*
+ * Copyright (c), Recep Aslantas.
+ * MIT License (MIT), http://opensource.org/licenses/MIT
+ */
+
 #ifndef cmt_descriptor_h
 #define cmt_descriptor_h
 #ifdef __cplusplus
@@ -9,10 +14,12 @@ extern "C" {
 #include "cmt/enums.h"
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtComputePipelineReflection*
-mtNewComputePipelineReflection();
+mtNewComputePipelineReflection(void);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 const MtArgument *
 mtComputePipelinereflectionArguments(MtComputePipelineReflection *refl);
 

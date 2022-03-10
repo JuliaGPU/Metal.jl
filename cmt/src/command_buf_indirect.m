@@ -1,8 +1,14 @@
+/*
+ * Copyright (c), Recep Aslantas.
+ * MIT License (MIT), http://opensource.org/licenses/MIT
+ */
+
 #import "impl/common.h"
 #import "cmt/command_buf_indirect.h"
 
 CF_RETURNS_RETAINED
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
 MtIndirectCommandBuffer*
 mtNewIndirectCommandBuffer(MtDevice *device, MtIndirectCommandBufferDescriptor *desc,
     NsUInteger maxCount, MtResourceOptions options) {
@@ -13,6 +19,7 @@ mtNewIndirectCommandBuffer(MtDevice *device, MtIndirectCommandBufferDescriptor *
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 NsUInteger
 mtIndirectCommandBufferSize(MtIndirectCommandBuffer *icb) {
     return [(id<MTLIndirectCommandBuffer>)icb size];
@@ -27,6 +34,7 @@ mtIndirectCommandBufferComputeCommandAtIndex(MtIndirectCommandBuffer *icb,
 }*/
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtIndirectRenderCommand*
 mtIndirectCommandBufferRenderCommandAtIndex(MtIndirectCommandBuffer *icb, 
                                                 NsUInteger index) {
@@ -34,6 +42,7 @@ mtIndirectCommandBufferRenderCommandAtIndex(MtIndirectCommandBuffer *icb,
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtIndirectCommandBufferResetWithRange(MtIndirectCommandBuffer *icb, NsRange range) {
     return [(id<MTLIndirectCommandBuffer>)icb resetWithRange:mtNSRange(range)];

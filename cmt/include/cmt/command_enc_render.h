@@ -13,32 +13,38 @@ extern "C" {
 #include "cmt/types.h"
 #include "cmt/enums.h"
 
-
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtRenderCommandEncoder*
 mtNewRenderCommandEncoder(MtCommandBuffer *cmdb, MtRenderPassDesc *pass);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtFrontFace(MtRenderCommandEncoder *rce, MtWinding winding);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtCullMode(MtRenderCommandEncoder *rce, MtCullMode mode);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtViewport(MtRenderCommandEncoder *rce, MtViewport *viewport);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtSetRenderState(MtRenderCommandEncoder *rce, MtRenderPipeline *pipline);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtSetDepthStencil(MtRenderCommandEncoder *rce, MtDepthStencil *ds);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtVertexBytes(MtRenderCommandEncoder *rce,
               void                   *bytes,
@@ -46,6 +52,7 @@ mtVertexBytes(MtRenderCommandEncoder *rce,
               uint32_t                atIndex);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtVertexBuffer(MtRenderCommandEncoder *rce,
                MtBuffer                *buf,
@@ -53,6 +60,7 @@ mtVertexBuffer(MtRenderCommandEncoder *rce,
                uint32_t                index);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtFragmentBuffer(MtRenderCommandEncoder *rce,
                  MtBuffer               *buf,
@@ -60,6 +68,7 @@ mtFragmentBuffer(MtRenderCommandEncoder *rce,
                  uint32_t                index);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtDrawPrims(MtRenderCommandEncoder *rce,
             MtPrimitiveType         type,
@@ -67,6 +76,7 @@ mtDrawPrims(MtRenderCommandEncoder *rce,
             size_t                  count);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtDrawIndexedPrims(MtRenderCommandEncoder *rce,
                    MtPrimitiveType         type,

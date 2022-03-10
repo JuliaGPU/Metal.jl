@@ -1,3 +1,8 @@
+/*
+ * Copyright (c), Recep Aslantas.
+ * MIT License (MIT), http://opensource.org/licenses/MIT
+ */
+
 #include "cmt/common.h"
 #include "impl/common.h"
 #include "impl/conversion.h"
@@ -5,6 +10,7 @@
 
 CF_RETURNS_RETAINED
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtComputeCommandEncoder*
 mtNewComputeCommandEncoder(MtCommandBuffer *cmdb) {
     return [(id<MTLCommandBuffer>)cmdb computeCommandEncoder];
@@ -12,6 +18,7 @@ mtNewComputeCommandEncoder(MtCommandBuffer *cmdb) {
 
 CF_RETURNS_RETAINED
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
 MtComputeCommandEncoder*
 mtNewComputeCommandEncoderWithDispatchType(MtCommandBuffer *cmdb, MtDispatchType dtype) {
         return [(id<MTLCommandBuffer>)cmdb computeCommandEncoderWithDispatchType:(MTLDispatchType)dtype];
@@ -25,26 +32,30 @@ mtComputeCommandEncoderRelease(MtComputeCommandEncoder *cce) {
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtComputeCommandEncoderEndEncoding(MtComputeCommandEncoder *cce) {
     [(id<MTLComputeCommandEncoder>)cce endEncoding];
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtComputeCommandEncoderSetComputePipelineState(MtComputeCommandEncoder *cce, MtComputePipelineState *state) {
     [(id<MTLComputeCommandEncoder>)cce setComputePipelineState:(id<MTLComputePipelineState>)state]; 
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtComputeCommandEncoderSetBufferOffsetAtIndex(MtComputeCommandEncoder *cce, MtBuffer *buf, NsUInteger offset, NsUInteger indx) {
-    [(id<MTLComputeCommandEncoder>)cce setBuffer:(id<MTLBuffer>)buf
-                                       offset:offset
-                                       atIndex:indx];
+  [(id<MTLComputeCommandEncoder>)cce setBuffer:(id<MTLBuffer>)buf
+                                     offset:offset
+                                     atIndex:indx];
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtComputeCommandEncoderSetBuffersOffsetsWithRange(MtComputeCommandEncoder *cce, MtBuffer **bufs, const NsUInteger *offsets, NsRange range) {
     [(id<MTLComputeCommandEncoder>)cce setBuffers:(id<MTLBuffer>*)bufs
@@ -53,18 +64,21 @@ mtComputeCommandEncoderSetBuffersOffsetsWithRange(MtComputeCommandEncoder *cce, 
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtComputeCommandEncoderBufferSetOffsetAtIndex(MtComputeCommandEncoder *cce, NsUInteger offset, NsUInteger indx) {
     [(id<MTLComputeCommandEncoder>)cce setBufferOffset:offset atIndex:indx];
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtComputeCommandEncoderSetBytesLengthAtIndex(MtComputeCommandEncoder *cce, const void* ptr, NsUInteger length, NsUInteger indx) {
     [(id<MTLComputeCommandEncoder>)cce setBytes:ptr length:length atIndex:indx];
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtComputeCommandEncoderSetSamplerStateAtIndex(MtComputeCommandEncoder *cce,  MtSamplerState *sampler, NsUInteger indx) {
     [(id<MTLComputeCommandEncoder>)cce setSamplerState:(id<MTLSamplerState>)sampler atIndex:indx];
@@ -72,6 +86,7 @@ mtComputeCommandEncoderSetSamplerStateAtIndex(MtComputeCommandEncoder *cce,  MtS
 
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtComputeCommandEncoderSetSamplerStatesWithRange(MtComputeCommandEncoder *cce,  MtSamplerState **samplers, NsRange range) {
     [(id<MTLComputeCommandEncoder>)cce setSamplerStates:(id<MTLSamplerState>*)samplers 
@@ -79,6 +94,7 @@ mtComputeCommandEncoderSetSamplerStatesWithRange(MtComputeCommandEncoder *cce,  
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtComputeCommandEncoderSetSamplerStateLodMinClampLodMaxClampAtIndex(MtComputeCommandEncoder *cce,  MtSamplerState *sampler, float lodMinClamp, float lodMaxClamp, NsUInteger indx) {
     [(id<MTLComputeCommandEncoder>)cce setSamplerState:(id<MTLSamplerState>)sampler 
@@ -88,6 +104,7 @@ mtComputeCommandEncoderSetSamplerStateLodMinClampLodMaxClampAtIndex(MtComputeCom
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtComputeCommandEncoderSetTextureAtIndex(MtComputeCommandEncoder *cce,  MtTexture *tex, NsUInteger indx) {
     [(id<MTLComputeCommandEncoder>)cce setTexture:(id<MTLTexture>)tex
@@ -95,6 +112,7 @@ mtComputeCommandEncoderSetTextureAtIndex(MtComputeCommandEncoder *cce,  MtTextur
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtComputeCommandEncoderSetTexturesWithRange(MtComputeCommandEncoder *cce,  MtTexture **textures, NsRange range) {
     [(id<MTLComputeCommandEncoder>)cce setTextures:(id<MTLTexture>*)textures
@@ -102,6 +120,7 @@ mtComputeCommandEncoderSetTexturesWithRange(MtComputeCommandEncoder *cce,  MtTex
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtComputeCommandEncoderSetThreadgroupMemoryLengthAtIndex(MtComputeCommandEncoder *cce,  NsUInteger length, NsUInteger indx) {
     [(id<MTLComputeCommandEncoder>)cce setThreadgroupMemoryLength: length
@@ -109,6 +128,7 @@ mtComputeCommandEncoderSetThreadgroupMemoryLengthAtIndex(MtComputeCommandEncoder
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtComputeCommandEncoderDispatchThreadgroups_threadsPerThreadgroup(MtComputeCommandEncoder *cce, MtSize threadgroupsPerGrid, MtSize threadsPerThreadgroup) {
     [(id<MTLComputeCommandEncoder>)cce dispatchThreadgroups: mtMTLSize(threadgroupsPerGrid)
@@ -116,6 +136,7 @@ mtComputeCommandEncoderDispatchThreadgroups_threadsPerThreadgroup(MtComputeComma
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 void
 mtComputeCommandEncoderDispatchThread_threadsPerThreadgroup(MtComputeCommandEncoder *cce, MtSize threadsPerGrid, MtSize threadsPerThreadgroup) {
     [(id<MTLComputeCommandEncoder>)cce dispatchThreads: mtMTLSize(threadsPerGrid)
@@ -123,6 +144,7 @@ mtComputeCommandEncoderDispatchThread_threadsPerThreadgroup(MtComputeCommandEnco
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtComputeCommandEncoderDispatchThreadgroupsWithIndirectBuffer_IndirectBufferOffset_threadsPerThreadgroup(MtComputeCommandEncoder *cce, MtBuffer *indirectBuffer, NsUInteger indirectBufferOffset, MtSize threadsPerThreadgroup) {
     [(id<MTLComputeCommandEncoder>)cce dispatchThreadgroupsWithIndirectBuffer: (id<MTLBuffer>)indirectBuffer
@@ -131,6 +153,7 @@ mtComputeCommandEncoderDispatchThreadgroupsWithIndirectBuffer_IndirectBufferOffs
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 void
 mtComputeCommandEncoderUseResourceUsage(MtComputeCommandEncoder *cce, MtResource *res, MtResourceUsage usage) {
     [(id<MTLComputeCommandEncoder>)cce useResource: (id<MTLResource>)res 
@@ -138,6 +161,7 @@ mtComputeCommandEncoderUseResourceUsage(MtComputeCommandEncoder *cce, MtResource
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 void
 mtComputeCommandEncoderUseResourceCountUsage(MtComputeCommandEncoder *cce, MtResource **res, NsUInteger count, MtResourceUsage usage) {
     [(id<MTLComputeCommandEncoder>)cce useResources: (id<MTLResource>*)res 
@@ -146,24 +170,28 @@ mtComputeCommandEncoderUseResourceCountUsage(MtComputeCommandEncoder *cce, MtRes
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 void
 mtComputeCommandEncoderUseHeap(MtComputeCommandEncoder *cce, MtHeap *heap) {
     [(id<MTLComputeCommandEncoder>)cce useHeap: (id<MTLHeap>)heap];
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 void
 mtComputeCommandEncoderUseHeaps(MtComputeCommandEncoder *cce, MtHeap **heaps, NsUInteger count) {
     [(id<MTLComputeCommandEncoder>)cce useHeaps:(id<MTLHeap>*)heaps count: count];
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.12), mt_ios(10.0))
 void
 mtComputeCommandEncoderSetStageInRegion(MtComputeCommandEncoder *cce, MtRegion region) {
     [(id<MTLComputeCommandEncoder>)cce setStageInRegion:mtMTLRegion(region)]; 
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
 void
 mtComputeCommandEncoderSetStageInRegionWithIndirectBuffer(MtComputeCommandEncoder *cce, MtBuffer *buf, NsUInteger offset) {
     [(id<MTLComputeCommandEncoder>)cce setStageInRegionWithIndirectBuffer: (id<MTLBuffer>)buf
@@ -171,6 +199,7 @@ mtComputeCommandEncoderSetStageInRegionWithIndirectBuffer(MtComputeCommandEncode
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
 MtDispatchType
 mtComputeCommandEncoderDispatchType(MtComputeCommandEncoder *cce) {
     return [(id<MTLComputeCommandEncoder>)cce dispatchType];
@@ -178,17 +207,17 @@ mtComputeCommandEncoderDispatchType(MtComputeCommandEncoder *cce) {
 
 // Executing Commands Concurrently or Serially
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
 void
 mtComputeCommandEncoderMemoryBarrierWithScope(MtComputeCommandEncoder *cce, MtBarrierScope scope) {
     return [(id<MTLComputeCommandEncoder>)cce memoryBarrierWithScope: (MTLBarrierScope)scope];
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
 void
 mtComputeCommandEncoderMemoryBarrierWithResource(MtComputeCommandEncoder *cce, MtResource **resources, NsUInteger count) {
     return [(id<MTLComputeCommandEncoder>)cce memoryBarrierWithResources: (id<MTLResource>*)resources
                                                                    count: count];
 
 }
-
-

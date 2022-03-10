@@ -1,3 +1,8 @@
+/*
+ * Copyright (c), Recep Aslantas.
+ * MIT License (MIT), http://opensource.org/licenses/MIT
+ */
+
 #include "impl/common.h"
 #include "cmt/common.h"
 

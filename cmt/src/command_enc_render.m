@@ -1,3 +1,8 @@
+/*
+ * Copyright (c), Recep Aslantas.
+ * MIT License (MIT), http://opensource.org/licenses/MIT
+ */
+
 #include "cmt/common.h"
 #include "impl/common.h"
 #include "cmt/command_enc_render.h"
@@ -9,6 +14,7 @@ mtNewResourceStateCommandEncoder(MtCommandBuffer *cmdb) {
 }*/ //IOS 13
 
 CF_RETURNS_RETAINED
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MT_EXPORT
 MtRenderCommandEncoder*
 mtNewRenderCommandEncoder(MtCommandBuffer *cmdb, MtRenderPassDesc *pass) {
@@ -16,24 +22,28 @@ mtNewRenderCommandEncoder(MtCommandBuffer *cmdb, MtRenderPassDesc *pass) {
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtFrontFace(MtRenderCommandEncoder *rce, MtWinding winding) {
   [(id<MTLRenderCommandEncoder>)rce setFrontFacingWinding:(MTLWinding)winding];
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtCullMode(MtRenderCommandEncoder *rce, MtCullMode mode) {
   [(id<MTLRenderCommandEncoder>)rce setCullMode:(MTLCullMode)mode];
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtViewport(MtRenderCommandEncoder *rce, MtViewport *viewport) {
   [(id<MTLRenderCommandEncoder>)rce setViewport: *(MTLViewport *)viewport];
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtSetRenderState(MtRenderCommandEncoder *rce, MtRenderPipeline *pipline) {
   [(id<MTLRenderCommandEncoder>)rce setRenderPipelineState: pipline];
@@ -46,6 +56,7 @@ mtSetDepthStencil(MtRenderCommandEncoder *rce, MtDepthStencil *ds) {
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtVertexBytes(MtRenderCommandEncoder *enc,
               void                   *bytes,
@@ -57,6 +68,7 @@ mtVertexBytes(MtRenderCommandEncoder *enc,
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtVertexBuffer(MtRenderCommandEncoder *rce,
                MtBuffer               *buf,
@@ -68,6 +80,7 @@ mtVertexBuffer(MtRenderCommandEncoder *rce,
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtFragmentBuffer(MtRenderCommandEncoder *rce,
                  MtBuffer               *buf,
@@ -79,6 +92,7 @@ mtFragmentBuffer(MtRenderCommandEncoder *rce,
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtDrawPrims(MtRenderCommandEncoder *rce,
             MtPrimitiveType         type,
@@ -90,6 +104,7 @@ mtDrawPrims(MtRenderCommandEncoder *rce,
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtDrawIndexedPrims(MtRenderCommandEncoder *rce,
                    MtPrimitiveType         type,
@@ -106,12 +121,8 @@ mtDrawIndexedPrims(MtRenderCommandEncoder *rce,
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtEndEncoding(MtRenderCommandEncoder *rce) {
   [(id<MTLRenderCommandEncoder>)rce endEncoding];
 }
-
-
-
-
-

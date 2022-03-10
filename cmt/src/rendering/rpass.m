@@ -8,12 +8,14 @@
 
 CF_RETURNS_RETAINED
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtRenderPassDesc*
 mtNewPass() {
   return [MTLRenderPassDescriptor new];
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtPassTexture(MtRenderPassDesc *pass,
               int               colorAttch,
@@ -26,6 +28,7 @@ mtPassTexture(MtRenderPassDesc *pass,
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtPassLoadAction(MtRenderPassDesc *pass,
                  int               colorAttch,

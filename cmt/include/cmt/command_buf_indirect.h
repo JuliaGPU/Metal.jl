@@ -15,25 +15,30 @@ extern "C" {
 #include "cmt/resource.h"
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
 MtIndirectCommandBuffer*
 mtNewIndirectCommandBuffer(MtDevice *device, MtIndirectCommandBufferDescriptor *desc,
-    NsUInteger maxCount, MtResourceOptions options); 
+                           NsUInteger maxCount, MtResourceOptions options);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 NsUInteger
 mtIndirectCommandBufferSize(MtIndirectCommandBuffer *icb); 
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtIndirectComputeCommand*
 mtIndirectCommandBufferComputeCommandAtIndex(MtIndirectCommandBuffer *icb, 
-                                                NsUInteger index); 
+                                             NsUInteger index);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtIndirectRenderCommand*
 mtIndirectCommandBufferRenderCommandAtIndex(MtIndirectCommandBuffer *icb, 
-                                                NsUInteger index); 
+                                            NsUInteger index);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtIndirectCommandBufferResetWithRange(MtIndirectCommandBuffer *icb, NsRange range);
 

@@ -14,11 +14,10 @@ extern "C" {
 #include "cmt/enums.h"
 #include "cmt/resource.h"
 
-
-MT_EXPORT 
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 MtArgumentDescriptor*
-mtNewArgumentDescriptor();
-
+mtNewArgumentDescriptor(void);
 
 #ifdef __cplusplus
 }

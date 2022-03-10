@@ -15,14 +15,17 @@ extern "C" {
 #include "cmt/error.h"
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtLibrary*
 mtNewDefaultLibrary(MtDevice *device);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtLibrary*
 mtNewLibraryWithFile(MtDevice *device, char *filepath, NsError **error);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtLibrary*
 mtNewLibraryWithSource(MtDevice *device, char *source, MtCompileOptions *Opts, NsError **error);
 
@@ -36,14 +39,17 @@ mtLibraryRelease(MtLibrary *lib);
 
 MT_EXPORT
 MtDevice*
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 mtLibraryDevice(MtLibrary *lib);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 const char*
 mtLibraryLabel(MtLibrary *lib);
 
 MT_EXPORT
 void
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 mtLibraryFunctionNames(MtLibrary *lib, size_t* count, const char **names);
 
 
