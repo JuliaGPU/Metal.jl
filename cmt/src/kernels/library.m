@@ -58,20 +58,20 @@ mtLibraryLabel(MtLibrary *lib) {
 	return Cstring([(id<MTLLibrary>)lib label]);
 }
 
+MT_EXPORT
+int
+mtLibraryFunctionCount(MtLibrary *lib) {
+  NSArray<NSString*> *_names = [(id<MTLLibrary>)lib functionNames];
+  return [_names count];
+}
 
 MT_EXPORT
-const char**
-mtLibraryFunctionNames(MtLibrary *lib) {
-
+void
+mtLibraryFunctionNames(MtLibrary *lib, const char** names) {
   NSArray<NSString*> *_names = [(id<MTLLibrary>)lib functionNames];
   int n = [_names count];
-  const char **names = malloc(sizeof(char*) * (n + 1));
-  for (int i=0; i < n; i++) {
+  for (int i=0; i < n; i++)
   	names[i] = Cstring([_names objectAtIndex:i]);
-  }
-  names[n] = NULL;
-
-  return names;
-
+  return;
 }
 

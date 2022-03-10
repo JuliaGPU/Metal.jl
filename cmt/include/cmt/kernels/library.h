@@ -36,15 +36,19 @@ mtLibraryRelease(MtLibrary *lib);
 
 MT_EXPORT
 MtDevice*
-mtLibraryDevice(MtLibrary *device);
+mtLibraryDevice(MtLibrary *lib);
 
 MT_EXPORT
 const char*
-mtLibraryLabel(MtLibrary *device);
+mtLibraryLabel(MtLibrary *lib);
 
 MT_EXPORT
-const char **
-mtLibraryFunctionNames(MtLibrary *device);
+int
+mtLibraryFunctionCount(MtLibrary *lib);
+
+MT_EXPORT
+void
+mtLibraryFunctionNames(MtLibrary *lib, const char **names);
 
 
 #ifdef __cplusplus

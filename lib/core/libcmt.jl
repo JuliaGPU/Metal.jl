@@ -557,22 +557,28 @@ function mtLibraryRelease(lib)
           lib)
 end
 
-function mtLibraryDevice(device)
+function mtLibraryDevice(lib)
     ccall((:mtLibraryDevice, libcmt), Ptr{MtDevice},
           (Ptr{MtLibrary},),
-          device)
+          lib)
 end
 
-function mtLibraryLabel(device)
+function mtLibraryLabel(lib)
     ccall((:mtLibraryLabel, libcmt), Cstring,
           (Ptr{MtLibrary},),
-          device)
+          lib)
 end
 
-function mtLibraryFunctionNames(device)
-    ccall((:mtLibraryFunctionNames, libcmt), Ptr{Cstring},
+function mtLibraryFunctionCount(lib)
+    ccall((:mtLibraryFunctionCount, libcmt), Cint,
           (Ptr{MtLibrary},),
-          device)
+          lib)
+end
+
+function mtLibraryFunctionNames(lib, names)
+    ccall((:mtLibraryFunctionNames, libcmt), Cvoid,
+          (Ptr{MtLibrary}, Ptr{Cstring}),
+          lib, names)
 end
 
 function mtBufferRelease(buf)
