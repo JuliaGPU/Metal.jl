@@ -1,7 +1,6 @@
 # code reflection entry-points
 
 # forward the rest to GPUCompiler with an appropriate CompilerJob
-# TODO: Actually implement this for Metal
 for method in (:code_typed, :code_warntype, :code_llvm, :code_native)
     # only code_typed doesn't take a io argument
     args = method == :code_typed ? (:job,) : (:io, :job)
@@ -29,7 +28,6 @@ Return a type `r` such that `f(args...)::r` where `args::tt`.
 """
 function return_type(@nospecialize(func), @nospecialize(tt))
     source = FunctionSpec(func, tt, true)
-    # target = CUDACompilerTarget(device())
     target = MetalCompilerTarget(macos=get_macos_v();)
     params = MetalCompilerParams()
     job = CompilerJob(target, source, params)
@@ -48,7 +46,7 @@ end
 #
 
 export @device_code_lowered, @device_code_typed, @device_code_warntype,
-       @device_code_llvm, @device_code
+       @device_code_llvm, @device_code_metallib, @device_code
 
 
 # forward the rest to GPUCompiler
@@ -56,4 +54,5 @@ export @device_code_lowered, @device_code_typed, @device_code_warntype,
 @eval $(Symbol("@device_code_typed")) = $(getfield(GPUCompiler, Symbol("@device_code_typed")))
 @eval $(Symbol("@device_code_warntype")) = $(getfield(GPUCompiler, Symbol("@device_code_warntype")))
 @eval $(Symbol("@device_code_llvm")) = $(getfield(GPUCompiler, Symbol("@device_code_llvm")))
+@eval $(Symbol("@device_code_metallib")) = $(getfield(GPUCompiler, Symbol("@device_code_native")))
 @eval $(Symbol("@device_code")) = $(getfield(GPUCompiler, Symbol("@device_code")))
