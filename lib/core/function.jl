@@ -9,6 +9,7 @@ mutable struct MtlFunction
     "Get a handle to a kernel function in a Metal Library."
     function MtlFunction(lib::MtlLibrary, name::String)
         handle = mtNewFunctionWithName(lib, name)
+        handle == C_NULL && throw(KeyError(name))
         obj = new(handle, lib)
         finalizer(unsafe_destroy!, obj)
         return obj
@@ -16,7 +17,7 @@ mutable struct MtlFunction
 end 
 
 function unsafe_destroy!(fun::MtlFunction)
-    fun.handle !== C_NULL && mtFunctionRelease(fun)
+    mtFunctionRelease(fun)
 end
 
 Base.unsafe_convert(::Type{MTLFunction}, fun::MtlFunction) = fun.handle
