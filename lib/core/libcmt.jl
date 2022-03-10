@@ -32,10 +32,10 @@ function mtErrorLocalizedDescription(err)
           err)
 end
 
-function mtErrorLocalizedRecoveryOptions(err)
-    ccall((:mtErrorLocalizedRecoveryOptions, libcmt), Ptr{Cstring},
-          (Ptr{NsError},),
-          err)
+function mtErrorLocalizedRecoveryOptions(err, count, options)
+    ccall((:mtErrorLocalizedRecoveryOptions, libcmt), Cvoid,
+          (Ptr{NsError}, Ptr{Csize_t}, Ptr{Cstring}),
+          err, count, options)
 end
 
 function mtErrorLocalizedRecoverySuggestion(err)
@@ -157,8 +157,10 @@ function mtCreateSystemDefaultDevice()
     ccall((:mtCreateSystemDefaultDevice, libcmt), Ptr{MtDevice}, ())
 end
 
-function mtCopyAllDevices()
-    ccall((:mtCopyAllDevices, libcmt), Ptr{Ptr{MtDevice}}, ())
+function mtCopyAllDevices(count, devices)
+    ccall((:mtCopyAllDevices, libcmt), Cvoid,
+          (Ptr{Csize_t}, Ptr{MtDevice}),
+          count, devices)
 end
 
 function mtDeviceName(arg1)
@@ -569,16 +571,10 @@ function mtLibraryLabel(lib)
           lib)
 end
 
-function mtLibraryFunctionCount(lib)
-    ccall((:mtLibraryFunctionCount, libcmt), Cint,
-          (Ptr{MtLibrary},),
-          lib)
-end
-
-function mtLibraryFunctionNames(lib, names)
+function mtLibraryFunctionNames(lib, count, names)
     ccall((:mtLibraryFunctionNames, libcmt), Cvoid,
-          (Ptr{MtLibrary}, Ptr{Cstring}),
-          lib, names)
+          (Ptr{MtLibrary}, Ptr{Csize_t}, Ptr{Cstring}),
+          lib, count, names)
 end
 
 function mtBufferRelease(buf)

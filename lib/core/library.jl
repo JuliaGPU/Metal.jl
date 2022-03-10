@@ -69,8 +69,9 @@ function Base.show(io::IO, ::MIME"text/plain", l::MtlLibrary)
 end
 
 function function_names(l::MtlLibrary)
-    count = mtLibraryFunctionCount(l)
-    names = Vector{Cstring}(undef, count)
-    mtLibraryFunctionNames(l, names)
+    count = Ref{Csize_t}(0)
+    mtLibraryFunctionNames(l, count, C_NULL)
+    names = Vector{Cstring}(undef, count[])
+    mtLibraryFunctionNames(l, count, names)
     unsafe_string.(names)
 end

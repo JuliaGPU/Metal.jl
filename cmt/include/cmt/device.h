@@ -20,8 +20,8 @@ MtDevice*
 mtCreateSystemDefaultDevice(void);
 
 MT_EXPORT
-MtDevice**
-mtCopyAllDevices(void);
+void
+mtCopyAllDevices(size_t *count, MtDevice** devices);
 
 MT_EXPORT
 const char*

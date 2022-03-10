@@ -30,18 +30,20 @@ mtErrorLocalizedDescription(NsError *err) {
 }
 
 MT_EXPORT
-const char**
-mtErrorLocalizedRecoveryOptions(NsError *err) {
-  NSArray<NSString *> *_strings = [(NSError*)err localizedRecoveryOptions];
+void
+mtErrorLocalizedRecoveryOptions(NsError *err, size_t* count, const char** options) {
+    NSArray<NSString *> *_strings = [(NSError*)err localizedRecoveryOptions];
+    int n = [_strings count];
 
-  int n = [_strings count];
-  const char **strs = malloc(sizeof(char*) * (n + 1));
-  for (int i=0; i < n; i++) {
-    strs[i] = Cstring([_strings objectAtIndex:i]);
-  }
-  strs[n] = NULL;
+    if (*count == 0) {
+        *count = n;
+    } else {
+        assert(*count <= n);
+        for (int i=0; i < *count; i++)
+            options[i] = Cstring([_strings objectAtIndex:i]);
+    }
 
-  return strs;
+    return;
 }
 
 MT_EXPORT

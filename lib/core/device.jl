@@ -21,16 +21,11 @@ Base.hash(dev::MtlDevice, h::UInt) = hash(dev.handle, h)
 Get an iterator for the compute devices.
 """
 function devices()
-    handles = mtCopyAllDevices()
-    devices = Vector{MtlDevice}()
-    while true
-        handle = unsafe_load(handles, length(devices)+1)
-        handle == C_NULL && break
-        push!(devices, MtlDevice(handle))
-    end
-    Libc.free(handles)
-
-    return devices
+    count = Ref{Csize_t}(0)
+    mtCopyAllDevices(count, C_NULL)
+    handles = Vector{Cstring}(undef, count[])
+    mtCopyAllDevices(count, handles)
+    MtlDevice.(handles)
 end
 
 """

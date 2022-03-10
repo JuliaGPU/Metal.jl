@@ -59,19 +59,18 @@ mtLibraryLabel(MtLibrary *lib) {
 }
 
 MT_EXPORT
-int
-mtLibraryFunctionCount(MtLibrary *lib) {
-  NSArray<NSString*> *_names = [(id<MTLLibrary>)lib functionNames];
-  return [_names count];
-}
-
-MT_EXPORT
 void
-mtLibraryFunctionNames(MtLibrary *lib, const char** names) {
+mtLibraryFunctionNames(MtLibrary *lib, size_t* count, const char** names) {
   NSArray<NSString*> *_names = [(id<MTLLibrary>)lib functionNames];
   int n = [_names count];
-  for (int i=0; i < n; i++)
-  	names[i] = Cstring([_names objectAtIndex:i]);
+
+  if (*count == 0) {
+    *count = n;
+  } else {
+    assert(*count <= n);
+    for (int i=0; i < *count; i++)
+      names[i] = Cstring([_names objectAtIndex:i]);
+  }
   return;
 }
 

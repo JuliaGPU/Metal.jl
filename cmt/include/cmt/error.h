@@ -34,7 +34,7 @@ mtErrorLocalizedDescription(NsError *err);
 
 MT_EXPORT
 const char**
-mtErrorLocalizedRecoveryOptions(NsError *err);
+mtErrorLocalizedRecoveryOptions(NsError *err, size_t* count, const char** options);
 
 MT_EXPORT
 const char*

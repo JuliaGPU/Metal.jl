@@ -13,19 +13,21 @@ mtCreateSystemDefaultDevice() {
   return MTLCreateSystemDefaultDevice();
 }
 
-CF_RETURNS_RETAINED
 MT_EXPORT
-MtDevice**
-mtCopyAllDevices() {
+void
+mtCopyAllDevices(size_t* count, MtDevice** devices) {
   NSArray<id<MTLDevice>> * _devices = MTLCopyAllDevices();
+  int n = [_devices count];
 
-  NSRange copyRange = NSMakeRange(0, [_devices count]);
-  id<MTLDevice> *devices = malloc(sizeof(id<MTLDevice>) * (copyRange.length + 1));
+  if (*count == 0) {
+	  *count = n;
+  } else {
+	  assert(*count <= n);
+	  for (int i=0; i < *count; i++)
+		devices[i] = [_devices objectAtIndex:i];
+  }
 
-  [_devices getObjects:devices range:copyRange];
-  devices[copyRange.length] = NULL;
-
-  return (MtDevice**)(devices);
+  return;
 }
 
 CF_RETURNS_RETAINED

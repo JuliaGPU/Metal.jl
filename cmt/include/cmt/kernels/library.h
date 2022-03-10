@@ -43,12 +43,8 @@ const char*
 mtLibraryLabel(MtLibrary *lib);
 
 MT_EXPORT
-int
-mtLibraryFunctionCount(MtLibrary *lib);
-
-MT_EXPORT
 void
-mtLibraryFunctionNames(MtLibrary *lib, const char **names);
+mtLibraryFunctionNames(MtLibrary *lib, size_t* count, const char **names);
 
 
 #ifdef __cplusplus

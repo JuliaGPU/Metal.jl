@@ -32,15 +32,11 @@ recoverySuggestion(err::MtlError) = unsafe_string_maybe(mtErrorLocalizedRecovery
 failureReason(err::MtlError) = unsafe_string_maybe(mtErrorLocalizedFailureReason(err))
 
 function recoveryOptions(err::MtlError)
-	options = mtErrorLocalizedRecoveryOptions(err)
-	opts = Vector{String}();
-	for i=0:typemax(Int)
-		_opt = Base.unsafe_load(options + i * sizeof(Ptr{NsError}))
-		_opt == C_NULL && break
-		push!(opts, unsafe_string(_opt))
-	end
-	Base.Libc.free(options)
-	return opts
+	count = Ref{Csize_t}(0)
+	mtErrorLocalizedRecoveryOptions(err, count, C_NULL)
+	options = Vector{String}(undef, count[])
+	mtErrorLocalizedRecoveryOptions(err, count, options)
+	unsafe_string.(options)
 end
 
 Base.show(io::IO, ::MIME"text/plain", err::MtlError) = _show(io, err)
