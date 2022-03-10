@@ -3,1423 +3,1423 @@
 
 
 function mtErrorRelease(err)
-    ccall((:mtErrorRelease, cmt_lib), Cvoid,
+    ccall((:mtErrorRelease, libcmt), Cvoid,
           (Ptr{NsError},),
           err)
 end
 
 function mtErrorCode(err)
-    ccall((:mtErrorCode, cmt_lib), NsInteger,
+    ccall((:mtErrorCode, libcmt), NsInteger,
           (Ptr{NsError},),
           err)
 end
 
 function mtErrorDomain(err)
-    ccall((:mtErrorDomain, cmt_lib), Cstring,
+    ccall((:mtErrorDomain, libcmt), Cstring,
           (Ptr{NsError},),
           err)
 end
 
 function mtErrorUserInfo(err)
-    ccall((:mtErrorUserInfo, cmt_lib), Cstring,
+    ccall((:mtErrorUserInfo, libcmt), Cstring,
           (Ptr{NsError},),
           err)
 end
 
 function mtErrorLocalizedDescription(err)
-    ccall((:mtErrorLocalizedDescription, cmt_lib), Cstring,
+    ccall((:mtErrorLocalizedDescription, libcmt), Cstring,
           (Ptr{NsError},),
           err)
 end
 
 function mtErrorLocalizedRecoveryOptions(err)
-    ccall((:mtErrorLocalizedRecoveryOptions, cmt_lib), Ptr{Cstring},
+    ccall((:mtErrorLocalizedRecoveryOptions, libcmt), Ptr{Cstring},
           (Ptr{NsError},),
           err)
 end
 
 function mtErrorLocalizedRecoverySuggestion(err)
-    ccall((:mtErrorLocalizedRecoverySuggestion, cmt_lib), Cstring,
+    ccall((:mtErrorLocalizedRecoverySuggestion, libcmt), Cstring,
           (Ptr{NsError},),
           err)
 end
 
 function mtErrorLocalizedFailureReason(err)
-    ccall((:mtErrorLocalizedFailureReason, cmt_lib), Cstring,
+    ccall((:mtErrorLocalizedFailureReason, libcmt), Cstring,
           (Ptr{NsError},),
           err)
 end
 
 function mtDeviceNewEvent(dev)
-    ccall((:mtDeviceNewEvent, cmt_lib), Ptr{MtEvent},
+    ccall((:mtDeviceNewEvent, libcmt), Ptr{MtEvent},
           (Ptr{MtDevice},),
           dev)
 end
 
 function mtDeviceNewSharedEvent(dev)
-    ccall((:mtDeviceNewSharedEvent, cmt_lib), Ptr{MtSharedEvent},
+    ccall((:mtDeviceNewSharedEvent, libcmt), Ptr{MtSharedEvent},
           (Ptr{MtDevice},),
           dev)
 end
 
 function mtDeviceNewSharedEventWithHandle(dev, handle)
-    ccall((:mtDeviceNewSharedEventWithHandle, cmt_lib), Ptr{MtSharedEvent},
+    ccall((:mtDeviceNewSharedEventWithHandle, libcmt), Ptr{MtSharedEvent},
           (Ptr{MtDevice}, Ptr{MtSharedEventHandle}),
           dev, handle)
 end
 
 function mtDeviceNewFence(dev)
-    ccall((:mtDeviceNewFence, cmt_lib), Ptr{MtFence},
+    ccall((:mtDeviceNewFence, libcmt), Ptr{MtFence},
           (Ptr{MtDevice},),
           dev)
 end
 
 function mtEventRelease(event)
-    ccall((:mtEventRelease, cmt_lib), Cvoid,
+    ccall((:mtEventRelease, libcmt), Cvoid,
           (Ptr{MtEvent},),
           event)
 end
 
 function mtEventDevice(event)
-    ccall((:mtEventDevice, cmt_lib), Ptr{MtDevice},
+    ccall((:mtEventDevice, libcmt), Ptr{MtDevice},
           (Ptr{MtEvent},),
           event)
 end
 
 function mtEventLabel(event)
-    ccall((:mtEventLabel, cmt_lib), Cstring,
+    ccall((:mtEventLabel, libcmt), Cstring,
           (Ptr{MtEvent},),
           event)
 end
 
 function mtSharedEventSignaledValue(event)
-    ccall((:mtSharedEventSignaledValue, cmt_lib), UInt64,
+    ccall((:mtSharedEventSignaledValue, libcmt), UInt64,
           (Ptr{MtSharedEvent},),
           event)
 end
 
 function mtSharedEventNewHandle(event)
-    ccall((:mtSharedEventNewHandle, cmt_lib), Ptr{MtSharedEventHandle},
+    ccall((:mtSharedEventNewHandle, libcmt), Ptr{MtSharedEventHandle},
           (Ptr{MtSharedEvent},),
           event)
 end
 
 function mtSharedEventHandleRelease(handle)
-    ccall((:mtSharedEventHandleRelease, cmt_lib), Cvoid,
+    ccall((:mtSharedEventHandleRelease, libcmt), Cvoid,
           (Ptr{MtSharedEventHandle},),
           handle)
 end
 
 function mtSharedEventNotifyListener(event, listener, val, block)
-    ccall((:mtSharedEventNotifyListener, cmt_lib), Cvoid,
+    ccall((:mtSharedEventNotifyListener, libcmt), Cvoid,
           (Ptr{MtSharedEvent}, Ptr{MtSharedEventListener}, UInt64,
            MtSharedEventNotificationBlock),
           event, listener, val, block)
 end
 
 function mtResourceDevice(res)
-    ccall((:mtResourceDevice, cmt_lib), Ptr{MtDevice},
+    ccall((:mtResourceDevice, libcmt), Ptr{MtDevice},
           (Ptr{MtResource},),
           res)
 end
 
 function mtResourceLabel(res)
-    ccall((:mtResourceLabel, cmt_lib), Cstring,
+    ccall((:mtResourceLabel, libcmt), Cstring,
           (Ptr{MtResource},),
           res)
 end
 
 function mtResourceCPUCacheMode(res)
-    ccall((:mtResourceCPUCacheMode, cmt_lib), MtCPUCacheMode,
+    ccall((:mtResourceCPUCacheMode, libcmt), MtCPUCacheMode,
           (Ptr{MtResource},),
           res)
 end
 
 function mtResourceStorageMode(res)
-    ccall((:mtResourceStorageMode, cmt_lib), MtStorageMode,
+    ccall((:mtResourceStorageMode, libcmt), MtStorageMode,
           (Ptr{MtResource},),
           res)
 end
 
 function mtResourceHazardTrackingMode(res)
-    ccall((:mtResourceHazardTrackingMode, cmt_lib), MtHazardTrackingMode,
+    ccall((:mtResourceHazardTrackingMode, libcmt), MtHazardTrackingMode,
           (Ptr{MtResource},),
           res)
 end
 
 function mtResourceOptions(res)
-    ccall((:mtResourceOptions, cmt_lib), MtResourceOptions,
+    ccall((:mtResourceOptions, libcmt), MtResourceOptions,
           (Ptr{MtResource},),
           res)
 end
 
 function mtCreateSystemDefaultDevice()
-    ccall((:mtCreateSystemDefaultDevice, cmt_lib), Ptr{MtDevice}, ())
+    ccall((:mtCreateSystemDefaultDevice, libcmt), Ptr{MtDevice}, ())
 end
 
 function mtCopyAllDevices()
-    ccall((:mtCopyAllDevices, cmt_lib), Ptr{Ptr{MtDevice}}, ())
+    ccall((:mtCopyAllDevices, libcmt), Ptr{Ptr{MtDevice}}, ())
 end
 
 function mtDeviceName(arg1)
-    ccall((:mtDeviceName, cmt_lib), Cstring,
+    ccall((:mtDeviceName, libcmt), Cstring,
           (Ptr{MtDevice},),
           arg1)
 end
 
 function mtDeviceHeadless(arg1)
-    ccall((:mtDeviceHeadless, cmt_lib), Bool,
+    ccall((:mtDeviceHeadless, libcmt), Bool,
           (Ptr{MtDevice},),
           arg1)
 end
 
 function mtDeviceLowPower(arg1)
-    ccall((:mtDeviceLowPower, cmt_lib), Bool,
+    ccall((:mtDeviceLowPower, libcmt), Bool,
           (Ptr{MtDevice},),
           arg1)
 end
 
 function mtDeviceRemovable(arg1)
-    ccall((:mtDeviceRemovable, cmt_lib), Bool,
+    ccall((:mtDeviceRemovable, libcmt), Bool,
           (Ptr{MtDevice},),
           arg1)
 end
 
 function mtDeviceRegistryID(arg1)
-    ccall((:mtDeviceRegistryID, cmt_lib), UInt64,
+    ccall((:mtDeviceRegistryID, libcmt), UInt64,
           (Ptr{MtDevice},),
           arg1)
 end
 
 function mtDeviceLocation(arg1)
-    ccall((:mtDeviceLocation, cmt_lib), MtDeviceLocation,
+    ccall((:mtDeviceLocation, libcmt), MtDeviceLocation,
           (Ptr{MtDevice},),
           arg1)
 end
 
 function mtDeviceLocationNumber(arg1)
-    ccall((:mtDeviceLocationNumber, cmt_lib), UInt64,
+    ccall((:mtDeviceLocationNumber, libcmt), UInt64,
           (Ptr{MtDevice},),
           arg1)
 end
 
 function mtDeviceMaxTransferRate(arg1)
-    ccall((:mtDeviceMaxTransferRate, cmt_lib), UInt64,
+    ccall((:mtDeviceMaxTransferRate, libcmt), UInt64,
           (Ptr{MtDevice},),
           arg1)
 end
 
 function mtDeviceHasUnifiedMemory(arg1)
-    ccall((:mtDeviceHasUnifiedMemory, cmt_lib), Bool,
+    ccall((:mtDeviceHasUnifiedMemory, libcmt), Bool,
           (Ptr{MtDevice},),
           arg1)
 end
 
 function mtDevicePeerGroupID(arg1)
-    ccall((:mtDevicePeerGroupID, cmt_lib), UInt64,
+    ccall((:mtDevicePeerGroupID, libcmt), UInt64,
           (Ptr{MtDevice},),
           arg1)
 end
 
 function mtDevicePeerCount(arg1)
-    ccall((:mtDevicePeerCount, cmt_lib), UInt32,
+    ccall((:mtDevicePeerCount, libcmt), UInt32,
           (Ptr{MtDevice},),
           arg1)
 end
 
 function mtDevicePeerIndex(arg1)
-    ccall((:mtDevicePeerIndex, cmt_lib), UInt32,
+    ccall((:mtDevicePeerIndex, libcmt), UInt32,
           (Ptr{MtDevice},),
           arg1)
 end
 
 function mtDeviceSupportsFamily(device, family)
-    ccall((:mtDeviceSupportsFamily, cmt_lib), Bool,
+    ccall((:mtDeviceSupportsFamily, libcmt), Bool,
           (Ptr{MtDevice}, MtGPUFamily),
           device, family)
 end
 
 function mtDeviceSupportsFeatureSet(device, set)
-    ccall((:mtDeviceSupportsFeatureSet, cmt_lib), Bool,
+    ccall((:mtDeviceSupportsFeatureSet, libcmt), Bool,
           (Ptr{MtDevice}, MtFeatureSet),
           device, set)
 end
 
 function mtDeviceRecommendedMaxWorkingSetSize(device)
-    ccall((:mtDeviceRecommendedMaxWorkingSetSize, cmt_lib), UInt64,
+    ccall((:mtDeviceRecommendedMaxWorkingSetSize, libcmt), UInt64,
           (Ptr{MtDevice},),
           device)
 end
 
 function mtDeviceCurrentAllocatedSize(device)
-    ccall((:mtDeviceCurrentAllocatedSize, cmt_lib), NsUInteger,
+    ccall((:mtDeviceCurrentAllocatedSize, libcmt), NsUInteger,
           (Ptr{MtDevice},),
           device)
 end
 
 function mtDeviceMaxThreadgroupMemoryLength(device)
-    ccall((:mtDeviceMaxThreadgroupMemoryLength, cmt_lib), NsUInteger,
+    ccall((:mtDeviceMaxThreadgroupMemoryLength, libcmt), NsUInteger,
           (Ptr{MtDevice},),
           device)
 end
 
 function mtMaxThreadsPerThreadgroup(device)
-    ccall((:mtMaxThreadsPerThreadgroup, cmt_lib), MtSize,
+    ccall((:mtMaxThreadsPerThreadgroup, libcmt), MtSize,
           (Ptr{MtDevice},),
           device)
 end
 
 function mtDeviceMaxBufferLength(device)
-    ccall((:mtDeviceMaxBufferLength, cmt_lib), NsUInteger,
+    ccall((:mtDeviceMaxBufferLength, libcmt), NsUInteger,
           (Ptr{MtDevice},),
           device)
 end
 
 function mtDeviceNewBufferWithLength(device, length, opts)
-    ccall((:mtDeviceNewBufferWithLength, cmt_lib), Ptr{MtBuffer},
+    ccall((:mtDeviceNewBufferWithLength, libcmt), Ptr{MtBuffer},
           (Ptr{MtDevice}, NsUInteger, MtResourceOptions),
           device, length, opts)
 end
 
 function mtDeviceNewBufferWithBytes(device, ptr, length, opts)
-    ccall((:mtDeviceNewBufferWithBytes, cmt_lib), Ptr{MtBuffer},
+    ccall((:mtDeviceNewBufferWithBytes, libcmt), Ptr{MtBuffer},
           (Ptr{MtDevice}, Ptr{Cvoid}, NsUInteger, MtResourceOptions),
           device, ptr, length, opts)
 end
 
 function mtDeviceNewBufferWithBytesNoCopy(device, ptr, length, opts)
-    ccall((:mtDeviceNewBufferWithBytesNoCopy, cmt_lib), Ptr{MtBuffer},
+    ccall((:mtDeviceNewBufferWithBytesNoCopy, libcmt), Ptr{MtBuffer},
           (Ptr{MtDevice}, Ptr{Cvoid}, NsUInteger, MtResourceOptions),
           device, ptr, length, opts)
 end
 
 function mtNewComputePipelineStateWithFunction(device, fun, error)
-    ccall((:mtNewComputePipelineStateWithFunction, cmt_lib), Ptr{MtComputePipelineState},
+    ccall((:mtNewComputePipelineStateWithFunction, libcmt), Ptr{MtComputePipelineState},
           (Ptr{MtDevice}, Ptr{MtFunction}, Ptr{Ptr{NsError}}),
           device, fun, error)
 end
 
 function mtNewComputePipelineStateWithFunctionReflection(device, fun, opt, reflection, error)
-    ccall((:mtNewComputePipelineStateWithFunctionReflection, cmt_lib), Ptr{MtComputePipelineState},
+    ccall((:mtNewComputePipelineStateWithFunctionReflection, libcmt), Ptr{MtComputePipelineState},
           (Ptr{MtDevice}, Ptr{MtFunction}, MtPipelineOption,
            Ptr{Ptr{MtComputePipelineReflection}}, Ptr{Ptr{NsError}}),
           device, fun, opt, reflection, error)
 end
 
 function mtNewComputePipelineStateWithDescriptor(device, desc, opt, reflection, error)
-    ccall((:mtNewComputePipelineStateWithDescriptor, cmt_lib), Ptr{MtComputePipelineState},
+    ccall((:mtNewComputePipelineStateWithDescriptor, libcmt), Ptr{MtComputePipelineState},
           (Ptr{MtDevice}, Ptr{MtComputePipelineDescriptor}, MtPipelineOption,
            Ptr{Ptr{MtComputePipelineReflection}}, Ptr{Ptr{NsError}}),
           device, desc, opt, reflection, error)
 end
 
 function mtComputePipelineDevice(pip)
-    ccall((:mtComputePipelineDevice, cmt_lib), Ptr{MtDevice},
+    ccall((:mtComputePipelineDevice, libcmt), Ptr{MtDevice},
           (Ptr{MtComputePipelineState},),
           pip)
 end
 
 function mtComputePipelineRelease(pip)
-    ccall((:mtComputePipelineRelease, cmt_lib), Cvoid,
+    ccall((:mtComputePipelineRelease, libcmt), Cvoid,
           (Ptr{MtComputePipelineState},),
           pip)
 end
 
 function mtComputePipelineLabel(pip)
-    ccall((:mtComputePipelineLabel, cmt_lib), Cstring,
+    ccall((:mtComputePipelineLabel, libcmt), Cstring,
           (Ptr{MtComputePipelineState},),
           pip)
 end
 
 function mtComputePipelineMaxTotalThreadsPerThreadgroup(pip)
-    ccall((:mtComputePipelineMaxTotalThreadsPerThreadgroup, cmt_lib), NsUInteger,
+    ccall((:mtComputePipelineMaxTotalThreadsPerThreadgroup, libcmt), NsUInteger,
           (Ptr{MtComputePipelineState},),
           pip)
 end
 
 function mtComputePipelineThreadExecutionWidth(pip)
-    ccall((:mtComputePipelineThreadExecutionWidth, cmt_lib), NsUInteger,
+    ccall((:mtComputePipelineThreadExecutionWidth, libcmt), NsUInteger,
           (Ptr{MtComputePipelineState},),
           pip)
 end
 
 function mtComputePipelineStaticThreadgroupMemoryLength(pip)
-    ccall((:mtComputePipelineStaticThreadgroupMemoryLength, cmt_lib), NsUInteger,
+    ccall((:mtComputePipelineStaticThreadgroupMemoryLength, libcmt), NsUInteger,
           (Ptr{MtComputePipelineState},),
           pip)
 end
 
 function mtAttributeName(attr)
-    ccall((:mtAttributeName, cmt_lib), Cstring,
+    ccall((:mtAttributeName, libcmt), Cstring,
           (Ptr{MtAttribute},),
           attr)
 end
 
 function mtAttributeIndex(attr)
-    ccall((:mtAttributeIndex, cmt_lib), NsUInteger,
+    ccall((:mtAttributeIndex, libcmt), NsUInteger,
           (Ptr{MtAttribute},),
           attr)
 end
 
 function mtAttributeDataType(attr)
-    ccall((:mtAttributeDataType, cmt_lib), MtDataType,
+    ccall((:mtAttributeDataType, libcmt), MtDataType,
           (Ptr{MtAttribute},),
           attr)
 end
 
 function mtAttributeActive(attr)
-    ccall((:mtAttributeActive, cmt_lib), Bool,
+    ccall((:mtAttributeActive, libcmt), Bool,
           (Ptr{MtAttribute},),
           attr)
 end
 
 function mtAttributeIsPatchControlPointData(attr)
-    ccall((:mtAttributeIsPatchControlPointData, cmt_lib), Bool,
+    ccall((:mtAttributeIsPatchControlPointData, libcmt), Bool,
           (Ptr{MtAttribute},),
           attr)
 end
 
 function mtAttributeIsPatchData(attr)
-    ccall((:mtAttributeIsPatchData, cmt_lib), Bool,
+    ccall((:mtAttributeIsPatchData, libcmt), Bool,
           (Ptr{MtAttribute},),
           attr)
 end
 
 function mtVertexAttributeName(attr)
-    ccall((:mtVertexAttributeName, cmt_lib), Cstring,
+    ccall((:mtVertexAttributeName, libcmt), Cstring,
           (Ptr{MtVertexAttribute},),
           attr)
 end
 
 function mtVertexAttributeIndex(attr)
-    ccall((:mtVertexAttributeIndex, cmt_lib), NsUInteger,
+    ccall((:mtVertexAttributeIndex, libcmt), NsUInteger,
           (Ptr{MtVertexAttribute},),
           attr)
 end
 
 function mtVertexAttributeDataType(attr)
-    ccall((:mtVertexAttributeDataType, cmt_lib), MtDataType,
+    ccall((:mtVertexAttributeDataType, libcmt), MtDataType,
           (Ptr{MtVertexAttribute},),
           attr)
 end
 
 function mtVertexAttributeActive(attr)
-    ccall((:mtVertexAttributeActive, cmt_lib), Bool,
+    ccall((:mtVertexAttributeActive, libcmt), Bool,
           (Ptr{MtVertexAttribute},),
           attr)
 end
 
 function mtVertexAttributeIsPatchControlPointData(attr)
-    ccall((:mtVertexAttributeIsPatchControlPointData, cmt_lib), Bool,
+    ccall((:mtVertexAttributeIsPatchControlPointData, libcmt), Bool,
           (Ptr{MtVertexAttribute},),
           attr)
 end
 
 function mtVertexAttributeIsPatchData(attr)
-    ccall((:mtVertexAttributeIsPatchData, cmt_lib), Bool,
+    ccall((:mtVertexAttributeIsPatchData, libcmt), Bool,
           (Ptr{MtVertexAttribute},),
           attr)
 end
 
 function mtNewCompileOpts()
-    ccall((:mtNewCompileOpts, cmt_lib), Ptr{MtCompileOptions}, ())
+    ccall((:mtNewCompileOpts, libcmt), Ptr{MtCompileOptions}, ())
 end
 
 function mtCompileOptsRelease(opts)
-    ccall((:mtCompileOptsRelease, cmt_lib), Cvoid,
+    ccall((:mtCompileOptsRelease, libcmt), Cvoid,
           (Ptr{MtCompileOptions},),
           opts)
 end
 
 function mtCompileOptsFastMath(opts)
-    ccall((:mtCompileOptsFastMath, cmt_lib), Bool,
+    ccall((:mtCompileOptsFastMath, libcmt), Bool,
           (Ptr{MtCompileOptions},),
           opts)
 end
 
 function mtCompileOptsFastMathSet(opts, val)
-    ccall((:mtCompileOptsFastMathSet, cmt_lib), Cvoid,
+    ccall((:mtCompileOptsFastMathSet, libcmt), Cvoid,
           (Ptr{MtCompileOptions}, Bool),
           opts, val)
 end
 
 function mtCompileOptsLanguageVersion(opts)
-    ccall((:mtCompileOptsLanguageVersion, cmt_lib), MtLanguageVersion,
+    ccall((:mtCompileOptsLanguageVersion, libcmt), MtLanguageVersion,
           (Ptr{MtCompileOptions},),
           opts)
 end
 
 function mtCompileOptsLanguageVersionSet(opts, val)
-    ccall((:mtCompileOptsLanguageVersionSet, cmt_lib), Cvoid,
+    ccall((:mtCompileOptsLanguageVersionSet, libcmt), Cvoid,
           (Ptr{MtCompileOptions}, MtLanguageVersion),
           opts, val)
 end
 
 function mtFunctionConstantValuesSetWithIndex(funval, value, typ, idx)
-    ccall((:mtFunctionConstantValuesSetWithIndex, cmt_lib), Cvoid,
+    ccall((:mtFunctionConstantValuesSetWithIndex, libcmt), Cvoid,
           (Ptr{MtFunctionConstantValues}, Ptr{Cvoid}, MtDataType, NsUInteger),
           funval, value, typ, idx)
 end
 
 function mtFunctionConstantValuesSetWithName(funval, value, typ, name)
-    ccall((:mtFunctionConstantValuesSetWithName, cmt_lib), Cvoid,
+    ccall((:mtFunctionConstantValuesSetWithName, libcmt), Cvoid,
           (Ptr{MtFunctionConstantValues}, Ptr{Cvoid}, MtDataType, Cstring),
           funval, value, typ, name)
 end
 
 function mtFunctionConstantValuesSetWithRange(funval, value, typ, range)
-    ccall((:mtFunctionConstantValuesSetWithRange, cmt_lib), Cvoid,
+    ccall((:mtFunctionConstantValuesSetWithRange, libcmt), Cvoid,
           (Ptr{MtFunctionConstantValues}, Ptr{Cvoid}, MtDataType, NsRange),
           funval, value, typ, range)
 end
 
 function mtFunctionConstantValuesReset(funval)
-    ccall((:mtFunctionConstantValuesReset, cmt_lib), Cvoid,
+    ccall((:mtFunctionConstantValuesReset, libcmt), Cvoid,
           (Ptr{MtFunctionConstantValues},),
           funval)
 end
 
 function mtNewFunctionWithName(lib, name)
-    ccall((:mtNewFunctionWithName, cmt_lib), Ptr{MtFunction},
+    ccall((:mtNewFunctionWithName, libcmt), Ptr{MtFunction},
           (Ptr{MtLibrary}, Cstring),
           lib, name)
 end
 
 function mtNewFunctionWithNameConstantValues(lib, name, constantValues, error)
-    ccall((:mtNewFunctionWithNameConstantValues, cmt_lib), Ptr{MtFunction},
+    ccall((:mtNewFunctionWithNameConstantValues, libcmt), Ptr{MtFunction},
           (Ptr{MtLibrary}, Cstring, Ptr{MtFunctionConstantValues}, Ptr{Ptr{NsError}}),
           lib, name, constantValues, error)
 end
 
 function mtFunctionRelease(fun)
-    ccall((:mtFunctionRelease, cmt_lib), Cvoid,
+    ccall((:mtFunctionRelease, libcmt), Cvoid,
           (Ptr{MtFunction},),
           fun)
 end
 
 function mtFunctionDevice(fun)
-    ccall((:mtFunctionDevice, cmt_lib), Ptr{MtDevice},
+    ccall((:mtFunctionDevice, libcmt), Ptr{MtDevice},
           (Ptr{MtFunction},),
           fun)
 end
 
 function mtFunctionLabel(fun)
-    ccall((:mtFunctionLabel, cmt_lib), Cstring,
+    ccall((:mtFunctionLabel, libcmt), Cstring,
           (Ptr{MtFunction},),
           fun)
 end
 
 function mtFunctionType(fun)
-    ccall((:mtFunctionType, cmt_lib), MtFunctionType,
+    ccall((:mtFunctionType, libcmt), MtFunctionType,
           (Ptr{MtFunction},),
           fun)
 end
 
 function mtFunctionName(fun)
-    ccall((:mtFunctionName, cmt_lib), Cstring,
+    ccall((:mtFunctionName, libcmt), Cstring,
           (Ptr{MtFunction},),
           fun)
 end
 
 function mtFunctionStageInputAttributes(fun)
-    ccall((:mtFunctionStageInputAttributes, cmt_lib), Ptr{Ptr{MtAttribute}},
+    ccall((:mtFunctionStageInputAttributes, libcmt), Ptr{Ptr{MtAttribute}},
           (Ptr{MtFunction},),
           fun)
 end
 
 function mtNewDefaultLibrary(device)
-    ccall((:mtNewDefaultLibrary, cmt_lib), Ptr{MtLibrary},
+    ccall((:mtNewDefaultLibrary, libcmt), Ptr{MtLibrary},
           (Ptr{MtDevice},),
           device)
 end
 
 function mtNewLibraryWithFile(device, filepath, error)
-    ccall((:mtNewLibraryWithFile, cmt_lib), Ptr{MtLibrary},
+    ccall((:mtNewLibraryWithFile, libcmt), Ptr{MtLibrary},
           (Ptr{MtDevice}, Cstring, Ptr{Ptr{NsError}}),
           device, filepath, error)
 end
 
 function mtNewLibraryWithSource(device, source, Opts, error)
-    ccall((:mtNewLibraryWithSource, cmt_lib), Ptr{MtLibrary},
+    ccall((:mtNewLibraryWithSource, libcmt), Ptr{MtLibrary},
           (Ptr{MtDevice}, Cstring, Ptr{MtCompileOptions}, Ptr{Ptr{NsError}}),
           device, source, Opts, error)
 end
 
 function mtNewLibraryWithData(device, buffer, size, error)
-    ccall((:mtNewLibraryWithData, cmt_lib), Ptr{MtLibrary},
+    ccall((:mtNewLibraryWithData, libcmt), Ptr{MtLibrary},
           (Ptr{MtDevice}, Ptr{Cvoid}, Csize_t, Ptr{Ptr{NsError}}),
           device, buffer, size, error)
 end
 
 function mtLibraryRelease(lib)
-    ccall((:mtLibraryRelease, cmt_lib), Cvoid,
+    ccall((:mtLibraryRelease, libcmt), Cvoid,
           (Ptr{MtLibrary},),
           lib)
 end
 
 function mtLibraryDevice(device)
-    ccall((:mtLibraryDevice, cmt_lib), Ptr{MtDevice},
+    ccall((:mtLibraryDevice, libcmt), Ptr{MtDevice},
           (Ptr{MtLibrary},),
           device)
 end
 
 function mtLibraryLabel(device)
-    ccall((:mtLibraryLabel, cmt_lib), Cstring,
+    ccall((:mtLibraryLabel, libcmt), Cstring,
           (Ptr{MtLibrary},),
           device)
 end
 
 function mtLibraryFunctionNames(device)
-    ccall((:mtLibraryFunctionNames, cmt_lib), Ptr{Cstring},
+    ccall((:mtLibraryFunctionNames, libcmt), Ptr{Cstring},
           (Ptr{MtLibrary},),
           device)
 end
 
 function mtBufferRelease(buf)
-    ccall((:mtBufferRelease, cmt_lib), Cvoid,
+    ccall((:mtBufferRelease, libcmt), Cvoid,
           (Ptr{MtBuffer},),
           buf)
 end
 
 function mtBufferContents(buf)
-    ccall((:mtBufferContents, cmt_lib), Ptr{Cvoid},
+    ccall((:mtBufferContents, libcmt), Ptr{Cvoid},
           (Ptr{MtBuffer},),
           buf)
 end
 
 function mtBufferLength(buf)
-    ccall((:mtBufferLength, cmt_lib), NsUInteger,
+    ccall((:mtBufferLength, libcmt), NsUInteger,
           (Ptr{MtBuffer},),
           buf)
 end
 
 function mtBufferDidModifyRange(buf, ran)
-    ccall((:mtBufferDidModifyRange, cmt_lib), Cvoid,
+    ccall((:mtBufferDidModifyRange, libcmt), Cvoid,
           (Ptr{MtBuffer}, NsRange),
           buf, ran)
 end
 
 function mtBufferAddDebugMarkerRange(buf, string, range)
-    ccall((:mtBufferAddDebugMarkerRange, cmt_lib), Cvoid,
+    ccall((:mtBufferAddDebugMarkerRange, libcmt), Cvoid,
           (Ptr{MtBuffer}, Cstring, NsRange),
           buf, string, range)
 end
 
 function mtBufferRemoveAllDebugMarkers(buf)
-    ccall((:mtBufferRemoveAllDebugMarkers, cmt_lib), Cvoid,
+    ccall((:mtBufferRemoveAllDebugMarkers, libcmt), Cvoid,
           (Ptr{MtBuffer},),
           buf)
 end
 
 function mtBufferNewRemoteBufferViewForDevice(buf, device)
-    ccall((:mtBufferNewRemoteBufferViewForDevice, cmt_lib), Ptr{MtBuffer},
+    ccall((:mtBufferNewRemoteBufferViewForDevice, libcmt), Ptr{MtBuffer},
           (Ptr{MtBuffer}, Ptr{MtDevice}),
           buf, device)
 end
 
 function mtBufferRemoteStorageBuffer(buf)
-    ccall((:mtBufferRemoteStorageBuffer, cmt_lib), Ptr{MtBuffer},
+    ccall((:mtBufferRemoteStorageBuffer, libcmt), Ptr{MtBuffer},
           (Ptr{MtBuffer},),
           buf)
 end
 
 function mtNewHeapDescriptor()
-    ccall((:mtNewHeapDescriptor, cmt_lib), Ptr{MtHeapDescriptor}, ())
+    ccall((:mtNewHeapDescriptor, libcmt), Ptr{MtHeapDescriptor}, ())
 end
 
 function mtHeapDescriptorRelease(desc)
-    ccall((:mtHeapDescriptorRelease, cmt_lib), Cvoid,
+    ccall((:mtHeapDescriptorRelease, libcmt), Cvoid,
           (Ptr{MtHeapDescriptor},),
           desc)
 end
 
 function mtHeapDescriptorType(heap)
-    ccall((:mtHeapDescriptorType, cmt_lib), MtHeapType,
+    ccall((:mtHeapDescriptorType, libcmt), MtHeapType,
           (Ptr{MtHeapDescriptor},),
           heap)
 end
 
 function mtHeapDescriptorTypeSet(heap, type)
-    ccall((:mtHeapDescriptorTypeSet, cmt_lib), Cvoid,
+    ccall((:mtHeapDescriptorTypeSet, libcmt), Cvoid,
           (Ptr{MtHeapDescriptor}, MtHeapType),
           heap, type)
 end
 
 function mtHeapDescriptorStorageMode(heap)
-    ccall((:mtHeapDescriptorStorageMode, cmt_lib), MtStorageMode,
+    ccall((:mtHeapDescriptorStorageMode, libcmt), MtStorageMode,
           (Ptr{MtHeapDescriptor},),
           heap)
 end
 
 function mtHeapDescriptorStorageModeSet(heap, mode)
-    ccall((:mtHeapDescriptorStorageModeSet, cmt_lib), Cvoid,
+    ccall((:mtHeapDescriptorStorageModeSet, libcmt), Cvoid,
           (Ptr{MtHeapDescriptor}, MtStorageMode),
           heap, mode)
 end
 
 function mtHeapDescriptorCPUCacheMode(heap)
-    ccall((:mtHeapDescriptorCPUCacheMode, cmt_lib), MtCPUCacheMode,
+    ccall((:mtHeapDescriptorCPUCacheMode, libcmt), MtCPUCacheMode,
           (Ptr{MtHeapDescriptor},),
           heap)
 end
 
 function mtHeapDescriptorCpuCacheModeSet(heap, mode)
-    ccall((:mtHeapDescriptorCpuCacheModeSet, cmt_lib), Cvoid,
+    ccall((:mtHeapDescriptorCpuCacheModeSet, libcmt), Cvoid,
           (Ptr{MtHeapDescriptor}, MtCPUCacheMode),
           heap, mode)
 end
 
 function mtHeapDescriptorHazardTrackingMode(heap)
-    ccall((:mtHeapDescriptorHazardTrackingMode, cmt_lib), MtHazardTrackingMode,
+    ccall((:mtHeapDescriptorHazardTrackingMode, libcmt), MtHazardTrackingMode,
           (Ptr{MtHeapDescriptor},),
           heap)
 end
 
 function mtHeapDescriptorHazardTrackingModeSet(heap, mode)
-    ccall((:mtHeapDescriptorHazardTrackingModeSet, cmt_lib), Cvoid,
+    ccall((:mtHeapDescriptorHazardTrackingModeSet, libcmt), Cvoid,
           (Ptr{MtHeapDescriptor}, MtHazardTrackingMode),
           heap, mode)
 end
 
 function mtHeapDescriptorResourceOptions(heap)
-    ccall((:mtHeapDescriptorResourceOptions, cmt_lib), MtResourceOptions,
+    ccall((:mtHeapDescriptorResourceOptions, libcmt), MtResourceOptions,
           (Ptr{MtHeapDescriptor},),
           heap)
 end
 
 function mtHeapDescriptorResourceOptionsSet(heap, mode)
-    ccall((:mtHeapDescriptorResourceOptionsSet, cmt_lib), Cvoid,
+    ccall((:mtHeapDescriptorResourceOptionsSet, libcmt), Cvoid,
           (Ptr{MtHeapDescriptor}, MtResourceOptions),
           heap, mode)
 end
 
 function mtHeapDescriptorSize(heap)
-    ccall((:mtHeapDescriptorSize, cmt_lib), NsUInteger,
+    ccall((:mtHeapDescriptorSize, libcmt), NsUInteger,
           (Ptr{MtHeapDescriptor},),
           heap)
 end
 
 function mtHeapDescriptorSizeSet(heap, size)
-    ccall((:mtHeapDescriptorSizeSet, cmt_lib), Cvoid,
+    ccall((:mtHeapDescriptorSizeSet, libcmt), Cvoid,
           (Ptr{MtHeapDescriptor}, NsUInteger),
           heap, size)
 end
 
 function mtDeviceNewHeapWithDescriptor(dev, descriptor)
-    ccall((:mtDeviceNewHeapWithDescriptor, cmt_lib), Ptr{MtHeap},
+    ccall((:mtDeviceNewHeapWithDescriptor, libcmt), Ptr{MtHeap},
           (Ptr{MtDevice}, Ptr{MtHeapDescriptor}),
           dev, descriptor)
 end
 
 function mtHeapRelease(heap)
-    ccall((:mtHeapRelease, cmt_lib), Cvoid,
+    ccall((:mtHeapRelease, libcmt), Cvoid,
           (Ptr{MtHeap},),
           heap)
 end
 
 function mtHeapDevice(heap)
-    ccall((:mtHeapDevice, cmt_lib), Ptr{MtDevice},
+    ccall((:mtHeapDevice, libcmt), Ptr{MtDevice},
           (Ptr{MtHeap},),
           heap)
 end
 
 function mtHeapLabel(heap)
-    ccall((:mtHeapLabel, cmt_lib), Cstring,
+    ccall((:mtHeapLabel, libcmt), Cstring,
           (Ptr{MtHeap},),
           heap)
 end
 
 function mtHeapType(heap)
-    ccall((:mtHeapType, cmt_lib), MtHeapType,
+    ccall((:mtHeapType, libcmt), MtHeapType,
           (Ptr{MtHeap},),
           heap)
 end
 
 function mtHeapStorageMode(heap)
-    ccall((:mtHeapStorageMode, cmt_lib), MtStorageMode,
+    ccall((:mtHeapStorageMode, libcmt), MtStorageMode,
           (Ptr{MtHeap},),
           heap)
 end
 
 function mtHeapCPUCacheMode(heap)
-    ccall((:mtHeapCPUCacheMode, cmt_lib), MtCPUCacheMode,
+    ccall((:mtHeapCPUCacheMode, libcmt), MtCPUCacheMode,
           (Ptr{MtHeap},),
           heap)
 end
 
 function mtHeapHazardTrackingMode(heap)
-    ccall((:mtHeapHazardTrackingMode, cmt_lib), MtHazardTrackingMode,
+    ccall((:mtHeapHazardTrackingMode, libcmt), MtHazardTrackingMode,
           (Ptr{MtHeap},),
           heap)
 end
 
 function mtHeapResourceOptions(heap)
-    ccall((:mtHeapResourceOptions, cmt_lib), MtResourceOptions,
+    ccall((:mtHeapResourceOptions, libcmt), MtResourceOptions,
           (Ptr{MtHeap},),
           heap)
 end
 
 function mtHeapSize(heap)
-    ccall((:mtHeapSize, cmt_lib), NsUInteger,
+    ccall((:mtHeapSize, libcmt), NsUInteger,
           (Ptr{MtHeap},),
           heap)
 end
 
 function mtHeapUsedSize(heap)
-    ccall((:mtHeapUsedSize, cmt_lib), NsUInteger,
+    ccall((:mtHeapUsedSize, libcmt), NsUInteger,
           (Ptr{MtHeap},),
           heap)
 end
 
 function mtHeapCurrentAllocatedSize(heap)
-    ccall((:mtHeapCurrentAllocatedSize, cmt_lib), NsUInteger,
+    ccall((:mtHeapCurrentAllocatedSize, libcmt), NsUInteger,
           (Ptr{MtHeap},),
           heap)
 end
 
 function mtHeapMaxAvailableSizeWithAlignment(heap, alignment)
-    ccall((:mtHeapMaxAvailableSizeWithAlignment, cmt_lib), NsUInteger,
+    ccall((:mtHeapMaxAvailableSizeWithAlignment, libcmt), NsUInteger,
           (Ptr{MtHeap}, NsUInteger),
           heap, alignment)
 end
 
 function mtHeapSetPurgeableState(heap, state)
-    ccall((:mtHeapSetPurgeableState, cmt_lib), MtPurgeableState,
+    ccall((:mtHeapSetPurgeableState, libcmt), MtPurgeableState,
           (Ptr{MtHeap}, MtPurgeableState),
           heap, state)
 end
 
 function mtHeapNewBufferWithLength(heap, len, opt)
-    ccall((:mtHeapNewBufferWithLength, cmt_lib), Ptr{MtBuffer},
+    ccall((:mtHeapNewBufferWithLength, libcmt), Ptr{MtBuffer},
           (Ptr{MtHeap}, NsUInteger, MtResourceOptions),
           heap, len, opt)
 end
 
 function mtHeapNewBufferWithLengthOffset(heap, len, opt, offset)
-    ccall((:mtHeapNewBufferWithLengthOffset, cmt_lib), Ptr{MtBuffer},
+    ccall((:mtHeapNewBufferWithLengthOffset, libcmt), Ptr{MtBuffer},
           (Ptr{MtHeap}, NsUInteger, MtResourceOptions, NsUInteger),
           heap, len, opt, offset)
 end
 
 function mtHeapNewTextureWithDescriptor(heap, desc)
-    ccall((:mtHeapNewTextureWithDescriptor, cmt_lib), Ptr{MtTexture},
+    ccall((:mtHeapNewTextureWithDescriptor, libcmt), Ptr{MtTexture},
           (Ptr{MtHeap}, Ptr{MtTextureDescriptor}),
           heap, desc)
 end
 
 function mtHeapNewTextureWithDescriptorOffset(heap, desc, offset)
-    ccall((:mtHeapNewTextureWithDescriptorOffset, cmt_lib), Ptr{MtTexture},
+    ccall((:mtHeapNewTextureWithDescriptorOffset, libcmt), Ptr{MtTexture},
           (Ptr{MtHeap}, Ptr{MtTextureDescriptor}, NsUInteger),
           heap, desc, offset)
 end
 
 function mtVertexDescNew()
-    ccall((:mtVertexDescNew, cmt_lib), Ptr{MtVertexDescriptor}, ())
+    ccall((:mtVertexDescNew, libcmt), Ptr{MtVertexDescriptor}, ())
 end
 
 function mtVertexAttrib(vertex, attribIndex, format, offset, bufferIndex)
-    ccall((:mtVertexAttrib, cmt_lib), Cvoid,
+    ccall((:mtVertexAttrib, libcmt), Cvoid,
           (Ptr{MtVertexDescriptor}, UInt32, MtVertexFormat, UInt32, UInt32),
           vertex, attribIndex, format, offset, bufferIndex)
 end
 
 function mtVertexLayout(vertex, layoutIndex, stride, stepRate, stepFunction)
-    ccall((:mtVertexLayout, cmt_lib), Cvoid,
+    ccall((:mtVertexLayout, libcmt), Cvoid,
           (Ptr{MtVertexDescriptor}, UInt32, UInt32, UInt32, MtVertexStepFunction),
           vertex, layoutIndex, stride, stepRate, stepFunction)
 end
 
 function mtSetVertexDesc(pipeline, vert)
-    ccall((:mtSetVertexDesc, cmt_lib), Cvoid,
+    ccall((:mtSetVertexDesc, libcmt), Cvoid,
           (Ptr{MtRenderPipeline}, Ptr{MtVertexDescriptor}),
           pipeline, vert)
 end
 
 function mtDepthStencil(depthCompareFunc, depthWriteEnabled)
-    ccall((:mtDepthStencil, cmt_lib), Ptr{MtDepthStencil},
+    ccall((:mtDepthStencil, libcmt), Ptr{MtDepthStencil},
           (MtCompareFunction, Bool),
           depthCompareFunc, depthWriteEnabled)
 end
 
 function mtNewPass()
-    ccall((:mtNewPass, cmt_lib), Ptr{MtRenderPassDesc}, ())
+    ccall((:mtNewPass, libcmt), Ptr{MtRenderPassDesc}, ())
 end
 
 function mtPassTexture(pass, colorAttch, tex)
-    ccall((:mtPassTexture, cmt_lib), Cvoid,
+    ccall((:mtPassTexture, libcmt), Cvoid,
           (Ptr{MtRenderPassDesc}, Cint, Ptr{MtTexture}),
           pass, colorAttch, tex)
 end
 
 function mtPassLoadAction(pass, colorAttch, action)
-    ccall((:mtPassLoadAction, cmt_lib), Cvoid,
+    ccall((:mtPassLoadAction, libcmt), Cvoid,
           (Ptr{MtRenderPassDesc}, Cint, MtLoadAction),
           pass, colorAttch, action)
 end
 
 function mtNewRenderPipeline(pixelFormat)
-    ccall((:mtNewRenderPipeline, cmt_lib), Ptr{MtRenderDesc},
+    ccall((:mtNewRenderPipeline, libcmt), Ptr{MtRenderDesc},
           (MtPixelFormat,),
           pixelFormat)
 end
 
 function mtSetFunc(pipDesc, func, functype)
-    ccall((:mtSetFunc, cmt_lib), Cvoid,
+    ccall((:mtSetFunc, libcmt), Cvoid,
           (Ptr{MtRenderDesc}, Ptr{MtFunction}, MtFuncType),
           pipDesc, func, functype)
 end
 
 function mtNewRenderState(device, pipDesc, error)
-    ccall((:mtNewRenderState, cmt_lib), Ptr{MtRenderPipeline},
+    ccall((:mtNewRenderState, libcmt), Ptr{MtRenderPipeline},
           (Ptr{MtDevice}, Ptr{MtRenderDesc}, Ptr{Ptr{NsError}}),
           device, pipDesc, error)
 end
 
 function mtColorPixelFormat(renderdesc, index, pixelFormat)
-    ccall((:mtColorPixelFormat, cmt_lib), Cvoid,
+    ccall((:mtColorPixelFormat, libcmt), Cvoid,
           (Ptr{MtRenderDesc}, UInt32, MtPixelFormat),
           renderdesc, index, pixelFormat)
 end
 
 function mtDepthPixelFormat(renderdesc, pixelFormat)
-    ccall((:mtDepthPixelFormat, cmt_lib), Cvoid,
+    ccall((:mtDepthPixelFormat, libcmt), Cvoid,
           (Ptr{MtRenderDesc}, MtPixelFormat),
           renderdesc, pixelFormat)
 end
 
 function mtStencilPixelFormat(renderdesc, pixelFormat)
-    ccall((:mtStencilPixelFormat, cmt_lib), Cvoid,
+    ccall((:mtStencilPixelFormat, libcmt), Cvoid,
           (Ptr{MtRenderDesc}, MtPixelFormat),
           renderdesc, pixelFormat)
 end
 
 function mtSampleCount(renderdesc, sampleCount)
-    ccall((:mtSampleCount, cmt_lib), Cvoid,
+    ccall((:mtSampleCount, libcmt), Cvoid,
           (Ptr{MtRenderDesc}, UInt32),
           renderdesc, sampleCount)
 end
 
 function mtArgumentName(arg)
-    ccall((:mtArgumentName, cmt_lib), Cstring,
+    ccall((:mtArgumentName, libcmt), Cstring,
           (Ptr{MtArgument},),
           arg)
 end
 
 function mtArgumentActive(arg)
-    ccall((:mtArgumentActive, cmt_lib), Bool,
+    ccall((:mtArgumentActive, libcmt), Bool,
           (Ptr{MtArgument},),
           arg)
 end
 
 function mtArgumentIndex(arg)
-    ccall((:mtArgumentIndex, cmt_lib), NsUInteger,
+    ccall((:mtArgumentIndex, libcmt), NsUInteger,
           (Ptr{MtArgument},),
           arg)
 end
 
 function mtArgumentType(arg)
-    ccall((:mtArgumentType, cmt_lib), MtArgumentType,
+    ccall((:mtArgumentType, libcmt), MtArgumentType,
           (Ptr{MtArgument},),
           arg)
 end
 
 function mtArgumentAccess(arg)
-    ccall((:mtArgumentAccess, cmt_lib), MtArgumentAccess,
+    ccall((:mtArgumentAccess, libcmt), MtArgumentAccess,
           (Ptr{MtArgument},),
           arg)
 end
 
 function mtArgumentBufferAlignment(arg)
-    ccall((:mtArgumentBufferAlignment, cmt_lib), NsUInteger,
+    ccall((:mtArgumentBufferAlignment, libcmt), NsUInteger,
           (Ptr{MtArgument},),
           arg)
 end
 
 function mtArgumentBufferDataSize(arg)
-    ccall((:mtArgumentBufferDataSize, cmt_lib), NsUInteger,
+    ccall((:mtArgumentBufferDataSize, libcmt), NsUInteger,
           (Ptr{MtArgument},),
           arg)
 end
 
 function mtArgumentBufferDataType(arg)
-    ccall((:mtArgumentBufferDataType, cmt_lib), MtDataType,
+    ccall((:mtArgumentBufferDataType, libcmt), MtDataType,
           (Ptr{MtArgument},),
           arg)
 end
 
 function mtArgumentBufferStructType(arg)
-    ccall((:mtArgumentBufferStructType, cmt_lib), Ptr{MtStructType},
+    ccall((:mtArgumentBufferStructType, libcmt), Ptr{MtStructType},
           (Ptr{MtArgument},),
           arg)
 end
 
 function mtArgumentBufferPointerType(arg)
-    ccall((:mtArgumentBufferPointerType, cmt_lib), Ptr{MtPointerType},
+    ccall((:mtArgumentBufferPointerType, libcmt), Ptr{MtPointerType},
           (Ptr{MtArgument},),
           arg)
 end
 
 function mtArgumentArrayLength(arg)
-    ccall((:mtArgumentArrayLength, cmt_lib), NsUInteger,
+    ccall((:mtArgumentArrayLength, libcmt), NsUInteger,
           (Ptr{MtArgument},),
           arg)
 end
 
 function mtArgumentThreadgroupMemoryAlignment(arg)
-    ccall((:mtArgumentThreadgroupMemoryAlignment, cmt_lib), NsUInteger,
+    ccall((:mtArgumentThreadgroupMemoryAlignment, libcmt), NsUInteger,
           (Ptr{MtArgument},),
           arg)
 end
 
 function mtArgumentThreadgroupMemoryDataSize(arg)
-    ccall((:mtArgumentThreadgroupMemoryDataSize, cmt_lib), NsUInteger,
+    ccall((:mtArgumentThreadgroupMemoryDataSize, libcmt), NsUInteger,
           (Ptr{MtArgument},),
           arg)
 end
 
 function mtNewComputePipelineReflection()
-    ccall((:mtNewComputePipelineReflection, cmt_lib), Ptr{MtComputePipelineReflection}, ())
+    ccall((:mtNewComputePipelineReflection, libcmt), Ptr{MtComputePipelineReflection}, ())
 end
 
 function mtComputePipelinereflectionArguments(refl)
-    ccall((:mtComputePipelinereflectionArguments, cmt_lib), Ptr{MtArgument},
+    ccall((:mtComputePipelinereflectionArguments, libcmt), Ptr{MtArgument},
           (Ptr{MtComputePipelineReflection},),
           refl)
 end
 
 function mtPointerTypeElementType(ptr)
-    ccall((:mtPointerTypeElementType, cmt_lib), MtDataType,
+    ccall((:mtPointerTypeElementType, libcmt), MtDataType,
           (Ptr{MtPointerType},),
           ptr)
 end
 
 function mtPointerTypeAccess(ptr)
-    ccall((:mtPointerTypeAccess, cmt_lib), MtArgumentAccess,
+    ccall((:mtPointerTypeAccess, libcmt), MtArgumentAccess,
           (Ptr{MtPointerType},),
           ptr)
 end
 
 function mtPointerTypeAlignment(ptr)
-    ccall((:mtPointerTypeAlignment, cmt_lib), NsUInteger,
+    ccall((:mtPointerTypeAlignment, libcmt), NsUInteger,
           (Ptr{MtPointerType},),
           ptr)
 end
 
 function mtPointerTypeDataSize(ptr)
-    ccall((:mtPointerTypeDataSize, cmt_lib), NsUInteger,
+    ccall((:mtPointerTypeDataSize, libcmt), NsUInteger,
           (Ptr{MtPointerType},),
           ptr)
 end
 
 function mtPointerTypeElementIsArgumentBuffer(ptr)
-    ccall((:mtPointerTypeElementIsArgumentBuffer, cmt_lib), Bool,
+    ccall((:mtPointerTypeElementIsArgumentBuffer, libcmt), Bool,
           (Ptr{MtPointerType},),
           ptr)
 end
 
 function mtPointerTypeElementStructType(ptr)
-    ccall((:mtPointerTypeElementStructType, cmt_lib), Ptr{MtStructType},
+    ccall((:mtPointerTypeElementStructType, libcmt), Ptr{MtStructType},
           (Ptr{MtPointerType},),
           ptr)
 end
 
 function mtPointerTypeElementArrayType(ptr)
-    ccall((:mtPointerTypeElementArrayType, cmt_lib), Ptr{MtArrayType},
+    ccall((:mtPointerTypeElementArrayType, libcmt), Ptr{MtArrayType},
           (Ptr{MtPointerType},),
           ptr)
 end
 
 function mtNewCommandBuffer(cmdq)
-    ccall((:mtNewCommandBuffer, cmt_lib), Ptr{MtCommandBuffer},
+    ccall((:mtNewCommandBuffer, libcmt), Ptr{MtCommandBuffer},
           (Ptr{MtCommandQueue},),
           cmdq)
 end
 
 function mtNewCommandBufferWithUnretainedReferences(cmdq)
-    ccall((:mtNewCommandBufferWithUnretainedReferences, cmt_lib), Ptr{MtCommandBuffer},
+    ccall((:mtNewCommandBufferWithUnretainedReferences, libcmt), Ptr{MtCommandBuffer},
           (Ptr{MtCommandQueue},),
           cmdq)
 end
 
 function mtCommandBufferOnComplete(cmdb, sender, oncomplete)
-    ccall((:mtCommandBufferOnComplete, cmt_lib), Cvoid,
+    ccall((:mtCommandBufferOnComplete, libcmt), Cvoid,
           (Ptr{MtCommandQueue}, Ptr{Cvoid}, MtCommandBufferOnCompleteFn),
           cmdb, sender, oncomplete)
 end
 
 function mtCommandBufferOnCompleteNoSender(cmdb, oncomplete)
-    ccall((:mtCommandBufferOnCompleteNoSender, cmt_lib), Cvoid,
+    ccall((:mtCommandBufferOnCompleteNoSender, libcmt), Cvoid,
           (Ptr{MtCommandQueue}, MtCommandBufferOnCompleteFnNoSender),
           cmdb, oncomplete)
 end
 
 function mtCommandBufferRelease(cmdbuf)
-    ccall((:mtCommandBufferRelease, cmt_lib), Cvoid,
+    ccall((:mtCommandBufferRelease, libcmt), Cvoid,
           (Ptr{MtCommandBuffer},),
           cmdbuf)
 end
 
 function mtCommandBufferPresentDrawable(cmdb, drawable)
-    ccall((:mtCommandBufferPresentDrawable, cmt_lib), Cvoid,
+    ccall((:mtCommandBufferPresentDrawable, libcmt), Cvoid,
           (Ptr{MtCommandBuffer}, Ptr{MtDrawable}),
           cmdb, drawable)
 end
 
 function mtCommandBufferEqueue(cmdb)
-    ccall((:mtCommandBufferEqueue, cmt_lib), Cvoid,
+    ccall((:mtCommandBufferEqueue, libcmt), Cvoid,
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtCommandBufferCommit(cmdb)
-    ccall((:mtCommandBufferCommit, cmt_lib), Cvoid,
+    ccall((:mtCommandBufferCommit, libcmt), Cvoid,
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtCommandBufferAddScheduledHandler(cmdb, handler)
-    ccall((:mtCommandBufferAddScheduledHandler, cmt_lib), Cvoid,
+    ccall((:mtCommandBufferAddScheduledHandler, libcmt), Cvoid,
           (Ptr{MtCommandBuffer}, MtCommandBufferHandlerFun),
           cmdb, handler)
 end
 
 function mtCommandBufferAddCompletedHandler(cmdb, handler)
-    ccall((:mtCommandBufferAddCompletedHandler, cmt_lib), Cvoid,
+    ccall((:mtCommandBufferAddCompletedHandler, libcmt), Cvoid,
           (Ptr{MtCommandBuffer}, MtCommandBufferHandlerFun),
           cmdb, handler)
 end
 
 function mtCommandBufferWaitUntilScheduled(cmdb)
-    ccall((:mtCommandBufferWaitUntilScheduled, cmt_lib), Cvoid,
+    ccall((:mtCommandBufferWaitUntilScheduled, libcmt), Cvoid,
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtCommandBufferWaitUntilCompleted(cmdb)
-    ccall((:mtCommandBufferWaitUntilCompleted, cmt_lib), Cvoid,
+    ccall((:mtCommandBufferWaitUntilCompleted, libcmt), Cvoid,
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtCommandBufferStatus(cmdb)
-    ccall((:mtCommandBufferStatus, cmt_lib), MtCommandBufferStatus,
+    ccall((:mtCommandBufferStatus, libcmt), MtCommandBufferStatus,
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtCommandBufferError(cmdb)
-    ccall((:mtCommandBufferError, cmt_lib), Ptr{NsError},
+    ccall((:mtCommandBufferError, libcmt), Ptr{NsError},
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtCommandBufferKernelStartTime(cmdb)
-    ccall((:mtCommandBufferKernelStartTime, cmt_lib), CfTimeInterval,
+    ccall((:mtCommandBufferKernelStartTime, libcmt), CfTimeInterval,
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtCommandBufferKernelEndTime(cmdb)
-    ccall((:mtCommandBufferKernelEndTime, cmt_lib), CfTimeInterval,
+    ccall((:mtCommandBufferKernelEndTime, libcmt), CfTimeInterval,
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtCommandBufferGPUStartTime(cmdb)
-    ccall((:mtCommandBufferGPUStartTime, cmt_lib), CfTimeInterval,
+    ccall((:mtCommandBufferGPUStartTime, libcmt), CfTimeInterval,
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtCommandBufferGPUEndTime(cmdb)
-    ccall((:mtCommandBufferGPUEndTime, cmt_lib), CfTimeInterval,
+    ccall((:mtCommandBufferGPUEndTime, libcmt), CfTimeInterval,
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtCommandBufferEncodeSignalEvent(cmdb, event, val)
-    ccall((:mtCommandBufferEncodeSignalEvent, cmt_lib), Cvoid,
+    ccall((:mtCommandBufferEncodeSignalEvent, libcmt), Cvoid,
           (Ptr{MtCommandBuffer}, Ptr{MtEvent}, UInt64),
           cmdb, event, val)
 end
 
 function mtCommandBufferEncodeWaitForEvent(cmdb, event, val)
-    ccall((:mtCommandBufferEncodeWaitForEvent, cmt_lib), Cvoid,
+    ccall((:mtCommandBufferEncodeWaitForEvent, libcmt), Cvoid,
           (Ptr{MtCommandBuffer}, Ptr{MtEvent}, UInt64),
           cmdb, event, val)
 end
 
 function mtCommandBufferRetainedReferences(cmdb)
-    ccall((:mtCommandBufferRetainedReferences, cmt_lib), Bool,
+    ccall((:mtCommandBufferRetainedReferences, libcmt), Bool,
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtCommandBufferDevice(cmdb)
-    ccall((:mtCommandBufferDevice, cmt_lib), Ptr{MtDevice},
+    ccall((:mtCommandBufferDevice, libcmt), Ptr{MtDevice},
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtCommandBufferCommandQueue(cmdb)
-    ccall((:mtCommandBufferCommandQueue, cmt_lib), Ptr{MtCommandQueue},
+    ccall((:mtCommandBufferCommandQueue, libcmt), Ptr{MtCommandQueue},
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtCommandBufferLabel(cmdb)
-    ccall((:mtCommandBufferLabel, cmt_lib), Cstring,
+    ccall((:mtCommandBufferLabel, libcmt), Cstring,
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtCommandBufferPushDebugGroup(cmdb, str)
-    ccall((:mtCommandBufferPushDebugGroup, cmt_lib), Cvoid,
+    ccall((:mtCommandBufferPushDebugGroup, libcmt), Cvoid,
           (Ptr{MtCommandBuffer}, Cstring),
           cmdb, str)
 end
 
 function mtCommandBufferPopDebugGroup(cmdb)
-    ccall((:mtCommandBufferPopDebugGroup, cmt_lib), Cvoid,
+    ccall((:mtCommandBufferPopDebugGroup, libcmt), Cvoid,
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtNewIndirectCommandBuffer(device, desc, maxCount, options)
-    ccall((:mtNewIndirectCommandBuffer, cmt_lib), Ptr{MtIndirectCommandBuffer},
+    ccall((:mtNewIndirectCommandBuffer, libcmt), Ptr{MtIndirectCommandBuffer},
           (Ptr{MtDevice}, Ptr{MtIndirectCommandBufferDescriptor}, NsUInteger,
            MtResourceOptions),
           device, desc, maxCount, options)
 end
 
 function mtIndirectCommandBufferSize(icb)
-    ccall((:mtIndirectCommandBufferSize, cmt_lib), NsUInteger,
+    ccall((:mtIndirectCommandBufferSize, libcmt), NsUInteger,
           (Ptr{MtIndirectCommandBuffer},),
           icb)
 end
 
 function mtIndirectCommandBufferComputeCommandAtIndex(icb, index)
-    ccall((:mtIndirectCommandBufferComputeCommandAtIndex, cmt_lib), Ptr{MtIndirectComputeCommand},
+    ccall((:mtIndirectCommandBufferComputeCommandAtIndex, libcmt), Ptr{MtIndirectComputeCommand},
           (Ptr{MtIndirectCommandBuffer}, NsUInteger),
           icb, index)
 end
 
 function mtIndirectCommandBufferRenderCommandAtIndex(icb, index)
-    ccall((:mtIndirectCommandBufferRenderCommandAtIndex, cmt_lib), Ptr{MtIndirectRenderCommand},
+    ccall((:mtIndirectCommandBufferRenderCommandAtIndex, libcmt), Ptr{MtIndirectRenderCommand},
           (Ptr{MtIndirectCommandBuffer}, NsUInteger),
           icb, index)
 end
 
 function mtIndirectCommandBufferResetWithRange(icb, range)
-    ccall((:mtIndirectCommandBufferResetWithRange, cmt_lib), Cvoid,
+    ccall((:mtIndirectCommandBufferResetWithRange, libcmt), Cvoid,
           (Ptr{MtIndirectCommandBuffer}, NsRange),
           icb, range)
 end
 
 function mtCommandEncoderEndEncoding(ce)
-    ccall((:mtCommandEncoderEndEncoding, cmt_lib), Cvoid,
+    ccall((:mtCommandEncoderEndEncoding, libcmt), Cvoid,
           (Ptr{MtCommandEncoder},),
           ce)
 end
 
 function mtCommandEncoderDevice(ce)
-    ccall((:mtCommandEncoderDevice, cmt_lib), Ptr{MtDevice},
+    ccall((:mtCommandEncoderDevice, libcmt), Ptr{MtDevice},
           (Ptr{MtCommandEncoder},),
           ce)
 end
 
 function mtCommandEncoderLabel(ce)
-    ccall((:mtCommandEncoderLabel, cmt_lib), Cstring,
+    ccall((:mtCommandEncoderLabel, libcmt), Cstring,
           (Ptr{MtCommandEncoder},),
           ce)
 end
 
 function mtCommandEncoderInsertDebugSignpost(ce, string)
-    ccall((:mtCommandEncoderInsertDebugSignpost, cmt_lib), Cvoid,
+    ccall((:mtCommandEncoderInsertDebugSignpost, libcmt), Cvoid,
           (Ptr{MtCommandEncoder}, Cstring),
           ce, string)
 end
 
 function mtCommandEncoderPushDebugGroup(ce, string)
-    ccall((:mtCommandEncoderPushDebugGroup, cmt_lib), Cvoid,
+    ccall((:mtCommandEncoderPushDebugGroup, libcmt), Cvoid,
           (Ptr{MtCommandEncoder}, Cstring),
           ce, string)
 end
 
 function mtCommandEncoderPopDebugGroup(ce)
-    ccall((:mtCommandEncoderPopDebugGroup, cmt_lib), Cvoid,
+    ccall((:mtCommandEncoderPopDebugGroup, libcmt), Cvoid,
           (Ptr{MtCommandEncoder},),
           ce)
 end
 
 function mtNewBlitCommandEncoder(cmdb)
-    ccall((:mtNewBlitCommandEncoder, cmt_lib), Ptr{MtBlitCommandEncoder},
+    ccall((:mtNewBlitCommandEncoder, libcmt), Ptr{MtBlitCommandEncoder},
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtBlitCommandEncoderCopyFromBufferToBuffer(bce, src, src_offset, dst, dst_offset,
                                                     size)
-    ccall((:mtBlitCommandEncoderCopyFromBufferToBuffer, cmt_lib), Cvoid,
+    ccall((:mtBlitCommandEncoderCopyFromBufferToBuffer, libcmt), Cvoid,
           (Ptr{MtBlitCommandEncoder}, Ptr{MtBuffer}, NsUInteger, Ptr{MtBuffer},
            NsUInteger, NsUInteger),
           bce, src, src_offset, dst, dst_offset, size)
 end
 
 function mtBlitCommandEncoderFillBuffer(bce, src, range, val)
-    ccall((:mtBlitCommandEncoderFillBuffer, cmt_lib), Cvoid,
+    ccall((:mtBlitCommandEncoderFillBuffer, libcmt), Cvoid,
           (Ptr{MtBlitCommandEncoder}, Ptr{MtBuffer}, NsRange, UInt8),
           bce, src, range, val)
 end
 
 function mtBlitCommandEncoderGenerateMipmaps(bce, texture)
-    ccall((:mtBlitCommandEncoderGenerateMipmaps, cmt_lib), Cvoid,
+    ccall((:mtBlitCommandEncoderGenerateMipmaps, libcmt), Cvoid,
           (Ptr{MtBlitCommandEncoder}, Ptr{MtTexture}),
           bce, texture)
 end
 
 function mtBlitCommandEncoderCopyIndirectCommandBuffer(bce, src, range, dst, dst_index)
-    ccall((:mtBlitCommandEncoderCopyIndirectCommandBuffer, cmt_lib), Cvoid,
+    ccall((:mtBlitCommandEncoderCopyIndirectCommandBuffer, libcmt), Cvoid,
           (Ptr{MtBlitCommandEncoder}, Ptr{MtIndirectCommandBuffer}, NsRange,
            Ptr{MtIndirectCommandBuffer}, NsUInteger),
           bce, src, range, dst, dst_index)
 end
 
 function mtBlitCommandEncoderOptimizeIndirectCommandBuffer(bce, buffer, range)
-    ccall((:mtBlitCommandEncoderOptimizeIndirectCommandBuffer, cmt_lib), Cvoid,
+    ccall((:mtBlitCommandEncoderOptimizeIndirectCommandBuffer, libcmt), Cvoid,
           (Ptr{MtBlitCommandEncoder}, Ptr{MtIndirectCommandBuffer}, NsRange),
           bce, buffer, range)
 end
 
 function mtBlitCommandEncoderResetCommandsInBuffer(bce, buffer, range)
-    ccall((:mtBlitCommandEncoderResetCommandsInBuffer, cmt_lib), Cvoid,
+    ccall((:mtBlitCommandEncoderResetCommandsInBuffer, libcmt), Cvoid,
           (Ptr{MtBlitCommandEncoder}, Ptr{MtIndirectCommandBuffer}, NsRange),
           bce, buffer, range)
 end
 
 function mtBlitCommandEncoderSynchronizeResource(bce, resource)
-    ccall((:mtBlitCommandEncoderSynchronizeResource, cmt_lib), Cvoid,
+    ccall((:mtBlitCommandEncoderSynchronizeResource, libcmt), Cvoid,
           (Ptr{MtBlitCommandEncoder}, Ptr{MtResource}),
           bce, resource)
 end
 
 function mtBlitCommandEncoderSynchronizeTexture(bce, texture, slice, level)
-    ccall((:mtBlitCommandEncoderSynchronizeTexture, cmt_lib), Cvoid,
+    ccall((:mtBlitCommandEncoderSynchronizeTexture, libcmt), Cvoid,
           (Ptr{MtBlitCommandEncoder}, Ptr{MtTexture}, NsUInteger, NsUInteger),
           bce, texture, slice, level)
 end
 
 function mtBlitCommandEncoderUpdateFence(icb, fence)
-    ccall((:mtBlitCommandEncoderUpdateFence, cmt_lib), Cvoid,
+    ccall((:mtBlitCommandEncoderUpdateFence, libcmt), Cvoid,
           (Ptr{MtIndirectCommandBuffer}, Ptr{MtFence}),
           icb, fence)
 end
 
 function mtBlitCommandEncoderWaitForFence(icb, fence)
-    ccall((:mtBlitCommandEncoderWaitForFence, cmt_lib), Cvoid,
+    ccall((:mtBlitCommandEncoderWaitForFence, libcmt), Cvoid,
           (Ptr{MtIndirectCommandBuffer}, Ptr{MtFence}),
           icb, fence)
 end
 
 function mtBlitCommandEncoderOptimizeContentsForGPUAccess(icb, tex)
-    ccall((:mtBlitCommandEncoderOptimizeContentsForGPUAccess, cmt_lib), Cvoid,
+    ccall((:mtBlitCommandEncoderOptimizeContentsForGPUAccess, libcmt), Cvoid,
           (Ptr{MtIndirectCommandBuffer}, Ptr{MtTexture}),
           icb, tex)
 end
 
 function mtBlitCommandEncoderOptimizeContentsForGPUAccessSliceLevel(icb, tex, slice, level)
-    ccall((:mtBlitCommandEncoderOptimizeContentsForGPUAccessSliceLevel, cmt_lib), Cvoid,
+    ccall((:mtBlitCommandEncoderOptimizeContentsForGPUAccessSliceLevel, libcmt), Cvoid,
           (Ptr{MtIndirectCommandBuffer}, Ptr{MtTexture}, NsUInteger, NsUInteger),
           icb, tex, slice, level)
 end
 
 function mtBlitCommandEncoderOptimizeContentsForCPUAccess(icb, tex)
-    ccall((:mtBlitCommandEncoderOptimizeContentsForCPUAccess, cmt_lib), Cvoid,
+    ccall((:mtBlitCommandEncoderOptimizeContentsForCPUAccess, libcmt), Cvoid,
           (Ptr{MtIndirectCommandBuffer}, Ptr{MtTexture}),
           icb, tex)
 end
 
 function mtBlitCommandEncoderOptimizeContentsForCPUAccessSliceLevel(icb, tex, slice, level)
-    ccall((:mtBlitCommandEncoderOptimizeContentsForCPUAccessSliceLevel, cmt_lib), Cvoid,
+    ccall((:mtBlitCommandEncoderOptimizeContentsForCPUAccessSliceLevel, libcmt), Cvoid,
           (Ptr{MtIndirectCommandBuffer}, Ptr{MtTexture}, NsUInteger, NsUInteger),
           icb, tex, slice, level)
 end
 
 function mtBlitCommandEncoderSampleCountersInBuffer(icb, sbuf, sampleindex, barrier)
-    ccall((:mtBlitCommandEncoderSampleCountersInBuffer, cmt_lib), Cvoid,
+    ccall((:mtBlitCommandEncoderSampleCountersInBuffer, libcmt), Cvoid,
           (Ptr{MtIndirectCommandBuffer}, Ptr{MtCounterSampleBuffer}, NsUInteger, Bool),
           icb, sbuf, sampleindex, barrier)
 end
 
 function mtBlitCommandEncoderResolveCounters(icb, sbuf, range, dst, dst_offset)
-    ccall((:mtBlitCommandEncoderResolveCounters, cmt_lib), Cvoid,
+    ccall((:mtBlitCommandEncoderResolveCounters, libcmt), Cvoid,
           (Ptr{MtIndirectCommandBuffer}, Ptr{MtCounterSampleBuffer}, NsRange,
            Ptr{MtBuffer}, NsUInteger),
           icb, sbuf, range, dst, dst_offset)
 end
 
 function mtNewComputeCommandEncoder(cmdb)
-    ccall((:mtNewComputeCommandEncoder, cmt_lib), Ptr{MtComputeCommandEncoder},
+    ccall((:mtNewComputeCommandEncoder, libcmt), Ptr{MtComputeCommandEncoder},
           (Ptr{MtCommandBuffer},),
           cmdb)
 end
 
 function mtNewComputeCommandEncoderWithDispatchType(cmdb, dtype)
-    ccall((:mtNewComputeCommandEncoderWithDispatchType, cmt_lib), Ptr{MtComputeCommandEncoder},
+    ccall((:mtNewComputeCommandEncoderWithDispatchType, libcmt), Ptr{MtComputeCommandEncoder},
           (Ptr{MtCommandBuffer}, MtDispatchType),
           cmdb, dtype)
 end
 
 function mtComputeCommandEncoderRelease(cce)
-    ccall((:mtComputeCommandEncoderRelease, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderRelease, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder},),
           cce)
 end
 
 function mtComputeCommandEncoderEndEncoding(cce)
-    ccall((:mtComputeCommandEncoderEndEncoding, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderEndEncoding, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder},),
           cce)
 end
 
 function mtComputeCommandEncoderSetComputePipelineState(cce, state)
-    ccall((:mtComputeCommandEncoderSetComputePipelineState, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderSetComputePipelineState, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{MtComputePipelineState}),
           cce, state)
 end
 
 function mtComputeCommandEncoderSetBufferOffsetAtIndex(cce, buf, offset, indx)
-    ccall((:mtComputeCommandEncoderSetBufferOffsetAtIndex, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderSetBufferOffsetAtIndex, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{MtBuffer}, NsUInteger, NsUInteger),
           cce, buf, offset, indx)
 end
 
 function mtComputeCommandEncoderSetBuffersOffsetsWithRange(cce, bufs, offsets, range)
-    ccall((:mtComputeCommandEncoderSetBuffersOffsetsWithRange, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderSetBuffersOffsetsWithRange, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtBuffer}}, Ptr{NsUInteger}, NsRange),
           cce, bufs, offsets, range)
 end
 
 function mtComputeCommandEncoderBufferSetOffsetAtIndex(cce, offset, indx)
-    ccall((:mtComputeCommandEncoderBufferSetOffsetAtIndex, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderBufferSetOffsetAtIndex, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, NsUInteger, NsUInteger),
           cce, offset, indx)
 end
 
 function mtComputeCommandEncoderSetBytesLengthAtIndex(cce, ptr, length, indx)
-    ccall((:mtComputeCommandEncoderSetBytesLengthAtIndex, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderSetBytesLengthAtIndex, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{Cvoid}, NsUInteger, NsUInteger),
           cce, ptr, length, indx)
 end
 
 function mtComputeCommandEncoderSetSamplerStateAtIndex(cce, sampler, indx)
-    ccall((:mtComputeCommandEncoderSetSamplerStateAtIndex, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderSetSamplerStateAtIndex, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{MtSamplerState}, NsUInteger),
           cce, sampler, indx)
 end
 
 function mtComputeCommandEncoderSetSamplerStatesWithRange(cce, samplers, range)
-    ccall((:mtComputeCommandEncoderSetSamplerStatesWithRange, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderSetSamplerStatesWithRange, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtSamplerState}}, NsRange),
           cce, samplers, range)
 end
@@ -1428,25 +1428,25 @@ function mtComputeCommandEncoderSetSamplerStateLodMinClampLodMaxClampAtIndex(cce
                                                                              lodMinClamp,
                                                                              lodMaxClamp,
                                                                              indx)
-    ccall((:mtComputeCommandEncoderSetSamplerStateLodMinClampLodMaxClampAtIndex, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderSetSamplerStateLodMinClampLodMaxClampAtIndex, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{MtSamplerState}, Cfloat, Cfloat, NsUInteger),
           cce, sampler, lodMinClamp, lodMaxClamp, indx)
 end
 
 function mtComputeCommandEncoderSetTextureAtIndex(cce, tex, indx)
-    ccall((:mtComputeCommandEncoderSetTextureAtIndex, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderSetTextureAtIndex, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{MtTexture}, NsUInteger),
           cce, tex, indx)
 end
 
 function mtComputeCommandEncoderSetTexturesWithRange(cce, textures, range)
-    ccall((:mtComputeCommandEncoderSetTexturesWithRange, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderSetTexturesWithRange, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtTexture}}, NsRange),
           cce, textures, range)
 end
 
 function mtComputeCommandEncoderSetThreadgroupMemoryLengthAtIndex(cce, length, indx)
-    ccall((:mtComputeCommandEncoderSetThreadgroupMemoryLengthAtIndex, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderSetThreadgroupMemoryLengthAtIndex, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, NsUInteger, NsUInteger),
           cce, length, indx)
 end
@@ -1454,14 +1454,14 @@ end
 function mtComputeCommandEncoderDispatchThreadgroups_threadsPerThreadgroup(cce,
                                                                            threadgroupsPerGrid,
                                                                            threadsPerThreadgroup)
-    ccall((:mtComputeCommandEncoderDispatchThreadgroups_threadsPerThreadgroup, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderDispatchThreadgroups_threadsPerThreadgroup, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, MtSize, MtSize),
           cce, threadgroupsPerGrid, threadsPerThreadgroup)
 end
 
 function mtComputeCommandEncoderDispatchThread_threadsPerThreadgroup(cce, threadsPerGrid,
                                                                      threadsPerThreadgroup)
-    ccall((:mtComputeCommandEncoderDispatchThread_threadsPerThreadgroup, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderDispatchThread_threadsPerThreadgroup, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, MtSize, MtSize),
           cce, threadsPerGrid, threadsPerThreadgroup)
 end
@@ -1470,344 +1470,344 @@ function mtComputeCommandEncoderDispatchThreadgroupsWithIndirectBuffer_IndirectB
                                                                                                                   indirectBuffer,
                                                                                                                   indirectBufferOffset,
                                                                                                                   threadsPerThreadgroup)
-    ccall((:mtComputeCommandEncoderDispatchThreadgroupsWithIndirectBuffer_IndirectBufferOffset_threadsPerThreadgroup, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderDispatchThreadgroupsWithIndirectBuffer_IndirectBufferOffset_threadsPerThreadgroup, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{MtBuffer}, NsUInteger, MtSize),
           cce, indirectBuffer, indirectBufferOffset, threadsPerThreadgroup)
 end
 
 function mtComputeCommandEncoderUseResourceUsage(cce, res, usage)
-    ccall((:mtComputeCommandEncoderUseResourceUsage, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderUseResourceUsage, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{MtResource}, MtResourceUsage),
           cce, res, usage)
 end
 
 function mtComputeCommandEncoderUseResourcesCountUsage(cce, res, count, usage)
-    ccall((:mtComputeCommandEncoderUseResourcesCountUsage, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderUseResourcesCountUsage, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtResource}}, NsUInteger, MtResourceUsage),
           cce, res, count, usage)
 end
 
 function mtComputeCommandEncoderUseHeap(cce, heap)
-    ccall((:mtComputeCommandEncoderUseHeap, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderUseHeap, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{MtHeap}),
           cce, heap)
 end
 
 function mtComputeCommandEncoderUseHeaps(cce, heaps, count)
-    ccall((:mtComputeCommandEncoderUseHeaps, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderUseHeaps, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtHeap}}, NsUInteger),
           cce, heaps, count)
 end
 
 function mtComputeCommandEncoderSetStageInRegion(cce, region)
-    ccall((:mtComputeCommandEncoderSetStageInRegion, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderSetStageInRegion, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, MtRegion),
           cce, region)
 end
 
 function mtComputeCommandEncoderSetStageInRegionWithIndirectBuffer(cce, buf, offset)
-    ccall((:mtComputeCommandEncoderSetStageInRegionWithIndirectBuffer, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderSetStageInRegionWithIndirectBuffer, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{MtBuffer}, NsUInteger),
           cce, buf, offset)
 end
 
 function mtComputeCommandEncoderDispatchType(cce)
-    ccall((:mtComputeCommandEncoderDispatchType, cmt_lib), MtDispatchType,
+    ccall((:mtComputeCommandEncoderDispatchType, libcmt), MtDispatchType,
           (Ptr{MtComputeCommandEncoder},),
           cce)
 end
 
 function mtComputeCommandEncoderMemoryBarrierWithScope(cce, scope)
-    ccall((:mtComputeCommandEncoderMemoryBarrierWithScope, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderMemoryBarrierWithScope, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, MtBarrierScope),
           cce, scope)
 end
 
 function mtComputeCommandEncoderMemoryBarrierWithResource(cce, resources, count)
-    ccall((:mtComputeCommandEncoderMemoryBarrierWithResource, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderMemoryBarrierWithResource, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtResource}}, NsUInteger),
           cce, resources, count)
 end
 
 function mtComputeCommandEncoderExecuteCommandInBuffer(cce, resources, count)
-    ccall((:mtComputeCommandEncoderExecuteCommandInBuffer, cmt_lib), Cvoid,
+    ccall((:mtComputeCommandEncoderExecuteCommandInBuffer, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtResource}}, NsUInteger),
           cce, resources, count)
 end
 
 function mtNewRenderCommandEncoder(cmdb, pass)
-    ccall((:mtNewRenderCommandEncoder, cmt_lib), Ptr{MtRenderCommandEncoder},
+    ccall((:mtNewRenderCommandEncoder, libcmt), Ptr{MtRenderCommandEncoder},
           (Ptr{MtCommandBuffer}, Ptr{MtRenderPassDesc}),
           cmdb, pass)
 end
 
 function mtFrontFace(rce, winding)
-    ccall((:mtFrontFace, cmt_lib), Cvoid,
+    ccall((:mtFrontFace, libcmt), Cvoid,
           (Ptr{MtRenderCommandEncoder}, MtWinding),
           rce, winding)
 end
 
 function mtCullMode(rce, mode)
-    ccall((:mtCullMode, cmt_lib), Cvoid,
+    ccall((:mtCullMode, libcmt), Cvoid,
           (Ptr{MtRenderCommandEncoder}, MtCullMode),
           rce, mode)
 end
 
 function mtViewport(rce, viewport)
-    ccall((:mtViewport, cmt_lib), Cvoid,
+    ccall((:mtViewport, libcmt), Cvoid,
           (Ptr{MtRenderCommandEncoder}, Ptr{MtViewport}),
           rce, viewport)
 end
 
 function mtSetRenderState(rce, pipline)
-    ccall((:mtSetRenderState, cmt_lib), Cvoid,
+    ccall((:mtSetRenderState, libcmt), Cvoid,
           (Ptr{MtRenderCommandEncoder}, Ptr{MtRenderPipeline}),
           rce, pipline)
 end
 
 function mtSetDepthStencil(rce, ds)
-    ccall((:mtSetDepthStencil, cmt_lib), Cvoid,
+    ccall((:mtSetDepthStencil, libcmt), Cvoid,
           (Ptr{MtRenderCommandEncoder}, Ptr{MtDepthStencil}),
           rce, ds)
 end
 
 function mtVertexBytes(rce, bytes, legth, atIndex)
-    ccall((:mtVertexBytes, cmt_lib), Cvoid,
+    ccall((:mtVertexBytes, libcmt), Cvoid,
           (Ptr{MtRenderCommandEncoder}, Ptr{Cvoid}, Csize_t, UInt32),
           rce, bytes, legth, atIndex)
 end
 
 function mtVertexBuffer(rce, buf, off, index)
-    ccall((:mtVertexBuffer, cmt_lib), Cvoid,
+    ccall((:mtVertexBuffer, libcmt), Cvoid,
           (Ptr{MtRenderCommandEncoder}, Ptr{MtBuffer}, Csize_t, UInt32),
           rce, buf, off, index)
 end
 
 function mtFragmentBuffer(rce, buf, off, index)
-    ccall((:mtFragmentBuffer, cmt_lib), Cvoid,
+    ccall((:mtFragmentBuffer, libcmt), Cvoid,
           (Ptr{MtRenderCommandEncoder}, Ptr{MtBuffer}, Csize_t, UInt32),
           rce, buf, off, index)
 end
 
 function mtDrawPrims(rce, type, start, count)
-    ccall((:mtDrawPrims, cmt_lib), Cvoid,
+    ccall((:mtDrawPrims, libcmt), Cvoid,
           (Ptr{MtRenderCommandEncoder}, MtPrimitiveType, Csize_t, Csize_t),
           rce, type, start, count)
 end
 
 function mtDrawIndexedPrims(rce, type, indexCount, indexType, indexBuffer, indexBufferOffset)
-    ccall((:mtDrawIndexedPrims, cmt_lib), Cvoid,
+    ccall((:mtDrawIndexedPrims, libcmt), Cvoid,
           (Ptr{MtRenderCommandEncoder}, MtPrimitiveType, UInt32, MtIndexType,
            Ptr{MtBuffer}, UInt32),
           rce, type, indexCount, indexType, indexBuffer, indexBufferOffset)
 end
 
 function mtNewCommandQueue(device)
-    ccall((:mtNewCommandQueue, cmt_lib), Ptr{MtCommandQueue},
+    ccall((:mtNewCommandQueue, libcmt), Ptr{MtCommandQueue},
           (Ptr{MtDevice},),
           device)
 end
 
 function mtNewCommandQueueWithMaxCommandBufferCount(device, count)
-    ccall((:mtNewCommandQueueWithMaxCommandBufferCount, cmt_lib), Ptr{MtCommandQueue},
+    ccall((:mtNewCommandQueueWithMaxCommandBufferCount, libcmt), Ptr{MtCommandQueue},
           (Ptr{MtDevice}, NsUInteger),
           device, count)
 end
 
 function mtCommandQueueRelease(queue)
-    ccall((:mtCommandQueueRelease, cmt_lib), Cvoid,
+    ccall((:mtCommandQueueRelease, libcmt), Cvoid,
           (Ptr{MtCommandQueue},),
           queue)
 end
 
 function mtNewArgumentDescriptor()
-    ccall((:mtNewArgumentDescriptor, cmt_lib), Ptr{MtArgumentDescriptor}, ())
+    ccall((:mtNewArgumentDescriptor, libcmt), Ptr{MtArgumentDescriptor}, ())
 end
 
 function mtArgumentDescriptorDataType(desc)
-    ccall((:mtArgumentDescriptorDataType, cmt_lib), MtDataType,
+    ccall((:mtArgumentDescriptorDataType, libcmt), MtDataType,
           (Ptr{MtArgumentDescriptor},),
           desc)
 end
 
 function mtArgumentDescriptorDataTypeSet(desc, dataType)
-    ccall((:mtArgumentDescriptorDataTypeSet, cmt_lib), Cvoid,
+    ccall((:mtArgumentDescriptorDataTypeSet, libcmt), Cvoid,
           (Ptr{MtArgumentDescriptor}, MtDataType),
           desc, dataType)
 end
 
 function mtArgumentDescriptorIndex(desc)
-    ccall((:mtArgumentDescriptorIndex, cmt_lib), NsUInteger,
+    ccall((:mtArgumentDescriptorIndex, libcmt), NsUInteger,
           (Ptr{MtArgumentDescriptor},),
           desc)
 end
 
 function mtArgumentDescriptorIndexSet(desc, index)
-    ccall((:mtArgumentDescriptorIndexSet, cmt_lib), Cvoid,
+    ccall((:mtArgumentDescriptorIndexSet, libcmt), Cvoid,
           (Ptr{MtArgumentDescriptor}, NsUInteger),
           desc, index)
 end
 
 function mtArgumentDescriptorAccess(desc)
-    ccall((:mtArgumentDescriptorAccess, cmt_lib), MtArgumentAccess,
+    ccall((:mtArgumentDescriptorAccess, libcmt), MtArgumentAccess,
           (Ptr{MtArgumentDescriptor},),
           desc)
 end
 
 function mtArgumentDescriptorAccessSet(desc, access)
-    ccall((:mtArgumentDescriptorAccessSet, cmt_lib), Cvoid,
+    ccall((:mtArgumentDescriptorAccessSet, libcmt), Cvoid,
           (Ptr{MtArgumentDescriptor}, MtArgumentAccess),
           desc, access)
 end
 
 function mtArgumentDescriptorArrayLength(desc)
-    ccall((:mtArgumentDescriptorArrayLength, cmt_lib), NsUInteger,
+    ccall((:mtArgumentDescriptorArrayLength, libcmt), NsUInteger,
           (Ptr{MtArgumentDescriptor},),
           desc)
 end
 
 function mtArgumentDescriptorArrayLengthSet(desc, length)
-    ccall((:mtArgumentDescriptorArrayLengthSet, cmt_lib), Cvoid,
+    ccall((:mtArgumentDescriptorArrayLengthSet, libcmt), Cvoid,
           (Ptr{MtArgumentDescriptor}, NsUInteger),
           desc, length)
 end
 
 function mtArgumentDescriptorConstantBlockAlignment(desc)
-    ccall((:mtArgumentDescriptorConstantBlockAlignment, cmt_lib), NsUInteger,
+    ccall((:mtArgumentDescriptorConstantBlockAlignment, libcmt), NsUInteger,
           (Ptr{MtArgumentDescriptor},),
           desc)
 end
 
 function mtArgumentDescriptorConstantBlockAlignmentSet(desc, alignment)
-    ccall((:mtArgumentDescriptorConstantBlockAlignmentSet, cmt_lib), Cvoid,
+    ccall((:mtArgumentDescriptorConstantBlockAlignmentSet, libcmt), Cvoid,
           (Ptr{MtArgumentDescriptor}, NsUInteger),
           desc, alignment)
 end
 
 function mtArgumentDescriptorTextureType(desc)
-    ccall((:mtArgumentDescriptorTextureType, cmt_lib), MtTextureType,
+    ccall((:mtArgumentDescriptorTextureType, libcmt), MtTextureType,
           (Ptr{MtArgumentDescriptor},),
           desc)
 end
 
 function mtArgumentDescriptorTextureTypeSet(desc, textype)
-    ccall((:mtArgumentDescriptorTextureTypeSet, cmt_lib), Cvoid,
+    ccall((:mtArgumentDescriptorTextureTypeSet, libcmt), Cvoid,
           (Ptr{MtArgumentDescriptor}, MtTextureType),
           desc, textype)
 end
 
 function mtNewArgumentEncoderWithBufferIndexFromFunction(_function, bufferIndex)
-    ccall((:mtNewArgumentEncoderWithBufferIndexFromFunction, cmt_lib), Ptr{MtArgumentEncoder},
+    ccall((:mtNewArgumentEncoderWithBufferIndexFromFunction, libcmt), Ptr{MtArgumentEncoder},
           (Ptr{MtFunction}, NsUInteger),
           _function, bufferIndex)
 end
 
 function mtNewArgumentEncoderWithBufferIndexReflectionFromFunction(_function, bufferIndex,
                                                                    reflection)
-    ccall((:mtNewArgumentEncoderWithBufferIndexReflectionFromFunction, cmt_lib), Ptr{MtArgumentEncoder},
+    ccall((:mtNewArgumentEncoderWithBufferIndexReflectionFromFunction, libcmt), Ptr{MtArgumentEncoder},
           (Ptr{MtFunction}, NsUInteger, Ptr{MtAutoreleasedArgument}),
           _function, bufferIndex, reflection)
 end
 
 function mtNewArgumentEncoderWithBufferIndexFromArgumentBuffer(ae, bufferIndex)
-    ccall((:mtNewArgumentEncoderWithBufferIndexFromArgumentBuffer, cmt_lib), Ptr{MtArgumentEncoder},
+    ccall((:mtNewArgumentEncoderWithBufferIndexFromArgumentBuffer, libcmt), Ptr{MtArgumentEncoder},
           (Ptr{MtArgumentEncoder}, NsUInteger),
           ae, bufferIndex)
 end
 
 function mtNewArgumentEncoder(device, arguments, count)
-    ccall((:mtNewArgumentEncoder, cmt_lib), Ptr{MtArgumentEncoder},
+    ccall((:mtNewArgumentEncoder, libcmt), Ptr{MtArgumentEncoder},
           (Ptr{MtDevice}, Ptr{Ptr{MtArgumentDescriptor}}, UInt64),
           device, arguments, count)
 end
 
 function mtArgumentEncoderLength(encoder)
-    ccall((:mtArgumentEncoderLength, cmt_lib), NsUInteger,
+    ccall((:mtArgumentEncoderLength, libcmt), NsUInteger,
           (Ptr{MtArgumentEncoder},),
           encoder)
 end
 
 function mtArgumentEncoderSetArgumentBufferWithOffset(cce, buf, offset)
-    ccall((:mtArgumentEncoderSetArgumentBufferWithOffset, cmt_lib), Cvoid,
+    ccall((:mtArgumentEncoderSetArgumentBufferWithOffset, libcmt), Cvoid,
           (Ptr{MtArgumentEncoder}, Ptr{MtBuffer}, NsUInteger),
           cce, buf, offset)
 end
 
 function mtArgumentEncoderSetArgumentBufferWithOffsetForElement(cce, buf, startOffset,
                                                                 arrayElement)
-    ccall((:mtArgumentEncoderSetArgumentBufferWithOffsetForElement, cmt_lib), Cvoid,
+    ccall((:mtArgumentEncoderSetArgumentBufferWithOffsetForElement, libcmt), Cvoid,
           (Ptr{MtArgumentEncoder}, Ptr{MtBuffer}, NsUInteger, NsUInteger),
           cce, buf, startOffset, arrayElement)
 end
 
 function mtArgumentEncoderSetBufferOffsetAtIndex(cce, buf, offset, indx)
-    ccall((:mtArgumentEncoderSetBufferOffsetAtIndex, cmt_lib), Cvoid,
+    ccall((:mtArgumentEncoderSetBufferOffsetAtIndex, libcmt), Cvoid,
           (Ptr{MtArgumentEncoder}, Ptr{MtBuffer}, NsUInteger, NsUInteger),
           cce, buf, offset, indx)
 end
 
 function mtArgumentEncoderSetBuffersOffsetsWithRange(cce, bufs, offsets, range)
-    ccall((:mtArgumentEncoderSetBuffersOffsetsWithRange, cmt_lib), Cvoid,
+    ccall((:mtArgumentEncoderSetBuffersOffsetsWithRange, libcmt), Cvoid,
           (Ptr{MtArgumentEncoder}, Ptr{Ptr{MtBuffer}}, Ptr{NsUInteger}, NsRange),
           cce, bufs, offsets, range)
 end
 
 function mtArgumentEncoderSetTextureAtIndex(cce, tex, indx)
-    ccall((:mtArgumentEncoderSetTextureAtIndex, cmt_lib), Cvoid,
+    ccall((:mtArgumentEncoderSetTextureAtIndex, libcmt), Cvoid,
           (Ptr{MtArgumentEncoder}, Ptr{MtTexture}, NsUInteger),
           cce, tex, indx)
 end
 
 function mtArgumentEncoderSetTexturesWithRange(cce, textures, range)
-    ccall((:mtArgumentEncoderSetTexturesWithRange, cmt_lib), Cvoid,
+    ccall((:mtArgumentEncoderSetTexturesWithRange, libcmt), Cvoid,
           (Ptr{MtArgumentEncoder}, Ptr{Ptr{MtTexture}}, NsRange),
           cce, textures, range)
 end
 
 function mtArgumentEncoderSetSamplerStateAtIndex(cce, sampler, indx)
-    ccall((:mtArgumentEncoderSetSamplerStateAtIndex, cmt_lib), Cvoid,
+    ccall((:mtArgumentEncoderSetSamplerStateAtIndex, libcmt), Cvoid,
           (Ptr{MtArgumentEncoder}, Ptr{MtSamplerState}, NsUInteger),
           cce, sampler, indx)
 end
 
 function mtArgumentEncoderSetSamplerStatesWithRange(cce, samplers, range)
-    ccall((:mtArgumentEncoderSetSamplerStatesWithRange, cmt_lib), Cvoid,
+    ccall((:mtArgumentEncoderSetSamplerStatesWithRange, libcmt), Cvoid,
           (Ptr{MtArgumentEncoder}, Ptr{Ptr{MtSamplerState}}, NsRange),
           cce, samplers, range)
 end
 
 function mtArgumentEncoderConstantDataAtIndex(cce, index)
-    ccall((:mtArgumentEncoderConstantDataAtIndex, cmt_lib), Ptr{Cvoid},
+    ccall((:mtArgumentEncoderConstantDataAtIndex, libcmt), Ptr{Cvoid},
           (Ptr{MtArgumentEncoder}, NsUInteger),
           cce, index)
 end
 
 function mtArgumentEncoderSetIndirectCommandBuffer(cce, cbuf, index)
-    ccall((:mtArgumentEncoderSetIndirectCommandBuffer, cmt_lib), Cvoid,
+    ccall((:mtArgumentEncoderSetIndirectCommandBuffer, libcmt), Cvoid,
           (Ptr{MtArgumentEncoder}, Ptr{MtIndirectCommandBuffer}, NsUInteger),
           cce, cbuf, index)
 end
 
 function mtArgumentEncoderSetIndirectCommandBuffers(cce, cbufs, range)
-    ccall((:mtArgumentEncoderSetIndirectCommandBuffers, cmt_lib), Cvoid,
+    ccall((:mtArgumentEncoderSetIndirectCommandBuffers, libcmt), Cvoid,
           (Ptr{MtArgumentEncoder}, Ptr{Ptr{MtIndirectCommandBuffer}}, NsRange),
           cce, cbufs, range)
 end
 
 function mtArgumentEncoderAlignment(cce)
-    ccall((:mtArgumentEncoderAlignment, cmt_lib), NsUInteger,
+    ccall((:mtArgumentEncoderAlignment, libcmt), NsUInteger,
           (Ptr{MtArgumentEncoder},),
           cce)
 end
 
 function mtRetain(obj)
-    ccall((:mtRetain, cmt_lib), Ptr{Cvoid},
+    ccall((:mtRetain, libcmt), Ptr{Cvoid},
           (Ptr{Cvoid},),
           obj)
 end
 
 function mtRelease(obj)
-    ccall((:mtRelease, cmt_lib), Cvoid,
+    ccall((:mtRelease, libcmt), Cvoid,
           (Ptr{Cvoid},),
           obj)
 end

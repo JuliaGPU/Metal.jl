@@ -4,7 +4,7 @@ import Libdl
 using CEnum
 using Scratch
 
-const cmt_lib = joinpath(@get_scratch!("cmt"), "lib", "libcmt_lib.dylib")
+const libcmt = joinpath(@get_scratch!("cmt"), "lib", "libcmt.dylib")
 
 ## source code includes
 

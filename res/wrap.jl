@@ -323,7 +323,7 @@ end
 function main()
     includedirs = ["/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.15.sdk/usr/include",
                     "cmt/include/", "cmt/include/cmt/"]
-    process("cmt", "cmt/include/cmt/cmt.h"; library="cmt_lib", include_dirs=includedirs)
+    process("cmt", "cmt/include/cmt/cmt.h"; library="libcmt", include_dirs=includedirs)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

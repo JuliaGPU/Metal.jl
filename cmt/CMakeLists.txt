@@ -42,18 +42,18 @@ set(SOURCES
 	src/event.m
 	src/resource.m)
 
-add_library(cmt_lib SHARED ${SOURCES})
+add_library(cmt SHARED ${SOURCES})
 
-target_include_directories(cmt_lib PRIVATE .)
-target_include_directories(cmt_lib PRIVATE include/)
-target_include_directories(cmt_lib INTERFACE include/)
+target_include_directories(cmt PRIVATE .)
+target_include_directories(cmt PRIVATE include/)
+target_include_directories(cmt INTERFACE include/)
 
-set_target_properties(cmt_lib PROPERTIES
+set_target_properties(cmt PROPERTIES
 					    VERSION ${PROJECT_VERSION}
 					    SOVERSION 1
 					    PUBLIC_HEADER include/cmt/cmt.h)
 
-target_link_libraries(cmt_lib ${FOUNDATION_LIBRARY} ${METAL_LIBRARY})
+target_link_libraries(cmt ${FOUNDATION_LIBRARY} ${METAL_LIBRARY})
 
-install(TARGETS cmt_lib
+install(TARGETS libcmt
         LIBRARY DESTINATION lib)
