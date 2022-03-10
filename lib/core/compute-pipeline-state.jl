@@ -16,7 +16,7 @@ Base.hash(q::MtlComputePipelineState, h::UInt) = hash(q.handle, h)
 
 function unsafe_destroy!(cce::MtlComputePipelineState)
     if cce.handle !== C_NULL
-        mtComputePipelineRelease(cce)
+        mtRelease(cce)
     end
 end
 

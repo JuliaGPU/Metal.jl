@@ -17,7 +17,7 @@ mutable struct MtlFunction
 end 
 
 function unsafe_destroy!(fun::MtlFunction)
-    mtFunctionRelease(fun)
+    mtRelease(fun)
 end
 
 Base.unsafe_convert(::Type{MTLFunction}, fun::MtlFunction) = fun.handle

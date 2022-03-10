@@ -19,12 +19,6 @@ mtNewCommandBufferWithUnretainedReferences(MtCommandQueue *cmdq) {
 }
 
 MT_EXPORT
-void
-mtCommandBufferRelease(MtCommandBuffer *cmdbuf) {
-  [(id<MTLCommandBuffer>)cmdbuf release];
-}
-
-MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtCommandBufferOnComplete(MtCommandQueue * __restrict cmdb,

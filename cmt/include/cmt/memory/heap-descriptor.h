@@ -20,10 +20,6 @@ MtHeapDescriptor*
 mtNewHeapDescriptor(void);
 
 MT_EXPORT
-void
-mtHeapDescriptorRelease(MtHeapDescriptor *desc);
-
-MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
 MtHeapType 
 mtHeapDescriptorType(MtHeapDescriptor *heap);

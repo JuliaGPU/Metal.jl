@@ -19,10 +19,6 @@ MtCompileOptions*
 mtNewCompileOpts(void);
 
 MT_EXPORT
-void
-mtCompileOptsRelease(MtCompileOptions *opts);
-
-MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 bool
 mtCompileOptsFastMath(MtCompileOptions *opts);

@@ -7,12 +7,6 @@
 #include "cmt/common.h"
 
 MT_EXPORT
-void
-mtErrorRelease(NsError *err) {
-    [(NSError *)err release];
-}
-
-MT_EXPORT
 NsInteger
 mtErrorCode(NsError *err) { return [(NSError *)err code]; }
 

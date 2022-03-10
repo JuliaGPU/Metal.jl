@@ -24,7 +24,7 @@ function MtlError(err::MTLError)
 end
 
 function unsafe_destroy!(err::MtlError)
-	mtErrorRelease(err)
+	mtRelease(err)
 end
 
 description(err::MtlError) = unsafe_string_maybe(mtErrorLocalizedDescription(err))

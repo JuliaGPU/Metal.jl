@@ -26,12 +26,6 @@ mtNewComputeCommandEncoderWithDispatchType(MtCommandBuffer *cmdb, MtDispatchType
 }
 
 MT_EXPORT
-void
-mtComputeCommandEncoderRelease(MtComputeCommandEncoder *cce) {
-    [(id<MTLComputeCommandEncoder>)cce release];
-}
-
-MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtComputeCommandEncoderEndEncoding(MtComputeCommandEncoder *cce) {

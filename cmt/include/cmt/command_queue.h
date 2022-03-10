@@ -21,10 +21,6 @@ MT_EXPORT
 MtCommandQueue*
 mtNewCommandQueueWithMaxCommandBufferCount(MtDevice *device, NsUInteger count);
 
-MT_EXPORT
-void
-mtCommandQueueRelease(MtCommandQueue *queue);
-
 #ifdef __cplusplus
 }
 #endif

@@ -33,10 +33,6 @@ MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
 MtFence*
 mtDeviceNewFence(MtDevice *dev);
 
-MT_EXPORT
-void
-mtEventRelease(MtEvent *event);
-
 //
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
@@ -58,10 +54,6 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
 MtSharedEventHandle*
 mtSharedEventNewHandle(MtSharedEvent *event);
-
-MT_EXPORT
-void
-mtSharedEventHandleRelease(MtSharedEventHandle *handle);
 
 MT_EXPORT
 void

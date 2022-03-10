@@ -53,12 +53,6 @@ mtComputePipelineDevice(MtComputePipelineState *pip) {
 }
 
 MT_EXPORT
-void
-mtComputePipelineRelease(MtComputePipelineState *pip) {
-    [(id<MTLComputePipelineState>)pip release];
-}
-
-MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 const char*
 mtComputePipelineLabel(MtComputePipelineState *pip) {

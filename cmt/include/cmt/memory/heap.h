@@ -20,10 +20,6 @@ MtHeap*
 mtDeviceNewHeapWithDescriptor(MtDevice *dev, MtHeapDescriptor *descriptor);
 
 MT_EXPORT
-void
-mtHeapRelease(MtHeap *heap);
-
-MT_EXPORT
 MtDevice*
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
 mtHeapDevice(MtHeap *heap);

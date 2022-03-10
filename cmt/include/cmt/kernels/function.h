@@ -24,10 +24,6 @@ MtFunction*
 mtNewFunctionWithNameConstantValues(MtLibrary *lib, const char *name, MtFunctionConstantValues *constantValues, NsError **error);
 
 MT_EXPORT
-void
-mtFunctionRelease(MtFunction* fun);
-
-MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtDevice*
 mtFunctionDevice(MtFunction* fun);

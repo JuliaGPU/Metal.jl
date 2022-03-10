@@ -15,10 +15,6 @@ extern "C" {
 #include "cmt/resource.h"
 
 MT_EXPORT
-void
-mtBufferRelease(MtBuffer* buf);
-
-MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void*
 mtBufferContents(MtBuffer* buf);

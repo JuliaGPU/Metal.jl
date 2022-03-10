@@ -45,12 +45,6 @@ mtNewLibraryWithData(MtDevice *device, void* buffer, size_t size, NsError **erro
 }
 
 MT_EXPORT
-void
-mtLibraryRelease(MtLibrary *lib) {
-  [(id<MTLLibrary>)lib release];
-}
-
-MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtDevice*
 mtLibraryDevice(MtLibrary *lib) {

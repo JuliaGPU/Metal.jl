@@ -1,13 +1,6 @@
 # Julia wrapper for header: cmt.h
 # Automatically generated using Clang.jl
 
-
-function mtErrorRelease(err)
-    ccall((:mtErrorRelease, libcmt), Cvoid,
-          (Ptr{NsError},),
-          err)
-end
-
 function mtErrorCode(err)
     ccall((:mtErrorCode, libcmt), NsInteger,
           (Ptr{NsError},),
@@ -74,12 +67,6 @@ function mtDeviceNewFence(dev)
           dev)
 end
 
-function mtEventRelease(event)
-    ccall((:mtEventRelease, libcmt), Cvoid,
-          (Ptr{MtEvent},),
-          event)
-end
-
 function mtEventDevice(event)
     ccall((:mtEventDevice, libcmt), Ptr{MtDevice},
           (Ptr{MtEvent},),
@@ -102,12 +89,6 @@ function mtSharedEventNewHandle(event)
     ccall((:mtSharedEventNewHandle, libcmt), Ptr{MtSharedEventHandle},
           (Ptr{MtSharedEvent},),
           event)
-end
-
-function mtSharedEventHandleRelease(handle)
-    ccall((:mtSharedEventHandleRelease, libcmt), Cvoid,
-          (Ptr{MtSharedEventHandle},),
-          handle)
 end
 
 function mtSharedEventNotifyListener(event, listener, val, block)
@@ -321,12 +302,6 @@ function mtComputePipelineDevice(pip)
           pip)
 end
 
-function mtComputePipelineRelease(pip)
-    ccall((:mtComputePipelineRelease, libcmt), Cvoid,
-          (Ptr{MtComputePipelineState},),
-          pip)
-end
-
 function mtComputePipelineLabel(pip)
     ccall((:mtComputePipelineLabel, libcmt), Cstring,
           (Ptr{MtComputePipelineState},),
@@ -427,12 +402,6 @@ function mtNewCompileOpts()
     ccall((:mtNewCompileOpts, libcmt), Ptr{MtCompileOptions}, ())
 end
 
-function mtCompileOptsRelease(opts)
-    ccall((:mtCompileOptsRelease, libcmt), Cvoid,
-          (Ptr{MtCompileOptions},),
-          opts)
-end
-
 function mtCompileOptsFastMath(opts)
     ccall((:mtCompileOptsFastMath, libcmt), Bool,
           (Ptr{MtCompileOptions},),
@@ -493,12 +462,6 @@ function mtNewFunctionWithNameConstantValues(lib, name, constantValues, error)
           lib, name, constantValues, error)
 end
 
-function mtFunctionRelease(fun)
-    ccall((:mtFunctionRelease, libcmt), Cvoid,
-          (Ptr{MtFunction},),
-          fun)
-end
-
 function mtFunctionDevice(fun)
     ccall((:mtFunctionDevice, libcmt), Ptr{MtDevice},
           (Ptr{MtFunction},),
@@ -553,12 +516,6 @@ function mtNewLibraryWithData(device, buffer, size, error)
           device, buffer, size, error)
 end
 
-function mtLibraryRelease(lib)
-    ccall((:mtLibraryRelease, libcmt), Cvoid,
-          (Ptr{MtLibrary},),
-          lib)
-end
-
 function mtLibraryDevice(lib)
     ccall((:mtLibraryDevice, libcmt), Ptr{MtDevice},
           (Ptr{MtLibrary},),
@@ -575,12 +532,6 @@ function mtLibraryFunctionNames(lib, count, names)
     ccall((:mtLibraryFunctionNames, libcmt), Cvoid,
           (Ptr{MtLibrary}, Ptr{Csize_t}, Ptr{Cstring}),
           lib, count, names)
-end
-
-function mtBufferRelease(buf)
-    ccall((:mtBufferRelease, libcmt), Cvoid,
-          (Ptr{MtBuffer},),
-          buf)
 end
 
 function mtBufferContents(buf)
@@ -627,12 +578,6 @@ end
 
 function mtNewHeapDescriptor()
     ccall((:mtNewHeapDescriptor, libcmt), Ptr{MtHeapDescriptor}, ())
-end
-
-function mtHeapDescriptorRelease(desc)
-    ccall((:mtHeapDescriptorRelease, libcmt), Cvoid,
-          (Ptr{MtHeapDescriptor},),
-          desc)
 end
 
 function mtHeapDescriptorType(heap)
@@ -711,12 +656,6 @@ function mtDeviceNewHeapWithDescriptor(dev, descriptor)
     ccall((:mtDeviceNewHeapWithDescriptor, libcmt), Ptr{MtHeap},
           (Ptr{MtDevice}, Ptr{MtHeapDescriptor}),
           dev, descriptor)
-end
-
-function mtHeapRelease(heap)
-    ccall((:mtHeapRelease, libcmt), Cvoid,
-          (Ptr{MtHeap},),
-          heap)
 end
 
 function mtHeapDevice(heap)
@@ -1055,12 +994,6 @@ function mtCommandBufferOnCompleteNoSender(cmdb, oncomplete)
           cmdb, oncomplete)
 end
 
-function mtCommandBufferRelease(cmdbuf)
-    ccall((:mtCommandBufferRelease, libcmt), Cvoid,
-          (Ptr{MtCommandBuffer},),
-          cmdbuf)
-end
-
 function mtCommandBufferPresentDrawable(cmdb, drawable)
     ccall((:mtCommandBufferPresentDrawable, libcmt), Cvoid,
           (Ptr{MtCommandBuffer}, Ptr{MtDrawable}),
@@ -1372,12 +1305,6 @@ function mtNewComputeCommandEncoderWithDispatchType(cmdb, dtype)
           cmdb, dtype)
 end
 
-function mtComputeCommandEncoderRelease(cce)
-    ccall((:mtComputeCommandEncoderRelease, libcmt), Cvoid,
-          (Ptr{MtComputeCommandEncoder},),
-          cce)
-end
-
 function mtComputeCommandEncoderEndEncoding(cce)
     ccall((:mtComputeCommandEncoderEndEncoding, libcmt), Cvoid,
           (Ptr{MtComputeCommandEncoder},),
@@ -1614,12 +1541,6 @@ function mtNewCommandQueueWithMaxCommandBufferCount(device, count)
     ccall((:mtNewCommandQueueWithMaxCommandBufferCount, libcmt), Ptr{MtCommandQueue},
           (Ptr{MtDevice}, NsUInteger),
           device, count)
-end
-
-function mtCommandQueueRelease(queue)
-    ccall((:mtCommandQueueRelease, libcmt), Cvoid,
-          (Ptr{MtCommandQueue},),
-          queue)
 end
 
 function mtNewArgumentDescriptor()

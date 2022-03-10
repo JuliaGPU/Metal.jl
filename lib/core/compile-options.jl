@@ -20,7 +20,7 @@ function MtlCompileOptions()
 end
 
 function unsafe_destroy!(opts::MtlCompileOptions)
-    opts.handle !== C_NULL && mtCompileOptsRelease(opts)
+    opts.handle !== C_NULL && mtRelease(opts)
 end
 
 Base.propertynames(o::MtlCompileOptions) = (:fastmath, :languageversion)

@@ -24,10 +24,6 @@ MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
 MtComputeCommandEncoder*
 mtNewComputeCommandEncoderWithDispatchType(MtCommandBuffer *cmdb, MtDispatchType dtype);
 
-MT_EXPORT
-void
-mtComputeCommandEncoderRelease(MtComputeCommandEncoder *cce);
-
 // Could be removed because in base class
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))

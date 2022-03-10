@@ -19,10 +19,3 @@ MtCommandQueue*
 mtNewCommandQueueWithMaxCommandBufferCount(MtDevice *device, NsUInteger count) {
   return [(id<MTLDevice>)device newCommandQueueWithMaxCommandBufferCount: count];
 }
-
-MT_EXPORT
-void
-mtCommandQueueRelease(MtCommandQueue *queue) {
-  [(id<MTLCommandQueue>)queue release];
-}
-

@@ -13,10 +13,6 @@ extern "C" {
 #include "types_foundation.h"
 
 MT_EXPORT
-void
-mtErrorRelease(NsError *err);
-
-MT_EXPORT
 NsInteger
 mtErrorCode(NsError *err);
 

@@ -55,7 +55,7 @@ function MtlLibraryFromData(device::MtlDevice, data)
 end
 
 function unsafe_destroy!(lib::MtlLibrary)
-    lib.handle !== C_NULL && mtLibraryRelease(lib)
+    lib.handle !== C_NULL && mtRelease(lib)
 end
 
 function Base.show(io::IO, l::MtlLibrary)

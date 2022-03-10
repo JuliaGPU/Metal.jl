@@ -31,12 +31,6 @@ mtDeviceNewFence(MtDevice *dev) {
 }
 
 MT_EXPORT
-void
-mtEventRelease(MtEvent *event) {
-	return [(id<MTLEvent>)event release];
-}
-
-MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
 MtDevice*
 mtEventDevice(MtEvent *event) {
@@ -64,12 +58,6 @@ MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
 MtSharedEventHandle*
 mtSharedEventNewHandle(MtSharedEvent *event) {
 	return [(id<MTLSharedEvent>)event newSharedEventHandle];
-}
-
-MT_EXPORT
-void
-mtSharedEventHandleRelease(MtSharedEventHandle *handle) {
-	return [(MTLSharedEventHandle*)handle release];
 }
 
 MT_EXPORT
