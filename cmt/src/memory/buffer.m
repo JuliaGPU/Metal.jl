@@ -26,7 +26,6 @@ mtBufferDidModifyRange(MtBuffer* buf, NsRange ran) {
 	[(id<MTLBuffer>)buf didModifyRange: mtNSRange(ran)];
 }
 
-
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.12), mt_ios(10.0))
 void

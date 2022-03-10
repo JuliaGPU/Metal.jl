@@ -4,4 +4,3 @@
  */
 
 #include "impl/conversion.h"
-

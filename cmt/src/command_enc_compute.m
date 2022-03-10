@@ -196,7 +196,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
 MtDispatchType
 mtComputeCommandEncoderDispatchType(MtComputeCommandEncoder *cce) {
-    return [(id<MTLComputeCommandEncoder>)cce dispatchType];
+  return (MtDispatchType)[(id<MTLComputeCommandEncoder>)cce dispatchType];
 }
 
 // Executing Commands Concurrently or Serially

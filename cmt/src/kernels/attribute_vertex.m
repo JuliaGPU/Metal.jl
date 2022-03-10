@@ -24,7 +24,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtDataType
 mtVertexAttributeDataType(MtVertexAttribute *attr) {
-    return [(MTLVertexAttribute*)attr attributeType];
+    return (MtDataType)[(MTLVertexAttribute*)attr attributeType];
 }
 
 MT_EXPORT

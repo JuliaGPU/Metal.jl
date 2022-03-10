@@ -33,7 +33,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtLanguageVersion
 mtCompileOptsLanguageVersion(MtCompileOptions *opts) {
-	return [(MTLCompileOptions *)(opts) languageVersion];
+	return (MtLanguageVersion)[(MTLCompileOptions *)(opts) languageVersion];
 }
 
 MT_EXPORT

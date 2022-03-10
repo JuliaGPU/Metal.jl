@@ -32,7 +32,7 @@ MT_EXPORT
 void
 mtErrorLocalizedRecoveryOptions(NsError *err, size_t* count, const char** options) {
     NSArray<NSString *> *_strings = [(NSError*)err localizedRecoveryOptions];
-    int n = [_strings count];
+    NSInteger n = [_strings count];
 
     if (*count == 0) {
         *count = n;

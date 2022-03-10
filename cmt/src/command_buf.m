@@ -98,7 +98,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtCommandBufferStatus
 mtCommandBufferStatus(MtCommandBuffer *cmdb) {
-  return [(id<MTLCommandBuffer>)cmdb status];
+  return (MtCommandBufferStatus)[(id<MTLCommandBuffer>)cmdb status];
 }
 
 MT_EXPORT

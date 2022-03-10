@@ -31,7 +31,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtArgumentType
 mtArgumentType(MtArgument *arg)  {
-	return [(MTLArgument*)arg type];
+	return (MtArgumentType)[(MTLArgument *)arg type];
 }        
 
 // Buffer
@@ -53,7 +53,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtDataType
 mtArgumentBufferDataType(MtArgument *arg) {
-	return [(MTLArgument*)arg bufferDataType];
+	return (MtDataType)[(MTLArgument *)arg bufferDataType];
 }
 
 MT_EXPORT

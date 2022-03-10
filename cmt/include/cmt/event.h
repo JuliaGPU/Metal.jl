@@ -56,8 +56,8 @@ MtSharedEventHandle*
 mtSharedEventNewHandle(MtSharedEvent *event);
 
 MT_EXPORT
-void
 MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
+void
 mtSharedEventNotifyListener(MtSharedEvent *event, MtSharedEventListener *listener, uint64_t val, MtSharedEventNotificationBlock block);
 
 

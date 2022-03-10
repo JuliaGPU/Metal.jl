@@ -19,7 +19,7 @@ MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
 mtCopyAllDevices(size_t* count, MtDevice** devices) {
   NSArray<id<MTLDevice>> * _devices = MTLCopyAllDevices();
-  int n = [_devices count];
+  NSInteger n = [_devices count];
 
   if (*count == 0) {
 	  *count = n;

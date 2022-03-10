@@ -24,7 +24,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.12), mt_ios(10.0))
 MtDataType
 mtAttributeDataType(MtAttribute *attr) {
-    return [(MTLAttribute*)attr attributeType];
+    return (MtDataType)[(MTLAttribute*)attr attributeType];
 }
 
 MT_EXPORT

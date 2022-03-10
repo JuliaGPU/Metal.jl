@@ -1,3 +1,8 @@
+/*
+ * Copyright (c), Recep Aslantas.
+ * MIT License (MIT), http://opensource.org/licenses/MIT
+ */
+
 #import "impl/common.h"
 #import "cmt/common.h"
 #import "cmt/memory/heap-descriptor.h"
@@ -14,7 +19,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
 MtHeapType 
 mtHeapDescriptorType(MtHeapDescriptor *heap) {
-	return [(MTLHeapDescriptor*)heap type];
+	return (MtHeapType)[(MTLHeapDescriptor*)heap type];
 }
 
 MT_EXPORT
@@ -28,7 +33,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
 MtStorageMode 
 mtHeapDescriptorStorageMode(MtHeapDescriptor *heap) {
-	return [(MTLHeapDescriptor*)heap storageMode];
+	return (MtStorageMode)[(MTLHeapDescriptor*)heap storageMode];
 }
 
 MT_EXPORT
@@ -42,7 +47,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
 MtCPUCacheMode 
 mtHeapDescriptorCPUCacheMode(MtHeapDescriptor *heap) {
-	return [(MTLHeapDescriptor*)heap cpuCacheMode];
+	return (MtCPUCacheMode)[(MTLHeapDescriptor*)heap cpuCacheMode];
 }
 
 MT_EXPORT
@@ -56,7 +61,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
 MtHazardTrackingMode 
 mtHeapDescriptorHazardTrackingMode(MtHeapDescriptor *heap) {
-	return [(MTLHeapDescriptor*)heap hazardTrackingMode];
+	return (MtHazardTrackingMode)[(MTLHeapDescriptor*)heap hazardTrackingMode];
 }
 
 MT_EXPORT
@@ -70,7 +75,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
 MtResourceOptions 
 mtHeapDescriptorResourceOptions(MtHeapDescriptor *heap) {
-	return [(MTLHeapDescriptor*)heap resourceOptions];
+	return (MtResourceOptions)[(MTLHeapDescriptor*)heap resourceOptions];
 }
 
 MT_EXPORT

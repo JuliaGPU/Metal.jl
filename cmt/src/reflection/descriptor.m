@@ -20,7 +20,7 @@ const MtArgument *
 mtComputePipelinereflectionArguments(MtComputePipelineReflection *refl) {
     NSArray<MTLArgument*> *_args = [(MTLComputePipelineReflection*) refl arguments];
     
-    int n = [_args count];
+    NSInteger n = [_args count];
     MtArgument* *args = malloc(sizeof(MtArgument*) * (n+1)); 
         for (int i=0; i < n; i++) {
       args[i] = [_args objectAtIndex:i];

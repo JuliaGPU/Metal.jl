@@ -13,8 +13,8 @@ mtDepthStencil(MtCompareFunction depthCompareFunc, bool depthWriteEnabled) {
   MTLDepthStencilDescriptor *depthStateDesc;
   
   depthStateDesc                      = [MTLDepthStencilDescriptor new];
-  depthStateDesc.depthCompareFunction = MTLCompareFunctionLess;
-  depthStateDesc.depthWriteEnabled    = YES;
+  depthStateDesc.depthCompareFunction = (MTLCompareFunction)depthCompareFunc;
+  depthStateDesc.depthWriteEnabled    = depthWriteEnabled;
   
   return depthStateDesc;
 }

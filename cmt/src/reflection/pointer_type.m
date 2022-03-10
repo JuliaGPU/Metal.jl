@@ -10,14 +10,14 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 MtDataType
 mtPointerTypeElementType(MtPointerType *ptr)  {
-	return [(MTLPointerType*)ptr elementType];
+	return (MtDataType)[(MTLPointerType *)ptr elementType];
 }        
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 MtArgumentAccess
 mtPointerTypeAccess(MtPointerType *ptr) {
-	return [(MTLPointerType*)ptr access];
+	return (MtArgumentAccess)[(MTLPointerType*)ptr access];
 }
 
 MT_EXPORT

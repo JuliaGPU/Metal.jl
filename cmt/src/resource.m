@@ -24,26 +24,26 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtCPUCacheMode
 mtResourceCPUCacheMode(MtResource *res) {
-	return [(id<MTLResource>)res cpuCacheMode];
+	return (MtCPUCacheMode)[(id<MTLResource>)res cpuCacheMode];
 }
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtStorageMode
 mtResourceStorageMode(MtResource *res) {
-	return [(id<MTLResource>)res storageMode];
+	return (MtStorageMode)[(id<MTLResource>)res storageMode];
 }
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
 MtHazardTrackingMode
 mtResourceHazardTrackingMode(MtResource *res) {
-	return [(id<MTLResource>)res hazardTrackingMode];
+	return (MtHazardTrackingMode)[(id<MTLResource>)res hazardTrackingMode];
 }
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
 MtResourceOptions
 mtResourceOptions(MtResource *res) {
-	return [(id<MTLResource>)res resourceOptions];
+	return (MtResourceOptions)[(id<MTLResource>)res resourceOptions];
 }

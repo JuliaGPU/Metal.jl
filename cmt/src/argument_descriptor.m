@@ -18,7 +18,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 MtDataType
 mtArgumentDescriptorDataType(MtArgumentDescriptor *desc) {
-    return [(MTLArgumentDescriptor*)desc dataType];
+  return (MtDataType)[(MTLArgumentDescriptor*)desc dataType];
 }
 
 MT_EXPORT
@@ -46,7 +46,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 MtArgumentAccess
 mtArgumentDescriptorAccess(MtArgumentDescriptor *desc) {
-    return [(MTLArgumentDescriptor*)desc access];
+  return (MtArgumentAccess)[(MTLArgumentDescriptor*)desc access];
 }
 
 MT_EXPORT
@@ -88,7 +88,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 MtTextureType
 mtArgumentDescriptorTextureType(MtArgumentDescriptor *desc) {
-    return [(MTLArgumentDescriptor*)desc textureType];
+  return (MtTextureType)[(MTLArgumentDescriptor*)desc textureType];
 }
 
 MT_EXPORT

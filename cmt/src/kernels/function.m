@@ -44,7 +44,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtFunctionType
 mtFunctionType(MtFunction* fun) {
-	return [(id<MTLFunction>)fun functionType];
+	return (MtFunctionType)[(id<MTLFunction>)fun functionType];
 }
 
 MT_EXPORT
@@ -59,7 +59,7 @@ MT_API_AVAILABLE(mt_macos(10.12), mt_ios(10.0))
 MtAttribute**
 mtFunctionStageInputAttributes(MtFunction* fun) {
 	NSArray<MTLAttribute *> *_attributes = [(id<MTLFunction>)fun stageInputAttributes];
-	int n = [_attributes count];
+	NSInteger n = [_attributes count];
 	MtAttribute* *attributes = malloc(sizeof(MtAttribute*) * (n+1));
 	for (int i=0; i < n; i++) {
       attributes[i] = [_attributes objectAtIndex:i];
