@@ -24,10 +24,33 @@ Base.unsafe_convert(::Type{MTLArgumentEncoder}, fun::MtlArgumentEncoder) = fun.h
 Base.:(==)(a::MtlArgumentEncoder, b::MtlArgumentEncoder) = a.handle == b.handle
 Base.hash(fun::MtlArgumentEncoder, h::UInt) = hash(mod.handle, h)
 
-Base.sizeof(a::MtlArgumentEncoder) = mtArgumentEncoderLength(a) |> Int
-alignment(a::MtlArgumentEncoder) = mtArgumentEncoderAlignment(a) |> Int
 
-##
+## properties
+
+Base.propertynames(o::MtlArgumentEncoder) = (
+    # identification
+    #=:device, :label,=#
+    # creation
+    :encodedLength,
+    # alignment
+    :alignment,
+)
+
+function Base.getproperty(o::MtlArgumentEncoder, f::Symbol)
+    if f === :encodedLength
+        mtArgumentEncoderLength(o)
+    elseif f === :alignment
+        mtArgumentEncoderAlignment(o)
+    else
+        getfield(o, f)
+    end
+end
+
+Base.sizeof(a::MtlArgumentEncoder) = Int(mtArgumentEncoderLength(a))
+
+
+## operations
+
 function assign_argument_buffer!(enc::MtlArgumentEncoder, buf::MtlBuffer, offset::Integer=1)
     mtArgumentEncoderSetArgumentBufferWithOffset(enc, buf, offset-1)
 end
@@ -36,11 +59,11 @@ function assign_argument_buffer!(enc::MtlArgumentEncoder, buf::MtlBuffer, offset
     mtArgumentEncoderSetArgumentBufferWithOffsetForElement(enc, buf, offset-1, element)
 end
 
-set_buffer!(cce::MtlArgumentEncoder, buf::MtlBuffer, offset::Integer, index::Integer) =
-    mtArgumentEncoderSetBufferOffsetAtIndex(cce, buf, offset, index-1)
-set_buffers!(cce::MtlArgumentEncoder, bufs::Vector{<:MtlBuffer},
+set_buffer!(enc::MtlArgumentEncoder, buf::MtlBuffer, offset::Integer, index::Integer) =
+    mtArgumentEncoderSetBufferOffsetAtIndex(enc, buf, offset, index-1)
+set_buffers!(enc::MtlArgumentEncoder, bufs::Vector{<:MtlBuffer},
              offsets::Vector{Int}, indices::UnitRange{Int}) =
-    mtArgumentSetBuffersOffsetsWithRange(cce, handle_array(bufs), offsets, indices .- 1)
+    mtArgumentSetBuffersOffsetsWithRange(enc, handle_array(bufs), offsets, indices .- 1)
 
 function set_bytes!(enc::MtlArgumentEncoder, src::Ptr, length::Integer, index::Integer)
     dst = Base.bitcast(typeof(ptr), mtArgumentEncoderConstantDataAtIndex(enc, index-1))
@@ -58,9 +81,4 @@ function set_field!(enc::MtlArgumentEncoder, val::NTuple{N,T}, index::Integer) w
     dst = Base.bitcast(Ptr{typeof(val)}, mtArgumentEncoderConstantDataAtIndex(enc, index-1))
     Base.unsafe_store!(dst, val, 1)
     return
-end
-
-##
-function encode_argument!(enc::MtlArgumentEncoder, f::MtlFunction, idx::Integer, val::MtlBuffer)
-
 end

@@ -40,7 +40,7 @@ include("buffer.jl")
 include("command_queue.jl")
 include("command_buf.jl")
 include("compute-pipeline.jl")
-include("buffer_argument.jl")
+include("argument_encoder.jl")
 
 include("command_enc.jl")
 include("command_enc_blit.jl")

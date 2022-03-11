@@ -278,6 +278,21 @@ pipeline = MtlComputePipelineState(dev, fun)
 
 end
 
+@testset "argument encoder" begin
+
+dev = first(devices())
+lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "vadd.metallib"))
+fun = MtlFunction(lib, "vadd")
+
+encoder = MtlArgumentEncoder(fun, 1)
+
+@test encoder.encodedLength == 0
+@test encoder.alignment == 1
+
+# TODO: actually encode arguments
+
+end
+
 # TODO: continue adding tests
 
 end
