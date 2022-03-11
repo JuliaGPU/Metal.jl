@@ -27,8 +27,8 @@ include("execution/reflection.jl")
 include("state.jl")
 
 # array abstraction
-include("host/array.jl")
-include("host/memory.jl")
+include("array.jl")
+include("memory.jl")
 include("broadcast.jl")
 include("random.jl")
 include("gpuarrays.jl")
