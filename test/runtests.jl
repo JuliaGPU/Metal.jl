@@ -59,14 +59,14 @@ opts = MtlCompileOptions()
 
 let lib = MtlLibrary(dev, "", opts)
     @test lib.device == dev
-    @test lib.label == ""
+    @test lib.label == nothing
     @test isempty(lib.functionNames)
 end
 
 metal_code = read(joinpath(@__DIR__, "dummy.metal"), String)
 let lib = MtlLibrary(dev, metal_code, opts)
     @test lib.device == dev
-    @test lib.label == ""
+    @test lib.label == nothing
     fns = lib.functionNames
     @test length(fns) == 2
     @test "kernel_1" in fns
@@ -76,7 +76,7 @@ end
 binary_path = joinpath(@__DIR__, "dummy.metallib")
 let lib = MtlLibraryFromFile(dev, binary_path)
     @test lib.device == dev
-    @test lib.label == ""
+    @test lib.label == nothing
     fns = lib.functionNames
     @test length(fns) == 2
     @test "kernel_1" in fns
@@ -86,7 +86,7 @@ end
 binary_code = read(binary_path)
 let lib = MtlLibraryFromData(dev, binary_code)
     @test lib.device == dev
-    @test lib.label == ""
+    @test lib.label == nothing
     fns = lib.functionNames
     @test length(fns) == 2
     @test "kernel_1" in fns
@@ -108,7 +108,7 @@ compact_str = sprint(io->show(io, fun))
 full_str = sprint(io->show(io, MIME"text/plain"(), fun))
 
 @test fun.device == dev
-@test fun.label == ""
+@test fun.label == nothing
 @test fun.name == "kernel_1"
 @test fun.functionType == MTL.MtFunctionTypeKernel
 
@@ -120,12 +120,12 @@ dev = first(devices())
 
 let ev = MtlEvent(dev)
     @test ev.device == dev
-    @test ev.label == ""
+    @test ev.label == nothing
 end
 
 let ev = MtlSharedEvent(dev)
     @test ev.device == dev
-    @test ev.label == ""
+    @test ev.label == nothing
     @test ev.signaledValue == 0
 end
 
@@ -185,7 +185,7 @@ end
 desc = MtlHeapDescriptor()
 desc.size = 0x4000 # TODO: use heapBufferSizeAndAlign
 let heap = MtlHeap(dev, desc)
-    @test heap.label == ""
+    @test heap.label == nothing
 
     @test heap.type == desc.type
 
@@ -214,7 +214,7 @@ buf = MtlBuffer{Int}(dev, 1)
 
 # MtlResource properties
 @test buf.device == dev
-@test buf.label == ""
+@test buf.label == nothing
 
 @test sizeof(buf) == 8
 
@@ -229,7 +229,7 @@ dev = first(devices())
 cmdq = MtlCommandQueue(dev)
 
 @test cmdq.device == dev
-@test cmdq.label == ""
+@test cmdq.label == nothing
 
 end
 
@@ -242,7 +242,7 @@ cmdbuf = MtlCommandBuffer(cmdq)
 
 @test cmdbuf.device == dev
 @test cmdbuf.commandQueue == cmdq
-@test cmdbuf.label == ""
+@test cmdbuf.label == nothing
 @test cmdbuf.error === nothing
 @test cmdbuf.status == MTL.MtCommandBufferStatusNotEnqueued
 @test cmdbuf.kernelStartTime == 0

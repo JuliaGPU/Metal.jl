@@ -62,7 +62,7 @@ function Base.getproperty(o::MtlCommandBuffer, f::Symbol)
         MtlCommandQueue(mtCommandBufferCommandQueue(o), o.device)
     elseif f === :label
         ptr = mtCommandBufferLabel(o)
-        ptr == C_NULL ? "" : unsafe_string(ptr)
+        ptr == C_NULL ? nothing : unsafe_string(ptr)
     elseif f === :status
         mtCommandBufferStatus(o)
     elseif f === :error

@@ -17,7 +17,7 @@ function Base.getproperty(res::MtlResource, f::Symbol)
         MtlDevice(mtResourceDevice(res))
     elseif f === :label
         ptr = mtResourceLabel(res)
-        ptr == C_NULL ? "" : unsafe_string(ptr)
+        ptr == C_NULL ? nothing : unsafe_string(ptr)
     elseif f === :cpuCacheMode
         mtResourceCPUCacheMode(res)
     elseif f === :storageMode

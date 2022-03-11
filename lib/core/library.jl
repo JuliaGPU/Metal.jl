@@ -59,7 +59,7 @@ Base.propertynames(::MtlLibrary) = (:device, :label, :functionNames)
 function Base.getproperty(lib::MtlLibrary, f::Symbol)
     if f === :label
         ptr = mtLibraryLabel(lib)
-        ptr == C_NULL ? "" : unsafe_string(ptr)
+        ptr == C_NULL ? nothing : unsafe_string(ptr)
     elseif f === :functionNames
         count = Ref{Csize_t}(0)
         mtLibraryFunctionNames(lib, count, C_NULL)

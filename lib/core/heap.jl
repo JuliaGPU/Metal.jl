@@ -115,7 +115,7 @@ function Base.getproperty(o::MtlHeap, f::Symbol)
         mtHeapDevice(heap)
     elseif f === :label
         ptr = mtHeapLabel(o)
-        ptr == C_NULL ? "" : unsafe_string(ptr)
+        ptr == C_NULL ? nothing : unsafe_string(ptr)
     elseif f === :type 
         mtHeapType(o)
     elseif f === :storageMode

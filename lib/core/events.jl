@@ -48,7 +48,7 @@ Base.propertynames(::MtlAbstractEvent) = (:device, :label, :signaledValue)
 function Base.getproperty(ev::MtlAbstractEvent, f::Symbol)
     if f == :label
         ptr = mtEventLabel(ev)
-        ptr == C_NULL ? "" : unsafe_string(ptr)
+        ptr == C_NULL ? nothing : unsafe_string(ptr)
     elseif ev isa MtlSharedEvent && f == :signaledValue
         mtSharedEventSignaledValue(ev)
     else

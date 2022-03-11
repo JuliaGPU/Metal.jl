@@ -47,7 +47,7 @@ function Base.getproperty(o::MtlCommandQueue, f::Symbol)
         MtlDevice(mtCommandQueueDevice(o))
     elseif f === :label
         ptr = mtCommandQueueLabel(o)
-        ptr == C_NULL ? "" : unsafe_string(ptr)
+        ptr == C_NULL ? nothing : unsafe_string(ptr)
     else
         getfield(o, f)
     end

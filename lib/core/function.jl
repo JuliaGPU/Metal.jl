@@ -35,7 +35,7 @@ function Base.getproperty(fun::MtlFunction, f::Symbol)
         MtlDevice(mtFunctionDevice(fun))
     elseif f == :label
         ptr = mtFunctionLabel(fun)
-        ptr == C_NULL ? "" : unsafe_string(ptr)
+        ptr == C_NULL ? nothing : unsafe_string(ptr)
     elseif f == :name
         unsafe_string(mtFunctionName(fun))
     elseif f == :functionType
