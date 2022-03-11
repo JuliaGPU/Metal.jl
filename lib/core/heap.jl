@@ -23,42 +23,50 @@ Base.unsafe_convert(::Type{MTLHeapDescriptor}, d::MtlHeapDescriptor) = convert(M
 Base.:(==)(a::MtlHeapDescriptor, b::MtlHeapDescriptor) = a.handle == b.handle
 Base.hash(dev::MtlHeapDescriptor, h::UInt) = hash(dev.handle, h)
 
+
+## properties
+
 Base.propertynames(::MtlHeapDescriptor) = 
-    (:handle, :type, :storageMode, :cpuCacheMode, :hazardTrackingMode, :resourceOptions, :size)
+    (:type, :storageMode, :cpuCacheMode, :hazardTrackingMode, :resourceOptions, :size)
 
 function Base.getproperty(o::MtlHeapDescriptor, f::Symbol)
-    if f === :handle
-        return getfield(o, :handle)
-    elseif f === :type 
-        return mtHeapDescriptorType(o)
+    if f === :type 
+        mtHeapDescriptorType(o)
     elseif f === :storageMode
-        return mtHeapDescriptorStorageMode(o)
+        mtHeapDescriptorStorageMode(o)
     elseif f === :cpuCacheMode
-        return mtHeapDescriptorCPUCacheMode(o)
+        mtHeapDescriptorCPUCacheMode(o)
     elseif f === :hazardTrackingMode
-        return mtHeapDescriptorHazardTrackingMode(o)
+        mtHeapDescriptorHazardTrackingMode(o)
     elseif f === :resourceOptions
-        return mtHeapDescriptorResourceOptions(o)
+        mtHeapDescriptorResourceOptions(o)
     elseif f === :size
-        return mtHeapDescriptorSize(o)
+        mtHeapDescriptorSize(o)
+    else
+        getfield(o, f)
     end
 end
 
 function Base.setproperty!(o::MtlHeapDescriptor, f::Symbol, val)
     if f === :type 
-        return mtHeapDescriptorTypeSet(o, val)
+        mtHeapDescriptorTypeSet(o, val)
     elseif f === :storageMode
-        return mtHeapDescriptorStorageModeSet(o, val)
+        mtHeapDescriptorStorageModeSet(o, val)
     elseif f === :cpuCacheMode
-        return mtHeapDescriptorCPUCacheModeSet(o, val)
+        mtHeapDescriptorCpuCacheModeSet(o, val)
     elseif f === :hazardTrackingMode
-        return mtHeapDescriptorHazardTrackingModeSet(o, val)
+        mtHeapDescriptorHazardTrackingModeSet(o, val)
     elseif f === :resourceOptions
-        return mtHeapDescriptorResourceOptionsSet(o, val)
+        mtHeapDescriptorResourceOptionsSet(o, val)
     elseif f === :size
-        return mtHeapDescriptorSizeSet(o, val)
+        mtHeapDescriptorSizeSet(o, val)
+    else
+        setfield!(o, f, val)
     end
 end
+
+
+## display
 
 function Base.show(io::IO, ::MIME"text/plain", o::MtlHeapDescriptor)
     print(io, "MtlHeapDescriptor: ")
@@ -67,7 +75,10 @@ function Base.show(io::IO, ::MIME"text/plain", o::MtlHeapDescriptor)
     end
 end
 
-###
+
+
+###############################################################################
+
 const MTLHeap = Ptr{MtHeap}
 
 mutable struct MtlHeap
@@ -81,8 +92,8 @@ Base.unsafe_convert(::Type{MTLHeap}, d::MtlHeap) = convert(MTLHeap, d.handle)
 Base.:(==)(a::MtlHeap, b::MtlHeap) = a.handle == b.handle
 Base.hash(dev::MtlHeap, h::UInt) = hash(dev.handle, h)
 
-function MtlHeap(device::MtlDevice, opts::MtlHeapDescriptor)
-    handle = mtDeviceNewHeapWithDescriptor(device, opts)
+function MtlHeap(device::MtlDevice, desc::MtlHeapDescriptor)
+    handle = mtDeviceNewHeapWithDescriptor(device, desc)
     obj = MtlHeap(handle, device)
     finalizer(unsafe_destroy!, obj)
     return obj
@@ -93,40 +104,43 @@ function unsafe_destroy!(desc::MtlHeap)
 end
 
 
-function label(l::MtlHeap)
-    ptr = mtResourceLabel(l)
-    return ptr == C_NULL ? "" : unsafe_string(ptr) 
-end
+## properties
 
 Base.propertynames(::MtlHeap) = 
-    (:handle, :device, :label, :type, :storageMode, :cpuCacheMode, :hazardTrackingMode, 
-        :resourceOptions, :size, :usedSize, :currentAllocatedSize, :maxAvailableSizeWithAlignment)
+    (:device, :label, :type, :storageMode, :cpuCacheMode, :hazardTrackingMode, 
+      :resourceOptions, :size, :usedSize, :currentAllocatedSize, :maxAvailableSizeWithAlignment)
 
 function Base.getproperty(o::MtlHeap, f::Symbol)
-    if f === :handle || f === :device 
-        return getfield(o, f)
+    if f === :device
+        mtHeapDevice(heap)
     elseif f === :label
-        return label(o, f)
+        ptr = mtHeapLabel(o)
+        ptr == C_NULL ? "" : unsafe_string(ptr)
     elseif f === :type 
-        return mtHeapType(o)
+        mtHeapType(o)
     elseif f === :storageMode
-        return mtHeapStorageMode(o)
+        mtHeapStorageMode(o)
     elseif f === :cpuCacheMode
-        return mtHeapCPUCacheMode(o)
+        mtHeapCPUCacheMode(o)
     elseif f === :hazardTrackingMode
-        return mtHeapHazardTrackingMode(o)
+        mtHeapHazardTrackingMode(o)
     elseif f === :resourceOptions
-        return mtHeapResourceOptions(o)
+        mtHeapResourceOptions(o)
     elseif f === :size
-        return mtHeapSize(o)
+        mtHeapSize(o)
     elseif f === :usedSize
-        return mtHeapUsedSize(o)
+        mtHeapUsedSize(o)
     elseif f === :currentAllocatedSize
-        return mtHeapCurrentAllocatedSize(o)
+        mtHeapCurrentAllocatedSize(o)
     elseif f === :maxAvailableSizeWithAlignment
-        return maxAvailableSizeWithAlignment(o)
+        maxAvailableSizeWithAlignment(o)
+    else
+        getfield(o, f)
     end
 end
+
+
+## display
 
 function Base.show(io::IO, ::MIME"text/plain", o::MtlHeap)
     print(io, "MtlHeap: ")
@@ -134,6 +148,3 @@ function Base.show(io::IO, ::MIME"text/plain", o::MtlHeap)
         print(io, "\n $f : $(getproperty(o, f))")
     end
 end
-
-
-

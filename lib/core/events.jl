@@ -1,4 +1,4 @@
-export MtlEvent, MtlSharedEvent
+export MtlEvent, MtlSharedEvent, MtlSharedEventHandle
 
 abstract type MtlAbstractEvent end
 
@@ -40,56 +40,43 @@ function MtlSharedEvent(dev::MtlDevice)
 	return obj
 end
 
-device(ev::MtlAbstractEvent) = ev.device
-function label(l::MtlAbstractEvent)
-	ptr = mtEventLabel(l)
-	return ptr == C_NULL ? "" : unsafe_string(ptr)
+
+## properties
+
+Base.propertynames(::MtlAbstractEvent) = (:device, :label, :signaledValue)
+
+function Base.getproperty(ev::MtlAbstractEvent, f::Symbol)
+    if f == :label
+        ptr = mtEventLabel(ev)
+        ptr == C_NULL ? "" : unsafe_string(ptr)
+    elseif ev isa MtlSharedEvent && f == :signaledValue
+        mtSharedEventSignaledValue(ev)
+    else
+        getfield(ev, f)
+    end
 end
 
-# shared event
-value(ev::MtlSharedEvent) = mtSharedEventSignaledValue(ev)
+
+## shared event handle
 
 mutable struct MtlSharedEventHandle
 	handle::MTLSharedEventHandle
 	event::MtlSharedEvent
 end
-function MtlSharedEventHandle(event::MtlSharedEvent)
-	handle = mtSharedEventNewHandle(event)
-	obj = MtlSharedEventHandle(handle, event)
+
+function MtlSharedEventHandle(ev::MtlSharedEvent)
+	handle = mtSharedEventNewHandle(ev)
+	obj = MtlSharedEventHandle(handle, ev)
 	finalizer(unsafe_destroy!, obj)
 	return obj
 end
-function unsafe_destroy!(fun::MtlSharedEventHandle)
-	fun.handle !== C_NULL && mtRelease(fun)
+
+function unsafe_destroy!(evh::MtlSharedEventHandle)
+	evh.handle !== C_NULL && mtRelease(evh)
 end
-Base.convert(::Type{MTLSharedEventHandle}, lib::MtlSharedEventHandle) = lib.handle
-Base.unsafe_convert(::Type{MTLSharedEventHandle}, lib::MtlSharedEventHandle) = convert(MTLSharedEventHandle, lib.handle)
+
+Base.convert(::Type{MTLSharedEventHandle}, evh::MtlSharedEventHandle) = evh.handle
+Base.unsafe_convert(::Type{MTLSharedEventHandle}, evh::MtlSharedEventHandle) = convert(MTLSharedEventHandle, evh.handle)
 
 Base.:(==)(a::MtlSharedEventHandle, b::MtlSharedEventHandle) = a.handle == b.handle
-Base.hash(lib::MtlSharedEventHandle, h::UInt) = hash(lib.handle, h)
-
-
-
-## FENCES
-const MTLFence = Ptr{MtFence}
-
-mutable struct MtlFence
-	handle::MTLFence
-	device::MtlDevice
-end
-
-Base.convert(::Type{MTLFence}, fen::MtlFence) = fen.handle
-Base.unsafe_convert(::Type{MTLFence}, fen::MtlFence) = convert(MTLFence, fen.handle)
-
-Base.:(==)(a::MtlFence, b::MtlFence) = a.handle == b.handle
-Base.hash(ev::MtlFence, h::UInt) = hash(ev.handle, h)
-
-
-function MtlFence(dev::MtlDevice)
-	handle = mtDeviceNewFence(dev)
-	obj = MtlFence(handle, dev)
-	finalizer(unsafe_destroy!, obj)
-	return obj
-end
-
-device(fen::MtlFence) = fen.device
+Base.hash(evh::MtlSharedEventHandle, h::UInt) = hash(evh.handle, h)

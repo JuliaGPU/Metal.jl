@@ -148,6 +148,8 @@ end
     MtLanguageVersion2_0 = 131072
     MtLanguageVersion2_1 = 131073
     MtLanguageVersion2_2 = 131074
+    MtLanguageVersion2_3 = 131075
+    MtLanguageVersion2_4 = 131076
 end
 
 @cenum MtFunctionType::UInt32 begin

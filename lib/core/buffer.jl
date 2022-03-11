@@ -1,7 +1,7 @@
-export
-    MtlBuffer, device, content, alloc, free, handle
+export MtlBuffer, device, content, alloc, free, handle
 
 const MTLBuffer = Ptr{MtBuffer}
+
 # From docs: "MSL implements a buffer as a pointer to a built-in or user defined data type described in the
 # device, constant, or threadgroup address space.
 struct MtlBuffer{T} <: MtlResource
@@ -15,14 +15,30 @@ Base.convert(::Type{MtlBuffer{T}}, buf::MtlBuffer{T2}) where {T,T2} =
 Base.:(==)(a::MtlBuffer, b::MtlBuffer) = a.handle == b.handle
 Base.hash(buf::MtlBuffer, h::UInt) = hash(buf.handle, h)
 
-Base.sizeof(buf::MtlBuffer)          = Int(mtBufferLength(buf))
+
+## properties
+
+Base.propertynames(o::MtlBuffer) = (
+    :length,
+    invoke(propertynames, Tuple{MtlResource}, o)...
+)
+
+function Base.getproperty(o::MtlBuffer, f::Symbol)
+    if f === :length 
+        mtBufferLength(o)
+    else
+        invoke(getproperty, Tuple{MtlResource, Symbol}, o, f)
+    end
+end
+
+Base.sizeof(buf::MtlBuffer)          = Int(buf.length)
 Base.length(d::MtlBuffer{T}) where T = sizeof(d) ÷ sizeof(T)
-device(buf::MtlBuffer)               = MtlDevice(mtResourceDevice(buf))
+
 content(buf::MtlBuffer{T}) where T   = Base.bitcast(Ptr{T}, mtBufferContents(buf))
 
-handle(buf::MtlBuffer) = buf.handle
 
-## Alloc
+## allocation
+
 alloc_buffer(dev::MtlDevice, bytesize, opts::MtlResourceOptions) =
     mtDeviceNewBufferWithLength(dev, bytesize, opts)
 alloc_buffer(dev::MtlHeap, bytesize, opts::MtlResourceOptions) =
@@ -37,7 +53,6 @@ alloc_buffer(dev, bytesize, opts::Integer) =
 alloc_buffer(dev, bytesize, opts::Integer, ptr) =
     alloc_buffer(dev, bytesize, Base.bitcast(MtlResourceOptions, UInt32(opts)), ptr)
 
-## Constructors from device
 # TODO: buffer should be untyped
 function MtlBuffer{T}(dev::Union{MtlDevice,MtlHeap},
                       length::Integer;
@@ -131,7 +146,9 @@ function ParentBuffer(buf::MtlBuffer)
     end
 end
 
-##
+
+## interop with CPU array
+
 function Base.unsafe_wrap(t::Type{<:Array}, buf::MtlBuffer{T}, dims; own=false) where {T}
     ptr = content(buf)
     ptr == C_NULL && error("Can't unsafe_wrap a GPU Private array.")

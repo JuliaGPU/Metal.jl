@@ -19,3 +19,17 @@ MtCommandQueue*
 mtNewCommandQueueWithMaxCommandBufferCount(MtDevice *device, NsUInteger count) {
   return [(id<MTLDevice>)device newCommandQueueWithMaxCommandBufferCount: count];
 }
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+MtDevice*
+mtCommandQueueDevice(MtCommandQueue *cmdq) {
+	return [(id<MTLCommandQueue>)cmdq device];
+}
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+const char*
+mtCommandQueueLabel(MtCommandQueue *cmdq) {
+	return Cstring([(id<MTLCommandQueue>)cmdq label]);
+}

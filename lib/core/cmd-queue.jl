@@ -37,13 +37,26 @@ function unsafe_destroy!(queue::MtlCommandQueue)
     end
 end
 
-function label(l::MtlCommandQueue)
-    ptr = mtCommandQueueLabel(l)
-    return ptr == C_NULL ? "" : unsafe_string(ptr) 
+
+## properties
+
+Base.propertynames(::MtlCommandQueue) = (:device, :label)
+
+function Base.getproperty(o::MtlCommandQueue, f::Symbol)
+    if f === :device 
+        MtlDevice(mtCommandQueueDevice(o))
+    elseif f === :label
+        ptr = mtCommandQueueLabel(o)
+        ptr == C_NULL ? "" : unsafe_string(ptr)
+    else
+        getfield(o, f)
+    end
 end
+
+
+## display
 
 function show(io::IO, ::MIME"text/plain", q::MtlCommandQueue)
     println(io, "MtlCommandQueue:")
-    println(io, " handle  : ", q.handle)
-    print(io, " device  : ", q.device)
+    print(io,   " device: ", q.device)
 end

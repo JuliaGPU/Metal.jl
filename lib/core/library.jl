@@ -1,4 +1,4 @@
-export MtlLibrary, MtlLibraryFromFile, MtlLibraryFromData, function_names
+export MtlLibrary, MtlLibraryFromFile, MtlLibraryFromData
 
 const MTLLibrary = Ptr{MtLibrary}
 
@@ -17,13 +17,6 @@ Base.unsafe_convert(::Type{MTLLibrary}, lib::MtlLibrary) = convert(MTLLibrary, l
 
 Base.:(==)(a::MtlLibrary, b::MtlLibrary) = a.handle == b.handle
 Base.hash(lib::MtlLibrary, h::UInt) = hash(lib.handle, h)
-
-## Properties
-device(l::MtlLibrary) = l.device
-function label(l::MtlLibrary)
-    ptr = mtLibraryLabel(l)
-    return ptr == C_NULL ? "" : unsafe_string(ptr)
-end
 
 function MtlLibrary(device::MtlDevice, src::String, opts::MtlCompileOptions)
     handle = @mtlthrows _errptr mtNewLibraryWithSource(device, src, opts, _errptr)
@@ -58,20 +51,35 @@ function unsafe_destroy!(lib::MtlLibrary)
     lib.handle !== C_NULL && mtRelease(lib)
 end
 
-function Base.show(io::IO, l::MtlLibrary)
-    print(io, "MtlLibrary($(l.device))")
+
+## properties
+
+Base.propertynames(::MtlLibrary) = (:device, :label, :functionNames)
+
+function Base.getproperty(lib::MtlLibrary, f::Symbol)
+    if f === :label
+        ptr = mtLibraryLabel(lib)
+        ptr == C_NULL ? "" : unsafe_string(ptr)
+    elseif f === :functionNames
+        count = Ref{Csize_t}(0)
+        mtLibraryFunctionNames(lib, count, C_NULL)
+        names = Vector{Cstring}(undef, count[])
+        mtLibraryFunctionNames(lib, count, names)
+        unsafe_string.(names)
+    else
+        getfield(lib, f)
+    end
 end
 
-function Base.show(io::IO, ::MIME"text/plain", l::MtlLibrary)
+
+## display
+
+function Base.show(io::IO, lib::MtlLibrary)
+    print(io, "MtlLibrary($(lib.device))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", lib::MtlLibrary)
     println(io, "MtlLibrary:")
-    println(io, " device : ", device(l))
-    print(io, " label  : ", label(l))
-end
-
-function function_names(l::MtlLibrary)
-    count = Ref{Csize_t}(0)
-    mtLibraryFunctionNames(l, count, C_NULL)
-    names = Vector{Cstring}(undef, count[])
-    mtLibraryFunctionNames(l, count, names)
-    unsafe_string.(names)
+    println(io, " device: ", lib.device)
+    print(io,   " label:  ", lib.label)
 end

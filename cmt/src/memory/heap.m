@@ -29,6 +29,13 @@ mtHeapLabel(MtHeap *heap) {
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
+MtHeapType 
+mtHeapType(MtHeap *heap) {
+	return (MtHeapType)[(id<MTLHeap>)heap type];
+}
+
+MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
 MtStorageMode 
 mtHeapStorageMode(MtHeap *heap) {

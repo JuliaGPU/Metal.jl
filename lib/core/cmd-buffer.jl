@@ -26,7 +26,6 @@ Base.unsafe_convert(::Type{MTLCommandBuffer}, q::MtlCommandBuffer) = convert(MTL
 Base.:(==)(a::MtlCommandBuffer, b::MtlCommandBuffer) = a.handle == b.handle
 Base.hash(q::MtlCommandBuffer, h::UInt) = hash(q.handle, h)
 
-# Constructor
 function MtlCommandBuffer(queue::MtlCommandQueue; retain_references = true)
     if retain_references
         handle = mtNewCommandBuffer(queue)
@@ -45,21 +44,48 @@ function unsafe_destroy!(cmdbuf::MtlCommandBuffer)
     end
 end
 
-## Properties
-device(l::MtlCommandBuffer) = MtlDevice(mtCommandBufferDevice(l))
-queue(l::MtlCommandBuffer) = l.queue
-retained_references(l::MtlCommandBuffer) = mtCommandBufferRetainedReferences(l)
-label(l::MtlCommandBuffer) = unsafe_string_maybe(mtCommandBufferLabel(l))
 
-##STATUS
-status(q::MtlCommandBuffer) = mtCommandBufferStatus(q)
-kernel_start_time(q::MtlCommandBuffer) = mtCommandBufferKernelStartTime(q)
-kernel_end_time(q::MtlCommandBuffer) = mtCommandBufferKernelEndTime(q)
-gpu_start_time(q::MtlCommandBuffer) = mtCommandBufferGPUStartTime(q)
-gpu_end_time(q::MtlCommandBuffer) = mtCommandBufferGPUEndTime(q)
-execution_error(q::MtlCommandBuffer) = NsError_maybe(mtCommandBufferError(q))
+## properties
 
-# Operations
+Base.propertynames(::MtlCommandBuffer) = (
+    :device, :commandQueue, :label,
+    :status, #=:errorOptions,=# :error,
+    #=:logs,=#
+    :kernelStartTime, :kernelEndTime, :gpuStartTime, :gpuEndTime,
+    :retainedReferences
+)
+
+function Base.getproperty(o::MtlCommandBuffer, f::Symbol)
+    if f === :device
+        MtlDevice(mtCommandBufferDevice(o))
+    elseif f === :commandQueue
+        MtlCommandQueue(mtCommandBufferCommandQueue(o), o.device)
+    elseif f === :label
+        ptr = mtCommandBufferLabel(o)
+        ptr == C_NULL ? "" : unsafe_string(ptr)
+    elseif f === :status
+        mtCommandBufferStatus(o)
+    elseif f === :error
+        ptr = mtCommandBufferError(o)
+        ptr == C_NULL ? nothing : NsError(ptr)
+    elseif f === :kernelStartTime
+        mtCommandBufferKernelStartTime(o)
+    elseif f === :kernelEndTime
+        mtCommandBufferKernelEndTime(o)
+    elseif f === :gpuStartTime
+        mtCommandBufferGPUStartTime(o)
+    elseif f === :gpuEndTime
+        mtCommandBufferGPUEndTime(o)
+    elseif f === :retainedReferences
+        mtCommandBufferRetainedReferences(o)
+    else
+        getfield(o, f)
+    end
+end
+
+
+## operations
+
 """
     enqueue!(q::MtlCommandBuffer)
 
@@ -99,9 +125,8 @@ Base.wait(q::MtlCommandBuffer) = waitUntilCompleted(q)
 
 function show(io::IO, ::MIME"text/plain", q::MtlCommandBuffer)
     println(io, "MtlCommandBuffer:")
-    println(io, " handle  : ", q.handle)
-    println(io, " queue   : ", q.queue)
-    print(io, "  status : ", status(q))
+    println(io, " queue:  ", q.commandQueue)
+    print(io,   " status: ", q.status)
 end
 
 ## One-Api like stuff

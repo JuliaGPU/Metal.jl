@@ -23,35 +23,61 @@ function unsafe_destroy!(opts::MtlCompileOptions)
     opts.handle !== C_NULL && mtRelease(opts)
 end
 
-Base.propertynames(o::MtlCompileOptions) = (:fastmath, :languageversion)
-function Base.getproperty(o::MtlCompileOptions, f::Symbol)
-    if f === :handle
-        return getfield(o, :handle)
-    elseif f === :fastmath
-        return mtCompileOptsFastMath(o)
-    elseif f === :languageversion
-        return mtCompileOptsLanguageVersion(o)
+
+## properties
+
+Base.propertynames(::MtlCompileOptions) = (:fastMathEnabled, :languageVersion)
+
+const language_versions = Dict(
+    MtLanguageVersion1_0 => v"1.0",
+    MtLanguageVersion1_1 => v"1.1",
+    MtLanguageVersion1_2 => v"1.2",
+    MtLanguageVersion2_0 => v"2.0",
+    MtLanguageVersion2_1 => v"2.1",
+    MtLanguageVersion2_2 => v"2.2",
+    MtLanguageVersion2_3 => v"2.3",
+    MtLanguageVersion2_4 => v"2.4",
+)
+
+function Base.getproperty(opts::MtlCompileOptions, f::Symbol)
+    if f === :fastMathEnabled
+        mtCompileOptsFastMath(opts)
+    elseif f === :languageVersion
+        ver = mtCompileOptsLanguageVersion(opts)
+        haskey(language_versions, ver) || error("Unknown language version $ver; please file an issue.")
+        language_versions[ver]
     else
-        error("CompileOptions does not have field $f")
+        getfield(opts, f)
     end
 end
 
-function Base.setproperty!(o::MtlCompileOptions, f::Symbol, val)
-    if f === :fastmath
-        return mtCompileOptsFastMathSet(o, val)
-    elseif f === :languageversion
-        return mtCompileOptsLanguageVersionSet(o, val)
+function Base.setproperty!(opts::MtlCompileOptions, f::Symbol, val)
+    if f === :fastMathEnabled
+        mtCompileOptsFastMathSet(opts, val)
+    elseif f === :languageVersion
+        isa(val, VersionNumber) ||
+            throw(ArgumentError("languageVersion property should be a version number"))
+        for (enum,ver) in language_versions
+            if ver === val
+                mtCompileOptsLanguageVersionSet(opts, enum)
+                return
+            end
+        end
+        error("Unknown language version $val")
     else
-        error("CompileOptions does not have field $f")
+        setfield!(opts, f, val)
     end
 end
 
-function Base.show(io::IO, l::MtlCompileOptions)
+
+## display
+
+function Base.show(io::IO, opts::MtlCompileOptions)
     print(io, "CompileOptions(…)")
 end
 
-function Base.show(io::IO, ::MIME"text/plain", l::MtlCompileOptions)
+function Base.show(io::IO, ::MIME"text/plain", opts::MtlCompileOptions)
     println(io, "CompileOptions:")
-    println(io, " fastmath : ", l.fastmath)
-    print(io, " version  : ", l.languageversion)
+    println(io, " fast math:        ", opts.fastMathEnabled)
+    print(io,   " language version: ", opts.languageVersion)
 end

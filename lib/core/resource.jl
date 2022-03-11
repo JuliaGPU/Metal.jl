@@ -6,14 +6,27 @@ abstract type MtlResource end
 
 Base.unsafe_convert(::Type{MTLResource}, res::MtlResource) = Base.bitcast(MTLResource, res.handle)
 
-device(res::MtlResource) = convert(MtlDevice, mtResourceDevice(res))
 
-function label(l::MtlResource)
-    ptr = mtResourceLabel(l)
-    return ptr == C_NULL ? "" : unsafe_string(ptr)
+## properties
+
+Base.propertynames(::MtlResource) =
+    (:device, :label, :cpuCacheMode, :storageMode, :hazardTrackingMode, :resourceOptions)
+
+function Base.getproperty(res::MtlResource, f::Symbol)
+    if f === :device
+        MtlDevice(mtResourceDevice(res))
+    elseif f === :label
+        ptr = mtResourceLabel(res)
+        ptr == C_NULL ? "" : unsafe_string(ptr)
+    elseif f === :cpuCacheMode
+        mtResourceCPUCacheMode(res)
+    elseif f === :storageMode
+        mtResourceStorageMode(res)
+    elseif f === :hazardTrackingMode
+        mtResourceHazardTrackingMode(res)
+    elseif f === :resourceOptions
+        mtResourceOptions(res)
+    else
+        getfield(res, f)
+    end
 end
-
-cpuCacheMode(res::MtlResource) = mtResourceCPUCacheMode(res)
-storage(res::MtlResource) = mtResourceStorageMode(res)
-hazardTrackingMode(res::MtlResource) = mtResourceHazardTrackingMode(res)
-options(res::MtlResource) = mtResourceOptions(res)

@@ -1,8 +1,5 @@
 export MtlDevice, devices
 
-
-## construction
-
 const MTLDevice = Ptr{MtDevice}
 
 struct MtlDevice
@@ -10,7 +7,7 @@ struct MtlDevice
 end
 
 Base.convert(::Type{MTLDevice}, dev::MtlDevice) = dev.handle
-Base.unsafe_convert(::Type{MTLDevice}, d::MtlDevice) = convert(MTLDevice, d.handle)
+Base.unsafe_convert(::Type{MTLDevice}, dev::MtlDevice) = convert(MTLDevice, dev.handle)
 
 Base.:(==)(a::MtlDevice, b::MtlDevice) = a.handle == b.handle
 Base.hash(dev::MtlDevice, h::UInt) = hash(dev.handle, h)
@@ -35,36 +32,72 @@ Get a handle to a compute device.
 """
 MtlDevice(i::Integer) = devices()[i]
 
-function Base.show(io::IO, d::MtlDevice)
-    print(io, "MtlDevice($(name(d)))")
-end
-
-function Base.show(io::IO, ::MIME"text/plain", d::MtlDevice)
-    println(io, "MtlDevice:")
-    println(io, " name :             ", name(d))
-    println(io, " lowpower :         ", is_lowpower(d))
-    println(io, " headless :         ", is_headless(d))
-    println(io, " removable :        ", is_removable(d))
-    println(io, " unified memory :   ", has_unified_memory(d))
-    println(io, " id :               ", registry_id(d))
-    print(io,   " transfer rate :    ", max_transfer_rate(d))
-end
-
 
 ## properties
 
-name(d::MtlDevice) = unsafe_string(mtDeviceName(d))
+Base.propertynames(::MtlDevice) = (
+    # GPU properties
+    :recommendedMaxWorkingSetSize,
+    :hasUnifiedMemory,
+    :maxTransferRate,
+    :name,
+    :isHeadless,
+    :isLowPower,
+    :isRemovable,
+    :registryID,
+    # threadgroup limits
+    :maxThreadgroupMemoryLength,
+    :maxThreadsPerThreadgroup,
+    # buffers
+    :maxBufferLength,
+    # gpu memory
+    :currentAllocatedSize,
+)
 
-is_lowpower(d::MtlDevice) = mtDeviceLowPower(d)
-is_headless(d::MtlDevice) = mtDeviceHeadless(d)
-is_removable(d::MtlDevice) = mtDeviceRemovable(d)
-has_unified_memory(d::MtlDevice) = mtDeviceHasUnifiedMemory(d)
-registry_id(d::MtlDevice) = mtDeviceRegistryID(d)
-max_transfer_rate(d::MtlDevice) = mtDeviceMaxTransferRate(d)
+function Base.getproperty(dev::MtlDevice, f::Symbol)
+    if f === :recommendedMaxWorkingSetSize
+        mtDeviceRecommendedMaxWorkingSetSize(dev)
+    elseif f === :hasUnifiedMemory
+        mtDeviceHasUnifiedMemory(dev)
+    elseif f === :maxTransferRate
+        mtDeviceMaxTransferRate(dev)
+    elseif f === :name
+        unsafe_string(mtDeviceName(dev))
+    elseif f === :isHeadless
+        mtDeviceLowPower(dev)
+    elseif f === :isLowPower
+        mtDeviceHeadless(dev)
+    elseif f === :isRemovable
+        mtDeviceRemovable(dev)
+    elseif f === :registryID
+        mtDeviceRegistryID(dev)
+    elseif f === :maxThreadgroupMemoryLength
+        mtDeviceMaxThreadgroupMemoryLength(dev)
+    elseif f === :maxThreadsPerThreadgroup
+        mtMaxThreadsPerThreadgroup(dev)
+    elseif f === :maxBufferLength
+        mtDeviceMaxBufferLength(dev)
+    elseif f === :currentAllocatedSize
+        mtDeviceCurrentAllocatedSize(dev)
+    else
+        getfield(dev, f)
+    end
+end
 
-max_workingsetsize(d::MtlDevice) = mtDeviceRecommendedMaxWorkingSetSize(d)
-max_threadgroupmemorylength(d::MtlDevice) = mtDeviceMaxThreadgroupMemoryLength(d)
-max_threadspergroup(d::MtlDevice) = mtMaxThreadsPerThreadgroup(d)
-max_bufferlength(d::MtlDevice) = mtDeviceMaxBufferLength(d)
 
-allocatedsize(d::MtlDevice) = mtDeviceCurrentAllocatedSize(d)
+## display
+
+function Base.show(io::IO, dev::MtlDevice)
+    print(io, "MtlDevice($(dev.name))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", dev::MtlDevice)
+    println(io, "MtlDevice:")
+    println(io, " name:             ", dev.name)
+    println(io, " lowpower:         ", dev.isLowPower)
+    println(io, " headless:         ", dev.isHeadless)
+    println(io, " removable:        ", dev.isRemovable)
+    println(io, " unified memory:   ", dev.hasUnifiedMemory)
+    println(io, " registry id:      ", dev.registryID)
+    print(io,   " transfer rate:    ", dev.maxTransferRate)
+end

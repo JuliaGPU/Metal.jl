@@ -1543,6 +1543,18 @@ function mtNewCommandQueueWithMaxCommandBufferCount(device, count)
           device, count)
 end
 
+function mtCommandQueueDevice(cmdq)
+    ccall((:mtCommandQueueDevice, libcmt), Ptr{MtDevice},
+          (Ptr{MtCommandQueue},),
+          cmdq)
+end
+
+function mtCommandQueueLabel(cmdq)
+    ccall((:mtCommandQueueLabel, libcmt), Cstring,
+          (Ptr{MtCommandQueue},),
+          cmdq)
+end
+
 function mtNewArgumentDescriptor()
     ccall((:mtNewArgumentDescriptor, libcmt), Ptr{MtArgumentDescriptor}, ())
 end
