@@ -261,6 +261,23 @@ end
 
 end
 
+@testset "compute pipeline" begin
+
+dev = first(devices())
+lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
+fun = MtlFunction(lib, "kernel_1")
+
+pipeline = MtlComputePipelineState(dev, fun)
+
+@test pipeline.device == dev
+@test pipeline.label === nothing
+
+@test pipeline.maxTotalThreadsPerThreadgroup isa Integer
+@test pipeline.threadExecutionWidth isa Integer
+@test pipeline.staticThreadgroupMemoryLength == 0
+
+end
+
 # TODO: continue adding tests
 
 end

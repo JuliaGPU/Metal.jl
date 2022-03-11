@@ -28,34 +28,31 @@ function MtlComputePipelineState(d::MtlDevice, f::MtlFunction)
     return obj
 end
 
-device(l::MtlComputePipelineState) = l.device
-function label(l::MtlComputePipelineState)
-    ptr = mtComputePipelineLabel(l)
-    if ptr == C_NULL
-        return ""
-    else
-        return unsafe_string(ptr)
-    end
-end
 
+## properties
 
-Base.propertynames(o::MtlComputePipelineState) =
-    (:maxTotalThreadsPerThreadgroup, :threadExecutionWidth, :staticThreadgroupMemoryLength, :device, :label)
+Base.propertynames(o::MtlComputePipelineState) = (
+    # identification
+    :device, :label,
+    # threadgroup attributes
+    :maxTotalThreadsPerThreadgroup, :threadExecutionWidth, :staticThreadgroupMemoryLength,
+    #other
+    #=supportIndirectCommandBuffers=#
+)
 
 function Base.getproperty(o::MtlComputePipelineState, f::Symbol)
-    if f === :handle
-        return getfield(o, :handle)
-    elseif f === :maxTotalThreadsPerThreadgroup
-        return mtComputePipelineMaxTotalThreadsPerThreadgroup(o)
-    elseif f === :threadExecutionWidth
-        return mtComputePipelineThreadExecutionWidth(o)
-    elseif f === :staticThreadgroupMemoryLength
-        return mtComputePipelineStaticThreadgroupMemoryLength(o)
-    elseif f === :device
-        return getfield(o, :device)
+    if f === :device
+        return MtlDevice(mtComputePipelineDevice(o))
     elseif f === :label
-        return label(o)
+        ptr = mtComputePipelineLabel(o)
+        ptr == C_NULL ? nothing : unsafe_string(ptr)
+    elseif f === :maxTotalThreadsPerThreadgroup
+        return Int(mtComputePipelineMaxTotalThreadsPerThreadgroup(o))
+    elseif f === :threadExecutionWidth
+        return Int(mtComputePipelineThreadExecutionWidth(o))
+    elseif f === :staticThreadgroupMemoryLength
+        return Int(mtComputePipelineStaticThreadgroupMemoryLength(o))
     else
-        error("MtlComputePipelineState does not have field $f")
+        getfield(o, f)
     end
 end
