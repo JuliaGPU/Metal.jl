@@ -1,5 +1,5 @@
 export
-    MtlCommandBuffer, commit!
+    MtlCommandBuffer, enqueue!, wait_scheduled, wait_completed, encode_signal!, encode_wait!, commit!
 
 const MTLCommandBuffer = Ptr{MtCommandBuffer}
 
@@ -26,11 +26,11 @@ Base.unsafe_convert(::Type{MTLCommandBuffer}, q::MtlCommandBuffer) = convert(MTL
 Base.:(==)(a::MtlCommandBuffer, b::MtlCommandBuffer) = a.handle == b.handle
 Base.hash(q::MtlCommandBuffer, h::UInt) = hash(q.handle, h)
 
-function MtlCommandBuffer(queue::MtlCommandQueue; retain_references = true)
-    if retain_references
-        handle = mtNewCommandBuffer(queue)
+function MtlCommandBuffer(queue::MtlCommandQueue; retain_references::Bool=true)
+    handle = if retain_references
+        mtNewCommandBuffer(queue)
     else
-        handle = mtNewCommandBufferWithUnretainedReferences(queue)
+        mtNewCommandBufferWithUnretainedReferences(queue)
     end
 
     obj = MtlCommandBuffer(handle, queue)
@@ -84,6 +84,15 @@ function Base.getproperty(o::MtlCommandBuffer, f::Symbol)
 end
 
 
+## display
+
+function show(io::IO, ::MIME"text/plain", q::MtlCommandBuffer)
+    println(io, "MtlCommandBuffer:")
+    println(io, " queue:  ", q.commandQueue)
+    print(io,   " status: ", q.status)
+end
+
+
 ## operations
 
 """
@@ -100,8 +109,10 @@ into the command buffers and those threads can complete in any order.
 """
 enqueue!(q::MtlCommandBuffer) = mtCommandBufferEnqueue(q)
 
+commit!(q::MtlCommandBuffer) = mtCommandBufferCommit(q)
+
 """
-    waitUntilScheduled(commandBuffer)
+    wait_scheduled(commandBuffer)
 
 Blocks execution of the current thread until the command buffer is scheduled.
 This method returns after the command buffer has been scheduled and all code
@@ -109,27 +120,18 @@ blocks registered by addScheduledHandler: have been invoked. A command buffer
 is considered scheduled after all its dependencies are resolved, and it is sent
 to the GPU for execution.
 """
-waitUntilScheduled(q::MtlCommandBuffer) = mtCommandBufferWaitUntilScheduled(q)
+wait_scheduled(q::MtlCommandBuffer) = mtCommandBufferWaitUntilScheduled(q)
 
 """
-    waitUntilCompleted(cmdbuf::MtlCommandBuffer)
-    Base.wait(cmdbuf::MtlCommandBuffer)
+    wait_completed(cmdbuf::MtlCommandBuffer)
 
 Blocks execution of the current thread until execution of the command
 buffer is completed.
 This method returns after the command buffer is completed and all code
 blocks registered by addCompletedHandler: are invoked.
 """
-waitUntilCompleted(q::MtlCommandBuffer) = mtCommandBufferWaitUntilCompleted(q)
-Base.wait(q::MtlCommandBuffer) = waitUntilCompleted(q)
+wait_completed(q::MtlCommandBuffer) = mtCommandBufferWaitUntilCompleted(q)
 
-function show(io::IO, ::MIME"text/plain", q::MtlCommandBuffer)
-    println(io, "MtlCommandBuffer:")
-    println(io, " queue:  ", q.commandQueue)
-    print(io,   " status: ", q.status)
-end
-
-## One-Api like stuff
 """
     encode_signal!(buf::MtlCommandBuffer, ev::MtlEvent, val::UInt)
 
@@ -143,8 +145,8 @@ waiting on the event are allowed to run if the new value is equal to or
 greater than the value for which they are waiting. For shared events, this
 update similarly triggers notification handlers waiting on the event.
 """
-append_signal!(buf::MtlCommandBuffer, ev::MtlEvent, val::UInt) =
-    mtEncodeSignalEvent(buf, ev, val)
+encode_signal!(buf::MtlCommandBuffer, ev::MtlAbstractEvent, val::Integer) =
+    mtCommandBufferEncodeSignalEvent(buf, ev, val)
 
 """
     encode_wait!(buf::MtlCommandBuffer, ev::MtlEvent, val::UInt)
@@ -160,22 +162,5 @@ GPU executes commands that appear earlier than the wait command,
 but doesn't start any commands that appear after it. Execution continues
 immediately if the event already has an equal or larger value.
 """
-append_wait!(buf::MtlCommandBuffer, ev::MtlEvent, val::UInt) =
-    mtEncodeWaitForEvent(buf, ev, val)
-
-##
-
-commit!(q::MtlCommandBuffer) = mtCommandBufferCommit(q)
-commit!(q::Vector{MtlCommandBuffer}) = map(mtCommandBufferCommit, q)
-
-function commit!(f::Base.Callable, queue::MtlCommandQueue; kwargs...)
-    cmdbuf = MtlCommandBuffer(f, queue; kwargs...)
-    commit!(cmdbuf)
-    return cmdbuf
-end
-
-function MtlCommandBuffer(f::Base.Callable, queue::MtlCommandQueue; kwargs...)
-    cmdbuf = MtlCommandBuffer(queue; kwargs...)
-    f(cmdbuf)
-    return cmdbuf
-end
+encode_wait!(buf::MtlCommandBuffer, ev::MtlAbstractEvent, val::Integer) =
+    mtCommandBufferEncodeWaitForEvent(buf, ev, val)

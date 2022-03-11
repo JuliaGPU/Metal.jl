@@ -250,7 +250,14 @@ cmdbuf = MtlCommandBuffer(cmdq)
 @test cmdbuf.gpuStartTime == 0
 @test cmdbuf.gpuEndTime == 0
 
-# TODO: test enqueueing things
+let ev = MtlSharedEvent(dev)
+    @test ev.signaledValue == 0
+    encode_signal!(cmdbuf, ev, 42)
+    encode_wait!(cmdbuf, ev, 21)
+    commit!(cmdbuf)
+    wait_completed(cmdbuf)
+    @test ev.signaledValue == 42
+end
 
 end
 

@@ -201,7 +201,7 @@ mtlcall(f::MtlKernel, types::Tuple, args...; kwargs...) =
 
 @inline function mtlcall(f::MtlKernel, types::Type, args...; kwargs...)
     # Handle kwargs here??
-    queue = global_queue(f.lib.device)
+    cmdq = global_queue(f.lib.device)
 
     # Process kernel call arguments
     grid    = 1
@@ -217,13 +217,14 @@ mtlcall(f::MtlKernel, types::Tuple, args...; kwargs...) =
         end
     end
 
-    cmd = MTL.commit!(queue) do cmdbuf
-        MtlComputeCommandEncoder(cmdbuf) do cce
-            enqueue_function(f, args...; grid, threads, cce)
-        end
+    cmdbuf = MtlCommandBuffer(cmdq)
+    MtlComputeCommandEncoder(cmdbuf) do cce
+        enqueue_function(f, args...; grid, threads, cce)
     end
-    # Should this happen here?
-    wait(cmd)
+    commit!(cmdbuf)
+
+    # XXX: don't wait here (this makes kernel launches synchronous)
+    wait_completed(cmdbuf)
 end
 
 ##############################################
