@@ -88,7 +88,12 @@ MT_HIDE
 MT_INLINE
 const char*
 CstringFromDict(NSDictionary<NSErrorUserInfoKey, id> *dict) {
-	return Cstring([NSString stringWithFormat:@"Dictionary: %@", dict]);
+	NSError *err;
+	NSData *jsonData = [NSJSONSerialization dataWithJSONObject:dict options:0 error:&err];
+	// FIXME: string ownership?
+	NSString *jsonString = [[NSString alloc] initWithData: jsonData
+	                                             encoding: NSUTF8StringEncoding];
+	return Cstring(jsonString);
 }
 
 MT_HIDE

@@ -3,6 +3,7 @@ module MTL
 import Libdl
 using CEnum
 using Scratch
+using JSON
 
 const libcmt = joinpath(@get_scratch!("cmt"), "lib", "libcmt.dylib")
 

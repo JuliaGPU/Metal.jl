@@ -27,29 +27,62 @@ function unsafe_destroy!(err::MtlError)
 	mtRelease(err)
 end
 
-description(err::MtlError) = unsafe_string_maybe(mtErrorLocalizedDescription(err))
-recoverySuggestion(err::MtlError) = unsafe_string_maybe(mtErrorLocalizedRecoverySuggestion(err))
-failureReason(err::MtlError) = unsafe_string_maybe(mtErrorLocalizedFailureReason(err))
 
-function recoveryOptions(err::MtlError)
-	count = Ref{Csize_t}(0)
-	mtErrorLocalizedRecoveryOptions(err, count, C_NULL)
-	options = Vector{String}(undef, count[])
-	mtErrorLocalizedRecoveryOptions(err, count, options)
-	unsafe_string.(options)
+## properties
+
+Base.propertynames(::MtlError) = (
+	# error properties
+	:code, :domain, :userInfo,
+	# localized error descriptions
+	:localizedDescription, :localizedRecoveryOptions,
+	:localizedRecoverySuggestion, :localizedFailureReason)
+
+function Base.getproperty(o::MtlError, f::Symbol)
+    if f === :code
+        mtErrorCode(o)
+    elseif f === :domain
+        unsafe_string(mtErrorDomain(o))
+    elseif f === :userinfo 
+        ptr = mtErrorUserInfo(o)
+        if ptr == C_NULL
+			Dict{String,Any}()
+		else
+			JSON.parse(unsafe_string(ptr))
+		end		
+    elseif f === :localizedDescription
+        unsafe_string(mtErrorLocalizedDescription(o))
+    elseif f === :localizedRecoveryOptions
+		count = Ref{Csize_t}(0)
+		mtErrorLocalizedRecoveryOptions(o, count, C_NULL)
+		options = Vector{String}(undef, count[])
+		mtErrorLocalizedRecoveryOptions(o, count, options)
+		unsafe_string.(options)
+    elseif f === :localizedRecoverySuggestion
+        ptr = mtErrorLocalizedRecoverySuggestion(o)
+        ptr == C_NULL ? nothing : unsafe_string(ptr)
+    elseif f === :localizedFailureReason
+        ptr = mtErrorLocalizedFailureReason(o)
+        ptr == C_NULL ? nothing : unsafe_string(ptr)
+    else
+        getfield(o, f)
+    end
 end
 
-Base.show(io::IO, ::MIME"text/plain", err::MtlError) = _show(io, err)
-Base.show(io::IO, err::MtlError) = _show(io, err)
 
-function _show(io::IO,  err::MtlError)
-	println(io, "MtlError (Error in Metal Runtime):")
-	println(io, " code     : ", err.code)
-	println(io, " domain   : ", err.domain)
-	println(io, " userinfo : ", replace(err.userinfo, "\\n"=>"\n"))
+## display
 
-	isempty(description(err)) || println(io, "Description:", description(err))
-	isempty(recoverySuggestion(err)) || println(io, "Suggestion:", recoverySuggestion(err))
-	isempty(failureReason(err)) || println(io, "Failure Reason:", failureReason(err))
-	isempty(recoveryOptions(err)) || println(io, "Recovery Options:", recoveryOptions(err))
+function Base.showerror(io::IO, err::MtlError)
+	print(io, "MtlError: $(err.localizedDescription) (code $(err.code), $(err.domain))")
+
+	if err.localizedFailureReason !== nothing
+		print(io, "\nFailure reason: $(err.localizedFailureReason)")
+	end
+
+	recovery_options = err.localizedRecoveryOptions
+	if !isempty(recovery_options)
+		print(io, "\nRecovery Options:")
+		for option in recovery_options
+			print(io, "\n - $(option)")
+		end
+	end
 end
