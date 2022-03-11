@@ -1,4 +1,4 @@
-export MtlResource, storage, options, cpuCacheMode, hazardTrackingMode
+export MtlResource
 
 const MTLResource = Ptr{MtResource}
 

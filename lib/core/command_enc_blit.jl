@@ -1,5 +1,4 @@
-export
-    MtlBlitCommandEncoder, append_copy!, append_fillbuffer!, append_sync!
+export MtlBlitCommandEncoder, append_copy!, append_fillbuffer!, append_sync!
 
 const MTLBlitCommandEncoder = Ptr{MtBlitCommandEncoder}
 

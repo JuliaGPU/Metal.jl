@@ -1,5 +1,4 @@
-export
-    MtlCommandBuffer, enqueue!, wait_scheduled, wait_completed, encode_signal!, encode_wait!, commit!
+export MtlCommandBuffer, enqueue!, wait_scheduled, wait_completed, encode_signal!, encode_wait!, commit!
 
 const MTLCommandBuffer = Ptr{MtCommandBuffer}
 

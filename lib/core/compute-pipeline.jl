@@ -1,5 +1,4 @@
-export
-    MtlComputePipelineState
+export MtlComputePipelineState
 
 const MTLComputePipelineState = Ptr{MtComputePipelineState}
 
