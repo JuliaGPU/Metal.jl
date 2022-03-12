@@ -23,7 +23,7 @@ using Metal
 
     @test sizeof(buf) == 8
     @test length(buf) == 1
-    @test device(buf) == dev
+    @test buf.device == dev
     free(buf)
 
     mtl_arr = MtlArray{Int}(undef, 1)

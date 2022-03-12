@@ -102,7 +102,7 @@ Adapt.adapt_storage(::Adaptor, xs::MtlArray{T,N}) where {T,N} =
 #   convert(Core.LLVMPtr{T,AS.Device}, xs)
 
 function Base.convert(::Type{Core.LLVMPtr{T,AS.Device}}, a::MtlArray{T}) where {T}
-    reinterpret(Core.LLVMPtr{T, 1}, handle(pointer(a)))
+    reinterpret(Core.LLVMPtr{T, 1}, a.buffer.handle)
 end
 ## interop with CPU arrays
 

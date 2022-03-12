@@ -103,9 +103,15 @@ into the command buffers and those threads can complete in any order.
 
 [enqueue](https://developer.apple.com/documentation/metal/mtlcommandbuffer/1443019-enqueue?language=objc)
 """
-enqueue!(q::MtlCommandBuffer) = mtCommandBufferEnqueue(q)
+function enqueue!(q::MtlCommandBuffer)
+    q.status == MtCommandBufferStatusEnqueued && error("Cannot enqueue an already enqueued command buffer")
+    mtCommandBufferEnqueue(q) 
+end
 
-commit!(q::MtlCommandBuffer) = mtCommandBufferCommit(q)
+function commit!(q::MtlCommandBuffer)
+    q.status in [MtCommandBufferStatusCompleted, MtCommandBufferStatusCommitted] && error("Cannot commit an already committed/completed command buffer")
+    mtCommandBufferCommit(q)
+end
 
 """
     wait_scheduled(commandBuffer)

@@ -9,17 +9,17 @@ DeviceBuffer
 
 # constructors
 DeviceBuffer{T,A}(x::Union{Int,UInt,DeviceBuffer,DevicePtr}) where {T,A}            = Base.bitcast(DeviceBuffer{T,A}, x)
-DeviceBuffer{T,A}(ptr::MtlBuffer{T})                         where {T,A}            = Base.bitcast(DeviceBuffer{T,A}, handle(ptr))
-DeviceBuffer{T}(ptr::MtlBuffer{T})                           where {T}                 = Base.bitcast(DeviceBuffer{T,AS.Device}, handle(ptr))
-DeviceBuffer(ptr::MtlBuffer{T})                              where {T}                 = Base.bitcast(DeviceBuffer{T,AS.Device}, handle(ptr))
+DeviceBuffer{T,A}(ptr::MtlBuffer{T})                         where {T,A}            = Base.bitcast(DeviceBuffer{T,A}, ptr.handle)
+DeviceBuffer{T}(ptr::MtlBuffer{T})                           where {T}                 = Base.bitcast(DeviceBuffer{T,AS.Device}, ptr.handle)
+DeviceBuffer(ptr::MtlBuffer{T})                              where {T}                 = Base.bitcast(DeviceBuffer{T,AS.Device}, ptr.handle)
 
 ## conversions
 Base.convert(::Type{DeviceBuffer{T,A}}, x::Union{Int,UInt}) where {T,A} = DeviceBuffer{T,A}(x)
 
 # between host and device pointers
 Base.convert(::Type{MtlBuffer{T}},      p::DeviceBuffer)  where {T}                   = MtlBuffer{T}(Base.bitcast(MTL.MTLBuffer, p))
-Base.convert(::Type{DeviceBuffer{T,A}}, p::MtlBuffer)     where {T,A}                 = Base.bitcast(DeviceBuffer{T,A}, handle(p))
-Base.convert(::Type{DeviceBuffer{T}},   p::MtlBuffer)     where {T}                   = Base.bitcast(DeviceBuffer{T,AS.Generic}, handle(p))
+Base.convert(::Type{DeviceBuffer{T,A}}, p::MtlBuffer)     where {T,A}                 = Base.bitcast(DeviceBuffer{T,A}, p.handle)
+Base.convert(::Type{DeviceBuffer{T}},   p::MtlBuffer)     where {T}                   = Base.bitcast(DeviceBuffer{T,AS.Generic}, p.handle)
 
 # between CPU pointers, for the purpose of working with `ccall`
 Base.unsafe_convert(::Type{MTL.MTLBuffer}, x::DeviceBuffer{T}) where {T} = reinterpret(MTL.MTLBuffer, x)
