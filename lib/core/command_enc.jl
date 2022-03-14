@@ -9,6 +9,5 @@ function unsafe_destroy!(cce::MtlCommandEncoder)
     mtRelease(cce.handle)
 end
 
-
-endEncoding!(ce::MtlCommandEncoder) = mtCommandEncoderEndEncoding(ce);
+endEncoding!(ce::MtlCommandEncoder) = mtCommandEncoderEndEncoding(ce.handle)
 Base.close(ce::MtlCommandEncoder) = endEncoding!(ce)
