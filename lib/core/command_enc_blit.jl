@@ -7,8 +7,7 @@ mutable struct MtlBlitCommandEncoder <: MtlCommandEncoder
     cmdbuf::MtlCommandBuffer
 end
 
-Base.convert(::Type{MTLBlitCommandEncoder}, e::MtlBlitCommandEncoder) = e.handle
-Base.unsafe_convert(::Type{MTLBlitCommandEncoder}, e::MtlBlitCommandEncoder) = convert(MTLBlitCommandEncoder, e.handle)
+Base.unsafe_convert(::Type{MTLBlitCommandEncoder}, e::MtlBlitCommandEncoder) = e.handle
 
 function MtlBlitCommandEncoder(cmdbuf::MtlCommandBuffer)
     handle = mtNewBlitCommandEncoder(cmdbuf)

@@ -9,8 +9,7 @@ mutable struct MtlComputeCommandEncoder <: MtlCommandEncoder
     cmdbuf::MtlCommandBuffer
 end
 
-Base.convert(::Type{MTLComputeCommandEncoder}, q::MtlComputeCommandEncoder) = q.handle
-Base.unsafe_convert(::Type{MTLComputeCommandEncoder}, q::MtlComputeCommandEncoder) = convert(MTLComputeCommandEncoder, q.handle)
+Base.unsafe_convert(::Type{MTLComputeCommandEncoder}, q::MtlComputeCommandEncoder) = q.handle
 
 function MtlComputeCommandEncoder(cmdbuf::MtlCommandBuffer; dispatch_type::Union{Nothing,MtDispatchType} = nothing)
     if isnothing(dispatch_type)

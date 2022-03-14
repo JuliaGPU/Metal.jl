@@ -10,8 +10,7 @@ mutable struct MtlError <: Exception
 	ptr::MTLError
 end
 
-Base.convert(::Type{MTLError}, err::MtlError) = err.ptr
-Base.unsafe_convert(::Type{MTLError}, err::MtlError) = convert(MTLError, err.ptr)
+Base.unsafe_convert(::Type{MTLError}, err::MtlError) = err.ptr
 
 function MtlError(err::MTLError)
 	code = mtErrorCode(err)

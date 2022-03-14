@@ -75,8 +75,7 @@ function unsafe_destroy!(evh::MtlSharedEventHandle)
 	evh.handle !== C_NULL && mtRelease(evh.handle)
 end
 
-Base.convert(::Type{MTLSharedEventHandle}, evh::MtlSharedEventHandle) = evh.handle
-Base.unsafe_convert(::Type{MTLSharedEventHandle}, evh::MtlSharedEventHandle) = convert(MTLSharedEventHandle, evh.handle)
+Base.unsafe_convert(::Type{MTLSharedEventHandle}, evh::MtlSharedEventHandle) = evh.handle
 
 Base.:(==)(a::MtlSharedEventHandle, b::MtlSharedEventHandle) = a.handle == b.handle
 Base.hash(evh::MtlSharedEventHandle, h::UInt) = hash(evh.handle, h)

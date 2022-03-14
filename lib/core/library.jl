@@ -12,8 +12,7 @@ mutable struct MtlLibrary
     device::MtlDevice
 end
 
-Base.convert(::Type{MTLLibrary}, lib::MtlLibrary) = lib.handle
-Base.unsafe_convert(::Type{MTLLibrary}, lib::MtlLibrary) = convert(MTLLibrary, lib.handle)
+Base.unsafe_convert(::Type{MTLLibrary}, lib::MtlLibrary) = lib.handle
 
 Base.:(==)(a::MtlLibrary, b::MtlLibrary) = a.handle == b.handle
 Base.hash(lib::MtlLibrary, h::UInt) = hash(lib.handle, h)

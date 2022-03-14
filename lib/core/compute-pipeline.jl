@@ -7,8 +7,7 @@ mutable struct MtlComputePipelineState
     device::MtlDevice
 end
 
-Base.convert(::Type{MTLComputePipelineState}, q::MtlComputePipelineState) = q.handle
-Base.unsafe_convert(::Type{MTLComputePipelineState}, q::MtlComputePipelineState) = convert(MTLComputePipelineState, q.handle)
+Base.unsafe_convert(::Type{MTLComputePipelineState}, q::MtlComputePipelineState) = q.handle
 
 Base.:(==)(a::MtlComputePipelineState, b::MtlComputePipelineState) = a.handle == b.handle
 Base.hash(q::MtlComputePipelineState, h::UInt) = hash(q.handle, h)

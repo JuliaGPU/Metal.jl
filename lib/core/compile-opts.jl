@@ -6,8 +6,7 @@ mutable struct MtlCompileOptions
     handle::MTLCompileOptions
 end
 
-Base.convert(::Type{MTLCompileOptions}, opts::MtlCompileOptions) = opts.handle
-Base.unsafe_convert(::Type{MTLCompileOptions}, opts::MtlCompileOptions) = convert(MTLCompileOptions, opts.handle) 
+Base.unsafe_convert(::Type{MTLCompileOptions}, opts::MtlCompileOptions) = opts.handle
 
 Base.:(==)(a::MtlCompileOptions, b::MtlCompileOptions) = a.handle == b.handle
 Base.hash(opts::MtlCompileOptions, h::UInt) = hash(opts.handle, h)

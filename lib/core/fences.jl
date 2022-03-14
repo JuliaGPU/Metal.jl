@@ -7,8 +7,7 @@ mutable struct MtlFence
 	device::MtlDevice
 end
 
-Base.convert(::Type{MTLFence}, fen::MtlFence) = fen.handle
-Base.unsafe_convert(::Type{MTLFence}, fen::MtlFence) = convert(MTLFence, fen.handle)
+Base.unsafe_convert(::Type{MTLFence}, fen::MtlFence) = fen.handle
 
 Base.:(==)(a::MtlFence, b::MtlFence) = a.handle == b.handle
 Base.hash(ev::MtlFence, h::UInt) = hash(ev.handle, h)

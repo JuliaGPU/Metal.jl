@@ -17,8 +17,7 @@ function unsafe_destroy!(desc::MtlHeapDescriptor)
     desc.handle !== C_NULL && mtRelease(desc.handle)
 end
 
-Base.convert(::Type{MTLHeapDescriptor}, dev::MtlHeapDescriptor) = dev.handle
-Base.unsafe_convert(::Type{MTLHeapDescriptor}, d::MtlHeapDescriptor) = convert(MTLHeapDescriptor, d.handle) 
+Base.unsafe_convert(::Type{MTLHeapDescriptor}, d::MtlHeapDescriptor) = d.handle
 
 Base.:(==)(a::MtlHeapDescriptor, b::MtlHeapDescriptor) = a.handle == b.handle
 Base.hash(dev::MtlHeapDescriptor, h::UInt) = hash(dev.handle, h)
@@ -86,8 +85,7 @@ mutable struct MtlHeap
     device::MtlDevice
 end
 
-Base.convert(::Type{MTLHeap}, dev::MtlHeap) = dev.handle
-Base.unsafe_convert(::Type{MTLHeap}, d::MtlHeap) = convert(MTLHeap, d.handle) 
+Base.unsafe_convert(::Type{MTLHeap}, d::MtlHeap) = d.handle
 
 Base.:(==)(a::MtlHeap, b::MtlHeap) = a.handle == b.handle
 Base.hash(dev::MtlHeap, h::UInt) = hash(dev.handle, h)

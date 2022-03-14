@@ -9,8 +9,6 @@ struct MtlBuffer{T} <: MtlResource
 end
 
 Base.unsafe_convert(::Type{MTLBuffer}, buf::MtlBuffer) = buf.handle
-Base.convert(::Type{MtlBuffer{T}}, buf::MtlBuffer{T2}) where {T,T2} =
-    MtlBuffer{T}(buf.handle)
 
 Base.:(==)(a::MtlBuffer, b::MtlBuffer) = a.handle == b.handle
 Base.hash(buf::MtlBuffer, h::UInt) = hash(buf.handle, h)

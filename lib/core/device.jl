@@ -6,8 +6,7 @@ struct MtlDevice
     handle::MTLDevice
 end
 
-Base.convert(::Type{MTLDevice}, dev::MtlDevice) = dev.handle
-Base.unsafe_convert(::Type{MTLDevice}, dev::MtlDevice) = convert(MTLDevice, dev.handle)
+Base.unsafe_convert(::Type{MTLDevice}, dev::MtlDevice) = dev.handle
 
 Base.:(==)(a::MtlDevice, b::MtlDevice) = a.handle == b.handle
 Base.hash(dev::MtlDevice, h::UInt) = hash(dev.handle, h)

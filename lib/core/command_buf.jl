@@ -19,8 +19,7 @@ mutable struct MtlCommandBuffer
     queue::MtlCommandQueue
 end
 
-Base.convert(::Type{MTLCommandBuffer}, q::MtlCommandBuffer) = q.handle
-Base.unsafe_convert(::Type{MTLCommandBuffer}, q::MtlCommandBuffer) = convert(MTLCommandBuffer, q.handle)
+Base.unsafe_convert(::Type{MTLCommandBuffer}, q::MtlCommandBuffer) = q.handle
 
 Base.:(==)(a::MtlCommandBuffer, b::MtlCommandBuffer) = a.handle == b.handle
 Base.hash(q::MtlCommandBuffer, h::UInt) = hash(q.handle, h)

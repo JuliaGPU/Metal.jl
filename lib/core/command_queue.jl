@@ -18,8 +18,7 @@ mutable struct MtlCommandQueue
     device::MtlDevice
 end
 
-Base.convert(::Type{MTLCommandQueue}, q::MtlCommandQueue) = q.handle
-Base.unsafe_convert(::Type{MTLCommandQueue}, q::MtlCommandQueue) = convert(MTLCommandQueue, q.handle) 
+Base.unsafe_convert(::Type{MTLCommandQueue}, q::MtlCommandQueue) = q.handle
 
 Base.:(==)(a::MtlCommandQueue, b::MtlCommandQueue) = a.handle == b.handle
 Base.hash(q::MtlCommandQueue, h::UInt) = hash(q.handle, h)
