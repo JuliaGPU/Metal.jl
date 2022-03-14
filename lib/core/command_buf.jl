@@ -39,7 +39,7 @@ end
 
 function unsafe_destroy!(cmdbuf::MtlCommandBuffer)
     if cmdbuf.handle !== C_NULL
-        mtRelease(cmdbuf)
+        mtRelease(cmdbuf.handle)
     end
 end
 

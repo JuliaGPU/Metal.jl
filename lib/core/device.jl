@@ -20,7 +20,7 @@ Get an iterator for the compute devices.
 function devices()
     count = Ref{Csize_t}(0)
     mtCopyAllDevices(count, C_NULL)
-    handles = Vector{Cstring}(undef, count[])
+    handles = Vector{Ptr{MtDevice}}(undef, count[])
     mtCopyAllDevices(count, handles)
     MtlDevice.(handles)
 end

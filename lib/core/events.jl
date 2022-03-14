@@ -12,18 +12,18 @@ mutable struct MtlEvent <: MtlAbstractEvent
 end
 
 mutable struct MtlSharedEvent <: MtlAbstractEvent
-	handle::MTLEvent
+	handle::MTLSharedEvent
 	device::MtlDevice
 end
 
-Base.convert(::Type{MTLEvent}, ev::MtlAbstractEvent) = ev.handle
 Base.unsafe_convert(::Type{MTLEvent}, ev::MtlAbstractEvent) = convert(MTLEvent, ev.handle)
+Base.unsafe_convert(::Type{MTLSharedEvent}, ev::MtlSharedEvent) = ev.handle
 
 Base.:(==)(a::MtlAbstractEvent, b::MtlAbstractEvent) = a.handle == b.handle
 Base.hash(ev::MtlAbstractEvent, h::UInt) = hash(ev.handle, h)
 
 function unsafe_destroy!(fun::MtlAbstractEvent)
-	fun.handle !== C_NULL && mtRelease(fun)
+	fun.handle !== C_NULL && mtRelease(fun.handle)
 end
 
 function MtlEvent(dev::MtlDevice)
@@ -72,7 +72,7 @@ function MtlSharedEventHandle(ev::MtlSharedEvent)
 end
 
 function unsafe_destroy!(evh::MtlSharedEventHandle)
-	evh.handle !== C_NULL && mtRelease(evh)
+	evh.handle !== C_NULL && mtRelease(evh.handle)
 end
 
 Base.convert(::Type{MTLSharedEventHandle}, evh::MtlSharedEventHandle) = evh.handle

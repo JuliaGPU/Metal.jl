@@ -20,7 +20,7 @@ function MtlCompileOptions()
 end
 
 function unsafe_destroy!(opts::MtlCompileOptions)
-    opts.handle !== C_NULL && mtRelease(opts)
+    opts.handle !== C_NULL && mtRelease(opts.handle)
 end
 
 

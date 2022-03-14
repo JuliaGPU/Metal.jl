@@ -33,7 +33,7 @@ end
 
 function unsafe_destroy!(queue::MtlCommandQueue)
     if queue.handle !== C_NULL
-        mtRelease(queue)
+        mtRelease(queue.handle)
     end
 end
 

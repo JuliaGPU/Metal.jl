@@ -7,7 +7,7 @@ Base.hash(q::MtlCommandEncoder, h::UInt) = hash(q.handle, h)
 
 function unsafe_destroy!(cce::MtlCommandEncoder)
     if cce.handle !== C_NULL
-        mtRelease(cce)
+        mtRelease(cce.handle)
     end
 end
 

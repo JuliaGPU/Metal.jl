@@ -13,13 +13,13 @@ function MtlArgumentEncoder(fun::MtlFunction, entry::Integer)
     return obj
 end
 
-function unsafe_destroy!(cce::MtlArgumentEncoder)
-    if cce.handle !== C_NULL
-        mtRelease(cce)
+function unsafe_destroy!(enc::MtlArgumentEncoder)
+    if enc.handle !== C_NULL
+        mtRelease(enc.handle)
     end
 end
 
-Base.unsafe_convert(::Type{MTLArgumentEncoder}, fun::MtlArgumentEncoder) = fun.handle
+Base.unsafe_convert(::Type{MTLArgumentEncoder}, enc::MtlArgumentEncoder) = enc.handle
 
 Base.:(==)(a::MtlArgumentEncoder, b::MtlArgumentEncoder) = a.handle == b.handle
 Base.hash(fun::MtlArgumentEncoder, h::UInt) = hash(mod.handle, h)

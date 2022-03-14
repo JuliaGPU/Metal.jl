@@ -24,7 +24,7 @@ function MtlError(err::MTLError)
 end
 
 function unsafe_destroy!(err::MtlError)
-	mtRelease(err)
+	mtRelease(err.handle)
 end
 
 
