@@ -296,3 +296,44 @@ end
 # TODO: continue adding tests
 
 end
+
+
+@testset "arrays" begin
+
+mtl_arr = MtlArray{Int}(undef, 1)
+arr = Array(mtl_arr)
+
+@test sizeof(arr) == 8
+@test length(arr) == 1
+@test eltype(arr) == Int
+
+end
+
+
+@testset "kernels" begin
+
+function tester(A)
+    idx = thread_position_in_grid_1d()
+    A[idx] = Int(5)
+    return nothing
+end
+
+bufferSize = 8
+bufferA = MtlArray{Int,1}(undef, tuple(bufferSize), storage=Shared)
+vecA = unsafe_wrap(Vector{Int}, bufferA.buffer, tuple(bufferSize))
+
+@metal threads=(bufferSize) tester(bufferA.buffer)
+@test all(vecA .== Int(5))
+
+@testset "launch params" begin
+    vecA .= 0
+    @metal threads=(2) tester(bufferA.buffer)
+    @test all(vecA == Int.([5, 5, 0, 0, 0, 0, 0, 0]))
+    vecA .= 0
+    
+    @metal grid=(3) threads=(2) tester(bufferA.buffer)
+    @test all(vecA == Int.([5, 5, 5, 5, 5, 5, 0, 0]))
+    vecA .= 0
+end
+
+end
