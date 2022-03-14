@@ -122,6 +122,8 @@ typedef enum MtLanguageVersion {
     MtLanguageVersion2_0  = (2 << 16),
     MtLanguageVersion2_1  = (2 << 16) + 1,
     MtLanguageVersion2_2  = (2 << 16) + 2,
+    MtLanguageVersion2_3  = (2 << 16) + 3,
+    MtLanguageVersion2_4  = (2 << 16) + 4,
 } MtLanguageVersion;
 
 typedef enum MtFunctionType {
