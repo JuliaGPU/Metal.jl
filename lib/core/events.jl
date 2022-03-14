@@ -23,7 +23,7 @@ Base.:(==)(a::MtlAbstractEvent, b::MtlAbstractEvent) = a.handle == b.handle
 Base.hash(ev::MtlAbstractEvent, h::UInt) = hash(ev.handle, h)
 
 function unsafe_destroy!(fun::MtlAbstractEvent)
-	fun.handle !== C_NULL && mtRelease(fun.handle)
+	mtRelease(fun.handle)
 end
 
 function MtlEvent(dev::MtlDevice)
@@ -72,7 +72,7 @@ function MtlSharedEventHandle(ev::MtlSharedEvent)
 end
 
 function unsafe_destroy!(evh::MtlSharedEventHandle)
-	evh.handle !== C_NULL && mtRelease(evh.handle)
+	mtRelease(evh.handle)
 end
 
 Base.unsafe_convert(::Type{MTLSharedEventHandle}, evh::MtlSharedEventHandle) = evh.handle

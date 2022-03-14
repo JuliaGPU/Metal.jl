@@ -14,9 +14,7 @@ function MtlArgumentEncoder(fun::MtlFunction, entry::Integer)
 end
 
 function unsafe_destroy!(enc::MtlArgumentEncoder)
-    if enc.handle !== C_NULL
-        mtRelease(enc.handle)
-    end
+    mtRelease(enc.handle)
 end
 
 Base.unsafe_convert(::Type{MTLArgumentEncoder}, enc::MtlArgumentEncoder) = enc.handle

@@ -37,9 +37,7 @@ function MtlCommandBuffer(queue::MtlCommandQueue; retain_references::Bool=true)
 end
 
 function unsafe_destroy!(cmdbuf::MtlCommandBuffer)
-    if cmdbuf.handle !== C_NULL
-        mtRelease(cmdbuf.handle)
-    end
+    mtRelease(cmdbuf.handle)
 end
 
 

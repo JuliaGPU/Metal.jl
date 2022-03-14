@@ -14,7 +14,7 @@ mutable struct MtlComputePipelineReflection
 end
 
 function unsafe_destroy!(fun::MtlComputePipelineReflection)
-    fun.handle !== C_NULL && mtRelease(fun.handle)
+    mtRelease(fun.handle)
 end
 
 Base.unsafe_convert(::Type{MTLComputePipelineReflection}, fun::MtlComputePipelineReflection) = fun.handle

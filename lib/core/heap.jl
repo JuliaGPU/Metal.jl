@@ -14,7 +14,7 @@ function MtlHeapDescriptor()
 end
 
 function unsafe_destroy!(desc::MtlHeapDescriptor)
-    desc.handle !== C_NULL && mtRelease(desc.handle)
+    mtRelease(desc.handle)
 end
 
 Base.unsafe_convert(::Type{MTLHeapDescriptor}, d::MtlHeapDescriptor) = d.handle
@@ -98,7 +98,7 @@ function MtlHeap(device::MtlDevice, desc::MtlHeapDescriptor)
 end
 
 function unsafe_destroy!(desc::MtlHeap)
-    desc.handle !== C_NULL && mtRelease(desc.handle)
+    mtRelease(desc.handle)
 end
 
 

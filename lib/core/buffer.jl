@@ -115,7 +115,7 @@ alloc(args...; kwargs...) = MtlBuffer(args...; kwargs...)
 Frees the buffer if the handle is valid.
 This does not protect against double-freeing of the same buffer!
 """
-free(buf::MtlBuffer) = (buf.handle !== C_NULL) || mtRelease(buf.handle)
+free(buf::MtlBuffer) = mtRelease(buf.handle)
 
 """
     DidModifyRange!(buf::MtlBuffer{T}, range::UnitRange)

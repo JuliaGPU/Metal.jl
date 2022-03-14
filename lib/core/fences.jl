@@ -20,5 +20,5 @@ function MtlFence(dev::MtlDevice)
 end
 
 function unsafe_destroy!(fen::MtlFence)
-	fen.handle !== C_NULL && mtRelease(fen.handle)
+	mtRelease(fen.handle)
 end

@@ -31,9 +31,7 @@ function MtlCommandQueue(dev::MtlDevice)
 end
 
 function unsafe_destroy!(queue::MtlCommandQueue)
-    if queue.handle !== C_NULL
-        mtRelease(queue.handle)
-    end
+    mtRelease(queue.handle)
 end
 
 
