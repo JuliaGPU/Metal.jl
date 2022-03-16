@@ -2,7 +2,7 @@ export @metal
 
 # Match Darwin version to MacOS version only caring about M1 release and after
 # Following: https://en.wikipedia.org/wiki/Darwin_(operating_system)#History
-const darwin_to_macos = Dict( 
+const darwin_to_macos = Dict(
                         # Catalina
                         v"19.2.0" => v"10.15.2",
                         v"19.3.0" => v"10.15.3",
@@ -22,7 +22,8 @@ const darwin_to_macos = Dict(
                         v"21.0.1" => v"12.0.0",
                         v"21.1.0" => v"12.0.1",
                         v"21.2.0" => v"12.1.0",
-                        v"21.3.0" => v"12.2.0")
+                        v"21.3.0" => v"12.2.0",
+                        v"21.4.0" => v"12.3.0")
 
 macro metal(ex...)
     call = ex[end]
@@ -295,12 +296,12 @@ function encode_argument!(enc::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx
 
         # TODO Implement automatic conversion of struct into a assign_argument_buffer
 
-        #for field in val 
+        #for field in val
         #    MTL.set_field!(argbuf_enc, size(val), 1)
         #    set_buffer!(argbuf_enc, pointer(val), 0, 2)
         #end
 
-        # set argubuf_enc into cce        
+        # set argubuf_enc into cce
     end
     return cce
 end
@@ -327,7 +328,7 @@ function encode_argument!(cce::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx
 
     MTL.use!(cce, mtl_buf, MTL.ReadWriteUsage) # try using the command_encoder version (no MTL.)
 
-    
+
     set_buffer!(cce, argbuf, 0, idx)
     @info "Leaked temporary argument buffer $(argbuf.handle) for argument #$idx"
     #TODO memmgmt
