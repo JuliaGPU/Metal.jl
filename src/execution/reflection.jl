@@ -46,7 +46,7 @@ end
 #
 
 export @device_code_lowered, @device_code_typed, @device_code_warntype,
-       @device_code_llvm, @device_code_metallib, @device_code
+       @device_code_llvm, @device_code_metal, @device_code
 
 
 # forward the rest to GPUCompiler
@@ -54,5 +54,5 @@ export @device_code_lowered, @device_code_typed, @device_code_warntype,
 @eval $(Symbol("@device_code_typed")) = $(getfield(GPUCompiler, Symbol("@device_code_typed")))
 @eval $(Symbol("@device_code_warntype")) = $(getfield(GPUCompiler, Symbol("@device_code_warntype")))
 @eval $(Symbol("@device_code_llvm")) = $(getfield(GPUCompiler, Symbol("@device_code_llvm")))
-@eval $(Symbol("@device_code_metallib")) = $(getfield(GPUCompiler, Symbol("@device_code_native")))
+@eval $(Symbol("@device_code_metal")) = $(getfield(GPUCompiler, Symbol("@device_code_native")))
 @eval $(Symbol("@device_code")) = $(getfield(GPUCompiler, Symbol("@device_code")))
