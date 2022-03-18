@@ -6,6 +6,7 @@ using Adapt
 using GPUCompiler
 using LLVM
 using LLVM.Interop
+using Metal_LLVM_Tools_jll
 
 # core library
 include("../lib/core/MTL.jl")
