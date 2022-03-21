@@ -22,7 +22,7 @@ Base.propertynames(o::MtlBuffer) = (
 )
 
 function Base.getproperty(o::MtlBuffer, f::Symbol)
-    if f === :length 
+    if f === :length
         mtBufferLength(o)
     else
         invoke(getproperty, Tuple{MtlResource, Symbol}, o, f)
@@ -77,7 +77,7 @@ function MtlBuffer{T}(dev::Union{MtlDevice,MtlHeap},
     bytesize = length * sizeof(T)
     ptr = alloc_buffer(dev, bytesize, opts, ptr)
 
-    dev = dev isa MtlDevice ? dev : device(dev)
+    dev = dev isa MtlDevice ? dev : dev.device
     return MtlBuffer{T}(ptr)
 end
 

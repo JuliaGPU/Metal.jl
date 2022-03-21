@@ -175,7 +175,7 @@ let desc = MtlHeapDescriptor()
     @test desc.resourceOptions == MTL.MtResourceStorageModePrivate |
                                   MTL.MtResourceCPUCacheModeDefaultCache |
                                   MTL.MtResourceHazardTrackingModeDefault
-    
+
     # setting resource options should be reflected in individual fields
     @test desc.storageMode == MTL.MtStorageModePrivate
     @test desc.cpuCacheMode == MTL.MtCPUCacheModeDefaultCache
