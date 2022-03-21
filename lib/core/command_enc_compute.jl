@@ -22,7 +22,7 @@ function MtlComputeCommandEncoder(cmdbuf::MtlCommandBuffer; dispatch_type::Union
     return obj
 end
 
-device(cce::MtlComputeCommandEncoder) = device(cce.cmdbuf)
+device(cce::MtlComputeCommandEncoder) = cce.cmdbuf.device
 
 set_function!(cce::MtlComputeCommandEncoder, pip::MtlComputePipelineState) =
     mtComputeCommandEncoderSetComputePipelineState(cce, pip)
