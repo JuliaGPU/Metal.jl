@@ -343,6 +343,4 @@ end
     @test all(vecA .== Int(5))
 end
 
-end
-
-end
+end # End kernels
