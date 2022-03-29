@@ -21,7 +21,7 @@ for (intr, offset) in nodim_intr
     @eval begin
         export $(Symbol(intr))
     
-        $(Symbol(intr))() = ccall($"extern julia.air.$intr.i32", llvmcall, Int32, ()) + Int32($offset)
+        $(Symbol(intr))() = ccall($"extern julia.air.$intr.i32", llvmcall, UInt32, ()) + UInt32($offset)
     end
 end
 
@@ -46,10 +46,24 @@ for (intr, offset) in dim_intr
         export $(Symbol(intr * "_3d"))
 
         $(Symbol(intr * "_1d"))() =
-            ccall($"extern julia.air.$intr.i32", llvmcall, Int32, ()) + Int32($offset)
+            ccall($"extern julia.air.$intr.i32", llvmcall, UInt32, ()) + UInt32($offset)
+        
         $(Symbol(intr * "_2d"))() =
-            ccall($"extern julia.air.$intr.v2i32", llvmcall, NTuple{2, VecElement{Int32}}, ()) + Int32($offset)
+            Base.llvmcall("""%3 = add <2 x i32> %1, %0
+                ret <2 x i32> %3""",
+                Tuple{VecElement{UInt32},VecElement{UInt32}},
+                Tuple{Tuple{VecElement{UInt32},VecElement{UInt32}},
+                Tuple{VecElement{UInt32},VecElement{UInt32}}},
+                (VecElement{UInt32}(1),VecElement{UInt32}(1)),
+                ccall($"extern julia.air.$intr.v2i32", llvmcall, NTuple{2, VecElement{UInt32}}, ()))
+
         $(Symbol(intr * "_3d"))() =
-            ccall($"extern julia.air.$intr.v3i32", llvmcall, NTuple{3, VecElement{Int32}}, ()) + Int32($offset)
+            Base.llvmcall("""%3 = add <3 x i32> %1, %0
+                ret <3 x i32> %3""",
+                Tuple{VecElement{UInt32},VecElement{UInt32},VecElement{UInt32}},
+                Tuple{Tuple{VecElement{UInt32},VecElement{UInt32},VecElement{UInt32}},
+                Tuple{VecElement{UInt32},VecElement{UInt32},VecElement{UInt32}}},
+                (VecElement{UInt32}(1),VecElement{UInt32}(1),VecElement{UInt32}(1)),
+                ccall($"extern julia.air.$intr.v3i32", llvmcall, NTuple{3, VecElement{UInt32}}, ()))
     end
 end
