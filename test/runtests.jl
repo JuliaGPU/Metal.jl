@@ -341,6 +341,27 @@ end
 @testset "argument buffers" begin
     @metal threads=(bufferSize) tester(bufferA)
     @test all(vecA .== Int(5))
+    vecA .= 0
+
+    function no_intrinsic(A)
+        A[1] += Int(5)
+        return nothing
+    end
+    @metal no_intrinsic(bufferA)
+    @test all(vecA == Int.([5, 0, 0, 0, 0, 0, 0, 0]))
+
+    function types_tester(A::MtlDeviceVector{T}) where T
+        idx = thread_position_in_grid_1d()
+        A[idx] = T(5)
+        return nothing
+    end
+    types = [Float32, Float16, Int64, Int32, Int16, Int8]
+    for typ in types
+        bufferA = MtlArray{typ,1}(undef, tuple(bufferSize), storage=Shared)
+        vecA = unsafe_wrap(Vector{typ}, bufferA.buffer, tuple(bufferSize))
+        @metal threads=(bufferSize) types_tester(bufferA)
+        @test all(vecA .== typ(5))
+    end
 end
 
 @testset "math intrinsics" begin
