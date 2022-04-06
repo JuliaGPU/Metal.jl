@@ -332,7 +332,7 @@ vecA = unsafe_wrap(Vector{Int}, bufferA.buffer, tuple(bufferSize))
     @metal threads=(2) tester(bufferA.buffer)
     @test all(vecA == Int.([5, 5, 0, 0, 0, 0, 0, 0]))
     vecA .= 0
-    
+
     @metal grid=(3) threads=(2) tester(bufferA.buffer)
     @test all(vecA == Int.([5, 5, 5, 5, 5, 5, 0, 0]))
     vecA .= 0
@@ -342,5 +342,7 @@ end
     @metal threads=(bufferSize) tester(bufferA)
     @test all(vecA .== Int(5))
 end
+
+# TODO: Math intrinsics tests
 
 end # End kernels

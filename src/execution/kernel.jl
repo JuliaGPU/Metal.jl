@@ -83,9 +83,6 @@ macro metal(ex...)
     return esc(code)
 end
 
-struct MetalCompilerParams <: GPUCompiler.AbstractCompilerParams end
-GPUCompiler.runtime_module(::CompilerJob{<:Any,MetalCompilerParams}) = Metal
-
 abstract type AbstractKernel{F,TT} end
 
 @generated function call(kernel::AbstractKernel{F,TT}, args...; call_kwargs...) where {F,TT}
