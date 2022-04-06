@@ -343,6 +343,26 @@ end
     @test all(vecA .== Int(5))
 end
 
-# TODO: Math intrinsics tests
+@testset "math intrinsics" begin
+    a = ones(Float32,1)
+    a .* Float32(3.14)
+    bufferA = MtlArray(a)
+    vecA = unsafe_wrap(Vector{Float32}, bufferA.buffer, 1)
 
-end # End kernels
+    function intr_test(buf)
+        idx = thread_position_in_grid_1d()
+        buf[idx] = cos(buf[idx])
+        return nothing
+    end
+    @metal intr_test(bufferA.buffer)
+    @test vecA ≈ cos.(a)
+
+    function intr_test2(buf)
+        idx = thread_position_in_grid_1d()
+        buf[idx] = Metal.rsqrt(buf[idx])
+        return nothing
+    end
+    @metal intr_test2(bufferA.buffer)
+end
+
+end # End kernels testset
