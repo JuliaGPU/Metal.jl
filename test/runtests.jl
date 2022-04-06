@@ -259,6 +259,8 @@ let ev = MtlSharedEvent(dev)
     @test ev.signaledValue == 42
 end
 
+# cmdbuf = MtlCommandBuffer(cmdq)
+# enqueue!(cmdbuf)
 end
 
 @testset "compute pipeline" begin
@@ -336,4 +338,9 @@ vecA = unsafe_wrap(Vector{Int}, bufferA.buffer, tuple(bufferSize))
     vecA .= 0
 end
 
+@testset "argument buffers" begin
+    @metal threads=(bufferSize) tester(bufferA)
+    @test all(vecA .== Int(5))
 end
+
+end # End kernels

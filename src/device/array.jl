@@ -53,11 +53,6 @@ MtlDeviceVector{T,A}(len::Integer,               p::Core.LLVMPtr{T,A}) where {T,
 Base.pointer(a::MtlDeviceArray) = a.ptr
 Base.pointer(a::MtlDeviceArray, i::Integer) = pointer(a) + (i - 1) * Base.elsize(a)
 
-# MtlBuffer pointer
-function pointer_buf(a::MtlDeviceArray{T}) where T
-    return DeviceBuffer(MtlBuffer{T}(reinterpret(Ptr{MTL.MtBuffer}, pointer(a))))
-end
-
 Base.elsize(::Type{<:MtlDeviceArray{T}}) where {T} = sizeof(T)
 Base.size(g::MtlDeviceArray) = g.shape
 # Testing to fix argument encoding with the trailing , for vectors

@@ -175,7 +175,6 @@ end
 function mtlfunction_compile(@nospecialize(job::CompilerJob), ctx::Context)
     mi, mi_meta = GPUCompiler.emit_julia(job)
     ir, ir_meta = GPUCompiler.emit_llvm(job, mi; ctx)
-
     image, asm_meta = GPUCompiler.emit_asm(job, ir; strip=false, format=LLVM.API.LLVMObjectFile) # TODO: Undo strip eventually
     return (image, entry=LLVM.name(ir_meta.entry))
 end
@@ -306,33 +305,28 @@ function encode_argument!(enc::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx
     return cce
 end
 
-# Encode MtlDeviceArrays as argument buffer?
-function encode_argument!(cce::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, val::MtlDeviceArray)
+# Encode MtlDeviceArray using an argument buffer
+function encode_argument!(cce::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, val::MtlDeviceArray{T}) where T
     #@assert contains_mtlbuffer(typeof(val))
-
-
     # create an encoder to write into the argument buffer
     argbuf_enc = MtlArgumentEncoder(f, idx)
     # allocate the argument buffer
     argbuf = alloc(Cchar, device(cce), sizeof(argbuf_enc), storage=Shared)
     # assign the argument buffer to the arg buff encoder
     MTL.assign_argument_buffer!(argbuf_enc, argbuf, 1)
-    # Encode the size of the MtlDeviceArray
-    MTL.set_field!(argbuf_enc, size(val), 1)
 
     # Convert LLVMPtr to MtlBuffer
-    #mtl_buf = pointer_buf(val)
-    mtl_buf = MtlBuffer{Float32}(Base.bitcast(MTL.MTLBuffer, val.ptr))
+    mtl_buf = MtlBuffer{T}(Base.bitcast(MTL.MTLBuffer, val.ptr))
     # encode the buffer into the argument buffer
-    MTL.set_buffer!(argbuf_enc, mtl_buf, 0, 2)
+    set_buffer!(argbuf_enc, mtl_buf, 0, 1)
+    # Encode the size of the MtlDeviceArray into the argument buffer
+    MTL.set_field!(argbuf_enc, size(val), 2)
+    # Set the device array usage for read/write TODO: Handle constant arrays
+    MTL.use!(cce, mtl_buf, MTL.ReadWriteUsage) 
 
-    MTL.use!(cce, mtl_buf, MTL.ReadWriteUsage) # try using the command_encoder version (no MTL.)
-
-
+    # Set the argument buffer at given argument index
     set_buffer!(cce, argbuf, 0, idx)
     @info "Leaked temporary argument buffer $(argbuf.handle) for argument #$idx"
     #TODO memmgmt
-    # Why return argbuf??
-    # return argbuf
     return cce
 end

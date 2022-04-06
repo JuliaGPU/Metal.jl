@@ -92,7 +92,7 @@ Base.unsafe_convert(t::Type{MTL.MTLBuffer}, x::MtlArray{T}) where {T}   = Base.u
 # TODO Figure out global
 
 function Base.convert(::Type{MtlDeviceArray{T,N,AS.Device}}, a::MtlArray{T,N}) where {T,N}
-    MtlDeviceArray{T,N,AS.Device}(a.dims, reinterpret(Core.LLVMPtr{T, 1}, content(pointer(a))))
+    MtlDeviceArray{T,N,AS.Device}(a.dims, reinterpret(Core.LLVMPtr{T, 1}, pointer(a).handle))
 end
 
 Adapt.adapt_storage(::Adaptor, xs::MtlArray{T,N}) where {T,N} =
