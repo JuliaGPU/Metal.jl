@@ -7,11 +7,11 @@ end
 
 # list of overrides (only for Julia 1.6)
 const overrides = Expr[]
-    
+
 macro device_override(ex)
     ex = macroexpand(__module__, ex)
     if Meta.isexpr(ex, :call)
-        @show ex = eval(ex)
+        ex = eval(ex)
         error()
     end
     code = quote
