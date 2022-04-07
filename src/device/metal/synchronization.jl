@@ -34,19 +34,19 @@ end
 
 
 """
-    threadgroup_barrier(flag::Union{UInt32,Int32})
+    threadgroup_barrier(flag::MemoryFlags=MemoryFlagNone)
 
 Synchronize all threads in a threadgroup.
 
 Possible flags that affect the memory synchronization behavior are found in [`MemoryFlags`](@ref)
 """
-@inline threadgroup_barrier(flag::MemoryFlags) = ccall("extern air.wg.barrier", llvmcall, Cvoid, (Cuint, Cuint, ), flag, UInt32(1))
+@inline threadgroup_barrier(flag::MemoryFlags=MemoryFlagNone) = ccall("extern air.wg.barrier", llvmcall, Cvoid, (Cuint, Cuint, ), flag, UInt32(1))
 
 """
-    simdgroup_barrier(flag::Union{UInt32,Int32})
+    simdgroup_barrier(flag::MemoryFlags=MemoryFlagNone)
 
 Synchronize all threads in a SIMD-group.
 
 Possible flags that affect the memory synchronization behavior are found in [`MemoryFlags`](@ref)
 """
-@inline simdgroup_barrier(flag::MemoryFlags) = ccall("extern air.simdgroup.barrier", llvmcall, Cvoid, (Cuint, Cuint, ), flag, UInt32(1))
+@inline simdgroup_barrier(flag::MemoryFlags=MemoryFlagNone) = ccall("extern air.simdgroup.barrier", llvmcall, Cvoid, (Cuint, Cuint, ), flag, UInt32(1))
