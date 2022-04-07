@@ -31,6 +31,7 @@ include("execution/reflection.jl")
 include("state.jl")
 
 # array abstraction
+include("utilities.jl")
 include("array.jl")
 include("memory.jl")
 include("broadcast.jl")

@@ -219,9 +219,6 @@ mtlcall(f::MtlKernel, types::Tuple, args...; kwargs...) =
         enqueue_function(f, args...; grid, threads, cce)
     end
     commit!(cmdbuf)
-
-    # XXX: don't wait here (this makes kernel launches synchronous)
-    wait_completed(cmdbuf)
 end
 
 ##############################################
@@ -319,11 +316,10 @@ function encode_argument!(cce::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx
     # Encode the size of the MtlDeviceArray into the argument buffer
     MTL.set_field!(argbuf_enc, size(val), 2)
     # Set the device array usage for read/write TODO: Handle constant arrays
-    MTL.use!(cce, mtl_buf, MTL.ReadWriteUsage) 
+    MTL.use!(cce, mtl_buf, MTL.ReadWriteUsage)
 
     # Set the argument buffer at given argument index
     set_buffer!(cce, argbuf, 0, idx)
-    @info "Leaked temporary argument buffer $(argbuf.handle) for argument #$idx"
-    #TODO memmgmt
+    #TODO memmgmt: Leaked temporary argument buffer (argbuf)
     return cce
 end
