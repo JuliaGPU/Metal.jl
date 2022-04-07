@@ -219,9 +219,6 @@ mtlcall(f::MtlKernel, types::Tuple, args...; kwargs...) =
         enqueue_function(f, args...; grid, threads, cce)
     end
     commit!(cmdbuf)
-
-    # XXX: don't wait here (this makes kernel launches synchronous)
-    wait_completed(cmdbuf)
 end
 
 ##############################################
@@ -323,7 +320,6 @@ function encode_argument!(cce::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx
 
     # Set the argument buffer at given argument index
     set_buffer!(cce, argbuf, 0, idx)
-    @info "Leaked temporary argument buffer $(argbuf.handle) for argument #$idx"
-    #TODO memmgmt
+    #TODO memmgmt: Leaked temporary argument buffer (argbuf)
     return cce
 end

@@ -324,22 +324,22 @@ bufferSize = 8
 bufferA = MtlArray{Int,1}(undef, tuple(bufferSize), storage=Shared)
 vecA = unsafe_wrap(Vector{Int}, bufferA.buffer, tuple(bufferSize))
 
-@metal threads=(bufferSize) tester(bufferA.buffer)
+Metal.@sync @metal threads=(bufferSize) tester(bufferA.buffer)
 @test all(vecA .== Int(5))
 
 @testset "launch params" begin
     vecA .= 0
-    @metal threads=(2) tester(bufferA.buffer)
+    Metal.@sync @metal threads=(2) tester(bufferA.buffer)
     @test all(vecA == Int.([5, 5, 0, 0, 0, 0, 0, 0]))
     vecA .= 0
 
-    @metal grid=(3) threads=(2) tester(bufferA.buffer)
+    Metal.@sync @metal grid=(3) threads=(2) tester(bufferA.buffer)
     @test all(vecA == Int.([5, 5, 5, 5, 5, 5, 0, 0]))
     vecA .= 0
 end
 
 @testset "argument buffers" begin
-    @metal threads=(bufferSize) tester(bufferA)
+    Metal.@sync @metal threads=(bufferSize) tester(bufferA)
     @test all(vecA .== Int(5))
     vecA .= 0
 
@@ -347,7 +347,7 @@ end
         A[1] += Int(5)
         return nothing
     end
-    @metal no_intrinsic(bufferA)
+    Metal.@sync @metal no_intrinsic(bufferA)
     @test all(vecA == Int.([5, 0, 0, 0, 0, 0, 0, 0]))
 
     function types_tester(A::MtlDeviceVector{T}) where T
@@ -359,7 +359,7 @@ end
     for typ in types
         bufferA = MtlArray{typ,1}(undef, tuple(bufferSize), storage=Shared)
         vecA = unsafe_wrap(Vector{typ}, bufferA.buffer, tuple(bufferSize))
-        @metal threads=(bufferSize) types_tester(bufferA)
+        Metal.@sync @metal threads=(bufferSize) types_tester(bufferA)
         @test all(vecA .== typ(5))
     end
 end
