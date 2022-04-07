@@ -2,3 +2,4 @@
 
 include("metal/arguments.jl")
 include("metal/math.jl")
+include("metal/synchronization.jl")
