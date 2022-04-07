@@ -386,4 +386,15 @@ end
     @metal intr_test2(bufferA.buffer)
 end
 
+@testset "values as references" begin
+    function kernel(a, val)
+        @inbounds a[thread_index_in_threadgroup()] = val
+        return
+    end
+
+    a = MtlArray{Float32}(undef, 1)
+    @metal kernel(a, 42f0)
+    @test Array(a) == [42f0]
+end
+
 end # End kernels testset

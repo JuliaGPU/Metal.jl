@@ -256,7 +256,7 @@ end
 function encode_argument!(cce::MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, arg::Nothing)
     @assert idx > 0
     #@check api.clSetKernelArg(k.id, cl_uint(idx-1), sizeof(CL_mem), C_NULL)
-    set_bytes!(cce, sizeof(C_NULL), C_NULL, idx)
+    MTL.set_bytes!(cce, sizeof(C_NULL), C_NULL, idx)
     return cce
 end
 
@@ -278,7 +278,7 @@ function encode_argument!(enc::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx
     #if does not contain a buffer we can use setbytes
     if !contains_mtlbuffer(T)
         ref, tsize = to_mtl_ref(val)
-        set_bytes!(cce, ref, tsize, idx)
+        MTL.set_bytes!(enc, ref, tsize, idx)
     else
         #otherwise, we need an argument buffer
         throw("Not implemented: If an argument contains a mtlbuffer automatic argument encoding is not yet supported.")
@@ -299,7 +299,7 @@ function encode_argument!(enc::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx
 
         # set argubuf_enc into cce
     end
-    return cce
+    return enc
 end
 
 # Encode MtlDeviceArray using an argument buffer
@@ -319,7 +319,7 @@ function encode_argument!(cce::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx
     # Encode the size of the MtlDeviceArray into the argument buffer
     MTL.set_field!(argbuf_enc, size(val), 2)
     # Set the device array usage for read/write TODO: Handle constant arrays
-    MTL.use!(cce, mtl_buf, MTL.ReadWriteUsage) 
+    MTL.use!(cce, mtl_buf, MTL.ReadWriteUsage)
 
     # Set the argument buffer at given argument index
     set_buffer!(cce, argbuf, 0, idx)

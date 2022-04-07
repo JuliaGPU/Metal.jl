@@ -38,7 +38,7 @@ set_buffers!(cce::MtlComputeCommandEncoder, bufs::Vector{T},
              offsets::Vector{Int}, indices::UnitRange{Int}) where {T} =
     mtComputeCommandEncoderSetBuffersOffsetsWithRange(cce, bufs, offsets, indices .- 1)=#
 
-set_bytes!(cce::MtlComputeCommandEncoder, ptr::Ptr, length::Integer, index::Integer) =
+set_bytes!(cce::MtlComputeCommandEncoder, ptr, length::Integer, index::Integer) =
     mtComputeCommandEncoderSetBytesLengthAtIndex(cce, ptr, length, index - 1)
 
 dispatchThreads!(cce::MtlComputeCommandEncoder, gridSize::MtSize, threadGroupSize::MtSize) =

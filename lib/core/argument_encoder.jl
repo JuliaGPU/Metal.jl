@@ -63,7 +63,7 @@ set_buffers!(enc::MtlArgumentEncoder, bufs::Vector{<:MtlBuffer},
              offsets::Vector{Int}, indices::UnitRange{Int}) =
     mtArgumentSetBuffersOffsetsWithRange(enc, handle_array(bufs), offsets, indices .- 1)
 
-function set_bytes!(enc::MtlArgumentEncoder, src::Ptr, length::Integer, index::Integer)
+function set_bytes!(enc::MtlArgumentEncoder, src, length::Integer, index::Integer)
     dst = Base.bitcast(typeof(ptr), mtArgumentEncoderConstantDataAtIndex(enc, index-1))
     Base.unsafe_copyto!(dst, src, length)
     return
