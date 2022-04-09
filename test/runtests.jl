@@ -359,6 +359,11 @@ Metal.@sync @metal threads=(bufferSize) tester(bufferA.buffer)
     Metal.@sync @metal grid=(3) threads=(2) tester(bufferA.buffer)
     @test all(vecA == Int.([5, 5, 5, 5, 5, 5, 0, 0]))
     vecA .= 0
+
+    @test_throws InexactError @metal threads=(-2) tester(bufferA.buffer)
+    @test_throws InexactError @metal grid=(-2) tester(bufferA.buffer)
+    @test_throws ArgumentError @metal threads=(1025) tester(bufferA.buffer)
+    @test_throws ArgumentError @metal threads=(1000,2) tester(bufferA.buffer)
 end
 
 @testset "argument buffers" begin
