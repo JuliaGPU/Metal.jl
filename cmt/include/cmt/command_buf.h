@@ -20,13 +20,43 @@ typedef void (*MtCommandBufferOnCompleteFnNoSender)( MtCommandBuffer * __restric
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
-MtCommandBuffer*
-mtNewCommandBuffer(MtCommandQueue *cmdq); 
+MtCommandBufferDescriptor*
+mtNewCommandBufferDescriptor(void);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+bool
+mtCommandBufferDescriptorRetainedReferences(MtCommandBufferDescriptor *desc);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+void
+mtCommandBufferDescriptorRetainedReferencesSet(MtCommandBufferDescriptor *desc, bool retain);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+NsUInteger
+mtCommandBufferDescriptorErrorOptions(MtCommandBufferDescriptor *desc);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+void
+mtCommandBufferDescriptorErrorOptionsSet(MtCommandBufferDescriptor *desc, NsUInteger errorOption);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtCommandBuffer*
-mtNewCommandBufferWithUnretainedReferences(MtCommandQueue *cmdq); 
+mtNewCommandBuffer(MtCommandQueue *cmdq);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+MtCommandBuffer*
+mtNewCommandBufferWithDescriptor(MtCommandQueue *cmdq, MtCommandBufferDescriptor *desc);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+MtCommandBuffer*
+mtNewCommandBufferWithUnretainedReferences(MtCommandQueue *cmdq);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
@@ -55,7 +85,7 @@ mtNewResourceStateCommandEncoder(MtCommandBuffer *cmdb); IOS 13*/
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
-mtCommandBufferEqueue(MtCommandBuffer *cmdb);
+mtCommandBufferEnqueue(MtCommandBuffer *cmdb);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
@@ -86,6 +116,11 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtCommandBufferStatus
 mtCommandBufferStatus(MtCommandBuffer *cmdb);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+MtCommandBufferErrorOption
+mtCommandBufferErrorOptions(MtCommandBuffer *cmdb);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))

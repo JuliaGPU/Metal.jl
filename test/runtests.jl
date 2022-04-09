@@ -259,8 +259,31 @@ let ev = MtlSharedEvent(dev)
     @test ev.signaledValue == 42
 end
 
-# cmdbuf = MtlCommandBuffer(cmdq)
-# enqueue!(cmdbuf)
+cmdbuf = MtlCommandBuffer(cmdq)
+@test cmdbuf.status == MTL.MtCommandBufferStatusNotEnqueued
+enqueue!(cmdbuf)
+@test cmdbuf.status == MTL.MtCommandBufferStatusEnqueued
+commit!(cmdbuf)
+@test cmdbuf.status == MTL.MtCommandBufferStatusCommitted
+# Completion happens too quickly to test for committed status to be checked
+wait_completed(cmdbuf) == MTL.MtCommandBufferStatusCompleted
+@test cmdbuf.status == MTL.MtCommandBufferStatusCompleted
+
+# CommandBufferDescriptor tests
+desc = MTL.mtNewCommandBufferDescriptor()
+@test MTL.mtCommandBufferDescriptorRetainedReferences(desc) == true
+MTL.mtCommandBufferDescriptorRetainedReferencesSet(desc,false)
+@test MTL.mtCommandBufferDescriptorRetainedReferences(desc) == false
+
+@test MTL.mtCommandBufferDescriptorErrorOptions(desc) == MTL.MtCommandBufferErrorOptionNone
+MTL.mtCommandBufferDescriptorErrorOptionsSet(desc,MTL.MtCommandBufferErrorOptionEncoderExecutionStatus)
+@test MTL.mtCommandBufferDescriptorErrorOptions(desc) == MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
+
+cmq = MtlCommandQueue(device())
+cmdbuf = MtlCommandBuffer(cmq; retainReferences=false, errorOption=MTL.MtCommandBufferErrorOptionEncoderExecutionStatus)
+@test cmdbuf.retainedReferences == false
+@test cmdbuf.errorOptions == MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
+
 end
 
 @testset "compute pipeline" begin

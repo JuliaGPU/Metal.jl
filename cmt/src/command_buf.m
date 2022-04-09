@@ -5,9 +5,53 @@
 CF_RETURNS_RETAINED
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+MtCommandBufferDescriptor*
+mtNewCommandBufferDescriptor() {
+  return [MTLCommandBufferDescriptor new];
+}
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+bool
+mtCommandBufferDescriptorRetainedReferences(MtCommandBufferDescriptor *desc) {
+  return (bool)[(MTLCommandBufferDescriptor*)desc retainedReferences];
+}
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+void
+mtCommandBufferDescriptorRetainedReferencesSet(MtCommandBufferDescriptor *desc, bool retain) {
+    [(MTLCommandBufferDescriptor*)desc setRetainedReferences: retain];
+}
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+NsUInteger
+mtCommandBufferDescriptorErrorOptions(MtCommandBufferDescriptor *desc) {
+  return (NsUInteger)[(MTLCommandBufferDescriptor*)desc errorOptions];
+}
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+void
+mtCommandBufferDescriptorErrorOptionsSet(MtCommandBufferDescriptor *desc, NsUInteger errorOption) {
+    [(MTLCommandBufferDescriptor*)desc setErrorOptions: errorOption];
+}
+
+CF_RETURNS_RETAINED
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtCommandBuffer*
 mtNewCommandBuffer(MtCommandQueue *cmdq) {
   return [(id<MTLCommandQueue>)cmdq commandBuffer];
+}
+
+CF_RETURNS_RETAINED
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+MtCommandBuffer*
+mtNewCommandBufferWithDescriptor(MtCommandQueue *cmdq, MtCommandBufferDescriptor *desc) {
+  return [(id<MTLCommandQueue>)cmdq commandBufferWithDescriptor:(MtCommandBufferDescriptor *)desc];
 }
 
 CF_RETURNS_RETAINED
@@ -48,7 +92,7 @@ mtCommandBufferPresentDrawable(MtCommandBuffer *cmdb, MtDrawable *drawable) {
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
-mtCommandBufferEqueue(MtCommandBuffer *cmdb) {
+mtCommandBufferEnqueue(MtCommandBuffer *cmdb) {
   [(id<MTLCommandBuffer>)cmdb enqueue];
 }
 
@@ -108,6 +152,12 @@ mtCommandBufferError(MtCommandBuffer *cmdb) {
   return [(id<MTLCommandBuffer>)cmdb error];
 }
 
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+MtCommandBufferErrorOption
+mtCommandBufferErrorOptions(MtCommandBuffer *cmdb) {
+  return (MtCommandBufferErrorOption)[(id<MTLCommandBuffer>)cmdb errorOptions];
+}
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
@@ -186,7 +236,7 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 void
 mtCommandBufferPushDebugGroup(MtCommandBuffer *cmdb, char* str) {
-  return [(id<MTLCommandBuffer>)cmdb pushDebugGroup: mtNSString(str)];  
+  return [(id<MTLCommandBuffer>)cmdb pushDebugGroup: mtNSString(str)];
 }
 
 MT_EXPORT

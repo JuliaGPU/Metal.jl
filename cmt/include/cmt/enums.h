@@ -206,6 +206,19 @@ typedef enum MtCommandBufferError {
     MtCommandBufferErrorDeviceRemoved = 11,
 } MtCommandBufferError;
 
+typedef enum MtCommandBufferErrorOption {
+    MtCommandBufferErrorOptionNone   = 0,
+    MtCommandBufferErrorOptionEncoderExecutionStatus = 1,
+} MtCommandBufferErrorOption;
+
+typedef enum MtCommandEncoderErrorState {
+    MtCommandEncodererrorStateUnknown   = 0,
+    MtCommandEncodererrorStateCompleted = 1,
+    MtCommandEncodererrorStateAffected  = 2,
+    MtCommandEncodererrorStatePending   = 3,
+    MtCommandEncodererrorStateFaulted   = 4,
+} MtCommandencoderErrorState;
+
 /*!
  @enum MTLHeapType
  @abstract Describes the mode of operation for an MTLHeap.

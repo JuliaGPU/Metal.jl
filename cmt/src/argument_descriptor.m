@@ -56,7 +56,7 @@ mtArgumentDescriptorAccessSet(MtArgumentDescriptor *desc, MtArgumentAccess acces
     [(MTLArgumentDescriptor*)desc setIndex: (MTLArgumentAccess)access];
 }
 
-MT_EXPORT 
+MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 NsUInteger
 mtArgumentDescriptorArrayLength(MtArgumentDescriptor *desc) {

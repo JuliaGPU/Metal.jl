@@ -1,4 +1,58 @@
-export MtlCommandBuffer, enqueue!, wait_scheduled, wait_completed, encode_signal!, encode_wait!, commit!
+export MtlCommandBuffer, MtlCommandBufferDescriptor, enqueue!, wait_scheduled, wait_completed, encode_signal!, encode_wait!, commit!
+
+const MTLCommandBufferDescriptor = Ptr{MTL.MtCommandBufferDescriptor}
+
+mutable struct MtlCommandBufferDescriptor
+    handle::MTLCommandBufferDescriptor
+    retainReferences::Bool
+    errorOption::MTL.MtCommandBufferErrorOption
+end
+
+Base.unsafe_convert(::Type{MTLCommandBufferDescriptor}, q::MtlCommandBufferDescriptor) = q.handle
+
+function MtlCommandBufferDescriptor(retainReferences::Bool=true, errorOption::MTL.MtCommandBufferErrorOption=MtCommandBufferErrorOptionNone)
+    if retainReferences && errorOption == MtCommandBufferErrorOptionNone
+        handle = mtNewCommandBufferDescriptor()
+    else
+        handle = mtNewCommandBufferDescriptor()
+        retainReferences || MTL.mtCommandBufferDescriptorRetainedReferencesSet(handle, false)
+        errorOption == MtCommandBufferErrorOptionNone || MTL.mtCommandBufferDescriptorErrorOptionsSet(handle, MTL.MtCommandBufferErrorOptionEncoderExecutionStatus)
+    end
+    obj = MtlCommandBufferDescriptor(handle, retainReferences, errorOption)
+    finalizer(unsafe_destroy!, obj)
+    return obj
+end
+
+function unsafe_destroy!(desc::MtlCommandBufferDescriptor)
+    mtRelease(desc.handle)
+end
+
+# TODO: Match retainedReferences names
+
+## properties
+
+Base.propertynames(::MtlCommandBufferDescriptor) = (
+    :retainReferences, :errorOption
+)
+
+function Base.getproperty(o::MtlCommandBufferDescriptor, f::Symbol)
+    if f === :errorOptions
+        mtCommandBufferDescriptorErrorOptions(o)
+    elseif f === :retainedReferences
+        mtCommandBufferDescriptorRetainedReferences(o)
+    else
+        getfield(o, f)
+    end
+end
+
+
+## display
+
+function show(io::IO, ::MIME"text/plain", q::MtlCommandBufferDescriptor)
+    println(io, "MtlCommandBufferDescriptor:")
+    println(io, " retainReferences:  ", q.retainReferences)
+    print(io,   " errorOption: ", q.errorOption)
+end
 
 const MTLCommandBuffer = Ptr{MtCommandBuffer}
 
@@ -17,6 +71,7 @@ required to execute the command buffer
 mutable struct MtlCommandBuffer
     handle::MTLCommandBuffer
     queue::MtlCommandQueue
+    desc::Union{Nothing, MtlCommandBufferDescriptor}
 end
 
 Base.unsafe_convert(::Type{MTLCommandBuffer}, q::MtlCommandBuffer) = q.handle
@@ -24,14 +79,20 @@ Base.unsafe_convert(::Type{MTLCommandBuffer}, q::MtlCommandBuffer) = q.handle
 Base.:(==)(a::MtlCommandBuffer, b::MtlCommandBuffer) = a.handle == b.handle
 Base.hash(q::MtlCommandBuffer, h::UInt) = hash(q.handle, h)
 
-function MtlCommandBuffer(queue::MtlCommandQueue; retain_references::Bool=true)
-    handle = if retain_references
-        mtNewCommandBuffer(queue)
+function MtlCommandBuffer(queue::MtlCommandQueue; retainReferences::Bool=true, errorOption::MTL.MtCommandBufferErrorOption=MtCommandBufferErrorOptionNone)
+    desc = nothing
+    handle = if errorOption != MtCommandBufferErrorOptionNone
+        desc = MtlCommandBufferDescriptor(retainReferences, errorOption)
+        mtNewCommandBufferWithDescriptor(queue, desc)
     else
-        mtNewCommandBufferWithUnretainedReferences(queue)
+        if retainReferences
+            mtNewCommandBuffer(queue)
+        else
+            mtNewCommandBufferWithUnretainedReferences(queue)
+        end
     end
 
-    obj = MtlCommandBuffer(handle, queue)
+    obj = MtlCommandBuffer(handle, queue, desc)
     finalizer(unsafe_destroy!, obj)
     return obj
 end
@@ -45,10 +106,10 @@ end
 
 Base.propertynames(::MtlCommandBuffer) = (
     :device, :commandQueue, :label,
-    :status, #=:errorOptions,=# :error,
+    :status, :errorOptions, :error,
     #=:logs,=#
     :kernelStartTime, :kernelEndTime, :gpuStartTime, :gpuEndTime,
-    :retainedReferences
+    :retainedReferences, :encoderInfo
 )
 
 function Base.getproperty(o::MtlCommandBuffer, f::Symbol)
@@ -63,7 +124,9 @@ function Base.getproperty(o::MtlCommandBuffer, f::Symbol)
         mtCommandBufferStatus(o)
     elseif f === :error
         ptr = mtCommandBufferError(o)
-        ptr == C_NULL ? nothing : NsError(ptr)
+        ptr == C_NULL ? nothing : MtlError(ptr)
+    elseif f === :errorOptions
+        mtCommandBufferErrorOptions(o)
     elseif f === :kernelStartTime
         mtCommandBufferKernelStartTime(o)
     elseif f === :kernelEndTime
@@ -74,6 +137,8 @@ function Base.getproperty(o::MtlCommandBuffer, f::Symbol)
         mtCommandBufferGPUEndTime(o)
     elseif f === :retainedReferences
         mtCommandBufferRetainedReferences(o)
+    elseif f === :encoderInfo
+        mtCommandBufferEncoderInfo(o)
     else
         getfield(o, f)
     end
@@ -105,7 +170,7 @@ into the command buffers and those threads can complete in any order.
 """
 function enqueue!(q::MtlCommandBuffer)
     q.status in [MtCommandBufferStatusCompleted, MtCommandBufferStatusEnqueued] && error("Cannot enqueue an already enqueued command buffer")
-    mtCommandBufferEnqueue(q) 
+    mtCommandBufferEnqueue(q)
 end
 
 function commit!(q::MtlCommandBuffer)

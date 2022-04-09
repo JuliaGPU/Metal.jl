@@ -33,6 +33,8 @@ typedef void MtLibrary;
 typedef void MtRenderPassDesc;
 typedef void MtTexture;
 typedef void MtCommandBuffer;
+typedef void MtCommandBufferDescriptor;
+typedef void MtCommandBufferEncoderInfo;
 typedef void MtDrawable;
 typedef void MtVertexDescriptor;
 typedef void MtTextureDescriptor;
