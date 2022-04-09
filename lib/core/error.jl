@@ -41,13 +41,13 @@ function Base.getproperty(o::MtlError, f::Symbol)
         mtErrorCode(o)
     elseif f === :domain
         unsafe_string(mtErrorDomain(o))
-    elseif f === :userinfo 
+    elseif f === :userinfo
         ptr = mtErrorUserInfo(o)
         if ptr == C_NULL
 			Dict{String,Any}()
 		else
-			JSON.parse(unsafe_string(ptr))
-		end		
+			unsafe_string(ptr)
+		end
     elseif f === :localizedDescription
         unsafe_string(mtErrorLocalizedDescription(o))
     elseif f === :localizedRecoveryOptions
