@@ -1,2 +1,4 @@
 Manifest.toml
 deps/build.log
+examples/driver/vadd.air
+examples/driver/vadd.metallib
