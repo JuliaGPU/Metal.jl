@@ -79,6 +79,11 @@ using Base: FastMath
 @device_override Base.floor(x::Float32) = ccall("extern air.floor.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.floor(x::Float16) = ccall("extern air.floor.f16", llvmcall, Float16, (Float16,), x)
 
+# half/regular -> air.fma.f16
+# half/(precise or fast) -> air.fma.f32
+@device_override Base.fma(a::Float32, b::Float32, c::Float32) = ccall("extern air.fma.f32", llvmcall, Float32, (Float32,Float32,Float32,), a,b,c)
+@device_override Base.fma(a::Float16, b::Float16, c::Float16) = ccall("extern air.fma.f32", llvmcall, Float16, (Float16,Float16,Float16,), a,b,c)
+
 @device_function fract_fast(x::Float32) = ccall("extern air.fast_fract.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_function fract(x::Float32) = ccall("extern air.fract.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_function fract(x::Float16) = ccall("extern air.fract.f16", llvmcall, Float16, (Float16,), x)
