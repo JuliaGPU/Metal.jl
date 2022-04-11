@@ -465,3 +465,10 @@ end
 end
 
 end # End kernels testset
+
+# Examples
+# TODO: Do this in a way more similar to the other backends
+@testset "examples" begin
+    include("../examples/unified_memory.jl")
+    include("../examples/vadd.jl")
+end

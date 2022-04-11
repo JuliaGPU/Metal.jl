@@ -13,7 +13,7 @@ end
 ## constructors
 
 # type and dimensionality specified, accepting dims as tuples of Ints
-function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Private) where {T,N}
+function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Shared) where {T,N}
     dev = device()
     # Check that requested size is not larger than maximum buffer size allowed
     sizeof(T) * prod(dims) > dev.maxBufferLength && error("Too large of Metal buffer requested of size $(Base.format_bytes(sizeof(T) * prod(dims))) (Max: $(Base.format_bytes(dev.maxBufferLength)))")
@@ -107,6 +107,8 @@ function Base.convert(::Type{Core.LLVMPtr{T,AS.Device}}, a::MtlArray{T}) where {
     reinterpret(Core.LLVMPtr{T, 1}, a.buffer.handle)
 end
 ## interop with CPU arrays
+
+Base.unsafe_wrap(t::Type{<:Array}, arr::MtlArray, dims; own=false) = unsafe_wrap(t, arr.buffer, dims; own=own)
 
 # We don't convert isbits types in `adapt`, since they are already
 # considered GPU-compatible.
