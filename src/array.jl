@@ -15,6 +15,8 @@ end
 # type and dimensionality specified, accepting dims as tuples of Ints
 function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Private) where {T,N}
     dev = device()
+    # Check that requested size is not larger than maximum buffer size allowed
+    sizeof(T) * prod(dims) > dev.maxBufferLength && error("Too large of Metal buffer requested of size $(Base.format_bytes(sizeof(T) * prod(dims))) (Max: $(Base.format_bytes(dev.maxBufferLength)))")
     buf = alloc(T, dev, prod(dims); storage=storage)
 
     obj = MtlArray{T,N}(buf, dims, dev)
