@@ -106,6 +106,8 @@ function Base.convert(::Type{Core.LLVMPtr{T,AS.Device}}, a::MtlArray{T}) where {
 end
 ## interop with CPU arrays
 
+Base.unsafe_wrap(t::Type{<:Array}, arr::MtlArray, dims; own=false) = unsafe_wrap(t, arr.buffer, dims; own=own)
+
 # We don't convert isbits types in `adapt`, since they are already
 # considered GPU-compatible.
 
