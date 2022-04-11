@@ -404,6 +404,7 @@ end
         return nothing
     end
     @metal intr_test(bufferA.buffer)
+    synchronize()
     @test vecA ≈ cos.(a)
 
     function intr_test2(buf)
