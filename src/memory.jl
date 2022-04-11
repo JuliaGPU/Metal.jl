@@ -1,4 +1,6 @@
 # memory operations
+# TODO: Properly use dispatch capabilities for these functions
+
 # TODO: cmdbuf cleanup - Was running into errors
 function sync_gpu_to_cpu!(dev::MtlDevice, buf::MtlBuffer{T}) where T
     cmdbuf = MtlCommandBuffer(global_queue(dev))
@@ -52,9 +54,9 @@ function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlBuffer{T}, doff::Integer,  
         Base.unsafe_copyto!(dev, dst, doff, tmp_buf, 1, N)
         free(tmp_buf)
     elseif storage_type == MTL.MtStorageModeShared
-        Base.unsafe_copyto!(dev, content(dst)+(doff-1)*sizeof(T), src, N)
+        Base.unsafe_copyto!(content(dst)+(doff-1)*sizeof(T), src, N)
     elseif storage_type == MTL.MtStorageModeManaged
-        Base.unsafe_copyto!(dev, content(dst)+(doff-1)*sizeof(T), src, N)
+        Base.unsafe_copyto!(content(dst)+(doff-1)*sizeof(T), src, N)
         MTL.DidModifyRange!(dst, 1:N)
     end
     return dst

@@ -13,7 +13,7 @@ end
 ## constructors
 
 # type and dimensionality specified, accepting dims as tuples of Ints
-function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Private) where {T,N}
+function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Shared) where {T,N}
     dev = device()
     buf = alloc(T, dev, prod(dims); storage=storage)
 
