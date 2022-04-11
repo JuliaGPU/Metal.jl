@@ -9,18 +9,10 @@ interesting to developers.**
 
 ## Requirements
 
--  macOS Catalina 10.15 or newer (might also work on 10.14 but untested).
 -  Mac device with M-series chip
--  cmake 3.9
--  command line XCode tools
--  Julia 1.3
-
-## Current Special Dependencies (for this branch)
-
-- [LLVM](https://github.com/max-Hawkins/llvm-project/commits/tb/metal)
-    - NOTE: This is not that different from [JuliaGPU#tb/metal](https://github.com/JuliaLang/llvm-project/tree/tb/metal)
-- [LLVM.jl](https://github.com/max-Hawkins/LLVM.jl/tree/mh/metal)
-- [GPUCompiler.jl](https://github.com/max-Hawkins/GPUCompiler.jl/tree/tb/metal)
+-  macOS Catalina 10.15 or newer (might also work on 10.14 but untested).
+-  Julia 1.8 (this package currently requires LLVM 13)
+- [This GPUCompiler fork](https://github.com/maleadt/GPUCompiler.jl)
 
 ## Metal API wrapper
 
