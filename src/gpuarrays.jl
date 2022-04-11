@@ -13,13 +13,18 @@ struct mtlKernelContext <: AbstractKernelContext end
                                              elements::Int, elements_per_thread::Int) where {F,N}
     kernel = @metal launch=false f(mtlKernelContext(), args...)
 
-    threads = 32 # suggest_groupsize(kernel.fun, elements).x
-    return (threads=threads, blocks=32)
+    # TODO: Be more efficient about creating pipeline states as they're expensive
+    # The pipeline state automatically computes occupancy stats, so we just need to parse its fields
+    pipeline = MtlComputePipelineState(kernel.fun.device, kernel.fun.fun)
+    threads_needed = cld(elements, elements_per_thread)
+    # Limit the threadgroup size
+    _threads = min(threads_needed, pipeline.maxTotalThreadsPerThreadgroup)
+    _blocks  = cld(threads_needed, _threads)
+    return (threads=_threads, blocks=_blocks)
 end
 
 function GPUArrays.gpu_call(::mtlArrayBackend, f, args, threads::Int, blocks::Int;
                             name::Union{String,Nothing})
-    println("GPUArrays gpu_call $args $threads $blocks")
     @metal threads=threads grid=blocks name=name f(mtlKernelContext(), args...)
 end
 
@@ -27,7 +32,6 @@ end
 ## on-device
 
 # indexing
-# TODO: Are these all 1d?
 GPUArrays.blockidx(ctx::mtlKernelContext)  = Metal.threadgroup_position_in_grid_1d()
 GPUArrays.blockdim(ctx::mtlKernelContext)  = Metal.threads_per_threadgroup_1d()
 GPUArrays.threadidx(ctx::mtlKernelContext) = Metal.thread_position_in_threadgroup_1d()
@@ -35,10 +39,10 @@ GPUArrays.griddim(ctx::mtlKernelContext)   = Metal.threadgroups_per_grid_1d()
 
 # math
 
-@inline GPUArrays.cos(ctx::mtlKernelContext, x) = Metal.cos(x)
-@inline GPUArrays.sin(ctx::mtlKernelContext, x) = Metal.sin(x)
-# @inline GPUArrays.sqrt(ctx::mtlKernelContext, x) = Metal.sqrt(x)
-# @inline GPUArrays.log(ctx::mtlKernelContext, x) = Metal.log(x)
+@inline GPUArrays.cos(ctx::mtlKernelContext, x)  = cos(x)
+@inline GPUArrays.sin(ctx::mtlKernelContext, x)  = sin(x)
+@inline GPUArrays.sqrt(ctx::mtlKernelContext, x) = sqrt(x)
+@inline GPUArrays.log(ctx::mtlKernelContext, x)  = log(x)
 
 # memory
 
@@ -50,7 +54,7 @@ GPUArrays.griddim(ctx::mtlKernelContext)   = Metal.threadgroups_per_grid_1d()
 
 # synchronization
 
-# @inline GPUArrays.synchronize_threads(::oneKernelContext) = oneAPI.barrier()
+@inline GPUArrays.synchronize_threads(::mtlKernelContext) = Metal.threadgroup_barrier()
 
 
 
