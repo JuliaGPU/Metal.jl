@@ -17,7 +17,7 @@ Base.unsafe_convert(::Type{MTLLibrary}, lib::MtlLibrary) = lib.handle
 Base.:(==)(a::MtlLibrary, b::MtlLibrary) = a.handle == b.handle
 Base.hash(lib::MtlLibrary, h::UInt) = hash(lib.handle, h)
 
-function MtlLibrary(device::MtlDevice, src::String, opts::MtlCompileOptions)
+function MtlLibrary(device::MtlDevice, src::String, opts::MtlCompileOptions=MtlCompileOptions())
     handle = @mtlthrows _errptr mtNewLibraryWithSource(device, src, opts, _errptr)
 
     obj = MtlLibrary(handle, device)

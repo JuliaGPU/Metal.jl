@@ -123,12 +123,16 @@ struct MtlKernel
     lib::MtlLibrary
     fun::MtlFunction
 
-    function MtlKernel(dev, image, fun_name)
-        lib = MtlLibraryFromData(dev, image)
+    function MtlKernel(dev::MtlDevice, lib::MtlLibrary, fun_name::String)
         fun = MtlFunction(lib, fun_name)
         return new(dev, lib, fun)
         # TODO: Finalizer
     end
+end
+
+function MtlKernel(dev::MtlDevice, image::Vector{UInt8}, fun_name::String)
+    lib = MtlLibraryFromData(dev, image)
+    return MtlKernel(dev, lib, fun_name)
 end
 
 # ## host-side kernels
