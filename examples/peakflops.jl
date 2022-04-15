@@ -18,7 +18,6 @@ function kernel_fma(a, b, c, out)
 end
 "Return calculated TFLOPS of Metal device"
 function peakflops(_size=1024*1024*100)
-    @info "Device: $(device().name)"
     a = round.(rand(Float32, _size) * 100)
     d_a = MtlArray(a)
     a = round.(rand(Float32, _size) * 100)
@@ -45,8 +44,7 @@ function peakflops(_size=1024*1024*100)
     secs = minimum(bench.times) * 1e-9
     flops = flopcount / secs
 
-    @info "TFlops: $(round(flops/1e12; digits=2))"
-    return
+    return flops
 end
 
-peakflops()
+isinteractive() || println("TFlops: $(round(peakflops()/1e12; digits=2))")
