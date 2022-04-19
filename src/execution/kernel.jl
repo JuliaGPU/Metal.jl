@@ -267,10 +267,9 @@ function encode_argument!(cce::MtlComputeCommandEncoder, f::MtlFunction, idx::In
     return cce
 end
 
-function encode_argument!(cce::MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, arg::Core.LLVMPtr)
+function encode_argument!(cce::MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, arg::Core.LLVMPtr{T}) where T
     @assert idx > 0
-
-    set_buffer!(cce, MtlBuffer{Float32}(Base.bitcast(MTL.MTLBuffer, arg)), 0, idx)
+    set_buffer!(cce, MtlBuffer{T}(Base.bitcast(MTL.MTLBuffer, arg)), 0, idx)
     return cce
 end
 
