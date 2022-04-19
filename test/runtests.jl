@@ -1,4 +1,5 @@
 using Test
+using Random
 using Metal
 
 @testset "MTL" begin
@@ -452,6 +453,35 @@ end
     @test vec[1] == 992
 
     # TODO: simdgroup barrier test
+end
+
+@testset "threadgroup memory" begin
+    for typ in [Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8]
+        dims=10
+
+        @eval function kernel_alloc(a, b)
+            idx = thread_position_in_grid_1d()
+            tg = MtlStaticSharedArray($typ, $dims)
+
+            tg[idx] = a[idx]
+            simdgroup_barrier(Metal.MemoryFlagThreadGroup)
+
+            if idx == 1
+                b[idx] += tg[1] + tg[9]
+            end
+            return
+        end
+
+        dev_a = MtlArray{typ}(undef, dims)
+        dev_b = MtlArray{typ}(undef, dims)
+        a = unsafe_wrap(Array{typ}, dev_a, dims)
+        b = unsafe_wrap(Array{typ}, dev_b, dims)
+
+        rand!(a, (1:4))
+        Metal.@sync @metal threads=dims kernel_alloc(dev_a, dev_b)
+        @test b[1] == a[1] + a[9]
+    end
+    # TODO: Test threadgroup memory as argument
 end
 
 @testset "values as references" begin

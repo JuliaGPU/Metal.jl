@@ -2,4 +2,5 @@
 
 include("metal/arguments.jl")
 include("metal/math.jl")
+include("metal/memory_shared.jl")
 include("metal/synchronization.jl")
