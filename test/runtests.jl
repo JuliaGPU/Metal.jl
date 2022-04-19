@@ -484,6 +484,46 @@ end
     # TODO: Test threadgroup memory as argument
 end
 
+@testset "simd intrinsics" begin
+
+    for typ in [Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8]
+        dims=32
+        threadgroup_size=32
+
+        @eval function shuffle_down_kernel(a, b)
+            idx = thread_position_in_grid_1d()
+            idx_in_simd = thread_index_in_simdgroup()
+            simd_idx = simdgroup_index_in_threadgroup()
+
+            temp = MtlStaticSharedArray($typ, $dims)
+            temp[idx] = a[idx]
+            simdgroup_barrier(Metal.MemoryFlagThreadGroup)
+
+            if simd_idx == 1
+                value = temp[idx_in_simd];
+
+                value = value + simd_shuffle_down(value, 16)
+                value = value + simd_shuffle_down(value,  8)
+                value = value + simd_shuffle_down(value,  4)
+                value = value + simd_shuffle_down(value,  2)
+                value = value + simd_shuffle_down(value,  1)
+
+                b[idx] = value
+            end
+            return
+        end
+
+        dev_a = MtlArray{typ}(undef, dims)
+        dev_b = MtlArray{typ}(undef, dims)
+        a = unsafe_wrap(Array{typ}, dev_a, dims)
+        b = unsafe_wrap(Array{typ}, dev_b, dims)
+
+        rand!(a, (1:4))
+        Metal.@sync @metal threads=threadgroup_size shuffle_down_kernel(dev_a, dev_b)
+        @test sum(a) ≈ b[1]
+    end
+end
+
 @testset "values as references" begin
     function kernel(a, val)
         @inbounds a[thread_index_in_threadgroup()] = val
