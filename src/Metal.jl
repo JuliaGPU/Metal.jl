@@ -37,5 +37,6 @@ include("memory.jl")
 include("broadcast.jl")
 include("random.jl")
 include("gpuarrays.jl")
+include("mapreduce.jl")
 
 end # module

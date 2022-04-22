@@ -535,6 +535,40 @@ end
     @test Array(a) == [42f0]
 end
 
+@testset "mapreduce" begin
+    function reduce_threadgroup_test(op, a, b, neutral, shuffle, shmem)
+        threadIdx_reduce = thread_position_in_threadgroup_1d()
+        threadgroupIdx_reduce = threadgroup_position_in_grid_1d()
+
+        val = a[threadIdx_reduce]
+
+        val = Metal.reduce_threadgroup(op, val, neutral, shuffle, shmem)
+
+        # write back to memory
+        if threadIdx_reduce == 1
+            b[threadIdx_reduce] = val
+        end
+        return
+    end
+
+    dims=1024
+    typ=Int32
+
+    dev_a = MtlArray{typ}(undef, dims)
+    dev_b = MtlArray{typ}(undef, 1)
+    a = unsafe_wrap(Array{typ}, dev_a, dims)
+    b = unsafe_wrap(Array{typ}, dev_b, 1)
+
+    rand!(a, (1:4))
+
+    Metal.@sync @metal threads=dims reduce_threadgroup_test(+, dev_a, dev_b, typ(0), Val(true), Val{dims}())
+    @test b[] ≈ sum(a)
+
+    b[] = 0
+    Metal.@sync @metal threads=dims reduce_threadgroup_test(+, dev_a, dev_b, typ(0), Val(false), Val{dims}())
+    @test b[] ≈ sum(a)
+end
+
 end # End kernels testset
 
 # Examples
