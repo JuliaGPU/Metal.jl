@@ -237,7 +237,8 @@ function enqueue_function(f::MtlKernel, args...;
     (threads.width>0 && threads.height>0 && threads.depth>0) || throw(ArgumentError("Threadgroup dimensions should be non-null"))
 
     pipeline_state = MtlComputePipelineState(f.device, f.fun)
-    (threads.width * threads.height * threads.depth) > pipeline_state.maxTotalThreadsPerThreadgroup && throw(ArgumentError("Max total threadgroup size should not exceed $(pipeline_state.maxTotalThreadsPerThreadgroup)"))
+    (threads.width * threads.height * threads.depth) > pipeline_state.maxTotalThreadsPerThreadgroup &&
+            throw(ArgumentError("Max total threadgroup size should not exceed $(pipeline_state.maxTotalThreadsPerThreadgroup) threads"))
     # Set the function that we are currently encoding
     MTL.set_function!(cce, pipeline_state)
     # Encode all arguments

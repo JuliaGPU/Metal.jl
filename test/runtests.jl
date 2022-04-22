@@ -481,6 +481,25 @@ end
         Metal.@sync @metal threads=dims kernel_alloc(dev_a, dev_b)
         @test b[1] == a[1] + a[9]
     end
+
+    # Threadgroup overallocation
+    function threadgroup_error_kernel(b, n::Val{_size}) where _size
+        idx = thread_position_in_grid_1d()
+        shared      = MtlStaticSharedArray(Int8, _size)
+        shared[idx] = b[1]
+        threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+        b[idx] = shared[1] + shared[2]
+        return
+    end
+
+    MtlStaticSharedArray(Int8, 32768)
+    @test_throws ArgumentError MtlStaticSharedArray(Int8, 32769)
+
+    buf = MtlArray{Int8}(undef, 2)
+    @metal threads=2 threadgroup_error_kernel(buf, Val{32768}())
+    @test_throws MtlError @metal threads=2 threadgroup_error_kernel(buf, Val{32772}())
+    @test_throws MtlError @metal threads=2 threadgroup_error_kernel(buf, Val{327720000}())
+
     # TODO: Test threadgroup memory as argument
 end
 

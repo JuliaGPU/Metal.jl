@@ -13,6 +13,19 @@ generator function will be called dynamically.
 """
 @inline function MtlStaticSharedArray(::Type{T}, dims) where {T}
     len = prod(dims)
+    # TODO: Make the maximum threadgroup memory a device property that is assigned via a dictionary from Metal device family
+    # Check for overallocation only on from the host-side allocations
+    sizeof(T) * len > 32768 && throw(ArgumentError("Too large of shared memory requested. Maximum threadgroup memory size is 32 kB"))
+    # NOTE: this relies on const-prop to forward the literal length to the generator.
+    #       maybe we should include the size in the type, like StaticArrays does?
+    ptr = emit_shmem(T, Val(len))
+    MtlDeviceArray(dims, ptr)
+end
+
+# TODO: Make these functions more cohesive once argument passing of shared memory is handled
+@device_override @inline function MtlStaticSharedArray(::Type{T}, dims) where {T}
+    len = prod(dims)
+    # No overallocation checking because that's handled by the MtlComputePipelineState object
     # NOTE: this relies on const-prop to forward the literal length to the generator.
     #       maybe we should include the size in the type, like StaticArrays does?
     ptr = emit_shmem(T, Val(len))
@@ -47,7 +60,7 @@ end
         initializer!(gv, null(gv_typ))
 
         # by requesting a larger-than-datatype alignment, we might be able to vectorize.
-        # Metal threadgroup memory alignment is 16, so use that
+        # xxx: Metal threadgroup memory alignment is 16, so use that?
         # TODO: Make the alignment configurable
         align = 1
         if isbitstype(T)
