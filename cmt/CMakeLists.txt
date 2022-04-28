@@ -41,6 +41,8 @@ set(SOURCES
     src/rendering/rpass.m
     src/rendering/rpip.m
     src/utils/conversion.m
+    src/capture/capture_descriptor.m
+    src/capture/capture_manager.m
     src/argument_descriptor.m
     src/argument_encoder.m
     src/cmt.m

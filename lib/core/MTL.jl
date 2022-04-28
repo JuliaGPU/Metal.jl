@@ -49,4 +49,6 @@ include("reflection/reflection_compute.jl")
 
 include("size.jl")
 
+include("profile.jl")
+
 end # module

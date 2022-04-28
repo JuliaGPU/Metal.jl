@@ -445,6 +445,24 @@ end
     MtArgumentTypeSampler = 3
 end
 
+@cenum MtCaptureError::UInt32 begin
+    MtCaptureErrorNotSupported = 1
+    MtCaptureErrorAlreadyCapturing = 2
+    MtCaptureErrorInvalidDescriptor = 3
+end
+
+@cenum MtCaptureDestination::UInt32 begin
+    MtCaptureDestinationDeveloperTools = 1
+    MtCaptureDestinationGPUTraceDocument = 2
+end
+
+@cenum MtCaptureDescriptorCaptureObjectType::UInt32 begin
+    MtCaptureDescriptorCaptureObjectTypeNull = 0
+    MtCaptureDescriptorCaptureObjectTypeDevice = 1
+    MtCaptureDescriptorCaptureObjectTypeQueue = 2
+    MtCaptureDescriptorCaptureObjectTypeScope = 3
+end
+
 struct MtSize
     width::NsUInteger
     height::NsUInteger
@@ -642,6 +660,18 @@ struct MtArgument
 end
 
 struct MtArgumentDescriptor
+    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+end
+
+struct MtCaptureManager
+    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+end
+
+struct MtCaptureScope
+    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+end
+
+struct MtCaptureDescriptor
     #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
 end
 
@@ -1590,6 +1620,62 @@ end
 
 function mtPointerTypeElementArrayType(ptr)
     ccall((:mtPointerTypeElementArrayType, libcmt), Ptr{MtArrayType}, (Ptr{MtPointerType},), ptr)
+end
+
+function mtNewCaptureDescriptor()
+    ccall((:mtNewCaptureDescriptor, libcmt), Ptr{MtCaptureDescriptor}, ())
+end
+
+function mtCaptureDescriptorCaptureObject(desc)
+    ccall((:mtCaptureDescriptorCaptureObject, libcmt), Ptr{Cvoid}, (Ptr{MtCaptureDescriptor},), desc)
+end
+
+function mtCaptureDescriptorCaptureObjectSetQueue(desc, cmdq)
+    ccall((:mtCaptureDescriptorCaptureObjectSetQueue, libcmt), Cvoid, (Ptr{MtCaptureDescriptor}, Ptr{MtCommandQueue}), desc, cmdq)
+end
+
+function mtCaptureDescriptorCaptureObjectSetDevice(desc, dev)
+    ccall((:mtCaptureDescriptorCaptureObjectSetDevice, libcmt), Cvoid, (Ptr{MtCaptureDescriptor}, Ptr{MtDevice}), desc, dev)
+end
+
+function mtCaptureDescriptorCaptureObjectSetScope(desc, scope)
+    ccall((:mtCaptureDescriptorCaptureObjectSetScope, libcmt), Cvoid, (Ptr{MtCaptureDescriptor}, Ptr{MtCaptureScope}), desc, scope)
+end
+
+function mtCaptureDescriptorDestination(desc)
+    ccall((:mtCaptureDescriptorDestination, libcmt), MtCaptureDestination, (Ptr{MtCaptureDescriptor},), desc)
+end
+
+function mtCaptureDescriptorDestinationSet(desc, dest)
+    ccall((:mtCaptureDescriptorDestinationSet, libcmt), Cvoid, (Ptr{MtCaptureDescriptor}, MtCaptureDestination), desc, dest)
+end
+
+function mtCaptureDescriptorOutputURLSet(desc, path)
+    ccall((:mtCaptureDescriptorOutputURLSet, libcmt), Cvoid, (Ptr{MtCaptureDescriptor}, Cstring), desc, path)
+end
+
+function mtCaptureDescriptorOutputURL(desc)
+    ccall((:mtCaptureDescriptorOutputURL, libcmt), Cstring, (Ptr{MtCaptureDescriptor},), desc)
+end
+
+function mtSharedCaptureManager()
+    ccall((:mtSharedCaptureManager, libcmt), Ptr{MtCaptureManager}, ())
+end
+
+function mtSupportsDestination(manager, destination)
+    ccall((:mtSupportsDestination, libcmt), Bool, (Ptr{MtCaptureManager}, MtCaptureDestination), manager, destination)
+end
+
+function mtStartCaptureWithDescriptor(manager, descriptor, error)
+    ccall((:mtStartCaptureWithDescriptor, libcmt), Bool, (Ptr{MtCaptureManager}, Ptr{MtCaptureDescriptor}, Ptr{Ptr{NsError}}), manager, descriptor, error)
+end
+
+function mtStopCapture(manager)
+    ccall((:mtStopCapture, libcmt), Cvoid, (Ptr{MtCaptureManager},), manager)
+end
+
+function mtIsCapturing(manager)
+    ccall((:mtIsCapturing, libcmt), Bool, (Ptr{MtCaptureManager},), manager)
 end
 
 # typedef void ( * MtCommandBufferOnCompleteFn ) ( void * __restrict sender , MtCommandBuffer * __restrict cmdb )

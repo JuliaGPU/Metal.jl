@@ -1,6 +1,8 @@
 using Test
 using Metal
 
+include("setup.jl")
+
 @testset "MTL" begin
 
 @testset "devices" begin
@@ -466,6 +468,13 @@ end
 end
 
 end # End kernels testset
+
+@testset "profiling" begin
+    withenv("METAL_CAPTURE_ENABLED"=>"1") do
+        proc, out, err = julia_exec(`test/profiling.jl`)
+        @test success(proc)
+    end
+end
 
 # Examples
 # TODO: Do this in a way more similar to the other backends

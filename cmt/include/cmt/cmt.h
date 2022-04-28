@@ -43,6 +43,9 @@ extern "C" {
 #include "reflection/descriptor.h"
 #include "reflection/pointer_type.h"
 
+#include "capture/capture_descriptor.h"
+#include "capture/capture_manager.h"
+
 #include "command_buf.h"
 #include "command_buf_indirect.h"
 

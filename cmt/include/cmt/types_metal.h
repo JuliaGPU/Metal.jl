@@ -80,6 +80,10 @@ typedef void MtAutoreleasedArgument;
 typedef void MtArgument;
 typedef void MtArgumentDescriptor;
 
+typedef void MtCaptureManager;
+typedef void MtCaptureScope;
+typedef void MtCaptureDescriptor;
+
 typedef void MtComputePipelineDescriptor;
 typedef void MtPointerType;
 typedef void MtArrayType;
