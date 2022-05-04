@@ -3,7 +3,9 @@ using BenchmarkTools
 
 function transfer_kernel(in, out)
     idx = thread_position_in_grid_1d()
-    out[idx] = in[idx]
+    @inbounds if idx <= length(out)
+        out[idx] = in[idx]
+    end
     return
 end
 
@@ -13,12 +15,15 @@ function peaktransfer()
     d_a = MtlArray(a)
     d_b = MtlArray{Float32}(undef, _size)
 
-    _grid = cld(_size, 1024)
+    kernel = @metal launch=false transfer_kernel(d_a, d_b)
+    config = launch_configuration(kernel.fun; max_threads=_size)
+    threads = config.threads
+    grid = cld(_size, threads)
 
     # Warmup
-    Metal.@sync @metal threads=1024 grid=_grid transfer_kernel(d_a, d_b)
+    Metal.@sync kernel(d_a, d_b)
 
-    bench = @benchmark Metal.@sync @metal threads=1024 grid=$_grid transfer_kernel($d_a, $d_b)
+    bench = @benchmark Metal.@sync kernel($d_a, $d_b; threads=$threads, grid=$grid)
 
     bytes_transfered = sizeof(Float32) * _size
     secs = minimum(bench.times) * 1e-9
