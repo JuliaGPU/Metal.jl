@@ -17,6 +17,6 @@ d_b = MtlArray(b)
 d_c = MtlArray(c)
 
 len = prod(dims)
-Metal.@sync @metal threads=len vadd(d_a, d_b, d_c)
+@metal threads=len vadd(d_a, d_b, d_c)
 c = Array(d_c)
 @test a+b ≈ c
