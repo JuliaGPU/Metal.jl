@@ -9,17 +9,13 @@ struct mtlArrayBackend <: AbstractGPUBackend end
 
 struct mtlKernelContext <: AbstractKernelContext end
 
-@inline function GPUArrays.launch_heuristic(::mtlArrayBackend, f::F, args::Vararg{Any,N};
-                                             elements::Int, elements_per_thread::Int) where {F,N}
+@inline function GPUArrays.launch_heuristic(::mtlArrayBackend, f::F,
+                                            args::Vararg{Any,N}; elements::Int,
+                                            elements_per_thread::Int) where {F,N}
     kernel = @metal launch=false f(mtlKernelContext(), args...)
 
-    # TODO: Be more efficient about creating pipeline states as they're expensive
-    # The pipeline state automatically computes occupancy stats, so we just need to parse its fields
-    pipeline = MtlComputePipelineState(kernel.fun.device, kernel.fun.fun)
-    threads_needed = cld(elements, elements_per_thread)
-    # Limit the threadgroup size
-    _threads = min(threads_needed, pipeline.maxTotalThreadsPerThreadgroup)
-    _blocks  = cld(threads_needed, _threads)
+    _blocks, _threads = launch_configuration(kernel;
+                                             max_threads=cld(elements, elements_per_thread))
     return (threads=_threads, blocks=_blocks)
 end
 

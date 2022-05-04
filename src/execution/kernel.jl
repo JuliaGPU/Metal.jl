@@ -1,4 +1,4 @@
-export @metal
+export @metal, launch_configuration
 
 # Match Darwin version to MacOS version only caring about M1 release and after
 # Following: https://en.wikipedia.org/wiki/Darwin_(operating_system)#History
@@ -223,6 +223,28 @@ mtlcall(f::MtlKernel, types::Tuple, args...; kwargs...) =
         enqueue_function(f, args...; grid, threads, cce)
     end
     commit!(cmdbuf)
+end
+
+"""
+    launch_configuration(fun::CuFunction; shmem=0, max_threads=0)
+
+Calculate a suggested launch configuration for kernel `fun` limiting the max threadgroup
+size dependent on the kernel's shared memory and register usage. Returns a tuple with a
+suggested amount of threads, and a grid size of (1) (no occupancy checks currently).
+Optionally, the maximum amount of threads can be constrained using `max_threads`.
+"""
+function launch_configuration(fun::MtlKernel; max_threads::Integer=0)
+    # TODO: Be more efficient about creating pipeline states as they're expensive
+    # The pipeline state automatically computes occupancy stats, so we just need to parse
+    # its fields
+    pipeline = MtlComputePipelineState(fun.device, fun.fun)
+    # Limit the threadgroup size
+    _threads = pipeline.maxTotalThreadsPerThreadgroup
+    if max_threads > 0
+        _threads = min(_threads, max_threads)
+    end
+    _grid = 1
+    return (grid=_grid, threads=_threads)
 end
 
 ##############################################
