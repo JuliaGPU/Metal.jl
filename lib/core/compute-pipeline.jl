@@ -2,6 +2,11 @@ export MtlComputePipelineState
 
 const MTLComputePipelineState = Ptr{MtComputePipelineState}
 
+"""
+    MtlComputePipelineState(d::MtlDevice, f::MtlFunction)
+
+Create an object that stores information about the execution parameters of a MtlFunction.
+"""
 mutable struct MtlComputePipelineState
     handle::MTLComputePipelineState
     device::MtlDevice
