@@ -25,6 +25,19 @@ const darwin_to_macos = Dict(
                         v"21.3.0" => v"12.2.0",
                         v"21.4.0" => v"12.3.0")
 
+"""
+    @metal [kwargs...] func(args...)
+
+High-level interface for executing code on a GPU. The `@metal` macro should prefix a call,
+with `func` a callable function or object that should return nothing. It will be compiled to
+a Metal function upon first use, and to a certain extent arguments will be converted and
+managed automatically using `mtlconvert`. Finally, a call to `mtlcall` is
+performed, creating a command buffer in the current global command queue then committing it.
+
+There is one supported keyword argument that influences the behavior of `@metal`.
+- `launch`: whether to launch this kernel, defaults to `true`. If `false` the returned
+  kernel object should be launched by calling it and passing arguments again.
+"""
 macro metal(ex...)
     call = ex[end]
     kwargs = ex[1:end-1]
@@ -154,6 +167,16 @@ function get_macos_v()
     return darwin_to_macos[darwin_v]
 end
 
+"""
+    mtlfunction(f, tt=Tuple{}; kwargs...)
+
+Low-level interface to compile a function invocation for the currently-active GPU, returning
+a callable kernel object. For a higher-level interface, use [`@metal`](@ref).
+
+The output of this function is automatically cached, i.e. you can simply call `mtlfunction`
+in a hot path without degrading performance. New code will be generated automatically when
+the function changes, or when different types or keyword arguments are provided.
+"""
 function mtlfunction(f::Core.Function, tt::Type=Tuple{}; name=nothing, kwargs...)
     dev = MtlDevice(1)
     cache = get!(()->Dict{UInt,Any}(), mtlfunction_cache, dev)
@@ -195,8 +218,6 @@ end
 #launchKernel
 
 ##########################################
-# Blocking call to a kernel
-# Should implement somethjing better
 mtlcall(f::MtlKernel, types::Tuple, args...; kwargs...) =
     mtlcall(f, Base.to_tuple_type(types), args...; kwargs...)
 
