@@ -96,65 +96,40 @@ macro metal(ex...)
     return esc(code)
 end
 
-abstract type AbstractKernel{F,TT} end
 
-@generated function call(kernel::AbstractKernel{F,TT}, args...; call_kwargs...) where {F,TT}
-    sig = Base.signature_type(F, TT)
-    args = (:F, (:( args[$i] ) for i in 1:length(args))...)
+## argument conversion
 
-    # filter out ghost arguments that shouldn't be passed
-    predicate = if VERSION >= v"1.5.0-DEV.581"
-        dt -> isghosttype(dt) || Core.Compiler.isconstType(dt)
-    else
-        dt -> isghosttype(dt)
-    end
-    to_pass = map(!predicate, sig.parameters)
-    call_t =                  Type[x[1] for x in zip(sig.parameters,  to_pass) if x[2]]
-    call_args = Union{Expr,Symbol}[x[1] for x in zip(args, to_pass)            if x[2]]
+struct Adaptor end
 
-    # replace non-isbits arguments (they should be unused, or compilation would have failed)
-    for (i,dt) in enumerate(call_t)
-        if !isbitstype(dt)
-            call_t[i] = Ptr{Any}
-            call_args[i] = :C_NULL
-        end
-    end
+# convert Metal Buffers Metal device pointers # should be generic
+Adapt.adapt_storage(to::Adaptor, buf::MtlBuffer{T}) where {T} = reinterpret(Core.LLVMPtr{T,AS.Device}, buf.handle)
 
-    # finalize types
-    call_tt = Base.to_tuple_type(call_t)
-
-    quote
-        Base.@_inline_meta
-
-        mtlcall(kernel.fun, $call_tt, $(call_args...); call_kwargs...)
-    end
+# Base.RefValue isn't GPU compatible, so provide a compatible alternative
+struct MtlRefValue{T} <: Ref{T}
+  x::T
 end
+Base.getindex(r::MtlRefValue) = r.x
+Adapt.adapt_structure(to::Adaptor, r::Base.RefValue) = MtlRefValue(adapt(to, r[]))
 
-# Why is this all necessary? MtlFunction has the lib and function handle.
-struct MtlKernel
-    device::MtlDevice
-    lib::MtlLibrary
+"""
+  mtlconvert(x)
+
+This function is called for every argument to be passed to a kernel, allowing it to be
+converted to a GPU-friendly format. By default, the function does nothing and returns the
+input object `x` as-is.
+
+Do not add methods to this function, but instead extend the underlying Adapt.jl package and
+register methods for the the `Metal.Adaptor` type.
+"""
+mtlconvert(arg) = adapt(Adaptor(), arg)
+
+
+## host-side kernel API
+
+struct HostKernel{F,TT}
+    f::F
     fun::MtlFunction
-
-    function MtlKernel(dev::MtlDevice, lib::MtlLibrary, fun_name::String)
-        fun = MtlFunction(lib, fun_name)
-        return new(dev, lib, fun)
-        # TODO: Finalizer
-    end
 end
-
-function MtlKernel(dev::MtlDevice, image::Vector{UInt8}, fun_name::String)
-    lib = MtlLibraryFromData(dev, image)
-    return MtlKernel(dev, lib, fun_name)
-end
-
-# ## host-side kernels
-
-struct HostKernel{F,TT} <: AbstractKernel{F,TT}
-    fun::MtlKernel
-end
-
-## host-side API
 
 # Get MacOS version from Darwin version
 function get_macos_v()
@@ -177,15 +152,18 @@ The output of this function is automatically cached, i.e. you can simply call `m
 in a hot path without degrading performance. New code will be generated automatically when
 the function changes, or when different types or keyword arguments are provided.
 """
-function mtlfunction(f::Core.Function, tt::Type=Tuple{}; name=nothing, kwargs...)
+function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
     dev = MtlDevice(1)
     cache = get!(()->Dict{UInt,Any}(), mtlfunction_cache, dev)
     source = FunctionSpec(f, tt, true, name)
     target = MetalCompilerTarget(macos=get_macos_v(); kwargs...)
     params = MetalCompilerParams()
     job = CompilerJob(target, source, params)
-    GPUCompiler.cached_compilation(cache, job,
-                                   mtlfunction_compile, mtlfunction_link)::HostKernel{f,tt}
+    fun = GPUCompiler.cached_compilation(cache, job,
+                                         mtlfunction_compile, mtlfunction_link)
+    # compilation is cached on the function type, so we can only create a kernel object here
+    # (as it captures the function _instance_). we may want to cache those objects.
+    HostKernel{F,tt}(f, fun)
 end
 
 const mtlfunction_cache = Dict{Any,Any}()
@@ -199,103 +177,75 @@ end
 function mtlfunction_compile(@nospecialize(job::CompilerJob), ctx::Context)
     mi, mi_meta = GPUCompiler.emit_julia(job)
     ir, ir_meta = GPUCompiler.emit_llvm(job, mi; ctx)
-    image, asm_meta = GPUCompiler.emit_asm(job, ir; strip=false, format=LLVM.API.LLVMObjectFile) # TODO: Undo strip eventually
+    image, asm_meta = GPUCompiler.emit_asm(job, ir; strip=false, format=LLVM.API.LLVMObjectFile)
+    # TODO: don't strip IR
     return (image, entry=LLVM.name(ir_meta.entry))
 end
 
 function mtlfunction_link(@nospecialize(job::CompilerJob), compiled)
-    dev = MtlDevice(1)
-    kernel = MtlKernel(dev, compiled.image, compiled.entry)
-    return HostKernel{job.source.f,job.source.tt}(kernel)
-end
-
-function (kernel::HostKernel)(args...; kwargs...)
-    call(kernel, map(mtlconvert, args)...; kwargs...)
+    dev = device()
+    lib = MtlLibraryFromData(dev, compiled.image)
+    MtlFunction(lib, compiled.entry)
 end
 
 
+## kernel launching and argument encoding
 
-#launchKernel
+function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
+    grid = MtlDim3(grid)
+    threads = MtlDim3(threads)
+    (grid.width>0 && grid.height>0 && grid.depth>0) ||
+        throw(ArgumentError("Grid dimensions should be non-null"))
+    (threads.width>0 && threads.height>0 && threads.depth>0) ||
+        throw(ArgumentError("Threadgroup dimensions should be non-null"))
 
-##########################################
-mtlcall(f::MtlKernel, types::Tuple, args...; kwargs...) =
-    mtlcall(f, Base.to_tuple_type(types), args...; kwargs...)
+    pipeline_state = MtlComputePipelineState(kernel.fun.lib.device, kernel.fun)
+    (threads.width * threads.height * threads.depth) > pipeline_state.maxTotalThreadsPerThreadgroup &&
+        throw(ArgumentError("Max total threadgroup size should not exceed $(pipeline_state.maxTotalThreadsPerThreadgroup)"))
 
-@inline function mtlcall(f::MtlKernel, types::Type, args...; kwargs...)
-    # Handle kwargs here??
-    cmdq = global_queue(f.lib.device)
+    args = map(mtlconvert, args)
 
-    # Process kernel call arguments
-    grid    = 1
-    threads = 1
-    for kwarg in kwargs
-        key = kwarg.first
-        if key == :grid
-            grid = kwarg.second
-        elseif key == :threads
-            threads = kwarg.second
-        else
-            throw(ArgumentError("Unsupported keyword argument '$key'"))
-        end
-    end
-
+    cmdq = global_queue(kernel.fun.lib.device)
     cmdbuf = MtlCommandBuffer(cmdq)
     MtlComputeCommandEncoder(cmdbuf) do cce
-        enqueue_function(f, args...; grid, threads, cce)
+        MTL.set_function!(cce, pipeline_state)
+        encode_arguments!(cce, kernel.fun, args...)
+        MTL.append_current_function!(cce, grid, threads)
     end
     commit!(cmdbuf)
 end
 
-##############################################
-# Enqueue a function for execution
-#
-function enqueue_function(f::MtlKernel, args...;
-                grid::MtlDim=1, threads::MtlDim=1,
-                cce::MtlComputeCommandEncoder)
-    grid = MtlDim3(grid)
-    threads = MtlDim3(threads)
-    (grid.width>0 && grid.height>0 && grid.depth>0)    || throw(ArgumentError("Grid dimensions should be non-null"))
-    (threads.width>0 && threads.height>0 && threads.depth>0) || throw(ArgumentError("Threadgroup dimensions should be non-null"))
-
-    pipeline_state = MtlComputePipelineState(f.device, f.fun)
-    (threads.width * threads.height * threads.depth) > pipeline_state.maxTotalThreadsPerThreadgroup && throw(ArgumentError("Max total threadgroup size should not exceed $(pipeline_state.maxTotalThreadsPerThreadgroup)"))
-    # Set the function that we are currently encoding
-    MTL.set_function!(cce, pipeline_state)
-    # Encode all arguments
-    encode_arguments!(cce, f.fun, args...)
-    # Flush everything
-    MTL.append_current_function!(cce, grid, threads)
-    return nothing
-end
-
-#####
 function encode_arguments!(cce::MtlComputeCommandEncoder, f::MtlFunction, args...)
     for (i, a) in enumerate(args)
         encode_argument!(cce, f, i, a)
     end
 end
 
-function encode_argument!(cce::MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, arg::Nothing)
+function encode_argument!(cce::MtlComputeCommandEncoder, f::MtlFunction, idx::Integer,
+                          rg::Nothing)
     @assert idx > 0
     #@check api.clSetKernelArg(k.id, cl_uint(idx-1), sizeof(CL_mem), C_NULL)
     MTL.set_bytes!(cce, sizeof(C_NULL), C_NULL, idx)
     return cce
 end
 
-function encode_argument!(cce::MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, arg::MtlBuffer)
+function encode_argument!(cce::MtlComputeCommandEncoder, f::MtlFunction, idx::Integer,
+                          arg::MtlBuffer)
     @assert idx > 0
     set_buffer!(cce, arg, 0, idx)
     return cce
 end
 
-function encode_argument!(cce::MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, arg::Core.LLVMPtr)
+function encode_argument!(cce::MtlComputeCommandEncoder, f::MtlFunction, idx::Integer,
+                          arg::Core.LLVMPtr)
     @assert idx > 0
 
     set_buffer!(cce, MtlBuffer{Float32}(Base.bitcast(MTL.MTLBuffer, arg)), 0, idx)
     return cce
 end
 
-function encode_argument!(enc::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, val::T) where T
+function encode_argument!(enc::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx::Integer,
+                          val::T) where T
     @assert idx > 0 "Kernel idx must be bigger 0"
     #if does not contain a buffer we can use setbytes
     if !contains_mtlbuffer(T)
@@ -325,7 +275,8 @@ function encode_argument!(enc::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx
 end
 
 # Encode MtlDeviceArray using an argument buffer
-function encode_argument!(cce::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx::Integer, val::MtlDeviceArray{T}) where T
+function encode_argument!(cce::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx::Integer,
+                          val::MtlDeviceArray{T}) where T
     #@assert contains_mtlbuffer(typeof(val))
     # create an encoder to write into the argument buffer
     argbuf_enc = MtlArgumentEncoder(f, idx)
