@@ -1,4 +1,4 @@
-export MtlArgumentEncoder
+export MtlArgumentEncoder, set_buffer!, set_buffers!, set_constant!
 
 const MTLArgumentEncoder = Ptr{MtArgumentEncoder}
 
@@ -49,34 +49,24 @@ Base.sizeof(a::MtlArgumentEncoder) = Int(mtArgumentEncoderLength(a))
 
 ## operations
 
-function assign_argument_buffer!(enc::MtlArgumentEncoder, buf::MtlBuffer, offset::Integer=1)
-    mtArgumentEncoderSetArgumentBufferWithOffset(enc, buf, offset-1)
+# NOTE: indices aren't 1-based here, because they map onto exact IDs in the metadata
+
+function assign_argument_buffer!(enc::MtlArgumentEncoder, buf::MtlBuffer, offset::Integer=0)
+    mtArgumentEncoderSetArgumentBufferWithOffset(enc, buf, offset)
 end
 
 function assign_argument_buffer!(enc::MtlArgumentEncoder, buf::MtlBuffer, offset::Integer, element::Integer)
-    mtArgumentEncoderSetArgumentBufferWithOffsetForElement(enc, buf, offset-1, element)
+    mtArgumentEncoderSetArgumentBufferWithOffsetForElement(enc, buf, offset, element)
 end
 
 set_buffer!(enc::MtlArgumentEncoder, buf::MtlBuffer, offset::Integer, index::Integer) =
-    mtArgumentEncoderSetBufferOffsetAtIndex(enc, buf, offset, index-1)
+    mtArgumentEncoderSetBufferOffsetAtIndex(enc, buf, offset, index)
 set_buffers!(enc::MtlArgumentEncoder, bufs::Vector{<:MtlBuffer},
              offsets::Vector{Int}, indices::UnitRange{Int}) =
-    mtArgumentSetBuffersOffsetsWithRange(enc, handle_array(bufs), offsets, indices .- 1)
+    mtArgumentSetBuffersOffsetsWithRange(enc, handle_array(bufs), offsets, indices)
 
-function set_bytes!(enc::MtlArgumentEncoder, src, length::Integer, index::Integer)
-    dst = Base.bitcast(typeof(ptr), mtArgumentEncoderConstantDataAtIndex(enc, index-1))
-    Base.unsafe_copyto!(dst, src, length)
-    return
-end
-
-function set_field!(enc::MtlArgumentEncoder, val::Number, index::Integer)
-    dst = Base.bitcast(Ptr{typeof(val)}, mtArgumentEncoderConstantDataAtIndex(enc, index-1))
-    Base.unsafe_store!(dst, val, 1)
-    return
-end
-
-function set_field!(enc::MtlArgumentEncoder, val::NTuple{N,T}, index::Integer) where {N,T}
-    dst = Base.bitcast(Ptr{typeof(val)}, mtArgumentEncoderConstantDataAtIndex(enc, index-1))
+function set_constant!(enc::MtlArgumentEncoder, val, index::Integer)
+    dst = Base.bitcast(Ptr{typeof(val)}, mtArgumentEncoderConstantDataAtIndex(enc, index))
     Base.unsafe_store!(dst, val, 1)
     return
 end

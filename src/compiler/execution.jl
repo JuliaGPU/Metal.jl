@@ -129,6 +129,7 @@ mtlconvert(arg) = adapt(Adaptor(), arg)
 struct HostKernel{F,TT}
     f::F
     fun::MtlFunction
+    arg_info::Any
 end
 
 # Get MacOS version from Darwin version
@@ -159,11 +160,11 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
     target = MetalCompilerTarget(macos=get_macos_v(); kwargs...)
     params = MetalCompilerParams()
     job = CompilerJob(target, source, params)
-    fun = GPUCompiler.cached_compilation(cache, job,
-                                         mtlfunction_compile, mtlfunction_link)
+    fun, arguments = GPUCompiler.cached_compilation(cache, job,
+                                                    mtlfunction_compile, mtlfunction_link)
     # compilation is cached on the function type, so we can only create a kernel object here
     # (as it captures the function _instance_). we may want to cache those objects.
-    HostKernel{F,tt}(f, fun)
+    HostKernel{F,tt}(f, fun, arguments)
 end
 
 const mtlfunction_cache = Dict{Any,Any}()
@@ -179,13 +180,13 @@ function mtlfunction_compile(@nospecialize(job::CompilerJob), ctx::Context)
     ir, ir_meta = GPUCompiler.emit_llvm(job, mi; ctx)
     image, asm_meta = GPUCompiler.emit_asm(job, ir; strip=false, format=LLVM.API.LLVMObjectFile)
     # TODO: don't strip IR
-    return (image, entry=LLVM.name(ir_meta.entry))
+    return (image, entry=LLVM.name(ir_meta.entry), arguments=job.meta[:arguments])
 end
 
 function mtlfunction_link(@nospecialize(job::CompilerJob), compiled)
     dev = device()
     lib = MtlLibraryFromData(dev, compiled.image)
-    MtlFunction(lib, compiled.entry)
+    MtlFunction(lib, compiled.entry), compiled.arguments
 end
 
 
@@ -203,13 +204,81 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
     (threads.width * threads.height * threads.depth) > pipeline_state.maxTotalThreadsPerThreadgroup &&
         throw(ArgumentError("Max total threadgroup size should not exceed $(pipeline_state.maxTotalThreadsPerThreadgroup)"))
 
-    args = map(mtlconvert, args)
-
     cmdq = global_queue(kernel.fun.lib.device)
     cmdbuf = MtlCommandBuffer(cmdq)
     MtlComputeCommandEncoder(cmdbuf) do cce
         MTL.set_function!(cce, pipeline_state)
-        encode_arguments!(cce, kernel.fun, args...)
+
+        # encode arguments
+        idx = 1
+        args = map(mtlconvert, (kernel.f, args...))
+        @assert length(args) == length(kernel.arg_info)
+        for (arg, arg_info) in zip(args, kernel.arg_info)
+            arg_info[:kind] == :ghost && continue
+
+            if arg_info[:kind] == :buffer
+                if arg isa Core.LLVMPtr
+                    buf = MtlBuffer{Nothing}(Base.bitcast(MTL.MTLBuffer, arg))
+                    set_buffer!(cce, buf, 0, idx)
+                else
+                    @assert isbits(arg)
+                    ref = Base.RefValue(arg)
+                    GC.@preserve ref begin
+                        ptr = Base.unsafe_convert(Ptr{Nothing}, ref)
+                        set_bytes!(cce, ptr, sizeof(ref), idx)
+                    end
+                end
+            elseif arg_info[:kind] == :array
+                @assert isbits(arg)
+                ref = Base.RefValue(arg)
+                GC.@preserve ref begin
+                    ptr = Base.unsafe_convert(Ptr{Nothing}, ref)
+                    set_bytes!(cce, ptr, sizeof(ref), idx)
+                end
+            elseif arg_info[:kind] == :struct
+                @assert isbits(arg)
+                ref = Base.RefValue(arg)
+                GC.@preserve ref begin
+                    ptr = Base.unsafe_convert(Ptr{Nothing}, ref)
+                    set_bytes!(cce, ptr, sizeof(ref), idx)
+                end
+            elseif arg_info[:kind] == :indirect_struct
+                # create an argument encoder
+                arg_enc = MtlArgumentEncoder(kernel.fun, idx)
+                arg_buf = alloc(Cchar, kernel.fun.lib.device, sizeof(arg_enc), storage=Shared)
+                MTL.assign_argument_buffer!(arg_enc, arg_buf, 0)
+
+                # encode fields
+                function encode_field(arg, arg_info)
+                    @assert fieldcount(typeof(arg)) == length(arg_info[:fields])
+                    for (field_name, field_info) in zip(fieldnames(typeof(arg)), arg_info[:fields])
+                        field_info[:kind] == :ghost && continue
+                        field = getfield(arg, field_name)
+                        if field_info[:kind] == :buffer
+                            @assert field isa Core.LLVMPtr
+                            buf = MtlBuffer{Nothing}(Base.bitcast(MTL.MTLBuffer, field))
+                            set_buffer!(arg_enc, buf, 0, field_info[:id])
+                            MTL.use!(cce, buf, MTL.ReadWriteUsage)
+                        elseif field_info[:kind] == :constant
+                            set_constant!(arg_enc, field, field_info[:id])
+                        elseif field_info[:kind] == :indirect_struct
+                            encode_field(field, field_info)
+                        else
+                            error("Unknown struct field kind: $(field_info[:kind])")
+                        end
+                    end
+                end
+                encode_field(arg, arg_info)
+
+                # encode argument
+                set_buffer!(cce, arg_buf, 0, idx)
+            else
+                error("Unknown argument kind: $(arg_info[:kind])")
+            end
+
+            idx += 1
+        end
+
         MTL.append_current_function!(cce, grid, threads)
     end
     commit!(cmdbuf)
@@ -239,7 +308,6 @@ end
 function encode_argument!(cce::MtlComputeCommandEncoder, f::MtlFunction, idx::Integer,
                           arg::Core.LLVMPtr)
     @assert idx > 0
-
     set_buffer!(cce, MtlBuffer{Float32}(Base.bitcast(MTL.MTLBuffer, arg)), 0, idx)
     return cce
 end
@@ -288,9 +356,9 @@ function encode_argument!(cce::MTL.MtlComputeCommandEncoder, f::MtlFunction, idx
     # Convert LLVMPtr to MtlBuffer
     mtl_buf = MtlBuffer{T}(Base.bitcast(MTL.MTLBuffer, val.ptr))
     # encode the buffer into the argument buffer
-    set_buffer!(argbuf_enc, mtl_buf, 0, 1)
+    set_buffer!(argbuf_enc, mtl_buf, 0, 0)
     # Encode the size of the MtlDeviceArray into the argument buffer
-    MTL.set_field!(argbuf_enc, size(val), 2)
+    MTL.set_field!(argbuf_enc, size(val), 1)
     # Set the device array usage for read/write TODO: Handle constant arrays
     MTL.use!(cce, mtl_buf, MTL.ReadWriteUsage)
 

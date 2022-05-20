@@ -1,5 +1,5 @@
 export MtlComputeCommandEncoder
-export set_function!, set_buffer!, dispatchThreads!, endEncoding!
+export set_function!, set_buffer!, set_bytes!, dispatchThreads!, endEncoding!
 export set_buffers!, append_current_function!
 
 const MTLComputeCommandEncoder = Ptr{MtComputeCommandEncoder}
