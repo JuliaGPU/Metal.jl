@@ -21,9 +21,6 @@ function _contains_mtlbuffer(::Type{T}) where T
     if Base.has_free_typevars(T)
         throw("Only concrete types can be sent to GPU!")
     end
-    for typ in T.types
-        typ <: DeviceBuffer && return true
-    end
 
     return false
 end

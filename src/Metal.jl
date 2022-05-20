@@ -15,9 +15,7 @@ include("../lib/core/MTL.jl")
 
 # device functionality
 include("device/utils.jl")
-include("device/pointer_abstract.jl")
-include("device/pointer_ptr.jl")
-include("device/pointer_buf.jl")
+include("device/pointer.jl")
 include("device/array.jl")
 include("device/metal.jl")
 
