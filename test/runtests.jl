@@ -366,29 +366,77 @@ Metal.@sync @metal threads=(bufferSize) tester(bufferA.buffer)
     @test_throws ArgumentError @metal threads=(1000,2) tester(bufferA.buffer)
 end
 
-@testset "argument buffers" begin
-    Metal.@sync @metal threads=(bufferSize) tester(bufferA)
-    @test all(vecA .== Int(5))
-    vecA .= 0
+@testset "argument passing" begin
+    @testset "buffer argument" begin
+        function kernel(ptr)
+            unsafe_store!(ptr, 42)
+            return
+        end
 
-    function no_intrinsic(A)
-        A[1] += Int(5)
-        return nothing
+        a = MtlArray([1])
+        @metal kernel(pointer(a))
+        synchronize()   # FIXME: shouldn't be required
+        @test Array(a)[] == 42
     end
-    Metal.@sync @metal no_intrinsic(bufferA)
-    @test all(vecA == Int.([5, 0, 0, 0, 0, 0, 0, 0]))
 
-    function types_tester(A::MtlDeviceVector{T}) where T
-        idx = thread_position_in_grid_1d()
-        A[idx] = T(5)
-        return nothing
+    @testset "scalar argument" begin
+        function kernel(ptr, val)
+            unsafe_store!(ptr, val)
+            return
+        end
+
+        a = MtlArray([1])
+        @metal kernel(pointer(a), 42)
+        synchronize()   # FIXME: shouldn't be required
+        @test Array(a)[] == 42
     end
-    types = [Float32, Float16, Int64, Int32, Int16, Int8]
-    for typ in types
-        bufferA = MtlArray{typ,1}(undef, tuple(bufferSize), storage=Shared)
-        vecA = unsafe_wrap(Vector{typ}, bufferA.buffer, tuple(bufferSize))
-        Metal.@sync @metal threads=(bufferSize) types_tester(bufferA)
-        @test all(vecA .== typ(5))
+
+    @testset "array argument" begin
+        function kernel(ptr, vals)
+            unsafe_store!(ptr, vals[1])
+            return
+        end
+
+        a = MtlArray([1])
+        @metal kernel(pointer(a), (42,))
+        synchronize()   # FIXME: shouldn't be required
+        @test Array(a)[] == 42
+    end
+
+    @testset "struct argument" begin
+        function kernel(ptr, vals)
+            unsafe_store!(ptr, vals[1] + vals[2])
+            return
+        end
+
+        a = MtlArray([1])
+        @metal kernel(pointer(a), (20, Int32(22)))
+        synchronize()   # FIXME: shouldn't be required
+        @test Array(a)[] == 42
+    end
+
+    @testset "indirect struct argument" begin
+        function kernel(obj)
+            unsafe_store!(obj[1], obj[2])
+            return
+        end
+
+        a = MtlArray([1])
+        @metal kernel((pointer(a), 42))
+        synchronize()   # FIXME: shouldn't be required
+        @test Array(a)[] == 42
+    end
+
+    @testset "nested indirect struct argument" begin
+        function kernel(obj)
+            unsafe_store!(obj[1][1], obj[2])
+            return
+        end
+
+        a = MtlArray([1])
+        @metal kernel(((pointer(a), 0), 42))
+        synchronize()   # FIXME: shouldn't be required
+        @test Array(a)[] == 42
     end
 end
 
@@ -452,17 +500,6 @@ end
     @test vec[1] == 992
 
     # TODO: simdgroup barrier test
-end
-
-@testset "values as references" begin
-    function kernel(a, val)
-        @inbounds a[thread_index_in_threadgroup()] = val
-        return
-    end
-
-    a = MtlArray{Float32}(undef, 1)
-    @metal kernel(a, 42f0)
-    @test Array(a) == [42f0]
 end
 
 end # End kernels testset
