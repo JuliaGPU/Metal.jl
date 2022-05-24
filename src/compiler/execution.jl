@@ -214,9 +214,9 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
         args = map(mtlconvert, (kernel.f, args...))
         @assert length(args) == length(kernel.arg_info)
         for (arg, arg_info) in zip(args, kernel.arg_info)
-            arg_info[:kind] == :ghost && continue
+            arg_info.kind == GPUCompiler.GhostArgument && continue
 
-            if arg_info[:kind] == :buffer
+            if arg_info.kind == GPUCompiler.BufferArgument
                 if arg isa Core.LLVMPtr
                     buf = MtlBuffer{Nothing}(Base.bitcast(MTL.MTLBuffer, arg))
                     set_buffer!(cce, buf, 0, idx)
@@ -228,21 +228,21 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
                         set_bytes!(cce, ptr, sizeof(ref), idx)
                     end
                 end
-            elseif arg_info[:kind] == :array
+            elseif arg_info.kind == GPUCompiler.ArrayArgument
                 @assert isbits(arg)
                 ref = Base.RefValue(arg)
                 GC.@preserve ref begin
                     ptr = Base.unsafe_convert(Ptr{Nothing}, ref)
                     set_bytes!(cce, ptr, sizeof(ref), idx)
                 end
-            elseif arg_info[:kind] == :struct
+            elseif arg_info.kind == GPUCompiler.StructArgument
                 @assert isbits(arg)
                 ref = Base.RefValue(arg)
                 GC.@preserve ref begin
                     ptr = Base.unsafe_convert(Ptr{Nothing}, ref)
                     set_bytes!(cce, ptr, sizeof(ref), idx)
                 end
-            elseif arg_info[:kind] == :indirect_struct
+            elseif arg_info.kind == GPUCompiler.IndirectStructArgument
                 # create an argument encoder
                 arg_enc = MtlArgumentEncoder(kernel.fun, idx)
                 arg_buf = alloc(Cchar, kernel.fun.lib.device, sizeof(arg_enc), storage=Shared)
@@ -250,21 +250,21 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
 
                 # encode fields
                 function encode_field(arg, arg_info)
-                    @assert fieldcount(typeof(arg)) == length(arg_info[:fields])
-                    for (field_name, field_info) in zip(fieldnames(typeof(arg)), arg_info[:fields])
-                        field_info[:kind] == :ghost && continue
+                    @assert fieldcount(typeof(arg)) == length(arg_info.fields)
+                    for (field_name, field_info) in zip(fieldnames(typeof(arg)), arg_info.fields)
+                        field_info.kind == GPUCompiler.GhostArgument && continue
                         field = getfield(arg, field_name)
-                        if field_info[:kind] == :buffer
+                        if field_info.kind == GPUCompiler.BufferArgument
                             @assert field isa Core.LLVMPtr
                             buf = MtlBuffer{Nothing}(Base.bitcast(MTL.MTLBuffer, field))
-                            set_buffer!(arg_enc, buf, 0, field_info[:id])
+                            set_buffer!(arg_enc, buf, 0, field_info.id)
                             MTL.use!(cce, buf, MTL.ReadWriteUsage)
-                        elseif field_info[:kind] == :constant
-                            set_constant!(arg_enc, field, field_info[:id])
-                        elseif field_info[:kind] == :indirect_struct
+                        elseif field_info.kind == GPUCompiler.ConstantArgument
+                            set_constant!(arg_enc, field, field_info.id)
+                        elseif field_info.kind == GPUCompiler.IndirectStructArgument
                             encode_field(field, field_info)
                         else
-                            error("Unknown struct field kind: $(field_info[:kind])")
+                            error("Unknown struct field kind: $(field_info.kind)")
                         end
                     end
                 end
@@ -273,7 +273,7 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
                 # encode argument
                 set_buffer!(cce, arg_buf, 0, idx)
             else
-                error("Unknown argument kind: $(arg_info[:kind])")
+                error("Unknown argument kind: $(arg_info.kind)")
             end
 
             idx += 1
