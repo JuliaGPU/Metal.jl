@@ -185,7 +185,7 @@ function mtlfunction(f::Core.Function, tt::Type=Tuple{}; name=nothing, kwargs...
     params = MetalCompilerParams()
     job = CompilerJob(target, source, params)
     GPUCompiler.cached_compilation(cache, job,
-                                   mtlfunction_compile, mtlfunction_link)::HostKernel{f,tt}
+                                   mtlfunction_compile, mtlfunction_link)::HostKernel{typeof(f),tt}
 end
 
 const mtlfunction_cache = Dict{Any,Any}()
