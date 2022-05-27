@@ -263,8 +263,11 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
                             set_constant!(arg_enc, field, field_info.id)
                         elseif field_info.kind == GPUCompiler.IndirectStructArgument
                             encode_field(field, field_info)
+                        elseif field_info.kind == GPUCompiler.ArrayArgument
+                            # XXX: this seems weird?
+                            set_constant!(arg_enc, field, field_info.id)
                         else
-                            error("Unknown struct field kind: $(field_info.kind)")
+                            error("Unknown struct field: $(field_info.kind) $(field)")
                         end
                     end
                 end

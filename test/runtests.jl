@@ -438,6 +438,18 @@ end
         synchronize()   # FIXME: shouldn't be required
         @test Array(a)[] == 42
     end
+
+    @testset "array in struct argument" begin
+        function kernel(obj)
+            unsafe_store!(obj[1], obj[2][1]+obj[2][2])
+            return
+        end
+
+        a = MtlArray([1])
+        @metal kernel((pointer(a), (20,22)))
+        synchronize()   # FIXME: shouldn't be required
+        @test Array(a)[] == 42
+    end
 end
 
 @testset "math intrinsics" begin
