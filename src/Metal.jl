@@ -15,18 +15,14 @@ include("../lib/core/MTL.jl")
 
 # device functionality
 include("device/utils.jl")
-include("device/pointer_abstract.jl")
-include("device/pointer_ptr.jl")
-include("device/pointer_buf.jl")
+include("device/pointer.jl")
 include("device/array.jl")
 include("device/metal.jl")
 
 # compiler
-include("execution/gpucompiler.jl")
-include("execution/mtl_type_conversion.jl")
-include("execution/device_type_conversion.jl")
-include("execution/kernel.jl")
-include("execution/reflection.jl")
+include("compiler/gpucompiler.jl")
+include("compiler/execution.jl")
+include("compiler/reflection.jl")
 
 include("state.jl")
 
