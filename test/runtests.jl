@@ -1,6 +1,8 @@
 using Test
 using Metal
 
+@info "System information:\n" * sprint(io->Metal.versioninfo(io))
+
 @testset "MTL" begin
 
 @testset "devices" begin

@@ -1,29 +1,38 @@
 export @metal
 
+function darwin_version()
+    machine = Sys.MACHINE
+    VersionNumber(machine[findfirst("darwin", machine)[end]+1:end])
+end
+
 # Match Darwin version to MacOS version only caring about M1 release and after
 # Following: https://en.wikipedia.org/wiki/Darwin_(operating_system)#History
 const darwin_to_macos = Dict(
-                        # Catalina
-                        v"19.2.0" => v"10.15.2",
-                        v"19.3.0" => v"10.15.3",
-                        v"19.4.0" => v"10.15.4",
-                        v"19.5.0" => v"10.15.5",
-                        v"19.6.0" => v"10.15.6",
-                        # Big Sur
-                        v"20.0.0" => v"11.0.0",
-                        v"20.1.0" => v"11.0.0",
-                        v"20.2.0" => v"11.1.0",
-                        v"20.3.0" => v"11.2.0",
-                        v"20.4.0" => v"11.3.0",
-                        v"20.5.0" => v"11.4.0",
-                        v"20.6.0" => v"11.5.0",
-                        # Monterey
-                        v"21.0.0" => v"12.0.0",
-                        v"21.0.1" => v"12.0.0",
-                        v"21.1.0" => v"12.0.1",
-                        v"21.2.0" => v"12.1.0",
-                        v"21.3.0" => v"12.2.0",
-                        v"21.4.0" => v"12.3.0")
+    # Catalina
+    v"19.2.0" => v"10.15.2",
+    v"19.3.0" => v"10.15.3",
+    v"19.4.0" => v"10.15.4",
+    v"19.5.0" => v"10.15.5",
+    v"19.6.0" => v"10.15.6",
+    # Big Sur
+    v"20.0.0" => v"11.0.0",
+    v"20.1.0" => v"11.0.0",
+    v"20.2.0" => v"11.1.0",
+    v"20.3.0" => v"11.2.0",
+    v"20.4.0" => v"11.3.0",
+    v"20.5.0" => v"11.4.0",
+    v"20.6.0" => v"11.5.0",
+    # Monterey
+    v"21.0.0" => v"12.0.0",
+    v"21.0.1" => v"12.0.0",
+    v"21.1.0" => v"12.0.1",
+    v"21.2.0" => v"12.1.0",
+    v"21.3.0" => v"12.2.0",
+    v"21.4.0" => v"12.3.0")
+function macos_version()
+    darwin = darwin_version()
+    get(darwin_to_macos, darwin, missing)
+end
 
 """
     @metal [kwargs...] func(args...)
@@ -132,17 +141,6 @@ struct HostKernel{F,TT}
     arg_info::Any
 end
 
-# Get MacOS version from Darwin version
-function get_macos_v()
-    machine = Sys.MACHINE
-    darwin_v = VersionNumber(machine[findfirst("darwin", machine)[end]+1:end])
-    # Check for unsupported/incomplete kernel version
-    if !(darwin_v in keys(darwin_to_macos))
-        error("Unsupported kernel version of $darwin_v")
-    end
-    return darwin_to_macos[darwin_v]
-end
-
 """
     mtlfunction(f, tt=Tuple{}; kwargs...)
 
@@ -157,7 +155,7 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
     dev = MtlDevice(1)
     cache = get!(()->Dict{UInt,Any}(), mtlfunction_cache, dev)
     source = FunctionSpec(f, tt, true, name)
-    target = MetalCompilerTarget(macos=get_macos_v(); kwargs...)
+    target = MetalCompilerTarget(macos=coalesce(macos_version()); kwargs...)
     params = MetalCompilerParams()
     job = CompilerJob(target, source, params)
     fun, arguments = GPUCompiler.cached_compilation(cache, job,
