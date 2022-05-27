@@ -14,7 +14,7 @@ macro sync(code)
 end
 
 function versioninfo(io::IO=stdout)
-    println(io, "macOS $(coalesce(macos_version(), "unknown")), Darwin $(darwin_version())")
+    println(io, "macOS $(known_macos_version() ? macos_version() : "unknown"), Darwin $(darwin_version())")
     println(io)
 
     println(io, "Toolchain:")

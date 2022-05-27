@@ -5,15 +5,36 @@ function darwin_version()
     VersionNumber(machine[findfirst("darwin", machine)[end]+1:end])
 end
 
-# Match Darwin version to MacOS version only caring about M1 release and after
-# Following: https://en.wikipedia.org/wiki/Darwin_(operating_system)#History
+# table mapping Darwin kernel versions to macOS OS version, only caring about versions
+# supporting Metal 2.0 or higher. See also:
+# https://en.wikipedia.org/wiki/Darwin_(operating_system)#History
 const darwin_to_macos = Dict(
+    # High Sierra
+    v"17.0.0" => v"10.13.0",
+    v"17.2.0" => v"10.13.1",
+    v"17.3.0" => v"10.13.2",
+    v"17.4.0" => v"10.13.3",
+    v"17.5.0" => v"10.13.4",
+    v"17.6.0" => v"10.13.5",
+    v"17.7.0" => v"10.13.6",
+
+    # Mojave
+    v"18.0.0" => v"10.14.0",
+    v"18.2.0" => v"10.14.1",
+    # macOS 10.14.2 and .3 also ship Darwin 18.2.0
+    v"18.5.0" => v"10.14.4",
+    v"18.6.0" => v"10.14.5",
+    v"18.7.0" => v"10.14.6",
+
     # Catalina
+    v"19.0.0" => v"10.15.0",
+    # macOS 10.15.2 also ships Darwin 19.0
     v"19.2.0" => v"10.15.2",
     v"19.3.0" => v"10.15.3",
     v"19.4.0" => v"10.15.4",
     v"19.5.0" => v"10.15.5",
     v"19.6.0" => v"10.15.6",
+
     # Big Sur
     v"20.0.0" => v"11.0.0",
     v"20.1.0" => v"11.0.0",
@@ -22,16 +43,30 @@ const darwin_to_macos = Dict(
     v"20.4.0" => v"11.3.0",
     v"20.5.0" => v"11.4.0",
     v"20.6.0" => v"11.5.0",
+
     # Monterey
     v"21.0.0" => v"12.0.0",
     v"21.0.1" => v"12.0.0",
     v"21.1.0" => v"12.0.1",
     v"21.2.0" => v"12.1.0",
     v"21.3.0" => v"12.2.0",
-    v"21.4.0" => v"12.3.0")
-function macos_version()
-    darwin = darwin_version()
-    get(darwin_to_macos, darwin, missing)
+    v"21.4.0" => v"12.3.0",
+    v"21.5.0" => v"12.4.0",
+)
+known_macos_version(darwin=darwin_version()) = haskey(darwin_to_macos, darwin_version())
+function macos_version(darwin=darwin_version())
+    if haskey(darwin_to_macos, darwin)
+        darwin_to_macos[darwin]
+    else
+        latest_supported_darwin = last(sort(collect(keys(darwin_to_macos))))
+        if darwin > latest_supported_darwin
+            # the macOS version is used to construct the LLVM IR triple, which in turn is
+            # used to determine the target AIR version, so it's safe to use a lower version.
+            darwin_to_macos[latest_supported_darwin]
+        else
+            error("Unsupported macOS version: at least macOS 10.13 is required, while you are using an older version (with Darwin kernel $darwin)")
+        end
+    end
 end
 
 """
@@ -155,7 +190,7 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
     dev = MtlDevice(1)
     cache = get!(()->Dict{UInt,Any}(), mtlfunction_cache, dev)
     source = FunctionSpec(f, tt, true, name)
-    target = MetalCompilerTarget(macos=coalesce(macos_version()); kwargs...)
+    target = MetalCompilerTarget(macos=macos_version(); kwargs...)
     params = MetalCompilerParams()
     job = CompilerJob(target, source, params)
     fun, arguments = GPUCompiler.cached_compilation(cache, job,
