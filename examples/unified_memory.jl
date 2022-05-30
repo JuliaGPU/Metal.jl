@@ -81,10 +81,7 @@ rand!(arr_cpu)
 # Now launch a kernel altering the Metal array
 @metal threads=1024 grid=1024 long_kernel(arr_mtl, dummy_mtl)
 
-# The kernel changes are not reflected immediately as the kernel probably has not finished yet
-@test all(arr_cpu .!= -1.0)
-
-# Use Metal.@sync to synchronize kernel launches to ensure future CPU work has correct data
-Metal.@sync @metal threads=1024 grid=1024 long_kernel(arr_mtl, dummy_mtl)
+# we need to synchronize the device as the kernel may not have finished yet
+synchronize()
 @test all(arr_cpu .== -1.0)
 
