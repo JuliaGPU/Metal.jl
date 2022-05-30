@@ -349,16 +349,19 @@ bufferSize = 8
 bufferA = MtlArray{Int,1}(undef, tuple(bufferSize), storage=Shared)
 vecA = unsafe_wrap(Vector{Int}, bufferA.buffer, tuple(bufferSize))
 
-Metal.@sync @metal threads=(bufferSize) tester(bufferA.buffer)
+@metal threads=(bufferSize) tester(bufferA.buffer)
+synchronize()
 @test all(vecA .== Int(5))
 
 @testset "launch params" begin
     vecA .= 0
-    Metal.@sync @metal threads=(2) tester(bufferA.buffer)
+    @metal threads=(2) tester(bufferA.buffer)
+    synchronize()
     @test all(vecA == Int.([5, 5, 0, 0, 0, 0, 0, 0]))
     vecA .= 0
 
-    Metal.@sync @metal grid=(3) threads=(2) tester(bufferA.buffer)
+    @metal grid=(3) threads=(2) tester(bufferA.buffer)
+    synchronize()
     @test all(vecA == Int.([5, 5, 5, 5, 5, 5, 0, 0]))
     vecA .= 0
 
@@ -503,7 +506,8 @@ end
 
     buf = MtlArray{Int,1}(undef, tuple(1024); storage=Shared)
     vec = unsafe_wrap(Vector{Int}, buf.buffer, (1024))
-    Metal.@sync @metal threads=1024 barrier_test_kernel(buf)
+    @metal threads=1024 barrier_test_kernel(buf)
+    synchronize()
     @test vec[1] == 992
 
     # TODO: simdgroup barrier test
