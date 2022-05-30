@@ -377,7 +377,6 @@ end
 
         a = MtlArray([1])
         @metal kernel(pointer(a))
-        synchronize()   # FIXME: shouldn't be required
         @test Array(a)[] == 42
     end
 
@@ -389,7 +388,6 @@ end
 
         a = MtlArray([1])
         @metal kernel(pointer(a), 42)
-        synchronize()   # FIXME: shouldn't be required
         @test Array(a)[] == 42
     end
 
@@ -401,7 +399,6 @@ end
 
         a = MtlArray([1])
         @metal kernel(pointer(a), (42,))
-        synchronize()   # FIXME: shouldn't be required
         @test Array(a)[] == 42
     end
 
@@ -413,7 +410,6 @@ end
 
         a = MtlArray([1])
         @metal kernel(pointer(a), (20, Int32(22)))
-        synchronize()   # FIXME: shouldn't be required
         @test Array(a)[] == 42
     end
 
@@ -425,7 +421,6 @@ end
 
         a = MtlArray([1])
         @metal kernel((pointer(a), 42))
-        synchronize()   # FIXME: shouldn't be required
         @test Array(a)[] == 42
     end
 
@@ -437,7 +432,6 @@ end
 
         a = MtlArray([1])
         @metal kernel(((pointer(a), 0), 42))
-        synchronize()   # FIXME: shouldn't be required
         @test Array(a)[] == 42
     end
 
@@ -449,7 +443,6 @@ end
 
         a = MtlArray([1])
         @metal kernel((pointer(a), (20,22)))
-        synchronize()   # FIXME: shouldn't be required
         @test Array(a)[] == 42
     end
 end

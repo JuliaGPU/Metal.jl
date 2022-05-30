@@ -172,6 +172,9 @@ Base.copyto!(dest::MtlArray{T}, src::MtlArray{T}) where {T} =
     copyto!(dest, 1, src, 1, length(src))
 
 function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::Array{T}, soffs, n) where T
+  # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
+  synchronize()
+
   GC.@preserve src dest begin
     unsafe_copyto!(dev, pointer(dest), doffs, pointer(src, soffs), n)
   end
@@ -183,6 +186,9 @@ function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::Arra
 end
 
 function Base.unsafe_copyto!(dev::MtlDevice, dest::Array{T}, doff, src::MtlArray{T}, soff, n) where T
+  # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
+  synchronize()
+
   GC.@preserve src dest begin
     unsafe_copyto!(dev, pointer(dest, doff), pointer(src), soff, n)
   end
@@ -195,6 +201,9 @@ function Base.unsafe_copyto!(dev::MtlDevice, dest::Array{T}, doff, src::MtlArray
 end
 
 function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::MtlArray{T}, soffs, n) where T
+  # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
+  synchronize()
+
   GC.@preserve src dest unsafe_copyto!(dev, pointer(dest), doffs, pointer(src), soffs, n)
 #  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
   if Base.isbitsunion(T)
