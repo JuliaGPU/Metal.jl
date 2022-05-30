@@ -2,7 +2,7 @@
 
 julia_version = "1.8.0-beta3"
 manifest_format = "2.0"
-project_hash = "3dce4bc48edb5c6f0ba8f1f1e80085ceb0a7247d"
+project_hash = "3637da5f590ff18ff486a1d5e72850698033baeb"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra"]
@@ -55,11 +55,9 @@ version = "8.3.2"
 
 [[deps.GPUCompiler]]
 deps = ["ExprTools", "InteractiveUtils", "LLVM", "Libdl", "Logging", "TimerOutputs", "UUIDs"]
-git-tree-sha1 = "c1b1545f59fbdb1825a2187a479d14f8543a4490"
-repo-rev = "96569b4"
-repo-url = "https://github.com/JuliaGPU/GPUCompiler.jl.git"
+git-tree-sha1 = "21b5d9da260afa6a8638ba2aaa0edbbb671c37bd"
 uuid = "61eb1bfa-7361-4325-ad38-22787b887f55"
-version = "0.15.2"
+version = "0.16.0"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -79,7 +77,7 @@ version = "0.21.3"
 
 [[deps.LLVM]]
 deps = ["CEnum", "LLVMExtra_jll", "Libdl", "Printf", "Unicode"]
-path = "/Users/tim/Julia/pkg/LLVM"
+git-tree-sha1 = "10a20c556107dc5833d3bb7c5e45c4a6e191bd28"
 uuid = "929cbde3-209d-540e-8aea-75f648917ca0"
 version = "4.13.0"
 
