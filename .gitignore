@@ -1,3 +1,2 @@
 deps/build.log
-examples/driver/vadd.air
-examples/driver/vadd.metallib
+test/Manifest.toml

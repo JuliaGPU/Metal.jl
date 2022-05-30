@@ -1,523 +1,380 @@
-using Test
-using Metal
+using Distributed
+using Dates
+import REPL
+using Printf: @sprintf
 
+# parse some command-line arguments
+function extract_flag!(args, flag, default=nothing)
+    for f in args
+        if startswith(f, flag)
+            # Check if it's just `--flag` or if it's `--flag=foo`
+            if f != flag
+                val = split(f, '=')[2]
+                if default !== nothing && !(typeof(default) <: AbstractString)
+                  val = parse(typeof(default), val)
+                end
+            else
+                val = default
+            end
+
+            # Drop this value from our args
+            filter!(x -> x != f, args)
+            return (true, val)
+        end
+    end
+    return (false, default)
+end
+do_help, _ = extract_flag!(ARGS, "--help")
+if do_help
+    println("""
+        Usage: runtests.jl [--help] [--list] [--jobs=N] [TESTS...]
+
+               --help             Show this text.
+               --list             List all available tests.
+               --quickfail        Fail the entire run as soon as a single test errored.
+               --jobs=N           Launch `N` processes to perform tests (default: Threads.nthreads()).
+
+               Remaining arguments filter the tests that will be executed.""")
+    exit(0)
+end
+_, jobs = extract_flag!(ARGS, "--jobs", Threads.nthreads())
+do_quickfail, _ = extract_flag!(ARGS, "--quickfail")
+
+include("setup.jl")     # make sure everything is precompiled
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
 
-@testset "MTL" begin
-
-@testset "devices" begin
-
-devs = devices()
-@test length(devs) > 0
-
-dev = first(devs)
-@test dev == devs[1]
-
-if length(devs) > 1
-    @test dev != devs[2]
-end
-
-compact_str = sprint(io->show(io, dev))
-full_str = sprint(io->show(io, MIME"text/plain"(), dev))
-
-@test dev.name isa String
-@test dev.isLowPower isa Bool
-@test dev.isRemovable isa Bool
-@test dev.hasUnifiedMemory isa Bool
-@test dev.registryID isa Integer
-@test dev.maxTransferRate isa Integer
-
-@test dev.recommendedMaxWorkingSetSize isa Integer
-@test dev.maxThreadgroupMemoryLength isa Integer
-@test dev.maxThreadsPerThreadgroup isa MTL.MtSize
-@test dev.maxBufferLength isa Integer
-
-@test dev.currentAllocatedSize isa Integer
-
-end
-
-@testset "compile options" begin
-
-opts = MtlCompileOptions()
-
-compact_str = sprint(io->show(io, opts))
-full_str = sprint(io->show(io, MIME"text/plain"(), opts))
-
-@test opts.fastMathEnabled isa Bool
-val = !opts.fastMathEnabled
-opts.fastMathEnabled = val
-@test opts.fastMathEnabled == val
-
-@test opts.languageVersion isa VersionNumber
-opts.languageVersion = v"1.0"
-@test opts.languageVersion == v"1.0"
-
-end
-
-@testset "libraries" begin
-
-dev = first(devices())
-opts = MtlCompileOptions()
-
-let lib = MtlLibrary(dev, "", opts)
-    @test lib.device == dev
-    @test lib.label == nothing
-    @test isempty(lib.functionNames)
-end
-
-metal_code = read(joinpath(@__DIR__, "dummy.metal"), String)
-let lib = MtlLibrary(dev, metal_code, opts)
-    @test lib.device == dev
-    @test lib.label == nothing
-    fns = lib.functionNames
-    @test length(fns) == 2
-    @test "kernel_1" in fns
-    @test "kernel_2" in fns
-end
-
-binary_path = joinpath(@__DIR__, "dummy.metallib")
-let lib = MtlLibraryFromFile(dev, binary_path)
-    @test lib.device == dev
-    @test lib.label == nothing
-    fns = lib.functionNames
-    @test length(fns) == 2
-    @test "kernel_1" in fns
-    @test "kernel_2" in fns
-end
-
-binary_code = read(binary_path)
-let lib = MtlLibraryFromData(dev, binary_code)
-    @test lib.device == dev
-    @test lib.label == nothing
-    fns = lib.functionNames
-    @test length(fns) == 2
-    @test "kernel_1" in fns
-    @test "kernel_2" in fns
-
-    compact_str = sprint(io->show(io, lib))
-    full_str = sprint(io->show(io, MIME"text/plain"(), lib))
-end
-
-end
-
-@testset "functions" begin
-
-dev = first(devices())
-lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
-fun = MtlFunction(lib, "kernel_1")
-
-compact_str = sprint(io->show(io, fun))
-full_str = sprint(io->show(io, MIME"text/plain"(), fun))
-
-@test fun.device == dev
-@test fun.label == nothing
-@test fun.name == "kernel_1"
-@test fun.functionType == MTL.MtFunctionTypeKernel
-
-end
-
-@testset "events" begin
-
-dev = first(devices())
-
-let ev = MtlEvent(dev)
-    @test ev.device == dev
-    @test ev.label == nothing
-end
-
-let ev = MtlSharedEvent(dev)
-    @test ev.device == dev
-    @test ev.label == nothing
-    @test ev.signaledValue == 0
-end
-
-end
-
-@testset "fences" begin
-
-dev = first(devices())
-
-let fen = MtlFence(dev)
-    @test fen.device == dev
-end
-
-end
-
-@testset "heap" begin
-
-dev = first(devices())
-
-let desc = MtlHeapDescriptor()
-    @test desc.type == MTL.MtHeapTypeAutomatic
-    desc.type = MTL.MtHeapTypePlacement
-    @test desc.type == MTL.MtHeapTypePlacement
-
-    @test desc.size == 0
-    desc.size = 1024
-    @test desc.size == 1024
-
-    @test desc.storageMode == MTL.MtStorageModePrivate
-    desc.storageMode = MTL.MtStorageModeShared
-    @test desc.storageMode == MTL.MtStorageModeShared
-
-    @test desc.cpuCacheMode == MTL.MtCPUCacheModeDefaultCache
-    desc.cpuCacheMode = MTL.MtCPUCacheModeWriteCombined
-    @test desc.cpuCacheMode == MTL.MtCPUCacheModeWriteCombined
-
-    @test desc.hazardTrackingMode == MTL.MtHazardTrackingModeDefault
-    desc.hazardTrackingMode = MTL.MtHazardTrackingModeUntracked
-    @test desc.hazardTrackingMode == MTL.MtHazardTrackingModeUntracked
-
-    @test desc.resourceOptions == MTL.MtResourceStorageModeShared |
-                                  MTL.MtResourceCPUCacheModeWriteCombined |
-                                  MTL.MtResourceHazardTrackingModeUntracked
-    desc.resourceOptions = MTL.MtResourceStorageModePrivate |
-                           MTL.MtResourceCPUCacheModeDefaultCache |
-                           MTL.MtResourceHazardTrackingModeDefault
-    @test desc.resourceOptions == MTL.MtResourceStorageModePrivate |
-                                  MTL.MtResourceCPUCacheModeDefaultCache |
-                                  MTL.MtResourceHazardTrackingModeDefault
-
-    # setting resource options should be reflected in individual fields
-    @test desc.storageMode == MTL.MtStorageModePrivate
-    @test desc.cpuCacheMode == MTL.MtCPUCacheModeDefaultCache
-    @test desc.hazardTrackingMode == MTL.MtHazardTrackingModeDefault
-end
-
-desc = MtlHeapDescriptor()
-desc.size = 0x4000 # TODO: use heapBufferSizeAndAlign
-let heap = MtlHeap(dev, desc)
-    @test heap.label == nothing
-
-    @test heap.type == desc.type
-
-    @test heap.size == desc.size
-
-    # NOTE: these checks are fragile, as the heap options seems to depend on the requested size
-
-    #=@test=# heap.storageMode == desc.storageMode
-
-    #=@test=# heap.cpuCacheMode == desc.cpuCacheMode
-
-    #=@test=# heap.hazardTrackingMode == desc.hazardTrackingMode
-
-    #=@test=# heap.resourceOptions == desc.resourceOptions
-end
-
-end
-
-@testset "buffers" begin
-
-dev = first(devices())
-
-buf = MtlBuffer{Int}(dev, 1)
-
-@test buf.length == 8
-
-# MtlResource properties
-@test buf.device == dev
-@test buf.label == nothing
-
-@test sizeof(buf) == 8
-
-free(buf)
-
-end
-
-@testset "command queue" begin
-
-dev = first(devices())
-
-cmdq = MtlCommandQueue(dev)
-
-@test cmdq.device == dev
-@test cmdq.label == nothing
-
-end
-
-@testset "command buffer" begin
-
-dev = first(devices())
-cmdq = MtlCommandQueue(dev)
-
-cmdbuf = MtlCommandBuffer(cmdq)
-
-@test cmdbuf.device == dev
-@test cmdbuf.commandQueue == cmdq
-@test cmdbuf.label == nothing
-@test cmdbuf.error === nothing
-@test cmdbuf.status == MTL.MtCommandBufferStatusNotEnqueued
-@test cmdbuf.kernelStartTime == 0
-@test cmdbuf.kernelEndTime == 0
-@test cmdbuf.gpuStartTime == 0
-@test cmdbuf.gpuEndTime == 0
-
-let ev = MtlSharedEvent(dev)
-    @test ev.signaledValue == 0
-    encode_signal!(cmdbuf, ev, 42)
-    encode_wait!(cmdbuf, ev, 21)
-    commit!(cmdbuf)
-    wait_completed(cmdbuf)
-    @test ev.signaledValue == 42
-end
-
-cmdbuf = MtlCommandBuffer(cmdq)
-@test cmdbuf.status == MTL.MtCommandBufferStatusNotEnqueued
-enqueue!(cmdbuf)
-@test cmdbuf.status == MTL.MtCommandBufferStatusEnqueued
-commit!(cmdbuf)
-@test cmdbuf.status == MTL.MtCommandBufferStatusCommitted
-# Completion happens too quickly to test for committed status to be checked
-wait_completed(cmdbuf) == MTL.MtCommandBufferStatusCompleted
-@test cmdbuf.status == MTL.MtCommandBufferStatusCompleted
-
-# CommandBufferDescriptor tests
-desc = MTL.mtNewCommandBufferDescriptor()
-@test MTL.mtCommandBufferDescriptorRetainedReferences(desc) == true
-MTL.mtCommandBufferDescriptorRetainedReferencesSet(desc,false)
-@test MTL.mtCommandBufferDescriptorRetainedReferences(desc) == false
-
-@test MTL.mtCommandBufferDescriptorErrorOptions(desc) == MTL.MtCommandBufferErrorOptionNone
-MTL.mtCommandBufferDescriptorErrorOptionsSet(desc,MTL.MtCommandBufferErrorOptionEncoderExecutionStatus)
-@test MTL.mtCommandBufferDescriptorErrorOptions(desc) == MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
-
-cmq = MtlCommandQueue(device())
-cmdbuf = MtlCommandBuffer(cmq; retainReferences=false, errorOption=MTL.MtCommandBufferErrorOptionEncoderExecutionStatus)
-@test cmdbuf.retainedReferences == false
-@test cmdbuf.errorOptions == MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
-
-end
-
-@testset "compute pipeline" begin
-
-dev = first(devices())
-lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
-fun = MtlFunction(lib, "kernel_1")
-
-pipeline = MtlComputePipelineState(dev, fun)
-
-@test pipeline.device == dev
-@test pipeline.label === nothing
-
-@test pipeline.maxTotalThreadsPerThreadgroup isa Integer
-@test pipeline.threadExecutionWidth isa Integer
-@test pipeline.staticThreadgroupMemoryLength == 0
-
-end
-
-@testset "argument encoder" begin
-
-dev = first(devices())
-lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "vadd.metallib"))
-fun = MtlFunction(lib, "vadd")
-
-encoder = MtlArgumentEncoder(fun, 1)
-
-@test encoder.encodedLength == 0
-@test encoder.alignment == 1
-
-# TODO: actually encode arguments
-
-end
-
-# TODO: continue adding tests
-
-end
-
-
-@testset "arrays" begin
-
-mtl_arr = MtlArray{Int}(undef, 1)
-arr = Array(mtl_arr)
-
-@test sizeof(arr) == 8
-@test length(arr) == 1
-@test eltype(arr) == Int
-
-end
-
-
-@testset "kernels" begin
-
-function tester(A)
-    idx = thread_position_in_grid_1d()
-    A[idx] = Int(5)
-    return nothing
-end
-
-bufferSize = 8
-bufferA = MtlArray{Int,1}(undef, tuple(bufferSize), storage=Shared)
-vecA = unsafe_wrap(Vector{Int}, bufferA.buffer, tuple(bufferSize))
-
-@metal threads=(bufferSize) tester(bufferA.buffer)
-synchronize()
-@test all(vecA .== Int(5))
-
-@testset "launch params" begin
-    vecA .= 0
-    @metal threads=(2) tester(bufferA.buffer)
-    synchronize()
-    @test all(vecA == Int.([5, 5, 0, 0, 0, 0, 0, 0]))
-    vecA .= 0
-
-    @metal grid=(3) threads=(2) tester(bufferA.buffer)
-    synchronize()
-    @test all(vecA == Int.([5, 5, 5, 5, 5, 5, 0, 0]))
-    vecA .= 0
-
-    @test_throws InexactError @metal threads=(-2) tester(bufferA.buffer)
-    @test_throws InexactError @metal grid=(-2) tester(bufferA.buffer)
-    @test_throws ArgumentError @metal threads=(1025) tester(bufferA.buffer)
-    @test_throws ArgumentError @metal threads=(1000,2) tester(bufferA.buffer)
-end
-
-@testset "argument passing" begin
-    @testset "buffer argument" begin
-        function kernel(ptr)
-            unsafe_store!(ptr, 42)
-            return
-        end
-
-        a = MtlArray([1])
-        @metal kernel(pointer(a))
-        @test Array(a)[] == 42
+# choose tests
+const tests = []
+const test_runners = Dict()
+## files in the test folder
+for (rootpath, dirs, files) in walkdir(@__DIR__)
+  # find Julia files
+  filter!(files) do file
+    endswith(file, ".jl") && file !== "setup.jl" && file !== "runtests.jl"
+  end
+  isempty(files) && continue
+
+  # strip extension
+  files = map(files) do file
+    file[1:end-3]
+  end
+
+  # prepend subdir
+  subdir = relpath(rootpath, @__DIR__)
+  if subdir != "."
+    files = map(files) do file
+      joinpath(subdir, file)
     end
+  end
 
-    @testset "scalar argument" begin
-        function kernel(ptr, val)
-            unsafe_store!(ptr, val)
-            return
-        end
+  append!(tests, files)
+  for file in files
+    test_runners[file] = ()->include("$(@__DIR__)/$file.jl")
+  end
+end
+unique!(tests)
 
-        a = MtlArray([1])
-        @metal kernel(pointer(a), 42)
-        @test Array(a)[] == 42
+# parse some more command-line arguments
+## --list to list all available tests
+do_list, _ = extract_flag!(ARGS, "--list")
+if do_list
+    println("Available tests:")
+    for test in sort(tests)
+        println(" - $test")
     end
+    exit(0)
+end
+## no options should remain
+optlike_args = filter(startswith("-"), ARGS)
+if !isempty(optlike_args)
+    error("Unknown test options `$(join(optlike_args, " "))` (try `--help` for usage instructions)")
+end
+## the remaining args filter tests
+if !isempty(ARGS)
+  filter!(tests) do test
+    any(arg->startswith(test, arg), ARGS)
+  end
+end
 
-    @testset "array argument" begin
-        function kernel(ptr, vals)
-            unsafe_store!(ptr, vals[1])
-            return
-        end
-
-        a = MtlArray([1])
-        @metal kernel(pointer(a), (42,))
-        @test Array(a)[] == 42
+# add workers
+const test_exeflags = Base.julia_cmd()
+filter!(test_exeflags.exec) do c
+    return !(startswith(c, "--depwarn") || startswith(c, "--check-bounds"))
+end
+push!(test_exeflags.exec, "--check-bounds=yes")
+push!(test_exeflags.exec, "--startup-file=no")
+push!(test_exeflags.exec, "--depwarn=yes")
+if Base.JLOptions().project != C_NULL
+    push!(test_exeflags.exec, "--project=$(unsafe_string(Base.JLOptions().project))")
+end
+const test_exename = popfirst!(test_exeflags.exec)
+function addworker(X; kwargs...)
+    withenv("JULIA_NUM_THREADS" => 1, "OPENBLAS_NUM_THREADS" => 1) do
+        procs = addprocs(X; exename=test_exename, exeflags=test_exeflags, kwargs...)
+        @everywhere procs include($(joinpath(@__DIR__, "setup.jl")))
+        procs
     end
+end
+addworker(min(jobs, length(tests)))
 
-    @testset "struct argument" begin
-        function kernel(ptr, vals)
-            unsafe_store!(ptr, vals[1] + vals[2])
-            return
-        end
+# pretty print information about gc and mem usage
+testgroupheader = "Test"
+workerheader = "(Worker)"
+name_align        = maximum([textwidth(testgroupheader) + textwidth(" ") +
+                             textwidth(workerheader); map(x -> textwidth(x) +
+                             3 + ndigits(nworkers()), tests)])
+elapsed_align     = textwidth("Time (s)")
+gc_align      = textwidth("GC (s)")
+percent_align = textwidth("GC %")
+alloc_align   = textwidth("Alloc (MB)")
+rss_align     = textwidth("RSS (MB)")
+printstyled(" "^(name_align + textwidth(testgroupheader) - 3), " | ")
+printstyled("         | ---------------- CPU ---------------- |\n", color=:white)
+printstyled(testgroupheader, color=:white)
+printstyled(lpad(workerheader, name_align - textwidth(testgroupheader) + 1), " | ", color=:white)
+printstyled("Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB) |\n", color=:white)
+print_lock = stdout isa Base.LibuvStream ? stdout.lock : ReentrantLock()
+if stderr isa Base.LibuvStream
+    stderr.lock = print_lock
+end
+function print_testworker_stats(test, wrkr, resp)
+    @nospecialize resp
+    lock(print_lock)
+    try
+        printstyled(test, color=:white)
+        printstyled(lpad("($wrkr)", name_align - textwidth(test) + 1, " "), " | ", color=:white)
+        time_str = @sprintf("%7.2f",resp[2])
+        printstyled(lpad(time_str, elapsed_align, " "), " | ", color=:white)
 
-        a = MtlArray([1])
-        @metal kernel(pointer(a), (20, Int32(22)))
-        @test Array(a)[] == 42
+        cpu_gc_str = @sprintf("%5.2f", resp[4])
+        printstyled(lpad(cpu_gc_str, gc_align, " "), " | ", color=:white)
+        # since there may be quite a few digits in the percentage,
+        # the left-padding here is less to make sure everything fits
+        cpu_percent_str = @sprintf("%4.1f", 100 * resp[4] / resp[2])
+        printstyled(lpad(cpu_percent_str, percent_align, " "), " | ", color=:white)
+        cpu_alloc_str = @sprintf("%5.2f", resp[3] / 2^20)
+        printstyled(lpad(cpu_alloc_str, alloc_align, " "), " | ", color=:white)
+
+        cpu_rss_str = @sprintf("%5.2f", resp[6] / 2^20)
+        printstyled(lpad(cpu_rss_str, rss_align, " "), " |\n", color=:white)
+    finally
+        unlock(print_lock)
     end
-
-    @testset "indirect struct argument" begin
-        function kernel(obj)
-            unsafe_store!(obj[1], obj[2])
-            return
-        end
-
-        a = MtlArray([1])
-        @metal kernel((pointer(a), 42))
-        @test Array(a)[] == 42
-    end
-
-    @testset "nested indirect struct argument" begin
-        function kernel(obj)
-            unsafe_store!(obj[1][1], obj[2])
-            return
-        end
-
-        a = MtlArray([1])
-        @metal kernel(((pointer(a), 0), 42))
-        @test Array(a)[] == 42
-    end
-
-    @testset "array in struct argument" begin
-        function kernel(obj)
-            unsafe_store!(obj[1], obj[2][1]+obj[2][2])
-            return
-        end
-
-        a = MtlArray([1])
-        @metal kernel((pointer(a), (20,22)))
-        @test Array(a)[] == 42
+end
+global print_testworker_started = (name, wrkr)->begin
+end
+function print_testworker_errored(name, wrkr)
+    lock(print_lock)
+    try
+        printstyled(name, color=:red)
+        printstyled(lpad("($wrkr)", name_align - textwidth(name) + 1, " "), " |",
+            " "^elapsed_align, " failed at $(now())\n", color=:red)
+    finally
+        unlock(print_lock)
     end
 end
 
-@testset "math intrinsics" begin
-    a = ones(Float32,1)
-    a .* Float32(3.14)
-    bufferA = MtlArray(a)
-    vecA = unsafe_wrap(Vector{Float32}, bufferA.buffer, 1)
-
-    function intr_test(buf)
-        idx = thread_position_in_grid_1d()
-        buf[idx] = cos(buf[idx])
-        return nothing
-    end
-    @metal intr_test(bufferA.buffer)
-    synchronize()
-    @test vecA ≈ cos.(a)
-
-    function intr_test2(buf)
-        idx = thread_position_in_grid_1d()
-        buf[idx] = Metal.rsqrt(buf[idx])
-        return nothing
-    end
-    @metal intr_test2(bufferA.buffer)
-end
-
-@testset "sync barriers" begin
-    function sync_test_kernel(buf)
-        idx = thread_position_in_grid_1d()
-        buf[idx] += UInt8(1)
-        return nothing
-    end
-    buf = MtlArray{UInt8,1}(undef, tuple(1024); storage=Shared)
-    vec = unsafe_wrap(Vector{UInt8}, buf.buffer, (1024))
-    @metal threads=1024 sync_test_kernel(buf)
-    synchronize()
-    @test all(vec .== UInt8(1))
-
-    function barrier_test_kernel(buf)
-        idx = thread_position_in_grid_1d()
-        if thread_position_in_threadgroup_1d() != UInt32(1)
-            for i in range(1,threads_per_threadgroup_1d())
-                buf[idx] += UInt32(i)
-            end
-            buf[idx] = 1
-        end
-
-        threadgroup_barrier()
-
-        if thread_position_in_threadgroup_1d() == UInt32(1)
-            for i in range(1,threads_per_threadgroup_1d())
-                buf[idx] += buf[idx+i-1]
+# run tasks
+t0 = now()
+results = []
+all_tasks = Task[]
+all_tests = copy(tests)
+try
+    # Monitor stdin and kill this task on ^C
+    # but don't do this on Windows, because it may deadlock in the kernel
+    t = current_task()
+    running_tests = Dict{String, DateTime}()
+    if !Sys.iswindows() && isa(stdin, Base.TTY)
+        stdin_monitor = @async begin
+            term = REPL.Terminals.TTYTerminal("xterm", stdin, stdout, stderr)
+            try
+                REPL.Terminals.raw!(term, true)
+                while true
+                    c = read(term, Char)
+                    if c == '\x3'
+                        Base.throwto(t, InterruptException())
+                        break
+                    elseif c == '?'
+                        println("Currently running: ")
+                        tests = sort(collect(running_tests), by=x->x[2])
+                        foreach(tests) do (test, date)
+                            println(test, " (running for ", round(now()-date, Minute), ")")
+                        end
+                    end
+                end
+            catch e
+                isa(e, InterruptException) || rethrow()
+            finally
+                REPL.Terminals.raw!(term, false)
             end
         end
-        return nothing
     end
+    @sync begin
+        function recycle_worker(p)
+            rmprocs(p, waitfor=30)
+            return nothing
+        end
 
-    buf = MtlArray{Int,1}(undef, tuple(1024); storage=Shared)
-    vec = unsafe_wrap(Vector{Int}, buf.buffer, (1024))
-    @metal threads=1024 barrier_test_kernel(buf)
-    synchronize()
-    @test vec[1] == 992
+        for p in workers()
+            @async begin
+                push!(all_tasks, current_task())
+                while length(tests) > 0
+                    test = popfirst!(tests)
 
-    # TODO: simdgroup barrier test
+                    # sometimes a worker failed, and we need to spawn a new one
+                    if p === nothing
+                        p = addworker(1)[1]
+                    end
+                    wrkr = p
+
+                    local resp
+
+                    # run the test
+                    running_tests[test] = now()
+                    try
+                        resp = remotecall_fetch(runtests, wrkr, test_runners[test], test)
+                    catch e
+                        isa(e, InterruptException) && return
+                        resp = Any[e]
+                    end
+                    delete!(running_tests, test)
+                    push!(results, (test, resp))
+
+                    # act on the results
+                    if resp[1] isa Exception
+                        print_testworker_errored(test, wrkr)
+                        do_quickfail && Base.throwto(t, InterruptException())
+
+                        # the worker encountered some failure, recycle it
+                        # so future tests get a fresh environment
+                        p = recycle_worker(p)
+                    else
+                        print_testworker_stats(test, wrkr, resp)
+
+                        cpu_rss = resp[6]
+                        if haskey(ENV, "CI") && cpu_rss > 3*2^30
+                            # XXX: collecting garbage
+                            #      after each test, we are leaking CPU memory somewhere.
+                            #      this is a problem on CI, where2 we don't have much RAM.
+                            #      work around this by periodically recycling the worker.
+                            p = recycle_worker(p)
+                        end
+                    end
+                end
+
+                if p !== nothing
+                    recycle_worker(p)
+                end
+            end
+        end
+    end
+catch e
+    isa(e, InterruptException) || rethrow()
+    # If the test suite was merely interrupted, still print the
+    # summary, which can be useful to diagnose what's going on
+    foreach(task -> begin
+            istaskstarted(task) || return
+            istaskdone(task) && return
+            try
+                schedule(task, InterruptException(); error=true)
+            catch ex
+                @error "InterruptException" exception=ex,catch_backtrace()
+            end
+        end, all_tasks)
+    for t in all_tasks
+        # NOTE: we can't just wait, but need to discard the exception,
+        #       because the throwto for --quickfail also kills the worker.
+        try
+            wait(t)
+        catch e
+            showerror(stderr, e)
+        end
+    end
+finally
+    if @isdefined stdin_monitor
+        schedule(stdin_monitor, InterruptException(); error=true)
+    end
 end
+t1 = now()
+elapsed = canonicalize(Dates.CompoundPeriod(t1-t0))
+println("Testing finished in $elapsed")
 
-end # End kernels testset
-
-# Examples
-# TODO: Do this in a way more similar to the other backends
-@testset "examples" begin
-    include("../examples/unified_memory.jl")
-    include("../examples/vadd.jl")
+# construct a testset to render the test results
+o_ts = Test.DefaultTestSet("Overall")
+Test.push_testset(o_ts)
+completed_tests = Set{String}()
+for (testname, (resp,)) in results
+    push!(completed_tests, testname)
+    if isa(resp, Test.DefaultTestSet)
+        Test.push_testset(resp)
+        Test.record(o_ts, resp)
+        Test.pop_testset()
+    elseif isa(resp, Tuple{Int,Int})
+        fake = Test.DefaultTestSet(testname)
+        for i in 1:resp[1]
+            if VERSION >= v"1.7-"
+                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing, nothing))
+            else
+                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
+            end
+        end
+        for i in 1:resp[2]
+            Test.record(fake, Test.Broken(:test, nothing))
+        end
+        Test.push_testset(fake)
+        Test.record(o_ts, fake)
+        Test.pop_testset()
+    elseif isa(resp, RemoteException) && isa(resp.captured.ex, Test.TestSetException)
+        println("Worker $(resp.pid) failed running test $(testname):")
+        Base.showerror(stdout, resp.captured)
+        println()
+        fake = Test.DefaultTestSet(testname)
+        for i in 1:resp.captured.ex.pass
+            if VERSION >= v"1.7-"
+                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing, nothing))
+            else
+                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
+            end
+        end
+        for i in 1:resp.captured.ex.broken
+            Test.record(fake, Test.Broken(:test, nothing))
+        end
+        for t in resp.captured.ex.errors_and_fails
+            Test.record(fake, t)
+        end
+        Test.push_testset(fake)
+        Test.record(o_ts, fake)
+        Test.pop_testset()
+    else
+        if !isa(resp, Exception)
+            resp = ErrorException(string("Unknown result type : ", typeof(resp)))
+        end
+        # If this test raised an exception that is not a remote testset exception,
+        # i.e. not a RemoteException capturing a TestSetException that means
+        # the test runner itself had some problem, so we may have hit a segfault,
+        # deserialization errors or something similar.  Record this testset as Errored.
+        fake = Test.DefaultTestSet(testname)
+        Test.record(fake, Test.Error(:nontest_error, testname, nothing, Any[(resp, [])], LineNumberNode(1)))
+        Test.push_testset(fake)
+        Test.record(o_ts, fake)
+        Test.pop_testset()
+    end
+end
+for test in all_tests
+    (test in completed_tests) && continue
+    fake = Test.DefaultTestSet(test)
+    Test.record(fake, Test.Error(:test_interrupted, test, nothing,
+                                    [("skipped", [])], LineNumberNode(1)))
+    Test.push_testset(fake)
+    Test.record(o_ts, fake)
+    Test.pop_testset()
+end
+println()
+Test.print_test_results(o_ts, 1)
+if !o_ts.anynonpass
+    println("    \033[32;1mSUCCESS\033[0m")
+else
+    println("    \033[31;1mFAILURE\033[0m\n")
+    Test.print_test_errors(o_ts)
+    throw(Test.FallbackTestSetException("Test run finished with errors"))
 end
