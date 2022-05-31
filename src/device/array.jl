@@ -51,21 +51,24 @@ MtlDeviceVector{T,A}(len::Integer,               p::Core.LLVMPtr{T,A}) where {T,
 # MtlDeviceVector{T,A}(len::NTuple{N,<:Integer},               p::Core.LLVMPtr{T,1}) where {T,A}   = MtlDeviceVector{T,A}((Int(len),), p)
 
 
-## getters
-
-Base.pointer(a::MtlDeviceArray) = a.ptr
-Base.pointer(a::MtlDeviceArray, i::Integer) = pointer(a) + (i - 1) * Base.elsize(a)
+## array interface
 
 Base.elsize(::Type{<:MtlDeviceArray{T}}) where {T} = sizeof(T)
+
 Base.size(g::MtlDeviceArray) = g.shape
-# Testing to fix argument encoding with the trailing , for vectors
-Base.size(g::MtlDeviceVector) = length(g)
-Base.length(g::MtlDeviceArray) = prod(g.shape)
+Base.sizeof(x::MtlDeviceArray) = Base.elsize(x) * length(x)
+
+Base.pointer(x::MtlDeviceArray{T,<:Any,A}) where {T,A} =
+    Base.unsafe_convert(Core.LLVMPtr{T,A}, x)
+@inline function Base.pointer(x::MtlDeviceArray{T,<:Any,A}, i::Integer) where {T,A}
+    Base.unsafe_convert(Core.LLVMPtr{T,A}, x) + Base._memory_offset(x, i)
+end
 
 
 ## conversions
 
-Base.unsafe_convert(::Type{Core.LLVMPtr{T,A}}, a::MtlDeviceArray{T,N,A}) where {T,A,N} = pointer(a)
+Base.unsafe_convert(::Type{Core.LLVMPtr{T,A}}, x::MtlDeviceArray{T,<:Any,A}) where {T,A} =
+  x.ptr
 
 
 ## indexing intrinsics
