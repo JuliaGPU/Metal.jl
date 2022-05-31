@@ -10,9 +10,20 @@ bufferSize = 8
 bufferA = MtlArray{Int,1}(undef, tuple(bufferSize), storage=Shared)
 vecA = unsafe_wrap(Vector{Int}, bufferA.buffer, tuple(bufferSize))
 
-@metal threads=(bufferSize) tester(bufferA.buffer)
-synchronize()
-@test all(vecA .== Int(5))
+@testset "basic execution and synchronization" begin
+    @metal threads=(bufferSize) tester(bufferA.buffer)
+    synchronize()
+    @test all(vecA .== Int(5))
+end
+
+@testset "device synchronization" begin
+    t = @async begin
+        @metal threads=(bufferSize) tester(bufferA.buffer)
+    end
+    wait(t)
+    device_synchronize()
+    @test all(vecA .== Int(5))
+end
 
 @testset "launch params" begin
     vecA .= 0
