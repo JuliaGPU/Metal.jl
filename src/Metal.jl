@@ -26,6 +26,7 @@ include("compiler/reflection.jl")
 
 include("state.jl")
 include("utilities.jl")
+include("initialization.jl")
 
 # array abstraction
 include("array.jl")
