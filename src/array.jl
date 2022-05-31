@@ -223,7 +223,8 @@ ones(dims...) = Mtls(Float32, dims...)
 fill(v, dims...) = fill!(MtlArray{typeof(v)}(undef, dims...), v)
 fill(v, dims::Dims) = fill!(MtlArray{typeof(v)}(undef, dims...), v)
 
-function Base.fill!(A::MtlArray{T}, val) where T
+# optimized implementation of `fill!` for types that are directly supported by fillbuffer
+function Base.fill!(A::MtlArray{T}, val) where T <: Union{UInt8,Int8}
   B = convert(T, val)
   unsafe_fill!(A.dev, pointer(A), B, length(A))
   A
