@@ -231,7 +231,66 @@ fill(v, dims::Dims) = fill!(MtlArray{typeof(v)}(undef, dims...), v)
 # optimized implementation of `fill!` for types that are directly supported by fillbuffer
 function Base.fill!(A::MtlArray{T}, val) where T <: Union{UInt8,Int8}
   B = convert(T, val)
-  unsafe_fill!(A.dev, pointer(A), B, length(A))
+  unsafe_fill!(device(A), pointer(A), B, length(A))
   A
 end
 
+
+## views
+
+device(a::SubArray) = device(parent(a))
+
+# we don't really want an array, so don't call `adapt(Array, ...)`,
+# but just want MtlArray indices to get downloaded back to the CPU.
+# this makes sure we preserve array-like containers, like Base.Slice.
+struct BackToCPU end
+Adapt.adapt_storage(::BackToCPU, xs::MtlArray) = convert(Array, xs)
+
+@inline function Base.view(A::MtlArray, I::Vararg{Any,N}) where {N}
+    J = to_indices(A, I)
+    @boundscheck begin
+        # Base's boundscheck accesses the indices, so make sure they reside on the CPU.
+        # this is expensive, but it's a bounds check after all.
+        J_cpu = map(j->adapt(BackToCPU(), j), J)
+        checkbounds(A, J_cpu...)
+    end
+    J_gpu = map(j->adapt(MtlArray, j), J)
+    Base.unsafe_view(Base._maybe_reshape_parent(A, Base.index_ndims(J_gpu...)), J_gpu...)
+end
+
+# pointer conversions
+## contiguous
+function Base.unsafe_convert(::Type{MTL.MTLBuffer}, V::SubArray{T,N,P,<:Tuple{Vararg{Base.RangeIndex}}}) where {T,N,P}
+    return Base.unsafe_convert(MTL.MTLBuffer, parent(V)) +
+           Base._memory_offset(V.parent, map(first, V.indices)...)
+end
+
+## reshaped
+function Base.unsafe_convert(::Type{MTL.MTLBuffer}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{Base.RangeIndex,Base.ReshapedUnitRange}}}}) where {T,N,P}
+   return Base.unsafe_convert(MTL.MTLBuffer, parent(V)) +
+          (Base.first_index(V)-1)*sizeof(T)
+end
+
+
+## PermutedDimsArray
+
+device(a::Base.PermutedDimsArray) = device(parent(a))
+
+Base.unsafe_convert(::Type{MTL.MTLBuffer}, A::PermutedDimsArray) where {T} =
+    Base.unsafe_convert(MTL.MTLBuffer, parent(A))
+
+
+## reshape
+
+device(a::Base.ReshapedArray) = device(parent(a))
+
+Base.unsafe_convert(::Type{MTL.MTLBuffer}, a::Base.ReshapedArray{T}) where {T} =
+  Base.unsafe_convert(MTL.MTLBuffer, parent(a))
+
+
+## reinterpret
+
+device(a::Base.ReinterpretArray) = device(parent(a))
+
+Base.unsafe_convert(::Type{MTL.MTLBuffer}, a::Base.ReinterpretArray{T,N,S} where N) where {T,S} =
+  MTL.MTLBuffer(Base.unsafe_convert(ZePtr{S}, parent(a)))
