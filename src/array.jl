@@ -56,8 +56,10 @@ Base.elsize(::Type{<:MtlArray{T}}) where {T} = sizeof(T)
 Base.size(x::MtlArray) = x.dims
 Base.sizeof(x::MtlArray) = Base.elsize(x) * length(x)
 
-Base.pointer(x::MtlArray) = x.buffer
-#Base.pointer(x::MtlArray, i::Integer) = x.ptr + (i-1) * Base.elsize(x)
+Base.pointer(x::MtlArray{T}) where {T} = Base.unsafe_convert(MTL.MTLBuffer, x)
+@inline function Base.pointer(x::MtlArray{T}, i::Integer) where T
+    Base.unsafe_convert(MTL.MTLBuffer, x) + Base._memory_offset(x, i)
+end
 
 
 ## interop with other arrays
@@ -86,10 +88,10 @@ Base.convert(::Type{T}, x::T) where T <: MtlArray = x
 
 ## interop with C libraries
 
-Base.unsafe_convert(::Type{Ptr{T}}, x::MtlArray{T}) where {T} = throw(ArgumentError("cannot take the host address of a $(typeof(x))"))
-Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S,T} = throw(ArgumentError("cannot take the host address of a $(typeof(x))"))
+Base.unsafe_convert(::Type{<:Ptr}, x::MtlArray) =
+  throw(ArgumentError("cannot take the host address of a $(typeof(x))"))
 
-Base.unsafe_convert(t::Type{MTL.MTLBuffer}, x::MtlArray{T}) where {T}   = Base.unsafe_convert(t, pointer(x))
+Base.unsafe_convert(t::Type{MTL.MTLBuffer}, x::MtlArray) = x.buffer
 
 
 ## interop with GPU arrays
