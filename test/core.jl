@@ -276,7 +276,7 @@ MTL.mtCommandBufferDescriptorRetainedReferencesSet(desc,false)
 MTL.mtCommandBufferDescriptorErrorOptionsSet(desc,MTL.MtCommandBufferErrorOptionEncoderExecutionStatus)
 @test MTL.mtCommandBufferDescriptorErrorOptions(desc) == MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
 
-cmq = MtlCommandQueue(device())
+cmq = MtlCommandQueue(current_device())
 cmdbuf = MtlCommandBuffer(cmq; retainReferences=false, errorOption=MTL.MtCommandBufferErrorOptionEncoderExecutionStatus)
 @test cmdbuf.retainedReferences == false
 @test cmdbuf.errorOptions == MTL.MtCommandBufferErrorOptionEncoderExecutionStatus

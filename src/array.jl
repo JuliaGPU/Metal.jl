@@ -9,12 +9,14 @@ mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
   dev::MtlDevice
 end
 
+device(A::MtlArray) = A.dev
+
 
 ## constructors
 
 # type and dimensionality specified, accepting dims as tuples of Ints
 function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Shared) where {T,N}
-    dev = device()
+    dev = current_device()
     # Check that requested size is not larger than maximum buffer size allowed
     sizeof(T) * prod(dims) > dev.maxBufferLength && error("Too large of Metal buffer requested of size $(Base.format_bytes(sizeof(T) * prod(dims))) (Max: $(Base.format_bytes(dev.maxBufferLength)))")
     buf = alloc(T, dev, prod(dims); storage=storage)

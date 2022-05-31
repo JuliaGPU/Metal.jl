@@ -217,7 +217,7 @@ function mtlfunction_compile(@nospecialize(job::CompilerJob), ctx::Context)
 end
 
 function mtlfunction_link(@nospecialize(job::CompilerJob), compiled)
-    dev = device()
+    dev = current_device()
     lib = MtlLibraryFromData(dev, compiled.image)
     MtlFunction(lib, compiled.entry), compiled.arguments
 end

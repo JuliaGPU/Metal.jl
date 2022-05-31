@@ -1,4 +1,18 @@
-export global_queue, synchronize, device_synchronize
+export current_device, global_queue, synchronize, device_synchronize
+
+"""
+    current_device()::MtlDevice
+
+Return the Metal GPU device associated with the current Julia task.
+
+Since all M-series systems currently only externally show a single GPU, this function
+effectively returns the only system GPU.
+"""
+function current_device()
+    get!(task_local_storage(), :MtlDevice) do
+        MtlDevice(1)
+    end::MtlDevice
+end
 
 const global_queues = WeakKeyDict{MtlCommandQueue,Nothing}()
 
@@ -15,20 +29,6 @@ function global_queue(dev::MtlDevice)
     end::MtlCommandQueue
 end
 
-"""
-    device()::MtlDevice
-
-Return the (first) Metal GPU device associated with the current Julia thread.
-
-Since all M-series systems currently only externally show a single GPU, this function
-effectively returns the only system GPU.
-"""
-function MTL.device()
-    get!(task_local_storage(), :MtlDevice) do
-        MtlDevice(1)
-    end::MtlDevice
-end
-
 # TODO: Increase performance (currently ~15us)
 """
     synchronize(queue)
@@ -39,7 +39,7 @@ Create a new MtlCommandBuffer from the global command queue, commit it to the qu
 and simply wait for it to be completed. Since command buffers *should* execute in a
 First-In-First-Out manner, this synchronizes the GPU.
 """
-function synchronize(queue::MtlCommandQueue=global_queue(device()))
+function synchronize(queue::MtlCommandQueue=global_queue(current_device()))
     cmdbuf = MtlCommandBuffer(queue)
     commit!(cmdbuf)
     wait_completed(cmdbuf)

@@ -10,7 +10,6 @@ for method in (:code_typed, :code_warntype, :code_llvm, :code_native)
                          kernel::Bool=false, minthreads=nothing, maxthreads=nothing,
                          blocks_per_sm=nothing, maxregs=nothing, kwargs...)
             source = FunctionSpec(func, Base.to_tuple_type(types), kernel)
-            # target = CUDACompilerTarget(device(); minthreads, maxthreads, blocks_per_sm, maxregs)
             target = MetalCompilerTarget(macos=get_macos_v();)
             params = MetalCompilerParams()
             job = CompilerJob(target, source, params)
