@@ -32,7 +32,8 @@ end
 Base.sizeof(buf::MtlBuffer)          = Int(buf.length)
 Base.length(d::MtlBuffer{T}) where T = sizeof(d) ÷ sizeof(T)
 
-content(buf::MtlBuffer{T}) where T   = Base.bitcast(Ptr{T}, mtBufferContents(buf))
+content(buf::MtlBuffer{T}, index::Integer=1) where T =
+    Base.bitcast(Ptr{T}, mtBufferContents(buf)) + (index-1) * sizeof(T)
 
 
 ## allocation

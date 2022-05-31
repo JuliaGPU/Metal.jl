@@ -56,10 +56,10 @@ Base.elsize(::Type{<:MtlArray{T}}) where {T} = sizeof(T)
 Base.size(x::MtlArray) = x.dims
 Base.sizeof(x::MtlArray) = Base.elsize(x) * length(x)
 
+# XXX: we can't actually get a true pointer, it's always a buffer
+# with Metal APIs accepting an offset param. should we then disallow this conversion?
 Base.pointer(x::MtlArray{T}) where {T} = Base.unsafe_convert(MTL.MTLBuffer, x)
-@inline function Base.pointer(x::MtlArray{T}, i::Integer) where T
-    Base.unsafe_convert(MTL.MTLBuffer, x) + Base._memory_offset(x, i)
-end
+Base.pointer(x::MtlArray, index) = error("Cannot compute a pointer with offset")
 
 
 ## interop with other arrays
