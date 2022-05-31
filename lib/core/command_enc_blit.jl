@@ -27,7 +27,7 @@ end
 ##
 # Copy from device to device
 append_copy!(enc::MtlBlitCommandEncoder, dst::MtlBuffer, dst_offset, src::MtlBuffer, src_offset, len) =
-    mtBlitCommandEncoderCopyFromBufferToBuffer(enc, src, src_offset-1, dst, dst_offset-1, len)
+    mtBlitCommandEncoderCopyFromBufferToBuffer(enc, src, src_offset, dst, dst_offset, len)
 
 append_fillbuffer!(enc::MtlBlitCommandEncoder, src::MtlBuffer,
                     val::Union{Int8, UInt8}, range) =

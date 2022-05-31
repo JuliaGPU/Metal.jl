@@ -18,7 +18,7 @@ function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlBuffer{T}, doff::Integer,
                              src::MtlBuffer{T}, soff::Integer, N::Integer) where T
     cmdbuf = MtlCommandBuffer(global_queue(dev))
     MtlBlitCommandEncoder(cmdbuf) do enc
-        MTL.append_copy!(enc, dst, doff, src, soff, N * sizeof(T))
+        MTL.append_copy!(enc, dst, (doff-1) * sizeof(T), src, (soff - 1) * sizeof(T), N * sizeof(T))
     end
     commit!(cmdbuf)
     wait_completed(cmdbuf)
