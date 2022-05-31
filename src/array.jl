@@ -48,6 +48,7 @@ function Base.copy(a::MtlArray{T,N}) where {T,N}
   @inbounds copyto!(b, a)
 end
 
+
 ## array interface
 
 Base.elsize(::Type{<:MtlArray{T}}) where {T} = sizeof(T)
@@ -133,7 +134,7 @@ function Base.copyto!(dest::MtlArray{T}, doffs::Integer, src::Array{T}, soffs::I
   @boundscheck checkbounds(dest, doffs+n-1)
   @boundscheck checkbounds(src, soffs)
   @boundscheck checkbounds(src, soffs+n-1)
-  unsafe_copyto!(dest.dev, dest, doffs, src, soffs, n)
+  unsafe_copyto!(device(dest), dest, doffs, src, soffs, n)
   return dest
 end
 
@@ -147,7 +148,7 @@ function Base.copyto!(dest::Array{T}, doffs::Integer, src::MtlArray{T}, soffs::I
   @boundscheck checkbounds(dest, doffs+n-1)
   @boundscheck checkbounds(src, soffs)
   @boundscheck checkbounds(src, soffs+n-1)
-  unsafe_copyto!(src.dev, dest, doffs, src, soffs, n)
+  unsafe_copyto!(device(src), dest, doffs, src, soffs, n)
   return dest
 end
 
@@ -162,8 +163,8 @@ function Base.copyto!(dest::MtlArray{T}, doffs::Integer, src::MtlArray{T}, soffs
   @boundscheck checkbounds(src, soffs)
   @boundscheck checkbounds(src, soffs+n-1)
   # TODO: which device to use here?
-  if dest.dev == src.dev
-    unsafe_copyto!(dest.dev, dest, doffs, src, soffs, n)
+  if device(dest) == device(src)
+    unsafe_copyto!(device(dest), dest, doffs, src, soffs, n)
   else
     error("Copy between different devices not implemented")
   end
