@@ -1,5 +1,19 @@
 using Distributed, Test, Metal
 
+# GPUArrays has a testsuite that isn't part of the main package.
+# Include it directly.
+import GPUArrays
+gpuarrays = pathof(GPUArrays)
+gpuarrays_root = dirname(dirname(gpuarrays))
+include(joinpath(gpuarrays_root, "test", "testsuite.jl"))
+testf(f, xs...; kwargs...) = TestSuite.compare(f, MtlArray, xs...; kwargs...)
+
+const eltypes = [Int16, Int32, Int64,
+                 Complex{Int16}, Complex{Int32}, Complex{Int64},
+                 Float16, Float32,
+                 ComplexF16, ComplexF32]
+TestSuite.supported_eltypes(::Type{<:MtlArray}) = eltypes
+
 using Random
 
 
