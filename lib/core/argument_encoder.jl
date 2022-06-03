@@ -63,7 +63,7 @@ set_buffer!(enc::MtlArgumentEncoder, buf::MtlBuffer, offset::Integer, index::Int
     mtArgumentEncoderSetBufferOffsetAtIndex(enc, buf, offset, index)
 set_buffers!(enc::MtlArgumentEncoder, bufs::Vector{<:MtlBuffer},
              offsets::Vector{Int}, indices::UnitRange{Int}) =
-    mtArgumentSetBuffersOffsetsWithRange(enc, handle_array(bufs), offsets, indices)
+    mtArgumentEncoderSetBuffersOffsetsWithRange(enc, handle_array(bufs), offsets, indices)
 
 function set_constant!(enc::MtlArgumentEncoder, val, index::Integer)
     dst = Base.bitcast(Ptr{typeof(val)}, mtArgumentEncoderConstantDataAtIndex(enc, index))
