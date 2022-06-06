@@ -10,7 +10,7 @@ for method in (:code_typed, :code_warntype, :code_llvm, :code_native)
                          kernel::Bool=false, minthreads=nothing, maxthreads=nothing,
                          blocks_per_sm=nothing, maxregs=nothing, kwargs...)
             source = FunctionSpec(func, Base.to_tuple_type(types), kernel)
-            target = MetalCompilerTarget(macos=get_macos_v();)
+            target = MetalCompilerTarget(macos=macos_version())
             params = MetalCompilerParams()
             job = CompilerJob(target, source, params)
             GPUCompiler.$method($(args...); kwargs...)
@@ -27,7 +27,7 @@ Return a type `r` such that `f(args...)::r` where `args::tt`.
 """
 function return_type(@nospecialize(func), @nospecialize(tt))
     source = FunctionSpec(func, tt, true)
-    target = MetalCompilerTarget(macos=get_macos_v();)
+    target = MetalCompilerTarget(macos=macos_version())
     params = MetalCompilerParams()
     job = CompilerJob(target, source, params)
     interp = GPUCompiler.get_interpreter(job)
