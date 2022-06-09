@@ -1,0 +1,11 @@
+coverage:
+  ignore:
+    - "lib/*/lib*.jl"
+    - "src/device"
+    - "res/"
+    - "doc/"
+    - "perf/"
+  status:
+    patch: false
+    project: false
+    changes: false
