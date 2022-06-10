@@ -9,7 +9,7 @@
 [buildkite-img]: https://badge.buildkite.com/a9b335b7d5d4d7ea90b031057728de9d1e9a73d5bcd9d89655.svg?branch=main
 [buildkite-url]: https://buildkite.com/julialang/metal-dot-jl
 
-[codecov-img]: https://codecov.io/gh/JuliaGPU/Metal.jl/branch/master/graph/badge.svg
+[codecov-img]: https://codecov.io/gh/JuliaGPU/Metal.jl/branch/main/graph/badge.svg
 [codecov-url]: https://codecov.io/gh/JuliaGPU/Metal.jl
 
 With Metal.jl it's possible to program GPUs on macOS using the Metal programming
