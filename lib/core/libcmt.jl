@@ -1186,6 +1186,10 @@ function mtNewLibraryWithFile(device, filepath, error)
     ccall((:mtNewLibraryWithFile, libcmt), Ptr{MtLibrary}, (Ptr{MtDevice}, Cstring, Ptr{Ptr{NsError}}), device, filepath, error)
 end
 
+function mtNewLibraryWithURL(device, url, error)
+    ccall((:mtNewLibraryWithURL, libcmt), Ptr{MtLibrary}, (Ptr{MtDevice}, Cstring, Ptr{Ptr{NsError}}), device, url, error)
+end
+
 function mtNewLibraryWithSource(device, source, Opts, error)
     ccall((:mtNewLibraryWithSource, libcmt), Ptr{MtLibrary}, (Ptr{MtDevice}, Cstring, Ptr{MtCompileOptions}, Ptr{Ptr{NsError}}), device, source, Opts, error)
 end

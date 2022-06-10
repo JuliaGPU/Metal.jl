@@ -25,6 +25,11 @@ MtLibrary*
 mtNewLibraryWithFile(MtDevice *device, char *filepath, NsError **error);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
+MtLibrary*
+mtNewLibraryWithURL(MtDevice *device, char *url, NsError **error);
+
+MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtLibrary*
 mtNewLibraryWithSource(MtDevice *device, char *source, MtCompileOptions *Opts, NsError **error);
