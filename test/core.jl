@@ -213,6 +213,9 @@ buf = MtlBuffer{Int}(dev, 1)
 # MtlResource properties
 @test buf.device == dev
 @test buf.label == nothing
+@test buf.gpuAddress isa Ptr{Int}
+
+@test content(buf) isa Ptr{Int}
 
 @test sizeof(buf) == 8
 

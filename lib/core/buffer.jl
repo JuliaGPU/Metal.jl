@@ -21,9 +21,11 @@ Base.propertynames(o::MtlBuffer) = (
     invoke(propertynames, Tuple{MtlResource}, o)...
 )
 
-function Base.getproperty(o::MtlBuffer, f::Symbol)
+function Base.getproperty(o::MtlBuffer{T}, f::Symbol) where T
     if f === :length
         mtBufferLength(o)
+    elseif f === :gpuAddress
+        Base.bitcast(Ptr{T}, mtBufferGPUAddress(o))
     else
         invoke(getproperty, Tuple{MtlResource, Symbol}, o, f)
     end

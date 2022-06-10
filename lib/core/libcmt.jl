@@ -1242,6 +1242,10 @@ function mtBufferRemoteStorageBuffer(buf)
     ccall((:mtBufferRemoteStorageBuffer, libcmt), Ptr{MtBuffer}, (Ptr{MtBuffer},), buf)
 end
 
+function mtBufferGPUAddress(buf)
+    ccall((:mtBufferGPUAddress, libcmt), UInt64, (Ptr{MtBuffer},), buf)
+end
+
 function mtNewHeapDescriptor()
     ccall((:mtNewHeapDescriptor, libcmt), Ptr{MtHeapDescriptor}, ())
 end

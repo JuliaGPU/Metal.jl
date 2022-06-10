@@ -52,6 +52,11 @@ MT_API_UNAVAILABLE(mt_ios)
 MtBuffer*
 mtBufferRemoteStorageBuffer(MtBuffer *buf);
 
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(13.0), mt_ios(16.0))
+uint64_t
+mtBufferGPUAddress(MtBuffer* buf);
+
 #ifdef __cplusplus
 }
 #endif
