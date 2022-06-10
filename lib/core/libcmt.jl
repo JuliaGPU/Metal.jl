@@ -1018,6 +1018,10 @@ function mtMaxThreadsPerThreadgroup(device)
     ccall((:mtMaxThreadsPerThreadgroup, libcmt), MtSize, (Ptr{MtDevice},), device)
 end
 
+function mtDeviceArgumentBuffersSupport(device)
+    ccall((:mtDeviceArgumentBuffersSupport, libcmt), MtArgumentBuffersTier, (Ptr{MtDevice},), device)
+end
+
 function mtDeviceMaxBufferLength(device)
     ccall((:mtDeviceMaxBufferLength, libcmt), NsUInteger, (Ptr{MtDevice},), device)
 end

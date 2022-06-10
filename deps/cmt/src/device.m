@@ -6,6 +6,9 @@
 #import "impl/common.h"
 #import "cmt/device.h"
 
+
+// Acquiring Device Objects
+
 CF_RETURNS_RETAINED
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
@@ -31,6 +34,9 @@ mtCopyAllDevices(size_t* count, MtDevice** devices) {
 
   return;
 }
+
+
+// Querying GPU Properties
 
 CF_RETURNS_RETAINED
 MT_EXPORT
@@ -99,8 +105,6 @@ mtDeviceHasUnifiedMemory(MtDevice* device) {
 	return [(id<MTLDevice>)device hasUnifiedMemory];
 }
 
-// Querying Memory Availability and Limits 3/3
-
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.12), mt_macCatalyst(13.0))
 MT_API_UNAVAILABLE(mt_ios)
@@ -123,13 +127,18 @@ mtDeviceMaxThreadgroupMemoryLength(MtDevice* device) {
 	return [(id<MTLDevice>)device maxThreadgroupMemoryLength];
 }
 
-// Querying Threadgroup Limits 1/1
+
+// Determining Threadgroup Limits
+
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtSize
 mtMaxThreadsPerThreadgroup(MtDevice* device) {
 	return mtSize([(id<MTLDevice>)device maxThreadsPerThreadgroup]);
 }
+
+
+// Finding Groups of Connected GPUs
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15))
@@ -155,7 +164,9 @@ mtDevicePeerIndex(MtDevice *device) {
 	return [(id<MTLDevice>)device peerIndex];
 }
 
-//
+
+// Querying Feature Sets and GPU Families
+
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
 bool
@@ -170,12 +181,24 @@ mtDeviceSupportsFeatureSet(MtDevice *device, MtFeatureSet set) {
 	return [(id<MTLDevice>)device supportsFeatureSet: (MTLFeatureSet)set];
 }
 
-// Buffers
+
+// Querying Argument Buffer Support
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
+MtArgumentBuffersTier
+mtDeviceArgumentBuffersSupport(MtDevice *device) {
+	return [(id<MTLDevice>)device argumentBuffersSupport];
+}
+
+
+// Creating Buffers
+
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
 NsUInteger
 mtDeviceMaxBufferLength(MtDevice *device) {
-	return [(id<MTLDevice>)device maxBufferLength]; 
+	return [(id<MTLDevice>)device maxBufferLength];
 }
 
 CF_RETURNS_RETAINED
@@ -183,8 +206,8 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtBuffer*
 mtDeviceNewBufferWithLength(MtDevice *device, NsUInteger length, MtResourceOptions opts) {
-	return [(id<MTLDevice>)device 
-					newBufferWithLength: length 
+	return [(id<MTLDevice>)device
+					newBufferWithLength: length
 					options: (MTLResourceOptions)opts];
 }
 
@@ -206,13 +229,13 @@ mtDeviceNewBufferWithBytes(MtDevice      * __restrict device,
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtBuffer*
-mtDeviceNewBufferWithBytesNoCopy(MtDevice * __restrict device, 
-							   void * ptr, 
-							   NsUInteger length, 
+mtDeviceNewBufferWithBytesNoCopy(MtDevice * __restrict device,
+							   void * ptr,
+							   NsUInteger length,
 							   MtResourceOptions opts) {
-	return [(id<MTLDevice>)device newBufferWithBytesNoCopy: ptr 
-                                   					length: length 
-                                  				   options: (MTLResourceOptions)opts 
+	return [(id<MTLDevice>)device newBufferWithBytesNoCopy: ptr
+                                   					length: length
+                                  				   options: (MTLResourceOptions)opts
                               				   deallocator: nil];
 }
 
@@ -220,8 +243,8 @@ mtDeviceNewBufferWithBytesNoCopy(MtDevice * __restrict device,
 MT_EXPORT
 MtBuffer*
 mtDeviceNewBufferWithBytesNoCopyDeallocator(MtDevice *device, const void* ptr, NsUInteger length, MtResourceOptions opts) {
-	return [(id<MTLDevice>)device newBufferWithBytesNoCopy: ptr 
-                                   					length: length 
-                                  				   options: (MTLResourceOptions)opts 
+	return [(id<MTLDevice>)device newBufferWithBytesNoCopy: ptr
+                                   					length: length
+                                  				   options: (MTLResourceOptions)opts
                               				   deallocator: nil];
 }*/
