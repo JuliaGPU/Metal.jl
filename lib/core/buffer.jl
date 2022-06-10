@@ -34,6 +34,7 @@ end
 Base.sizeof(buf::MtlBuffer)          = Int(buf.length)
 Base.length(d::MtlBuffer{T}) where T = sizeof(d) ÷ sizeof(T)
 
+# TODO: rename to contents
 content(buf::MtlBuffer{T}, index::Integer=1) where T =
     Base.bitcast(Ptr{T}, mtBufferContents(buf)) + (index-1) * sizeof(T)
 
@@ -77,7 +78,7 @@ function MtlBuffer{T}(dev::Union{MtlDevice,MtlHeap},
     storage == Private && error("Can't create a Private copy-allocated buffer.")
     opts =  storage | hazard_tracking | cache_mode
 
-    bytesize = length * sizeof(T)
+    bytesize = length * Core.sizeof(T)
     ptr = alloc_buffer(dev, bytesize, opts, ptr)
 
     dev = dev isa MtlDevice ? dev : dev.device
