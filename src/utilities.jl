@@ -13,21 +13,6 @@ macro sync(code)
     end
 end
 
-function darwin_version()
-    # extract the trailing `-darwinXXX` bit from the triple
-    machine = Sys.MACHINE
-    VersionNumber(machine[findfirst("darwin", machine)[end]+1:end])
-end
-
-const _macos_version = Ref{VersionNumber}()
-function macos_version()
-    if !isassigned(_macos_version)
-        verstr = read(`sw_vers -productVersion`, String)
-        _macos_version[] = parse(VersionNumber, verstr)
-    end
-    _macos_version[]
-end
-
 function versioninfo(io::IO=stdout)
     println(io, "macOS $(macos_version()), Darwin $(darwin_version())")
     println(io)

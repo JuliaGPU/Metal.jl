@@ -47,6 +47,8 @@ Base.propertynames(::MtlDevice) = (
     # threadgroup limits
     :maxThreadgroupMemoryLength,
     :maxThreadsPerThreadgroup,
+    # argument buffers
+    :argumentBuffersSupport,
     # buffers
     :maxBufferLength,
     # gpu memory
@@ -74,6 +76,8 @@ function Base.getproperty(dev::MtlDevice, f::Symbol)
         mtDeviceMaxThreadgroupMemoryLength(dev)
     elseif f === :maxThreadsPerThreadgroup
         mtMaxThreadsPerThreadgroup(dev)
+    elseif f === :argumentBuffersSupport
+        mtDeviceArgumentBuffersSupport(dev)
     elseif f === :maxBufferLength
         mtDeviceMaxBufferLength(dev)
     elseif f === :currentAllocatedSize

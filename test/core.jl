@@ -25,6 +25,7 @@ full_str = sprint(io->show(io, MIME"text/plain"(), dev))
 @test dev.recommendedMaxWorkingSetSize isa Integer
 @test dev.maxThreadgroupMemoryLength isa Integer
 @test dev.maxThreadsPerThreadgroup isa MTL.MtSize
+@test dev.argumentBuffersSupport isa MTL.MtArgumentBuffersTier
 @test dev.maxBufferLength isa Integer
 
 @test dev.currentAllocatedSize isa Integer
@@ -212,6 +213,9 @@ buf = MtlBuffer{Int}(dev, 1)
 # MtlResource properties
 @test buf.device == dev
 @test buf.label == nothing
+@test buf.gpuAddress isa Ptr{Int}
+
+@test content(buf) isa Ptr{Int}
 
 @test sizeof(buf) == 8
 

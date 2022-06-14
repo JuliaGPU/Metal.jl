@@ -23,9 +23,15 @@ to use it. PRs are very welcome!
 ## Requirements
 
 -  Mac device with M-series chip
--  Julia 1.8 (this package currently requires LLVM 13)
--  macOS Catalina 10.15 or newer (might also work on 10.14)
--  Xcode Command Line Tools (for now, we will get rid of this requirement)
+-  Julia 1.8
+-  macOS 13 (Ventura), older version may work as well
+-  Xcode Command Line Tools
+
+Some of these requirements will be relaxed in the future: different versions of
+Julia will be supported, and Xcode will not be required anymore. Other
+requirements can technically be relaxed (see [this
+issue](https://github.com/JuliaGPU/Metal.jl/issues/22) for more details), but
+that work is currently not planned.
 
 
 ## Quick start

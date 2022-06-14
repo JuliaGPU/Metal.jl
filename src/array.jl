@@ -96,21 +96,13 @@ Base.unsafe_convert(t::Type{MTL.MTLBuffer}, x::MtlArray) = x.buffer
 
 ## interop with GPU arrays
 
-# TODO Figure out global
-
-function Base.convert(::Type{MtlDeviceArray{T,N,AS.Device}}, a::MtlArray{T,N}) where {T,N}
-    MtlDeviceArray{T,N,AS.Device}(a.dims, reinterpret(Core.LLVMPtr{T, 1}, pointer(a).handle))
+function Adapt.adapt_storage(to::Adaptor, xs::MtlArray{T,N}) where {T,N}
+    buf = pointer(xs)
+    ptr = adapt(to, buf)
+    MtlDeviceArray{T,N,AS.Device}(xs.dims, ptr)
 end
 
-Adapt.adapt_storage(::Adaptor, xs::MtlArray{T,N}) where {T,N} =
-  convert(MtlDeviceArray{T,N,AS.Device}, xs)
 
-# Adapt.adapt_storage(::Adaptor, xs::MtlArray{T,N}) where {T,N} =
-#   convert(Core.LLVMPtr{T,AS.Device}, xs)
-
-function Base.convert(::Type{Core.LLVMPtr{T,AS.Device}}, a::MtlArray{T}) where {T}
-    reinterpret(Core.LLVMPtr{T, 1}, a.buffer.handle)
-end
 ## interop with CPU arrays
 
 Base.unsafe_wrap(t::Type{<:Array}, arr::MtlArray, dims; own=false) = unsafe_wrap(t, arr.buffer, dims; own=own)

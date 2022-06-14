@@ -27,7 +27,11 @@ function MtlLibrary(device::MtlDevice, src::String, opts::MtlCompileOptions=MtlC
 end
 
 function MtlLibraryFromFile(device::MtlDevice, path::String)
-    handle = @mtlthrows _errptr mtNewLibraryWithFile(device, path, _errptr)
+    handle = if macos_version() >= v"13"
+        @mtlthrows _errptr mtNewLibraryWithURL(device, "file://$(abspath(path))", _errptr)
+    else
+        @mtlthrows _errptr mtNewLibraryWithFile(device, path, _errptr)
+    end
 
     obj = MtlLibrary(handle, device)
     finalizer(unsafe_destroy!, obj)

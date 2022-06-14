@@ -55,3 +55,10 @@ MtBuffer*
 mtBufferRemoteStorageBuffer(MtBuffer *buf) {
 	return [(id<MTLBuffer>)buf remoteStorageBuffer];
 }
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(13.0), mt_ios(16.0))
+uint64_t
+mtBufferGPUAddress(MtBuffer* buf) {
+	return [(id<MTLBuffer>)buf gpuAddress];
+}

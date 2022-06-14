@@ -1018,6 +1018,10 @@ function mtMaxThreadsPerThreadgroup(device)
     ccall((:mtMaxThreadsPerThreadgroup, libcmt), MtSize, (Ptr{MtDevice},), device)
 end
 
+function mtDeviceArgumentBuffersSupport(device)
+    ccall((:mtDeviceArgumentBuffersSupport, libcmt), MtArgumentBuffersTier, (Ptr{MtDevice},), device)
+end
+
 function mtDeviceMaxBufferLength(device)
     ccall((:mtDeviceMaxBufferLength, libcmt), NsUInteger, (Ptr{MtDevice},), device)
 end
@@ -1186,6 +1190,10 @@ function mtNewLibraryWithFile(device, filepath, error)
     ccall((:mtNewLibraryWithFile, libcmt), Ptr{MtLibrary}, (Ptr{MtDevice}, Cstring, Ptr{Ptr{NsError}}), device, filepath, error)
 end
 
+function mtNewLibraryWithURL(device, url, error)
+    ccall((:mtNewLibraryWithURL, libcmt), Ptr{MtLibrary}, (Ptr{MtDevice}, Cstring, Ptr{Ptr{NsError}}), device, url, error)
+end
+
 function mtNewLibraryWithSource(device, source, Opts, error)
     ccall((:mtNewLibraryWithSource, libcmt), Ptr{MtLibrary}, (Ptr{MtDevice}, Cstring, Ptr{MtCompileOptions}, Ptr{Ptr{NsError}}), device, source, Opts, error)
 end
@@ -1232,6 +1240,10 @@ end
 
 function mtBufferRemoteStorageBuffer(buf)
     ccall((:mtBufferRemoteStorageBuffer, libcmt), Ptr{MtBuffer}, (Ptr{MtBuffer},), buf)
+end
+
+function mtBufferGPUAddress(buf)
+    ccall((:mtBufferGPUAddress, libcmt), UInt64, (Ptr{MtBuffer},), buf)
 end
 
 function mtNewHeapDescriptor()
