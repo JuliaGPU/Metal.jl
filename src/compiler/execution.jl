@@ -74,10 +74,17 @@ end
 
 ## argument conversion
 
-struct Adaptor end
+struct Adaptor
+    cce::Union{Nothing,MtlComputeCommandEncoder}
+end
 
-# convert Metal Buffers Metal device pointers # should be generic
-Adapt.adapt_storage(to::Adaptor, buf::MtlBuffer{T}) where {T} = reinterpret(Core.LLVMPtr{T,AS.Device}, buf.handle)
+# convert Metal buffers to their GPU address
+function Adapt.adapt_storage(to::Adaptor, buf::MtlBuffer{T}) where {T}
+    if to.cce !== nothing
+        MTL.use!(to.cce, buf, MTL.ReadWriteUsage)
+    end
+   reinterpret(Core.LLVMPtr{T,AS.Device}, buf.gpuAddress)
+end
 
 # Base.RefValue isn't GPU compatible, so provide a compatible alternative
 struct MtlRefValue{T} <: Ref{T}
@@ -87,7 +94,7 @@ Base.getindex(r::MtlRefValue) = r.x
 Adapt.adapt_structure(to::Adaptor, r::Base.RefValue) = MtlRefValue(adapt(to, r[]))
 
 """
-  mtlconvert(x)
+  mtlconvert(x, [cce])
 
 This function is called for every argument to be passed to a kernel, allowing it to be
 converted to a GPU-friendly format. By default, the function does nothing and returns the
@@ -96,7 +103,7 @@ input object `x` as-is.
 Do not add methods to this function, but instead extend the underlying Adapt.jl package and
 register methods for the the `Metal.Adaptor` type.
 """
-mtlconvert(arg) = adapt(Adaptor(), arg)
+mtlconvert(arg, cce=nothing) = adapt(Adaptor(cce), arg)
 
 
 ## host-side kernel API
@@ -104,7 +111,6 @@ mtlconvert(arg) = adapt(Adaptor(), arg)
 struct HostKernel{F,TT}
     f::F
     fun::MtlFunction
-    arg_info::Any
 end
 
 """
@@ -124,11 +130,11 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
     target = MetalCompilerTarget(macos=macos_version(); kwargs...)
     params = MetalCompilerParams()
     job = CompilerJob(target, source, params)
-    fun, arguments = GPUCompiler.cached_compilation(cache, job,
-                                                    mtlfunction_compile, mtlfunction_link)
+    fun = GPUCompiler.cached_compilation(cache, job,
+                                         mtlfunction_compile, mtlfunction_link)
     # compilation is cached on the function type, so we can only create a kernel object here
     # (as it captures the function _instance_). we may want to cache those objects.
-    HostKernel{F,tt}(f, fun, arguments)
+    HostKernel{F,tt}(f, fun)
 end
 
 const mtlfunction_cache = Dict{Any,Any}()
@@ -142,15 +148,16 @@ end
 function mtlfunction_compile(@nospecialize(job::CompilerJob), ctx::Context)
     mi, mi_meta = GPUCompiler.emit_julia(job)
     ir, ir_meta = GPUCompiler.emit_llvm(job, mi; ctx)
-    image, asm_meta = GPUCompiler.emit_asm(job, ir; strip=false, format=LLVM.API.LLVMObjectFile)
-    # TODO: don't strip IR
-    return (image, entry=LLVM.name(ir_meta.entry), arguments=job.meta[:arguments])
+    strip_debuginfo!(ir)
+    entry = LLVM.name(ir_meta.entry)
+    image, asm_meta = GPUCompiler.emit_asm(job, ir; format=LLVM.API.LLVMObjectFile)
+    return (; image, entry)
 end
 
 function mtlfunction_link(@nospecialize(job::CompilerJob), compiled)
     dev = current_device()
     lib = MtlLibraryFromData(dev, compiled.image)
-    MtlFunction(lib, compiled.entry), compiled.arguments
+    MtlFunction(lib, compiled.entry)
 end
 
 
@@ -175,74 +182,24 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
 
         # encode arguments
         idx = 1
-        args = map(mtlconvert, (kernel.f, args...))
-        @assert length(args) == length(kernel.arg_info)
-        for (arg, arg_info) in zip(args, kernel.arg_info)
-            arg_info.kind == GPUCompiler.GhostArgument && continue
-
-            if arg_info.kind == GPUCompiler.BufferArgument
-                if arg isa Core.LLVMPtr
-                    buf = MtlBuffer{Nothing}(Base.bitcast(MTL.MTLBuffer, arg))
-                    set_buffer!(cce, buf, 0, idx)
-                else
-                    @assert isbits(arg)
-                    ref = Base.RefValue(arg)
-                    GC.@preserve ref begin
-                        ptr = Base.unsafe_convert(Ptr{Nothing}, ref)
-                        set_bytes!(cce, ptr, sizeof(ref), idx)
-                    end
-                end
-            elseif arg_info.kind == GPUCompiler.ArrayArgument
-                @assert isbits(arg)
-                ref = Base.RefValue(arg)
-                GC.@preserve ref begin
-                    ptr = Base.unsafe_convert(Ptr{Nothing}, ref)
-                    set_bytes!(cce, ptr, sizeof(ref), idx)
-                end
-            elseif arg_info.kind == GPUCompiler.StructArgument
-                @assert isbits(arg)
-                ref = Base.RefValue(arg)
-                GC.@preserve ref begin
-                    ptr = Base.unsafe_convert(Ptr{Nothing}, ref)
-                    set_bytes!(cce, ptr, sizeof(ref), idx)
-                end
-            elseif arg_info.kind == GPUCompiler.IndirectStructArgument
-                # create an argument encoder
-                arg_enc = MtlArgumentEncoder(kernel.fun, idx)
-                arg_buf = alloc(Cchar, kernel.fun.lib.device, sizeof(arg_enc), storage=Shared)
-                MTL.assign_argument_buffer!(arg_enc, arg_buf, 0)
-
-                # encode fields
-                function encode_field(arg, arg_info)
-                    @assert fieldcount(typeof(arg)) == length(arg_info.fields)
-                    for (field_name, field_info) in zip(fieldnames(typeof(arg)), arg_info.fields)
-                        field_info.kind == GPUCompiler.GhostArgument && continue
-                        field = getfield(arg, field_name)
-                        if field_info.kind == GPUCompiler.BufferArgument
-                            @assert field isa Core.LLVMPtr
-                            buf = MtlBuffer{Nothing}(Base.bitcast(MTL.MTLBuffer, field))
-                            set_buffer!(arg_enc, buf, 0, field_info.id)
-                            MTL.use!(cce, buf, MTL.ReadWriteUsage)
-                        elseif field_info.kind == GPUCompiler.ConstantArgument
-                            set_constant!(arg_enc, field, field_info.id)
-                        elseif field_info.kind == GPUCompiler.IndirectStructArgument
-                            encode_field(field, field_info)
-                        elseif field_info.kind == GPUCompiler.ArrayArgument
-                            # XXX: this seems weird?
-                            set_constant!(arg_enc, field, field_info.id)
-                        else
-                            error("Unknown struct field: $(field_info.kind) $(field)")
-                        end
-                    end
-                end
-                encode_field(arg, arg_info)
-
-                # encode argument
-                set_buffer!(cce, arg_buf, 0, idx)
+        for arg in args
+            if arg isa MtlBuffer
+                # top-level buffers need to be passed directly; it doesn't
+                # seem possible to pass them as the only element of a bindless
+                # argument buffer.
+                set_buffer!(cce, arg, 0, idx)
             else
-                error("Unknown argument kind: $(arg_info.kind)")
+                arg = mtlconvert(arg, cce)
+                argtyp = Core.typeof(arg)
+                if isghosttype(argtyp) || Core.Compiler.isconstType(argtyp)
+                    continue
+                end
+                @assert isbits(arg)
+                argBuffer = alloc(argtyp, kernel.fun.lib.device, 1,
+                                  storage=Shared)   # TODO: free
+                unsafe_store!(content(argBuffer), arg)
+                set_buffer!(cce, argBuffer, 0, idx)
             end
-
             idx += 1
         end
 
