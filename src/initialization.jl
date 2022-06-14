@@ -4,6 +4,14 @@ function __init__()
     if isdefined(Base, :active_repl_backend)
         push!(Base.active_repl_backend.ast_transforms, synchronize_metal_tasks)
     end
+
+    if Base.JLOptions().debug_level >= 2
+        # enable Metal API validation
+        ENV["METAL_DEVICE_WRAPPER_TYPE"] = "1"
+        # ... but make it non-fatal
+        ENV["METAL_DEBUG_ERROR_MODE"] = "5"
+        ENV["METAL_ERROR_MODE"] = "5"
+    end
 end
 
 function synchronize_metal_tasks(ex)
