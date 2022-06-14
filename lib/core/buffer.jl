@@ -25,6 +25,9 @@ function Base.getproperty(o::MtlBuffer{T}, f::Symbol) where T
     if f === :length
         mtBufferLength(o)
     elseif f === :gpuAddress
+        # XXX: even though the gpuAddress property is only documented in Metal 3,
+        #      it seems to be present in earlier versions of the API as well.
+        #      can we rely on this?
         Base.bitcast(Ptr{T}, mtBufferGPUAddress(o))
     else
         invoke(getproperty, Tuple{MtlResource, Symbol}, o, f)

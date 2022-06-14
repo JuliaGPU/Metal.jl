@@ -83,7 +83,7 @@ function Adapt.adapt_storage(to::Adaptor, buf::MtlBuffer{T}) where {T}
     if to.cce !== nothing
         MTL.use!(to.cce, buf, MTL.ReadWriteUsage)
     end
-   reinterpret(Core.LLVMPtr{T,AS.Device}, buf.gpuAddress)
+    reinterpret(Core.LLVMPtr{T,AS.Device}, buf.gpuAddress)
 end
 
 # Base.RefValue isn't GPU compatible, so provide a compatible alternative

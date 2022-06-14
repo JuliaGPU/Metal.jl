@@ -24,7 +24,7 @@ to use it. PRs are very welcome!
 
 -  Mac device with M-series chip
 -  Julia 1.8
--  macOS 13 (Ventura)
+-  macOS 13 (Ventura), older version may work as well
 -  Xcode Command Line Tools
 
 Some of these requirements will be relaxed in the future: different versions of
