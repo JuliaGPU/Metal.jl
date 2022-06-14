@@ -21,6 +21,7 @@ include("device/runtime.jl")
 include("device/metal/arguments.jl")
 include("device/metal/math.jl")
 include("device/metal/synchronization.jl")
+include("device/metal/memory.jl")
 include("device/quirks.jl")
 
 # compiler
