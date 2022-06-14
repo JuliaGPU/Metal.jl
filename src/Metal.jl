@@ -37,6 +37,7 @@ include("initialization.jl")
 include("array.jl")
 include("memory.jl")
 include("broadcast.jl")
+include("mapreduce.jl")
 include("random.jl")
 include("gpuarrays.jl")
 

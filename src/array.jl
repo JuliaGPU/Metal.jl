@@ -81,6 +81,15 @@ MtlArray(A::AbstractArray{T,N}) where {T,N} = MtlArray{T,N}(A)
 MtlArray{T,N}(xs::MtlArray{T,N}) where {T,N} = xs
 
 
+## derived types
+
+# wrapped arrays: can be used in kernels
+const WrappedMtlArray{T,N} = Union{MtlArray{T,N}, WrappedArray{T,N,MtlArray,MtlArray{T,N}}}
+const WrappedMtlVector{T} = WrappedMtlArray{T,1}
+const WrappedMtlMatrix{T} = WrappedMtlArray{T,2}
+const WrappedMtlVecOrMat{T} = Union{WrappedMtlVector{T}, WrappedMtlMatrix{T}}
+
+
 ## conversions
 
 Base.convert(::Type{T}, x::T) where T <: MtlArray = x
