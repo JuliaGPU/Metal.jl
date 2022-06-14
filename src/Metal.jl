@@ -17,7 +17,9 @@ include("../lib/core/MTL.jl")
 include("device/utils.jl")
 include("device/pointer.jl")
 include("device/array.jl")
-include("device/metal.jl")
+include("device/metal/arguments.jl")
+include("device/metal/math.jl")
+include("device/metal/synchronization.jl")
 
 # compiler
 include("compiler/gpucompiler.jl")
