@@ -21,4 +21,4 @@ Scratch = "6c6a2e73-6563-6170-7368-637461726353"
 [compat]
 GPUCompiler = "0.16"
 LLVM = "4.13"
-julia = "1"
+julia = "1.8"
