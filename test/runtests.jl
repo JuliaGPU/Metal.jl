@@ -72,6 +72,11 @@ for (rootpath, dirs, files) in walkdir(@__DIR__)
     test_runners[file] = ()->include("$(@__DIR__)/$file.jl")
   end
 end
+## GPUArrays testsuite
+for name in keys(TestSuite.tests)
+    push!(tests, "gpuarrays$(Base.Filesystem.path_separator)$name")
+    test_runners["gpuarrays$(Base.Filesystem.path_separator)$name"] = ()->TestSuite.tests[name](MtlArray)
+end
 unique!(tests)
 
 # parse some more command-line arguments
