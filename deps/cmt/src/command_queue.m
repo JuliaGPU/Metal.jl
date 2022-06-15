@@ -33,3 +33,10 @@ const char*
 mtCommandQueueLabel(MtCommandQueue *cmdq) {
 	return Cstring([(id<MTLCommandQueue>)cmdq label]);
 }
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+void
+mtCommandQueueLabelSet(MtCommandQueue *cmdq, const char* label) {
+	((id<MTLCommandQueue>)cmdq).label = mtNSString(label);
+}

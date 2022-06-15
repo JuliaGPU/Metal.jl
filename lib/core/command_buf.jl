@@ -144,6 +144,14 @@ function Base.getproperty(o::MtlCommandBuffer, f::Symbol)
     end
 end
 
+function Base.setproperty!(o::MtlCommandBuffer, f::Symbol, val)
+    if f === :label
+		mtCommandBufferLabelSet(o, val)
+    else
+        setfield!(o, f, val)
+    end
+end
+
 
 ## display
 

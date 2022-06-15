@@ -27,6 +27,10 @@ mtCommandEncoderLabel(MtCommandEncoder *ce);
 
 MT_EXPORT
 void
+mtCommandEncoderLabelSet(MtCommandEncoder *ce, const char* label);
+
+MT_EXPORT
+void
 mtCommandEncoderInsertDebugSignpost(MtCommandEncoder *ce, char* string);
 
 MT_EXPORT

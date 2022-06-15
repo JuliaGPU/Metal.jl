@@ -27,6 +27,12 @@ mtCommandEncoderLabel(MtCommandEncoder *ce) {
 
 MT_EXPORT
 void
+mtCommandEncoderLabelSet(MtCommandEncoder *ce, const char* label) {
+	((id<MTLCommandEncoder>)ce).label = mtNSString(label);
+}
+
+MT_EXPORT
+void
 mtCommandEncoderInsertDebugSignpost(MtCommandEncoder *ce, char* string) {
     [(id<MTLCommandEncoder>)ce insertDebugSignpost: mtNSString(string)];
 }

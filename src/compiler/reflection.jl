@@ -3,7 +3,7 @@
 # forward the rest to GPUCompiler with an appropriate CompilerJob
 for method in (:code_typed, :code_warntype, :code_llvm, :code_native)
     # only code_typed doesn't take a io argument
-    args = method == :code_typed ? (:job,) : (:io, :job)
+    args = method === :code_typed ? (:job,) : (:io, :job)
 
     @eval begin
         function $method(io::IO, @nospecialize(func), @nospecialize(types);

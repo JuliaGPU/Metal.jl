@@ -58,6 +58,8 @@ opts = MtlCompileOptions()
 let lib = MtlLibrary(dev, "", opts)
     @test lib.device == dev
     @test lib.label === nothing
+    lib.label = "MyLibrary"
+    @test lib.label == "MyLibrary"
     @test isempty(lib.functionNames)
 end
 
@@ -107,6 +109,8 @@ full_str = sprint(io->show(io, MIME"text/plain"(), fun))
 
 @test fun.device == dev
 @test fun.label === nothing
+fun.label = "MyKernel"
+@test fun.label == "MyKernel"
 @test fun.name == "kernel_1"
 @test fun.functionType == MTL.MtFunctionTypeKernel
 
@@ -119,11 +123,15 @@ dev = first(devices())
 let ev = MtlEvent(dev)
     @test ev.device == dev
     @test ev.label === nothing
+    ev.label = "MyEvent"
+    @test ev.label == "MyEvent"
 end
 
 let ev = MtlSharedEvent(dev)
     @test ev.device == dev
     @test ev.label === nothing
+    ev.label = "MyEvent"
+    @test ev.label == "MyEvent"
     @test ev.signaledValue == 0
 end
 
@@ -184,6 +192,8 @@ desc = MtlHeapDescriptor()
 desc.size = 0x4000 # TODO: use heapBufferSizeAndAlign
 let heap = MtlHeap(dev, desc)
     @test heap.label === nothing
+    heap.label = "MyHeap"
+    @test heap.label == "MyHeap"
 
     @test heap.type == desc.type
 
@@ -213,6 +223,8 @@ buf = MtlBuffer{Int}(dev, 1; storage=Shared)
 # MtlResource properties
 @test buf.device == dev
 @test buf.label === nothing
+buf.label = "MyBuffer"
+@test buf.label == "MyBuffer"
 @test buf.gpuAddress isa Ptr{Int}
 
 @test content(buf) isa Ptr{Int}
@@ -231,6 +243,8 @@ cmdq = MtlCommandQueue(dev)
 
 @test cmdq.device == dev
 @test cmdq.label === nothing
+cmdq.label = "MyCommandQueue"
+@test cmdq.label == "MyCommandQueue"
 
 end
 
@@ -244,6 +258,8 @@ cmdbuf = MtlCommandBuffer(cmdq)
 @test cmdbuf.device == dev
 @test cmdbuf.commandQueue == cmdq
 @test cmdbuf.label === nothing
+cmdbuf.label = "MyCommandBuffer"
+@test cmdbuf.label == "MyCommandBuffer"
 @test cmdbuf.error === nothing
 @test cmdbuf.status == MTL.MtCommandBufferStatusNotEnqueued
 @test cmdbuf.kernelStartTime == 0

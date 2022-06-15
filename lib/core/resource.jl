@@ -30,3 +30,11 @@ function Base.getproperty(res::MtlResource, f::Symbol)
         getfield(res, f)
     end
 end
+
+function Base.setproperty!(res::MtlResource, f::Symbol, val)
+    if f === :label
+		mtResourceLabelSet(res, val)
+    else
+        setfield!(res, f, val)
+    end
+end

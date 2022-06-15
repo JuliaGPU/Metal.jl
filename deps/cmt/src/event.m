@@ -49,6 +49,13 @@ mtEventLabel(MtEvent *event) {
 	return Cstring([(id<MTLEvent>)event label]);
 }
 
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
+void
+mtEventLabelSet(MtEvent *event, const char* label) {
+	((id<MTLEvent>)event).label = mtNSString(label);
+}
+
 // shared
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))

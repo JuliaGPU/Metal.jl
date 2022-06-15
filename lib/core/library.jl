@@ -74,6 +74,14 @@ function Base.getproperty(lib::MtlLibrary, f::Symbol)
     end
 end
 
+function Base.setproperty!(lib::MtlLibrary, f::Symbol, val)
+    if f === :label
+		mtLibraryLabelSet(lib, val)
+    else
+        setfield!(lib, f, val)
+    end
+end
+
 
 ## display
 

@@ -34,6 +34,11 @@ const char*
 mtFunctionLabel(MtFunction* fun);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.12), mt_ios(10.0))
+void
+mtFunctionLabelSet(MtFunction *fun, const char* label);
+
+MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtFunctionType
 mtFunctionType(MtFunction* fun);

@@ -44,6 +44,11 @@ MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
 const char*
 mtEventLabel(MtEvent *event);
 
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
+void
+mtEventLabelSet(MtEvent *event, const char* label);
+
 // shared
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))

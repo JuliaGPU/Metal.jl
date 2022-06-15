@@ -37,7 +37,7 @@ macro metal(ex...)
     launch = true
     for kwarg in macro_kwargs
         key,val = kwarg.args
-        if key == :launch
+        if key === :launch
             isa(val, Bool) || throw(ArgumentError("`launch` keyword argument to @metal should be a Bool"))
             launch = val::Bool
         else

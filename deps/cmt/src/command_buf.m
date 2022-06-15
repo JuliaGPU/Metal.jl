@@ -233,6 +233,13 @@ mtCommandBufferLabel(MtCommandBuffer *cmdb) {
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+void
+mtCommandBufferLabelSet(MtCommandBuffer *cmdb, const char* label) {
+	((id<MTLCommandBuffer>)cmdb).label = mtNSString(label);
+}
+
+MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 void
 mtCommandBufferPushDebugGroup(MtCommandBuffer *cmdb, char* str) {

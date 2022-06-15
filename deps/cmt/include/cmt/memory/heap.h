@@ -30,75 +30,80 @@ const char*
 mtHeapLabel(MtHeap *heap);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
+void
+mtHeapLabelSet(MtHeap *heap, const char* label);
+
+MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
-MtHeapType 
+MtHeapType
 mtHeapType(MtHeap *heap);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
-MtStorageMode 
+MtStorageMode
 mtHeapStorageMode(MtHeap *heap);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
-MtCPUCacheMode 
+MtCPUCacheMode
 mtHeapCPUCacheMode(MtHeap *heap);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
-MtHazardTrackingMode 
+MtHazardTrackingMode
 mtHeapHazardTrackingMode(MtHeap *heap);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
-MtResourceOptions 
+MtResourceOptions
 mtHeapResourceOptions(MtHeap *heap);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
-NsUInteger 
+NsUInteger
 mtHeapSize(MtHeap *heap);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
-NsUInteger 
+NsUInteger
 mtHeapUsedSize(MtHeap *heap);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
-NsUInteger 
+NsUInteger
 mtHeapCurrentAllocatedSize(MtHeap *heap);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
-NsUInteger 
+NsUInteger
 mtHeapMaxAvailableSizeWithAlignment(MtHeap *heap, NsUInteger alignment);
 
 //
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
-MtPurgeableState 
+MtPurgeableState
 mtHeapSetPurgeableState(MtHeap *heap, MtPurgeableState state);
 
 // Creating Resources on the Heap
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
-MtBuffer* 
+MtBuffer*
 mtHeapNewBufferWithLength(MtHeap *heap, NsUInteger len, MtResourceOptions opt);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
-MtBuffer*  
+MtBuffer*
 mtHeapNewBufferWithLengthOffset(MtHeap *heap, NsUInteger len, MtResourceOptions opt, NsUInteger offset);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
-MtTexture* 
+MtTexture*
 mtHeapNewTextureWithDescriptor(MtHeap *heap, MtTextureDescriptor *desc);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
-MtTexture* 
+MtTexture*
 mtHeapNewTextureWithDescriptorOffset(MtHeap *heap, MtTextureDescriptor *desc, NsUInteger offset);
 
 #ifdef __cplusplus
