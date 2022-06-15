@@ -291,8 +291,8 @@ end
 enqueue!(cmdbuf)
 @test cmdbuf.status == MTL.MtCommandBufferStatusEnqueued
 commit!(cmdbuf)
-@test cmdbuf.status == MTL.MtCommandBufferStatusCommitted
-# Completion happens too quickly to test for committed status to be checked
+# XXX: happens too quickly to test for committed status
+#@test cmdbuf.status == MTL.MtCommandBufferStatusCommitted
 wait_completed(cmdbuf) == MTL.MtCommandBufferStatusCompleted
 @test cmdbuf.status == MTL.MtCommandBufferStatusCompleted
 retry(; delays=[0, 0.1, 1]) do
