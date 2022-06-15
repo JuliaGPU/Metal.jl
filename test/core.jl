@@ -206,7 +206,7 @@ end
 
 dev = first(devices())
 
-buf = MtlBuffer{Int}(dev, 1)
+buf = MtlBuffer{Int}(dev, 1; storage=Shared)
 
 @test buf.length == 8
 
@@ -301,21 +301,6 @@ pipeline = MtlComputePipelineState(dev, fun)
 @test pipeline.maxTotalThreadsPerThreadgroup isa Integer
 @test pipeline.threadExecutionWidth isa Integer
 @test pipeline.staticThreadgroupMemoryLength == 0
-
-end
-
-@testset "argument encoder" begin
-
-dev = first(devices())
-lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "vadd.metallib"))
-fun = MtlFunction(lib, "vadd")
-
-encoder = MtlArgumentEncoder(fun, 1)
-
-@test encoder.encodedLength == 0
-@test encoder.alignment == 1
-
-# TODO: actually encode arguments
 
 end
 
