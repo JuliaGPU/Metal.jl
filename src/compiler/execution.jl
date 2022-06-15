@@ -182,7 +182,7 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
 
         # encode arguments
         idx = 1
-        for arg in args
+        for arg in (kernel.f, args...)
             if arg isa MtlBuffer
                 # top-level buffers need to be passed directly; it doesn't
                 # seem possible to pass them as the only element of a bindless
