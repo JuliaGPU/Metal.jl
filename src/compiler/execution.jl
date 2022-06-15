@@ -185,11 +185,10 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
         idx = 1
         for arg in (kernel.f, args...)
             if arg isa MtlBuffer
-                # top-level buffers need to be passed directly; it doesn't
-                # seem possible to pass them as the only element of a bindless
-                # argument buffer.
+                # top-level buffers are passed as a pointer-valued argument
                 set_buffer!(cce, arg, 0, idx)
             else
+                # everything else is passed by reference, and requires an argument buffer
                 arg = mtlconvert(arg, cce)
                 argtyp = Core.typeof(arg)
                 if isghosttype(argtyp) || Core.Compiler.isconstType(argtyp)
