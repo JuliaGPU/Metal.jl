@@ -206,5 +206,19 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
 
         MTL.append_current_function!(cce, grid, threads)
     end
+
+    # the command buffer retains resources that are explicitly encoded (i.e. direct buffer
+    # arguments, or the buffers allocated for each other argument), but that doesn't keep
+    # other resources alive for which we've encoded the GPU address ourselves. since it's
+    # possible for buffers to go out of scope while the kernel is still running, which
+    # triggers validation failures, keep track of things we need to keep alive until the
+    # kernel has actually completed.
+    #
+    # TODO: is there a way to bind additional resources to the command buffer?
+    roots = [kernel.f, args]
+    MTL.on_completed(cmdbuf) do
+        empty!(roots)
+    end
+
     commit!(cmdbuf)
 end
