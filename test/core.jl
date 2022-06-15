@@ -277,6 +277,16 @@ let ev = MtlSharedEvent(dev)
 end
 
 cmdbuf = MtlCommandBuffer(cmdq)
+scheduled = Ref(false)
+completed = Ref(false)
+on_scheduled(cmdbuf) do
+    scheduled[] = true
+end
+on_completed(cmdbuf) do
+    completed[] = true
+end
+@test scheduled[] == false
+@test completed[] == false
 @test cmdbuf.status == MTL.MtCommandBufferStatusNotEnqueued
 enqueue!(cmdbuf)
 @test cmdbuf.status == MTL.MtCommandBufferStatusEnqueued
@@ -285,6 +295,12 @@ commit!(cmdbuf)
 # Completion happens too quickly to test for committed status to be checked
 wait_completed(cmdbuf) == MTL.MtCommandBufferStatusCompleted
 @test cmdbuf.status == MTL.MtCommandBufferStatusCompleted
+retry(; delays=[0, 0.1, 1]) do
+    scheduled[] || error()
+    completed[] || error()
+end()
+@test scheduled[] == true
+@test completed[] == true
 
 # CommandBufferDescriptor tests
 desc = MTL.mtNewCommandBufferDescriptor()

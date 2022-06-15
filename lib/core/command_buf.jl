@@ -1,4 +1,4 @@
-export MtlCommandBuffer, MtlCommandBufferDescriptor, enqueue!, wait_scheduled, wait_completed, encode_signal!, encode_wait!, commit!
+export MtlCommandBuffer, MtlCommandBufferDescriptor, enqueue!, wait_scheduled, wait_completed, encode_signal!, encode_wait!, commit!, on_scheduled, on_completed
 
 const MTLCommandBufferDescriptor = Ptr{MTL.MtCommandBufferDescriptor}
 
@@ -27,6 +27,7 @@ end
 function unsafe_destroy!(desc::MtlCommandBufferDescriptor)
     mtRelease(desc.handle)
 end
+
 
 ## properties
 
@@ -239,3 +240,48 @@ immediately if the event already has an equal or larger value.
 """
 encode_wait!(buf::MtlCommandBuffer, ev::MtlAbstractEvent, val::Integer) =
     mtCommandBufferEncodeWaitForEvent(buf, ev, val)
+
+function _command_buffer_async_callback(handle, data)
+    # we don't care about the buffer (handle), the user can capture it if needed
+    ccall(:uv_async_send, Cint, (Ptr{Cvoid},), data)
+    return
+end
+
+function _command_buffer_callback(f::Base.Callable, buf::MtlCommandBuffer)
+    cond = Base.AsyncCondition() do async_cond
+        f()
+        close(async_cond)
+    end
+
+    # the condition object is embedded in a task, so the Julia scheduler keeps it alive
+
+    handler = @cfunction(_command_buffer_async_callback, Nothing,
+                         (MTL.MTLCommandBufferDescriptor, Ptr{Cvoid}))
+
+    return handler, cond
+end
+
+"""
+    on_scheduled(buf::MtlCommandBuffer) do buf
+        ...
+    end
+
+Execute a block of code when execution of the command buffer is scheduled.
+"""
+function on_scheduled(f::Base.Callable, buf::MtlCommandBuffer)
+    handler, data = _command_buffer_callback(f, buf)
+    MTL.mtCommandBufferOnScheduled(buf, data, handler)
+end
+
+"""
+    on_completed(buf::MtlCommandBuffer) do buf
+        ...
+    end
+
+Execute a block of code when execution of the command buffer is completed.
+"""
+function on_completed(f::Base.Callable, buf::MtlCommandBuffer)
+    handler, data = _command_buffer_callback(f, buf)
+    MTL.mtCommandBufferOnComplete(buf, data, handler)
+end
+

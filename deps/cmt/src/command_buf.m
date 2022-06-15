@@ -65,20 +65,22 @@ mtNewCommandBufferWithUnretainedReferences(MtCommandQueue *cmdq) {
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
-mtCommandBufferOnComplete(MtCommandQueue * __restrict cmdb,
-                          void           * __restrict sender,
-                          MtCommandBufferOnCompleteFn oncomplete) {
+mtCommandBufferOnCompleted(MtCommandBuffer * __restrict cmdb,
+                           void            * __restrict data,
+                           MtCommandBufferOnCompletedFn fn) {
   [(id<MTLCommandBuffer>)cmdb addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
-    oncomplete(sender, buffer);
+    fn(buffer, data);
   }];
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
-mtCommandBufferOnCompleteNoSender(MtCommandQueue * __restrict cmdb,
-                          MtCommandBufferOnCompleteFnNoSender oncomplete) {
-  [(id<MTLCommandBuffer>)cmdb addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
-    oncomplete(buffer);
+mtCommandBufferOnScheduled(MtCommandBuffer * __restrict cmdb,
+                           void            * __restrict data,
+                           MtCommandBufferOnScheduledFn fn) {
+  [(id<MTLCommandBuffer>)cmdb addScheduledHandler:^(id<MTLCommandBuffer> buffer) {
+    fn(buffer, data);
   }];
 }
 

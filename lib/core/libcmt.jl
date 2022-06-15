@@ -1624,11 +1624,11 @@ function mtPointerTypeElementArrayType(ptr)
     ccall((:mtPointerTypeElementArrayType, libcmt), Ptr{MtArrayType}, (Ptr{MtPointerType},), ptr)
 end
 
-# typedef void ( * MtCommandBufferOnCompleteFn ) ( void * __restrict sender , MtCommandBuffer * __restrict cmdb )
-const MtCommandBufferOnCompleteFn = Ptr{Cvoid}
+# typedef void ( * MtCommandBufferOnCompletedFn ) ( MtCommandBuffer * __restrict cmdb, void * __restrict data )
+const MtCommandBufferOnCompletedFn = Ptr{Cvoid}
 
-# typedef void ( * MtCommandBufferOnCompleteFnNoSender ) ( MtCommandBuffer * __restrict cmdb )
-const MtCommandBufferOnCompleteFnNoSender = Ptr{Cvoid}
+# typedef void ( * MtCommandBufferOnScheduledFn ) ( MtCommandBuffer * __restrict cmdb, void * __restrict data )
+const MtCommandBufferOnScheduledFn = Ptr{Cvoid}
 
 function mtNewCommandBufferDescriptor()
     ccall((:mtNewCommandBufferDescriptor, libcmt), Ptr{MtCommandBufferDescriptor}, ())
@@ -1662,12 +1662,12 @@ function mtNewCommandBufferWithUnretainedReferences(cmdq)
     ccall((:mtNewCommandBufferWithUnretainedReferences, libcmt), Ptr{MtCommandBuffer}, (Ptr{MtCommandQueue},), cmdq)
 end
 
-function mtCommandBufferOnComplete(cmdb, sender, oncomplete)
-    ccall((:mtCommandBufferOnComplete, libcmt), Cvoid, (Ptr{MtCommandQueue}, Ptr{Cvoid}, MtCommandBufferOnCompleteFn), cmdb, sender, oncomplete)
+function mtCommandBufferOnComplete(cmdb, data, fn)
+    ccall((:mtCommandBufferOnCompleted, libcmt), Cvoid, (Ptr{MtCommandBuffer}, Ptr{Cvoid}, MtCommandBufferOnCompletedFn), cmdb, data, fn)
 end
 
-function mtCommandBufferOnCompleteNoSender(cmdb, oncomplete)
-    ccall((:mtCommandBufferOnCompleteNoSender, libcmt), Cvoid, (Ptr{MtCommandQueue}, MtCommandBufferOnCompleteFnNoSender), cmdb, oncomplete)
+function mtCommandBufferOnScheduled(cmdb, data, fn)
+    ccall((:mtCommandBufferOnScheduled, libcmt), Cvoid, (Ptr{MtCommandBuffer}, Ptr{Cvoid}, MtCommandBufferOnScheduledFn), cmdb, data, fn)
 end
 
 function mtCommandBufferPresentDrawable(cmdb, drawable)
