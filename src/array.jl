@@ -7,6 +7,22 @@ mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
   dims::Dims{N}
 
   dev::MtlDevice
+
+  function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Shared) where {T,N}
+      dev = current_device()
+      len = prod(dims)
+      buf = if len > 0
+        alloc(T, dev, len; storage=storage)
+      else
+        MtlBuffer{T}(C_NULL)
+      end
+
+      obj = new(buf, dims, dev)
+      finalizer(obj) do arr
+          free(arr.buffer)
+      end
+      return obj
+  end
 end
 
 device(A::MtlArray) = A.dev
@@ -14,25 +30,9 @@ device(A::MtlArray) = A.dev
 
 ## constructors
 
-# type and dimensionality specified, accepting dims as tuples of Ints
-function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Shared) where {T,N}
-    dev = current_device()
-    len = prod(dims)
-    buf = if len > 0
-      alloc(T, dev, len; storage=storage)
-    else
-      MtlBuffer{T}(C_NULL)
-    end
-
-    obj = MtlArray{T,N}(buf, dims, dev)
-    finalizer(obj) do arr
-        free(arr.buffer)
-    end
-    return obj
-end
-
 # type and dimensionality specified, accepting dims as series of Ints
-MtlArray{T,N}(::UndefInitializer, dims::Integer...) where {T,N} = MtlArray{T,N}(undef, Dims(dims))
+MtlArray{T,N}(::UndefInitializer, dims::Integer...) where {T,N} =
+  MtlArray{T,N}(undef, Dims(dims))
 
 # type but not dimensionality specified
 MtlArray{T}(::UndefInitializer, dims::Dims{N}) where {T,N} = MtlArray{T,N}(undef, dims)
@@ -44,7 +44,8 @@ MtlArray{T,1}() where {T} = MtlArray{T,1}(undef, 0)
 
 Base.similar(a::MtlArray{T,N}) where {T,N} = MtlArray{T,N}(undef, size(a))
 Base.similar(a::MtlArray{T}, dims::Base.Dims{N}) where {T,N} = MtlArray{T,N}(undef, dims)
-Base.similar(a::MtlArray, ::Type{T}, dims::Base.Dims{N}) where {T,N} = MtlArray{T,N}(undef, dims)
+Base.similar(a::MtlArray, ::Type{T}, dims::Base.Dims{N}) where {T,N} =
+  MtlArray{T,N}(undef, dims)
 
 function Base.copy(a::MtlArray{T,N}) where {T,N}
   b = similar(a)
