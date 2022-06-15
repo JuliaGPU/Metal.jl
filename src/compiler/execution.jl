@@ -177,6 +177,7 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
 
     cmdq = global_queue(kernel.fun.lib.device)
     cmdbuf = MtlCommandBuffer(cmdq)
+    cmdbuf.label = "MtlCommandBuffer($(nameof(kernel.f)))"
     MtlComputeCommandEncoder(cmdbuf) do cce
         MTL.set_function!(cce, pipeline_state)
 
@@ -197,6 +198,7 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
                 @assert isbits(arg)
                 argBuffer = alloc(argtyp, kernel.fun.lib.device, 1,
                                   storage=Shared)   # TODO: free
+                argBuffer.label = "MtlBuffer for kernel argument"
                 unsafe_store!(content(argBuffer), arg)
                 set_buffer!(cce, argBuffer, 0, idx)
             end

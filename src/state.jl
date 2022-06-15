@@ -24,6 +24,7 @@ Return the Metal command queue associated with the current Julia thread.
 function global_queue(dev::MtlDevice)
     get!(task_local_storage(), (:MtlCommandQueue, dev)) do
         queue = MtlCommandQueue(dev)
+        queue.label = "global_queue($(current_task()))"
         global_queues[queue] = nothing
         queue
     end::MtlCommandQueue

@@ -11,10 +11,11 @@ mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
   function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Shared) where {T,N}
       dev = current_device()
       len = prod(dims)
-      buf = if len > 0
-        alloc(T, dev, len; storage=storage)
+      if len > 0
+        buf = alloc(T, dev, len; storage=storage)
+        buf.label = "MtlArray{$(T),$(N)}(dims=$dims)"
       else
-        MtlBuffer{T}(C_NULL)
+        buf = MtlBuffer{T}(C_NULL)
       end
 
       obj = new(buf, dims, dev)
