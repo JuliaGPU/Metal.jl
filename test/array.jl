@@ -1,11 +1,16 @@
 @testset "arrays" begin
 
-mtl_arr = MtlArray{Int}(undef, 1)
-arr = Array(mtl_arr)
+let mtl_arr = MtlArray{Int}(undef, 1)
+    arr = Array(mtl_arr)
 
-@test sizeof(arr) == 8
-@test length(arr) == 1
-@test eltype(arr) == Int
+    @test sizeof(arr) == 8
+    @test length(arr) == 1
+    @test eltype(arr) == Int
+end
+
+let mtl_arr = MtlArray{Int}(undef, 0)
+    @test pointer(mtl_arr).handle == C_NULL
+end
 
 @testset "fill($T)" for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
                               Float32]

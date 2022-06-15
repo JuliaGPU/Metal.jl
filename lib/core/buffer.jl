@@ -67,6 +67,7 @@ function MtlBuffer{T}(dev::Union{MtlDevice,MtlHeap},
     opts = storage | hazard_tracking | cache_mode
 
     bytesize = length * sizeof(T)
+    @assert 0 < bytesize <= dev.maxBufferLength
     ptr = alloc_buffer(dev, bytesize, opts)
 
     return MtlBuffer{T}(ptr)
