@@ -94,7 +94,7 @@ Base.unsafe_convert(t::Type{MtlPointer{T}}, x::MtlArray) where {T} =
 
 @inline function MtlArray{T,N}(xs::AbstractArray{T,N}) where {T,N}
   A = MtlArray{T,N}(undef, size(xs))
-  copyto!(A, xs)
+  copyto!(A, convert(Array{T}, xs))
   return A
 end
 
