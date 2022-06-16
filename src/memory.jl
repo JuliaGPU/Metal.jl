@@ -29,18 +29,6 @@ MTL.contents(ptr::MtlPointer{T}) where {T} = convert(Ptr{T}, contents(ptr.buffer
 
 ## operations
 
-# TODO: cmdbuf cleanup - Was running into errors
-
-# XXX: do we want to do this here? should be done by caller; these are unsafe calls
-function sync_gpu_to_cpu!(dev::MtlDevice, ptr::MtlPointer)
-    cmdbuf = MtlCommandBuffer(global_queue(dev))
-    MtlBlitCommandEncoder(cmdbuf) do enc
-        MTL.append_sync!(enc, ptr.buf)
-    end
-    commit!(cmdbuf)
-    wait_completed(cmdbuf)
-end
-
 # GPU -> GPU
 function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlPointer{T}, src::MtlPointer{T}, N::Integer) where T
     cmdbuf = MtlCommandBuffer(global_queue(dev))
@@ -62,7 +50,6 @@ function Base.unsafe_copyto!(dev::MtlDevice, dst::Ptr{T}, src::MtlPointer{T}, N:
     elseif storage_type ==  MTL.MtStorageModeShared
         unsafe_copyto!(dst, contents(src), N)
     elseif storage_type ==  MTL.MtStorageModeManaged
-        sync_gpu_to_cpu!(dev, src)
         unsafe_copyto!(dst, contents(src), N)
     end
     return dst
