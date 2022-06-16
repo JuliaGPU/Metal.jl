@@ -187,6 +187,7 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
     cmdq = global_queue(kernel.fun.lib.device)
     cmdbuf = MtlCommandBuffer(cmdq)
     cmdbuf.label = "MtlCommandBuffer($(nameof(kernel.f)))"
+    argument_buffers = MtlBuffer[]
     MtlComputeCommandEncoder(cmdbuf) do cce
         MTL.set_function!(cce, pipeline_state)
 
@@ -207,11 +208,12 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
                     continue
                 end
                 @assert isbits(arg)
-                argBuffer = alloc(kernel.fun.lib.device, sizeof(argtyp),
-                                  storage=Shared)   # TODO: free
-                argBuffer.label = "MtlBuffer for kernel argument"
-                unsafe_store!(convert(Ptr{argtyp}, contents(argBuffer)), arg)
-                set_buffer!(cce, argBuffer, 0, idx)
+                argument_buffer = alloc(kernel.fun.lib.device, sizeof(argtyp),
+                                        storage=Shared)
+                argument_buffer.label = "MtlBuffer for kernel argument"
+                unsafe_store!(convert(Ptr{argtyp}, contents(argument_buffer)), arg)
+                set_buffer!(cce, argument_buffer, 0, idx)
+                push!(argument_buffers, argument_buffer)
             end
             idx += 1
         end
@@ -230,6 +232,7 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
     roots = [kernel.f, args]
     MTL.on_completed(cmdbuf) do
         empty!(roots)
+        foreach(free, argument_buffers)
     end
 
     commit!(cmdbuf)
