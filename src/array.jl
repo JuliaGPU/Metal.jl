@@ -299,10 +299,23 @@ Base.unsafe_convert(::Type{MTL.MTLBuffer}, A::PermutedDimsArray) where {T} =
 
 ## reshape
 
-device(a::Base.ReshapedArray) = device(parent(a))
+function Base.reshape(a::MtlArray{T,M}, dims::NTuple{N,Int}) where {T,N,M}
+  if prod(dims) != length(a)
+      throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(size(a))"))
+  end
 
-Base.unsafe_convert(::Type{MTL.MTLBuffer}, a::Base.ReshapedArray{T}) where {T} =
-  Base.unsafe_convert(MTL.MTLBuffer, parent(a))
+  if N == M && dims == size(a)
+      return a
+  end
+
+  _derived_array(T, N, a, dims)
+end
+
+# create a derived array (reinterpreted or reshaped) that's still a MtlArray
+@inline function _derived_array(::Type{T}, N::Int, a::MtlArray, osize::Dims) where {T}
+  offset = (a.offset * Base.elsize(a)) ÷ sizeof(T)
+  MtlArray{T,N}(a.buffer, osize; a.maxsize, offset)
+end
 
 
 ## reinterpret
