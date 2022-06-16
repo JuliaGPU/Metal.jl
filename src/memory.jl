@@ -11,7 +11,7 @@ struct MtlPointer{T}
     buffer::MtlBuffer
     offset::UInt    # in bytes
 
-    function MtlPointer{T}(buffer::MtlBuffer; offset=0) where {T}
+    function MtlPointer{T}(buffer::MtlBuffer, offset=0) where {T}
         new(buffer, offset)
     end
 end
@@ -19,9 +19,9 @@ end
 Base.eltype(::Type{<:MtlPointer{T}}) where {T} = T
 
 # limited arithmetic
-Base.:(+)(x::MtlPointer{T}, y::Integer) where {T} = MtlPointer{T}(x.buffer; offset=x.offset+y)
-Base.:(-)(x::MtlPointer{T}, y::Integer) where {T} = MtlPointer{T}(x.buffer; offset=x.offset-y)
-Base.:(+)(x::Integer, y::MtlPointer{T}) where {T} = MtlPointer{T}(x.buffer; offset=y+x.offset)
+Base.:(+)(x::MtlPointer{T}, y::Integer) where {T} = MtlPointer{T}(x.buffer, x.offset+y)
+Base.:(-)(x::MtlPointer{T}, y::Integer) where {T} = MtlPointer{T}(x.buffer, x.offset-y)
+Base.:(+)(x::Integer, y::MtlPointer{T}) where {T} = MtlPointer{T}(x.buffer, y+x.offset)
 
 # XXX: encode as `convert(Ptr)`?
 MTL.contents(ptr::MtlPointer{T}) where {T} = convert(Ptr{T}, contents(ptr.buffer)) + ptr.offset

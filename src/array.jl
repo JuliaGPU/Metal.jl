@@ -4,21 +4,41 @@ export MtlArray
 
 mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
   buffer::MtlBuffer
+
+  maxsize::Int  # maximum data size; excluding any selector bytes
+  offset::Int   # offset of the data in the buffer, in number of elements
   dims::Dims{N}
 
-  dev::MtlDevice
-
   function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Shared) where {T,N}
+      Base.allocatedinline(T) || error("MtlArray only supports element types that are stored inline")
+      maxsize = prod(dims) * sizeof(T)
+      bufsize = if Base.isbitsunion(T)
+        # type tag array past the data
+        maxsize + prod(dims)
+      else
+        maxsize
+      end
+
       dev = current_device()
-      bytesize = prod(dims) * sizeof(T)
-      if bytesize > 0
-        buf = alloc(dev, bytesize; storage=storage)
+      if bufsize > 0
+        buf = alloc(dev, bufsize; storage=storage)
         buf.label = "MtlArray{$(T),$(N)}(dims=$dims)"
       else
         buf = MtlBuffer(C_NULL)
       end
 
-      obj = new(buf, dims, dev)
+      obj = new(buf, maxsize, 0, dims)
+      finalizer(obj) do arr
+          free(arr.buffer)
+      end
+      return obj
+  end
+
+  function MtlArray{T,N}(buffer::MtlBuffer, dims::Dims{N};
+                         maxsize::Int=prod(dims) * sizeof(T), offset::Int=0) where {T,N}
+      Base.allocatedinline(T) || error("MtlArray only supports element types that are stored inline")
+      MTL.mtRetain(buffer.handle)
+      obj = new{T,N}(buffer, maxsize, offset, dims)
       finalizer(obj) do arr
           free(arr.buffer)
       end
@@ -26,7 +46,7 @@ mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
   end
 end
 
-device(A::MtlArray) = A.dev
+device(A::MtlArray) = A.buffer.device
 
 
 ## constructors
@@ -66,7 +86,8 @@ Base.pointer(x::MtlArray{T}) where {T} = Base.unsafe_convert(MtlPointer{T}, x)
     Base.unsafe_convert(MtlPointer{T}, x) + Base._memory_offset(x, i)
 end
 
-Base.unsafe_convert(t::Type{MtlPointer{T}}, x::MtlArray) where {T} = MtlPointer{T}(x.buffer)
+Base.unsafe_convert(t::Type{MtlPointer{T}}, x::MtlArray) where {T} =
+  MtlPointer{T}(x.buffer, x.offset*Base.elsize(x))
 
 
 ## interop with other arrays
