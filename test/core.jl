@@ -216,20 +216,19 @@ end
 
 dev = first(devices())
 
-buf = MtlBuffer{Int}(dev, 1; storage=Shared)
+buf = MtlBuffer(dev, 8; storage=Shared)
 
 @test buf.length == 8
+@test sizeof(buf) == 8
 
 # MtlResource properties
 @test buf.device == dev
 @test buf.label === nothing
 buf.label = "MyBuffer"
 @test buf.label == "MyBuffer"
-@test buf.gpuAddress isa Ptr{Int}
+@test buf.gpuAddress isa Ptr{Cvoid}
 
-@test content(buf) isa Ptr{Int}
-
-@test sizeof(buf) == 8
+@test contents(buf) isa Ptr{Cvoid}
 
 free(buf)
 

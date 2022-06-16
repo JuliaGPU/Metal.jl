@@ -26,12 +26,12 @@ end
 
 ##
 # Copy from device to device
-append_copy!(enc::MtlBlitCommandEncoder, dst::MtlBuffer, dst_offset, src::MtlBuffer, src_offset, len) =
-    mtBlitCommandEncoderCopyFromBufferToBuffer(enc, src, src_offset, dst, dst_offset, len)
+append_copy!(enc::MtlBlitCommandEncoder, dst::MtlBuffer, doff, src::MtlBuffer, soff, len) =
+    mtBlitCommandEncoderCopyFromBufferToBuffer(enc, src, soff, dst, doff, len)
 
 append_fillbuffer!(enc::MtlBlitCommandEncoder, src::MtlBuffer,
-                    val::Union{Int8, UInt8}, range) =
-    mtBlitCommandEncoderFillBuffer(enc, src, UnitRange(0:range-1), val)
+                   val::Union{Int8, UInt8}, bytesize, offset=0) =
+    mtBlitCommandEncoderFillBuffer(enc, src, UnitRange(offset:bytesize-1), val)
 
 # only for managed resources
 append_sync!(enc::MtlBlitCommandEncoder, src::MtlBuffer) =

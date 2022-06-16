@@ -79,11 +79,14 @@ struct Adaptor
 end
 
 # convert Metal buffers to their GPU address
-function Adapt.adapt_storage(to::Adaptor, buf::MtlBuffer{T}) where {T}
+function Adapt.adapt_storage(to::Adaptor, buf::MtlBuffer)
     if to.cce !== nothing
         MTL.use!(to.cce, buf, MTL.ReadWriteUsage)
     end
-    reinterpret(Core.LLVMPtr{T,AS.Device}, buf.gpuAddress)
+    reinterpret(Core.LLVMPtr{Nothing,AS.Device}, buf.gpuAddress)
+end
+function Adapt.adapt_storage(to::Adaptor, ptr::MtlPointer{T}) where {T}
+    reinterpret(Core.LLVMPtr{T,AS.Device}, adapt(to, ptr.buffer)) + ptr.offset
 end
 
 # Base.RefValue isn't GPU compatible, so provide a compatible alternative
@@ -92,6 +95,12 @@ struct MtlRefValue{T} <: Ref{T}
 end
 Base.getindex(r::MtlRefValue) = r.x
 Adapt.adapt_structure(to::Adaptor, r::Base.RefValue) = MtlRefValue(adapt(to, r[]))
+
+function Adapt.adapt_storage(to::Adaptor, xs::MtlArray{T,N}) where {T,N}
+    buf = pointer(xs)
+    ptr = adapt(to, buf)
+    MtlDeviceArray{T,N,AS.Device}(xs.dims, ptr)
+end
 
 """
   mtlconvert(x, [cce])
@@ -187,6 +196,9 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
             if arg isa MtlBuffer
                 # top-level buffers are passed as a pointer-valued argument
                 set_buffer!(cce, arg, 0, idx)
+            elseif arg isa MtlPointer
+                # the same as a buffer, but with an offset
+                set_buffer!(cce, arg.buffer, arg.offset, idx)
             else
                 # everything else is passed by reference, and requires an argument buffer
                 arg = mtlconvert(arg, cce)
@@ -195,10 +207,10 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
                     continue
                 end
                 @assert isbits(arg)
-                argBuffer = alloc(argtyp, kernel.fun.lib.device, 1,
+                argBuffer = alloc(kernel.fun.lib.device, sizeof(argtyp),
                                   storage=Shared)   # TODO: free
                 argBuffer.label = "MtlBuffer for kernel argument"
-                unsafe_store!(content(argBuffer), arg)
+                unsafe_store!(convert(Ptr{argtyp}, contents(argBuffer)), arg)
                 set_buffer!(cce, argBuffer, 0, idx)
             end
             idx += 1

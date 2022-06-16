@@ -54,23 +54,23 @@ end
     a = ones(Float32,1)
     a .* Float32(3.14)
     bufferA = MtlArray(a)
-    vecA = unsafe_wrap(Vector{Float32}, bufferA.buffer, 1)
+    vecA = unsafe_wrap(Vector{Float32}, pointer(bufferA), 1)
 
-    function intr_test(buf)
+    function intr_test(arr)
         idx = thread_position_in_grid_1d()
-        buf[idx] = cos(buf[idx])
+        arr[idx] = cos(arr[idx])
         return nothing
     end
-    @metal intr_test(bufferA.buffer)
+    @metal intr_test(bufferA)
     synchronize()
     @test vecA ≈ cos.(a)
 
-    function intr_test2(buf)
+    function intr_test2(arr)
         idx = thread_position_in_grid_1d()
-        buf[idx] = Metal.rsqrt(buf[idx])
+        arr[idx] = Metal.rsqrt(arr[idx])
         return nothing
     end
-    @metal intr_test2(bufferA.buffer)
+    @metal intr_test2(bufferA)
 end
 
 ############################################################################################
@@ -82,7 +82,7 @@ end
         return nothing
     end
     buf = MtlArray{UInt8,1}(undef, tuple(1024); storage=Shared)
-    vec = unsafe_wrap(Vector{UInt8}, buf.buffer, (1024))
+    vec = unsafe_wrap(Vector{UInt8}, pointer(buf), (1024))
     @metal threads=1024 sync_test_kernel(buf)
     synchronize()
     @test all(vec .== UInt8(1))
@@ -107,7 +107,7 @@ end
     end
 
     buf = MtlArray{Int,1}(undef, tuple(1024); storage=Shared)
-    vec = unsafe_wrap(Vector{Int}, buf.buffer, (1024))
+    vec = unsafe_wrap(Vector{Int}, pointer(buf), (1024))
     @metal threads=1024 barrier_test_kernel(buf)
     synchronize()
     @test vec[1] == 992

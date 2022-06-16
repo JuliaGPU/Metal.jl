@@ -9,7 +9,7 @@ let mtl_arr = MtlArray{Int}(undef, 1)
 end
 
 let mtl_arr = MtlArray{Int}(undef, 0)
-    @test pointer(mtl_arr).handle == C_NULL
+    @test pointer(mtl_arr).buffer.handle == C_NULL
 end
 
 @testset "fill($T)" for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
