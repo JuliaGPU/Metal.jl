@@ -37,6 +37,7 @@ end
 Base.sizeof(buf::MtlBuffer) = Int(buf.length)
 
 function contents(buf::MtlBuffer)
+    buf.handle == C_NULL && return C_NULL
     ptr = Base.bitcast(Ptr{Cvoid}, mtBufferContents(buf))
     ptr == C_NULL && error("Cannot access the contents of a private buffer")
     return ptr
