@@ -4,13 +4,22 @@
 # - serial version for lower latency
 # - group-stride loop to delay need for second kernel launch
 
+# shared memory with small integer types results in miscompilation
+# see https://developer.apple.com/forums/thread/708536
+widen_workaround(T::Type) = T
+widen_workaround(T::Type{<:Union{Bool, Int8, Int16}}) = Int32
+widen_workaround(T::Type{<:Union{UInt8, UInt32}}) = UInt32
+
 # Reduce a value across a group, using local memory for communication
 @inline function reduce_group(op, val::T, neutral, ::Val{maxthreads}) where {T, maxthreads}
     threads = threads_per_threadgroup_1d()
     thread = thread_position_in_threadgroup_1d()
 
+    U = widen_workaround(T)
+    val = U(val)
+
     # local mem for a complete reduction
-    shared = MtlThreadGroupArray(T, (maxthreads,))
+    shared = MtlThreadGroupArray(U, (maxthreads,))
     @inbounds shared[thread] = val
 
     # perform a reduction
@@ -34,7 +43,7 @@
         val = @inbounds shared[thread]
     end
 
-    return val
+    return T===U ? val : val%T
 end
 
 Base.@propagate_inbounds _map_getindex(args::Tuple, I) = ((args[1][I]), _map_getindex(Base.tail(args), I)...)
