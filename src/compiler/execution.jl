@@ -80,7 +80,7 @@ end
 
 # convert Metal buffers to their GPU address
 function Adapt.adapt_storage(to::Adaptor, buf::MtlBuffer)
-    if to.cce !== nothing
+    if to.cce !== nothing && buf.handle != C_NULL
         MTL.use!(to.cce, buf, MTL.ReadWriteUsage)
     end
     reinterpret(Core.LLVMPtr{Nothing,AS.Device}, buf.gpuAddress)
