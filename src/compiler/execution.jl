@@ -157,7 +157,6 @@ end
 function mtlfunction_compile(@nospecialize(job::CompilerJob), ctx::Context)
     mi, mi_meta = GPUCompiler.emit_julia(job)
     ir, ir_meta = GPUCompiler.emit_llvm(job, mi; ctx)
-    strip_debuginfo!(ir)
     entry = LLVM.name(ir_meta.entry)
     image, asm_meta = GPUCompiler.emit_asm(job, ir; format=LLVM.API.LLVMObjectFile)
     return (; image, entry)
