@@ -153,6 +153,28 @@ using Base: FastMath
 @device_override Base.trunc(x::Float32) = ccall("extern air.trunc.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.trunc(x::Float16) = ccall("extern air.trunc.f16", llvmcall, Float16, (Float16,), x)
 
+# hypot without use of double
+#
+# taken from Cosmopolitan Libc
+# Copyright 2021 Justine Alexandra Roberts Tunney
+@inline function _hypot(a::T, b::T) where T <: AbstractFloat
+    if isinf(a) || isinf(b)
+        return T(Inf)
+    end
+    a = abs(a)
+    b = abs(b)
+    if a < b
+        b, a = a, b
+    end
+    if iszero(a)
+        return b
+    end
+    r = b / a
+    return a * sqrt(one(T) + r * r)
+end
+@device_override Base.hypot(x::Float32, y::Float32) = _hypot(x, y)
+@device_override Base.hypot(x::Float16, y::Float16) = _hypot(x, y)
+
 
 ### Integer Intrinsics
 
