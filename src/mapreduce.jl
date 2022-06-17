@@ -16,7 +16,7 @@
     # perform a reduction
     d = 1
     while d < threads
-        threadgroup_barrier()
+        threadgroup_barrier(MemoryFlagThreadGroup)
         index = 2 * d * (thread-1) + 1
         @inbounds if index <= threads
             other_val = if index + d <= threads
