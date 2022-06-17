@@ -2,18 +2,15 @@
 
 using Base: FastMath
 
-# Override Base functions with device counterparts
-# Or if no Base equivalent, create device function
-# The lack of metaprogramming here is for your benefit, dear user
-
-# TODO: Add support for vector types
+# TODO:
+# - wrap all intrinsics from include/metal/metal_math
+# - add support for vector types
+# - consider emitting LLVM intrinsics and lowering those in the back-end
 
 ### Floating Point Intrinsics
 
 ## Metal only supports single and half-precision floating-point types (and their vector counterparts)
 ## For single precision types, there are precise and fast variants
-
-# TODO: clamp, mix, saturate, sign, smoothstep, step
 
 @device_override FastMath.abs_fast(x::Float32) = ccall("extern air.fast_fabs.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.abs(x::Float32) = ccall("extern air.fabs.f32", llvmcall, Cfloat, (Cfloat,), x)
@@ -100,6 +97,14 @@ using Base: FastMath
 @device_override Base.log10(x::Float32) = ccall("extern air.log10.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.log10(x::Float16) = ccall("extern air.log10.f16", llvmcall, Float16, (Float16,), x)
 
+@device_override FastMath.pow_fast(x::Float32, y::Float32) = ccall("extern air.fast_pow.f32", llvmcall, Cfloat, (Cfloat, Cfloat), x, y)
+@device_override Base.:(^)(x::Float32, y::Float32) = ccall("extern air.pow.f32", llvmcall, Cfloat, (Cfloat, Cfloat), x, y)
+@device_override Base.:(^)(x::Float16, y::Float16) = ccall("extern air.pow.f16", llvmcall, Float16, (Float16, Float16), x, y)
+
+@device_function powr_fast(x::Float32, y::Float32) = ccall("extern air.fast_powr.f32", llvmcall, Cfloat, (Cfloat, Cfloat), x, y)
+@device_function powr(x::Float32, y::Float32) = ccall("extern air.powr.f32", llvmcall, Cfloat, (Cfloat, Cfloat), x, y)
+@device_function powr(x::Float16, y::Float16) = ccall("extern air.powr.f16", llvmcall, Float16, (Float16, Float16), x, y)
+
 @device_function rint_fast(x::Float32) = ccall("extern air.fast_rint.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_function rint(x::Float32) = ccall("extern air.rint.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_function rint(x::Float16) = ccall("extern air.rint.f16", llvmcall, Float16, (Float16,), x)
@@ -150,9 +155,6 @@ using Base: FastMath
 
 
 ### Integer Intrinsics
-
-# TODO: absdiff, addsat, clamp, extract_bits, hadd, insert_bits, mad24, madhi, madsat,
-#       max3, median3, min, min3, mul24, mulhi, rhadd, rotate, subsat
 
 @device_override Base.abs(x::Int64)   = ccall("extern air.abs.s.i64", llvmcall, Int64, (Int64,), x)
 @device_override Base.abs(x::UInt64)  = ccall("extern air.abs.u.i64", llvmcall, UInt64, (UInt64,), x)
