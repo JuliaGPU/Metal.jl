@@ -13,3 +13,7 @@ Base.similar(bc::Broadcasted{MtlArrayStyle{N}}, ::Type{T}) where {N,T} =
 
 Base.similar(bc::Broadcasted{MtlArrayStyle{N}}, ::Type{T}, dims...) where {N,T} =
     MtlArray{T}(undef, dims...)
+
+# broadcasting type ctors isn't GPU compatible
+Broadcast.broadcasted(::MtlArrayStyle{N}, f::Type{T}, args...) where {N, T} =
+    Broadcasted{MtlArrayStyle{N}}((x...) -> T(x...), args, nothing)
