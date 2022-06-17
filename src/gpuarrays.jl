@@ -46,15 +46,16 @@ GPUArrays.griddim(ctx::mtlKernelContext)   = Metal.threadgroups_per_grid_1d()
 
 # memory
 
-# @inline function GPUArrays.LocalMemory(::oneKernelContext, ::Type{T}, ::Val{dims}, ::Val{id}
-#                                       ) where {T, dims, id}
-#     ptr = oneAPI.emit_localmemory(Val(id), T, Val(prod(dims)))
-#     oneDeviceArray(dims, LLVMPtr{T, onePI.AS.Local}(ptr))
-# end
+@inline function GPUArrays.LocalMemory(::mtlKernelContext, ::Type{T}, ::Val{dims}, ::Val{id}
+                                      ) where {T, dims, id}
+    ptr = Metal.emit_threadgroup_memory(T, Val(prod(dims)))
+    MtlDeviceArray(dims, ptr)
+end
 
 # synchronization
 
-@inline GPUArrays.synchronize_threads(::mtlKernelContext) = Metal.threadgroup_barrier()
+@inline GPUArrays.synchronize_threads(::mtlKernelContext) =
+    Metal.threadgroup_barrier(Metal.MemoryFlagThreadGroup)
 
 
 
