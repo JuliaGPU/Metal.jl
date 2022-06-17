@@ -7,10 +7,15 @@ function __init__()
 
     if Base.JLOptions().debug_level >= 2
         # enable Metal API validation
-        ENV["METAL_DEVICE_WRAPPER_TYPE"] = "1"
+        ENV["MTL_DEBUG_LAYER"] = "1"
         # ... but make it non-fatal
-        ENV["METAL_DEBUG_ERROR_MODE"] = "5"
-        ENV["METAL_ERROR_MODE"] = "5"
+        ENV["MTL_DEBUG_LAYER_ERROR_MODE"] = "nslog"
+        ENV["MTL_DEBUG_LAYER_WARNING_MODE"] = "nslog"
+
+        if macos_version() >= v"13"
+            # enable Metal shader validation
+            ENV["MTL_SHADER_VALIDATION"] = "4"
+        end
     end
 end
 

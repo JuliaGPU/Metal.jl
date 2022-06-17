@@ -32,7 +32,8 @@ steps:
             - lib
             - examples
     env:
-      METAL_DEVICE_WRAPPER_TYPE: '1'
+      MTL_DEBUG_LAYER: '1'
+      MTL_SHADER_VALIDATION: '1'
     agents:
       queue: "juliagpu"
       metal: "*"
