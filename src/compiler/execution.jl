@@ -233,6 +233,9 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
     MTL.on_completed(cmdbuf) do
         empty!(roots)
         foreach(free, argument_buffers)
+
+        # TODO: access logs here to check for errors
+        #       https://developer.apple.com/videos/play/wwdc2020/10616/
     end
 
     commit!(cmdbuf)
