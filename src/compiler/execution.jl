@@ -168,7 +168,17 @@ function mtlfunction_link(@nospecialize(job::CompilerJob), compiled)
     dev = current_device()
     lib = MtlLibraryFromData(dev, compiled.image)
     fun = MtlFunction(lib, compiled.entry)
-    pipeline_state = MtlComputePipelineState(dev, fun)
+    pipeline_state = try
+        MtlComputePipelineState(dev, fun)
+    catch
+        # the back-end compiler likely failed
+        # XXX: check more accurately? the error domain doesn't help much here
+        metallib = tempname(cleanup=false) * ".metallib"
+        write(metallib, compiled.image)
+        @warn """Compilation of MetalLib to native code failed.
+                 If you think this is a bug, please file an issue and attach $(metallib)."""
+        rethrow()
+    end
     fun, pipeline_state
 end
 
