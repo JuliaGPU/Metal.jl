@@ -22,7 +22,7 @@ function versioninfo(io::IO=stdout)
     println(io, "- LLVM: $(LLVM.version())")
     println(io)
 
-    env = filter(var->startswith(var, "JULIA_METAL"), keys(ENV))
+    env = filter(var->startswith(var, "JULIA_METAL") || startswith(var, "MTL"), keys(ENV))
     if !isempty(env)
         println(io, "Environment:")
         for var in env
