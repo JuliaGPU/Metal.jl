@@ -313,7 +313,10 @@ MTL.mtCommandBufferDescriptorErrorOptionsSet(desc,MTL.MtCommandBufferErrorOption
 
 cmq = MtlCommandQueue(current_device())
 cmdbuf = MtlCommandBuffer(cmq; retainReferences=false, errorOption=MTL.MtCommandBufferErrorOptionEncoderExecutionStatus)
-@test cmdbuf.retainedReferences == false
+if get(ENV, "MTL_DEBUG_LAYER", "0") == 0
+    # when the debug layer is activated, Metal seems to retain all resources?
+    @test cmdbuf.retainedReferences == false
+end
 @test cmdbuf.errorOptions == MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
 
 end
