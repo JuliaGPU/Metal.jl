@@ -120,6 +120,7 @@ mtlconvert(arg, cce=nothing) = adapt(Adaptor(cce), arg)
 struct HostKernel{F,TT}
     f::F
     fun::MtlFunction
+    pipeline_state::MtlComputePipelineState
 end
 
 """
@@ -139,11 +140,12 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
     target = MetalCompilerTarget(macos=macos_version(); kwargs...)
     params = MetalCompilerParams()
     job = CompilerJob(target, source, params)
-    fun = GPUCompiler.cached_compilation(cache, job,
-                                         mtlfunction_compile, mtlfunction_link)
+    fun, pipeline_state =
+        GPUCompiler.cached_compilation(cache, job,
+                                       mtlfunction_compile, mtlfunction_link)
     # compilation is cached on the function type, so we can only create a kernel object here
     # (as it captures the function _instance_). we may want to cache those objects.
-    HostKernel{F,tt}(f, fun)
+    HostKernel{F,tt}(f, fun, pipeline_state)
 end
 
 const mtlfunction_cache = Dict{Any,Any}()
@@ -165,7 +167,9 @@ end
 function mtlfunction_link(@nospecialize(job::CompilerJob), compiled)
     dev = current_device()
     lib = MtlLibraryFromData(dev, compiled.image)
-    MtlFunction(lib, compiled.entry)
+    fun = MtlFunction(lib, compiled.entry)
+    pipeline_state = MtlComputePipelineState(dev, fun)
+    fun, pipeline_state
 end
 
 
@@ -179,16 +183,15 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
     (threads.width>0 && threads.height>0 && threads.depth>0) ||
         throw(ArgumentError("Threadgroup dimensions should be non-null"))
 
-    pipeline_state = MtlComputePipelineState(kernel.fun.lib.device, kernel.fun)
-    (threads.width * threads.height * threads.depth) > pipeline_state.maxTotalThreadsPerThreadgroup &&
-        throw(ArgumentError("Max total threadgroup size should not exceed $(pipeline_state.maxTotalThreadsPerThreadgroup)"))
+    (threads.width * threads.height * threads.depth) > kernel.pipeline_state.maxTotalThreadsPerThreadgroup &&
+        throw(ArgumentError("Max total threadgroup size should not exceed $(kernel.pipeline_state.maxTotalThreadsPerThreadgroup)"))
 
     cmdq = global_queue(kernel.fun.lib.device)
     cmdbuf = MtlCommandBuffer(cmdq)
     cmdbuf.label = "MtlCommandBuffer($(nameof(kernel.f)))"
     argument_buffers = MtlBuffer[]
     MtlComputeCommandEncoder(cmdbuf) do cce
-        MTL.set_function!(cce, pipeline_state)
+        MTL.set_function!(cce, kernel.pipeline_state)
 
         # encode arguments
         idx = 1
