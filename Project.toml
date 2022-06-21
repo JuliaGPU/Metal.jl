@@ -16,10 +16,11 @@ LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Metal_LLVM_Tools_jll = "0418c028-ff8c-56b8-a53e-0f9676ed36fc"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
-Scratch = "6c6a2e73-6563-6170-7368-637461726353"
+cmt_jll = "65323cdd-17ec-5719-9643-72016a7f97e3"
 
 [compat]
 GPUCompiler = "0.16"
 LLVM = "4.13"
 Metal_LLVM_Tools_jll = "~0.3"
+cmt_jll = "~0.1"
 julia = "1.8"
