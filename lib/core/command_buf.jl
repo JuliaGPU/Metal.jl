@@ -1,4 +1,4 @@
-export MtlCommandBuffer, MtlCommandBufferDescriptor, enqueue!, wait_scheduled, wait_completed, encode_signal!, encode_wait!, commit!
+export MtlCommandBuffer, MtlCommandBufferDescriptor, enqueue!, wait_scheduled, wait_completed, encode_signal!, encode_wait!, commit!, on_scheduled, on_completed
 
 const MTLCommandBufferDescriptor = Ptr{MTL.MtCommandBufferDescriptor}
 
@@ -11,12 +11,13 @@ end
 Base.unsafe_convert(::Type{MTLCommandBufferDescriptor}, q::MtlCommandBufferDescriptor) = q.handle
 
 function MtlCommandBufferDescriptor(retainReferences::Bool=true, errorOption::MTL.MtCommandBufferErrorOption=MtCommandBufferErrorOptionNone)
-    if retainReferences && errorOption == MtCommandBufferErrorOptionNone
-        handle = mtNewCommandBufferDescriptor()
-    else
-        handle = mtNewCommandBufferDescriptor()
-        retainReferences || MTL.mtCommandBufferDescriptorRetainedReferencesSet(handle, false)
-        errorOption == MtCommandBufferErrorOptionNone || MTL.mtCommandBufferDescriptorErrorOptionsSet(handle, MTL.MtCommandBufferErrorOptionEncoderExecutionStatus)
+    handle = mtNewCommandBufferDescriptor()
+    if !retainReferences
+        MTL.mtCommandBufferDescriptorRetainedReferencesSet(handle, false)
+    end
+    if errorOption != MtCommandBufferErrorOptionNone
+        MTL.mtCommandBufferDescriptorErrorOptionsSet(handle,
+                MTL.MtCommandBufferErrorOptionEncoderExecutionStatus)
     end
     obj = MtlCommandBufferDescriptor(handle, retainReferences, errorOption)
     finalizer(unsafe_destroy!, obj)
@@ -27,7 +28,6 @@ function unsafe_destroy!(desc::MtlCommandBufferDescriptor)
     mtRelease(desc.handle)
 end
 
-# TODO: Match retainedReferences names
 
 ## properties
 
@@ -57,16 +57,16 @@ end
 const MTLCommandBuffer = Ptr{MtCommandBuffer}
 
 """
-    MtlCommandBuffer(queue::MtlCommandQueue; unretained_references=false)
+    MtlCommandBuffer(queue::MtlCommandQueue; retainReferences=false)
 
 A container that stores encoded commands for the GPU to execute.
 
-If `unretained_references=true` it doesn't hold strong references to any objects
+If `retainReferences=false` it doesn't hold strong references to any objects
 required to execute the command buffer
 
 [Metal Docs](https://developer.apple.com/documentation/metal/mtlcommandbuffer?language=objc)
 
-[Unretained references](https://developer.apple.com/documentation/metal/mtlcommandqueue/1508684-commandbufferwithunretainedrefer?language=objc)
+[Retained references](https://developer.apple.com/documentation/metal/mtlcommandqueue/1508684-commandbufferwithunretainedrefer?language=objc)
 """
 mutable struct MtlCommandBuffer
     handle::MTLCommandBuffer
@@ -79,7 +79,8 @@ Base.unsafe_convert(::Type{MTLCommandBuffer}, q::MtlCommandBuffer) = q.handle
 Base.:(==)(a::MtlCommandBuffer, b::MtlCommandBuffer) = a.handle == b.handle
 Base.hash(q::MtlCommandBuffer, h::UInt) = hash(q.handle, h)
 
-function MtlCommandBuffer(queue::MtlCommandQueue; retainReferences::Bool=true, errorOption::MTL.MtCommandBufferErrorOption=MtCommandBufferErrorOptionNone)
+function MtlCommandBuffer(queue::MtlCommandQueue; retainReferences::Bool=true,
+                          errorOption::MTL.MtCommandBufferErrorOption=MtCommandBufferErrorOptionNone)
     desc = nothing
     handle = if errorOption != MtCommandBufferErrorOptionNone
         desc = MtlCommandBufferDescriptor(retainReferences, errorOption)
@@ -141,6 +142,14 @@ function Base.getproperty(o::MtlCommandBuffer, f::Symbol)
         mtCommandBufferEncoderInfo(o)
     else
         getfield(o, f)
+    end
+end
+
+function Base.setproperty!(o::MtlCommandBuffer, f::Symbol, val)
+    if f === :label
+		mtCommandBufferLabelSet(o, val)
+    else
+        setfield!(o, f, val)
     end
 end
 
@@ -231,3 +240,48 @@ immediately if the event already has an equal or larger value.
 """
 encode_wait!(buf::MtlCommandBuffer, ev::MtlAbstractEvent, val::Integer) =
     mtCommandBufferEncodeWaitForEvent(buf, ev, val)
+
+function _command_buffer_async_callback(handle, data)
+    # we don't care about the buffer (handle), the user can capture it if needed
+    ccall(:uv_async_send, Cint, (Ptr{Cvoid},), data)
+    return
+end
+
+function _command_buffer_callback(f::Base.Callable, buf::MtlCommandBuffer)
+    cond = Base.AsyncCondition() do async_cond
+        f()
+        close(async_cond)
+    end
+
+    # the condition object is embedded in a task, so the Julia scheduler keeps it alive
+
+    handler = @cfunction(_command_buffer_async_callback, Nothing,
+                         (MTL.MTLCommandBufferDescriptor, Ptr{Cvoid}))
+
+    return handler, cond
+end
+
+"""
+    on_scheduled(buf::MtlCommandBuffer) do buf
+        ...
+    end
+
+Execute a block of code when execution of the command buffer is scheduled.
+"""
+function on_scheduled(f::Base.Callable, buf::MtlCommandBuffer)
+    handler, data = _command_buffer_callback(f, buf)
+    MTL.mtCommandBufferOnScheduled(buf, data, handler)
+end
+
+"""
+    on_completed(buf::MtlCommandBuffer) do buf
+        ...
+    end
+
+Execute a block of code when execution of the command buffer is completed.
+"""
+function on_completed(f::Base.Callable, buf::MtlCommandBuffer)
+    handler, data = _command_buffer_callback(f, buf)
+    MTL.mtCommandBufferOnComplete(buf, data, handler)
+end
+

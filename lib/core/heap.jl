@@ -25,11 +25,11 @@ Base.hash(dev::MtlHeapDescriptor, h::UInt) = hash(dev.handle, h)
 
 ## properties
 
-Base.propertynames(::MtlHeapDescriptor) = 
+Base.propertynames(::MtlHeapDescriptor) =
     (:type, :storageMode, :cpuCacheMode, :hazardTrackingMode, :resourceOptions, :size)
 
 function Base.getproperty(o::MtlHeapDescriptor, f::Symbol)
-    if f === :type 
+    if f === :type
         mtHeapDescriptorType(o)
     elseif f === :storageMode
         mtHeapDescriptorStorageMode(o)
@@ -47,7 +47,7 @@ function Base.getproperty(o::MtlHeapDescriptor, f::Symbol)
 end
 
 function Base.setproperty!(o::MtlHeapDescriptor, f::Symbol, val)
-    if f === :type 
+    if f === :type
         mtHeapDescriptorTypeSet(o, val)
     elseif f === :storageMode
         mtHeapDescriptorStorageModeSet(o, val)
@@ -104,8 +104,8 @@ end
 
 ## properties
 
-Base.propertynames(::MtlHeap) = 
-    (:device, :label, :type, :storageMode, :cpuCacheMode, :hazardTrackingMode, 
+Base.propertynames(::MtlHeap) =
+    (:device, :label, :type, :storageMode, :cpuCacheMode, :hazardTrackingMode,
       :resourceOptions, :size, :usedSize, :currentAllocatedSize, :maxAvailableSizeWithAlignment)
 
 function Base.getproperty(o::MtlHeap, f::Symbol)
@@ -114,7 +114,7 @@ function Base.getproperty(o::MtlHeap, f::Symbol)
     elseif f === :label
         ptr = mtHeapLabel(o)
         ptr == C_NULL ? nothing : unsafe_string(ptr)
-    elseif f === :type 
+    elseif f === :type
         mtHeapType(o)
     elseif f === :storageMode
         mtHeapStorageMode(o)
@@ -134,6 +134,14 @@ function Base.getproperty(o::MtlHeap, f::Symbol)
         maxAvailableSizeWithAlignment(o)
     else
         getfield(o, f)
+    end
+end
+
+function Base.setproperty!(o::MtlHeap, f::Symbol, val)
+    if f === :label
+        mtHeapLabelSet(o, val)
+    else
+        setfield!(o, f, val)
     end
 end
 

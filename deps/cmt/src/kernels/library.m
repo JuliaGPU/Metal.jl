@@ -70,6 +70,13 @@ mtLibraryLabel(MtLibrary *lib) {
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
+mtLibraryLabelSet(MtLibrary *lib, const char* label) {
+	((id<MTLLibrary>)lib).label = mtNSString(label);
+}
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+void
 mtLibraryFunctionNames(MtLibrary *lib, size_t* count, const char** names) {
   NSArray<NSString*> *_names = [(id<MTLLibrary>)lib functionNames];
   NSInteger n = [_names count];

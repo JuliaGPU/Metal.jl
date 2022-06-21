@@ -16,31 +16,28 @@ function kernel_fma(a, b, c, out)
 
     return
 end
+
 "Return calculated TFLOPS of Metal device"
-function peakflops(_size=1024*1024*100)
-    a = round.(rand(Float32, _size) * 100)
-    d_a = MtlArray(a)
-    a = round.(rand(Float32, _size) * 100)
-    d_b = MtlArray(a)
-    a = round.(rand(Float32, _size) * 100)
-    d_c = MtlArray(a)
+function peakflops(len=1024*1024*100)
+    a = MtlArray(rand(Float32, len))
+    b = MtlArray(rand(Float32, len))
+    c = MtlArray(rand(Float32, len))
     out = similar(a)
-    d_out = MtlArray(out)
 
-    _grid = cld(_size, 1024)
+    threads = 1024
+    grid = cld(len, threads)
 
-    # Warmup
-    Metal.@sync @metal threads=1024 grid=_grid kernel_fma(d_a, d_b, d_c, d_out)
-
-    bench = @benchmark Metal.@sync @metal threads=1024 grid=$_grid kernel_fma($d_a, $d_b, $d_c, $d_out)
+    bench = @benchmark Metal.@sync begin
+        @metal threads=$threads grid=$grid kernel_fma($a, $b, $c, $out)
+    end
 
     # Cleanup memory
-    finalize(d_a)
-    finalize(d_b)
-    finalize(d_c)
-    finalize(d_out)
+    finalize(a)
+    finalize(b)
+    finalize(c)
+    finalize(out)
 
-    flopcount = (99*3+1) * 2 * _size
+    flopcount = (99*3+1) * 2 * len
     secs = minimum(bench.times) * 1e-9
     flops = flopcount / secs
 

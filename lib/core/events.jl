@@ -46,13 +46,21 @@ end
 Base.propertynames(::MtlAbstractEvent) = (:device, :label, :signaledValue)
 
 function Base.getproperty(ev::MtlAbstractEvent, f::Symbol)
-    if f == :label
+    if f === :label
         ptr = mtEventLabel(ev)
         ptr == C_NULL ? nothing : unsafe_string(ptr)
-    elseif ev isa MtlSharedEvent && f == :signaledValue
+    elseif ev isa MtlSharedEvent && f === :signaledValue
         mtSharedEventSignaledValue(ev)
     else
         getfield(ev, f)
+    end
+end
+
+function Base.setproperty!(ev::MtlAbstractEvent, f::Symbol, val)
+    if f === :label
+		mtEventLabelSet(ev, val)
+    else
+        setfield!(ev, f, val)
     end
 end
 

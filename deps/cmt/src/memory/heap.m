@@ -29,50 +29,57 @@ mtHeapLabel(MtHeap *heap) {
 }
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
+void
+mtHeapLabelSet(MtHeap *heap, const char* label) {
+	((id<MTLHeap>)heap).label = mtNSString(label);
+}
+
+MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
-MtHeapType 
+MtHeapType
 mtHeapType(MtHeap *heap) {
 	return (MtHeapType)[(id<MTLHeap>)heap type];
 }
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
-MtStorageMode 
+MtStorageMode
 mtHeapStorageMode(MtHeap *heap) {
 	return (MtStorageMode)[(id<MTLHeap>)heap storageMode];
 }
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
-MtCPUCacheMode 
+MtCPUCacheMode
 mtHeapCPUCacheMode(MtHeap *heap) {
 	return (MtCPUCacheMode)[(id<MTLHeap>)heap cpuCacheMode];
 }
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
-MtHazardTrackingMode 
+MtHazardTrackingMode
 mtHeapHazardTrackingMode(MtHeap *heap) {
 	return (MtHazardTrackingMode)[(id<MTLHeap>)heap hazardTrackingMode];
 }
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
-MtResourceOptions 
+MtResourceOptions
 mtHeapResourceOptions(MtHeap *heap) {
 	return (MtResourceOptions)[(id<MTLHeap>)heap resourceOptions];
 }
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
-NsUInteger 
+NsUInteger
 mtHeapSize(MtHeap *heap) {
 	return [(id<MTLHeap>)heap size];
 }
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
-NsUInteger 
+NsUInteger
 mtHeapUsedSize(MtHeap *heap) {
 	return [(id<MTLHeap>)heap usedSize];
 }
@@ -93,14 +100,14 @@ mtHeapMaxAvailableSizeWithAlignment(MtHeap *heap, NsUInteger alignment) {
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
-MtPurgeableState 
+MtPurgeableState
 mtHeapSetPurgeableState(MtHeap *heap, MtPurgeableState state) {
 	return (MtPurgeableState)[(id<MTLHeap>)heap setPurgeableState: (MTLPurgeableState)state];
 }
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
-MtBuffer* 
+MtBuffer*
 mtHeapNewBufferWithLength(MtHeap *heap, NsUInteger len, MtResourceOptions opt) {
 	return [(id<MTLHeap>)heap newBufferWithLength:len
 							  options:(MTLResourceOptions)opt];
@@ -108,7 +115,7 @@ mtHeapNewBufferWithLength(MtHeap *heap, NsUInteger len, MtResourceOptions opt) {
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
-MtBuffer* 
+MtBuffer*
 mtHeapNewBufferWithLengthOffset(MtHeap *heap, NsUInteger len, MtResourceOptions opt, NsUInteger offset) {
 	return [(id<MTLHeap>)heap newBufferWithLength: len
 							  options: (MTLResourceOptions)opt
@@ -117,15 +124,15 @@ mtHeapNewBufferWithLengthOffset(MtHeap *heap, NsUInteger len, MtResourceOptions 
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(10.0))
-MtTexture* 
+MtTexture*
 mtHeapNewTextureWithDescriptor(MtHeap *heap, MtTextureDescriptor *desc) {
 	return [(id<MTLHeap>)heap newTextureWithDescriptor: (MTLTextureDescriptor*)desc];
 }
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.15), mt_ios(13.0))
-MtTexture* 
+MtTexture*
 mtHeapNewTextureWithDescriptorOffset(MtHeap *heap, MtTextureDescriptor *desc, NsUInteger offset) {
-	return [(id<MTLHeap>)heap newTextureWithDescriptor: (MTLTextureDescriptor*)desc 
+	return [(id<MTLHeap>)heap newTextureWithDescriptor: (MTLTextureDescriptor*)desc
 							  offset: offset];
 }

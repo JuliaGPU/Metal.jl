@@ -57,14 +57,16 @@ opts = MtlCompileOptions()
 
 let lib = MtlLibrary(dev, "", opts)
     @test lib.device == dev
-    @test lib.label == nothing
+    @test lib.label === nothing
+    lib.label = "MyLibrary"
+    @test lib.label == "MyLibrary"
     @test isempty(lib.functionNames)
 end
 
 metal_code = read(joinpath(@__DIR__, "dummy.metal"), String)
 let lib = MtlLibrary(dev, metal_code, opts)
     @test lib.device == dev
-    @test lib.label == nothing
+    @test lib.label === nothing
     fns = lib.functionNames
     @test length(fns) == 2
     @test "kernel_1" in fns
@@ -74,7 +76,7 @@ end
 binary_path = joinpath(@__DIR__, "dummy.metallib")
 let lib = MtlLibraryFromFile(dev, binary_path)
     @test lib.device == dev
-    @test lib.label == nothing
+    @test lib.label === nothing
     fns = lib.functionNames
     @test length(fns) == 2
     @test "kernel_1" in fns
@@ -84,7 +86,7 @@ end
 binary_code = read(binary_path)
 let lib = MtlLibraryFromData(dev, binary_code)
     @test lib.device == dev
-    @test lib.label == nothing
+    @test lib.label === nothing
     fns = lib.functionNames
     @test length(fns) == 2
     @test "kernel_1" in fns
@@ -106,7 +108,9 @@ compact_str = sprint(io->show(io, fun))
 full_str = sprint(io->show(io, MIME"text/plain"(), fun))
 
 @test fun.device == dev
-@test fun.label == nothing
+@test fun.label === nothing
+fun.label = "MyKernel"
+@test fun.label == "MyKernel"
 @test fun.name == "kernel_1"
 @test fun.functionType == MTL.MtFunctionTypeKernel
 
@@ -118,12 +122,16 @@ dev = first(devices())
 
 let ev = MtlEvent(dev)
     @test ev.device == dev
-    @test ev.label == nothing
+    @test ev.label === nothing
+    ev.label = "MyEvent"
+    @test ev.label == "MyEvent"
 end
 
 let ev = MtlSharedEvent(dev)
     @test ev.device == dev
-    @test ev.label == nothing
+    @test ev.label === nothing
+    ev.label = "MyEvent"
+    @test ev.label == "MyEvent"
     @test ev.signaledValue == 0
 end
 
@@ -183,7 +191,9 @@ end
 desc = MtlHeapDescriptor()
 desc.size = 0x4000 # TODO: use heapBufferSizeAndAlign
 let heap = MtlHeap(dev, desc)
-    @test heap.label == nothing
+    @test heap.label === nothing
+    heap.label = "MyHeap"
+    @test heap.label == "MyHeap"
 
     @test heap.type == desc.type
 
@@ -206,18 +216,19 @@ end
 
 dev = first(devices())
 
-buf = MtlBuffer{Int}(dev, 1)
+buf = MtlBuffer(dev, 8; storage=Shared)
 
 @test buf.length == 8
+@test sizeof(buf) == 8
 
 # MtlResource properties
 @test buf.device == dev
-@test buf.label == nothing
-@test buf.gpuAddress isa Ptr{Int}
+@test buf.label === nothing
+buf.label = "MyBuffer"
+@test buf.label == "MyBuffer"
+@test buf.gpuAddress isa Ptr{Cvoid}
 
-@test content(buf) isa Ptr{Int}
-
-@test sizeof(buf) == 8
+@test contents(buf) isa Ptr{Cvoid}
 
 free(buf)
 
@@ -230,7 +241,9 @@ dev = first(devices())
 cmdq = MtlCommandQueue(dev)
 
 @test cmdq.device == dev
-@test cmdq.label == nothing
+@test cmdq.label === nothing
+cmdq.label = "MyCommandQueue"
+@test cmdq.label == "MyCommandQueue"
 
 end
 
@@ -243,7 +256,9 @@ cmdbuf = MtlCommandBuffer(cmdq)
 
 @test cmdbuf.device == dev
 @test cmdbuf.commandQueue == cmdq
-@test cmdbuf.label == nothing
+@test cmdbuf.label === nothing
+cmdbuf.label = "MyCommandBuffer"
+@test cmdbuf.label == "MyCommandBuffer"
 @test cmdbuf.error === nothing
 @test cmdbuf.status == MTL.MtCommandBufferStatusNotEnqueued
 @test cmdbuf.kernelStartTime == 0
@@ -261,14 +276,30 @@ let ev = MtlSharedEvent(dev)
 end
 
 cmdbuf = MtlCommandBuffer(cmdq)
+scheduled = Ref(false)
+completed = Ref(false)
+on_scheduled(cmdbuf) do
+    scheduled[] = true
+end
+on_completed(cmdbuf) do
+    completed[] = true
+end
+@test scheduled[] == false
+@test completed[] == false
 @test cmdbuf.status == MTL.MtCommandBufferStatusNotEnqueued
 enqueue!(cmdbuf)
 @test cmdbuf.status == MTL.MtCommandBufferStatusEnqueued
 commit!(cmdbuf)
-@test cmdbuf.status == MTL.MtCommandBufferStatusCommitted
-# Completion happens too quickly to test for committed status to be checked
+# XXX: happens too quickly to test for committed status
+#@test cmdbuf.status == MTL.MtCommandBufferStatusCommitted
 wait_completed(cmdbuf) == MTL.MtCommandBufferStatusCompleted
 @test cmdbuf.status == MTL.MtCommandBufferStatusCompleted
+retry(; delays=[0, 0.1, 1]) do
+    scheduled[] || error()
+    completed[] || error()
+end()
+@test scheduled[] == true
+@test completed[] == true
 
 # CommandBufferDescriptor tests
 desc = MTL.mtNewCommandBufferDescriptor()
@@ -282,7 +313,10 @@ MTL.mtCommandBufferDescriptorErrorOptionsSet(desc,MTL.MtCommandBufferErrorOption
 
 cmq = MtlCommandQueue(current_device())
 cmdbuf = MtlCommandBuffer(cmq; retainReferences=false, errorOption=MTL.MtCommandBufferErrorOptionEncoderExecutionStatus)
-@test cmdbuf.retainedReferences == false
+if get(ENV, "MTL_DEBUG_LAYER", "0") == 0
+    # when the debug layer is activated, Metal seems to retain all resources?
+    @test cmdbuf.retainedReferences == false
+end
 @test cmdbuf.errorOptions == MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
 
 end
@@ -301,21 +335,6 @@ pipeline = MtlComputePipelineState(dev, fun)
 @test pipeline.maxTotalThreadsPerThreadgroup isa Integer
 @test pipeline.threadExecutionWidth isa Integer
 @test pipeline.staticThreadgroupMemoryLength == 0
-
-end
-
-@testset "argument encoder" begin
-
-dev = first(devices())
-lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "vadd.metallib"))
-fun = MtlFunction(lib, "vadd")
-
-encoder = MtlArgumentEncoder(fun, 1)
-
-@test encoder.encodedLength == 0
-@test encoder.alignment == 1
-
-# TODO: actually encode arguments
 
 end
 

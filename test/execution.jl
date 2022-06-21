@@ -8,17 +8,17 @@ end
 
 bufferSize = 8
 bufferA = MtlArray{Int,1}(undef, tuple(bufferSize), storage=Shared)
-vecA = unsafe_wrap(Vector{Int}, bufferA.buffer, tuple(bufferSize))
+vecA = unsafe_wrap(Vector{Int}, pointer(bufferA), tuple(bufferSize))
 
 @testset "basic execution and synchronization" begin
-    @metal threads=(bufferSize) tester(bufferA.buffer)
+    @metal threads=(bufferSize) tester(bufferA)
     synchronize()
     @test all(vecA .== Int(5))
 end
 
 @testset "device synchronization" begin
     t = @async begin
-        @metal threads=(bufferSize) tester(bufferA.buffer)
+        @metal threads=(bufferSize) tester(bufferA)
     end
     wait(t)
     device_synchronize()
@@ -27,20 +27,20 @@ end
 
 @testset "launch params" begin
     vecA .= 0
-    @metal threads=(2) tester(bufferA.buffer)
+    @metal threads=(2) tester(bufferA)
     synchronize()
     @test all(vecA == Int.([5, 5, 0, 0, 0, 0, 0, 0]))
     vecA .= 0
 
-    @metal grid=(3) threads=(2) tester(bufferA.buffer)
+    @metal grid=(3) threads=(2) tester(bufferA)
     synchronize()
     @test all(vecA == Int.([5, 5, 5, 5, 5, 5, 0, 0]))
     vecA .= 0
 
-    @test_throws InexactError @metal threads=(-2) tester(bufferA.buffer)
-    @test_throws InexactError @metal grid=(-2) tester(bufferA.buffer)
-    @test_throws ArgumentError @metal threads=(1025) tester(bufferA.buffer)
-    @test_throws ArgumentError @metal threads=(1000,2) tester(bufferA.buffer)
+    @test_throws InexactError @metal threads=(-2) tester(bufferA)
+    @test_throws InexactError @metal grid=(-2) tester(bufferA)
+    @test_throws ArgumentError @metal threads=(1025) tester(bufferA)
+    @test_throws ArgumentError @metal threads=(1000,2) tester(bufferA)
 end
 
 @testset "argument passing" begin

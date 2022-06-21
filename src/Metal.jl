@@ -13,25 +13,34 @@ using ExprTools: splitdef, combinedef
 include("../lib/core/MTL.jl")
 @reexport using .MTL
 
+# essential stuff
+include("state.jl")
+include("initialization.jl")
+
 # device functionality
 include("device/utils.jl")
 include("device/pointer.jl")
 include("device/array.jl")
-include("device/metal.jl")
+include("device/runtime.jl")
+include("device/intrinsics/arguments.jl")
+include("device/intrinsics/math.jl")
+include("device/intrinsics/synchronization.jl")
+include("device/intrinsics/memory.jl")
+include("device/quirks.jl")
 
-# compiler
+# array essentials
+include("memory.jl")
+include("array.jl")
+
+# compiler implementation
 include("compiler/gpucompiler.jl")
 include("compiler/execution.jl")
 include("compiler/reflection.jl")
 
-include("state.jl")
+# array implementation
 include("utilities.jl")
-include("initialization.jl")
-
-# array abstraction
-include("array.jl")
-include("memory.jl")
 include("broadcast.jl")
+include("mapreduce.jl")
 include("random.jl")
 include("gpuarrays.jl")
 

@@ -3,33 +3,57 @@
 export MtlArray
 
 mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
-  buffer::MtlBuffer{T}
+  buffer::MtlBuffer
+
+  maxsize::Int  # maximum data size; excluding any selector bytes
+  offset::Int   # offset of the data in the buffer, in number of elements
   dims::Dims{N}
 
-  dev::MtlDevice
+  function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Shared) where {T,N}
+      Base.allocatedinline(T) || error("MtlArray only supports element types that are stored inline")
+      maxsize = prod(dims) * sizeof(T)
+      bufsize = if Base.isbitsunion(T)
+        # type tag array past the data
+        maxsize + prod(dims)
+      else
+        maxsize
+      end
+
+      dev = current_device()
+      if bufsize > 0
+        buf = alloc(dev, bufsize; storage=storage)
+        buf.label = "MtlArray{$(T),$(N)}(dims=$dims)"
+      else
+        buf = MtlBuffer(C_NULL)
+      end
+
+      obj = new(buf, maxsize, 0, dims)
+      finalizer(obj) do arr
+          free(arr.buffer)
+      end
+      return obj
+  end
+
+  function MtlArray{T,N}(buffer::MtlBuffer, dims::Dims{N};
+                         maxsize::Int=prod(dims) * sizeof(T), offset::Int=0) where {T,N}
+      Base.allocatedinline(T) || error("MtlArray only supports element types that are stored inline")
+      MTL.mtRetain(buffer.handle)
+      obj = new{T,N}(buffer, maxsize, offset, dims)
+      finalizer(obj) do arr
+          free(arr.buffer)
+      end
+      return obj
+  end
 end
 
-device(A::MtlArray) = A.dev
+device(A::MtlArray) = A.buffer.device
 
 
 ## constructors
 
-# type and dimensionality specified, accepting dims as tuples of Ints
-function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Shared) where {T,N}
-    dev = current_device()
-    # Check that requested size is not larger than maximum buffer size allowed
-    sizeof(T) * prod(dims) > dev.maxBufferLength && error("Too large of Metal buffer requested of size $(Base.format_bytes(sizeof(T) * prod(dims))) (Max: $(Base.format_bytes(dev.maxBufferLength)))")
-    buf = alloc(T, dev, prod(dims); storage=storage)
-
-    obj = MtlArray{T,N}(buf, dims, dev)
-    finalizer(obj) do arr
-        free(arr.buffer)
-    end
-    return obj
-end
-
 # type and dimensionality specified, accepting dims as series of Ints
-MtlArray{T,N}(::UndefInitializer, dims::Integer...) where {T,N} = MtlArray{T,N}(undef, Dims(dims))
+MtlArray{T,N}(::UndefInitializer, dims::Integer...) where {T,N} =
+  MtlArray{T,N}(undef, Dims(dims))
 
 # type but not dimensionality specified
 MtlArray{T}(::UndefInitializer, dims::Dims{N}) where {T,N} = MtlArray{T,N}(undef, dims)
@@ -41,7 +65,8 @@ MtlArray{T,1}() where {T} = MtlArray{T,1}(undef, 0)
 
 Base.similar(a::MtlArray{T,N}) where {T,N} = MtlArray{T,N}(undef, size(a))
 Base.similar(a::MtlArray{T}, dims::Base.Dims{N}) where {T,N} = MtlArray{T,N}(undef, dims)
-Base.similar(a::MtlArray, ::Type{T}, dims::Base.Dims{N}) where {T,N} = MtlArray{T,N}(undef, dims)
+Base.similar(a::MtlArray, ::Type{T}, dims::Base.Dims{N}) where {T,N} =
+  MtlArray{T,N}(undef, dims)
 
 function Base.copy(a::MtlArray{T,N}) where {T,N}
   b = similar(a)
@@ -56,17 +81,20 @@ Base.elsize(::Type{<:MtlArray{T}}) where {T} = sizeof(T)
 Base.size(x::MtlArray) = x.dims
 Base.sizeof(x::MtlArray) = Base.elsize(x) * length(x)
 
-# XXX: we can't actually get a true pointer, it's always a buffer
-# with Metal APIs accepting an offset param. should we then disallow this conversion?
-Base.pointer(x::MtlArray{T}) where {T} = Base.unsafe_convert(MTL.MTLBuffer, x)
-Base.pointer(x::MtlArray, index) = error("Cannot compute a pointer with offset")
+Base.pointer(x::MtlArray{T}) where {T} = Base.unsafe_convert(MtlPointer{T}, x)
+@inline function Base.pointer(x::MtlArray{T}, i::Integer) where T
+    Base.unsafe_convert(MtlPointer{T}, x) + Base._memory_offset(x, i)
+end
+
+Base.unsafe_convert(t::Type{MtlPointer{T}}, x::MtlArray) where {T} =
+  MtlPointer{T}(x.buffer, x.offset*Base.elsize(x))
 
 
 ## interop with other arrays
 
 @inline function MtlArray{T,N}(xs::AbstractArray{T,N}) where {T,N}
   A = MtlArray{T,N}(undef, size(xs))
-  copyto!(A, xs)
+  copyto!(A, convert(Array{T}, xs))
   return A
 end
 
@@ -81,6 +109,15 @@ MtlArray(A::AbstractArray{T,N}) where {T,N} = MtlArray{T,N}(A)
 MtlArray{T,N}(xs::MtlArray{T,N}) where {T,N} = xs
 
 
+## derived types
+
+# wrapped arrays: can be used in kernels
+const WrappedMtlArray{T,N} = Union{MtlArray{T,N}, WrappedArray{T,N,MtlArray,MtlArray{T,N}}}
+const WrappedMtlVector{T} = WrappedMtlArray{T,1}
+const WrappedMtlMatrix{T} = WrappedMtlArray{T,2}
+const WrappedMtlVecOrMat{T} = Union{WrappedMtlVector{T}, WrappedMtlMatrix{T}}
+
+
 ## conversions
 
 Base.convert(::Type{T}, x::T) where T <: MtlArray = x
@@ -92,15 +129,6 @@ Base.unsafe_convert(::Type{<:Ptr}, x::MtlArray) =
   throw(ArgumentError("cannot take the host address of a $(typeof(x))"))
 
 Base.unsafe_convert(t::Type{MTL.MTLBuffer}, x::MtlArray) = x.buffer
-
-
-## interop with GPU arrays
-
-function Adapt.adapt_storage(to::Adaptor, xs::MtlArray{T,N}) where {T,N}
-    buf = pointer(xs)
-    ptr = adapt(to, buf)
-    MtlDeviceArray{T,N,AS.Device}(xs.dims, ptr)
-end
 
 
 ## interop with CPU arrays
@@ -121,9 +149,12 @@ Adapt.adapt_storage(::Type{Array}, xs::MtlArray) = convert(Array, xs)
 
 Base.collect(x::MtlArray{T,N}) where {T,N} = copyto!(Array{T,N}(undef, size(x)), x)
 
+
+## memory copying
+
 function Base.copyto!(dest::MtlArray{T}, doffs::Integer, src::Array{T}, soffs::Integer,
                       n::Integer) where T
-  n==0 && return dest
+  (n==0 || sizeof(T) == 0) && return dest
   @boundscheck checkbounds(dest, doffs)
   @boundscheck checkbounds(dest, doffs+n-1)
   @boundscheck checkbounds(src, soffs)
@@ -137,7 +168,7 @@ Base.copyto!(dest::MtlArray{T}, src::Array{T}) where {T} =
 
 function Base.copyto!(dest::Array{T}, doffs::Integer, src::MtlArray{T}, soffs::Integer,
                       n::Integer) where T
-  n==0 && return dest
+  (n==0 || sizeof(T) == 0) && return dest
   @boundscheck checkbounds(dest, doffs)
   @boundscheck checkbounds(dest, doffs+n-1)
   @boundscheck checkbounds(src, soffs)
@@ -151,7 +182,7 @@ Base.copyto!(dest::Array{T}, src::MtlArray{T}) where {T} =
 
 function Base.copyto!(dest::MtlArray{T}, doffs::Integer, src::MtlArray{T}, soffs::Integer,
                       n::Integer) where T
-  n==0 && return dest
+  (n==0 || sizeof(T) == 0) && return dest
   @boundscheck checkbounds(dest, doffs)
   @boundscheck checkbounds(dest, doffs+n-1)
   @boundscheck checkbounds(src, soffs)
@@ -172,9 +203,7 @@ function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::Arra
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
   synchronize()
 
-  GC.@preserve src dest begin
-    unsafe_copyto!(dev, pointer(dest), doffs, pointer(src, soffs), n)
-  end
+  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
   if Base.isbitsunion(T)
     # copy selector bytes
     error("Not implemented")
@@ -182,14 +211,11 @@ function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::Arra
   return dest
 end
 
-function Base.unsafe_copyto!(dev::MtlDevice, dest::Array{T}, doff, src::MtlArray{T}, soff, n) where T
+function Base.unsafe_copyto!(dev::MtlDevice, dest::Array{T}, doffs, src::MtlArray{T}, soffs, n) where T
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
   synchronize()
 
-  GC.@preserve src dest begin
-    unsafe_copyto!(dev, pointer(dest, doff), pointer(src), soff, n)
-  end
-  #GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
+  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
   if Base.isbitsunion(T)
     # copy selector bytes
     error("Not implemented")
@@ -201,8 +227,7 @@ function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::MtlA
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
   synchronize()
 
-  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest), doffs, pointer(src), soffs, n)
-#  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
+  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
   if Base.isbitsunion(T)
     # copy selector bytes
     error("Not implemented")
@@ -274,10 +299,23 @@ Base.unsafe_convert(::Type{MTL.MTLBuffer}, A::PermutedDimsArray) where {T} =
 
 ## reshape
 
-device(a::Base.ReshapedArray) = device(parent(a))
+function Base.reshape(a::MtlArray{T,M}, dims::NTuple{N,Int}) where {T,N,M}
+  if prod(dims) != length(a)
+      throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(size(a))"))
+  end
 
-Base.unsafe_convert(::Type{MTL.MTLBuffer}, a::Base.ReshapedArray{T}) where {T} =
-  Base.unsafe_convert(MTL.MTLBuffer, parent(a))
+  if N == M && dims == size(a)
+      return a
+  end
+
+  _derived_array(T, N, a, dims)
+end
+
+# create a derived array (reinterpreted or reshaped) that's still a MtlArray
+@inline function _derived_array(::Type{T}, N::Int, a::MtlArray, osize::Dims) where {T}
+  offset = (a.offset * Base.elsize(a)) ÷ sizeof(T)
+  MtlArray{T,N}(a.buffer, osize; a.maxsize, offset)
+end
 
 
 ## reinterpret
@@ -286,3 +324,15 @@ device(a::Base.ReinterpretArray) = device(parent(a))
 
 Base.unsafe_convert(::Type{MTL.MTLBuffer}, a::Base.ReinterpretArray{T,N,S} where N) where {T,S} =
   MTL.MTLBuffer(Base.unsafe_convert(ZePtr{S}, parent(a)))
+
+
+## unsafe_wrap
+
+function Base.unsafe_wrap(t::Type{<:Array{T}}, buf::MtlBuffer, dims; own=false) where T
+    ptr = convert(Ptr{T}, contents(buf))
+    return unsafe_wrap(t, ptr, dims; own)
+end
+
+function Base.unsafe_wrap(t::Type{<:Array{T}}, ptr::MtlPointer{T}, dims; own=false) where T
+    return unsafe_wrap(t, contents(ptr), dims; own)
+end

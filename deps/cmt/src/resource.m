@@ -9,15 +9,22 @@
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtDevice*
-mtResourceDevice(MtLibrary *res) {
+mtResourceDevice(MtResource *res) {
 	return [(id<MTLResource>)res device];
 }
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 const char*
-mtResourceLabel(MtLibrary *res) {
+mtResourceLabel(MtResource *res) {
 	return Cstring([(id<MTLResource>)res label]);
+}
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+void
+mtResourceLabelSet(MtResource *res, const char* label) {
+	((id<MTLResource>)res).label = mtNSString(label);
 }
 
 MT_EXPORT

@@ -13,10 +13,11 @@ extern "C" {
 #include "types.h"
 #include "enums.h"
 
-typedef void (*MtCommandBufferOnCompleteFn)(void            * __restrict sender,
-                                            MtCommandBuffer * __restrict cmdb);
+typedef void (*MtCommandBufferOnCompletedFn)(MtCommandBuffer * __restrict cmdb,
+                                             void            * __restrict data);
 
-typedef void (*MtCommandBufferOnCompleteFnNoSender)( MtCommandBuffer * __restrict cmdb);
+typedef void (*MtCommandBufferOnScheduledFn)(MtCommandBuffer * __restrict cmdb,
+                                             void            * __restrict data);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
@@ -61,14 +62,16 @@ mtNewCommandBufferWithUnretainedReferences(MtCommandQueue *cmdq);
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
-mtCommandBufferOnComplete(MtCommandQueue * __restrict cmdb,
-                          void           * __restrict sender,
-                          MtCommandBufferOnCompleteFn oncomplete);
+mtCommandBufferOnCompleted(MtCommandBuffer * __restrict cmdb,
+                           void            * __restrict data,
+                           MtCommandBufferOnCompletedFn fn);
 
 MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 void
-mtCommandBufferOnCompleteNoSender(MtCommandQueue * __restrict cmdb,
-                          MtCommandBufferOnCompleteFnNoSender oncomplete);
+mtCommandBufferOnScheduled(MtCommandBuffer * __restrict cmdb,
+                           void            * __restrict data,
+                           MtCommandBufferOnScheduledFn fn);
 
 MT_EXPORT
 void
@@ -179,6 +182,11 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 const char*
 mtCommandBufferLabel(MtCommandBuffer *cmdb);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
+void
+mtCommandBufferLabelSet(MtCommandBuffer *cmdb, const char* label);
 
 // debug
 MT_EXPORT

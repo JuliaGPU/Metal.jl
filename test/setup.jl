@@ -96,7 +96,7 @@ macro on_device(ex...)
                 return
             end
 
-            Metal.@sync @Metal $(kwargs...) $kernel()
+            Metal.@sync @metal $(kwargs...) $kernel()
         end
     end)
 end

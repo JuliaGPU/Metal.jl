@@ -37,7 +37,7 @@ function make_opaque(x::Expr)
     y = x.args[1]
     Meta.isexpr(y, :(=)) || return x
     var, val = y.args
-    if (startswith(String(var), "Mt") || startswith(String(var), "Ns")) && val == :Cvoid
+    if (startswith(String(var), "Mt") || startswith(String(var), "Ns")) && val === :Cvoid
         return :(struct $var end)
     end
     return x

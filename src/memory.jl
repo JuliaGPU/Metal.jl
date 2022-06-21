@@ -1,73 +1,81 @@
 # memory operations
 # TODO: Properly use dispatch capabilities for these functions
 
-# TODO: cmdbuf cleanup - Was running into errors
-function sync_gpu_to_cpu!(dev::MtlDevice, buf::MtlBuffer{T}) where T
-    cmdbuf = MtlCommandBuffer(global_queue(dev))
-    MtlBlitCommandEncoder(cmdbuf) do enc
-        MTL.append_sync!(enc, buf)
+
+## pointer type
+
+# we cannot take a MtlBuffer's handle and work with that as it were a pointer to memory.
+# instead, the Metal APIs always take the original handle and an offset parameter.
+
+struct MtlPointer{T}
+    buffer::MtlBuffer
+    offset::UInt    # in bytes
+
+    function MtlPointer{T}(buffer::MtlBuffer, offset=0) where {T}
+        new(buffer, offset)
     end
-    commit!(cmdbuf)
-    wait_completed(cmdbuf)
 end
 
+Base.eltype(::Type{<:MtlPointer{T}}) where {T} = T
+
+# limited arithmetic
+Base.:(+)(x::MtlPointer{T}, y::Integer) where {T} = MtlPointer{T}(x.buffer, x.offset+y)
+Base.:(-)(x::MtlPointer{T}, y::Integer) where {T} = MtlPointer{T}(x.buffer, x.offset-y)
+Base.:(+)(x::Integer, y::MtlPointer{T}) where {T} = MtlPointer{T}(x.buffer, y+x.offset)
+
+# XXX: encode as `convert(Ptr)`?
+MTL.contents(ptr::MtlPointer{T}) where {T} = convert(Ptr{T}, contents(ptr.buffer)) + ptr.offset
+
+
+## operations
+
 # GPU -> GPU
-Base.unsafe_copyto!(dev::MtlDevice, dst::MtlBuffer{T}, src::MtlBuffer{T}, N::Integer) where T =
-    unsafe_copyto!(dev, dst, 1, src, 1, n)
-function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlBuffer{T}, doff::Integer,
-                             src::MtlBuffer{T}, soff::Integer, N::Integer) where T
+function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlPointer{T}, src::MtlPointer{T}, N::Integer) where T
     cmdbuf = MtlCommandBuffer(global_queue(dev))
     MtlBlitCommandEncoder(cmdbuf) do enc
-        MTL.append_copy!(enc, dst, (doff-1) * sizeof(T), src, (soff - 1) * sizeof(T), N * sizeof(T))
+        MTL.append_copy!(enc, dst.buffer, dst.offset, src.buffer, src.offset, N * sizeof(T))
     end
     commit!(cmdbuf)
     wait_completed(cmdbuf)
 end
 
 # GPU -> CPU
-Base.unsafe_copyto!(dev::MtlDevice, dst::Ptr{T}, src::MtlBuffer{T}, N::Integer) where T =
-    unsafe_copyto!(dev, dst, src, 1, n)
-function Base.unsafe_copyto!(dev::MtlDevice, dst::Ptr{T},
-                             src::MtlBuffer{T}, soff::Integer, N::Integer) where T
-    storage_type = src.storageMode
+function Base.unsafe_copyto!(dev::MtlDevice, dst::Ptr{T}, src::MtlPointer{T}, N::Integer) where T
+    storage_type = src.buffer.storageMode
     if storage_type ==  MTL.MtStorageModePrivate
         tmp_buf = alloc(T, dev, N, storage=Shared)
-        Base.unsafe_copyto!(dev, tmp_buf, 1, src, soff, N)
-        Base.unsafe_copyto!(dst, content(tmp_buf), N)
+        unsafe_copyto!(dev, tmp_buf, 1, src.buffer, src.offset, N)
+        unsafe_copyto!(dst, contents(tmp_buf), N)
         free(tmp_buf)
     elseif storage_type ==  MTL.MtStorageModeShared
-        Base.unsafe_copyto!(dst, content(src, soff), N)
+        unsafe_copyto!(dst, contents(src), N)
     elseif storage_type ==  MTL.MtStorageModeManaged
-        sync_gpu_to_cpu!(dev, src)
-        Base.unsafe_copyto!(dst, content(src, soff), N)
+        unsafe_copyto!(dst, contents(src), N)
     end
     return dst
 end
 
 # CPU -> GPU
-Base.unsafe_copyto!(dev::MtlDevice, dst::MtlBuffer{T}, src::Ptr{T}, N::Integer) where T =
-    unsafe_copyto!(dev, dst, 1, src, n)
-function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlBuffer{T}, doff::Integer,
-                             src::Ptr{T}, N::Integer) where T
-    storage_type = dst.storageMode
+function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlPointer{T}, src::Ptr{T}, N::Integer) where T
+    storage_type = dst.buffer.storageMode
     if storage_type == MTL.MtStorageModePrivate
         tmp_buf = alloc(T, dev, N, src, storage=Shared)
-        Base.unsafe_copyto!(dev, tmp_buf, src, N)
-        Base.unsafe_copyto!(dev, dst, doff, tmp_buf, 1, N)
+        unsafe_copyto!(dev, tmp_buf, src, N)
+        unsafe_copyto!(dev, dst.buffer, dst.offset, tmp_buf, 1, N)
         free(tmp_buf)
     elseif storage_type == MTL.MtStorageModeShared
-        Base.unsafe_copyto!(content(dst, doff), src, N)
+        unsafe_copyto!(contents(dst), src, N)
     elseif storage_type == MTL.MtStorageModeManaged
-        Base.unsafe_copyto!(content(dst, doff), src, N)
+        unsafe_copyto!(contents(dst), src, N)
         MTL.DidModifyRange!(dst, 1:N)
     end
     return dst
 end
 
-function unsafe_fill!(dev::MtlDevice, ptr::MtlBuffer{T}, value::Union{UInt8,Int8}, N::Integer) where T
+function unsafe_fill!(dev::MtlDevice, ptr::MtlPointer{T}, value::Union{UInt8,Int8}, N::Integer) where T
     cmdbuf = MtlCommandBuffer(global_queue(dev))
     MtlBlitCommandEncoder(cmdbuf) do enc
-        MTL.append_fillbuffer!(enc, ptr, value, N * sizeof(T))
+        MTL.append_fillbuffer!(enc, ptr.buffer, value, N * sizeof(T), ptr.offset)
     end
     commit!(cmdbuf)
     wait_completed(cmdbuf)

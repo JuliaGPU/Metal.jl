@@ -14,7 +14,7 @@ mutable struct MtlFunction
         finalizer(unsafe_destroy!, obj)
         return obj
     end
-end 
+end
 
 function unsafe_destroy!(fun::MtlFunction)
     mtRelease(fun.handle)
@@ -33,15 +33,23 @@ Base.propertynames(::MtlFunction) = (:device, :label, :name, :functionType)
 function Base.getproperty(fun::MtlFunction, f::Symbol)
     if f === :device
         MtlDevice(mtFunctionDevice(fun))
-    elseif f == :label
+    elseif f === :label
         ptr = mtFunctionLabel(fun)
         ptr == C_NULL ? nothing : unsafe_string(ptr)
-    elseif f == :name
+    elseif f === :name
         unsafe_string(mtFunctionName(fun))
-    elseif f == :functionType
+    elseif f === :functionType
         mtFunctionType(fun)
     else
         getfield(fun, f)
+    end
+end
+
+function Base.setproperty!(fun::MtlFunction, f::Symbol, val)
+    if f === :label
+		mtFunctionLabelSet(fun, val)
+    else
+        setfield!(fun, f, val)
     end
 end
 

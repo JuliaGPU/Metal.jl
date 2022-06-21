@@ -13,14 +13,14 @@ struct mtlKernelContext <: AbstractKernelContext end
                                              elements::Int, elements_per_thread::Int) where {F,N}
     kernel = @metal launch=false f(mtlKernelContext(), args...)
 
-    # TODO: Be more efficient about creating pipeline states as they're expensive
-    # The pipeline state automatically computes occupancy stats, so we just need to parse its fields
-    pipeline = MtlComputePipelineState(kernel.fun.lib.device, kernel.fun)
+    # The pipeline state automatically computes occupancy stats
     threads_needed = cld(elements, elements_per_thread)
+
     # Limit the threadgroup size
-    _threads = min(threads_needed, pipeline.maxTotalThreadsPerThreadgroup)
-    _blocks  = cld(threads_needed, _threads)
-    return (threads=_threads, blocks=_blocks)
+    threads = min(threads_needed, kernel.pipeline_state.maxTotalThreadsPerThreadgroup)
+    blocks  = cld(threads_needed, threads)
+
+    return (; threads, blocks)
 end
 
 function GPUArrays.gpu_call(::mtlArrayBackend, f, args, threads::Int, blocks::Int;
@@ -46,15 +46,16 @@ GPUArrays.griddim(ctx::mtlKernelContext)   = Metal.threadgroups_per_grid_1d()
 
 # memory
 
-# @inline function GPUArrays.LocalMemory(::oneKernelContext, ::Type{T}, ::Val{dims}, ::Val{id}
-#                                       ) where {T, dims, id}
-#     ptr = oneAPI.emit_localmemory(Val(id), T, Val(prod(dims)))
-#     oneDeviceArray(dims, LLVMPtr{T, onePI.AS.Local}(ptr))
-# end
+@inline function GPUArrays.LocalMemory(::mtlKernelContext, ::Type{T}, ::Val{dims}, ::Val{id}
+                                      ) where {T, dims, id}
+    ptr = Metal.emit_threadgroup_memory(T, Val(prod(dims)))
+    MtlDeviceArray(dims, ptr)
+end
 
 # synchronization
 
-@inline GPUArrays.synchronize_threads(::mtlKernelContext) = Metal.threadgroup_barrier()
+@inline GPUArrays.synchronize_threads(::mtlKernelContext) =
+    Metal.threadgroup_barrier(Metal.MemoryFlagThreadGroup)
 
 
 
