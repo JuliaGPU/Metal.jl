@@ -2,10 +2,10 @@ module MTL
 
 import Libdl
 using CEnum
-using Scratch
 using JSON
 
-const libcmt = joinpath(@get_scratch!("cmt"), "lib", "libcmt.dylib")
+using cmt_jll
+const libcmt = cmt_jll.libcmt
 
 
 ## version information
