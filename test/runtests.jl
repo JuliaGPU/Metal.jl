@@ -42,6 +42,7 @@ do_quickfail, _ = extract_flag!(ARGS, "--quickfail")
 
 include("setup.jl")     # make sure everything is precompiled
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
+@info "Using cmt library from $(MTL.libcmt)"
 
 # choose tests
 const tests = []
