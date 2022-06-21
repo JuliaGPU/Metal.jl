@@ -74,5 +74,7 @@ install(TARGETS cmt
         PUBLIC_HEADER DESTINATION include)
 
 # XXX: can we add the dSYM to the target instead of copying it to the prefix ourselve?
-install(DIRECTORY ${CMAKE_BINARY_DIR}/libcmt.dylib.dSYM
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
+if ((CMAKE_BUILD_TYPE MATCHES Debug) OR (CMAKE_BUILD_TYPE MATCHES RelWithDebInfo))
+    install(DIRECTORY ${CMAKE_BINARY_DIR}/libcmt.dylib.dSYM
+            DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
+endif()
