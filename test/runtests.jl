@@ -42,7 +42,11 @@ do_quickfail, _ = extract_flag!(ARGS, "--quickfail")
 
 include("setup.jl")     # make sure everything is precompiled
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
-@info "Using cmt library from $(MTL.libcmt)"
+@info "Using cmt library from $(dirname(MTL.libcmt))"
+metallib_as_version = Metal.Metal_LLVM_Tools_jll.Metal_LLVM_Tools_jll.metallib_as() do metallib_as
+    read(`$metallib_as --version`, String)
+end
+@info "Using Metal LLVM back-end from $(dirname(Metal.Metal_LLVM_Tools_jll.Metal_LLVM_Tools_jll.metallib_as_path)):\n" * metallib_as_version
 
 # choose tests
 const tests = []
