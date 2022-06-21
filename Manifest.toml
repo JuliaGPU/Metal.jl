@@ -57,11 +57,9 @@ version = "8.3.2"
 
 [[deps.GPUCompiler]]
 deps = ["ExprTools", "InteractiveUtils", "LLVM", "Libdl", "Logging", "TimerOutputs", "UUIDs"]
-git-tree-sha1 = "465e90c6965439dcd8d20b179378df688e391205"
-repo-rev = "0cba0b2"
-repo-url = "https://github.com/JuliaGPU/GPUCompiler.jl.git"
+git-tree-sha1 = "47f63159f7cb5d0e5e0cfd2f20454adea429bec9"
 uuid = "61eb1bfa-7361-4325-ad38-22787b887f55"
-version = "0.16.0"
+version = "0.16.1"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -135,9 +133,9 @@ version = "2.28.0+0"
 
 [[deps.Metal_LLVM_Tools_jll]]
 deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl", "Pkg", "TOML"]
-git-tree-sha1 = "84bdeeb3d9f7b0fa4b883533b9a47b4e742bf0e9"
+git-tree-sha1 = "23313d580b64e17daa2db6c6dde082867a3c86dc"
 uuid = "0418c028-ff8c-56b8-a53e-0f9676ed36fc"
-version = "0.3.0+0"
+version = "0.3.0+1"
 
 [[deps.Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
