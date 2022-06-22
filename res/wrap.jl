@@ -1,14 +1,12 @@
 using Clang.Generators
 
-cd(@__DIR__)
-
 @add_def off_t
 
 function main()
     options = load_options(joinpath(@__DIR__, "wrap.toml"))
 
     args = get_default_args()
-    includedir = joinpath(dirname(@__DIR__), "cmt", "include")
+    includedir = joinpath(dirname(@__DIR__), "deps", "cmt", "include")
     push!(args, "-I$includedir")
 
     headers = [joinpath(includedir, "cmt", "cmt.h")]
