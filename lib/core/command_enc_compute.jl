@@ -18,7 +18,7 @@ function MtlComputeCommandEncoder(cmdbuf::MtlCommandBuffer; dispatch_type::Union
         handle = mtNewComputeCommandEncoderWithDispatchtype(cmdbuf, dispatchtype)
     end
     obj = MtlComputeCommandEncoder(handle, cmdbuf)
-    #finalizer(unsafe_destroy!, obj)
+    finalizer(unsafe_destroy!, obj)
     return obj
 end
 
@@ -41,20 +41,22 @@ set_buffers!(cce::MtlComputeCommandEncoder, bufs::Vector{T},
 set_bytes!(cce::MtlComputeCommandEncoder, ptr, length::Integer, index::Integer) =
     mtComputeCommandEncoderSetBytesLengthAtIndex(cce, ptr, length, index - 1)
 
-dispatchThreads!(cce::MtlComputeCommandEncoder, gridSize::MtSize, threadGroupSize::MtSize) =
+dispatchThreadgroups!(cce::MtlComputeCommandEncoder, gridSize::MtSize, threadGroupSize::MtSize) =
     mtComputeCommandEncoderDispatchThreadgroups_threadsPerThreadgroup(cce, gridSize, threadGroupSize)
 
 #####
 # encode in the Command Encoder
 function MtlComputeCommandEncoder(f::Base.Callable, cmdbuf::MtlCommandBuffer; kwargs...)
     encoder = MtlComputeCommandEncoder(cmdbuf; kwargs...)
-    f(encoder)
-    close(encoder)
-    return encoder
+    try
+        f(encoder)
+    finally
+        close(encoder)
+    end
 end
 
 append_current_function!(cce::MtlComputeCommandEncoder, gridSize::MtSize, threadGroupSize::MtSize) =
-    dispatchThreads!(cce, gridSize, threadGroupSize)
+    dispatchThreadgroups!(cce, gridSize, threadGroupSize)
 
 #### use
 use!(cce::MtlComputeCommandEncoder, buf::MtlBuffer, mode::MtResourceUsage=ReadWriteUsage) =
