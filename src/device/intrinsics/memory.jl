@@ -4,8 +4,14 @@ export MtlThreadGroupArray
     len = prod(dims)
     # NOTE: this relies on const-prop to forward the literal length to the generator.
     #       maybe we should include the size in the type, like StaticArrays does?
-    ptr = emit_threadgroup_memory(T, Val(len))
-    MtlDeviceArray(dims, ptr)
+    if sizeof(T) >= 4
+        ptr = emit_threadgroup_memory(T, Val(len))
+        MtlDeviceArray(dims, ptr)
+    else
+        ptr = emit_threadgroup_memory(UInt32, Val(len))
+        arr = MtlDeviceArray(dims, ptr)
+        MtlLargerDeviceArray{T,ndims(arr),AS.ThreadGroup}(arr)
+    end
 end
 
 # get a pointer to threadgroup memory, with known (static) or zero length (dynamic)
@@ -41,4 +47,46 @@ end
 
         call_function(llvm_f, Core.LLVMPtr{T,AS.ThreadGroup})
     end
+end
+
+
+# shared memory with small types results in miscompilation (Metal.jl#26),
+# so we use an array wrapper extending the element size to the minimum known to work.
+
+struct MtlLargerDeviceArray{T,N,A} <: DenseArray{T,N}
+    x::MtlDeviceArray{UInt32,N,A}
+end
+
+Base.elsize(::Type{<:MtlLargerDeviceArray{T}}) where {T} = sizeof(UInt32)
+
+Base.size(g::MtlLargerDeviceArray) = size(g.x)
+Base.sizeof(x::MtlLargerDeviceArray) = Base.elsize(x) * length(x)
+
+Base.pointer(x::MtlLargerDeviceArray{T,<:Any,A}) where {T,A} =
+    Base.unsafe_convert(Core.LLVMPtr{T,A}, x)
+@inline function Base.pointer(x::MtlLargerDeviceArray{T,<:Any,A}, i::Integer) where {T,A}
+    Base.unsafe_convert(Core.LLVMPtr{T,A}, x) + Base._memory_offset(x, i)
+end
+
+Base.unsafe_convert(::Type{Core.LLVMPtr{T,A}}, x::MtlLargerDeviceArray{T,<:Any,A}) where {T,A} =
+  reinterpret(Core.LLVMPtr{T,A}, Base.unsafe_convert(Core.LLVMPtr{UInt32,A}, x.x))
+
+Base.IndexStyle(::Type{<:Core.LLVMPtr}) = Base.IndexLinear()
+
+Base.@propagate_inbounds Base.getindex(A::MtlLargerDeviceArray{T}, i1::Integer) where {T} =
+    arrayref(A, i1)
+Base.@propagate_inbounds Base.setindex!(A::MtlLargerDeviceArray{T}, x, i1::Integer) where {T} =
+    arrayset(A, convert(T,x)::T, i1)
+
+@inline function arrayref(A::MtlLargerDeviceArray{T}, index::Integer) where {T}
+    #@boundscheck checkbounds(A, index)
+    align = alignment(pointer(A.x))
+    unsafe_load(pointer(A), index, Val(align))
+end
+
+@inline function arrayset(A::MtlLargerDeviceArray{T}, x::T, index::Integer) where {T}
+    #@boundscheck checkbounds(A, index)
+    align = alignment(pointer(A))
+    unsafe_store!(pointer(A), x, index, Val(align))
+    return A
 end
