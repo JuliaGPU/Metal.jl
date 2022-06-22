@@ -2,7 +2,6 @@ module MTL
 
 import Libdl
 using CEnum
-using JSON
 
 using cmt_jll
 const libcmt = cmt_jll.libcmt
