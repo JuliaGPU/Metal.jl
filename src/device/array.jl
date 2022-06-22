@@ -76,17 +76,15 @@ Base.unsafe_convert(::Type{Core.LLVMPtr{T,A}}, x::MtlDeviceArray{T,<:Any,A}) whe
 # NOTE: these intrinsics are now implemented using plain and simple pointer operations;
 #       when adding support for isbits union arrays we will need to implement that here.
 
-# FIXME: Bounscheck
-
 @inline function arrayref(A::MtlDeviceArray{T}, index::Integer) where {T}
-    #@boundscheck checkbounds(A, index)
-    align = alignment(pointer(A))
+    @boundscheck checkbounds(A, index)
+    align = Base.datatype_alignment(T)
     unsafe_load(pointer(A), index, Val(align))
 end
 
 @inline function arrayset(A::MtlDeviceArray{T}, x::T, index::Integer) where {T}
-    #@boundscheck checkbounds(A, index)
-    align = alignment(pointer(A))
+    @boundscheck checkbounds(A, index)
+    align = Base.datatype_alignment(T)
     unsafe_store!(pointer(A), x, index, Val(align))
     return A
 end
@@ -99,6 +97,8 @@ end
 
 
 ## indexing
+
+Base.IndexStyle(::Type{<:MtlDeviceArray}) = Base.IndexLinear()
 
 Base.@propagate_inbounds Base.getindex(A::MtlDeviceArray{T}, i1::Integer) where {T} =
     arrayref(A, i1)
@@ -118,35 +118,6 @@ Base.@propagate_inbounds Base.setindex!(A::MtlDeviceArray, x,
                                         I::Union{Integer, CartesianIndex}...) =
     A[Base._to_linear_index(A, to_indices(A, I)...)] = x
 
-# TODO: Put this in pointer_ptr.jl?
-Base.@propagate_inbounds Base.getindex(A::Core.LLVMPtr{T}, i1::Integer) where {T} =
-    arrayref(A, i1)
-Base.setindex!(A::Core.LLVMPtr{T}, x, i1::Integer) where {T} =
-    arrayset(A, convert(T,x)::T, i1)
-
-Base.IndexStyle(::Type{<:Core.LLVMPtr}) = Base.IndexLinear()
-
-@generated function alignment(::Core.LLVMPtr{T}) where {T}
-    if Base.isbitsunion(T)
-        _, sz, al = Base.uniontype_layout(T)
-        al
-    else
-        Base.datatype_alignment(T)
-    end
-end
-
-@inline function arrayref(A::Core.LLVMPtr{T,AS}, index::Integer) where {T,AS}
-    #@boundscheck checkbounds(A, index)
-    align = alignment(A)
-    unsafe_load(A, index, Val(align))
-end
-
-@inline function arrayset(A::Core.LLVMPtr{T,AS}, x::T, index::Integer) where {T,AS}
-    #@boundscheck checkbounds(A, index)
-    align = alignment(A)
-    unsafe_store!(A, x, index, Val(align))
-    return A
-end
 
 ## const indexing
 

@@ -79,14 +79,14 @@ Base.@propagate_inbounds Base.setindex!(A::MtlLargerDeviceArray{T}, x, i1::Integ
     arrayset(A, convert(T,x)::T, i1)
 
 @inline function arrayref(A::MtlLargerDeviceArray{T}, index::Integer) where {T}
-    #@boundscheck checkbounds(A, index)
-    align = alignment(pointer(A.x))
+    @boundscheck checkbounds(A, index)
+    align = Base.datatype_alignment(T)
     unsafe_load(pointer(A), index, Val(align))
 end
 
 @inline function arrayset(A::MtlLargerDeviceArray{T}, x::T, index::Integer) where {T}
-    #@boundscheck checkbounds(A, index)
-    align = alignment(pointer(A))
+    @boundscheck checkbounds(A, index)
+    align = Base.datatype_alignment(T)
     unsafe_store!(pointer(A), x, index, Val(align))
     return A
 end
