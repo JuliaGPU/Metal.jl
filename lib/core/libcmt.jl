@@ -1624,10 +1624,10 @@ function mtPointerTypeElementArrayType(ptr)
     ccall((:mtPointerTypeElementArrayType, libcmt), Ptr{MtArrayType}, (Ptr{MtPointerType},), ptr)
 end
 
-# typedef void ( * MtCommandBufferOnCompletedFn ) ( MtCommandBuffer * __restrict cmdb, void * __restrict data )
+# typedef void ( * MtCommandBufferOnCompletedFn ) ( MtCommandBuffer * __restrict cmdb , void * __restrict data )
 const MtCommandBufferOnCompletedFn = Ptr{Cvoid}
 
-# typedef void ( * MtCommandBufferOnScheduledFn ) ( MtCommandBuffer * __restrict cmdb, void * __restrict data )
+# typedef void ( * MtCommandBufferOnScheduledFn ) ( MtCommandBuffer * __restrict cmdb , void * __restrict data )
 const MtCommandBufferOnScheduledFn = Ptr{Cvoid}
 
 function mtNewCommandBufferDescriptor()
@@ -1662,7 +1662,7 @@ function mtNewCommandBufferWithUnretainedReferences(cmdq)
     ccall((:mtNewCommandBufferWithUnretainedReferences, libcmt), Ptr{MtCommandBuffer}, (Ptr{MtCommandQueue},), cmdq)
 end
 
-function mtCommandBufferOnComplete(cmdb, data, fn)
+function mtCommandBufferOnCompleted(cmdb, data, fn)
     ccall((:mtCommandBufferOnCompleted, libcmt), Cvoid, (Ptr{MtCommandBuffer}, Ptr{Cvoid}, MtCommandBufferOnCompletedFn), cmdb, data, fn)
 end
 

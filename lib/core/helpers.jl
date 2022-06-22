@@ -14,8 +14,6 @@ function NsError_maybe(ptr::MtlError)
     end
 end
 
-export @enum_without_prefix
-
 
 ## redeclare enum values without a prefix
 

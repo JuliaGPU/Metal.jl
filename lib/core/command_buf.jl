@@ -282,6 +282,6 @@ Execute a block of code when execution of the command buffer is completed.
 """
 function on_completed(f::Base.Callable, buf::MtlCommandBuffer)
     handler, data = _command_buffer_callback(f, buf)
-    MTL.mtCommandBufferOnComplete(buf, data, handler)
+    MTL.mtCommandBufferOnCompleted(buf, data, handler)
 end
 
