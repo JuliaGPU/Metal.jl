@@ -67,6 +67,6 @@ set_buffers!(enc::MtlArgumentEncoder, bufs::Vector{<:MtlBuffer},
 
 function set_constant!(enc::MtlArgumentEncoder, val, index::Integer)
     dst = Base.bitcast(Ptr{typeof(val)}, mtArgumentEncoderConstantDataAtIndex(enc, index))
-    Base.unsafe_store!(dst, val, 1)
+    unsafe_store!(dst, val, 1)
     return
 end
