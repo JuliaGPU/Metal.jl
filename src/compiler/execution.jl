@@ -156,7 +156,7 @@ function mtlfunction_compile(@nospecialize(job::CompilerJob))
         mtlfunction_compile(job, ctx)
     end
 end
-function mtlfunction_compile(@nospecialize(job::CompilerJob), ctx::Context)
+function mtlfunction_compile(@nospecialize(job::CompilerJob), ctx)
     mi, mi_meta = GPUCompiler.emit_julia(job)
     ir, ir_meta = GPUCompiler.emit_llvm(job, mi; ctx)
     entry = LLVM.name(ir_meta.entry)
