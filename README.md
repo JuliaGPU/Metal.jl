@@ -139,6 +139,38 @@ julia> dev.name
 ```
 
 
+## Hacking
+
+Metal.jl relies on two binary dependencies (provided as JLLs):
+
+- [cmt](https://github.com/JuliaGPU/Metal.jl/tree/main/deps/cmt)
+- [LLVM with an AIR back-end](https://github.com/JuliaGPU/llvm-metal)
+
+Normally, these dependencies are built on
+[Yggdrasil](https://github.com/JuliaPackaging/Yggdrasil/).
+If you need to make changes to these dependencies, have a look at the
+`build_cmt.jl` and `build_llvm.jl` scripts in the `deps/` folder. These
+scripts build a local version of the dependency, and configure a local
+preference such that any environment depending on the corresponding JLLs will
+pick-up the modified version (i.e., do `julia --project` in a clone
+of `Metal.jl`):
+
+```
+$ julia --project -e 'using Metal; @show MTL.libcmt'
+MTL.libcmt = "/Users/tim/Julia/depot/artifacts/6adc0ed9a8370ff1e3bb8fbaf36e8519ee11fd96/lib/libcmt.dylib"
+
+$ julia --project=deps deps/build_cmt.jl
+...
+[100%] Built target cmt
+
+$ julia --project -e 'using Metal; @show MTL.libcmt'
+MTL.libcmt = "/Users/tim/Julia/depot/scratchspaces/dde4c033-4e86-420c-a63e-0dd931031962/cmt/lib/libcmt.dylib"
+```
+
+These scripts are integrated with our CI, and will be triggered if
+the `ci.build_cmt` or `ci.build_llvm` labels are set on a pull request.
+
+
 ## Acknowledgements
 
 The C library started by forking [rcp/cmt](https://github.com/recp/cmt), to whom
