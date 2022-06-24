@@ -1,6 +1,8 @@
 name = "Metal"
 uuid = "dde4c033-4e86-420c-a63e-0dd931031962"
-authors = ["Filippo Vicentini <filippovicentini@gmail.com>"]
+authors = ["Filippo Vicentini <filippovicentini@gmail.com>",
+           "Tim Besard <tim.besard@gmail.com>",
+           "Max Hawkins <max.hawkins65@gmail.com>"]
 version = "0.1.0"
 
 [deps]
