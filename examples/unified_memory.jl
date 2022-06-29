@@ -12,7 +12,7 @@ using LinearAlgebra
 # these transfers are unnecessary and allow for a more seamless
 # use of the available heterogeneous compute architecture.
 
-# This document is meant to showcase potential usecases allowed by unified memory.
+# This document is meant to showcase potential use cases allowed by unified memory.
 
 function simple_kernel(arr)
     idx = thread_position_in_grid_1d()
@@ -20,7 +20,7 @@ function simple_kernel(arr)
     return
 end
 
-### Unsafe wrapping a GPU array by a CPU array and altering eachother's (same) data
+### Unsafe wrapping a GPU array by a CPU array and altering each other's (same) data
 # Note that since the GPU array allocation requires more assumptions about the
 # underlying data, in a unified memory architecture, the GPU array should first
 # be allocated, then wrapped by a CPU array...not the other way around.
@@ -48,7 +48,7 @@ Metal.@sync @metal threads=1024 grid=1024 simple_kernel(arr_mtl)
 # This would otherwise require a set of copies back and forth.
 
 round.(rand!(arr_cpu)*100)
-# Example 1: Calculate the deteminant using CPU implementation
+# Example 1: Calculate the determinant using CPU implementation
 det(arr_cpu)
 # Example 2: Singular Value Decomposition
 svd(arr_cpu)
