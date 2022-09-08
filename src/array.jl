@@ -1,6 +1,6 @@
 # host array
 
-export MtlArray
+export MtlArray, MtlVector, MtlMatrix, MtlVecOrMat
 
 mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
   buffer::MtlBuffer
@@ -48,6 +48,11 @@ end
 
 device(A::MtlArray) = A.buffer.device
 
+## aliases
+
+const MtlVector{T} = MtlArray{T,1}
+const MtlMatrix{T} = MtlArray{T,2}
+const MtlVecOrMat{T} = Union{MtlVector{T},MtlMatrix{T}}
 
 ## constructors
 
