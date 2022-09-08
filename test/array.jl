@@ -42,7 +42,7 @@ end
     @test all(Array(M) .== b)
 
     v = MtlVector{T}(undef, 10)
-    fill(v, b)
+    fill!(v, b)
     @test all(Array(v) .== b)
 end
 
