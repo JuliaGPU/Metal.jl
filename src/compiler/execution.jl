@@ -58,17 +58,22 @@ macro metal(ex...)
         quote
             $f_var = $f
             GC.@preserve $(vars...) $f_var begin
-                local $kernel_f = $mtlconvert($f_var)
-                local $kernel_args = map($mtlconvert, ($(var_exprs...),))
-                local $kernel_tt = Tuple{map(Core.Typeof, $kernel_args)...}
-                local $kernel = $mtlfunction($kernel_f, $kernel_tt; $(compiler_kwargs...))
+                $kernel_f = $mtlconvert($f_var)
+                $kernel_args = map($mtlconvert, ($(var_exprs...),))
+                $kernel_tt = Tuple{map(Core.Typeof, $kernel_args)...}
+                $kernel = $mtlfunction($kernel_f, $kernel_tt; $(compiler_kwargs...))
                 if $launch
                     $kernel($(var_exprs...); $(call_kwargs...))
                 end
                 $kernel
             end
          end)
-    return esc(code)
+
+    return esc(quote
+        let
+            $code
+        end
+    end)
 end
 
 
