@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: Besard
+    given-names: Tim
+    orcid: https://orcid.org/0000-0001-7826-8021
+  - family-names: Hawkins
+    given-names: Max
+copyright: "© 2022 Julia Computing, and other contributors"
+title: "Metal.jl"
+version: 0.1.2
+doi: 10.5281/zenodo.7139374
+date-released: 2022-10-03
+url: "https://github.com/JuliaGPU/Metal.jl"
