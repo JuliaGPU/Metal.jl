@@ -112,6 +112,24 @@ julia> Array(c)
  3
 ```
 
+## Profiling
+
+This package also supports profiling GPU execution for later visualization with Apple's
+Xcode tools. The easiest way to generate a GPU report is to use the `Metal.@profile` macro as seen
+below (using the kernel and setup from above).
+
+```julia
+julia> Metal.@profile @metal threads=length(c) vadd(a, b, c)
+```
+
+This will generate a `.gputrace` folder in a temporary directory. To view the profile, open
+the folder with Xcode. Since the temporary directory is destroyed when the Julia process
+ends though, be sure to copy the `.gputrace` directory to a stable location on your system
+for later viewing.
+
+Note: Xcode is a large install, and there are some peculiarities with viewing Julia-created
+GPU traces. It's recommended to only have one trace open at a time, and the shader profiler
+may fail to start.
 
 ## Metal API wrapper
 

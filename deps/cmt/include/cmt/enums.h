@@ -491,5 +491,28 @@ typedef enum MtArgumentType {
     MtArgumentTypeSampler = 3,
 } MtArgumentType;
 
+typedef enum MtCaptureError {
+    /// Capturing is not supported, maybe the destination is not supported.
+    MtCaptureErrorNotSupported = 1,
+    /// A capture is already in progress.
+    MtCaptureErrorAlreadyCapturing,
+    /// The MTLCaptureDescriptor contains an invalid parameters.
+    MtCaptureErrorInvalidDescriptor,
+} MtCaptureError;
+
+/// The destination where you want the GPU trace to be captured to.
+typedef enum MtCaptureDestination {
+    /// Capture to Developer Tools (Xcode) and stop the execution after capturing.
+    MtCaptureDestinationDeveloperTools = 1,
+    /// Capture to a GPU Trace document and continue execution after capturing.
+    MtCaptureDestinationGPUTraceDocument,
+} MtCaptureDestination;
+
+typedef enum MtCaptureDescriptorCaptureObjectType {
+  MtCaptureDescriptorCaptureObjectTypeNull  = 0,
+  MtCaptureDescriptorCaptureObjectTypeDevice  = 1,
+  MtCaptureDescriptorCaptureObjectTypeQueue   = 2,
+  MtCaptureDescriptorCaptureObjectTypeScope   = 3
+} MtCaptureDescriptorCaptureObjectType;
 
 #endif /* cmt_enums_h */

@@ -54,7 +54,10 @@ set(SOURCES
     src/device.m
     src/error.m
     src/event.m
-    src/resource.m)
+    src/resource.m
+    src/capture/capture_descriptor.m
+    src/capture/capture_manager.m
+    src/capture/capture_scope.m)
 
 add_library(cmt SHARED ${SOURCES})
 

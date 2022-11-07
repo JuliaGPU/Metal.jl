@@ -116,8 +116,8 @@ push!(test_exeflags.exec, "--startup-file=no")
 push!(test_exeflags.exec, "--depwarn=yes")
 push!(test_exeflags.exec, "--project=$(Base.active_project())")
 const test_exename = popfirst!(test_exeflags.exec)
-function addworker(X; kwargs...)
-    withenv("JULIA_NUM_THREADS" => 1, "OPENBLAS_NUM_THREADS" => 1) do
+function addworker(X; env=[], kwargs...)
+    withenv("JULIA_NUM_THREADS" => 1, "OPENBLAS_NUM_THREADS" => 1, env...) do
         procs = addprocs(X; exename=test_exename, exeflags=test_exeflags, kwargs...)
         @everywhere procs include($(joinpath(@__DIR__, "setup.jl")))
         procs
@@ -229,6 +229,12 @@ try
                 while length(tests) > 0
                     test = popfirst!(tests)
 
+                    # the `profiling` test is special, and needs an environment variable set
+                    if test == "profiling"
+                        recycle_worker(p)
+                        p = addworker(1; env=["METAL_CAPTURE_ENABLED"=>1])[1]
+                    end
+
                     # sometimes a worker failed, and we need to spawn a new one
                     if p === nothing
                         p = addworker(1)[1]
@@ -263,10 +269,15 @@ try
                         if haskey(ENV, "CI") && cpu_rss > 3*2^30
                             # XXX: collecting garbage
                             #      after each test, we are leaking CPU memory somewhere.
-                            #      this is a problem on CI, where2 we don't have much RAM.
+                            #      this is a problem on CI, where we don't have much RAM.
                             #      work around this by periodically recycling the worker.
                             p = recycle_worker(p)
                         end
+                    end
+
+                    # make sure the `profiling` test environment variables doesn't leak
+                    if test == "profiling"
+                        recycle_worker(p)
                     end
                 end
 

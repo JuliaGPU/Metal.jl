@@ -445,6 +445,24 @@ end
     MtArgumentTypeSampler = 3
 end
 
+@cenum MtCaptureError::UInt32 begin
+    MtCaptureErrorNotSupported = 1
+    MtCaptureErrorAlreadyCapturing = 2
+    MtCaptureErrorInvalidDescriptor = 3
+end
+
+@cenum MtCaptureDestination::UInt32 begin
+    MtCaptureDestinationDeveloperTools = 1
+    MtCaptureDestinationGPUTraceDocument = 2
+end
+
+@cenum MtCaptureDescriptorCaptureObjectType::UInt32 begin
+    MtCaptureDescriptorCaptureObjectTypeNull = 0
+    MtCaptureDescriptorCaptureObjectTypeDevice = 1
+    MtCaptureDescriptorCaptureObjectTypeQueue = 2
+    MtCaptureDescriptorCaptureObjectTypeScope = 3
+end
+
 struct MtSize
     width::NsUInteger
     height::NsUInteger
@@ -666,7 +684,18 @@ struct MtComputePipelineReflection
 end
 
 struct MtRenderPipelineReflection
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+end
+
+struct MtCaptureManager
+    #= /Users/maxhawkins/workspace_julia/Metal.jl/res/wrap.jl:39 =#
+end
+
+struct MtCaptureScope
+    #= /Users/maxhawkins/workspace_julia/Metal.jl/res/wrap.jl:39 =#
+end
+
+struct MtCaptureDescriptor
+    #= /Users/maxhawkins/workspace_julia/Metal.jl/res/wrap.jl:39 =#
 end
 
 struct MtDispatchThreadgroupsIndirectArguments
@@ -2168,6 +2197,98 @@ end
 
 function mtArgumentEncoderAlignment(cce)
     ccall((:mtArgumentEncoderAlignment, libcmt), NsUInteger, (Ptr{MtArgumentEncoder},), cce)
+end
+
+function mtNewCaptureDescriptor()
+    ccall((:mtNewCaptureDescriptor, libcmt), Ptr{MtCaptureDescriptor}, ())
+end
+
+function mtCaptureDescriptorCaptureObject(desc)
+    ccall((:mtCaptureDescriptorCaptureObject, libcmt), Ptr{Cvoid}, (Ptr{MtCaptureDescriptor},), desc)
+end
+
+function mtCaptureDescriptorCaptureObjectSetQueue(desc, cmdq)
+    ccall((:mtCaptureDescriptorCaptureObjectSetQueue, libcmt), Cvoid, (Ptr{MtCaptureDescriptor}, Ptr{MtCommandQueue}), desc, cmdq)
+end
+
+function mtCaptureDescriptorCaptureObjectSetDevice(desc, dev)
+    ccall((:mtCaptureDescriptorCaptureObjectSetDevice, libcmt), Cvoid, (Ptr{MtCaptureDescriptor}, Ptr{MtDevice}), desc, dev)
+end
+
+function mtCaptureDescriptorCaptureObjectSetScope(desc, scope)
+    ccall((:mtCaptureDescriptorCaptureObjectSetScope, libcmt), Cvoid, (Ptr{MtCaptureDescriptor}, Ptr{MtCaptureScope}), desc, scope)
+end
+
+function mtCaptureDescriptorDestination(desc)
+    ccall((:mtCaptureDescriptorDestination, libcmt), MtCaptureDestination, (Ptr{MtCaptureDescriptor},), desc)
+end
+
+function mtCaptureDescriptorDestinationSet(desc, dest)
+    ccall((:mtCaptureDescriptorDestinationSet, libcmt), Cvoid, (Ptr{MtCaptureDescriptor}, MtCaptureDestination), desc, dest)
+end
+
+function mtCaptureDescriptorOutputURLSet(desc, path)
+    ccall((:mtCaptureDescriptorOutputURLSet, libcmt), Cvoid, (Ptr{MtCaptureDescriptor}, Cstring), desc, path)
+end
+
+function mtCaptureDescriptorOutputURL(desc)
+    ccall((:mtCaptureDescriptorOutputURL, libcmt), Cstring, (Ptr{MtCaptureDescriptor},), desc)
+end
+
+function mtSharedCaptureManager()
+    ccall((:mtSharedCaptureManager, libcmt), Ptr{MtCaptureManager}, ())
+end
+
+function mtSupportsDestination(manager, destination)
+    ccall((:mtSupportsDestination, libcmt), Bool, (Ptr{MtCaptureManager}, MtCaptureDestination), manager, destination)
+end
+
+function mtStartCaptureWithDescriptor(manager, descriptor, error)
+    ccall((:mtStartCaptureWithDescriptor, libcmt), Bool, (Ptr{MtCaptureManager}, Ptr{MtCaptureDescriptor}, Ptr{Ptr{NsError}}), manager, descriptor, error)
+end
+
+function mtStopCapture(manager)
+    ccall((:mtStopCapture, libcmt), Cvoid, (Ptr{MtCaptureManager},), manager)
+end
+
+function mtIsCapturing(manager)
+    ccall((:mtIsCapturing, libcmt), Bool, (Ptr{MtCaptureManager},), manager)
+end
+
+function mtDefaultCaptureScope(manager)
+    ccall((:mtDefaultCaptureScope, libcmt), Ptr{MtCaptureScope}, (Ptr{MtCaptureManager},), manager)
+end
+
+function mtDefaultCaptureScopeSet(manager, scope)
+    ccall((:mtDefaultCaptureScopeSet, libcmt), Cvoid, (Ptr{MtCaptureManager}, Ptr{MtCaptureScope}), manager, scope)
+end
+
+function mtNewCaptureScopeWithCommandQueue(manager, queue)
+    ccall((:mtNewCaptureScopeWithCommandQueue, libcmt), Ptr{MtCaptureScope}, (Ptr{MtCaptureManager}, Ptr{MtCommandQueue}), manager, queue)
+end
+
+function mtBeginScope(scope)
+    ccall((:mtBeginScope, libcmt), Cvoid, (Ptr{MtCaptureScope},), scope)
+end
+
+function mtEndScope(scope)
+    ccall((:mtEndScope, libcmt), Cvoid, (Ptr{MtCaptureScope},), scope)
+end
+
+function mtCaptureScopeLabel(scope)
+    ccall((:mtCaptureScopeLabel, libcmt), Cstring, (Ptr{MtCaptureScope},), scope)
+end
+
+function mtCaptureScopeLabelSet(scope, label)
+    ccall((:mtCaptureScopeLabelSet, libcmt), Cvoid, (Ptr{MtCaptureScope}, Cstring), scope, label)
+end
+
+function mtCaptureScopeDevice(scope)
+    ccall((:mtCaptureScopeDevice, libcmt), Ptr{MtDevice}, (Ptr{MtCaptureScope},), scope)
+end
+
+function mtCaptureScopeCommandQueue(scope)
+    ccall((:mtCaptureScopeCommandQueue, libcmt), Ptr{MtCommandQueue}, (Ptr{MtCaptureScope},), scope)
 end
 
 function mtRetain(obj)
