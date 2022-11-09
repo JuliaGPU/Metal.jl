@@ -116,10 +116,29 @@ julia> Array(c)
 
 This package also supports profiling GPU execution for later visualization with Apple's
 Xcode tools. The easiest way to generate a GPU report is to use the `Metal.@profile` macro as seen
-below (using the kernel and setup from above).
+below. To profile GPU code from a Julia process,
+you must set the `METAL_CAPTURE_ENABLED` environment variable. On the first Metal
+command detected, you should get a message stating "Metal GPU Frame Capture Enabled" if the
+variable was set correctly.
 
 ```julia
-julia> Metal.@profile @metal threads=length(c) vadd(a, b, c)
+$ METAL_CAPTURE_ENABLED=1 julia
+...
+
+julia> using Metal
+
+julia> function vadd(a, b, c)
+           i = thread_position_in_grid_1d()
+           c[i] = a[i] + b[i]
+           return
+       end
+vadd (generic function with 1 method)
+
+julia> a = MtlArray([1]); b = MtlArray([2]); c = similar(a);
+... Metal GPU Frame Capture Enabled
+
+julia> Metal.@profile @metal threads=length(c) vadd(a, b, c);
+[ Info: GPU frame capture saved to /var/folders/x3/75r5z4sd2_bdwqs68_nfnxw40000gn/T/jl_WzKxYVMlon/jl_metal.gputrace/
 ```
 
 This will generate a `.gputrace` folder in a temporary directory. To view the profile, open
