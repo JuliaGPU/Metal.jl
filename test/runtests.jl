@@ -275,9 +275,10 @@ try
                         end
                     end
 
-                    # make sure the `profiling` test environment variables doesn't leak
+                    # make sure the `profiling` test environment variable doesn't leak
                     if test == "profiling"
                         recycle_worker(p)
+                        p = addworker(1; env=["METAL_CAPTURE_ENABLED"=>0])[1]
                     end
                 end
 
