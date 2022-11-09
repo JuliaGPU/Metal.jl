@@ -1,0 +1,1 @@
+@test !haskey(ENV, "FOOBAR")
