@@ -1,3 +1,13 @@
+# build cmt locally
+
+using Pkg
+Pkg.activate(@__DIR__)
+Pkg.instantiate()
+
+if haskey(ENV, "BUILDKITE")
+    run(`buildkite-agent annotate 'Using a locally-built cmt library; A bump of cmt_jll will be required before releasing Metal.jl.' --style 'warning' --context 'ctx-deps'`)
+end
+
 using Scratch, CMake_jll, Libdl, Preferences
 
 Metal = Base.UUID("dde4c033-4e86-420c-a63e-0dd931031962")
