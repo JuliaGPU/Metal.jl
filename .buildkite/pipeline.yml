@@ -1,53 +1,4 @@
 steps:
-  # first check if we need to build libcmt or the LLVM back-end
-
-  - label: "Julia 1.8 (with locally-built cmt)"
-    plugins:
-      - JuliaCI/julia#v1:
-          version: 1.8
-          persist_depot_dirs: "registries,packages,artifacts,compiled,datadeps,scratchspaces"
-      - JuliaCI/julia-test#v1: ~
-      - JuliaCI/julia-coverage#v1:
-          codecov: true
-          dirs:
-            - src
-            - lib
-            - examples
-    command: |
-      julia --project=deps -e 'using Pkg; Pkg.instantiate()'
-      julia --project=deps deps/build_cmt.jl
-    agents:
-      queue: "juliagpu"
-      metal: "*"
-    if: build.message !~ /\[skip tests\]/ &&
-        build.pull_request.labels includes "ci.build_cmt"
-    timeout_in_minutes: 60
-
-  - label: "Julia 1.8 (with locally-built LLVM back-end)"
-    plugins:
-      - JuliaCI/julia#v1:
-          version: 1.8
-          persist_depot_dirs: "registries,packages,artifacts,compiled,datadeps,scratchspaces"
-      - JuliaCI/julia-test#v1: ~
-      - JuliaCI/julia-coverage#v1:
-          codecov: true
-          dirs:
-            - src
-            - lib
-            - examples
-    command: |
-      julia --project=deps -e 'using Pkg; Pkg.instantiate()'
-      julia --project=deps deps/build_llvm.jl
-    agents:
-      queue: "juliagpu"
-      metal: "*"
-    if: build.message !~ /\[skip tests\]/ &&
-        build.pull_request.labels includes "ci.build_llvm"
-    timeout_in_minutes: 60
-
-  - wait
-
-
   # Julia versions
 
   - label: "Julia 1.8"
@@ -61,15 +12,14 @@ steps:
             - src
             - lib
             - examples
+    command: |
+      julia --project=deps deps/build_ci.jl
     agents:
       queue: "juliagpu"
       metal: "*"
-    if: build.message !~ /\[skip tests\]/ &&
-        !(build.pull_request.labels includes "ci.build_cmt") &&
-        !(build.pull_request.labels includes "ci.build_llvm")
+    if: build.message !~ /\[skip tests\]/
     timeout_in_minutes: 60
 
-  # if Julia 1.8 fails, don't bother with other tests
   - wait
 
   - label: "Julia nightly"
@@ -84,6 +34,8 @@ steps:
             - src
             - lib
             - examples
+    command: |
+      julia --project=deps deps/build_ci.jl
     agents:
       queue: "juliagpu"
       metal: "*"
@@ -107,6 +59,8 @@ steps:
             - src
             - lib
             - examples
+    command: |
+      julia --project=deps deps/build_ci.jl
     env:
       MTL_DEBUG_LAYER: '1'
       MTL_SHADER_VALIDATION: '1'
