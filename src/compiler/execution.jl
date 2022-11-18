@@ -27,7 +27,7 @@ macro metal(ex...)
 
     # group keyword argument
     macro_kwargs, compiler_kwargs, call_kwargs, other_kwargs =
-        split_kwargs(kwargs, [:launch], [:name], [:grid, :threads])
+        split_kwargs(kwargs, [:launch], [:name], [:grid, :threads, :queue])
     if !isempty(other_kwargs)
         key,val = first(other_kwargs).args
         throw(ArgumentError("Unsupported keyword argument '$key'"))
