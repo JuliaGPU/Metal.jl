@@ -190,7 +190,7 @@ end
 
 ## kernel launching and argument encoding
 
-function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
+function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1, queue=global_queue(current_device()))
     grid = MtlDim3(grid)
     threads = MtlDim3(threads)
     (grid.width>0 && grid.height>0 && grid.depth>0) ||
@@ -201,8 +201,7 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1)
     (threads.width * threads.height * threads.depth) > kernel.pipeline_state.maxTotalThreadsPerThreadgroup &&
         throw(ArgumentError("Max total threadgroup size should not exceed $(kernel.pipeline_state.maxTotalThreadsPerThreadgroup)"))
 
-    cmdq = global_queue(kernel.fun.lib.device)
-    cmdbuf = MtlCommandBuffer(cmdq)
+    cmdbuf = MtlCommandBuffer(queue)
     cmdbuf.label = "MtlCommandBuffer($(nameof(kernel.f)))"
     argument_buffers = MtlBuffer[]
     MtlComputeCommandEncoder(cmdbuf) do cce
