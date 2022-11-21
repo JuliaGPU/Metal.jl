@@ -37,6 +37,13 @@ end
     @test all(vecA == Int.([5, 5, 5, 5, 5, 5, 0, 0]))
     vecA .= 0
 
+    dev = current_device()
+    queue = MtlCommandQueue(dev)
+    @metal threads=(3) queue=queue tester(bufferA)
+    synchronize(queue)
+    @test all(vecA == Int.([5, 5, 5, 0, 0, 0, 0, 0]))
+    vecA .= 0
+
     @test_throws InexactError @metal threads=(-2) tester(bufferA)
     @test_throws InexactError @metal grid=(-2) tester(bufferA)
     @test_throws ArgumentError @metal threads=(1025) tester(bufferA)
