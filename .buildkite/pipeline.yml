@@ -15,8 +15,9 @@ steps:
     command: |
       julia --project=deps deps/build_ci.jl
     agents:
-      queue: "juliagpu"
-      metal: "*"
+      queue: "juliaecosystem"
+      os: "macos"
+      arch: "aarch64"
     if: build.message !~ /\[skip tests\]/
     timeout_in_minutes: 60
 
