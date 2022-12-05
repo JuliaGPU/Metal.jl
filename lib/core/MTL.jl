@@ -53,5 +53,6 @@ include("compute_pipeline/reflection.jl")
 include("command_enc.jl")
 include("command_enc/blit.jl")
 include("command_enc/compute.jl")
+include("profile.jl")
 
 end # module

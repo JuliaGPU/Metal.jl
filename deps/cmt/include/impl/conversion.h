@@ -9,10 +9,24 @@
 
 MT_HIDE
 MT_INLINE
+const char*
+mtNSURLFileSystemRepresentation(NSURL *url) {
+    return (const char*)[(NSURL*)url fileSystemRepresentation];
+}
+
+MT_HIDE
+MT_INLINE
 NSString*
 mtNSString(const char *str) {
   return [NSString stringWithCString: str
                             encoding: NSUTF8StringEncoding];
+}
+
+MT_HIDE
+MT_INLINE
+NSURL*
+mtNSURL(const char *str){
+    return [NSURL fileURLWithPath: mtNSString(str)];
 }
 
 MT_HIDE

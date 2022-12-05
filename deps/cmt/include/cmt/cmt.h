@@ -56,6 +56,10 @@ extern "C" {
 #include "argument_descriptor.h"
 #include "argument_encoder.h"
 
+#include "capture/capture_descriptor.h"
+#include "capture/capture_manager.h"
+#include "capture/capture_scope.h"
+
 MT_EXPORT
 void*
 mtRetain(void *obj);

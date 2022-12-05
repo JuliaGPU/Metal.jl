@@ -88,6 +88,9 @@ typedef void MtStructType;
 typedef void MtComputePipelineReflection;
 typedef void MtRenderPipelineReflection;
 
+typedef void MtCaptureManager;
+typedef void MtCaptureScope;
+typedef void MtCaptureDescriptor;
 
 typedef struct {
     uint32_t threadgroupsPerGrid[3];
