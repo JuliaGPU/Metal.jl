@@ -1,4 +1,4 @@
-export current_device, global_queue, synchronize, device_synchronize
+export current_device, device!, global_queue, synchronize, device_synchronize
 
 """
     current_device()::MtlDevice
@@ -13,6 +13,13 @@ function current_device()
         MtlDevice(1)
     end::MtlDevice
 end
+
+"""
+    device!(dev::MtlDevice)
+
+Sets the Metal GPU device associated with the current Julia task.
+"""
+device!(dev::MtlDevice) = task_local_storage(:MtlDevice, dev)
 
 const global_queues = WeakKeyDict{MtlCommandQueue,Nothing}()
 
