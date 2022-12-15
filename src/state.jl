@@ -53,6 +53,11 @@ function synchronize(queue::MtlCommandQueue=global_queue(current_device()))
     wait_completed(cmdbuf)
 end
 
+"""
+    device_synchronize()
+
+Synchronize all committed GPU work across all global queues
+"""
 function device_synchronize()
     for queue in keys(global_queues)
         synchronize(queue)
