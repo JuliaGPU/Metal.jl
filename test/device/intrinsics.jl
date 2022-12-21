@@ -197,3 +197,52 @@ end
 end
 
 end
+
+############################################################################################
+
+@testset "simd intrinsics" begin
+    using Revise, Metal
+    typs = [Float16, Float32]
+    @testset for typ in typs
+        function load_store(a::MtlDeviceArray{T}, b::MtlDeviceArray{T}) where {T}
+            sg_a = simdgroup_load(a)
+            simdgroup_store(sg_a, b)
+            return
+        end
+
+        function mul(a::MtlDeviceArray{T}, b::MtlDeviceArray{T}, c::MtlDeviceArray{T}) where {T}
+            sg_a = simdgroup_load(a)
+            sg_b = simdgroup_load(b)
+            sg_c = simdgroup_multiply(sg_a, sg_b)
+            simdgroup_store(sg_c, c)
+            return
+        end
+
+        function mad(a::MtlDeviceArray{T}, b::MtlDeviceArray{T}, c::MtlDeviceArray{T}, d::MtlDeviceArray{T}) where {T}
+            sg_a = simdgroup_load(a)
+            sg_b = simdgroup_load(b)
+            sg_c = simdgroup_load(c)
+            sg_d = simdgroup_multiply_accumulate(sg_a, sg_b, sg_c)
+            simdgroup_store(sg_d, d)
+            return
+        end
+
+        a = MtlArray(rand(typ, 8, 8))
+        b = MtlArray(zeros(typ, 8, 8))
+        @metal threads=(8, 8) load_store(a, b)
+        @test Array(a) == Array(b)
+
+        a = MtlArray(rand(typ, 8, 8))
+        b = MtlArray(rand(typ, 8, 8))
+        c = MtlArray(zeros(typ, 8, 8))
+        @metal threads=(8, 8) mul(a, b, c)
+        @test Array(a) * Array(b) ≈ Array(c)
+
+        a = MtlArray(rand(typ, 8, 8))
+        b = MtlArray(rand(typ, 8, 8))
+        c = MtlArray(rand(typ, 8, 8))
+        d = MtlArray(zeros(typ, 8, 8))
+        @metal threads=(8, 8) mad(a, b, c, d)
+        @test Array(a) * Array(b) + Array(c) ≈ Array(d)
+    end
+end
