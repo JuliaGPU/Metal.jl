@@ -51,37 +51,19 @@ for (jltype, llvmtype, suffix) in ((Float16, "half", "f16"),
         @device_function simdgroup_multiply(
             a::NTuple{64, VecElement{$jltype}},
             b::NTuple{64, VecElement{$jltype}},
-        ) = Base.llvmcall($("""
-            define <64 x $llvmtype> @entry(<64 x $llvmtype>, <64 x $llvmtype>) #0 {
-                %r = tail call <64 x $llvmtype> @air.simdgroup_matrix_8x8_multiply_accumulate.v64$suffix.v64$suffix.v64$suffix.v64$suffix(<64 x $llvmtype> %0, <64 x $llvmtype> %1, <64 x $llvmtype> zeroinitializer)
-                ret <64 x $llvmtype> %r
-            }
-
-            declare <64 x $llvmtype> @air.simdgroup_matrix_8x8_multiply_accumulate.v64$suffix.v64$suffix.v64$suffix.v64$suffix(<64 x $llvmtype>, <64 x $llvmtype>, <64 x $llvmtype>) local_unnamed_addr #1
-
-            attributes #0 = { convergent nounwind }
-            attributes #1 = { convergent nounwind }
-            """, "entry"), NTuple{64, VecElement{$jltype}},
-            Tuple{NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}},
-            a, b)
+        ) = ccall($"extern air.simdgroup_matrix_8x8_multiply_accumulate.v64$suffix.v64$suffix.v64$suffix.v64$suffix",
+        llvmcall, NTuple{64, VecElement{$jltype}},
+        (NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}),
+        a, b, ntuple(_ -> VecElement{$jltype}(0.0), Val(64)))
 
         @device_function simdgroup_multiply_accumulate(
             a::NTuple{64, VecElement{$jltype}},
             b::NTuple{64, VecElement{$jltype}},
             c::NTuple{64, VecElement{$jltype}},
-        ) = Base.llvmcall($("""
-            define <64 x $llvmtype> @entry(<64 x $llvmtype>, <64 x $llvmtype>, <64 x $llvmtype>) #0 {
-                %r = tail call <64 x $llvmtype> @air.simdgroup_matrix_8x8_multiply_accumulate.v64$suffix.v64$suffix.v64$suffix.v64$suffix(<64 x $llvmtype> %0, <64 x $llvmtype> %1, <64 x $llvmtype> %2)
-                ret <64 x $llvmtype> %r
-            }
-
-            declare <64 x $llvmtype> @air.simdgroup_matrix_8x8_multiply_accumulate.v64$suffix.v64$suffix.v64$suffix.v64$suffix(<64 x $llvmtype>, <64 x $llvmtype>, <64 x $llvmtype>) local_unnamed_addr #1
-
-            attributes #0 = { convergent nounwind }
-            attributes #1 = { convergent nounwind }
-            """, "entry"), NTuple{64, VecElement{$jltype}},
-            Tuple{NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}},
-            a, b, c)
+        ) = ccall($"extern air.simdgroup_matrix_8x8_multiply_accumulate.v64$suffix.v64$suffix.v64$suffix.v64$suffix",
+        llvmcall, NTuple{64, VecElement{$jltype}},
+        (NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}),
+        a, b, c)
     end
 end
 
