@@ -9,7 +9,12 @@ end
 for (jltype, llvmtype, suffix) in ((Float16, "half", "f16"),
                                    (Float32, "float", "f32"))
     @eval begin
-        # TODO: expose the version which loads from threadgroup memory
+        # TODO: expose load()/store() variants for threadgroup memory
+
+        # The custom entry function serves two purposes:
+        # 1. To convert the untyped (i8*) MtlDeviceArray pointer to a `float*`.
+        # 2. To pass the last parameter (transpose=true) as an i1. ccall maps Bool
+        #    to an i8, which is not what the API expected.
         @device_function simdgroup_load(
             data::MtlDeviceArray{$jltype, <:Any, AS.Device},
             matrix_origin::NTuple{2, Int64} = (1, 1),
@@ -28,7 +33,10 @@ for (jltype, llvmtype, suffix) in ((Float16, "half", "f16"),
             Tuple{LLVMPtr{$jltype, AS.Device}, Int64, NTuple{2, VecElement{Int64}}},
             data.ptr, data.shape[1], convert_origin(matrix_origin))
 
-        # TODO: expose the version which stores to threadgroup memory
+        # The custom entry function serves two purposes:
+        # 1. To convert the untyped (i8*) MtlDeviceArray pointer to a `float*`.
+        # 2. To pass the last parameter (transpose=true) as an i1. ccall maps Bool
+        #    to an i8, which is not what the API expected.
         @device_function simdgroup_store(
             src::NTuple{64, VecElement{$jltype}},
             dest::MtlDeviceArray{$jltype, <:Any, AS.Device},
