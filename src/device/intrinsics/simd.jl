@@ -11,50 +11,22 @@ for (jltype, llvmtype, suffix) in ((Float16, "half", "f16"),
     @eval begin
         # TODO: expose load()/store() variants for threadgroup memory
 
-        # The custom entry function serves two purposes:
-        # 1. To convert the untyped (i8*) MtlDeviceArray pointer to a `float*` or `half*`.
-        # 2. To pass the last parameter (transpose=true) as an i1. ccall maps Bool
-        #    to an i8, which is not what the API expected.
         @device_function simdgroup_load(
             data::MtlDeviceArray{$jltype, <:Any, AS.Device},
             matrix_origin::NTuple{2, Int64} = (1, 1),
-        ) = Base.llvmcall($("""
-            define <64 x $llvmtype> @entry(i8 addrspace(1)*, i64, <2 x i64>) #0 {
-                %typed_ptr = bitcast i8 addrspace(1)* %0 to $llvmtype addrspace(1)*
-                %r = tail call <64 x $llvmtype> @air.simdgroup_matrix_8x8_load.v64$suffix.p1$suffix($llvmtype addrspace(1)* %typed_ptr, i64 %1, <2 x i64> %2, i1 true)
-                ret <64 x $llvmtype> %r
-            }
+        ) = @typed_ccall($"air.simdgroup_matrix_8x8_load.v64$suffix.p1$suffix",
+        llvmcall, NTuple{64, VecElement{$jltype}},
+        (LLVMPtr{$jltype, AS.Device}, Int64, NTuple{2, VecElement{Int64}}, Bool),
+        data.ptr, data.shape[1], convert_origin(matrix_origin), Val(true))
 
-            declare <64 x $llvmtype> @air.simdgroup_matrix_8x8_load.v64$suffix.p1$suffix($llvmtype addrspace(1)* nocapture readonly, i64, <2 x i64>, i1) local_unnamed_addr #1
-
-            attributes #0 = { convergent nounwind }
-            attributes #1 = { convergent nounwind readonly }
-            """, "entry"), NTuple{64, VecElement{$jltype}},
-            Tuple{LLVMPtr{$jltype, AS.Device}, Int64, NTuple{2, VecElement{Int64}}},
-            data.ptr, data.shape[1], convert_origin(matrix_origin))
-
-        # The custom entry function serves two purposes:
-        # 1. To convert the untyped (i8*) MtlDeviceArray pointer to a `float*` or `half*`.
-        # 2. To pass the last parameter (transpose=true) as an i1. ccall maps Bool
-        #    to an i8, which is not what the API expected.
         @device_function simdgroup_store(
             src::NTuple{64, VecElement{$jltype}},
             dest::MtlDeviceArray{$jltype, <:Any, AS.Device},
             matrix_origin::NTuple{2, Int64} = (1, 1),
-        ) = Base.llvmcall($("""
-            define void @entry(<64 x $llvmtype>, i8 addrspace(1)*, i64, <2 x i64>) #0 {
-                %typed_ptr = bitcast i8 addrspace(1)* %1 to $llvmtype addrspace(1)*
-                tail call void @air.simdgroup_matrix_8x8_store.v64$suffix.p1$suffix(<64 x $llvmtype> %0, $llvmtype addrspace(1)* %typed_ptr, i64 %2, <2 x i64> %3, i1 true)
-                ret void
-            }
-
-            declare void @air.simdgroup_matrix_8x8_store.v64$suffix.p1$suffix(<64 x $llvmtype>, $llvmtype addrspace(1)* nocapture writeonly, i64, <2 x i64>, i1) local_unnamed_addr #1
-
-            attributes #0 = { convergent nounwind }
-            attributes #1 = { convergent nounwind writeonly }
-            """, "entry"), Cvoid,
-            Tuple{NTuple{64, VecElement{$jltype}}, LLVMPtr{$jltype, AS.Device}, Int64, NTuple{2, VecElement{Int64}}},
-            src, dest.ptr, dest.shape[1], convert_origin(matrix_origin))
+        ) = @typed_ccall($"air.simdgroup_matrix_8x8_store.v64$suffix.p1$suffix",
+        llvmcall, Cvoid,
+        (NTuple{64, VecElement{$jltype}}, LLVMPtr{$jltype, AS.Device}, Int64, NTuple{2, VecElement{Int64}}, Bool),
+        src, dest.ptr, dest.shape[1], convert_origin(matrix_origin), Val(true))
 
         @device_function simdgroup_multiply(
             a::NTuple{64, VecElement{$jltype}},
