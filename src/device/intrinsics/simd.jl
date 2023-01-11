@@ -12,7 +12,7 @@ for (jltype, llvmtype, suffix) in ((Float16, "half", "f16"),
         # TODO: expose load()/store() variants for threadgroup memory
 
         # The custom entry function serves two purposes:
-        # 1. To convert the untyped (i8*) MtlDeviceArray pointer to a `float*`.
+        # 1. To convert the untyped (i8*) MtlDeviceArray pointer to a `float*` or `half*`.
         # 2. To pass the last parameter (transpose=true) as an i1. ccall maps Bool
         #    to an i8, which is not what the API expected.
         @device_function simdgroup_load(
@@ -34,7 +34,7 @@ for (jltype, llvmtype, suffix) in ((Float16, "half", "f16"),
             data.ptr, data.shape[1], convert_origin(matrix_origin))
 
         # The custom entry function serves two purposes:
-        # 1. To convert the untyped (i8*) MtlDeviceArray pointer to a `float*`.
+        # 1. To convert the untyped (i8*) MtlDeviceArray pointer to a `float*` or `half*`.
         # 2. To pass the last parameter (transpose=true) as an i1. ccall maps Bool
         #    to an i8, which is not what the API expected.
         @device_function simdgroup_store(
@@ -78,18 +78,20 @@ end
 ## Documentation
 
 @doc """
-    simdgroup_load(data::MtlDeviceArray, matrix_origin=(1, 1))
+    simdgroup_load(data::MtlDeviceArray{T}, matrix_origin=(1, 1))
 
 Loads data from device memory into an 8x8 SIMD-group matrix and returns it.
+`T` must be either `Float16` or `Float32`.
 
 # Arguments
 - `matrix_origin::NTuple{2, Int64}=(1, 1)`: origin in the source memory to load from.
 """ simdgroup_load
 
 @doc """
-    simdgroup_store(src, dest::MtlDeviceArray, matrix_origin=(1, 1))
+    simdgroup_store(src, dest::MtlDeviceArray{T}, matrix_origin=(1, 1))
 
 Stores data from an 8x8 SIMD-group matrix into device memory.
+`T` must be either `Float16` or `Float32`.
 
 # Arguments
 - `matrix_origin::NTuple{2, Int64}=(1, 1)`: origin in the destination memory to store to.
