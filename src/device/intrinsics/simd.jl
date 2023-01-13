@@ -15,35 +15,35 @@ for (jltype, llvmtype, suffix) in ((Float16, "half", "f16"),
             data::MtlDeviceArray{$jltype, <:Any, AS.Device},
             matrix_origin::NTuple{2, Int64} = (1, 1),
         ) = @typed_ccall($"air.simdgroup_matrix_8x8_load.v64$suffix.p1$suffix",
-        llvmcall, NTuple{64, VecElement{$jltype}},
-        (LLVMPtr{$jltype, AS.Device}, Int64, NTuple{2, VecElement{Int64}}, Bool),
-        data.ptr, data.shape[1], convert_origin(matrix_origin), Val(true))
+            llvmcall, NTuple{64, VecElement{$jltype}},
+            (LLVMPtr{$jltype, AS.Device}, Int64, NTuple{2, VecElement{Int64}}, Bool),
+            data.ptr, data.shape[1], convert_origin(matrix_origin), Val(true))
 
         @device_function simdgroup_store(
             src::NTuple{64, VecElement{$jltype}},
             dest::MtlDeviceArray{$jltype, <:Any, AS.Device},
             matrix_origin::NTuple{2, Int64} = (1, 1),
         ) = @typed_ccall($"air.simdgroup_matrix_8x8_store.v64$suffix.p1$suffix",
-        llvmcall, Cvoid,
-        (NTuple{64, VecElement{$jltype}}, LLVMPtr{$jltype, AS.Device}, Int64, NTuple{2, VecElement{Int64}}, Bool),
-        src, dest.ptr, dest.shape[1], convert_origin(matrix_origin), Val(true))
+            llvmcall, Cvoid,
+            (NTuple{64, VecElement{$jltype}}, LLVMPtr{$jltype, AS.Device}, Int64, NTuple{2, VecElement{Int64}}, Bool),
+            src, dest.ptr, dest.shape[1], convert_origin(matrix_origin), Val(true))
 
         @device_function simdgroup_multiply(
             a::NTuple{64, VecElement{$jltype}},
             b::NTuple{64, VecElement{$jltype}},
         ) = ccall($"extern air.simdgroup_matrix_8x8_multiply_accumulate.v64$suffix.v64$suffix.v64$suffix.v64$suffix",
-        llvmcall, NTuple{64, VecElement{$jltype}},
-        (NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}),
-        a, b, ntuple(_ -> VecElement{$jltype}(0.0), Val(64)))
+            llvmcall, NTuple{64, VecElement{$jltype}},
+            (NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}),
+            a, b, ntuple(_ -> VecElement{$jltype}(0.0), Val(64)))
 
         @device_function simdgroup_multiply_accumulate(
             a::NTuple{64, VecElement{$jltype}},
             b::NTuple{64, VecElement{$jltype}},
             c::NTuple{64, VecElement{$jltype}},
         ) = ccall($"extern air.simdgroup_matrix_8x8_multiply_accumulate.v64$suffix.v64$suffix.v64$suffix.v64$suffix",
-        llvmcall, NTuple{64, VecElement{$jltype}},
-        (NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}),
-        a, b, c)
+            llvmcall, NTuple{64, VecElement{$jltype}},
+            (NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}),
+            a, b, c)
     end
 end
 
