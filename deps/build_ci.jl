@@ -43,12 +43,12 @@ if isdir(joinpath(@__DIR__), "..", ".git")
 
     if deps_timestamp > jll_timestamp
         @info "Wrappers have changed since the last JLL build. Building the support library locally."
-        include(joinpath(@__DIR__, "build_local.jl"))
+        include(joinpath(@__DIR__, "build_cmt.jl"))
     else
         @info "Wrappers have not changed since the last JLL build. Using the JLL's support library."
     end
 else
     @warn """Metal.jl source code is not checked-out from Git.
              This means we cannot check for changes, and need to unconditionally build the support library."""
-    include(joinpath(@__DIR__, "build_local.jl"))
+    include(joinpath(@__DIR__, "build_cmt.jl"))
 end
