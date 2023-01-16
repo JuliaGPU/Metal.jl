@@ -201,7 +201,6 @@ end
 ############################################################################################
 
 @testset "simd intrinsics" begin
-    using Revise, Metal
     typs = [Float16, Float32]
     @testset for typ in typs
         function load_store(a::MtlDeviceArray{T}, b::MtlDeviceArray{T},
