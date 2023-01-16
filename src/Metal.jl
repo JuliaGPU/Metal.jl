@@ -26,6 +26,7 @@ include("device/intrinsics/arguments.jl")
 include("device/intrinsics/math.jl")
 include("device/intrinsics/synchronization.jl")
 include("device/intrinsics/memory.jl")
+include("device/intrinsics/simd.jl")
 include("device/quirks.jl")
 
 # array essentials
