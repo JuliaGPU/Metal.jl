@@ -78,6 +78,15 @@ Base.@propagate_inbounds Base.getindex(A::MtlLargerDeviceArray{T}, i1::Integer) 
 Base.@propagate_inbounds Base.setindex!(A::MtlLargerDeviceArray{T}, x, i1::Integer) where {T} =
     arrayset(A, convert(T,x)::T, i1)
 
+Base.to_index(::MtlLargerDeviceArray{T}, i::Integer) where {T} = i
+
+Base.@propagate_inbounds Base.getindex(A::MtlLargerDeviceArray{T},
+                                       I::Union{Integer, CartesianIndex}...) where {T} =
+    A[Base._to_linear_index(A, to_indices(A, I)...)]
+Base.@propagate_inbounds Base.setindex!(A::MtlLargerDeviceArray{T}, x,
+                                       I::Union{Integer, CartesianIndex}...) where {T} =
+    A[Base._to_linear_index(A, to_indices(A, I)...)] = x
+
 @inline function arrayref(A::MtlLargerDeviceArray{T}, index::Integer) where {T}
     @boundscheck checkbounds(A, index)
     align = Base.datatype_alignment(T)

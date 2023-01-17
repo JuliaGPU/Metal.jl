@@ -210,6 +210,20 @@ end
             return
         end
 
+        function load_store_tg(a::MtlDeviceArray{T}, b::MtlDeviceArray{T}) where {T}
+            pos = thread_position_in_threadgroup_2d()
+
+            tg_a = MtlThreadGroupArray(T, (8, 8))
+            tg_a[pos.x, pos.y] = a[pos.x, pos.y]
+            sg_a = simdgroup_load(tg_a)
+
+            tg_b = MtlThreadGroupArray(T, (8, 8))
+            simdgroup_store(sg_a, tg_b)
+            b[pos.x, pos.y] = tg_b[pos.x, pos.y]
+
+            return
+        end
+
         function mul(a::MtlDeviceArray{T}, b::MtlDeviceArray{T}, c::MtlDeviceArray{T}) where {T}
             sg_a = simdgroup_load(a)
             sg_b = simdgroup_load(b)
@@ -230,6 +244,11 @@ end
         a = MtlArray(rand(typ, 8, 8))
         b = MtlArray(zeros(typ, 8, 8))
         @metal threads=(8, 8) load_store(a, b)
+        @test Array(a) == Array(b)
+
+        a = MtlArray(rand(typ, 8, 8))
+        b = MtlArray(zeros(typ, 8, 8))
+        @metal threads=(8, 8) load_store_tg(a, b)
         @test Array(a) == Array(b)
 
         a = MtlArray(rand(typ, 20, 15))
