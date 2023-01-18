@@ -6,28 +6,29 @@ function convert_origin(origin::NTuple{2, Int64})
     return (VecElement{Int64}(origin[1]-1), VecElement{Int64}(origin[2]-1))
 end
 
-for (jltype, llvmtype, suffix) in ((Float16, "half", "f16"),
-                                   (Float32, "float", "f32"))
+for (jltype, suffix) in ((Float16, "f16"), (Float32, "f32"))
+    for as in (AS.Device, AS.ThreadGroup)
+        @eval begin
+            @device_function simdgroup_load(
+                data::Union{MtlDeviceArray{$jltype, <:Any, $as}, MtlLargerDeviceArray{$jltype, <:Any, $as}},
+                matrix_origin::NTuple{2, Int64} = (1, 1),
+            ) = @typed_ccall($"air.simdgroup_matrix_8x8_load.v64$suffix.p$as$suffix",
+                llvmcall, NTuple{64, VecElement{$jltype}},
+                (LLVMPtr{$jltype, $as}, Int64, NTuple{2, VecElement{Int64}}, Bool),
+                pointer(data), size(data)[1], convert_origin(matrix_origin), Val(true))
+
+            @device_function simdgroup_store(
+                src::NTuple{64, VecElement{$jltype}},
+                dest::Union{MtlDeviceArray{$jltype, <:Any, $as}, MtlLargerDeviceArray{$jltype, <:Any, $as}},
+                matrix_origin::NTuple{2, Int64} = (1, 1),
+            ) = @typed_ccall($"air.simdgroup_matrix_8x8_store.v64$suffix.p$as$suffix",
+                llvmcall, Cvoid,
+                (NTuple{64, VecElement{$jltype}}, LLVMPtr{$jltype, $as}, Int64, NTuple{2, VecElement{Int64}}, Bool),
+                src, pointer(dest), size(dest)[1], convert_origin(matrix_origin), Val(true))
+        end
+    end
+
     @eval begin
-        # TODO: expose load()/store() variants for threadgroup memory
-
-        @device_function simdgroup_load(
-            data::MtlDeviceArray{$jltype, <:Any, AS.Device},
-            matrix_origin::NTuple{2, Int64} = (1, 1),
-        ) = @typed_ccall($"air.simdgroup_matrix_8x8_load.v64$suffix.p1$suffix",
-            llvmcall, NTuple{64, VecElement{$jltype}},
-            (LLVMPtr{$jltype, AS.Device}, Int64, NTuple{2, VecElement{Int64}}, Bool),
-            data.ptr, data.shape[1], convert_origin(matrix_origin), Val(true))
-
-        @device_function simdgroup_store(
-            src::NTuple{64, VecElement{$jltype}},
-            dest::MtlDeviceArray{$jltype, <:Any, AS.Device},
-            matrix_origin::NTuple{2, Int64} = (1, 1),
-        ) = @typed_ccall($"air.simdgroup_matrix_8x8_store.v64$suffix.p1$suffix",
-            llvmcall, Cvoid,
-            (NTuple{64, VecElement{$jltype}}, LLVMPtr{$jltype, AS.Device}, Int64, NTuple{2, VecElement{Int64}}, Bool),
-            src, dest.ptr, dest.shape[1], convert_origin(matrix_origin), Val(true))
-
         @device_function simdgroup_multiply(
             a::NTuple{64, VecElement{$jltype}},
             b::NTuple{64, VecElement{$jltype}},
@@ -52,8 +53,8 @@ end
 @doc """
     simdgroup_load(data::MtlDeviceArray{T}, matrix_origin=(1, 1))
 
-Loads data from device memory into an 8x8 SIMD-group matrix and returns it.
-`T` must be either `Float16` or `Float32`.
+Loads data from device or threadgroup memory into an 8x8 SIMD-group matrix
+and returns it. `T` must be either `Float16` or `Float32`.
 
 # Arguments
 - `matrix_origin::NTuple{2, Int64}=(1, 1)`: origin in the source memory to load from.
@@ -62,7 +63,7 @@ Loads data from device memory into an 8x8 SIMD-group matrix and returns it.
 @doc """
     simdgroup_store(src, dest::MtlDeviceArray{T}, matrix_origin=(1, 1))
 
-Stores data from an 8x8 SIMD-group matrix into device memory.
+Stores data from an 8x8 SIMD-group matrix into device or threadgroup memory.
 `T` must be either `Float16` or `Float32`.
 
 # Arguments

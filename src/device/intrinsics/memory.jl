@@ -76,7 +76,20 @@ Base.IndexStyle(::Type{<:Core.LLVMPtr}) = Base.IndexLinear()
 Base.@propagate_inbounds Base.getindex(A::MtlLargerDeviceArray{T}, i1::Integer) where {T} =
     arrayref(A, i1)
 Base.@propagate_inbounds Base.setindex!(A::MtlLargerDeviceArray{T}, x, i1::Integer) where {T} =
-    arrayset(A, convert(T,x)::T, i1)
+    arrayset(A, convert(T, x)::T, i1)
+
+# preserve the specific integer type when indexing device arrays,
+# to avoid extending 32-bit hardware indices to 64-bit.
+Base.to_index(::MtlLargerDeviceArray, i::Integer) = i
+
+# Base doesn't like Integer indices, so we need our own ND get and setindex! routines.
+# See also: https://github.com/JuliaLang/julia/pull/42289
+Base.@propagate_inbounds Base.getindex(A::MtlLargerDeviceArray,
+                                       I::Union{Integer, CartesianIndex}...) =
+    A[Base._to_linear_index(A, to_indices(A, I)...)]
+Base.@propagate_inbounds Base.setindex!(A::MtlLargerDeviceArray, x,
+                                        I::Union{Integer, CartesianIndex}...) =
+    A[Base._to_linear_index(A, to_indices(A, I)...)] = x
 
 @inline function arrayref(A::MtlLargerDeviceArray{T}, index::Integer) where {T}
     @boundscheck checkbounds(A, index)
