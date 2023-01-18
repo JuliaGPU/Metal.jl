@@ -1,16 +1,27 @@
 export MtlThreadGroupArray
 
-@inline function MtlThreadGroupArray(::Type{T}, dims) where {T}
-    len = prod(dims)
-    # NOTE: this relies on const-prop to forward the literal length to the generator.
-    #       maybe we should include the size in the type, like StaticArrays does?
-    if sizeof(T) >= 4
+@static if macos_version() >= v"13.1"
+    @inline function MtlThreadGroupArray(::Type{T}, dims) where {T}
+        len = prod(dims)
+        # NOTE: this relies on const-prop to forward the literal length to the generator.
+        #       maybe we should include the size in the type, like StaticArrays does?
         ptr = emit_threadgroup_memory(T, Val(len))
         MtlDeviceArray(dims, ptr)
-    else
-        ptr = emit_threadgroup_memory(UInt32, Val(len))
-        arr = MtlDeviceArray(dims, ptr)
-        MtlLargerDeviceArray{T,ndims(arr),AS.ThreadGroup}(arr)
+    end
+else
+    # on older macOS, shared memory with small types results in miscompilation (Metal.jl#26),
+    # so we use an array wrapper extending the element size to the minimum known to work.
+
+    @inline function MtlThreadGroupArray(::Type{T}, dims) where {T}
+        len = prod(dims)
+        if sizeof(T) >= 4
+            ptr = emit_threadgroup_memory(T, Val(len))
+            MtlDeviceArray(dims, ptr)
+        else
+            ptr = emit_threadgroup_memory(UInt32, Val(len))
+            arr = MtlDeviceArray(dims, ptr)
+            MtlLargerDeviceArray{T,ndims(arr),AS.ThreadGroup}(arr)
+        end
     end
 end
 
@@ -50,8 +61,7 @@ end
 end
 
 
-# shared memory with small types results in miscompilation (Metal.jl#26),
-# so we use an array wrapper extending the element size to the minimum known to work.
+## device array wrapper extending small element types
 
 struct MtlLargerDeviceArray{T,N,A} <: DenseArray{T,N}
     x::MtlDeviceArray{UInt32,N,A}
