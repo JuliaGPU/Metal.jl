@@ -78,8 +78,8 @@ Base.@propagate_inbounds Base.getindex(A::MtlLargerDeviceArray{T}, i1::Integer) 
 Base.@propagate_inbounds Base.setindex!(A::MtlLargerDeviceArray{T}, x, i1::Integer) where {T} =
     arrayset(A, convert(T,x)::T, i1)
 
-Base.to_index(::MtlLargerDeviceArray{T}, i::Integer) where {T} = i
-
+# Base doesn't like Integer indices, so we need our own ND get and setindex! routines.
+# See also: https://github.com/JuliaLang/julia/pull/42289
 Base.@propagate_inbounds Base.getindex(A::MtlLargerDeviceArray{T},
                                        I::Union{Integer, CartesianIndex}...) where {T} =
     A[Base._to_linear_index(A, to_indices(A, I)...)]
