@@ -64,7 +64,7 @@ function MtlBuffer(dev::Union{MtlDevice,MtlHeap},
                    bytesize::Integer;
                    storage = Private,
                    hazard_tracking = DefaultTracking,
-                   cache_mode = DefaultCPUCache) where {T}
+                   cache_mode = DefaultCPUCache)
     opts = storage | hazard_tracking | cache_mode
 
     @assert 0 < bytesize <= dev.maxBufferLength # XXX: not supported by MtlHeap
@@ -78,7 +78,7 @@ function MtlBuffer(dev::Union{MtlDevice,MtlHeap},
                    ptr::Ptr;
                    storage = Managed,
                    hazard_tracking = DefaultTracking,
-                   cache_mode = DefaultCPUCache) where {T}
+                   cache_mode = DefaultCPUCache)
     storage == Private && error("Can't create a Private copy-allocated buffer.")
     opts =  storage | hazard_tracking | cache_mode
 
@@ -126,7 +126,7 @@ and that they should be transferred to the device before executing any following
 
 Only valid for `Managed` buffers.
 """
-function DidModifyRange!(buf::MtlBuffer, range::UnitRange) where {T}
+function DidModifyRange!(buf::MtlBuffer, range::UnitRange)
     mtBufferDidModifyRange(buf, range)
 end
 

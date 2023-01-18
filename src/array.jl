@@ -298,7 +298,7 @@ end
 
 device(a::Base.PermutedDimsArray) = device(parent(a))
 
-Base.unsafe_convert(::Type{MTL.MTLBuffer}, A::PermutedDimsArray) where {T} =
+Base.unsafe_convert(::Type{MTL.MTLBuffer}, A::PermutedDimsArray) =
     Base.unsafe_convert(MTL.MTLBuffer, parent(A))
 
 
