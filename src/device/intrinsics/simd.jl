@@ -1,4 +1,5 @@
-export simdgroup_load, simdgroup_store, simdgroup_multiply, simdgroup_multiply_accumulate;
+export simdgroup_load, simdgroup_store, simdgroup_multiply, simdgroup_multiply_accumulate,
+        simd_shuffle_down, simd_shuffle_up
 
 using Core: LLVMPtr
 
@@ -81,3 +82,55 @@ Returns `a * b`.
 
 Returns `a * b + c`.
 """ simdgroup_multiply_accumulate
+
+
+## SIMD Shuffle Up/Down
+
+simd_shuffle_map = ((Float32, "f16"),
+                    (Float16, "f32"),
+                    (Int32,   "s.i32"),
+                    (UInt32,  "u.i32"),
+                    (Int16,   "s.i16"),
+                    (UInt16,  "u.i16"),
+                    (Int8,    "s.i8"),
+                    (UInt8,   "u.i8"))
+
+for (jltype, suffix) in simd_shuffle_map
+    @eval begin
+        @device_function simd_shuffle_down(data::$jltype, delta::Integer) =
+            ccall($"extern air.simd_shuffle_down.$suffix",
+                llvmcall, $jltype, ($jltype, Int16), data, delta)
+
+        @device_function simd_shuffle_up(data::$jltype, delta::Integer) =
+            ccall($"extern air.simd_shuffle_up.$suffix",
+                llvmcall, $jltype, ($jltype, Int16), data, delta)
+    end
+end
+
+## Documentation
+
+@doc """
+    simd_shuffle_down(data::T, delta::Integer)
+
+Return data from the thread whose SIMD lane ID is the sum of caller’s SIMD lane ID and delta.
+
+The value for delta must be the same for all threads in the SIMD-group. This function
+doesn’t modify the upper delta lanes of data because it doesn’t wrap values around
+the SIMD-group.
+
+T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+"""
+simd_shuffle_down
+
+@doc """
+    simd_shuffle_up(data::T, delta::Integer)
+
+Return data from the thread whose SIMD lane ID is the difference from the caller’s SIMD
+lane ID minus delta.
+
+The value of delta must be the same for all threads in a SIMD-group. This function doesn’t
+modify the lower delta lanes of data because it doesn’t wrap values around the SIMD-group.
+
+T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+"""
+simd_shuffle_up
