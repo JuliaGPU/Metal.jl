@@ -35,14 +35,6 @@ function main()
             "FAQ" => "faq.md",
         ]
     )
-
-    if ci
-        @info "Deploying to GitHub"
-        deploydocs(
-            repo = "github.com/JuliaGPU/Metal.jl.git",
-            push_preview = true
-        )
-    end
 end
 
 isinteractive() || main()
