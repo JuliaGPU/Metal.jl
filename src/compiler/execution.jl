@@ -256,3 +256,22 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1, queue=
 
     commit!(cmdbuf)
 end
+
+## Intra-warp Helpers
+
+"""
+    nextwarp(dev, threads)
+    prevwarp(dev, threads)
+
+Returns the next or previous nearest number of threads that is a multiple of the warp size
+of a device `dev`. This is a common requirement when using intra-warp communication.
+"""
+function nextwarp(pipe::MtlComputePipelineState, threads::Integer)
+    ws = pipe.threadExecutionWidth
+    return threads + (ws - threads % ws) % ws
+end
+
+@doc (@doc nextwarp) function prevwarp(pipe::MtlComputePipelineState, threads::Integer)
+    ws = pipe.threadExecutionWidth
+    return threads - Base.rem(threads, ws)
+end
