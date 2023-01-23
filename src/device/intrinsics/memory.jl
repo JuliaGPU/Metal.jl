@@ -1,5 +1,12 @@
 export MtlThreadGroupArray
 
+"""
+    MtlThreadGroupArray(::Type{T}, dims)
+
+Create an array local to each threadgroup launched during kernel execution.
+"""
+MtlThreadGroupArray
+
 @static if macos_version() >= v"13.1"
     @inline function MtlThreadGroupArray(::Type{T}, dims) where {T}
         len = prod(dims)

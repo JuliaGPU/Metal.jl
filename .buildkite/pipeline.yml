@@ -1,77 +1,99 @@
 steps:
   # Julia versions
+  - group: ":julia: Julia"
+    key: "julia"
+    steps:
+      - label: "Julia 1.8"
+        plugins:
+          - JuliaCI/julia#v1:
+              version: 1.8
+          - JuliaCI/julia-test#v1: ~
+          - JuliaCI/julia-coverage#v1:
+              codecov: true
+              dirs:
+                - src
+                - lib
+                - examples
+        command: |
+          julia --project=deps deps/build_ci.jl
+        agents:
+          queue: "juliaecosystem"
+          os: "macos"
+          arch: "aarch64"
+        if: build.message !~ /\[skip tests\]/
+        timeout_in_minutes: 60
 
-  - label: "Julia 1.8"
-    plugins:
-      - JuliaCI/julia#v1:
-          version: 1.8
-      - JuliaCI/julia-test#v1: ~
-      - JuliaCI/julia-coverage#v1:
-          codecov: true
-          dirs:
-            - src
-            - lib
-            - examples
-    command: |
-      julia --project=deps deps/build_ci.jl
-    agents:
-      queue: "juliaecosystem"
-      os: "macos"
-      arch: "aarch64"
-    if: build.message !~ /\[skip tests\]/
-    timeout_in_minutes: 60
+      # - label: "Julia 1.9"
+      #   plugins:
+      #     - JuliaCI/julia#v1:
+      #         version: 1.9-nightly
+      #     - JuliaCI/julia-test#v1: ~
+      #     - JuliaCI/julia-coverage#v1:
+      #         codecov: true
+      #         dirs:
+      #           - src
+      #           - lib
+      #           - examples
+      #   command: |
+      #     julia --project=deps deps/build_ci.jl
+      #   agents:
+      #     queue: "juliaecosystem"
+      #     os: "macos"
+      #     arch: "aarch64"
+      #   if: build.message !~ /\[skip tests\]/ && !build.pull_request.draft
+      #   timeout_in_minutes: 60
 
-  - wait
-
-#   - label: "Julia nightly"
-#     plugins:
-#       - JuliaCI/julia#v1:
-#           version: nightly
-#       - JuliaCI/julia-test#v1:
-#           test_args: "--quickfail"
-#       - JuliaCI/julia-coverage#v1:
-#           codecov: true
-#           dirs:
-#             - src
-#             - lib
-#             - examples
-#     command: |
-#       julia --project=deps deps/build_ci.jl
-#     agents:
-#       queue: "juliagpu"
-#       metal: "*"
-#     if: build.message !~ /\[skip tests\]/ && !build.pull_request.draft
-#     timeout_in_minutes: 60
-#     soft_fail:
-#       - exit_status: 1
-
+      # - label: "Julia nightly"
+      #   plugins:
+      #     - JuliaCI/julia#v1:
+      #         version: nightly
+      #     - JuliaCI/julia-test#v1:
+      #         test_args: "--quickfail"
+      #     - JuliaCI/julia-coverage#v1:
+      #         codecov: true
+      #         dirs:
+      #           - src
+      #           - lib
+      #           - examples
+      #   command: |
+      #     julia --project=deps deps/build_ci.jl
+      #   agents:
+      #     queue: "juliagpu"
+      #     metal: "*"
+      #   if: build.message !~ /\[skip tests\]/ && !build.pull_request.draft
+      #   timeout_in_minutes: 60
+      #   soft_fail:
+      #     - exit_status: 1
 
   # special tests
-
-#   - label: "Metal API Validation"
-#     plugins:
-#       - JuliaCI/julia#v1:
-#           version: 1.8
-#       - JuliaCI/julia-test#v1:
-#           test_args: "--quickfail"
-#       - JuliaCI/julia-coverage#v1:
-#           codecov: true
-#           dirs:
-#             - src
-#             - lib
-#             - examples
-#     command: |
-#       julia --project=deps deps/build_ci.jl
-#     env:
-#       MTL_DEBUG_LAYER: '1'
-#       MTL_SHADER_VALIDATION: '1'
-#     agents:
-#       queue: "juliagpu"
-#       metal: "*"
-#     if: build.message !~ /\[skip tests\]/ && !build.pull_request.draft
-#     timeout_in_minutes: 60
-#     soft_fail:
-#       - exit_status: 1
+  - group: ":eyes: Special"
+    depends_on: "julia"
+    steps:
+      # - label: "Metal API Validation"
+      #   plugins:
+      #     - JuliaCI/julia#v1:
+      #         version: 1.8
+      #     - JuliaCI/julia-test#v1:
+      #         test_args: "--quickfail"
+      #     - JuliaCI/julia-coverage#v1:
+      #         codecov: true
+      #         dirs:
+      #           - src
+      #           - lib
+      #           - examples
+      #   command: |
+      #     julia --project=deps deps/build_ci.jl
+      #   env:
+      #     MTL_DEBUG_LAYER: '1'
+      #     MTL_SHADER_VALIDATION: '1'
+      #   agents:
+      #     queue: "juliagpu"
+      #     metal: "*"
+      #   if: build.message !~ /\[skip tests\]/ && !build.pull_request.draft
+      #   timeout_in_minutes: 60
+      #   soft_fail:
+      #     - exit_status: 1
+      - wait
 
 env:
   SECRET_CODECOV_TOKEN: "dysHhdzb4Afv/ogVhu+SVWpcFyzFgwzgpiM3rdPuwwKtzCZVvPYWMCE22WCTUvpJQG/TYY7wmDJA9nH5j1VUd9Y55IamkDDMrOkLsdI+Mu7pmIjfJ0DzRZymP0q5HF4X1lp9YlTErko+ZHYghZktQUqDDWr7g/ponCyNba/uBUEi0wXLISiS+/kRDtOKtAQXV55VdcG7H9pXfWYgWrfDKZVRk/6Jgx6djsYwPYjM6AygFm1SmWRynBIqP/n/H94u8lMTcfv3iFs98RwWja7Nu8rwn82325qqIvE25B3PPPUcYK8KMclKj5FA9U6F/ta58h8zGR/rnKxDJSvER3RF+g==;U2FsdGVkX18jTxzRENWrQI03MQepANTHhy2iYZHwpTzIZnWR26SUBLJCdmJonz0YffMXQuTO0II1VAqgMVnopA=="

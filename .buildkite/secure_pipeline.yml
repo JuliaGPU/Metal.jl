@@ -1,0 +1,29 @@
+steps:
+  - label: "Documentation"
+    depends_on: "julia"
+    env:
+      BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET: ${BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET?}
+    plugins:
+      - JuliaCI/julia#v1:
+          version: 1.8
+      - staticfloat/cryptic#v2:
+          files:
+            - ./docs/documenter.key
+    command: |
+      julia --project -e '
+        println("--- :julia: Instantiating project")
+        using Pkg
+        Pkg.instantiate()
+        Pkg.activate("docs")
+        Pkg.instantiate()
+        push!(LOAD_PATH, @__DIR__)
+        println("+++ :julia: Building documentation")
+        include("docs/make.jl")
+        println("+++ :julia: Deploying documentation")
+        include("docs/deploy.jl")'
+    agents:
+      queue: "juliaecosystem"
+      os: "macos"
+      arch: "aarch64"
+    if: build.message !~ /\[skip docs\]/ && !build.pull_request.draft
+    timeout_in_minutes: 30
