@@ -5,8 +5,7 @@ project(cmt VERSION 1.0.1 DESCRIPTION "C Metal Wrapper"
 
 find_library(FOUNDATION_LIBRARY Foundation)
 find_library(METAL_LIBRARY Metal)
-MARK_AS_ADVANCED(FOUNDATION_LIBRARY
-                     METAL_LIBRARY)
+find_library(MPS_LIBRARY MetalPerformanceShaders)
 
 # with debug builds, invoke dsymutil to generate separate debug info.
 # this needs to be done when object files are available
@@ -57,7 +56,8 @@ set(SOURCES
     src/resource.m
     src/capture/capture_descriptor.m
     src/capture/capture_manager.m
-    src/capture/capture_scope.m)
+    src/capture/capture_scope.m
+    src/performance_shaders/matrix.m)
 
 add_library(cmt SHARED ${SOURCES})
 
@@ -70,7 +70,7 @@ set_target_properties(cmt PROPERTIES
                       SOVERSION 1
                       PUBLIC_HEADER include/cmt/cmt.h)
 
-target_link_libraries(cmt ${FOUNDATION_LIBRARY} ${METAL_LIBRARY})
+target_link_libraries(cmt ${FOUNDATION_LIBRARY} ${METAL_LIBRARY} ${MPS_LIBRARY})
 
 install(TARGETS cmt
         LIBRARY DESTINATION lib

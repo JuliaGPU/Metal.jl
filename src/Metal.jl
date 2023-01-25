@@ -45,4 +45,7 @@ include("mapreduce.jl")
 include("random.jl")
 include("gpuarrays.jl")
 
+# libraries
+include("../lib/mps/MPS.jl")
+
 end # module

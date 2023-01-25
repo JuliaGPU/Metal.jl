@@ -10,5 +10,6 @@
 
 #include "types_foundation.h"
 #include "types_metal.h"
+#include "types_mps.h"
 
 #endif /* cmt_types_h */
