@@ -7,7 +7,7 @@ Create an array local to each threadgroup launched during kernel execution.
 """
 MtlThreadGroupArray
 
-@static if macos_version() >= v"13.1"
+@static if macos_version() >= v"13.0"
     @inline function MtlThreadGroupArray(::Type{T}, dims) where {T}
         len = prod(dims)
         # NOTE: this relies on const-prop to forward the literal length to the generator.
@@ -18,6 +18,7 @@ MtlThreadGroupArray
 else
     # on older macOS, shared memory with small types results in miscompilation (Metal.jl#26),
     # so we use an array wrapper extending the element size to the minimum known to work.
+    # this was fixed in macOS 13 beta 4 (22A5311f).
 
     @inline function MtlThreadGroupArray(::Type{T}, dims) where {T}
         len = prod(dims)
