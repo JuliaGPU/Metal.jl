@@ -17,3 +17,4 @@ steps:
     branches: "!gh-pages"
     agents:
       queue: "juliaecosystem"
+      os: "linux"
