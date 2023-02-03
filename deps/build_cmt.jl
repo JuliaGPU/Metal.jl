@@ -8,7 +8,7 @@ if haskey(ENV, "BUILDKITE")
     run(`buildkite-agent annotate 'Using a locally-built cmt library; A bump of cmt_jll will be required before releasing Metal.jl.' --style 'warning' --context 'ctx-deps'`)
 end
 
-using Scratch, CMake_jll, Libdl, Preferences
+using Scratch, CMake_jll, Ninja_jll, Libdl, Preferences
 
 Metal = Base.UUID("dde4c033-4e86-420c-a63e-0dd931031962")
 
@@ -17,10 +17,25 @@ scratch_dir = get_scratch!(Metal, "cmt")
 isdir(scratch_dir) && rm(scratch_dir; recursive=true)
 source_dir = joinpath(@__DIR__, "cmt")
 
-mktempdir() do build_dir
-    run(`$(cmake()) -DCMAKE_INSTALL_PREFIX=$(scratch_dir) -B$(build_dir) -S$(source_dir) -DCMAKE_BUILD_TYPE=Debug`)
-    run(`$(cmake()) --build $(build_dir) --parallel $(Sys.CPU_THREADS)`)
-    run(`$(cmake()) --install $(build_dir)`)
+# get build directory
+build_dir = if isempty(ARGS)
+    mktempdir()
+else
+    ARGS[1]
+end
+mkpath(build_dir)
+
+# build and install
+cmake() do cmake_path
+ninja() do ninja_path
+    run(```$cmake_path -GNinja
+                       -DCMAKE_BUILD_TYPE=Debug
+                       -DCMAKE_INSTALL_PREFIX=$(scratch_dir)
+                       -DCMAKE_COLOR_DIAGNOSTICS=$(get(stdout, :color, false) ? "On" : "Off")
+                       -B$(build_dir) -S$(source_dir)```)
+    run(`$cmake --build $(build_dir) --parallel $(Sys.CPU_THREADS)`)
+    run(`$ninja_path -C $(build_dir) install`)
+end
 end
 
 # Discover built libraries
