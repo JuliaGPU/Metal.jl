@@ -30,8 +30,8 @@ MTL.contents(ptr::MtlPointer{T}) where {T} = convert(Ptr{T}, contents(ptr.buffer
 ## operations
 
 # GPU -> GPU
-function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlPointer{T}, src::MtlPointer{T}, N::Integer) where T
-    cmdbuf = MtlCommandBuffer(global_queue(dev))
+function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlPointer{T}, src::MtlPointer{T}, N::Integer, queue=global_queue(dev)) where T
+    cmdbuf = MtlCommandBuffer(queue)
     MtlBlitCommandEncoder(cmdbuf) do enc
         MTL.append_copy!(enc, dst.buffer, dst.offset, src.buffer, src.offset, N * sizeof(T))
     end
@@ -40,11 +40,11 @@ function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlPointer{T}, src::MtlPointer
 end
 
 # GPU -> CPU
-function Base.unsafe_copyto!(dev::MtlDevice, dst::Ptr{T}, src::MtlPointer{T}, N::Integer) where T
+function Base.unsafe_copyto!(dev::MtlDevice, dst::Ptr{T}, src::MtlPointer{T}, N::Integer, queue=global_queue(dev)) where T
     storage_type = src.buffer.storageMode
     if storage_type ==  MTL.MtStorageModePrivate
         tmp_buf = alloc(T, dev, N, storage=Shared)
-        unsafe_copyto!(dev, tmp_buf, 1, src.buffer, src.offset, N)
+        unsafe_copyto!(dev, tmp_buf, 1, src.buffer, src.offset, N, queue)
         unsafe_copyto!(dst, contents(tmp_buf), N)
         free(tmp_buf)
     elseif storage_type ==  MTL.MtStorageModeShared
@@ -56,12 +56,12 @@ function Base.unsafe_copyto!(dev::MtlDevice, dst::Ptr{T}, src::MtlPointer{T}, N:
 end
 
 # CPU -> GPU
-function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlPointer{T}, src::Ptr{T}, N::Integer) where T
+function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlPointer{T}, src::Ptr{T}, N::Integer, queue=global_queue(dev)) where T
     storage_type = dst.buffer.storageMode
     if storage_type == MTL.MtStorageModePrivate
         tmp_buf = alloc(T, dev, N, src, storage=Shared)
-        unsafe_copyto!(dev, tmp_buf, src, N)
-        unsafe_copyto!(dev, dst.buffer, dst.offset, tmp_buf, 1, N)
+        unsafe_copyto!(dev, tmp_buf, src, N, queue)
+        unsafe_copyto!(dev, dst.buffer, dst.offset, tmp_buf, 1, N, queue)
         free(tmp_buf)
     elseif storage_type == MTL.MtStorageModeShared
         unsafe_copyto!(contents(dst), src, N)

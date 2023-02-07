@@ -232,11 +232,11 @@ end
 Base.copyto!(dest::MtlArray{T}, src::MtlArray{T}) where {T} =
     copyto!(dest, 1, src, 1, length(src))
 
-function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::Array{T}, soffs, n) where T
+function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::Array{T}, soffs, n, queue=global_queue(dev)) where T
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
   synchronize()
 
-  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
+  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n, queue)
   if Base.isbitsunion(T)
     # copy selector bytes
     error("Not implemented")
@@ -244,11 +244,11 @@ function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::Arra
   return dest
 end
 
-function Base.unsafe_copyto!(dev::MtlDevice, dest::Array{T}, doffs, src::MtlArray{T}, soffs, n) where T
+function Base.unsafe_copyto!(dev::MtlDevice, dest::Array{T}, doffs, src::MtlArray{T}, soffs, n, queue=global_queue(dev)) where T
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
   synchronize()
 
-  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
+  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n, queue)
   if Base.isbitsunion(T)
     # copy selector bytes
     error("Not implemented")
@@ -256,11 +256,11 @@ function Base.unsafe_copyto!(dev::MtlDevice, dest::Array{T}, doffs, src::MtlArra
   return dest
 end
 
-function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::MtlArray{T}, soffs, n) where T
+function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::MtlArray{T}, soffs, n, queue=global_queue(dev)) where T
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
   synchronize()
 
-  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
+  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n, queue)
   if Base.isbitsunion(T)
     # copy selector bytes
     error("Not implemented")
