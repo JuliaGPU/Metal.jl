@@ -35,7 +35,7 @@ mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
 
   function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Shared) where {T,N}
       Base.allocatedinline(T) || error("MtlArray only supports element types that are stored inline")
-      contains_double(T) && @warn "Metal does not support Float64 values" maxlog=1
+      contains_double(T) && @warn "Metal does not support Float64 values, try using Float32 instead" maxlog=1
       maxsize = prod(dims) * sizeof(T)
       bufsize = if Base.isbitsunion(T)
         # type tag array past the data
