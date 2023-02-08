@@ -60,6 +60,9 @@ extern "C" {
 #include "capture/capture_manager.h"
 #include "capture/capture_scope.h"
 
+#include "performance_shaders/device.h"
+#include "performance_shaders/matrix.h"
+
 MT_EXPORT
 void*
 mtRetain(void *obj);

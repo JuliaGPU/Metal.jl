@@ -1,10 +1,6 @@
 module MTL
 
-import Libdl
-using CEnum
-
-using cmt_jll
-const libcmt = cmt_jll.libcmt
+using ..cmt
 
 
 ## version information
@@ -30,7 +26,6 @@ end
 ## source code includes
 
 # low-level wrappers
-include("libcmt.jl")
 include("error.jl")
 include("helpers.jl")
 

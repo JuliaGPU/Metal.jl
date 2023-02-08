@@ -12,7 +12,7 @@ struct NsRange
 end
 
 struct NsError
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct NsDictionaryStringString
@@ -481,221 +481,222 @@ struct MtSizeAndAlign
 end
 
 struct MtDevice
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtRenderDesc
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtRenderPipeline
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtCommandQueue
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtCommandEncoder
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtBlitCommandEncoder
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtLibrary
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtRenderPassDesc
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtTexture
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtCommandBuffer
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtCommandBufferDescriptor
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtCommandBufferEncoderInfo
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtDrawable
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtVertexDescriptor
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtTextureDescriptor
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtIndirectCommandBufferDescriptor
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtIndirectCommandBuffer
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtIndirectComputeCommand
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtIndirectRenderCommand
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtDepthStencil
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtBuffer
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtCompileOptions
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtFunction
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtFunctionConstant
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtFunctionConstantValues
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtEvent
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtSharedEvent
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtSharedEventHandle
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtFence
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 # typedef void ( * MtCommandBufferHandlerFun ) ( MtCommandBuffer * buf )
 const MtCommandBufferHandlerFun = Ptr{Cvoid}
 
 struct MtSharedEventListener
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtResource
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtHeap
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtHeapDescriptor
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtAttribute
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtVertexAttribute
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtComputePipelineState
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtSamplerState
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtRenderCommandEncoder
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtComputeCommandEncoder
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtResourceStateCommandEncoder
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtCounterSampleBuffer
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtArgumentEncoder
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtAutoreleasedArgument
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtArgument
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtArgumentDescriptor
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtComputePipelineDescriptor
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtPointerType
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtArrayType
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtStructType
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtComputePipelineReflection
-    #= /Users/maxhawkins/workspace_julia/src/Metal.jl/res/wrap.jl:42 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtRenderPipelineReflection
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtCaptureManager
-    #= /Users/maxhawkins/workspace_julia/Metal.jl/res/wrap.jl:39 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtCaptureScope
-    #= /Users/maxhawkins/workspace_julia/Metal.jl/res/wrap.jl:39 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtCaptureDescriptor
-    #= /Users/maxhawkins/workspace_julia/Metal.jl/res/wrap.jl:39 =#
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 struct MtDispatchThreadgroupsIndirectArguments
@@ -722,6 +723,26 @@ struct MtTextureSwizzleChannels
     green::MtTextureSwizzle
     blue::MtTextureSwizzle
     alpha::MtTextureSwizzle
+end
+
+struct MtMPSVectorDescriptor
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
+end
+
+struct MtMPSVector
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
+end
+
+struct MtMPSMatrixDescriptor
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
+end
+
+struct MtMPSMatrix
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
+end
+
+struct MtMPSMatrixMultiplication
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
 function mtErrorCode(err)
@@ -2289,6 +2310,26 @@ end
 
 function mtCaptureScopeCommandQueue(scope)
     ccall((:mtCaptureScopeCommandQueue, libcmt), Ptr{MtCommandQueue}, (Ptr{MtCaptureScope},), scope)
+end
+
+function mtMPSSupportsMTLDevice(device)
+    ccall((:mtMPSSupportsMTLDevice, libcmt), Bool, (Ptr{MtDevice},), device)
+end
+
+function mtNewMatrixDescriptorWithRows(rows, columns, rowBytes, dataType)
+    ccall((:mtNewMatrixDescriptorWithRows, libcmt), Ptr{MtMPSMatrixDescriptor}, (NsUInteger, NsUInteger, NsUInteger, UInt32), rows, columns, rowBytes, dataType)
+end
+
+function mtNewMPSMatrixInitWithBuffer(buffer, descriptor)
+    ccall((:mtNewMPSMatrixInitWithBuffer, libcmt), Ptr{MtMPSMatrix}, (Ptr{MtBuffer}, Ptr{MtMPSMatrixDescriptor}), buffer, descriptor)
+end
+
+function mtNewMPSMatrixMultiplication(device, transposeLeft, transposeRight, resultRows, resultColumns, interiorColumns, alpha, beta)
+    ccall((:mtNewMPSMatrixMultiplication, libcmt), Ptr{MtMPSMatrixMultiplication}, (Ptr{MtDevice}, Bool, Bool, NsUInteger, NsUInteger, NsUInteger, Cdouble, Cdouble), device, transposeLeft, transposeRight, resultRows, resultColumns, interiorColumns, alpha, beta)
+end
+
+function mtMPSMatMulEncodeToCommandBuffer(matMul, commandBuffer, leftMatrix, rightMatrix, resultMatrix)
+    ccall((:mtMPSMatMulEncodeToCommandBuffer, libcmt), Cvoid, (Ptr{MtMPSMatrixMultiplication}, Ptr{MtCommandBuffer}, Ptr{MtMPSMatrix}, Ptr{MtMPSMatrix}, Ptr{MtMPSMatrix}), matMul, commandBuffer, leftMatrix, rightMatrix, resultMatrix)
 end
 
 function mtRetain(obj)

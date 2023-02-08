@@ -9,8 +9,11 @@ using LLVM.Interop
 using Metal_LLVM_Tools_jll
 using ExprTools: splitdef, combinedef
 
+# C wrappers
+include("../lib/cmt/cmt.jl")
+
 # core library
-include("../lib/core/MTL.jl")
+include("../lib/mtl/MTL.jl")
 @reexport using .MTL
 
 # essential stuff
@@ -44,5 +47,9 @@ include("broadcast.jl")
 include("mapreduce.jl")
 include("random.jl")
 include("gpuarrays.jl")
+
+# libraries
+include("../lib/mps/MPS.jl")
+export MPS
 
 end # module
