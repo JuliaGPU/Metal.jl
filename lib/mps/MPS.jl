@@ -2,9 +2,9 @@ module MPS
 
 using ..Metal
 
-import GPUArrays
+using ..cmt
 
-# low-level API: part of cmt, so accessed through MTL
+import GPUArrays
 
 # high-level wrappers
 include("matrix.jl")

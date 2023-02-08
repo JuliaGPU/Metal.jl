@@ -25,7 +25,7 @@ const jl_typ_to_mps = Dict{DataType,UInt32}(
     ComplexF32  => MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(32)
 )
 
-const MPTMatrix = Ptr{MTL.MtMPSMatrix}
+const MPTMatrix = Ptr{cmt.MtMPSMatrix}
 
 mutable struct MpsMatrix
     handle::MPTMatrix
@@ -41,9 +41,9 @@ as Metal stores matrices row-major instead of column-major.
 """
 function MPSMatrix(arr::MtlMatrix{T}) where T
     n_cols, n_rows = size(arr)
-    desc = MTL.mtNewMatrixDescriptorWithRows(n_rows, n_cols, sizeof(T)*n_cols,
+    desc = cmt.mtNewMatrixDescriptorWithRows(n_rows, n_cols, sizeof(T)*n_cols,
                                              jl_typ_to_mps[T])
-    return MTL.mtNewMPSMatrixInitWithBuffer(arr.buffer, desc)
+    return cmt.mtNewMPSMatrixInitWithBuffer(arr.buffer, desc)
 end
 
 """
@@ -67,14 +67,14 @@ function matmul!(c::MtlMatrix, a::MtlMatrix, b::MtlMatrix,
     mps_c = MPSMatrix(c)
 
     mat_mul_kernel =
-        MTL.mtNewMPSMatrixMultiplication(current_device(),
+        cmt.mtNewMPSMatrixMultiplication(current_device(),
                                          transpose_b, transpose_a,
                                          rows_c, cols_c, cols_a,
                                          alpha, beta)
 
     # Encode and commit matmul kernel
     cmdbuf = MtlCommandBuffer(global_queue(current_device()))
-    MTL.mtMPSMatMulEncodeToCommandBuffer(mat_mul_kernel, cmdbuf, mps_b, mps_a, mps_c)
+    cmt.mtMPSMatMulEncodeToCommandBuffer(mat_mul_kernel, cmdbuf, mps_b, mps_a, mps_c)
     commit!(cmdbuf)
 
     c
