@@ -91,6 +91,8 @@ Base.pointer(x::MtlArray{T}) where {T} = Base.unsafe_convert(MtlPointer{T}, x)
     Base.unsafe_convert(MtlPointer{T}, x) + Base._memory_offset(x, i)
 end
 
+Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S, T} =
+  throw(ArgumentError("cannot take the CPU address of a $(typeof(x))"))
 Base.unsafe_convert(t::Type{MtlPointer{T}}, x::MtlArray) where {T} =
   MtlPointer{T}(x.buffer, x.offset*Base.elsize(x))
 
@@ -138,7 +140,8 @@ Base.unsafe_convert(t::Type{MTL.MTLBuffer}, x::MtlArray) = x.buffer
 
 ## interop with CPU arrays
 
-Base.unsafe_wrap(t::Type{<:Array}, arr::MtlArray, dims; own=false) = unsafe_wrap(t, arr.buffer, dims; own=own)
+Base.unsafe_wrap(t::Type{<:Array}, arr::MtlArray, dims; own=false) =
+  unsafe_wrap(t, arr.buffer, dims; own=own)
 
 # We don't convert isbits types in `adapt`, since they are already
 # considered GPU-compatible.
