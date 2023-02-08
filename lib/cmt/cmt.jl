@@ -1,7 +1,5 @@
 module cmt
 
-using CEnum
-
 using cmt_jll
 const libcmt = cmt_jll.libcmt
 
