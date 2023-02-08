@@ -57,6 +57,7 @@ set(SOURCES
     src/capture/capture_descriptor.m
     src/capture/capture_manager.m
     src/capture/capture_scope.m
+    src/performance_shaders/device.m
     src/performance_shaders/matrix.m)
 
 add_library(cmt SHARED ${SOURCES})

@@ -50,5 +50,6 @@ include("gpuarrays.jl")
 
 # libraries
 include("../lib/mps/MPS.jl")
+export MPS
 
 end # module

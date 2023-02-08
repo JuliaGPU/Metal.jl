@@ -6,6 +6,8 @@
 #import "impl/common.h"
 #import "cmt/performance_shaders/matrix.h"
 
+#include <MetalPerformanceShaders/MetalPerformanceShaders.h>
+
 CF_RETURNS_RETAINED
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))

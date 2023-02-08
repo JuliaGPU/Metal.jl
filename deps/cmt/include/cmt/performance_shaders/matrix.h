@@ -12,8 +12,6 @@ extern "C" {
 
 #include "cmt/common.h"
 #include "cmt/types.h"
-#include "cmt/types_metal.h"
-#include <MetalPerformanceShaders/MetalPerformanceShaders.h>
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))

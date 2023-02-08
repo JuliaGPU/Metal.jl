@@ -49,7 +49,8 @@ function gemm_dispatch!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
     typC = eltype(C)
 
     # If possible, dispatch to performance shaders
-    if typA == typB && (typA, typC) in MPS_VALID_MATMUL_TYPES
+    if is_supported(current_device()) &&
+       typA == typB && (typA, typC) in MPS_VALID_MATMUL_TYPES
         matmul!(C, dA, dB, alpha, beta, tA, tB)
     else
         GPUArrays.generic_matmatmul!(C, A, B, alpha, beta)

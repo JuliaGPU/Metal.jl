@@ -2312,6 +2312,10 @@ function mtCaptureScopeCommandQueue(scope)
     ccall((:mtCaptureScopeCommandQueue, libcmt), Ptr{MtCommandQueue}, (Ptr{MtCaptureScope},), scope)
 end
 
+function mtMPSSupportsMTLDevice(device)
+    ccall((:mtMPSSupportsMTLDevice, libcmt), Bool, (Ptr{MtDevice},), device)
+end
+
 function mtNewMatrixDescriptorWithRows(rows, columns, rowBytes, dataType)
     ccall((:mtNewMatrixDescriptorWithRows, libcmt), Ptr{MtMPSMatrixDescriptor}, (NsUInteger, NsUInteger, NsUInteger, UInt32), rows, columns, rowBytes, dataType)
 end
