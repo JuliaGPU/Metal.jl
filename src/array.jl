@@ -2,6 +2,30 @@
 
 export MtlArray, MtlVector, MtlMatrix, MtlVecOrMat
 
+function hasfieldcount(@nospecialize(dt))
+    try
+        fieldcount(dt)
+    catch
+        return false
+    end
+    return true
+end
+
+function contains_double(T)
+    if T === Float64
+      return true
+    elseif T isa Union
+        for U in Base.uniontypes(T)
+            contains_double(U) && return true
+        end
+    elseif hasfieldcount(T)
+        for U in fieldtypes(T)
+            contains_double(U) && return true
+        end
+    end
+    return false
+end
+
 mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
   buffer::MtlBuffer
 
@@ -11,6 +35,7 @@ mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
 
   function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Shared) where {T,N}
       Base.allocatedinline(T) || error("MtlArray only supports element types that are stored inline")
+      contains_double(T) && @warn "Metal does not support Float64 values" maxlog=1
       maxsize = prod(dims) * sizeof(T)
       bufsize = if Base.isbitsunion(T)
         # type tag array past the data
