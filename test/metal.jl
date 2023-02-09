@@ -338,6 +338,38 @@ pipeline = MtlComputePipelineState(dev, fun)
 
 end
 
+@testset "async_copy" begin
+    N = 1024
+    signal_value = 2
+
+    dev = first(devices())
+    A = MtlArray(rand(Float32, N))
+    B = MtlArray(rand(Float32, N))
+    a = Array{Float32}(undef, N)
+
+    queue1 = Metal.MtlCommandQueue(dev)
+
+    unsafe_copyto!(dev, a, 0, B, 0, N, queue=queue1)
+    unsafe_copyto!(dev, A, 0, a, 0, N, queue=queue1)
+
+    buf1 = Metal.MtlCommandBuffer(queue1)
+    event = Metal.MtlEvent(dev)
+    Metal.encode_signal!(buf1, event, signal_value)
+
+    queue2 = Metal.MtlCommandQueue(dev)
+    buf2 = Metal.MtlCommandBuffer(queue2)
+    Metal.encode_wait!(buf2, event, signal_value)
+
+    Metal.commit!(buf1)
+    Metal.commit!(buf2)
+
+    Metal.wait_completed(buf2)
+
+
+    @test isapprox(a, Array(A))
+    @test isapprox(a, Array(B))
+end
+
 # TODO: continue adding tests
 
 end
