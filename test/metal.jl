@@ -348,23 +348,23 @@ end
     a = Array{Float32}(undef, N)
 
     queue1 = Metal.MtlCommandQueue(dev)
-
-    unsafe_copyto!(dev, a, 0, B, 0, N, queue=queue1)
-    unsafe_copyto!(dev, A, 0, a, 0, N, queue=queue1)
-
-    buf1 = Metal.MtlCommandBuffer(queue1)
-    event = Metal.MtlEvent(dev)
-    Metal.encode_signal!(buf1, event, signal_value)
-
     queue2 = Metal.MtlCommandQueue(dev)
+    buf1 = Metal.MtlCommandBuffer(queue1)
     buf2 = Metal.MtlCommandBuffer(queue2)
-    Metal.encode_wait!(buf2, event, signal_value)
+    event = Metal.MtlEvent(dev)
 
-    Metal.commit!(buf1)
+    
+    Metal.encode_wait!(buf2, event, signal_value)
     Metal.commit!(buf2)
 
-    Metal.wait_completed(buf2)
+    unsafe_copyto!(dev, a, 1, B, 1, N, queue=queue1, async=true)
+    unsafe_copyto!(dev, A, 1, a, 1, N, queue=queue1, async=true)
 
+    Metal.encode_signal!(buf1, event, signal_value)
+    Metal.commit!(buf1)
+
+
+    Metal.wait_completed(buf2)
 
     @test isapprox(a, Array(A))
     @test isapprox(a, Array(B))

@@ -233,11 +233,11 @@ Base.copyto!(dest::MtlArray{T}, src::MtlArray{T}) where {T} =
     copyto!(dest, 1, src, 1, length(src))
 
 function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::Array{T}, soffs, n;
-                             queue::MtlCommandQueue=global_queue(dev)) where T
+                             queue::MtlCommandQueue=global_queue(dev), async::Bool=false) where T
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
-  synchronize()
+  async || synchronize(queue)
 
-  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n, queue=queue)
+  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n, queue=queue, async=async)
   if Base.isbitsunion(T)
     # copy selector bytes
     error("Not implemented")
@@ -246,11 +246,11 @@ function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::Arra
 end
 
 function Base.unsafe_copyto!(dev::MtlDevice, dest::Array{T}, doffs, src::MtlArray{T}, soffs, n;
-                             queue::MtlCommandQueue=global_queue(dev)) where T
+                             queue::MtlCommandQueue=global_queue(dev), async::Bool=false) where T
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
-  synchronize()
+  async || synchronize(queue)
 
-  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n, queue=queue)
+  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n, queue=queue, async=async)
   if Base.isbitsunion(T)
     # copy selector bytes
     error("Not implemented")
@@ -259,11 +259,11 @@ function Base.unsafe_copyto!(dev::MtlDevice, dest::Array{T}, doffs, src::MtlArra
 end
 
 function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::MtlArray{T}, soffs, n;
-                             queue::MtlCommandQueue=global_queue(dev)) where T
+                             queue::MtlCommandQueue=global_queue(dev), async::Bool=false) where T
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
-  synchronize()
+  async || synchronize(queue)
 
-  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n, queue=queue)
+  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n, queue=queue, async=async)
   if Base.isbitsunion(T)
     # copy selector bytes
     error("Not implemented")
