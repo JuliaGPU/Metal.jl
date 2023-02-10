@@ -44,10 +44,6 @@ using Base: FastMath
 @device_override Base.ceil(x::Float32) = ccall("extern air.ceil.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.ceil(x::Float16) = ccall("extern air.ceil.f16", llvmcall, Float16, (Float16,), x)
 
-@device_function copysign_fast(x::Float32) = ccall("extern air.fast_copysign.f32", llvmcall, Cfloat, (Cfloat,), x)
-@device_override Base.copysign(x::Float32) = ccall("extern air.copysign.f32", llvmcall, Cfloat, (Cfloat,), x)
-@device_override Base.copysign(x::Float16) = ccall("extern air.copysign.f16", llvmcall, Float16, (Float16,), x)
-
 @device_override FastMath.cos_fast(x::Float32) = ccall("extern air.fast_cos.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.cos(x::Float32) = ccall("extern air.cos.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.cos(x::Float16) = ccall("extern air.cos.f16", llvmcall, Float16, (Float16,), x)
