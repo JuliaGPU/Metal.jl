@@ -30,7 +30,7 @@ MTL.contents(ptr::MtlPointer{T}) where {T} = convert(Ptr{T}, contents(ptr.buffer
 ## operations
 
 # GPU -> GPU
-function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlPointer{T}, src::MtlPointer{T}, N::Integer; 
+function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlPointer{T}, src::MtlPointer{T}, N::Integer;
                              queue::MtlCommandQueue=global_queue(dev), async::Bool=false) where T
     cmdbuf = MtlCommandBuffer(queue)
     MtlBlitCommandEncoder(cmdbuf) do enc
@@ -46,7 +46,7 @@ function Base.unsafe_copyto!(dev::MtlDevice, dst::Ptr{T}, src::MtlPointer{T}, N:
     storage_type = src.buffer.storageMode
     if storage_type ==  MTL.MtStorageModePrivate
         tmp_buf = alloc(T, dev, N, storage=Shared)
-        unsafe_copyto!(dev, tmp_buf, 1, src.buffer, src.offset, N, queue=queue, async=async)
+        unsafe_copyto!(dev, tmp_buf, 1, src.buffer, src.offset, N; queue, async)
         unsafe_copyto!(dst, contents(tmp_buf), N)
         free(tmp_buf)
     elseif storage_type ==  MTL.MtStorageModeShared
@@ -63,8 +63,8 @@ function Base.unsafe_copyto!(dev::MtlDevice, dst::MtlPointer{T}, src::Ptr{T}, N:
     storage_type = dst.buffer.storageMode
     if storage_type == MTL.MtStorageModePrivate
         tmp_buf = alloc(T, dev, N, src, storage=Shared)
-        unsafe_copyto!(dev, tmp_buf, src, N, queue=queue, async=async)
-        unsafe_copyto!(dev, dst.buffer, dst.offset, tmp_buf, 1, N, queue=queue, async=async)
+        unsafe_copyto!(dev, tmp_buf, src, N; queue, async)
+        unsafe_copyto!(dev, dst.buffer, dst.offset, tmp_buf, 1, N; queue, async)
         free(tmp_buf)
     elseif storage_type == MTL.MtStorageModeShared
         unsafe_copyto!(contents(dst), src, N)
