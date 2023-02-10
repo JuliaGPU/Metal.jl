@@ -357,8 +357,8 @@ end
     Metal.encode_wait!(buf2, event, signal_value)
     Metal.commit!(buf2)
 
-    unsafe_copyto!(dev, a, 1, B, 1, N, queue=queue1, async=true)
-    unsafe_copyto!(dev, A, 1, a, 1, N, queue=queue1, async=true)
+    unsafe_copyto!(dev, pointer(a), pointer(B), N, queue=queue1, async=true)
+    unsafe_copyto!(dev, pointer(A), pointer(a), N, queue=queue1, async=true)
 
     Metal.encode_signal!(buf1, event, signal_value)
     Metal.commit!(buf1)
