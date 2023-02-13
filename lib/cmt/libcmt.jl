@@ -1802,10 +1802,10 @@ function mtPointerTypeElementArrayType(ptr)
     ccall((:mtPointerTypeElementArrayType, libcmt), Ptr{MtArrayType}, (Ptr{MtPointerType},), ptr)
 end
 
-# typedef void ( * MtCommandBufferOnCompletedFn ) ( MtCommandBuffer * __restrict cmdb , void * __restrict data )
+# typedef void ( * MtCommandBufferOnCompletedFn ) ( void * __restrict data )
 const MtCommandBufferOnCompletedFn = Ptr{Cvoid}
 
-# typedef void ( * MtCommandBufferOnScheduledFn ) ( MtCommandBuffer * __restrict cmdb , void * __restrict data )
+# typedef void ( * MtCommandBufferOnScheduledFn ) ( void * __restrict data )
 const MtCommandBufferOnScheduledFn = Ptr{Cvoid}
 
 function mtNewCommandBufferDescriptor()

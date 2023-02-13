@@ -245,6 +245,8 @@ immediately if the event already has an equal or larger value.
 encode_wait!(buf::MtlCommandBuffer, ev::MtlAbstractEvent, val::Integer) =
     mtCommandBufferEncodeWaitForEvent(buf, ev, val)
 
+async_send(data::Ptr{Cvoid}) = ccall(:uv_async_send, Cint, (Ptr{Cvoid},), data)
+
 function _command_buffer_async_callback(handle, data)
     # we don't care about the buffer (handle), the user can capture it if needed
     ccall(:uv_async_send, Cint, (Ptr{Cvoid},), data)
@@ -259,10 +261,14 @@ function _command_buffer_callback(f::Base.Callable, buf::MtlCommandBuffer)
 
     # the condition object is embedded in a task, so the Julia scheduler keeps it alive
 
-    handler = @cfunction(_command_buffer_async_callback, Nothing,
-                         (MTL.MTLCommandBufferDescriptor, Ptr{Cvoid}))
+    # callback = @cfunction(async_send, Cint, (Ptr{Cvoid},))
+    # See https://github.com/JuliaGPU/CUDA.jl/issues/1314.
+    # and https://github.com/JuliaLang/julia/issues/43748
+    # TL;DR We are not allowed to cache `async_send` in the sysimage
+    # so instead let's just pull out the function pointer and pass it instead.
+    callback = cglobal(:uv_async_send)
 
-    return handler, cond
+    return callback, cond
 end
 
 """
