@@ -53,8 +53,7 @@ end
 # number.jl
 # XXX: remove when we have malloc
 @device_override @inline function Base.getindex(x::Number, I::Integer...)
-    if !@boundscheck all(isone, I)
+    @boundscheck all(isone, I) ||
         @print_and_throw "Out-of-bounds access of scalar value"
-    end
     x
 end
