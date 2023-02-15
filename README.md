@@ -2,10 +2,16 @@
 
 *Metal programming in Julia*
 
-[![][doi-img]][doi-url] [![][buildkite-img]][buildkite-url] [![][codecov-img]][codecov-url]
+[![][doi-img]][doi-url] [![][docs-stable-img]][docs-stable-url] [![][docs-dev-img]][docs-dev-url] [![][buildkite-img]][buildkite-url] [![][codecov-img]][codecov-url]
 
 [doi-img]: https://zenodo.org/badge/262279120.svg
 [doi-url]: https://zenodo.org/badge/latestdoi/262279120
+
+[docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
+[docs-stable-url]: https://metal.juliagpu.org/stable/
+
+[docs-dev-img]: https://img.shields.io/badge/docs-dev-blue.svg
+[docs-dev-url]: https://metal.juliagpu.org/dev/
 
 [buildkite-img]: https://badge.buildkite.com/a9b335b7d5d4d7ea90b031057728de9d1e9a73d5bcd9d89655.svg?branch=main
 [buildkite-url]: https://buildkite.com/julialang/metal-dot-jl
