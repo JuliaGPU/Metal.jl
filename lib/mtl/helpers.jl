@@ -62,7 +62,7 @@ error[] != C_NULL && throw(MtlError(error[]))
 """
 macro mtlthrows(error, fun)
     expr = quote
-        $error = Ref{MTLError}()
+        $error = Ref{MTLError}(C_NULL)
         result = $fun
         if $error[] != C_NULL
             throw(MtlError($(error)[]))
