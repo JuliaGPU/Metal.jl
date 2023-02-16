@@ -19,7 +19,7 @@ CF_RETURNS_RETAINED
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtLibrary*
-mtNewLibraryWithFile(MtDevice *device, char *filepath, NsError **error) {
+mtNewLibraryWithFile(MtDevice *device, const char *filepath, NsError **error) {
   return [(id<MTLDevice>)device newLibraryWithFile: mtNSString(filepath) error: (NSError**)error];
 }
 
@@ -27,16 +27,15 @@ CF_RETURNS_RETAINED
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 MtLibrary*
-mtNewLibraryWithURL(MtDevice *device, char *path, NsError **error) {
-  NSURL *url = [NSURL URLWithString: mtNSString(path)];
-  return [(id<MTLDevice>)device newLibraryWithURL: url error: (NSError**)error];
+mtNewLibraryWithURL(MtDevice *device, const char *path, NsError **error) {
+  return [(id<MTLDevice>)device newLibraryWithURL: mtNSURL(path) error: (NSError**)error];
 }
 
 CF_RETURNS_RETAINED
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtLibrary*
-mtNewLibraryWithSource(MtDevice *device, char *source, MtCompileOptions *Opts, NsError **error) {
+mtNewLibraryWithSource(MtDevice *device, const char *source, MtCompileOptions *Opts, NsError **error) {
   return [(id<MTLDevice>)device newLibraryWithSource: mtNSString(source)
   								                           options: (MTLCompileOptions*)Opts
   								                             error: (NSError**) error];
@@ -46,7 +45,7 @@ CF_RETURNS_RETAINED
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtLibrary*
-mtNewLibraryWithData(MtDevice *device, void* buffer, size_t size, NsError **error) {
+mtNewLibraryWithData(MtDevice *device, const void* buffer, size_t size, NsError **error) {
   dispatch_data_t dispatch_data =
     dispatch_data_create(buffer, size, dispatch_get_main_queue(),
                          DISPATCH_DATA_DESTRUCTOR_DEFAULT);

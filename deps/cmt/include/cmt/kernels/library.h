@@ -22,21 +22,21 @@ mtNewDefaultLibrary(MtDevice *device);
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtLibrary*
-mtNewLibraryWithFile(MtDevice *device, char *filepath, NsError **error);
+mtNewLibraryWithFile(MtDevice *device, const char *filepath, NsError **error);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.13), mt_ios(11.0))
 MtLibrary*
-mtNewLibraryWithURL(MtDevice *device, char *url, NsError **error);
+mtNewLibraryWithURL(MtDevice *device, const char *url, NsError **error);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtLibrary*
-mtNewLibraryWithSource(MtDevice *device, char *source, MtCompileOptions *Opts, NsError **error);
+mtNewLibraryWithSource(MtDevice *device, const char *source, MtCompileOptions *Opts, NsError **error);
 
 MT_EXPORT
 MtLibrary*
-mtNewLibraryWithData(MtDevice *device, void* buffer, size_t size, NsError **error);
+mtNewLibraryWithData(MtDevice *device, const void* buffer, size_t size, NsError **error);
 
 MT_EXPORT
 MtDevice*
