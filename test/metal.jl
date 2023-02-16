@@ -329,7 +329,7 @@ desc.errorOptions = MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
 
 cmq = MtlCommandQueue(current_device())
 cmdbuf = MtlCommandBuffer(cmq, desc)
-if get(ENV, "MTL_DEBUG_LAYER", "0") == 0
+if !runtime_validation
     # when the debug layer is activated, Metal seems to retain all resources?
     @test cmdbuf.retainedReferences == false
 end
@@ -398,13 +398,16 @@ desc.url = "/tmp/foo"
 
 pipeline_desc = MtlComputePipelineDescriptor()
 pipeline_desc.computeFunction = fun
-add_functions!(bin, pipeline_desc)
+if !runtime_validation
+    # XXX: for some reason, this crashes under the validator
+    add_functions!(bin, pipeline_desc)
 
-mktempdir() do dir
-    path = joinpath(dir, "kernel.bin")
-    write(path, bin)
-    @test isfile(path)
-    @test filesize(path) > 0
+    mktempdir() do dir
+        path = joinpath(dir, "kernel.bin")
+        write(path, bin)
+        @test isfile(path)
+        @test filesize(path) > 0
+    end
 end
 
 end

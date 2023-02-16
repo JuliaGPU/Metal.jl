@@ -14,6 +14,8 @@ const eltypes = [Int16, Int32, Int64,
                  ComplexF16, ComplexF32]
 TestSuite.supported_eltypes(::Type{<:MtlArray}) = eltypes
 
+const runtime_validation = get(ENV, "MTL_DEBUG_LAYER", "0") != "0"
+
 using Random
 
 
