@@ -508,6 +508,14 @@ struct MtLibrary
     #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
+struct MtBinaryArchive
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
+end
+
+struct MtBinaryArchiveDescriptor
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
+end
+
 struct MtRenderPassDesc
     #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
@@ -1358,6 +1366,46 @@ end
 
 function mtLibraryFunctionNames(lib, count, names)
     ccall((:mtLibraryFunctionNames, libcmt), Cvoid, (Ptr{MtLibrary}, Ptr{Csize_t}, Ptr{Cstring}), lib, count, names)
+end
+
+function mtNewBinaryArchiveDescriptor()
+    ccall((:mtNewBinaryArchiveDescriptor, libcmt), Ptr{MtBinaryArchiveDescriptor}, ())
+end
+
+function mtBinaryArchiveDescriptorURL(desc)
+    ccall((:mtBinaryArchiveDescriptorURL, libcmt), Cstring, (Ptr{MtBinaryArchiveDescriptor},), desc)
+end
+
+function mtBinaryArchiveDescriptorURLSet(desc, path)
+    ccall((:mtBinaryArchiveDescriptorURLSet, libcmt), Cvoid, (Ptr{MtBinaryArchiveDescriptor}, Cstring), desc, path)
+end
+
+function mtNewBinaryArchiveWithDescriptor(device, desc, error)
+    ccall((:mtNewBinaryArchiveWithDescriptor, libcmt), Ptr{MtBinaryArchive}, (Ptr{MtDevice}, Ptr{MtBinaryArchiveDescriptor}, Ptr{Ptr{NsError}}), device, desc, error)
+end
+
+function mtBinaryArchiveDevice(bin)
+    ccall((:mtBinaryArchiveDevice, libcmt), Ptr{MtDevice}, (Ptr{MtBinaryArchive},), bin)
+end
+
+function mtBinaryArchiveLabel(bin)
+    ccall((:mtBinaryArchiveLabel, libcmt), Cstring, (Ptr{MtBinaryArchive},), bin)
+end
+
+function mtBinaryArchiveLabelSet(bin, label)
+    ccall((:mtBinaryArchiveLabelSet, libcmt), Cvoid, (Ptr{MtBinaryArchive}, Cstring), bin, label)
+end
+
+function mtBinaryArchiveAddComputePipelineFunctions(bin, desc, error)
+    ccall((:mtBinaryArchiveAddComputePipelineFunctions, libcmt), Cvoid, (Ptr{MtBinaryArchive}, Ptr{MtComputePipelineDescriptor}, Ptr{Ptr{NsError}}), bin, desc, error)
+end
+
+function mtBinaryArchiveAddFunction(bin, desc, lib, error)
+    ccall((:mtBinaryArchiveAddFunction, libcmt), Cvoid, (Ptr{MtBinaryArchive}, Ptr{MtFunctionDescriptor}, Ptr{MtLibrary}, Ptr{Ptr{NsError}}), bin, desc, lib, error)
+end
+
+function mtBinaryArchiveSerialize(bin, path, error)
+    ccall((:mtBinaryArchiveSerialize, libcmt), Cvoid, (Ptr{MtBinaryArchive}, Cstring, Ptr{Ptr{NsError}}), bin, path, error)
 end
 
 function mtBufferContents(buf)

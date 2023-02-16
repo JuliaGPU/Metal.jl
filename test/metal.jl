@@ -378,6 +378,35 @@ desc.maxCallStackDepth = 2
 
 end
 
+@testset "binary archive" begin
+
+dev = first(devices())
+lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
+fun = MtlFunction(lib, "kernel_1")
+
+desc = MtlBinaryArchiveDescriptor()
+bin = MtlBinaryArchive(dev, desc)
+
+compact_str = sprint(io->show(io, desc))
+full_str = sprint(io->show(io, MIME"text/plain"(), desc))
+
+@test desc.url === nothing
+desc.url = "/tmp/foo"
+@test desc.url == "/tmp/foo"
+
+pipeline_desc = MtlComputePipelineDescriptor()
+pipeline_desc.computeFunction = fun
+add_functions!(bin, pipeline_desc)
+
+mktempdir() do dir
+    path = joinpath(dir, "kernel.bin")
+    write(path, bin)
+    @test isfile(path)
+    @test filesize(path) > 0
+end
+
+end
+
 @testset "async_copy" begin
     N = 1024
     signal_value = 2
@@ -393,7 +422,7 @@ end
     buf2 = Metal.MtlCommandBuffer(queue2)
     event = Metal.MtlEvent(dev)
 
-    
+
     Metal.encode_wait!(buf2, event, signal_value)
     Metal.commit!(buf2)
 

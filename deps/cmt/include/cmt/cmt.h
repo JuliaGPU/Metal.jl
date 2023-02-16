@@ -29,6 +29,7 @@ extern "C" {
 #include "kernels/constant_values.h"
 #include "kernels/function.h"
 #include "kernels/library.h"
+#include "kernels/binary_archive.h"
 
 #include "memory/buffer.h"
 #include "memory/heap-descriptor.h"
