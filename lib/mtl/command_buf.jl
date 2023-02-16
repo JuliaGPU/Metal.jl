@@ -1,25 +1,21 @@
-export MtlCommandBuffer, MtlCommandBufferDescriptor, enqueue!, wait_scheduled, wait_completed, encode_signal!, encode_wait!, commit!, on_scheduled, on_completed
+#
+# command buffer descriptor
+#
+
+export MtlCommandBufferDescriptor
 
 const MTLCommandBufferDescriptor = Ptr{MTL.MtCommandBufferDescriptor}
 
 mutable struct MtlCommandBufferDescriptor
     handle::MTLCommandBufferDescriptor
-    retainReferences::Bool
-    errorOption::MTL.MtCommandBufferErrorOption
 end
 
-Base.unsafe_convert(::Type{MTLCommandBufferDescriptor}, q::MtlCommandBufferDescriptor) = q.handle
+Base.unsafe_convert(::Type{MTLCommandBufferDescriptor}, q::MtlCommandBufferDescriptor) =
+    q.handle
 
-function MtlCommandBufferDescriptor(retainReferences::Bool=true, errorOption::MTL.MtCommandBufferErrorOption=MtCommandBufferErrorOptionNone)
+function MtlCommandBufferDescriptor()
     handle = mtNewCommandBufferDescriptor()
-    if !retainReferences
-        MTL.mtCommandBufferDescriptorRetainedReferencesSet(handle, false)
-    end
-    if errorOption != MtCommandBufferErrorOptionNone
-        MTL.mtCommandBufferDescriptorErrorOptionsSet(handle,
-                MTL.MtCommandBufferErrorOptionEncoderExecutionStatus)
-    end
-    obj = MtlCommandBufferDescriptor(handle, retainReferences, errorOption)
+    obj = MtlCommandBufferDescriptor(handle)
     finalizer(unsafe_destroy!, obj)
     return obj
 end
@@ -32,7 +28,7 @@ end
 ## properties
 
 Base.propertynames(::MtlCommandBufferDescriptor) = (
-    :retainReferences, :errorOption
+    :retainedReferences, :errorOptions
 )
 
 function Base.getproperty(o::MtlCommandBufferDescriptor, f::Symbol)
@@ -45,8 +41,22 @@ function Base.getproperty(o::MtlCommandBufferDescriptor, f::Symbol)
     end
 end
 
+function Base.setproperty!(o::MtlCommandBufferDescriptor, f::Symbol, val)
+    if f === :errorOptions
+        mtCommandBufferDescriptorErrorOptionsSet(o, val)
+    elseif f === :retainedReferences
+        mtCommandBufferDescriptorRetainedReferencesSet(o, val)
+    else
+        setfield!(o, f, val)
+    end
+end
+
 
 ## display
+
+function Base.show(io::IO, desc::MtlCommandBufferDescriptor)
+    print(io, "MtlCommandBufferDescriptor(...)")
+end
 
 function show(io::IO, ::MIME"text/plain", q::MtlCommandBufferDescriptor)
     println(io, "MtlCommandBufferDescriptor:")
@@ -54,19 +64,20 @@ function show(io::IO, ::MIME"text/plain", q::MtlCommandBufferDescriptor)
     print(io,   " errorOption: ", q.errorOption)
 end
 
+
+#
+# command buffer
+#
+
+export MtlCommandBuffer, enqueue!, wait_scheduled, wait_completed, encode_signal!,
+       encode_wait!, commit!, on_scheduled, on_completed
+
 const MTLCommandBuffer = Ptr{MtCommandBuffer}
 
 """
-    MtlCommandBuffer(queue::MtlCommandQueue; retainReferences=false)
+    MtlCommandBuffer(queue::MtlCommandQueue, [desc::MtlCommandBufferDescriptor])
 
 A container that stores encoded commands for the GPU to execute.
-
-If `retainReferences=false` it doesn't hold strong references to any objects
-required to execute the command buffer
-
-[Metal Docs](https://developer.apple.com/documentation/metal/mtlcommandbuffer?language=objc)
-
-[Retained references](https://developer.apple.com/documentation/metal/mtlcommandqueue/1508684-commandbufferwithunretainedrefer?language=objc)
 """
 mutable struct MtlCommandBuffer
     handle::MTLCommandBuffer
@@ -79,20 +90,9 @@ Base.unsafe_convert(::Type{MTLCommandBuffer}, q::MtlCommandBuffer) = q.handle
 Base.:(==)(a::MtlCommandBuffer, b::MtlCommandBuffer) = a.handle == b.handle
 Base.hash(q::MtlCommandBuffer, h::UInt) = hash(q.handle, h)
 
-function MtlCommandBuffer(queue::MtlCommandQueue; retainReferences::Bool=true,
-                          errorOption::MTL.MtCommandBufferErrorOption=MtCommandBufferErrorOptionNone)
-    desc = nothing
-    handle = if errorOption != MtCommandBufferErrorOptionNone
-        desc = MtlCommandBufferDescriptor(retainReferences, errorOption)
-        mtNewCommandBufferWithDescriptor(queue, desc)
-    else
-        if retainReferences
-            mtNewCommandBuffer(queue)
-        else
-            mtNewCommandBufferWithUnretainedReferences(queue)
-        end
-    end
-
+function MtlCommandBuffer(queue::MtlCommandQueue,
+                          desc::MtlCommandBufferDescriptor=MtlCommandBufferDescriptor())
+    handle = mtNewCommandBufferWithDescriptor(queue, desc)
     obj = MtlCommandBuffer(handle, queue, desc)
     finalizer(unsafe_destroy!, obj)
     return obj
@@ -155,6 +155,10 @@ end
 
 
 ## display
+
+function Base.show(io::IO, q::MtlCommandBuffer)
+    print(io, "MtlCommandBuffer(...)")
+end
 
 function show(io::IO, ::MIME"text/plain", q::MtlCommandBuffer)
     println(io, "MtlCommandBuffer:")

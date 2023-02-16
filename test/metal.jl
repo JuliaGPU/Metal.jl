@@ -266,6 +266,7 @@ end
 dev = first(devices())
 cmdq = MtlCommandQueue(dev)
 
+
 cmdbuf = MtlCommandBuffer(cmdq)
 
 @test cmdbuf.device == dev
@@ -309,24 +310,25 @@ commit!(cmdbuf)
 wait_completed(cmdbuf) == MTL.MtCommandBufferStatusCompleted
 @test cmdbuf.status == MTL.MtCommandBufferStatusCompleted
 retry(; delays=[0, 0.1, 1]) do
-    scheduled[] || error()
-    completed[] || error()
+    scheduled[] || error("scheduled callback not called")
+    completed[] || error("completed callback not called")
 end()
 @test scheduled[] == true
 @test completed[] == true
 
-# CommandBufferDescriptor tests
-desc = MTL.mtNewCommandBufferDescriptor()
-@test MTL.mtCommandBufferDescriptorRetainedReferences(desc) == true
-MTL.mtCommandBufferDescriptorRetainedReferencesSet(desc,false)
-@test MTL.mtCommandBufferDescriptorRetainedReferences(desc) == false
 
-@test MTL.mtCommandBufferDescriptorErrorOptions(desc) == MTL.MtCommandBufferErrorOptionNone
-MTL.mtCommandBufferDescriptorErrorOptionsSet(desc,MTL.MtCommandBufferErrorOptionEncoderExecutionStatus)
-@test MTL.mtCommandBufferDescriptorErrorOptions(desc) == MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
+desc = MtlCommandBufferDescriptor()
+
+@test desc.retainedReferences == true
+desc.retainedReferences = false
+@test desc.retainedReferences == false
+
+@test desc.errorOptions == MTL.MtCommandBufferErrorOptionNone
+desc.errorOptions = MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
+@test desc.errorOptions == MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
 
 cmq = MtlCommandQueue(current_device())
-cmdbuf = MtlCommandBuffer(cmq; retainReferences=false, errorOption=MTL.MtCommandBufferErrorOptionEncoderExecutionStatus)
+cmdbuf = MtlCommandBuffer(cmq, desc)
 if get(ENV, "MTL_DEBUG_LAYER", "0") == 0
     # when the debug layer is activated, Metal seems to retain all resources?
     @test cmdbuf.retainedReferences == false
