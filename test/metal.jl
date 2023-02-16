@@ -100,6 +100,20 @@ end
 
 @testset "functions" begin
 
+desc = MtlFunctionDescriptor()
+
+compact_str = sprint(io->show(io, desc))
+full_str = sprint(io->show(io, MIME"text/plain"(), desc))
+
+@test desc.name === nothing
+desc.name = "MyKernel"
+@test desc.name == "MyKernel"
+
+@test desc.specializedName === nothing
+desc.specializedName = "MySpecializedKernel"
+@test desc.specializedName == "MySpecializedKernel"
+
+
 dev = first(devices())
 lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
 fun = MtlFunction(lib, "kernel_1")

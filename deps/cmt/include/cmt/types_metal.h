@@ -47,6 +47,7 @@ typedef void MtBuffer;
 typedef void MtCompileOptions;
 
 typedef void MtFunction;
+typedef void MtFunctionDescriptor;
 typedef void MtFunctionConstant;
 typedef void MtFunctionConstantValues;
 

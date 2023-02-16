@@ -572,6 +572,10 @@ struct MtFunction
     #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
+struct MtFunctionDescriptor
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
+end
+
 struct MtFunctionConstant
     #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
@@ -1242,6 +1246,26 @@ end
 
 function mtFunctionStageInputAttributes(fun)
     ccall((:mtFunctionStageInputAttributes, libcmt), Ptr{Ptr{MtAttribute}}, (Ptr{MtFunction},), fun)
+end
+
+function mtNewFunctionDescriptor()
+    ccall((:mtNewFunctionDescriptor, libcmt), Ptr{MtFunctionDescriptor}, ())
+end
+
+function mtFunctionDescriptorName(desc)
+    ccall((:mtFunctionDescriptorName, libcmt), Cstring, (Ptr{MtFunctionDescriptor},), desc)
+end
+
+function mtFunctionDescriptorNameSet(desc, name)
+    ccall((:mtFunctionDescriptorNameSet, libcmt), Cvoid, (Ptr{MtFunctionDescriptor}, Cstring), desc, name)
+end
+
+function mtFunctionDescriptorSpecializedName(desc)
+    ccall((:mtFunctionDescriptorSpecializedName, libcmt), Cstring, (Ptr{MtFunctionDescriptor},), desc)
+end
+
+function mtFunctionDescriptorSpecializedNameSet(desc, specializedName)
+    ccall((:mtFunctionDescriptorSpecializedNameSet, libcmt), Cvoid, (Ptr{MtFunctionDescriptor}, Cstring), desc, specializedName)
 end
 
 function mtNewDefaultLibrary(device)
