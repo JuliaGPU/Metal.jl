@@ -78,16 +78,11 @@ const MTLFunction = Ptr{MtFunction}
 
 mutable struct MtlFunction
     handle::MTLFunction
-    lib::MtlLibrary
 
-    "Get a handle to a kernel function in a Metal Library."
-    function MtlFunction(lib::MtlLibrary, name::String)
-        handle = mtNewFunctionWithName(lib, name)
-        handle == C_NULL && throw(KeyError(name))
-        obj = new(handle, lib)
-        finalizer(unsafe_destroy!, obj)
-        return obj
-    end
+    # roots (can be nothing if the function was created directly from a handle)
+    lib::Union{Nothing,MtlLibrary}
+
+    MtlFunction(handle::MTLFunction, lib=nothing) = new(handle, lib)
 end
 
 function unsafe_destroy!(fun::MtlFunction)
@@ -98,6 +93,15 @@ Base.unsafe_convert(::Type{MTLFunction}, fun::MtlFunction) = fun.handle
 
 Base.:(==)(a::MtlFunction, b::MtlFunction) = a.handle == b.handle
 Base.hash(fun::MtlFunction, h::UInt) = hash(mod.handle, h)
+
+# Get a handle to a kernel function in a Metal Library.
+function MtlFunction(lib::MtlLibrary, name::String)
+    handle = mtNewFunctionWithName(lib, name)
+    handle == C_NULL && throw(KeyError(name))
+    obj = MtlFunction(handle, lib)
+    finalizer(unsafe_destroy!, obj)
+    return obj
+end
 
 
 ## properties
