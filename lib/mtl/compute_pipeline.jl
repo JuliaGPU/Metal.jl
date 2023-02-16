@@ -1,3 +1,97 @@
+#
+# compute pipeline descriptor
+#
+
+export MtlComputePipelineDescriptor
+
+const MTLComputePipelineDescriptor = Ptr{MtComputePipelineDescriptor}
+
+mutable struct MtlComputePipelineDescriptor
+    handle::MTLComputePipelineDescriptor
+end
+
+Base.unsafe_convert(::Type{MTLComputePipelineDescriptor}, q::MtlComputePipelineDescriptor) = q.handle
+
+Base.:(==)(a::MtlComputePipelineDescriptor, b::MtlComputePipelineDescriptor) = a.handle == b.handle
+Base.hash(lib::MtlComputePipelineDescriptor, h::UInt) = hash(lib.handle, h)
+
+function MtlComputePipelineDescriptor()
+    handle = mtNewComputePipelineDescriptor()
+    obj = MtlComputePipelineDescriptor(handle)
+    finalizer(unsafe_destroy!, obj)
+    return obj
+end
+
+function unsafe_destroy!(desc::MtlComputePipelineDescriptor)
+    mtRelease(desc.handle)
+end
+
+
+## properties
+
+Base.propertynames(::MtlComputePipelineDescriptor) = (
+    :label, :computeFunction, :threadGroupSizeIsMultipleOfExecutionWidth,
+    :maxTotalThreads, :maxCallStackDepth, :supportIndirectCommandBuffers
+)
+
+function Base.getproperty(o::MtlComputePipelineDescriptor, f::Symbol)
+    if f === :label
+        ptr = mtComputePipelineDescriptorLabel(o)
+        ptr == C_NULL ? nothing : unsafe_string(ptr)
+    elseif f === :computeFunction
+        ptr = mtComputePipelineDescriptorComputeFunction(o)
+        ptr == C_NULL ? nothing : MtlFunction(ptr)
+    elseif f === :threadGroupSizeIsMultipleOfThreadExecutionWidth
+        mtComputePipelineDescriptorThreadGroupSizeIsMultipleOfThreadExecutionWidth(o)
+    elseif f === :maxTotalThreadsPerThreadgroup
+        mtComputePipelineDescriptorMaxTotalThreadsPerThreadgroup(o)
+    elseif f === :maxCallStackDepth
+        mtComputePipelineDescriptorMaxCallStackDepth(o)
+    elseif f === :supportIndirectCommandBuffers
+        mtComputePipelineDescriptorSupportIndirectCommandBuffers(o)
+    else
+        getfield(o, f)
+    end
+end
+
+function Base.setproperty!(o::MtlComputePipelineDescriptor, f::Symbol, val)
+    if f === :label
+        mtComputePipelineDescriptorLabelSet(o, val)
+    elseif f === :computeFunction
+        mtComputePipelineDescriptorComputeFunctionSet(o, val)
+    elseif f === :threadGroupSizeIsMultipleOfThreadExecutionWidth
+        mtComputePipelineDescriptorThreadGroupSizeIsMultipleOfThreadExecutionWidthSet(o, val)
+    elseif f === :maxTotalThreadsPerThreadgroup
+        mtComputePipelineDescriptorMaxTotalThreadsPerThreadgroupSet(o, val)
+    elseif f === :maxCallStackDepth
+        mtComputePipelineDescriptorMaxCallStackDepthSet(o, val)
+    else
+        setfield!(opts, f, val)
+    end
+end
+
+
+## display
+
+function Base.show(io::IO, bin::MtlComputePipelineDescriptor)
+    print(io, "MtlComputePipelineDescriptor(…)")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", q::MtlComputePipelineDescriptor)
+    println(io, "MtlComputePipelineDescriptor:")
+    println(io, "  label: ", q.label)
+    println(io, "  computeFunction: ", q.computeFunction)
+    println(io, "  threadGroupSizeIsMultipleOfThreadExecutionWidth: ", q.threadGroupSizeIsMultipleOfThreadExecutionWidth)
+    println(io, "  maxTotalThreadsPerThreadgroup: ", q.maxTotalThreadsPerThreadgroup)
+    println(io, "  maxCallStackDepth: ", q.maxCallStackDepth)
+    println(io, "  supportIndirectCommandBuffers: ", q.supportIndirectCommandBuffers)
+end
+
+
+#
+# compute pipeline state
+#
+
 export MtlComputePipelineState
 
 const MTLComputePipelineState = Ptr{MtComputePipelineState}
@@ -28,6 +122,8 @@ function MtlComputePipelineState(d::MtlDevice, f::MtlFunction)
     finalizer(unsafe_destroy!, obj)
     return obj
 end
+
+# TODO: MtlComputePipelineState(d::MtlDevice, desc::MtlComputePipelineDescriptor, ...)
 
 
 ## properties

@@ -1100,6 +1100,62 @@ function mtDeviceNewBufferWithBytesNoCopy(device, ptr, length, opts)
     ccall((:mtDeviceNewBufferWithBytesNoCopy, libcmt), Ptr{MtBuffer}, (Ptr{MtDevice}, Ptr{Cvoid}, NsUInteger, MtResourceOptions), device, ptr, length, opts)
 end
 
+function mtNewComputePipelineDescriptor()
+    ccall((:mtNewComputePipelineDescriptor, libcmt), Ptr{MtComputePipelineDescriptor}, ())
+end
+
+function mtComputePipelineDescriptorLabel(desc)
+    ccall((:mtComputePipelineDescriptorLabel, libcmt), Cstring, (Ptr{MtComputePipelineDescriptor},), desc)
+end
+
+function mtComputePipelineDescriptorLabelSet(desc, label)
+    ccall((:mtComputePipelineDescriptorLabelSet, libcmt), Cvoid, (Ptr{MtComputePipelineDescriptor}, Cstring), desc, label)
+end
+
+function mtComputePipelineDescriptorComputeFunction(desc)
+    ccall((:mtComputePipelineDescriptorComputeFunction, libcmt), Ptr{MtFunction}, (Ptr{MtComputePipelineDescriptor},), desc)
+end
+
+function mtComputePipelineDescriptorComputeFunctionSet(desc, fun)
+    ccall((:mtComputePipelineDescriptorComputeFunctionSet, libcmt), Cvoid, (Ptr{MtComputePipelineDescriptor}, Ptr{MtFunction}), desc, fun)
+end
+
+function mtComputePipelineDescriptorThreadGroupSizeIsMultipleOfThreadExecutionWidth(desc)
+    ccall((:mtComputePipelineDescriptorThreadGroupSizeIsMultipleOfThreadExecutionWidth, libcmt), Bool, (Ptr{MtComputePipelineDescriptor},), desc)
+end
+
+function mtComputePipelineDescriptorThreadGroupSizeIsMultipleOfThreadExecutionWidthSet(desc, val)
+    ccall((:mtComputePipelineDescriptorThreadGroupSizeIsMultipleOfThreadExecutionWidthSet, libcmt), Cvoid, (Ptr{MtComputePipelineDescriptor}, Bool), desc, val)
+end
+
+function mtComputePipelineDescriptorMaxTotalThreadsPerThreadgroup(desc)
+    ccall((:mtComputePipelineDescriptorMaxTotalThreadsPerThreadgroup, libcmt), UInt32, (Ptr{MtComputePipelineDescriptor},), desc)
+end
+
+function mtComputePipelineDescriptorMaxTotalThreadsPerThreadgroupSet(desc, val)
+    ccall((:mtComputePipelineDescriptorMaxTotalThreadsPerThreadgroupSet, libcmt), Cvoid, (Ptr{MtComputePipelineDescriptor}, UInt32), desc, val)
+end
+
+function mtComputePipelineDescriptorMaxCallStackDepth(desc)
+    ccall((:mtComputePipelineDescriptorMaxCallStackDepth, libcmt), UInt32, (Ptr{MtComputePipelineDescriptor},), desc)
+end
+
+function mtComputePipelineDescriptorMaxCallStackDepthSet(desc, val)
+    ccall((:mtComputePipelineDescriptorMaxCallStackDepthSet, libcmt), Cvoid, (Ptr{MtComputePipelineDescriptor}, UInt32), desc, val)
+end
+
+function mtComputePipelineDescriptorSupportIndirectCommandBuffers(desc)
+    ccall((:mtComputePipelineDescriptorSupportIndirectCommandBuffers, libcmt), Bool, (Ptr{MtComputePipelineDescriptor},), desc)
+end
+
+function mtComputePipelineDescriptorReset(desc)
+    ccall((:mtComputePipelineDescriptorReset, libcmt), Cvoid, (Ptr{MtComputePipelineDescriptor},), desc)
+end
+
+function mtComputePipelineDescriptorSupportAddingBinaryFunctions(desc)
+    ccall((:mtComputePipelineDescriptorSupportAddingBinaryFunctions, libcmt), Bool, (Ptr{MtComputePipelineDescriptor},), desc)
+end
+
 function mtNewComputePipelineStateWithFunction(device, fun, error)
     ccall((:mtNewComputePipelineStateWithFunction, libcmt), Ptr{MtComputePipelineState}, (Ptr{MtDevice}, Ptr{MtFunction}, Ptr{Ptr{NsError}}), device, fun, error)
 end

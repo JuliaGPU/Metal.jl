@@ -350,6 +350,32 @@ pipeline = MtlComputePipelineState(dev, fun)
 @test pipeline.threadExecutionWidth isa Integer
 @test pipeline.staticThreadgroupMemoryLength == 0
 
+
+desc = MtlComputePipelineDescriptor()
+
+compact_str = sprint(io->show(io, desc))
+full_str = sprint(io->show(io, MIME"text/plain"(), desc))
+
+@test desc.label === nothing
+desc.label = "foo"
+@test desc.label == "foo"
+
+@test desc.computeFunction === nothing
+desc.computeFunction = fun
+@test desc.computeFunction == fun
+
+@test desc.threadGroupSizeIsMultipleOfThreadExecutionWidth == false
+desc.threadGroupSizeIsMultipleOfThreadExecutionWidth = true
+@test desc.threadGroupSizeIsMultipleOfThreadExecutionWidth == true
+
+@test desc.maxTotalThreadsPerThreadgroup isa Integer
+# setting this may fail, so use the same value
+desc.maxTotalThreadsPerThreadgroup = pipeline.maxTotalThreadsPerThreadgroup
+
+@test desc.maxCallStackDepth == 1
+desc.maxCallStackDepth = 2
+@test desc.maxCallStackDepth == 2
+
 end
 
 @testset "async_copy" begin
