@@ -16,7 +16,7 @@ function __init__()
     precompiling && return
 
     if !cmt_jll.is_available()
-        @error """Metal library wrapper not available for your platform; only macOS is currently supported."""
+        @error """Metal library wrapper not available for your platform."""
         return
     end
 end

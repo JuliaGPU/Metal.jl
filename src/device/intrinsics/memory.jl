@@ -7,7 +7,7 @@ Create an array local to each threadgroup launched during kernel execution.
 """
 MtlThreadGroupArray
 
-@static if macos_version() >= v"13.0"
+@static if Sys.isapple() && macos_version() >= v"13.0"
     @inline function MtlThreadGroupArray(::Type{T}, dims) where {T}
         len = prod(dims)
         # NOTE: this relies on const-prop to forward the literal length to the generator.
