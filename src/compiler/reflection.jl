@@ -61,9 +61,18 @@ function code_agx(io::IO, job::MetalCompilerJob)
         write(binary, bin)
 
         # disassemble the main function
-        main = joinpath(dir, "main.bin")
-        write(main, extract_gpu_code(binary))
-        disassemble(io, main)
+        first = true
+        extract_gpu_code(binary) do name, code
+            file = joinpath(dir, name * ".bin")
+            write(file, code)
+
+            # disassemble the function
+            first || println(io)
+            println(io, "; disassembly of `$name` function:")
+            disassemble(io, file)
+
+            first = false
+        end
     end
 
 end
@@ -75,7 +84,7 @@ end
     AIR64    = 0x1000017
 end
 
-function extract_gpu_code(binary)
+function extract_gpu_code(f, binary)
     fat_handle = readmeta(open(binary))
     fat_handle isa FatMachOHandle || error("Expected a universal binary")
 
@@ -119,11 +128,12 @@ function extract_gpu_code(binary)
     end
     prolog_code = extract_function("_agc.main.constant_program")
     if prolog_code !== nothing
-        # XXX: what to do with the kernel prologue?
+        f("constant_program", prolog_code)
     end
     main_code = extract_function("_agc.main")
     main_code === nothing && error("Could not find main function")
-    return main_code
+    f("main", main_code)
+    return
 end
 
 function disassemble(io::IO, path)
