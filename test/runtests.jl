@@ -42,7 +42,7 @@ do_quickfail, _ = extract_flag!(ARGS, "--quickfail")
 
 include("setup.jl")     # make sure everything is precompiled
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
-@info "Using cmt library from $(dirname(MTL.libcmt))"
+@info "Using cmt library from $(dirname(MTL.cmt.libcmt))"
 metallib_as_version = Metal.Metal_LLVM_Tools_jll.Metal_LLVM_Tools_jll.metallib_as() do metallib_as
     read(`$metallib_as --version`, String)
 end
