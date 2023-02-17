@@ -63,7 +63,7 @@ function compile(@nospecialize(job::CompilerJob), ctx)
 end
 
 # link into an executable kernel
-function link(@nospecialize(job::CompilerJob), compiled)
+function link(@nospecialize(job::CompilerJob), compiled; return_function=false)
     dev = current_device()
     lib = MTLLibraryFromData(dev, compiled.image)
     fun = MTLFunction(lib, compiled.entry)
@@ -78,5 +78,8 @@ function link(@nospecialize(job::CompilerJob), compiled)
                  If you think this is a bug, please file an issue and attach $(metallib)."""
         rethrow()
     end
-    pipeline_state
+
+    # most of the time, we don't need the function object,
+    # so don't keep it alive unconditionally in GPUCompiler's caches
+    pipeline_state, return_function ? fun : nothing
 end
