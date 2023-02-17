@@ -508,6 +508,14 @@ struct MtLibrary
     #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
+struct MtBinaryArchive
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
+end
+
+struct MtBinaryArchiveDescriptor
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
+end
+
 struct MtRenderPassDesc
     #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
@@ -569,6 +577,10 @@ struct MtCompileOptions
 end
 
 struct MtFunction
+    #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
+end
+
+struct MtFunctionDescriptor
     #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
 
@@ -1096,6 +1108,62 @@ function mtDeviceNewBufferWithBytesNoCopy(device, ptr, length, opts)
     ccall((:mtDeviceNewBufferWithBytesNoCopy, libcmt), Ptr{MtBuffer}, (Ptr{MtDevice}, Ptr{Cvoid}, NsUInteger, MtResourceOptions), device, ptr, length, opts)
 end
 
+function mtNewComputePipelineDescriptor()
+    ccall((:mtNewComputePipelineDescriptor, libcmt), Ptr{MtComputePipelineDescriptor}, ())
+end
+
+function mtComputePipelineDescriptorLabel(desc)
+    ccall((:mtComputePipelineDescriptorLabel, libcmt), Cstring, (Ptr{MtComputePipelineDescriptor},), desc)
+end
+
+function mtComputePipelineDescriptorLabelSet(desc, label)
+    ccall((:mtComputePipelineDescriptorLabelSet, libcmt), Cvoid, (Ptr{MtComputePipelineDescriptor}, Cstring), desc, label)
+end
+
+function mtComputePipelineDescriptorComputeFunction(desc)
+    ccall((:mtComputePipelineDescriptorComputeFunction, libcmt), Ptr{MtFunction}, (Ptr{MtComputePipelineDescriptor},), desc)
+end
+
+function mtComputePipelineDescriptorComputeFunctionSet(desc, fun)
+    ccall((:mtComputePipelineDescriptorComputeFunctionSet, libcmt), Cvoid, (Ptr{MtComputePipelineDescriptor}, Ptr{MtFunction}), desc, fun)
+end
+
+function mtComputePipelineDescriptorThreadGroupSizeIsMultipleOfThreadExecutionWidth(desc)
+    ccall((:mtComputePipelineDescriptorThreadGroupSizeIsMultipleOfThreadExecutionWidth, libcmt), Bool, (Ptr{MtComputePipelineDescriptor},), desc)
+end
+
+function mtComputePipelineDescriptorThreadGroupSizeIsMultipleOfThreadExecutionWidthSet(desc, val)
+    ccall((:mtComputePipelineDescriptorThreadGroupSizeIsMultipleOfThreadExecutionWidthSet, libcmt), Cvoid, (Ptr{MtComputePipelineDescriptor}, Bool), desc, val)
+end
+
+function mtComputePipelineDescriptorMaxTotalThreadsPerThreadgroup(desc)
+    ccall((:mtComputePipelineDescriptorMaxTotalThreadsPerThreadgroup, libcmt), UInt32, (Ptr{MtComputePipelineDescriptor},), desc)
+end
+
+function mtComputePipelineDescriptorMaxTotalThreadsPerThreadgroupSet(desc, val)
+    ccall((:mtComputePipelineDescriptorMaxTotalThreadsPerThreadgroupSet, libcmt), Cvoid, (Ptr{MtComputePipelineDescriptor}, UInt32), desc, val)
+end
+
+function mtComputePipelineDescriptorMaxCallStackDepth(desc)
+    ccall((:mtComputePipelineDescriptorMaxCallStackDepth, libcmt), UInt32, (Ptr{MtComputePipelineDescriptor},), desc)
+end
+
+function mtComputePipelineDescriptorMaxCallStackDepthSet(desc, val)
+    ccall((:mtComputePipelineDescriptorMaxCallStackDepthSet, libcmt), Cvoid, (Ptr{MtComputePipelineDescriptor}, UInt32), desc, val)
+end
+
+function mtComputePipelineDescriptorSupportIndirectCommandBuffers(desc)
+    ccall((:mtComputePipelineDescriptorSupportIndirectCommandBuffers, libcmt), Bool, (Ptr{MtComputePipelineDescriptor},), desc)
+end
+
+function mtComputePipelineDescriptorReset(desc)
+    ccall((:mtComputePipelineDescriptorReset, libcmt), Cvoid, (Ptr{MtComputePipelineDescriptor},), desc)
+end
+
+function mtComputePipelineDescriptorSupportAddingBinaryFunctions(desc)
+    ccall((:mtComputePipelineDescriptorSupportAddingBinaryFunctions, libcmt), Bool, (Ptr{MtComputePipelineDescriptor},), desc)
+end
+
 function mtNewComputePipelineStateWithFunction(device, fun, error)
     ccall((:mtNewComputePipelineStateWithFunction, libcmt), Ptr{MtComputePipelineState}, (Ptr{MtDevice}, Ptr{MtFunction}, Ptr{Ptr{NsError}}), device, fun, error)
 end
@@ -1244,6 +1312,26 @@ function mtFunctionStageInputAttributes(fun)
     ccall((:mtFunctionStageInputAttributes, libcmt), Ptr{Ptr{MtAttribute}}, (Ptr{MtFunction},), fun)
 end
 
+function mtNewFunctionDescriptor()
+    ccall((:mtNewFunctionDescriptor, libcmt), Ptr{MtFunctionDescriptor}, ())
+end
+
+function mtFunctionDescriptorName(desc)
+    ccall((:mtFunctionDescriptorName, libcmt), Cstring, (Ptr{MtFunctionDescriptor},), desc)
+end
+
+function mtFunctionDescriptorNameSet(desc, name)
+    ccall((:mtFunctionDescriptorNameSet, libcmt), Cvoid, (Ptr{MtFunctionDescriptor}, Cstring), desc, name)
+end
+
+function mtFunctionDescriptorSpecializedName(desc)
+    ccall((:mtFunctionDescriptorSpecializedName, libcmt), Cstring, (Ptr{MtFunctionDescriptor},), desc)
+end
+
+function mtFunctionDescriptorSpecializedNameSet(desc, specializedName)
+    ccall((:mtFunctionDescriptorSpecializedNameSet, libcmt), Cvoid, (Ptr{MtFunctionDescriptor}, Cstring), desc, specializedName)
+end
+
 function mtNewDefaultLibrary(device)
     ccall((:mtNewDefaultLibrary, libcmt), Ptr{MtLibrary}, (Ptr{MtDevice},), device)
 end
@@ -1278,6 +1366,46 @@ end
 
 function mtLibraryFunctionNames(lib, count, names)
     ccall((:mtLibraryFunctionNames, libcmt), Cvoid, (Ptr{MtLibrary}, Ptr{Csize_t}, Ptr{Cstring}), lib, count, names)
+end
+
+function mtNewBinaryArchiveDescriptor()
+    ccall((:mtNewBinaryArchiveDescriptor, libcmt), Ptr{MtBinaryArchiveDescriptor}, ())
+end
+
+function mtBinaryArchiveDescriptorURL(desc)
+    ccall((:mtBinaryArchiveDescriptorURL, libcmt), Cstring, (Ptr{MtBinaryArchiveDescriptor},), desc)
+end
+
+function mtBinaryArchiveDescriptorURLSet(desc, path)
+    ccall((:mtBinaryArchiveDescriptorURLSet, libcmt), Cvoid, (Ptr{MtBinaryArchiveDescriptor}, Cstring), desc, path)
+end
+
+function mtNewBinaryArchiveWithDescriptor(device, desc, error)
+    ccall((:mtNewBinaryArchiveWithDescriptor, libcmt), Ptr{MtBinaryArchive}, (Ptr{MtDevice}, Ptr{MtBinaryArchiveDescriptor}, Ptr{Ptr{NsError}}), device, desc, error)
+end
+
+function mtBinaryArchiveDevice(bin)
+    ccall((:mtBinaryArchiveDevice, libcmt), Ptr{MtDevice}, (Ptr{MtBinaryArchive},), bin)
+end
+
+function mtBinaryArchiveLabel(bin)
+    ccall((:mtBinaryArchiveLabel, libcmt), Cstring, (Ptr{MtBinaryArchive},), bin)
+end
+
+function mtBinaryArchiveLabelSet(bin, label)
+    ccall((:mtBinaryArchiveLabelSet, libcmt), Cvoid, (Ptr{MtBinaryArchive}, Cstring), bin, label)
+end
+
+function mtBinaryArchiveAddComputePipelineFunctions(bin, desc, error)
+    ccall((:mtBinaryArchiveAddComputePipelineFunctions, libcmt), Cvoid, (Ptr{MtBinaryArchive}, Ptr{MtComputePipelineDescriptor}, Ptr{Ptr{NsError}}), bin, desc, error)
+end
+
+function mtBinaryArchiveAddFunction(bin, desc, lib, error)
+    ccall((:mtBinaryArchiveAddFunction, libcmt), Cvoid, (Ptr{MtBinaryArchive}, Ptr{MtFunctionDescriptor}, Ptr{MtLibrary}, Ptr{Ptr{NsError}}), bin, desc, lib, error)
+end
+
+function mtBinaryArchiveSerialize(bin, path, error)
+    ccall((:mtBinaryArchiveSerialize, libcmt), Cvoid, (Ptr{MtBinaryArchive}, Cstring, Ptr{Ptr{NsError}}), bin, path, error)
 end
 
 function mtBufferContents(buf)

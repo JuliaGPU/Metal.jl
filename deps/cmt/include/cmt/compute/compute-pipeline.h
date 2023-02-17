@@ -13,6 +13,77 @@ extern "C" {
 #include "cmt/types.h"
 #include "cmt/enums.h"
 
+// Compute Pipeline Descriptor
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(9.0))
+MtComputePipelineDescriptor*
+mtNewComputePipelineDescriptor(void);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(9.0))
+const char*
+mtComputePipelineDescriptorLabel(MtComputePipelineDescriptor *desc);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(9.0))
+void
+mtComputePipelineDescriptorLabelSet(MtComputePipelineDescriptor *desc, const char *label);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(9.0))
+MtFunction*
+mtComputePipelineDescriptorComputeFunction(MtComputePipelineDescriptor *desc);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(9.0))
+void
+mtComputePipelineDescriptorComputeFunctionSet(MtComputePipelineDescriptor *desc, MtFunction *fun);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(9.0))
+bool
+mtComputePipelineDescriptorThreadGroupSizeIsMultipleOfThreadExecutionWidth(MtComputePipelineDescriptor *desc);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(9.0))
+void
+mtComputePipelineDescriptorThreadGroupSizeIsMultipleOfThreadExecutionWidthSet(MtComputePipelineDescriptor *desc, bool val);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
+uint32_t
+mtComputePipelineDescriptorMaxTotalThreadsPerThreadgroup(MtComputePipelineDescriptor *desc);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
+void
+mtComputePipelineDescriptorMaxTotalThreadsPerThreadgroupSet(MtComputePipelineDescriptor *desc, uint32_t val);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(11.00), mt_ios(14.0))
+uint32_t
+mtComputePipelineDescriptorMaxCallStackDepth(MtComputePipelineDescriptor *desc);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(11.00), mt_ios(14.0))
+void
+mtComputePipelineDescriptorMaxCallStackDepthSet(MtComputePipelineDescriptor *desc, uint32_t val);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(11.0), mt_ios(13.0))
+bool
+mtComputePipelineDescriptorSupportIndirectCommandBuffers(MtComputePipelineDescriptor *desc);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(10.11), mt_ios(9.0))
+void
+mtComputePipelineDescriptorReset(MtComputePipelineDescriptor *desc);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(11.00), mt_ios(14.0))
+bool
+mtComputePipelineDescriptorSupportAddingBinaryFunctions(MtComputePipelineDescriptor *desc);
+
 // Create Pipeline
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))

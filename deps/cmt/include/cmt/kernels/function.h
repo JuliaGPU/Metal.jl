@@ -53,6 +53,31 @@ MT_API_AVAILABLE(mt_macos(10.12), mt_ios(10.0))
 MtAttribute**
 mtFunctionStageInputAttributes(MtFunction* fun);
 
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(11.0), mt_ios(14.0))
+MtFunctionDescriptor*
+mtNewFunctionDescriptor(void);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(11.0), mt_ios(14.0))
+const char*
+mtFunctionDescriptorName(MtFunctionDescriptor *desc);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(11.0), mt_ios(14.0))
+void
+mtFunctionDescriptorNameSet(MtFunctionDescriptor *desc, const char *name);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(11.0), mt_ios(14.0))
+const char*
+mtFunctionDescriptorSpecializedName(MtFunctionDescriptor *desc);
+
+MT_EXPORT
+MT_API_AVAILABLE(mt_macos(11.0), mt_ios(14.0))
+void
+mtFunctionDescriptorSpecializedNameSet(MtFunctionDescriptor *desc, const char *specializedName);
+
 #ifdef __cplusplus
 }
 #endif

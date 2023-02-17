@@ -32,6 +32,7 @@ set(SOURCES
     src/kernels/compile-opts.m
     src/kernels/function.m
     src/kernels/library.m
+    src/kernels/binary_archive.m
     src/memory/buffer.m
     src/memory/heap-descriptor.m
     src/memory/heap.m

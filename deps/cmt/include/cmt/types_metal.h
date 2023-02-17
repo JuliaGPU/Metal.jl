@@ -30,6 +30,8 @@ typedef void MtCommandQueue;
 typedef void MtCommandEncoder;
 typedef void MtBlitCommandEncoder;
 typedef void MtLibrary;
+typedef void MtBinaryArchive;
+typedef void MtBinaryArchiveDescriptor;
 typedef void MtRenderPassDesc;
 typedef void MtTexture;
 typedef void MtCommandBuffer;
@@ -47,6 +49,7 @@ typedef void MtBuffer;
 typedef void MtCompileOptions;
 
 typedef void MtFunction;
+typedef void MtFunctionDescriptor;
 typedef void MtFunctionConstant;
 typedef void MtFunctionConstantValues;
 

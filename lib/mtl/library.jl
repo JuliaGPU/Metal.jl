@@ -28,7 +28,7 @@ end
 
 function MtlLibraryFromFile(device::MtlDevice, path::String)
     handle = if macos_version() >= v"13"
-        @mtlthrows _errptr mtNewLibraryWithURL(device, "file://$(abspath(path))", _errptr)
+        @mtlthrows _errptr mtNewLibraryWithURL(device, path, _errptr)
     else
         @mtlthrows _errptr mtNewLibraryWithFile(device, path, _errptr)
     end

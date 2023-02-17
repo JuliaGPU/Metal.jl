@@ -100,6 +100,20 @@ end
 
 @testset "functions" begin
 
+desc = MtlFunctionDescriptor()
+
+compact_str = sprint(io->show(io, desc))
+full_str = sprint(io->show(io, MIME"text/plain"(), desc))
+
+@test desc.name === nothing
+desc.name = "MyKernel"
+@test desc.name == "MyKernel"
+
+@test desc.specializedName === nothing
+desc.specializedName = "MySpecializedKernel"
+@test desc.specializedName == "MySpecializedKernel"
+
+
 dev = first(devices())
 lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
 fun = MtlFunction(lib, "kernel_1")
@@ -252,6 +266,7 @@ end
 dev = first(devices())
 cmdq = MtlCommandQueue(dev)
 
+
 cmdbuf = MtlCommandBuffer(cmdq)
 
 @test cmdbuf.device == dev
@@ -295,25 +310,26 @@ commit!(cmdbuf)
 wait_completed(cmdbuf) == MTL.MtCommandBufferStatusCompleted
 @test cmdbuf.status == MTL.MtCommandBufferStatusCompleted
 retry(; delays=[0, 0.1, 1]) do
-    scheduled[] || error()
-    completed[] || error()
+    scheduled[] || error("scheduled callback not called")
+    completed[] || error("completed callback not called")
 end()
 @test scheduled[] == true
 @test completed[] == true
 
-# CommandBufferDescriptor tests
-desc = MTL.mtNewCommandBufferDescriptor()
-@test MTL.mtCommandBufferDescriptorRetainedReferences(desc) == true
-MTL.mtCommandBufferDescriptorRetainedReferencesSet(desc,false)
-@test MTL.mtCommandBufferDescriptorRetainedReferences(desc) == false
 
-@test MTL.mtCommandBufferDescriptorErrorOptions(desc) == MTL.MtCommandBufferErrorOptionNone
-MTL.mtCommandBufferDescriptorErrorOptionsSet(desc,MTL.MtCommandBufferErrorOptionEncoderExecutionStatus)
-@test MTL.mtCommandBufferDescriptorErrorOptions(desc) == MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
+desc = MtlCommandBufferDescriptor()
+
+@test desc.retainedReferences == true
+desc.retainedReferences = false
+@test desc.retainedReferences == false
+
+@test desc.errorOptions == MTL.MtCommandBufferErrorOptionNone
+desc.errorOptions = MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
+@test desc.errorOptions == MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
 
 cmq = MtlCommandQueue(current_device())
-cmdbuf = MtlCommandBuffer(cmq; retainReferences=false, errorOption=MTL.MtCommandBufferErrorOptionEncoderExecutionStatus)
-if get(ENV, "MTL_DEBUG_LAYER", "0") == 0
+cmdbuf = MtlCommandBuffer(cmq, desc)
+if !runtime_validation
     # when the debug layer is activated, Metal seems to retain all resources?
     @test cmdbuf.retainedReferences == false
 end
@@ -336,6 +352,64 @@ pipeline = MtlComputePipelineState(dev, fun)
 @test pipeline.threadExecutionWidth isa Integer
 @test pipeline.staticThreadgroupMemoryLength == 0
 
+
+desc = MtlComputePipelineDescriptor()
+
+compact_str = sprint(io->show(io, desc))
+full_str = sprint(io->show(io, MIME"text/plain"(), desc))
+
+@test desc.label === nothing
+desc.label = "foo"
+@test desc.label == "foo"
+
+@test desc.computeFunction === nothing
+desc.computeFunction = fun
+@test desc.computeFunction == fun
+
+@test desc.threadGroupSizeIsMultipleOfThreadExecutionWidth == false
+desc.threadGroupSizeIsMultipleOfThreadExecutionWidth = true
+@test desc.threadGroupSizeIsMultipleOfThreadExecutionWidth == true
+
+@test desc.maxTotalThreadsPerThreadgroup isa Integer
+# setting this may fail, so use the same value
+desc.maxTotalThreadsPerThreadgroup = pipeline.maxTotalThreadsPerThreadgroup
+
+@test desc.maxCallStackDepth == 1
+desc.maxCallStackDepth = 2
+@test desc.maxCallStackDepth == 2
+
+end
+
+@testset "binary archive" begin
+
+dev = first(devices())
+lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
+fun = MtlFunction(lib, "kernel_1")
+
+desc = MtlBinaryArchiveDescriptor()
+bin = MtlBinaryArchive(dev, desc)
+
+compact_str = sprint(io->show(io, desc))
+full_str = sprint(io->show(io, MIME"text/plain"(), desc))
+
+@test desc.url === nothing
+desc.url = "/tmp/foo"
+@test desc.url == "/tmp/foo"
+
+pipeline_desc = MtlComputePipelineDescriptor()
+pipeline_desc.computeFunction = fun
+if !runtime_validation
+    # XXX: for some reason, this crashes under the validator
+    add_functions!(bin, pipeline_desc)
+
+    mktempdir() do dir
+        path = joinpath(dir, "kernel.bin")
+        write(path, bin)
+        @test isfile(path)
+        @test filesize(path) > 0
+    end
+end
+
 end
 
 @testset "async_copy" begin
@@ -353,7 +427,7 @@ end
     buf2 = Metal.MtlCommandBuffer(queue2)
     event = Metal.MtlEvent(dev)
 
-    
+
     Metal.encode_wait!(buf2, event, signal_value)
     Metal.commit!(buf2)
 
