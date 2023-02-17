@@ -96,32 +96,32 @@ function extract_gpu_code(binary)
     section = findfirst(Sections(native_handle), "__TEXT,__text")
     isnothing(section) && error("Could not find __TEXT,__text section")
 
-    function extract_function(handle, section, code, fn)
-        # find the symbol
-        symbol = findfirst(Symbols(handle), fn)
-        symbol ===  nothing && return nothing
-
-        # read the section
-        code = read(section)
-
-        # extract the function
-        size = if symbol_number(symbol) < length(Symbols(handle))
-            # up until the next symbol
-            symbol_value(Symbols(handle)[symbol_number(symbol) + 1])
-        else
-            # up until the end of the section
-            section_size(section)
-        end - symbol_value(symbol)
-        return code[symbol_value(symbol) + 1 : symbol_value(symbol) + size]
-    end
+    # get all symbols, and sort them by address
+    symbols = sort(collect(Symbols(native_handle)), by=symbol_value)
 
     # extract relevant functions
     code = read(section)
-    prolog_code = extract_function(native_handle, section, code, "_agc.main.constant_program")
+    function extract_function(fn)
+        # find the symbol
+        symbol = findfirst(isequal(fn) ∘ symbol_name , symbols)
+        symbol ===  nothing && return nothing
+        offset = symbol_value(symbols[symbol])
+
+        # extract the function
+        size = if symbol < length(symbols)
+            # up until the next symbol
+            symbol_value(symbols[symbol + 1])
+        else
+            # up until the end of the section
+            section_size(section)
+        end - offset
+        return code[offset + 1 : offset + size]
+    end
+    prolog_code = extract_function("_agc.main.constant_program")
     if prolog_code !== nothing
         # XXX: what to do with the kernel prologue?
     end
-    main_code = extract_function(native_handle, section, code, "_agc.main")
+    main_code = extract_function("_agc.main")
     main_code === nothing && error("Could not find main function")
     return main_code
 end
