@@ -67,7 +67,7 @@ end
     @test occursin("dummy", sprint(io->(@device_code_llvm io=io optimize=false @metal dummy())))
     @test occursin("dummy", sprint(io->(@device_code_llvm io=io @metal dummy())))
     @test occursin("dummy", sprint(io->(@device_code_air io=io @metal dummy())))
-    @test_broken occursin("dummy", sprint(io->(@device_code_agx io=io @metal dummy())))
+    @test occursin("dummy", sprint(io->(@device_code_agx io=io @metal dummy())))
 
     # make sure invalid kernels can be partially reflected upon
     let

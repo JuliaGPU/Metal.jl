@@ -63,12 +63,15 @@ function code_agx(io::IO, job::MetalCompilerJob)
         # disassemble the main function
         first = true
         extract_gpu_code(binary) do name, code
+            # skip all-zero functions
+            all(code .== 0) && return
+
             file = joinpath(dir, name * ".bin")
             write(file, code)
 
             # disassemble the function
             first || println(io)
-            println(io, "; disassembly of `$name` function:")
+            println(io, "$name:")
             disassemble(io, file)
 
             first = false
@@ -101,6 +104,17 @@ function extract_gpu_code(f, binary)
     compute_binary = read(compute_section)
     native_handle = readmeta(IOBuffer(compute_binary))
 
+    # the start of the section should also alias with a symbol in the universal binary,
+    # which we can use to identify the name of the kernel
+    compute_symbol = nothing
+    for symbol in Symbols(fat_handle[arch])
+        symbol_value(symbol) == section_offset(compute_section) || continue
+        endswith(symbol_name(symbol), "_begin") || continue
+        compute_symbol = symbol
+    end
+    compute_symbol === nothing && error("Could not find symbol for __compute section")
+    kernel_name = symbol_name(compute_symbol)[1:end-6]
+
     # within the native GPU binary, isolate the section containing code
     section = findfirst(Sections(native_handle), "__TEXT,__text")
     isnothing(section) && error("Could not find __TEXT,__text section")
@@ -112,7 +126,7 @@ function extract_gpu_code(f, binary)
     code = read(section)
     function extract_function(fn)
         # find the symbol
-        symbol = findfirst(isequal(fn) ∘ symbol_name , symbols)
+        symbol = findfirst(isequal(fn) , symbols)
         symbol ===  nothing && return nothing
         offset = symbol_value(symbols[symbol])
 
@@ -126,13 +140,9 @@ function extract_gpu_code(f, binary)
         end - offset
         return code[offset + 1 : offset + size]
     end
-    prolog_code = extract_function("_agc.main.constant_program")
-    if prolog_code !== nothing
-        f("constant_program", prolog_code)
+    for sym in symbols
+        f("$kernel_name.$(symbol_name(sym))", extract_function(sym))
     end
-    main_code = extract_function("_agc.main")
-    main_code === nothing && error("Could not find main function")
-    f("main", main_code)
     return
 end
 
