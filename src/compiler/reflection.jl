@@ -166,6 +166,8 @@ for method in (:code_typed, :code_warntype, :code_llvm, :code_native)
     end
 end
 
+const code_air = code_native
+
 
 #
 # @device_code_* functions

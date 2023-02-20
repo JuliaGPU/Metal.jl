@@ -1,4 +1,100 @@
-@testset "execution" begin
+dummy() = return
+
+@testset "@metal" begin
+
+@test_throws UndefVarError @metal undefined()
+@test_throws MethodError @metal dummy(1)
+
+
+@testset "launch configuration" begin
+    @metal dummy()
+
+    @metal threads=1 dummy()
+    @metal threads=(1,1) dummy()
+    @metal threads=(1,1,1) dummy()
+
+    @metal groups=1 dummy()
+    @metal groups=(1,1) dummy()
+    @metal groups=(1,1,1) dummy()
+
+    @test_throws InexactError @metal threads=(-2) dummy()
+    @test_throws InexactError @metal groups=(-2) dummy()
+    @test_throws ArgumentError @metal threads=(1025) dummy()
+    @test_throws ArgumentError @metal threads=(1000,2) dummy()
+end
+
+@testset "launch=false" begin
+    k = @metal launch=false dummy()
+    k()
+    k(; threads=1)
+
+    # TODO: kernel introspection
+end
+
+@testset "inference" begin
+    foo() = @metal dummy()
+    @inferred foo()
+
+    # with arguments, we call cudaconvert
+    kernel(a) = return
+    bar(a) = @metal kernel(a)
+    @inferred bar(MtlArray([1]))
+end
+
+
+@testset "reflection" begin
+    Metal.code_lowered(dummy, Tuple{})
+    Metal.code_typed(dummy, Tuple{})
+    Metal.code_warntype(devnull, dummy, Tuple{})
+    Metal.code_llvm(devnull, dummy, Tuple{})
+    Metal.code_air(devnull, dummy, Tuple{})
+    Metal.code_agx(devnull, dummy, Tuple{})
+
+    @device_code_lowered @metal dummy()
+    @device_code_typed @metal dummy()
+    @device_code_warntype io=devnull @metal dummy()
+    @device_code_llvm io=devnull @metal dummy()
+    @device_code_air io=devnull @metal dummy()
+    @device_code_agx io=devnull @metal dummy()
+
+    mktempdir() do dir
+        @device_code dir=dir @metal dummy()
+    end
+
+    @test_throws ErrorException @device_code_lowered nothing
+
+    # make sure kernel name aliases are preserved in the generated code
+    @test occursin("dummy", sprint(io->(@device_code_llvm io=io optimize=false @metal dummy())))
+    @test occursin("dummy", sprint(io->(@device_code_llvm io=io @metal dummy())))
+    @test occursin("dummy", sprint(io->(@device_code_air io=io @metal dummy())))
+    @test_broken occursin("dummy", sprint(io->(@device_code_agx io=io @metal dummy())))
+
+    # make sure invalid kernels can be partially reflected upon
+    let
+        invalid_kernel() = throw()
+        @test_throws Metal.KernelError @metal invalid_kernel()
+        @test_throws Metal.KernelError @grab_output @device_code_warntype @metal invalid_kernel()
+        out, err = @grab_output begin
+            try
+                @device_code_warntype @metal invalid_kernel()
+            catch
+            end
+        end
+        @test occursin("Body::Union{}", err)
+    end
+
+    # set name of kernel
+    @test occursin("mykernel", sprint(io->(@device_code_llvm io=io begin
+        @metal name="mykernel" dummy()
+    end)))
+
+    @test Metal.return_type(identity, Tuple{Int}) === Int
+    @test Metal.return_type(sin, Tuple{Float32}) === Float32
+    @test Metal.return_type(getindex, Tuple{MtlDeviceArray{Float32,1,1},Int32}) === Float32
+    @test Metal.return_type(getindex, Tuple{Base.RefValue{Integer}}) === Integer
+end
+
+
 
 function tester(A)
     idx = thread_position_in_grid_1d()
@@ -10,7 +106,7 @@ bufferSize = 8
 bufferA = MtlArray{Int,1}(undef, tuple(bufferSize), storage=Shared)
 vecA = unsafe_wrap(Vector{Int}, pointer(bufferA), tuple(bufferSize))
 
-@testset "basic execution and synchronization" begin
+@testset "synchronization" begin
     @metal threads=(bufferSize) tester(bufferA)
     synchronize()
     @test all(vecA .== Int(5))
@@ -49,6 +145,10 @@ end
     @test_throws ArgumentError @metal threads=(1025) tester(bufferA)
     @test_throws ArgumentError @metal threads=(1000,2) tester(bufferA)
 end
+
+end
+
+############################################################################################
 
 @testset "argument passing" begin
     @testset "buffer argument" begin
@@ -138,6 +238,4 @@ end
         @metal kernel(pointer(a), Int)
         @test Array(a)[] == 1
     end
-end
-
 end

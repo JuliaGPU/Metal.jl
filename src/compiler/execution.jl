@@ -157,7 +157,7 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
     Base.@lock mtlfunction_lock begin
         # compile the function
         cache = compiler_cache(dev)
-        config = compiler_config(dev; kwargs...)::MetalCompilerConfig
+        config = compiler_config(dev; name, kwargs...)::MetalCompilerConfig
         pipeline, _ = GPUCompiler.cached_compilation(cache, config, F, tt,
                                                      compile, link)
 
