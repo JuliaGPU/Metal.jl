@@ -204,7 +204,6 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     groups = reduce_groups*other_groups
 
     # perform the actual reduction
-    #@info "mapreducedim!" threads groups Rreduce Rother shuffle R′ A reduce_groups
     if reduce_groups == 1
         # we can cover the dimensions to reduce using a single group
         @metal threads=threads grid=groups partial_mapreduce_device(
