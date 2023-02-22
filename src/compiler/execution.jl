@@ -141,10 +141,10 @@ the function changes, or when different types or keyword arguments are provided.
 function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
     dev = MtlDevice(1)
     cache = get!(()->Dict{UInt,Any}(), mtlfunction_cache, dev)
-    source = FunctionSpec(f, tt, true, name)
+    source = FunctionSpec(F, tt; kernel=true, name)
     target = MetalCompilerTarget(macos=macos_version(); kwargs...)
     params = MetalCompilerParams()
-    job = CompilerJob(target, source, params)
+    job = CompilerJob(source, target, params)
     fun, pipeline_state =
         GPUCompiler.cached_compilation(cache, job,
                                        mtlfunction_compile, mtlfunction_link)
