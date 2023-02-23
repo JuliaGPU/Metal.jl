@@ -43,7 +43,12 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtCommandBuffer*
 mtNewCommandBuffer(MtCommandQueue *cmdq) {
-  return [(id<MTLCommandQueue>)cmdq commandBuffer];
+    id<MTLCommandBuffer> commandBuffer = [(id <MTLCommandQueue>) cmdq commandBuffer];
+    // Per Apple's "Basic Memory Management Rules" the above invocation does not imply ownership.
+    // To be consistent the name of the function and CF_RETURNS_RETAINED, we explicitly claim
+    // ownership with an explicit `retain`
+    [commandBuffer retain];
+    return commandBuffer;
 }
 
 CF_RETURNS_RETAINED
@@ -51,7 +56,12 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtCommandBuffer*
 mtNewCommandBufferWithDescriptor(MtCommandQueue *cmdq, MtCommandBufferDescriptor *desc) {
-  return [(id<MTLCommandQueue>)cmdq commandBufferWithDescriptor:(MtCommandBufferDescriptor *)desc];
+  id<MTLCommandBuffer>  commandBuffer = [(id<MTLCommandQueue>)cmdq commandBufferWithDescriptor:(MtCommandBufferDescriptor *)desc];
+  // Per Apple's "Basic Memory Management Rules" the above invocation does not imply ownership.
+  // To be consistent the name of the function and CF_RETURNS_RETAINED, we explicitly claim
+  // ownership with an explicit `retain`
+  [commandBuffer retain];
+  return commandBuffer;
 }
 
 CF_RETURNS_RETAINED

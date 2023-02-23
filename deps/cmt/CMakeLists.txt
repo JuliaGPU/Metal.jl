@@ -74,6 +74,9 @@ set_target_properties(cmt PROPERTIES
 
 target_link_libraries(cmt ${FOUNDATION_LIBRARY} ${METAL_LIBRARY} ${MPS_LIBRARY})
 
+# libcmt uses Manual-Retain-Release and not ARC
+target_compile_options(cmt PRIVATE -fno-objc-arc)
+
 install(TARGETS cmt
         LIBRARY DESTINATION lib
         PUBLIC_HEADER DESTINATION include)

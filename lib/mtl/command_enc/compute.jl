@@ -18,7 +18,7 @@ function MtlComputeCommandEncoder(cmdbuf::MtlCommandBuffer; dispatch_type::Union
         handle = mtNewComputeCommandEncoderWithDispatchtype(cmdbuf, dispatchtype)
     end
     obj = MtlComputeCommandEncoder(handle, cmdbuf)
-    #finalizer(unsafe_destroy!, obj)
+    finalizer(unsafe_destroy!, obj)
     return obj
 end
 

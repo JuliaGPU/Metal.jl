@@ -94,7 +94,7 @@ function MtlCommandBuffer(queue::MtlCommandQueue,
                           desc::MtlCommandBufferDescriptor=MtlCommandBufferDescriptor())
     handle = mtNewCommandBufferWithDescriptor(queue, desc)
     obj = MtlCommandBuffer(handle, queue, desc)
-    #finalizer(unsafe_destroy!, obj)
+    finalizer(unsafe_destroy!, obj)
     return obj
 end
 
