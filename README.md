@@ -200,14 +200,14 @@ pick-up the modified version (i.e., do `julia --project` in a clone
 of `Metal.jl`):
 
 ```
-$ julia --project -e 'using Metal; @show MTL.libcmt'
+$ julia --project -e 'using Metal; @show MTL.cmt.libcmt'
 MTL.libcmt = "/Users/tim/Julia/depot/artifacts/6adc0ed9a8370ff1e3bb8fbaf36e8519ee11fd96/lib/libcmt.dylib"
 
 $ julia --project=deps deps/build_cmt.jl
 ...
 [100%] Built target cmt
 
-$ julia --project -e 'using Metal; @show MTL.libcmt'
+$ julia --project -e 'using Metal; @show MTL.cmt.libcmt'
 MTL.libcmt = "/Users/tim/Julia/depot/scratchspaces/dde4c033-4e86-420c-a63e-0dd931031962/cmt/lib/libcmt.dylib"
 ```
 
