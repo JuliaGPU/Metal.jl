@@ -27,14 +27,14 @@ function generate(img, pos)
 end
 
 img = MtlArray{RGB{N0f8}}(undef, 800,600)
-wrapped = unsafe_wrap(Array{RGB{N0f8}}, img, size(img))
+host = unsafe_wrap(Array{RGB{N0f8}}, img, size(img))
 
 ## initial image
 Metal.@sync @metal threads=16,16 grid=size(img) generate(img, 0)
 
 win = GtkWindow("Test", 800, 600);
 
-data = reinterpret(Gtk4.GdkPixbufLib.RGB, wrapped) 
+data = reinterpret(Gtk4.GdkPixbufLib.RGB, host) 
 pixbuf = Gtk4.GdkPixbufLib.GdkPixbuf(data,false) 
 view = GtkImage(pixbuf)
 
