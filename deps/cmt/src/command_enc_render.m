@@ -18,7 +18,12 @@ MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MT_EXPORT
 MtRenderCommandEncoder*
 mtNewRenderCommandEncoder(MtCommandBuffer *cmdb, MtRenderPassDesc *pass) {
-  return [(id<MTLCommandBuffer>)cmdb renderCommandEncoderWithDescriptor: pass];
+  id<MTLRenderCommandEncoder> encoder = [(id<MTLCommandBuffer>)cmdb renderCommandEncoderWithDescriptor: pass];
+  // Per Apple's "Basic Memory Management Rules" the above invocation does not imply ownership.
+  // To be consistent the name of the function and CF_RETURNS_RETAINED, we explicitly claim
+  // ownership with an explicit `retain`
+  [encoder retain];
+  return encoder;
 }
 
 MT_EXPORT

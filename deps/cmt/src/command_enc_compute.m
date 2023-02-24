@@ -13,7 +13,12 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtComputeCommandEncoder*
 mtNewComputeCommandEncoder(MtCommandBuffer *cmdb) {
-    return [(id<MTLCommandBuffer>)cmdb computeCommandEncoder];
+    id<MTLComputeCommandEncoder> encoder = [(id<MTLCommandBuffer>)cmdb computeCommandEncoder];
+    // Per Apple's "Basic Memory Management Rules" the above invocation does not imply ownership.
+    // To be consistent the name of the function and CF_RETURNS_RETAINED, we explicitly claim
+    // ownership with an explicit `retain`
+    [encoder retain];
+    return encoder;
 }
 
 CF_RETURNS_RETAINED
@@ -21,7 +26,13 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.14), mt_ios(12.0))
 MtComputeCommandEncoder*
 mtNewComputeCommandEncoderWithDispatchType(MtCommandBuffer *cmdb, MtDispatchType dtype) {
-        return [(id<MTLCommandBuffer>)cmdb computeCommandEncoderWithDispatchType:(MTLDispatchType)dtype];
+    id <MTLComputeCommandEncoder> encoder = [(id <MTLCommandBuffer>) cmdb
+                                             computeCommandEncoderWithDispatchType:(MTLDispatchType) dtype];
+    // Per Apple's "Basic Memory Management Rules" the above invocation does not imply ownership.
+    // To be consistent the name of the function and CF_RETURNS_RETAINED, we explicitly claim
+    // ownership with an explicit `retain`
+    [encoder retain];
+    return encoder;
 
 }
 

@@ -11,7 +11,12 @@ MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))
 MtBlitCommandEncoder*
 mtNewBlitCommandEncoder(MtCommandBuffer *cmdb) {
-    return [(id<MTLCommandBuffer>)cmdb blitCommandEncoder];
+    id<MTLBlitCommandEncoder> encoder = [(id<MTLCommandBuffer>)cmdb blitCommandEncoder];
+    // Per Apple's "Basic Memory Management Rules" the above invocation does not imply ownership.
+    // To be consistent the name of the function and CF_RETURNS_RETAINED, we explicitly claim
+    // ownership with an explicit `retain`
+    [encoder retain];
+    return encoder;
 }
 
 MT_EXPORT
