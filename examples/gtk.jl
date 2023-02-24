@@ -1,24 +1,15 @@
+# EXCLUDE FROM TESTING
 """
 This example demonstrates how to integrate Metal and Gtk4. 
 An image is generated using a Metal kernel and efficiently displayed using Gtk4
 """
 
-using Pkg
+using Pkg, Metal
 metal_dir = dirname(@__DIR__)
-local_prefs = joinpath(metal_dir, "LocalPreferences.toml")
 
-project_dir = mktempdir()
-cd(project_dir)
-
-## Some gynamastics are needed to use a locally built libcmt
-if isfile(local_prefs)
-    println("Copying local preferences.")
-    cp(local_prefs, "LocalPreferences.toml")
-end
-Pkg.activate(".")
-Pkg.add(["cmt_jll","Gtk4", "Colors", "FixedPointNumbers"])
+Pkg.activate(; temp=true)
+Pkg.add(["Gtk4", "Colors", "FixedPointNumbers"])
 Pkg.develop(path=metal_dir)
-
 
 using Colors, FixedPointNumbers, Gtk4, Metal
 
