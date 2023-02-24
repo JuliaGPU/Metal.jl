@@ -12,7 +12,7 @@ Base.unsafe_convert(::Type{MTLBlitCommandEncoder}, e::MtlBlitCommandEncoder) = e
 function MtlBlitCommandEncoder(cmdbuf::MtlCommandBuffer)
     handle = mtNewBlitCommandEncoder(cmdbuf)
     obj = MtlBlitCommandEncoder(handle, cmdbuf)
-    #finalizer(unsafe_destroy!, obj)
+    finalizer(unsafe_destroy!, obj)
     return obj
 end
 
