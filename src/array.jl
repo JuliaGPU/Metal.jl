@@ -33,7 +33,7 @@ mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
   offset::Int   # offset of the data in the buffer, in number of elements
   dims::Dims{N}
 
-  function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Shared) where {T,N}
+  function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage=Private) where {T,N}
       Base.allocatedinline(T) || error("MtlArray only supports element types that are stored inline")
       contains_double(T) && @warn "Metal does not support Float64 values, try using Float32 instead" maxlog=1
       maxsize = prod(dims) * sizeof(T)

@@ -45,9 +45,10 @@ function Base.unsafe_copyto!(dev::MtlDevice, dst::Ptr{T}, src::MtlPointer{T}, N:
                              queue::MtlCommandQueue=global_queue(dev), async::Bool=false) where T
     storage_type = src.buffer.storageMode
     if storage_type ==  MTL.MtStorageModePrivate
-        tmp_buf = alloc(T, dev, N, storage=Shared)
-        unsafe_copyto!(dev, tmp_buf, 1, src.buffer, src.offset, N; queue, async)
-        unsafe_copyto!(dst, contents(tmp_buf), N)
+        bytes = N*sizeof(T)
+        tmp_buf = alloc(dev, bytes; storage=MTL.Shared)
+        unsafe_copyto!(dev, tmp_buf, 1, src.buffer, src.offset, bytes; queue, async)
+        unsafe_copyto!(dst, contents(tmp_buf), bytes)
         free(tmp_buf)
     elseif storage_type ==  MTL.MtStorageModeShared
         unsafe_copyto!(dst, contents(src), N)
