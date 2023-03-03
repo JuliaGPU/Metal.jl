@@ -13,11 +13,9 @@ extern "C" {
 #include "types.h"
 #include "enums.h"
 
-typedef void (*MtCommandBufferOnCompletedFn)(MtCommandBuffer * __restrict cmdb,
-                                             void            * __restrict data);
+typedef void (*MtCommandBufferOnCompletedFn)(void * __restrict data);
 
-typedef void (*MtCommandBufferOnScheduledFn)(MtCommandBuffer * __restrict cmdb,
-                                             void            * __restrict data);
+typedef void (*MtCommandBufferOnScheduledFn)(void * __restrict data);
 
 MT_EXPORT
 MT_API_AVAILABLE(mt_macos(10.11), mt_ios(8.0))

@@ -161,3 +161,37 @@ end
         nothing
     end
 end
+
+
+
+## derived arrays
+
+# create a derived device array (reinterpreted or reshaped) that's still a MtlDeviceArray
+@inline function _derived_array(::Type{T}, N::Int, a::MtlDeviceArray{T,M,A},
+                                osize::Dims) where {T, M, A}
+  return MtlDeviceArray{T,N,A}(a.ptr, osize)
+end
+
+function Base.reinterpret(::Type{T}, a::MtlDeviceArray{S,N,A}) where {T,S,N,A}
+  err = _reinterpret_exception(T, a)
+  err === nothing || throw(err)
+
+  if sizeof(T) == sizeof(S) # fast case
+    return MtlDeviceArray{T,N,A}(reinterpret(LLVMPtr{T,A}, a.ptr), size(a))
+  end
+
+  isize = size(a)
+  size1 = div(isize[1]*sizeof(S), sizeof(T))
+  osize = tuple(size1, Base.tail(isize)...)
+  return MtlDeviceArray{T,N,A}(reinterpret(LLVMPtr{T,A}, a.ptr), osize)
+end
+
+function Base.reshape(a::MtlDeviceArray{T,M}, dims::NTuple{N,Int}) where {T,N,M}
+  if prod(dims) != length(a)
+      throw(DimensionMismatch("new dimensions (argument `dims`) must be consistent with array size (`size(a)`)"))
+  end
+  if N == M && dims == size(a)
+      return a
+  end
+  _derived_array(T, N, a, dims)
+end

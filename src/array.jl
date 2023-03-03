@@ -355,8 +355,117 @@ end
 
 device(a::Base.ReinterpretArray) = device(parent(a))
 
-Base.unsafe_convert(::Type{MTL.MTLBuffer}, a::Base.ReinterpretArray{T,N,S} where N) where {T,S} =
-  MTL.MTLBuffer(Base.unsafe_convert(ZePtr{S}, parent(a)))
+function Base.reinterpret(::Type{T}, a::MtlArray{S,N}) where {T,S,N}
+  err = _reinterpret_exception(T, a)
+  err === nothing || throw(err)
+
+  if sizeof(T) == sizeof(S) # for N == 0
+    osize = size(a)
+  else
+    isize = size(a)
+    size1 = div(isize[1]*sizeof(S), sizeof(T))
+    osize = tuple(size1, Base.tail(isize)...)
+  end
+
+  return _derived_array(T, N, a, osize)
+end
+
+function _reinterpret_exception(::Type{T}, a::AbstractArray{S,N}) where {T,S,N}
+  if !isbitstype(T) || !isbitstype(S)
+    return MtlReinterpretBitsTypeError{T,typeof(a)}()
+  end
+  if N == 0 && sizeof(T) != sizeof(S)
+    return MtlReinterpretZeroDimError{T,typeof(a)}()
+  end
+  if N != 0 && sizeof(S) != sizeof(T)
+      ax1 = axes(a)[1]
+      dim = length(ax1)
+      if Base.rem(dim*sizeof(S),sizeof(T)) != 0
+        return MtlReinterpretDivisibilityError{T,typeof(a)}(dim)
+      end
+      if first(ax1) != 1
+        return MtlReinterpretFirstIndexError{T,typeof(a),typeof(ax1)}(ax1)
+      end
+  end
+  return nothing
+end
+
+struct MtlReinterpretBitsTypeError{T,A} <: Exception end
+function Base.showerror(io::IO, ::MtlReinterpretBitsTypeError{T, <:AbstractArray{S}}) where {T, S}
+  print(io, "cannot reinterpret an `$(S)` array to `$(T)`, because not all types are bitstypes")
+end
+
+struct MtlReinterpretZeroDimError{T,A} <: Exception end
+function Base.showerror(io::IO, ::MtlReinterpretZeroDimError{T, <:AbstractArray{S,N}}) where {T, S, N}
+  print(io, "cannot reinterpret a zero-dimensional `$(S)` array to `$(T)` which is of a different size")
+end
+
+struct MtlReinterpretDivisibilityError{T,A} <: Exception
+  dim::Int
+end
+function Base.showerror(io::IO, err::MtlReinterpretDivisibilityError{T, <:AbstractArray{S,N}}) where {T, S, N}
+  dim = err.dim
+  print(io, """
+      cannot reinterpret an `$(S)` array to `$(T)` whose first dimension has size `$(dim)`.
+      The resulting array would have non-integral first dimension.
+      """)
+end
+
+struct MtlReinterpretFirstIndexError{T,A,Ax1} <: Exception
+  ax1::Ax1
+end
+function Base.showerror(io::IO, err::MtlReinterpretFirstIndexError{T, <:AbstractArray{S,N}}) where {T, S, N}
+  ax1 = err.ax1
+  print(io, "cannot reinterpret a `$(S)` array to `$(T)` when the first axis is $ax1. Try reshaping first.")
+end
+
+
+## reinterpret(reshape)
+
+function Base.reinterpret(::typeof(reshape), ::Type{T}, a::MtlArray) where {T}
+  N, osize = _base_check_reshape_reinterpret(T, a)
+  return _derived_array(T, N, a, osize)
+end
+
+# taken from reinterpretarray.jl
+# TODO: move these Base definitions out of the ReinterpretArray struct for reuse
+function _base_check_reshape_reinterpret(::Type{T}, a::MtlArray{S}) where {T,S}
+  isbitstype(T) || throwbits(S, T, T)
+  isbitstype(S) || throwbits(S, T, S)
+  if sizeof(S) == sizeof(T)
+      N = ndims(a)
+      osize = size(a)
+  elseif sizeof(S) > sizeof(T)
+      d, r = divrem(sizeof(S), sizeof(T))
+      r == 0 || throwintmult(S, T)
+      N = ndims(a) + 1
+      osize = (d, size(a)...)
+  else
+      d, r = divrem(sizeof(T), sizeof(S))
+      r == 0 || throwintmult(S, T)
+      N = ndims(a) - 1
+      N > -1 || throwsize0(S, T, "larger")
+      axes(a, 1) == Base.OneTo(sizeof(T) ÷ sizeof(S)) || throwsize1(a, T)
+      osize = size(a)[2:end]
+  end
+  return N, osize
+end
+
+@noinline function throwbits(S::Type, T::Type, U::Type)
+  throw(ArgumentError("cannot reinterpret `$(S)` as `$(T)`, type `$(U)` is not a bits type"))
+end
+
+@noinline function throwintmult(S::Type, T::Type)
+  throw(ArgumentError("`reinterpret(reshape, T, a)` requires that one of `sizeof(T)` (got $(sizeof(T))) and `sizeof(eltype(a))` (got $(sizeof(S))) be an integer multiple of the other"))
+end
+
+@noinline function throwsize0(S::Type, T::Type, msg)
+  throw(ArgumentError("cannot reinterpret a zero-dimensional `$(S)` array to `$(T)` which is of a $msg size"))
+end
+
+@noinline function throwsize1(a::AbstractArray, T::Type)
+    throw(ArgumentError("`reinterpret(reshape, $T, a)` where `eltype(a)` is $(eltype(a)) requires that `axes(a, 1)` (got $(axes(a, 1))) be equal to 1:$(sizeof(T) ÷ sizeof(eltype(a))) (from the ratio of element sizes)"))
+end
 
 
 ## unsafe_wrap

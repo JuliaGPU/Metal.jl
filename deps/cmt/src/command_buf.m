@@ -79,7 +79,8 @@ mtCommandBufferOnCompleted(MtCommandBuffer * __restrict cmdb,
                            void            * __restrict data,
                            MtCommandBufferOnCompletedFn fn) {
   [(id<MTLCommandBuffer>)cmdb addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
-    fn(buffer, data);
+    // we don't care about the buffer; the user can capture it if they want
+    fn(data);
   }];
 }
 
@@ -90,7 +91,8 @@ mtCommandBufferOnScheduled(MtCommandBuffer * __restrict cmdb,
                            void            * __restrict data,
                            MtCommandBufferOnScheduledFn fn) {
   [(id<MTLCommandBuffer>)cmdb addScheduledHandler:^(id<MTLCommandBuffer> buffer) {
-    fn(buffer, data);
+    // we don't care about the buffer; the user can capture it if they want
+    fn(data);
   }];
 }
 
