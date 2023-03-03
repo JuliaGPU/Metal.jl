@@ -91,13 +91,12 @@ Base.@propagate_inbounds _map_getindex(args::Tuple{}, I) = ()
 # product of the two iterators `Rreduce` and `Rother`, where the latter iterator will have
 # singleton entries for the dimensions that should be reduced (and vice versa).
 function partial_mapreduce_device(f, op, neutral, maxthreads, ::Val{Rreduce},
-    ::Val{Rother}, ::Val{Rlen}, shuffle, R, As...) where {Rreduce, Rother, Rlen}
+    ::Val{Rother}, ::Val{Rlen}, ::Val{stride}, shuffle, R, As...) where {Rreduce, Rother, Rlen, stride}
     # decompose the 1D hardware indices into separate ones for reduction (across items
     # and possibly groups if it doesn't fit) and other elements (remaining groups)
     localIdx_reduce = thread_position_in_threadgroup_1d()
-    localDim_reduce = threads_per_threadgroup_1d()
+    localDim_reduce = threads_per_threadgroup_1d() * stride
     groupIdx_reduce, groupIdx_other = fldmod1(threadgroup_position_in_grid_1d(), Rlen)
-    groupDim_reduce = threadgroups_per_grid_1d() ÷ Rlen
 
     # group-based indexing into the values outside of the reduction dimension
     # (that means we can safely synchronize items within this group)
@@ -115,13 +114,19 @@ function partial_mapreduce_device(f, op, neutral, maxthreads, ::Val{Rreduce},
 
         val = op(neutral, neutral)
 
-        # reduce serially across chunks of input vector that don't fit in a group
-        ireduce = localIdx_reduce + (groupIdx_reduce - 1) * localDim_reduce
-        while ireduce <= length(Rreduce)
-            Ireduce = Rreduce[ireduce]
-            J = max(Iother, Ireduce)
-            val = op(val, f(_map_getindex(As, J)...))
-            ireduce += localDim_reduce * groupDim_reduce
+        # read multiple consecutive values in reduction dimension to improve efficiency
+        ireduce = (localIdx_reduce - 1) * stride + (groupIdx_reduce - 1) * localDim_reduce
+        limit = ireduce + stride
+        while ireduce < limit
+            ireduce += 1
+            next = if ireduce <= length(Rreduce)
+                Ireduce = Rreduce[ireduce]
+                J = max(Iother, Ireduce)
+                f(_map_getindex(As, J)...)
+            else
+                neutral
+            end
+            val = op(val, next)
         end
 
         val = reduce_group(op, val, neutral, shuffle, maxthreads)
@@ -166,6 +171,10 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # but allows us to write a generalized kernel supporting partial reductions.
     R′ = reshape(R, (size(R)..., 1))
 
+    # number of consecutive values in reduction dimension read by each thread
+    # TODO: experiment and document this choice
+    stride = 16 ÷ sizeof(T)
+
     # how many threads can we launch?
     #
     # we might not be able to launch all those threads to reduce each slice in one go.
@@ -173,7 +182,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # so that we can span the entire reduction dimension using a single item group.
     # XXX: can we query the 1024?
     kernel = @metal launch=false partial_mapreduce_device(f, op, init, Val(1024), Val(Rreduce), Val(Rother),
-                                                          Val(UInt64(length(Rother))), Val(shuffle), R′, A)
+                                                          Val(UInt64(length(Rother))), Val(stride), Val(shuffle), R′, A)
     pipeline = MTLComputePipelineState(kernel.fun.device, kernel.fun)
 
     # how many threads do we want?
@@ -197,7 +206,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # optimal as it might not saturate the GPU. we already launch some groups to process
     # independent dimensions in parallel; pad that number to ensure full occupancy.
     other_groups = length(Rother)
-    reduce_groups = cld(length(Rreduce), reduce_threads)
+    reduce_groups = cld(length(Rreduce), reduce_threads * stride)
 
     # determine the launch configuration
     threads = reduce_threads
@@ -207,7 +216,8 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     if reduce_groups == 1
         # we can cover the dimensions to reduce using a single group
         @metal threads=threads grid=groups partial_mapreduce_device(
-            f, op, init, Val(threads), Val(Rreduce), Val(Rother), Val(UInt64(length(Rother))), Val(shuffle), R′, A)
+            f, op, init, Val(threads), Val(Rreduce), Val(Rother),
+            Val(UInt64(length(Rother))), Val(stride), Val(shuffle), R′, A)
     else
         # we need multiple steps to cover all values to reduce
         partial = similar(R, (size(R)..., reduce_groups))
@@ -221,7 +231,8 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
             end
         end
         @metal threads=threads grid=groups partial_mapreduce_device(
-            f, op, init, Val(threads), Val(Rreduce), Val(Rother), Val(UInt64(length(Rother))), Val(shuffle), partial, A)
+            f, op, init, Val(threads), Val(Rreduce), Val(Rother),
+            Val(UInt64(length(Rother))), Val(stride), Val(shuffle), partial, A)
 
         GPUArrays.mapreducedim!(identity, op, R′, partial; init=init)
     end
