@@ -1,6 +1,6 @@
 # host array
 
-export MtlArray, MtlVector, MtlMatrix, MtlVecOrMat
+export MtlArray, MtlVector, MtlMatrix, MtlVecOrMat, mtl
 
 function hasfieldcount(@nospecialize(dt))
     try
@@ -168,18 +168,6 @@ Base.unsafe_convert(t::Type{MTL.MTLBuffer}, x::MtlArray) = x.buffer
 Base.unsafe_wrap(t::Type{<:Array}, arr::MtlArray, dims; own=false) =
   unsafe_wrap(t, arr.buffer, dims; own=own)
 
-# We don't convert isbits types in `adapt`, since they are already
-# considered GPU-compatible.
-
-Adapt.adapt_storage(::Type{MtlArray}, xs::AbstractArray) =
-  isbits(xs) ? xs : convert(MtlArray, xs)
-
-# if an element type is specified, convert to it
-Adapt.adapt_storage(::Type{<:MtlArray{T}}, xs::AbstractArray) where {T} =
-  isbits(xs) ? xs : convert(MtlArray{T}, xs)
-
-Adapt.adapt_storage(::Type{Array}, xs::MtlArray) = convert(Array, xs)
-
 Base.collect(x::MtlArray{T,N}) where {T,N} = copyto!(Array{T,N}(undef, size(x)), x)
 
 
@@ -267,6 +255,56 @@ function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::MtlA
   end
   return dest
 end
+
+
+## regular gpu array adaptor
+
+# We don't convert isbits types in `adapt`, since they are already
+# considered GPU-compatible.
+
+Adapt.adapt_storage(::Type{MtlArray}, xs::AT) where {AT<:AbstractArray} =
+  isbitstype(AT) ? xs : convert(MtlArray, xs)
+
+# if specific type parameters are specified, preserve those
+Adapt.adapt_storage(::Type{<:MtlArray{T}}, xs::AT) where {T, AT<:AbstractArray} =
+  isbitstype(AT) ? xs : convert(MtlArray{T}, xs)
+Adapt.adapt_storage(::Type{<:MtlArray{T, N}}, xs::AT) where {T, N, AT<:AbstractArray} =
+  isbitstype(AT) ? xs : convert(MtlArray{T,N}, xs)
+
+
+## opinionated gpu array adaptor
+
+# eagerly converts Float64 to Float32, for compatibility reasons
+
+struct MtlArrayAdaptor end
+
+Adapt.adapt_storage(::MtlArrayAdaptor, xs::AbstractArray{T,N}) where {T,N} =
+  isbits(xs) ? xs : MtlArray{T,N}(xs)
+
+Adapt.adapt_storage(::MtlArrayAdaptor, xs::AbstractArray{T,N}) where {T<:AbstractFloat,N} =
+  isbits(xs) ? xs : MtlArray{Float32,N}(xs)
+
+Adapt.adapt_storage(::MtlArrayAdaptor, xs::AbstractArray{T,N}) where {T<:Complex{<:AbstractFloat},N} =
+  isbits(xs) ? xs : MtlArray{ComplexF32,N}(xs)
+
+# not for Float16
+Adapt.adapt_storage(::MtlArrayAdaptor, xs::AbstractArray{T,N}) where {T<:Float16,N} =
+  isbits(xs) ? xs : MtlArray{T,N}(xs)
+
+"""
+    mtl(A)
+
+Opinionated GPU array adaptor, which may alter the element type `T` of arrays:
+* For `T<:AbstractFloat`, it makes a `MtlArray{Float32}` for performance and compatibility
+  reasons (except for `Float16`).
+* For `T<:Complex{<:AbstractFloat}` it makes a `MtlArray{ComplexF32}`.
+* For other `isbitstype(T)`, it makes a `MtlArray{T}`.
+
+By contrast, `MtlArray(A)` never changes the element type.
+
+Uses Adapt.jl to act inside some wrapper structs.
+"""
+@inline mtl(xs; unified::Bool=false) = adapt(MtlArrayAdaptor(), xs)
 
 
 ## utilities
