@@ -2,6 +2,8 @@ module MTL
 
 using ..cmt
 
+using ObjectiveC, ObjectiveC.Foundation
+
 
 ## version information
 
@@ -50,5 +52,14 @@ include("command_enc/blit.jl")
 include("command_enc/compute.jl")
 include("binary_archive.jl")
 include("profile.jl")
+
+function __init__()
+    precompiling = ccall(:jl_generating_output, Cint, ()) != 0
+    precompiling && return
+
+    Sys.isapple() || return
+
+    load_framework("CoreGraphics")
+end
 
 end # module
