@@ -97,13 +97,13 @@ export MtlComputePipelineState
 const MTLComputePipelineState = Ptr{MtComputePipelineState}
 
 """
-    MtlComputePipelineState(d::MtlDevice, f::MtlFunction)
+    MtlComputePipelineState(d::MTLDevice, f::MtlFunction)
 
 Create an object that stores information about the execution parameters of a MtlFunction.
 """
 mutable struct MtlComputePipelineState
     handle::MTLComputePipelineState
-    device::MtlDevice
+    device::MTLDevice
 end
 
 Base.unsafe_convert(::Type{MTLComputePipelineState}, q::MtlComputePipelineState) = q.handle
@@ -115,7 +115,7 @@ function unsafe_destroy!(cce::MtlComputePipelineState)
     mtRelease(cce.handle)
 end
 
-function MtlComputePipelineState(d::MtlDevice, f::MtlFunction)
+function MtlComputePipelineState(d::MTLDevice, f::MtlFunction)
     handle = @mtlthrows _errptr mtNewComputePipelineStateWithFunction(d, f, _errptr)
 
     obj = MtlComputePipelineState(handle, d)
@@ -123,7 +123,7 @@ function MtlComputePipelineState(d::MtlDevice, f::MtlFunction)
     return obj
 end
 
-# TODO: MtlComputePipelineState(d::MtlDevice, desc::MtlComputePipelineDescriptor, ...)
+# TODO: MtlComputePipelineState(d::MTLDevice, desc::MtlComputePipelineDescriptor, ...)
 
 
 ## properties
@@ -139,7 +139,7 @@ Base.propertynames(o::MtlComputePipelineState) = (
 
 function Base.getproperty(o::MtlComputePipelineState, f::Symbol)
     if f === :device
-        return MtlDevice(mtComputePipelineDevice(o))
+        return MTLDevice(mtComputePipelineDevice(o))
     elseif f === :label
         ptr = mtComputePipelineLabel(o)
         ptr == C_NULL ? nothing : unsafe_string(ptr)

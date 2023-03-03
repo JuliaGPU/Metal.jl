@@ -3,13 +3,13 @@ export MtlLibrary, MtlLibraryFromFile, MtlLibraryFromData
 const MTLLibrary = Ptr{MtLibrary}
 
 """
-    MtlDevice(i::Integer)
+    MTLDevice(i::Integer)
 
 Get a handle to a compute device.
 """
 mutable struct MtlLibrary
     handle::MTLLibrary
-    device::MtlDevice
+    device::MTLDevice
 end
 
 Base.unsafe_convert(::Type{MTLLibrary}, lib::MtlLibrary) = lib.handle
@@ -17,7 +17,7 @@ Base.unsafe_convert(::Type{MTLLibrary}, lib::MtlLibrary) = lib.handle
 Base.:(==)(a::MtlLibrary, b::MtlLibrary) = a.handle == b.handle
 Base.hash(lib::MtlLibrary, h::UInt) = hash(lib.handle, h)
 
-function MtlLibrary(device::MtlDevice, src::String, opts::MtlCompileOptions=MtlCompileOptions())
+function MtlLibrary(device::MTLDevice, src::String, opts::MtlCompileOptions=MtlCompileOptions())
     handle = @mtlthrows _errptr mtNewLibraryWithSource(device, src, opts, _errptr)
 
     obj = MtlLibrary(handle, device)
@@ -26,7 +26,7 @@ function MtlLibrary(device::MtlDevice, src::String, opts::MtlCompileOptions=MtlC
     return obj
 end
 
-function MtlLibraryFromFile(device::MtlDevice, path::String)
+function MtlLibraryFromFile(device::MTLDevice, path::String)
     handle = if macos_version() >= v"13"
         @mtlthrows _errptr mtNewLibraryWithURL(device, path, _errptr)
     else
@@ -39,7 +39,7 @@ function MtlLibraryFromFile(device::MtlDevice, path::String)
     return obj
 end
 
-function MtlLibraryFromData(device::MtlDevice, data)
+function MtlLibraryFromData(device::MTLDevice, data)
     GC.@preserve data begin
         handle = @mtlthrows _errptr mtNewLibraryWithData(device, pointer(data), sizeof(data), _errptr)
     end

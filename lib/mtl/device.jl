@@ -1,15 +1,13 @@
-export MtlDevice, devices
+export MTLDevice, devices
 
-const MTLDevice = Ptr{MtDevice}
+@objcwrapper MTLDevice <: NSObject
 
-struct MtlDevice
-    handle::MTLDevice
-end
+# compatibility with cmt
+Base.unsafe_convert(T::Type{Ptr{MtDevice}}, obj::MTLDevice) =
+    reinterpret(T, Base.unsafe_convert(id, obj))
+MTLDevice(ptr::Ptr{MtDevice}) = MTLDevice(reinterpret(id, ptr))
 
-Base.unsafe_convert(::Type{MTLDevice}, dev::MtlDevice) = dev.handle
-
-Base.:(==)(a::MtlDevice, b::MtlDevice) = a.handle == b.handle
-Base.hash(dev::MtlDevice, h::UInt) = hash(dev.handle, h)
+MTLCreateSystemDefaultDevice() = MTLDevice(ccall(:MTLCreateSystemDefaultDevice, id, ()))
 
 """
     devices()
@@ -17,90 +15,97 @@ Base.hash(dev::MtlDevice, h::UInt) = hash(dev.handle, h)
 Get an iterator for the compute devices.
 """
 function devices()
-    count = Ref{Csize_t}(0)
-    mtCopyAllDevices(count, C_NULL)
-    handles = Vector{Ptr{MtDevice}}(undef, count[])
-    mtCopyAllDevices(count, handles)
-    MtlDevice.(handles)
+    list = NSArray(ccall(:MTLCopyAllDevices, id, ()))
+    MTLDevice.(collect(list))
 end
 
 """
-    MtlDevice(i::Integer)
+    MTLDevice(i::Integer)
 
 Get a handle to a compute device.
 """
-MtlDevice(i::Integer) = devices()[i]
+MTLDevice(i::Integer) = devices()[i]
 
 
 ## properties
 
-Base.propertynames(::MtlDevice) = (
-    # GPU properties
-    :recommendedMaxWorkingSetSize,
-    :hasUnifiedMemory,
-    :maxTransferRate,
-    :name,
-    :isHeadless,
-    :isLowPower,
-    :isRemovable,
-    :registryID,
-    # threadgroup limits
-    :maxThreadgroupMemoryLength,
-    :maxThreadsPerThreadgroup,
-    # argument buffers
-    :argumentBuffersSupport,
-    # buffers
-    :maxBufferLength,
-    # gpu memory
-    :currentAllocatedSize,
-)
+@enum MTLArgumentBuffersTier::NSUInteger begin
+    MTLArgumentBuffersTier1 = 0
+    MTLArgumentBuffersTier2 = 1
+end
 
-function Base.getproperty(dev::MtlDevice, f::Symbol)
-    if f === :recommendedMaxWorkingSetSize
-        mtDeviceRecommendedMaxWorkingSetSize(dev)
-    elseif f === :hasUnifiedMemory
-        mtDeviceHasUnifiedMemory(dev)
-    elseif f === :maxTransferRate
-        mtDeviceMaxTransferRate(dev)
-    elseif f === :name
-        unsafe_string(mtDeviceName(dev))
-    elseif f === :isHeadless
-        mtDeviceLowPower(dev)
-    elseif f === :isLowPower
-        mtDeviceHeadless(dev)
-    elseif f === :isRemovable
-        mtDeviceRemovable(dev)
-    elseif f === :registryID
-        mtDeviceRegistryID(dev)
-    elseif f === :maxThreadgroupMemoryLength
-        mtDeviceMaxThreadgroupMemoryLength(dev)
-    elseif f === :maxThreadsPerThreadgroup
-        mtMaxThreadsPerThreadgroup(dev)
-    elseif f === :argumentBuffersSupport
-        mtDeviceArgumentBuffersSupport(dev)
-    elseif f === :maxBufferLength
-        mtDeviceMaxBufferLength(dev)
-    elseif f === :currentAllocatedSize
-        mtDeviceCurrentAllocatedSize(dev)
-    else
-        getfield(dev, f)
+const properties = [
+    ## device inspection
+    # compute support
+    (:maxThreadgroupMemoryLength, :NSUInteger),
+    (:maxThreadsPerThreadgroup, :MTLSize => :MtSize),
+    # render support
+    (:supportsRaytracing, :Bool),
+    (:supportsPrimitiveMotionBlur, :Bool),
+    (:supportsRaytracingFromRender, :Bool),
+    (:supports32BitMSAA, :Bool),
+    (:supportsPullModelInterpolation, :Bool),
+    (:supportsShaderBarycentricCoordinates, :Bool),
+    (:programmableSamplePositionsSupported, :Bool),
+    (:rasterOrderGroupsSupported, :Bool),
+    # texture and sampler support
+    (:supports32BitFloatFiltering, :Bool),
+    (:supportsBCTextureCompression, :Bool),
+    (:depth24Stencil8PixelFormatSupported, :Bool),
+    (:supportsQueryTextureLOD, :Bool),
+    #(:readWriteTextureSupport, :MTLReadWriteTextureTier),
+    # function pointer support
+    (:supportsFunctionPointers, :Bool),
+    (:supportsFunctionPointersFromRender, :Bool),
+    # memory
+    (:currentAllocatedSize, :UInt64),
+    (:recommendedMaxWorkingSetSize, :NSUInteger),
+    (:hasUnifiedMemory, :Bool),
+    (:maxTransferRate, :NSUInteger),
+    # counters
+    #(:counterSets, :MTLCounterSet),
+    # identifying
+    (:name, :NSString => :String),
+    (:registryID, :UInt64),
+    #(:location, :MTLDeviceLocation),
+    (:locationNumber, :UInt64),
+    (:isLowPower, :Bool),
+    (:isRemovable, :Bool),
+    (:isHeadless, :Bool),
+    (:peerGroupID, :UInt64),
+    (:peerCount, :UInt64),
+    (:peerIndex, :UInt64),
+    ## resource creation
+    # creating buffers
+    (:maxBufferLength, :NSUInteger),
+    # creating argument buffer encoders
+    (:argumentBuffersSupport, :MTLArgumentBuffersTier),
+    (:maxArgumentBufferSamplerCount, :NSUInteger),
+]
+
+Base.propertynames(::MTLDevice) = map(first, properties)
+
+let
+    ex = nothing
+    current = nothing
+    for (property, type) in properties
+        test = :(f === $(QuoteNode(property)))
+        call = if type isa Symbol
+            :(@objc [dev::id{MTLDevice} $property]::$type)
+        else
+            src, dst = type
+            :($dst(@objc [dev::id{MTLDevice} $property]::$src))
+        end
+        if ex === nothing
+            current = Expr(:if, test, call)
+            ex = current
+        else
+            new = Expr(:elseif, test, call)
+            push!(current.args, new)
+            current = new
+        end
     end
-end
-
-
-## display
-
-function Base.show(io::IO, dev::MtlDevice)
-    print(io, "MtlDevice($(dev.name))")
-end
-
-function Base.show(io::IO, ::MIME"text/plain", dev::MtlDevice)
-    println(io, "MtlDevice:")
-    println(io, " name:             ", dev.name)
-    println(io, " lowpower:         ", dev.isLowPower)
-    println(io, " headless:         ", dev.isHeadless)
-    println(io, " removable:        ", dev.isRemovable)
-    println(io, " unified memory:   ", dev.hasUnifiedMemory)
-    println(io, " registry id:      ", dev.registryID)
-    print(io,   " transfer rate:    ", dev.maxTransferRate)
+    final = :(getfield(dev, f))
+    push!(current.args, final)
+    @eval Base.getproperty(dev::MTLDevice, f::Symbol) = $ex
 end

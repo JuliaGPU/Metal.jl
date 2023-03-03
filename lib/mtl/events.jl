@@ -8,12 +8,12 @@ const MTLSharedEventHandle = Ptr{MtSharedEventHandle}
 
 mutable struct MtlEvent <: MtlAbstractEvent
 	handle::MTLEvent
-	device::MtlDevice
+	device::MTLDevice
 end
 
 mutable struct MtlSharedEvent <: MtlAbstractEvent
 	handle::MTLSharedEvent
-	device::MtlDevice
+	device::MTLDevice
 end
 
 Base.unsafe_convert(::Type{MTLEvent}, ev::MtlAbstractEvent) = convert(MTLEvent, ev.handle)
@@ -26,14 +26,14 @@ function unsafe_destroy!(fun::MtlAbstractEvent)
 	mtRelease(fun.handle)
 end
 
-function MtlEvent(dev::MtlDevice)
+function MtlEvent(dev::MTLDevice)
 	handle = mtDeviceNewEvent(dev)
 	obj = MtlEvent(handle, dev)
 	finalizer(unsafe_destroy!, obj)
 	return obj
 end
 
-function MtlSharedEvent(dev::MtlDevice)
+function MtlSharedEvent(dev::MTLDevice)
 	handle = mtDeviceNewSharedEvent(dev)
 	obj = MtlSharedEvent(handle, dev)
 	finalizer(unsafe_destroy!, obj)

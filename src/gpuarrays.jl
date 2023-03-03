@@ -63,9 +63,9 @@ end
 
 GPUArrays.backend(::Type{<:MtlArray}) = mtlArrayBackend()
 
-const GLOBAL_RNGs = Dict{MtlDevice,GPUArrays.RNG}()
+const GLOBAL_RNGs = Dict{MTLDevice,GPUArrays.RNG}()
 function GPUArrays.default_rng(::Type{<:MtlArray})
-    dev = MtlDevice(1)
+    dev = MTLDevice(1)
     get!(GLOBAL_RNGs, dev) do
         N = 128 # Size of default oneAPI working group with barrier, so should be good for Metal
         state = MtlArray{NTuple{4, UInt32}}(undef, N)

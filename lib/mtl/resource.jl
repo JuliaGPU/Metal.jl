@@ -14,7 +14,7 @@ Base.propertynames(::MtlResource) =
 
 function Base.getproperty(res::MtlResource, f::Symbol)
     if f === :device
-        MtlDevice(mtResourceDevice(res))
+        MTLDevice(mtResourceDevice(res))
     elseif f === :label
         ptr = mtResourceLabel(res)
         ptr == C_NULL ? nothing : unsafe_string(ptr)

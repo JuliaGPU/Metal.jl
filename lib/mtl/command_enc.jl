@@ -16,7 +16,7 @@ Base.propertynames(::MtlCommandEncoder) = (:device, :label)
 
 function Base.getproperty(o::MtlCommandEncoder, f::Symbol)
     if f === :device
-        MtlDevice(mtCommandEncoderDevice(o))
+        MTLDevice(mtCommandEncoderDevice(o))
     elseif f === :label
         ptr = mtCommandEncoderLabel(o)
         ptr == C_NULL ? nothing : unsafe_string(ptr)

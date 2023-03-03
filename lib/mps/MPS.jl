@@ -6,7 +6,7 @@ using ..cmt
 
 import GPUArrays
 
-is_supported(dev::MtlDevice) = mtMPSSupportsMTLDevice(dev)
+is_supported(dev::MTLDevice) = mtMPSSupportsMTLDevice(dev)
 
 # high-level wrappers
 include("matrix.jl")

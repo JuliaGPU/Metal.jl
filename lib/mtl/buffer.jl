@@ -46,11 +46,11 @@ end
 
 ## allocation
 
-alloc_buffer(dev::MtlDevice, bytesize, opts::MtlResourceOptions) =
+alloc_buffer(dev::MTLDevice, bytesize, opts::MtlResourceOptions) =
     mtDeviceNewBufferWithLength(dev, bytesize, opts)
 alloc_buffer(dev::MtlHeap, bytesize, opts::MtlResourceOptions) =
     mtHeapNewBufferWithLength(heap, bytesize, opts)
-alloc_buffer(dev::MtlDevice, bytesize, opts::MtlResourceOptions, ptr::Ptr) =
+alloc_buffer(dev::MTLDevice, bytesize, opts::MtlResourceOptions, ptr::Ptr) =
     mtDeviceNewBufferWithBytes(dev, ptr, bytesize, opts)
 alloc_buffer(dev::MtlHeap, bytesize, opts::MtlResourceOptions, ptr::Ptr) =
     mtHeapNewBufferWithBytes(heap, ptr, bytesize, opts)
@@ -60,7 +60,7 @@ alloc_buffer(dev, bytesize, opts::Integer) =
 alloc_buffer(dev, bytesize, opts::Integer, ptr) =
     alloc_buffer(dev, bytesize, Base.bitcast(MtlResourceOptions, UInt32(opts)), ptr)
 
-function MtlBuffer(dev::Union{MtlDevice,MtlHeap},
+function MtlBuffer(dev::Union{MTLDevice,MtlHeap},
                    bytesize::Integer;
                    storage = Private,
                    hazard_tracking = DefaultTracking,
@@ -73,7 +73,7 @@ function MtlBuffer(dev::Union{MtlDevice,MtlHeap},
     return MtlBuffer(ptr)
 end
 
-function MtlBuffer(dev::Union{MtlDevice,MtlHeap},
+function MtlBuffer(dev::Union{MTLDevice,MtlHeap},
                    bytesize::Integer,
                    ptr::Ptr;
                    storage = Managed,
@@ -131,7 +131,7 @@ function DidModifyRange!(buf::MtlBuffer, range::UnitRange)
 end
 
 # Views on different device
-NewBuffer(buf::MtlBuffer, d::MtlDevice) =
+NewBuffer(buf::MtlBuffer, d::MTLDevice) =
     mtBufferNewRemoteBufferViewForDevice(buf, d);
 
 function ParentBuffer(buf::MtlBuffer)

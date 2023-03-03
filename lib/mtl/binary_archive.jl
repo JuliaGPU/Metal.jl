@@ -72,7 +72,7 @@ const MTLBinaryArchive = Ptr{MTL.MtBinaryArchive}
 
 mutable struct MtlBinaryArchive
     handle::MTLBinaryArchive
-    device::MtlDevice
+    device::MTLDevice
     desc::MtlBinaryArchiveDescriptor
 end
 
@@ -81,7 +81,7 @@ Base.unsafe_convert(::Type{MTLBinaryArchive}, q::MtlBinaryArchive) = q.handle
 Base.:(==)(a::MtlBinaryArchive, b::MtlBinaryArchive) = a.handle == b.handle
 Base.hash(lib::MtlBinaryArchive, h::UInt) = hash(lib.handle, h)
 
-function MtlBinaryArchive(device::MtlDevice, desc::MtlBinaryArchiveDescriptor)
+function MtlBinaryArchive(device::MTLDevice, desc::MtlBinaryArchiveDescriptor)
     handle = @mtlthrows _errptr mtNewBinaryArchiveWithDescriptor(device, desc, _errptr)
 
     obj = MtlBinaryArchive(handle, device, desc)
@@ -103,7 +103,7 @@ Base.propertynames(o::MtlBinaryArchive) = (
 
 function Base.getproperty(o::MtlBinaryArchive, f::Symbol)
     if f === :device
-        return MtlDevice(mtBinaryArchiveDevice(o))
+        return MTLDevice(mtBinaryArchiveDevice(o))
     elseif f === :label
         ptr = mtBinaryArchiveLabel(o)
         ptr == C_NULL ? nothing : unsafe_string(ptr)

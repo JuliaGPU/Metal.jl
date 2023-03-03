@@ -82,7 +82,7 @@ const MTLHeap = Ptr{MtHeap}
 
 mutable struct MtlHeap
     handle::MTLHeap
-    device::MtlDevice
+    device::MTLDevice
 end
 
 Base.unsafe_convert(::Type{MTLHeap}, d::MtlHeap) = d.handle
@@ -90,7 +90,7 @@ Base.unsafe_convert(::Type{MTLHeap}, d::MtlHeap) = d.handle
 Base.:(==)(a::MtlHeap, b::MtlHeap) = a.handle == b.handle
 Base.hash(dev::MtlHeap, h::UInt) = hash(dev.handle, h)
 
-function MtlHeap(device::MtlDevice, desc::MtlHeapDescriptor)
+function MtlHeap(device::MTLDevice, desc::MtlHeapDescriptor)
     handle = mtDeviceNewHeapWithDescriptor(device, desc)
     obj = MtlHeap(handle, device)
     finalizer(unsafe_destroy!, obj)

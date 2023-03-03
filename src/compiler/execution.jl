@@ -139,7 +139,7 @@ in a hot path without degrading performance. New code will be generated automati
 the function changes, or when different types or keyword arguments are provided.
 """
 function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
-    dev = MtlDevice(1)
+    dev = MTLDevice(1)
     cache = get!(()->Dict{UInt,Any}(), mtlfunction_cache, dev)
     source = FunctionSpec(f, tt, true, name)
     target = MetalCompilerTarget(macos=macos_version(); kwargs...)
@@ -190,9 +190,9 @@ end
 
 ## kernel launching and argument encoding
 
-function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1, queue=global_queue(current_device()))
-    grid = MtlDim3(grid)
-    threads = MtlDim3(threads)
+function (kernel::HostKernel)(args...; grid=1, threads=1, queue=global_queue(current_device()))
+    grid = cmt.MtSize(MTLSize(grid))
+    threads = cmt.MtSize(MTLSize(threads))
     (grid.width>0 && grid.height>0 && grid.depth>0) ||
         throw(ArgumentError("Grid dimensions should be non-null"))
     (threads.width>0 && threads.height>0 && threads.depth>0) ||

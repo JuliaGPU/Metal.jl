@@ -3,9 +3,9 @@ export MtlCommandQueue
 const MTLCommandQueue = Ptr{MtCommandQueue}
 
 """
-    MtlCommandQueue(dev::MtlDevice)
+    MtlCommandQueue(dev::MTLDevice)
 
-A queue that organizes command buffers to be executed by the GPU `MtlDevice`.
+A queue that organizes command buffers to be executed by the GPU `MTLDevice`.
 
 A MTLCommandQueue object is used to queue an ordered list of command buffers for a
 MTLDevice to execute. Command queues are thread-safe and allow multiple outstanding
@@ -15,7 +15,7 @@ command buffers to be encoded simultaneously.
 """
 mutable struct MtlCommandQueue
     handle::MTLCommandQueue
-    device::MtlDevice
+    device::MTLDevice
 end
 
 Base.unsafe_convert(::Type{MTLCommandQueue}, q::MtlCommandQueue) = q.handle
@@ -23,7 +23,7 @@ Base.unsafe_convert(::Type{MTLCommandQueue}, q::MtlCommandQueue) = q.handle
 Base.:(==)(a::MtlCommandQueue, b::MtlCommandQueue) = a.handle == b.handle
 Base.hash(q::MtlCommandQueue, h::UInt) = hash(q.handle, h)
 
-function MtlCommandQueue(dev::MtlDevice)
+function MtlCommandQueue(dev::MTLDevice)
     queue = mtNewCommandQueue(dev)
     obj = MtlCommandQueue(queue, dev)
     finalizer(unsafe_destroy!, obj)
@@ -41,7 +41,7 @@ Base.propertynames(::MtlCommandQueue) = (:device, :label)
 
 function Base.getproperty(o::MtlCommandQueue, f::Symbol)
     if f === :device
-        MtlDevice(mtCommandQueueDevice(o))
+        MTLDevice(mtCommandQueueDevice(o))
     elseif f === :label
         ptr = mtCommandQueueLabel(o)
         ptr == C_NULL ? nothing : unsafe_string(ptr)

@@ -32,7 +32,7 @@ function synchronize_metal_tasks(ex)
         try
             $(ex)
         finally
-            if haskey($task_local_storage(), :MtlDevice)
+            if haskey($task_local_storage(), :MTLDevice)
                 $device_synchronize()
             end
         end

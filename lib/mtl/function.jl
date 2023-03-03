@@ -110,7 +110,7 @@ Base.propertynames(::MtlFunction) = (:device, :label, :name, :functionType)
 
 function Base.getproperty(fun::MtlFunction, f::Symbol)
     if f === :device
-        MtlDevice(mtFunctionDevice(fun))
+        MTLDevice(mtFunctionDevice(fun))
     elseif f === :label
         ptr = mtFunctionLabel(fun)
         ptr == C_NULL ? nothing : unsafe_string(ptr)

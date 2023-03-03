@@ -115,7 +115,7 @@ Base.propertynames(::MtlCommandBuffer) = (
 
 function Base.getproperty(o::MtlCommandBuffer, f::Symbol)
     if f === :device
-        MtlDevice(mtCommandBufferDevice(o))
+        MTLDevice(mtCommandBufferDevice(o))
     elseif f === :commandQueue
         MtlCommandQueue(mtCommandBufferCommandQueue(o), o.device)
     elseif f === :label

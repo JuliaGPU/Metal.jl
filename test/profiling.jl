@@ -26,7 +26,7 @@ desc.captureObject = cmdq
 @test desc.captureObject == cmdq.handle
 dev = current_device()
 desc.captureObject = dev
-@test desc.captureObject == dev.handle
+@test desc.captureObject == dev
 
 # Capture Destination
 @test desc.destination == MTL.MtCaptureDestinationDeveloperTools

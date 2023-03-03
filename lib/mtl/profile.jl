@@ -49,7 +49,7 @@ Base.propertynames(::MtlCaptureScope) = (
 
 function Base.getproperty(o::MtlCaptureScope, f::Symbol)
     if f === :device
-        MtlDevice(mtCaptureScopeDevice(o))
+        MTLDevice(mtCaptureScopeDevice(o))
     elseif f === :commandQueue
         MtlCommandQueue(mtCaptureScopeCommandQueue(o), o.device)
     elseif f === :label
@@ -83,7 +83,7 @@ const MTLCaptureDescriptor = Ptr{MtCaptureDescriptor}
 
 """
     MtlCaptureDescriptor()
-    MtlCaptureDescriptor(obj::Union{MtlDevice,MtlCommandQueue},
+    MtlCaptureDescriptor(obj::Union{MTLDevice,MtlCommandQueue},
                          destination::MtCaptureDestination;
                          folder::String=nothing)
 Create a GPU frame capture descriptor to alter the parameters of a profiling session.
@@ -100,7 +100,7 @@ mutable struct MtlCaptureDescriptor
     end
 
     # TODO: Add capture state
-    function MtlCaptureDescriptor(obj::Union{MtlDevice,MtlCommandQueue, MtlCaptureScope},
+    function MtlCaptureDescriptor(obj::Union{MTLDevice,MtlCommandQueue, MtlCaptureScope},
                                   destination::MtCaptureDestination;
                                   folder::String=nothing)
         desc = MtlCaptureDescriptor()
@@ -134,7 +134,13 @@ Base.propertynames(::MtlCaptureDescriptor) = (:captureObject, :destination, :out
 function Base.getproperty(desc::MtlCaptureDescriptor, f::Symbol)
     if f === :captureObject
         ptr = mtCaptureDescriptorCaptureObject(desc)
-        ptr == C_NULL ? nothing : obj_enum_to_jl_typ[desc.cap_obj_type](ptr)
+        ptr == C_NULL && return nothing
+        if desc.cap_obj_type == MtCaptureDescriptorCaptureObjectTypeDevice
+            # XXX: temporary hack while we migrate away from cmt
+            MTLDevice(reinterpret(id, ptr))
+        else
+            obj_enum_to_jl_typ[desc.cap_obj_type](ptr)
+        end
     elseif f === :destination
         mtCaptureDescriptorDestination(desc)
     elseif f === :outputFolder
@@ -149,26 +155,26 @@ end
 function Base.setproperty!(desc::MtlCaptureDescriptor, f::Symbol, val)
     if f === :captureObject
         if isa(val, MtlCommandQueue)
-            mtCaptureDescriptorCaptureObjectSetQueue(desc.handle, val.handle)
+            mtCaptureDescriptorCaptureObjectSetQueue(desc, val)
             desc.cap_obj_type = MtCaptureDescriptorCaptureObjectTypeQueue
-        elseif isa(val, MtlDevice)
-            mtCaptureDescriptorCaptureObjectSetDevice(desc.handle, val.handle)
+        elseif isa(val, MTLDevice)
+            mtCaptureDescriptorCaptureObjectSetDevice(desc, val)
             desc.cap_obj_type = MtCaptureDescriptorCaptureObjectTypeDevice
         elseif isa(val, MtlCaptureScope)
-            mtCaptureDescriptorCaptureObjectSetScope(desc.handle, val.handle)
+            mtCaptureDescriptorCaptureObjectSetScope(desc, val)
             desc.cap_obj_type = MtCaptureDescriptorCaptureObjectTypeScope
         else
-            throw(ArgumentError("captureObject property should be a MtlCommandQueue, MtlDevice, or MtlCaptureScope."))
+            throw(ArgumentError("captureObject property should be a MtlCommandQueue, MTLDevice, or MtlCaptureScope."))
         end
     elseif f === :destination
         isa(val, MtCaptureDestination) ||
             throw(ArgumentError("destination property must be a MtlCaptureDestination"))
-        mtCaptureDescriptorDestinationSet(desc.handle, val)
+        mtCaptureDescriptorDestinationSet(desc, val)
     elseif f === :outputFolder
         # TODO: Check that it doesn't already exist and allow for path or other compatible objects
         isa(val, String) ||
             throw(ArgumentError("outputFolder property must be a String"))
-        mtCaptureDescriptorOutputURLSet(desc.handle, val)
+        mtCaptureDescriptorOutputURLSet(desc, val)
     else
         setfield!(desc, f, val)
     end
@@ -207,7 +213,7 @@ struct MtlCaptureManager
         # Inexpensive dummy metal command to trigger GPU framce capture enable on Metal's end
         # Without this, two separate capture managers are potentially handled
         # One with capture enabled and one without
-        MtlDevice(1)
+        MTLDevice(1)
         handle = mtSharedCaptureManager()
         obj = new(handle)
         # No finalizer needed since the manager is handled by Metal
@@ -222,12 +228,12 @@ Base.hash(capman::MtlCaptureManager, h::UInt) = hash(capman.handle, h)
 
 
 """
-    startCapture(obj::Union{MtlDevice,MtlCommandQueue},
+    startCapture(obj::Union{MTLDevice,MtlCommandQueue},
                  destination::MtCaptureDestination=MtCaptureDestinationGPUTraceDocument;
                  folder::String=nothing)
 Start GPU frame capture using the default capture object and specifying capture descriptor parameters directly.
 """
-function startCapture(obj::Union{MtlDevice,MtlCommandQueue, MtlCaptureScope},
+function startCapture(obj::Union{MTLDevice,MtlCommandQueue, MtlCaptureScope},
                       destination::MtCaptureDestination=MtCaptureDestinationGPUTraceDocument;
                       folder::String=nothing)
     destination == MtCaptureDestinationGPUTraceDocument && folder == nothing &&
