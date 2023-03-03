@@ -1,4 +1,5 @@
 @testset "profiling" begin
+mktempdir() do tmpdir
 
 # Verify Metal capture is enabled via environment variable
 @test haskey(ENV, "METAL_CAPTURE_ENABLED")
@@ -34,10 +35,9 @@ desc.destination = MTL.MtCaptureDestinationGPUTraceDocument
 
 # Output URL
 @test desc.outputFolder == nothing
-path = tempname()*"/jl_metal.gputrace"
+path = joinpath(tmpdir, "test.gputrace")
 desc.outputFolder = path
 @test desc.outputFolder == path
-
 
 # Capture Scope
 queue = MtlCommandQueue(current_device())
@@ -55,10 +55,10 @@ new_scope.label = new_label
 manager.defaultCaptureScope = new_scope
 @test manager.defaultCaptureScope == new_scope
 
-
 # Capturing
 bufferA = MtlArray{Float32,1}(undef, tuple(4), storage=Shared)
 
+@test !isdir(path)
 @test manager.isCapturing == false
 startCapture(manager, desc)
 @test manager.isCapturing
@@ -66,10 +66,16 @@ startCapture(manager, desc)
 @metal threads=4 tester(bufferA)
 stopCapture(manager)
 @test manager.isCapturing == false
+@test isdir(path)
 
 # Profile Macro
-Metal.@profile @metal threads=4 tester(bufferA)
-Metal.@profile capture=current_device() @metal threads=4 tester(bufferA)
-@test_throws ArgumentError Metal.@profile dir=path @metal threads=4 tester(bufferA)
+cd(path) do
+    Metal.@profile @metal threads=4 tester(bufferA)
+    @test isdir("julia_capture_1.gputrace")
+    Metal.@profile capture=current_device() @metal threads=4 tester(bufferA)
+    @test isdir("julia_capture_2.gputrace")
+    @test_throws ArgumentError Metal.@profile @metal threads=4 tester(bufferA)
+end
 
+end
 end

@@ -46,41 +46,48 @@ function versioninfo(io::IO=stdout)
     return
 end
 
+function profile_dir()
+    root = pwd()
+    i = 1
+    while true
+        path = joinpath(root, "julia_capture_$i.gputrace/")
+        isdir(path) || return path
+        i += 1
+    end
+end
+
 """
-    @profile [kwargs...] ex
+    Metal.@profile [kwargs...] ex
+
 Profile Metal/GPU work using XCode's GPU frame capture capabilities.
-Note: Metal frame capture must be enabled before launching Julia (METAL\\_CAPTURE\\_ENABLED=1)
-and XCode is required to view and interpret the GPU trace output.
 
-Several keyword arguments are supported that influence the behavior of `@profile`:
-- `dir`: the directory to save the GPU trace folder as. Will append required ".gputrace" \
-postfix by default if not explicitly put.
-- `capture`: the object to capture GPU work on. Can be a MtlDevice, MtlCommandQueue, or \
-MtlCaptureScope. This defaults to the global command queue, and selecting a different \
-capture object may result in no GPU commands detected when viewed from Xcode.
+!!! note
+
+    Metal frame capture must be enabled before launching Julia (METAL\\_CAPTURE\\_ENABLED=1)
+    and XCode is required to view and interpret the GPU trace output.
+
+Several keyword arguments are supported that influence the behavior of `Metal.@profile`:
+
+- `capture`: the object to capture GPU work on. Can be a MtlDevice, MtlCommandQueue, or
+   MtlCaptureScope. This defaults to the global command queue, and selecting a different
+   capture object may result in no GPU commands detected when viewed from Xcode.
 - `dest`: the type of GPU frame capture output. Potential values:
-    - `MTL.MtCaptureDestinationGPUTraceDocument` for folder output for later viewing/sharing. (default)
-    - `MTL.MtCaptureDestinationDeveloperTools` for direct XCode viewing.
+   - `MTL.MtCaptureDestinationGPUTraceDocument` for folder output for later
+     viewing/sharing. (default)
+   - `MTL.MtCaptureDestinationDeveloperTools` for direct XCode viewing.
 
-Note that when profiling the resulting gputrace folder in Xcode, do so one at a time to \
-avoid "no profiling data found" errors.
+When profiling the resulting gputrace folder in Xcode, do so one at a time to avoid "no
+profiling data found" errors.
 """
 macro profile(ex...)
     work = ex[end]
     kwargs = ex[1:end-1]
-    # Default output directory - generate random path with required folder name ending
-    dir = tempname()*"/jl_metal.gputrace/"
-    # Default destination type to GPU trace document
-    dest = MTL.MtCaptureDestinationGPUTraceDocument
-    # Default capture object to global command queue
-    capture = global_queue(current_device())
-
+    dest = MTL.MtCaptureDestinationGPUTraceDocument # default: folder output
+    capture = global_queue(current_device())        # default: capture global command queue
     if !isempty(kwargs)
         for kwarg in kwargs
             key,val = kwarg.args
-            if key == :dir
-                dir = val
-            elseif key == :dest
+            if key == :dest
                 dest = val
             elseif key == :capture
                 capture = val
@@ -90,20 +97,16 @@ macro profile(ex...)
         end
     end
 
-    expr = quote
-        local result = nothing
-        # Start tracking GPU work
-        startCapture($capture, $dest; folder=$dir)
+    quote
+        result = nothing
+        dir = profile_dir()
+        startCapture($capture, $dest; folder=dir)
         try
-            # Execute GPU work and store result
-            result = $work
-            @info "GPU frame capture saved to $($dir)\n"
+            result = $(esc(work))
+            @info "GPU frame capture saved to $dir"
         finally
-            # Stop tracking
             stopCapture()
         end
         return result
     end
-
-    return esc(expr)
 end

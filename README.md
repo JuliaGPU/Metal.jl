@@ -121,16 +121,14 @@ julia> Array(c)
 ## Profiling
 
 This package also supports profiling GPU execution for later visualization with Apple's
-Xcode tools. The easiest way to generate a GPU report is to use the `Metal.@profile` macro as seen
-below. To profile GPU code from a Julia process,
-you must set the `METAL_CAPTURE_ENABLED` environment variable. On the first Metal
+Xcode tools. The easiest way to generate a GPU report is to use the `Metal.@profile` macro
+as seen below. To profile GPU code from a Julia process, you must set the
+`METAL_CAPTURE_ENABLED` environment variable before importing Metal.jl. On the first Metal
 command detected, you should get a message stating "Metal GPU Frame Capture Enabled" if the
-variable was set correctly.
+variable was set correctly:
 
 ```julia
-$ METAL_CAPTURE_ENABLED=1 julia
-...
-
+julia> ENV["METAL_CAPTURE_ENABLED"] = 1
 julia> using Metal
 
 julia> function vadd(a, b, c)
@@ -138,23 +136,21 @@ julia> function vadd(a, b, c)
            c[i] = a[i] + b[i]
            return
        end
-vadd (generic function with 1 method)
 
 julia> a = MtlArray([1]); b = MtlArray([2]); c = similar(a);
 ... Metal GPU Frame Capture Enabled
 
 julia> Metal.@profile @metal threads=length(c) vadd(a, b, c);
-[ Info: GPU frame capture saved to /var/folders/x3/75r5z4sd2_bdwqs68_nfnxw40000gn/T/jl_WzKxYVMlon/jl_metal.gputrace/
+[ Info: GPU frame capture saved to julia_capture_1.gputrace
 ```
 
-This will generate a `.gputrace` folder in a temporary directory. To view the profile, open
-the folder with Xcode. Since the temporary directory is destroyed when the Julia process
-ends though, be sure to copy the `.gputrace` directory to a stable location on your system
-for later viewing.
+This will generate a `.gputrace` folder in the current directory. To view the profile, open
+the folder with Xcode.
 
 Note: Xcode is a large install, and there are some peculiarities with viewing Julia-created
 GPU traces. It's recommended to only have one trace open at a time, and the shader profiler
 may fail to start.
+
 
 ## Metal API wrapper
 
