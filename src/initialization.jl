@@ -2,7 +2,10 @@ function __init__()
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     precompiling && return
 
-    Sys.isapple() || error("Metal.jl is only supported on macOS")
+    if !Sys.isapple()
+        @error("Metal.jl is only supported on macOS")
+        return
+    end
 
     # ensure that operations executed by the REPL back-end finish before returning,
     # because displaying values happens on a different task
