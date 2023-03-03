@@ -12,6 +12,11 @@ let mtl_arr = MtlArray{Int}(undef, 0)
     @test pointer(mtl_arr).buffer.handle == C_NULL
 end
 
+@testset "mtl" begin
+    @test mtl(rand(2,2)) isa MtlArray{Float32}
+    @test adapt(MtlArray, rand(2,2)) isa MtlArray{Float64}
+end
+
 @testset "fill($T)" for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
                               Float32]
 

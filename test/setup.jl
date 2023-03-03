@@ -1,4 +1,4 @@
-using Distributed, Test, Metal
+using Distributed, Test, Metal, Adapt
 
 # GPUArrays has a testsuite that isn't part of the main package.
 # Include it directly.
