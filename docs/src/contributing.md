@@ -129,7 +129,17 @@ from outside Metal.jl. Put it behind the corresponding interface.
 
 As it's good practice, and JuliaGPU has great CI/CD workflows, your addition should have
 associated tests to ensure correctness and edge cases. Look to existing examples under the
-`test` folder for initial guidance, and be sure to create tests for all valid types.
+`test` folder for initial guidance, and be sure to create tests for all valid types. Any
+new Julia file in this folder will be ran as its own testset. If you feel your tests don't
+fit in any existing place, you'll probably want to create a new file with an appropriate name.
+
+## Running a Subset of the Existing Tests
+
+Sometimes you won't want to run the entire testsuite. You may just want to run the tests
+for your new functionality. To do that, you can either pass the name of the testset to the
+`test/runtests.jl` script: `julia --project=test test/runtests.jl metal` or you can isolate test
+files by running them alone after running the `test/setup.jl` script:
+`julia --project=test -L test/setup.jl test/metal.jl`
 
 ## Thank You and Good Luck
 
