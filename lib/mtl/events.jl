@@ -1,6 +1,6 @@
 export MTLEvent, MTLSharedEvent, MTLSharedEventHandle
 
-# MTLSharedEvend extends MTLEvent, which we cannot express in Julia,
+# MTLSharedEvent extends MTLEvent, which we cannot express in Julia,
 # so we use a common supertype that has all of the MTLEven properties.
 abstract type MTLAbstractEvent <: NSObject end
 
@@ -27,29 +27,32 @@ MTLSharedEvent(ptr::Ptr{MtSharedEvent}) = MTLSharedEvent(reinterpret(id, ptr))
 
 ## properties
 
-Base.propertynames(::MTLAbstractEvent) = (:device, :label, :signaledValue)
+const event_properties = [
+    (:device,               :(id{MTLDevice})),
+    (:label,                :(id{NSString}),
+     :setLabel),
+]
 
-function Base.getproperty(ev::MTLAbstractEvent, f::Symbol)
-    if f === :device
-        ptr = @objc [ev::id{MTLEvent} device]::id{MTLDevice}
-        ptr === nil ? nothing : MTLDevice(ptr)
-    elseif f === :label
-        str = @objc [ev::id{MTLEvent} label]::id{NSString}
-        str === nil ? nothing : String(NSString(str))
-    elseif ev isa MTLSharedEvent && f === :signaledValue
-        @objc [ev::id{MTLSharedEvent} signaledValue]::UInt64
-    else
-        getfield(ev, f)
-    end
-end
+Base.propertynames(::MTLEvent) = map(first, event_properties)
 
-function Base.setproperty!(ev::MTLAbstractEvent, f::Symbol, val)
-    if f === :label
-        @objc [ev::id{MTLEvent} setLabel:val::id{NSString}]::Cvoid
-    else
-        setfield!(ev, f, val)
-    end
-end
+@eval Base.getproperty(ev::MTLEvent, f::Symbol) =
+    $(emit_getproperties(:ev, :MTLEvent, :f, event_properties))
+
+@eval Base.setproperty!(ev::MTLEvent, f::Symbol, val) =
+    $(emit_setproperties(:ev, :MTLEvent, :f, :val, event_properties))
+
+const shared_event_properties = [
+    (:signaledValue,        UInt64),
+    event_properties...
+]
+
+Base.propertynames(::MTLSharedEvent) = map(first, shared_event_properties)
+
+@eval Base.getproperty(ev::MTLSharedEvent, f::Symbol) =
+    $(emit_getproperties(:ev, :MTLSharedEvent, :f, shared_event_properties))
+
+@eval Base.setproperty!(ev::MTLSharedEvent, f::Symbol, val) =
+    $(emit_setproperties(:ev, :MTLSharedEvent, :f, :val, shared_event_properties))
 
 
 ## shared event handle

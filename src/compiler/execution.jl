@@ -191,8 +191,8 @@ end
 ## kernel launching and argument encoding
 
 function (kernel::HostKernel)(args...; grid=1, threads=1, queue=global_queue(current_device()))
-    grid = cmt.MtSize(MTLSize(grid))
-    threads = cmt.MtSize(MTLSize(threads))
+    grid = convert(cmt.MtSize, MTLSize(grid))
+    threads = convert(cmt.MtSize, MTLSize(threads))
     (grid.width>0 && grid.height>0 && grid.depth>0) ||
         throw(ArgumentError("Grid dimensions should be non-null"))
     (threads.width>0 && threads.height>0 && threads.depth>0) ||

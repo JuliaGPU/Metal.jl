@@ -73,38 +73,46 @@ macro mtlthrows(error, fun)
 end
 
 
-##
+## getproperty and setproperty! generators
 
-# given a list of properties (tuples of (name, type) or (name, srcTyp=>dstTyp) in case
-# the value needs to be converted), generate a getproperty method body.
-function emit_getproperties(typ, properties)
+# the function below operate on a list of properties, which consists of tuples
+# (getter, tye, setter), where `setter` is optional, and `type` can be a plain
+# Symbol or type, or a pair in case a conversion needs to happen (by calling the
+# destination type's constructor)
+
+# generate a method body for `getproperty`
+function emit_getproperties(obj, typ, field, properties)
     ex = nothing
     current = nothing
-    for (property, type) in properties
-        test = :(f === $(QuoteNode(property)))
-        if type isa Symbol || type isa Type
+    for tup in properties
+        property = tup[1]
+        type = tup[2]
+        if type isa Pair
+            srcTyp, dstTyp = type
+        else
             srcTyp = type
             dstTyp = type
-        else
-            srcTyp, dstTyp = type
         end
+
+        test = :($field === $(QuoteNode(property)))
 
         body = quote
-            val = @objc [dev::id{$typ} $property]::$srcTyp
+            val = @objc [$obj::id{$typ} $property]::$srcTyp
         end
 
-        # convert the value, if necessary, by calling a constructor
-        if srcTyp != dstTyp
-            # if dealing with an object pointer, avoid constructing nil objects
-            if (srcTyp isa Type && srcTyp <: id) ||
-               (srcTyp == :id || (Meta.isexpr(srcTyp, :curly) && srcTyp.args[1] == :id))
-                append!(body.args, (quote
-                    val == nil && return nothing
-                end).args)
-            end
-
+        # if we're dealing with a typed object pointer, do a nil check and create an object
+        if Meta.isexpr(srcTyp, :curly) && srcTyp.args[1] == :id
+            objTyp = srcTyp.args[2]
             append!(body.args, (quote
-                val = $dstTyp(val)
+                val == nil && return nothing
+                val = $objTyp(val)
+            end).args)
+        end
+
+        # convert the value, if necessary
+        if srcTyp != dstTyp
+            append!(body.args, (quote
+                val = convert($dstTyp, val)
             end).args)
         end
 
@@ -121,7 +129,46 @@ function emit_getproperties(typ, properties)
     end
 
     # finally, call getfield
-    final = :(getfield(dev, f))
+    final = :(getfield($obj, f))
+    push!(current.args, final)
+
+    return ex
+end
+
+# same, but for `setproperty!`
+function emit_setproperties(obj, typ, field, val, properties)
+    ex = nothing
+    current = nothing
+    for tup in properties
+        length(tup) == 3 || continue
+        property = tup[1]
+        type = tup[2]
+        setter = tup[3]
+        if type isa Pair
+            srcTyp, dstTyp = type
+        else
+            srcTyp = type
+            dstTyp = type
+        end
+
+        test = :($field === $(QuoteNode(property)))
+
+        body = quote
+            @objc [$obj::id{$typ} $setter:$val::$srcTyp]::Cvoid
+        end
+
+        if ex === nothing
+            current = Expr(:if, test, body)
+            ex = current
+        else
+            new = Expr(:elseif, test, body)
+            push!(current.args, new)
+            current = new
+        end
+    end
+
+    # finally, call getfield
+    final = :(getfield($obj, f))
     push!(current.args, final)
 
     return ex

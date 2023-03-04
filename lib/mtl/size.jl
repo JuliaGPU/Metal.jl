@@ -16,7 +16,7 @@ MTLSize(dims::NTuple{2,<:Integer}) = MTLSize(dims[1], dims[2], 1)
 MTLSize(dims::NTuple{3,<:Integer}) = MTLSize(dims[1], dims[2], dims[3])
 
 # backwards compatibility with cmt
-cmt.MtSize(sz::MTLSize) = MtSize(sz.width, sz.height, sz.depth)
+Base.convert(::Type{MtSize}, sz::MTLSize) = MtSize(sz.width, sz.height, sz.depth)
 
 
 ## ranges

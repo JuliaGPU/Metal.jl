@@ -34,7 +34,7 @@ MTLDevice(i::Integer) = devices()[i]
     MTLArgumentBuffersTier2 = 1
 end
 
-const properties = [
+const device_properties = [
     ## device inspection
     # compute support
     (:maxThreadgroupMemoryLength,               NSUInteger),
@@ -65,7 +65,7 @@ const properties = [
     # counters
     #(:counterSets,                             MTLCounterSet),
     # identifying
-    (:name,                                     :(id{NSString}) => NSString),
+    (:name,                                     :(id{NSString})),
     (:registryID,                               UInt64),
     #(:location,                                MTLDeviceLocation),
     (:locationNumber,                           UInt64),
@@ -83,7 +83,7 @@ const properties = [
     (:maxArgumentBufferSamplerCount,            NSUInteger),
 ]
 
-Base.propertynames(::MTLDevice) = map(first, properties)
+Base.propertynames(::MTLDevice) = map(first, device_properties)
 
 @eval Base.getproperty(dev::MTLDevice, f::Symbol) =
-    $(emit_getproperties(:MTLDevice, properties))
+    $(emit_getproperties(:dev, :MTLDevice, :f, device_properties))
