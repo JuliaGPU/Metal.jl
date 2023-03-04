@@ -134,15 +134,15 @@ end
 
 dev = first(devices())
 
-let ev = MtlEvent(dev)
+let ev = MTLEvent(dev)
     @test ev.device == dev
     @test ev.label === nothing
     ev.label = "MyEvent"
     @test ev.label == "MyEvent"
 end
 
-let ev = MtlSharedEvent(dev)
-    @test ev.device == dev
+let ev = MTLSharedEvent(dev)
+    @test ev.device === nothing
     @test ev.label === nothing
     ev.label = "MyEvent"
     @test ev.label == "MyEvent"
@@ -281,7 +281,7 @@ cmdbuf.label = "MyCommandBuffer"
 @test cmdbuf.gpuStartTime == 0
 @test cmdbuf.gpuEndTime == 0
 
-let ev = MtlSharedEvent(dev)
+let ev = MTLSharedEvent(dev)
     @test ev.signaledValue == 0
     encode_signal!(cmdbuf, ev, 42)
     encode_wait!(cmdbuf, ev, 21)
@@ -425,7 +425,7 @@ end
     queue2 = Metal.MtlCommandQueue(dev)
     buf1 = Metal.MtlCommandBuffer(queue1)
     buf2 = Metal.MtlCommandBuffer(queue2)
-    event = Metal.MtlEvent(dev)
+    event = Metal.MTLEvent(dev)
 
 
     Metal.encode_wait!(buf2, event, signal_value)

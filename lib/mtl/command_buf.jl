@@ -213,7 +213,7 @@ blocks registered by addCompletedHandler: are invoked.
 wait_completed(q::MtlCommandBuffer) = mtCommandBufferWaitUntilCompleted(q)
 
 """
-    encode_signal!(buf::MtlCommandBuffer, ev::MtlEvent, val::UInt)
+    encode_signal!(buf::MtlCommandBuffer, ev::MTLEvent, val::UInt)
 
 Encodes a command that signals the given event, updating it to a new value.
 
@@ -225,11 +225,11 @@ waiting on the event are allowed to run if the new value is equal to or
 greater than the value for which they are waiting. For shared events, this
 update similarly triggers notification handlers waiting on the event.
 """
-encode_signal!(buf::MtlCommandBuffer, ev::MtlAbstractEvent, val::Integer) =
+encode_signal!(buf::MtlCommandBuffer, ev::MTLAbstractEvent, val::Integer) =
     mtCommandBufferEncodeSignalEvent(buf, ev, val)
 
 """
-    encode_wait!(buf::MtlCommandBuffer, ev::MtlEvent, val::UInt)
+    encode_wait!(buf::MtlCommandBuffer, ev::MTLEvent, val::UInt)
 
 Encodes a command that blocks the execution of the command buffer
 until the given event reaches the given value.
@@ -242,7 +242,7 @@ GPU executes commands that appear earlier than the wait command,
 but doesn't start any commands that appear after it. Execution continues
 immediately if the event already has an equal or larger value.
 """
-encode_wait!(buf::MtlCommandBuffer, ev::MtlAbstractEvent, val::Integer) =
+encode_wait!(buf::MtlCommandBuffer, ev::MTLAbstractEvent, val::Integer) =
     mtCommandBufferEncodeWaitForEvent(buf, ev, val)
 
 async_send(data::Ptr{Cvoid}) = ccall(:uv_async_send, Cint, (Ptr{Cvoid},), data)
