@@ -1,23 +1,19 @@
 export MTLEvent, MTLSharedEvent, MTLSharedEventHandle
 
-# MTLSharedEvent extends MTLEvent, which we cannot express in Julia,
-# so we use a common supertype that has all of the MTLEven properties.
-abstract type MTLAbstractEvent <: NSObject end
-
-@objcwrapper MTLEvent <: MTLAbstractEvent
-
-@objcwrapper MTLSharedEvent <: MTLAbstractEvent
+@objcwrapper MTLEvent <: NSObject
 
 function MTLEvent(dev::MTLDevice)
     MTLEvent(@objc [dev::id{MTLDevice} newEvent]::id{MTLEvent})
 end
+
+@objcwrapper MTLSharedEvent <: MTLEvent
 
 function MTLSharedEvent(dev::MTLDevice)
     MTLSharedEvent(@objc [dev::id{MTLDevice} newSharedEvent]::id{MTLSharedEvent})
 end
 
 # compatibility with cmt
-Base.unsafe_convert(T::Type{Ptr{MtEvent}}, obj::MTLAbstractEvent) =
+Base.unsafe_convert(T::Type{Ptr{MtEvent}}, obj::Union{MTLEvent,MTLSharedEvent}) =
     reinterpret(T, Base.unsafe_convert(id, obj))
 MTLEvent(ptr::Ptr{MtEvent}) = MTLEvent(reinterpret(id, ptr))
 Base.unsafe_convert(T::Type{Ptr{MtSharedEvent}}, obj::MTLSharedEvent) =
