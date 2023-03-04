@@ -82,7 +82,7 @@ function emit_getproperties(typ, properties)
     current = nothing
     for (property, type) in properties
         test = :(f === $(QuoteNode(property)))
-        if type isa Symbol
+        if type isa Symbol || type isa Type
             srcTyp = type
             dstTyp = type
         else
@@ -96,7 +96,8 @@ function emit_getproperties(typ, properties)
         # convert the value, if necessary, by calling a constructor
         if srcTyp != dstTyp
             # if dealing with an object pointer, avoid constructing nil objects
-            if srcTyp == :id || (Meta.isexpr(srcTyp, :curly) && srcTyp.args[1] == :id)
+            if (srcTyp isa Type && srcTyp <: id) ||
+               (srcTyp == :id || (Meta.isexpr(srcTyp, :curly) && srcTyp.args[1] == :id))
                 append!(body.args, (quote
                     val == nil && return nothing
                 end).args)
