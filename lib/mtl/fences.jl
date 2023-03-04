@@ -1,24 +1,37 @@
-export MtlFence
+export MTLFence
 
-const MTLFence = Ptr{MtFence}
+@objcwrapper MTLFence <: NSObject
 
-mutable struct MtlFence
-	handle::MTLFence
-	device::MTLDevice
+function MTLFence(dev::MTLDevice)
+    MTLFence(@objc [dev::id{MTLDevice} newFence]::id{MTLFence})
 end
 
-Base.unsafe_convert(::Type{MTLFence}, fen::MtlFence) = fen.handle
+# compatibility with cmt
+Base.unsafe_convert(T::Type{Ptr{MtFence}}, obj::MTLFence) =
+    reinterpret(T, Base.unsafe_convert(id, obj))
+MTLFence(ptr::Ptr{MtFence}) = MTLFence(reinterpret(id, ptr))
 
-Base.:(==)(a::MtlFence, b::MtlFence) = a.handle == b.handle
-Base.hash(ev::MtlFence, h::UInt) = hash(ev.handle, h)
 
-function MtlFence(dev::MTLDevice)
-	handle = mtDeviceNewFence(dev)
-	obj = MtlFence(handle, dev)
-	finalizer(unsafe_destroy!, obj)
-	return obj
+## properties
+
+Base.propertynames(::MTLFence) = (:device, :label)
+
+function Base.getproperty(ev::MTLFence, f::Symbol)
+    if f === :device
+        ptr = @objc [ev::id{MTLFence} device]::id{MTLDevice}
+        ptr === nil ? nothing : MTLDevice(ptr)
+    elseif f === :label
+        str = @objc [ev::id{MTLFence} label]::id{NSString}
+        str === nil ? nothing : String(NSString(str))
+    else
+        getfield(ev, f)
+    end
 end
 
-function unsafe_destroy!(fen::MtlFence)
-	mtRelease(fen.handle)
+function Base.setproperty!(ev::MTLFence, f::Symbol, val)
+    if f === :label
+        @objc [ev::id{MTLFence} setLabel:val::id{NSString}]::Cvoid
+    else
+        setfield!(ev, f, val)
+    end
 end

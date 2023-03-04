@@ -155,7 +155,7 @@ end
 
 dev = first(devices())
 
-let fen = MtlFence(dev)
+let fen = MTLFence(dev)
     @test fen.device == dev
 end
 
