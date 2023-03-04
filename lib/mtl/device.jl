@@ -86,4 +86,4 @@ const device_properties = [
 Base.propertynames(::MTLDevice) = map(first, device_properties)
 
 @eval Base.getproperty(dev::MTLDevice, f::Symbol) =
-    $(emit_getproperties(:dev, :MTLDevice, :f, device_properties))
+    $(emit_getproperties(:dev, MTLDevice, :f, device_properties))

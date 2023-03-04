@@ -75,10 +75,14 @@ end
 
 ## getproperty and setproperty! generators
 
-# the function below operate on a list of properties, which consists of tuples
-# (getter, tye, setter), where `setter` is optional, and `type` can be a plain
+# the functions below operate on a list of properties, which consists of tuples
+# (getter, type, setter), where `setter` is optional, and `type` can be a plain
 # Symbol or type, or a pair in case a conversion needs to happen (by calling the
 # destination type's constructor)
+
+# if the generated code does not match the input property, we will defer to the parent's
+# implementation through `invoke`, instead of falling back to `getfield`. this makes it
+# so that properties do not need to be repeated for derived types.
 
 # generate a method body for `getproperty`
 function emit_getproperties(obj, typ, field, properties)
@@ -128,9 +132,10 @@ function emit_getproperties(obj, typ, field, properties)
         end
     end
 
-    # finally, call getfield
-    final = :(getfield($obj, f))
-    push!(current.args, final)
+    # finally, call our parent's `getproperty`
+    final = :(invoke(getproperty, Tuple{$(supertype(typ)), Symbol}, $obj, $field))
+    current === nothing && return final
+    push!(current.args, :(@inline $final))
 
     return ex
 end
@@ -167,9 +172,10 @@ function emit_setproperties(obj, typ, field, val, properties)
         end
     end
 
-    # finally, call getfield
-    final = :(getfield($obj, f))
-    push!(current.args, final)
+    # finally, call our parent's `setproperty!`
+    final = :(invoke(setproperty!, Tuple{$(supertype(typ)), Symbol, Any}, $obj, $field, $val))
+    current === nothing && return final
+    push!(current.args, :(@inline $final))
 
     return ex
 end

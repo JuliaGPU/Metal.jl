@@ -23,7 +23,7 @@ const fence_properties = [
 Base.propertynames(::MTLFence) = map(first, fence_properties)
 
 @eval Base.getproperty(obj::MTLFence, f::Symbol) =
-    $(emit_getproperties(:obj, :MTLFence, :f, fence_properties))
+    $(emit_getproperties(:obj, MTLFence, :f, fence_properties))
 
 @eval Base.setproperty!(obj::MTLFence, f::Symbol, val) =
-    $(emit_setproperties(:obj, :MTLFence, :f, :val, fence_properties))
+    $(emit_setproperties(:obj, MTLFence, :f, :val, fence_properties))

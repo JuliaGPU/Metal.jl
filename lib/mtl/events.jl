@@ -32,23 +32,22 @@ const event_properties = [
 Base.propertynames(::MTLEvent) = map(first, event_properties)
 
 @eval Base.getproperty(ev::MTLEvent, f::Symbol) =
-    $(emit_getproperties(:ev, :MTLEvent, :f, event_properties))
+    $(emit_getproperties(:ev, MTLEvent, :f, event_properties))
 
 @eval Base.setproperty!(ev::MTLEvent, f::Symbol, val) =
-    $(emit_setproperties(:ev, :MTLEvent, :f, :val, event_properties))
+    $(emit_setproperties(:ev, MTLEvent, :f, :val, event_properties))
 
 const shared_event_properties = [
-    (:signaledValue,        UInt64),
-    event_properties...
+    (:signaledValue,        UInt64)
 ]
 
 Base.propertynames(::MTLSharedEvent) = map(first, shared_event_properties)
 
 @eval Base.getproperty(ev::MTLSharedEvent, f::Symbol) =
-    $(emit_getproperties(:ev, :MTLSharedEvent, :f, shared_event_properties))
+    $(emit_getproperties(:ev, MTLSharedEvent, :f, shared_event_properties))
 
 @eval Base.setproperty!(ev::MTLSharedEvent, f::Symbol, val) =
-    $(emit_setproperties(:ev, :MTLSharedEvent, :f, :val, shared_event_properties))
+    $(emit_setproperties(:ev, MTLSharedEvent, :f, :val, shared_event_properties))
 
 
 ## shared event handle
