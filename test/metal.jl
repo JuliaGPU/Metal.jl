@@ -15,7 +15,7 @@ end
 compact_str = sprint(io->show(io, dev))
 full_str = sprint(io->show(io, MIME"text/plain"(), dev))
 
-@test dev.name isa String
+@test dev.name isa NSString
 @test dev.isLowPower isa Bool
 @test dev.isRemovable isa Bool
 @test dev.hasUnifiedMemory isa Bool

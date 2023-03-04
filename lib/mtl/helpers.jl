@@ -71,3 +71,57 @@ macro mtlthrows(error, fun)
     end
     return esc(expr)
 end
+
+
+##
+
+# given a list of properties (tuples of (name, type) or (name, srcTyp=>dstTyp) in case
+# the value needs to be converted), generate a getproperty method body.
+function emit_getproperties(typ, properties)
+    ex = nothing
+    current = nothing
+    for (property, type) in properties
+        test = :(f === $(QuoteNode(property)))
+        if type isa Symbol
+            srcTyp = type
+            dstTyp = type
+        else
+            srcTyp, dstTyp = type
+        end
+
+        body = quote
+            val = @objc [dev::id{$typ} $property]::$srcTyp
+        end
+
+        # convert the value, if necessary, by calling a constructor
+        if srcTyp != dstTyp
+            # if dealing with an object pointer, avoid constructing nil objects
+            if srcTyp == :id || (Meta.isexpr(srcTyp, :curly) && srcTyp.args[1] == :id)
+                append!(body.args, (quote
+                    val == nil && return nothing
+                end).args)
+            end
+
+            append!(body.args, (quote
+                val = $dstTyp(val)
+            end).args)
+        end
+
+        push!(body.args, :(return val))
+
+        if ex === nothing
+            current = Expr(:if, test, body)
+            ex = current
+        else
+            new = Expr(:elseif, test, body)
+            push!(current.args, new)
+            current = new
+        end
+    end
+
+    # finally, call getfield
+    final = :(getfield(dev, f))
+    push!(current.args, final)
+
+    return ex
+end

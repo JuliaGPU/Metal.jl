@@ -65,7 +65,7 @@ const properties = [
     # counters
     #(:counterSets, :MTLCounterSet),
     # identifying
-    (:name, :NSString => :String),
+    (:name, :(id{NSString}) => :NSString),
     (:registryID, :UInt64),
     #(:location, :MTLDeviceLocation),
     (:locationNumber, :UInt64),
@@ -85,27 +85,5 @@ const properties = [
 
 Base.propertynames(::MTLDevice) = map(first, properties)
 
-let
-    ex = nothing
-    current = nothing
-    for (property, type) in properties
-        test = :(f === $(QuoteNode(property)))
-        call = if type isa Symbol
-            :(@objc [dev::id{MTLDevice} $property]::$type)
-        else
-            src, dst = type
-            :($dst(@objc [dev::id{MTLDevice} $property]::$src))
-        end
-        if ex === nothing
-            current = Expr(:if, test, call)
-            ex = current
-        else
-            new = Expr(:elseif, test, call)
-            push!(current.args, new)
-            current = new
-        end
-    end
-    final = :(getfield(dev, f))
-    push!(current.args, final)
-    @eval Base.getproperty(dev::MTLDevice, f::Symbol) = $ex
-end
+@eval Base.getproperty(dev::MTLDevice, f::Symbol) =
+    $(emit_getproperties(:MTLDevice, properties))

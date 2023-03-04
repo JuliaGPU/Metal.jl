@@ -1,4 +1,4 @@
-using Distributed, Test, Metal, Adapt
+using Distributed, Test, Metal, Adapt, ObjectiveC, ObjectiveC.Foundation
 
 # GPUArrays has a testsuite that isn't part of the main package.
 # Include it directly.
