@@ -171,9 +171,9 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # but allows us to write a generalized kernel supporting partial reductions.
     R′ = reshape(R, (size(R)..., 1))
 
-    # number of consecutive values in reduction dimension read by each thread.
-    # based on experiments, 4 is a good value for all scalar types.
-    grain = 4
+    # number of consecutive values in reduction dimension to be read by each thread.
+    # based on experiments, 16 / sizeof(T) elements is usually a good choice.
+    grain = prevpow(2, cld(16, sizeof(T)))
 
     # how many threads can we launch?
     #
@@ -205,7 +205,12 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # even though we can always reduce each slice in a single item group, that may not be
     # optimal as it might not saturate the GPU. we already launch some groups to process
     # independent dimensions in parallel; pad that number to ensure full occupancy.
+    #
+    # also, make sure the grain size is not too high so as to starve threads of work.
     other_groups = length(Rother)
+    while grain > 1 && length(Rreduce) <= reduce_threads * prevpow(2, grain)
+        grain >>= 1
+    end
     reduce_groups = cld(length(Rreduce), reduce_threads * grain)
 
     # determine the launch configuration
