@@ -174,7 +174,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # when the reduction dimension is contiguous in memory, we can improve performance
     # by having each thread read multiple consecutive elements. base on experiments,
     # 16 / sizeof(T) elements is usually a good choice.
-    reduce_dim_start = findfirst(axis -> length(axis) > 1, axes(Rreduce))
+    reduce_dim_start = something(findfirst(axis -> length(axis) > 1, axes(Rreduce)), 1)
     contiguous = prod(size(R)[1:reduce_dim_start-1]) == 1
     grain = contiguous ? prevpow(2, cld(16, sizeof(T))) : 1
 
