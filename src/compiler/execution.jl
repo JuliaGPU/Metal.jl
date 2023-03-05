@@ -27,7 +27,7 @@ macro metal(ex...)
 
     # group keyword argument
     macro_kwargs, compiler_kwargs, call_kwargs, other_kwargs =
-        split_kwargs(kwargs, [:launch], [:name], [:grid, :threads, :queue])
+        split_kwargs(kwargs, [:launch], [:name], [:groups, :threads, :queue])
     if !isempty(other_kwargs)
         key,val = first(other_kwargs).args
         throw(ArgumentError("Unsupported keyword argument '$key'"))
@@ -190,16 +190,16 @@ end
 
 ## kernel launching and argument encoding
 
-function (kernel::HostKernel)(args...; grid=1, threads=1, queue=global_queue(current_device()))
-    grid = MTLSize(grid)
+function (kernel::HostKernel)(args...; groups=1, threads=1, queue=global_queue(current_device()))
+    groups = MTLSize(groups)
     threads = MTLSize(threads)
-    (grid.width>0 && grid.height>0 && grid.depth>0) ||
-        throw(ArgumentError("Grid dimensions should be non-null"))
+    (groups.width>0 && groups.height>0 && groups.depth>0) ||
+        throw(ArgumentError("Threadgroups dimensions should be non-null"))
     (threads.width>0 && threads.height>0 && threads.depth>0) ||
-        throw(ArgumentError("Threadgroup dimensions should be non-null"))
+        throw(ArgumentError("Threads dimensions should be non-null"))
 
     (threads.width * threads.height * threads.depth) > kernel.pipeline_state.maxTotalThreadsPerThreadgroup &&
-        throw(ArgumentError("Max total threadgroup size should not exceed $(kernel.pipeline_state.maxTotalThreadsPerThreadgroup)"))
+        throw(ArgumentError("Max total thread size should not exceed $(kernel.pipeline_state.maxTotalThreadsPerThreadgroup)"))
 
     cmdbuf = MTLCommandBuffer(queue)
     cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
@@ -234,7 +234,7 @@ function (kernel::HostKernel)(args...; grid=1, threads=1, queue=global_queue(cur
             idx += 1
         end
 
-        MTL.append_current_function!(cce, grid, threads)
+        MTL.append_current_function!(cce, groups, threads)
     end
 
     # the command buffer retains resources that are explicitly encoded (i.e. direct buffer

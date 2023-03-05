@@ -32,7 +32,7 @@ end
     @test all(vecA == Int.([5, 5, 0, 0, 0, 0, 0, 0]))
     vecA .= 0
 
-    @metal grid=(3) threads=(2) tester(bufferA)
+    @metal groups=(3) threads=(2) tester(bufferA)
     synchronize()
     @test all(vecA == Int.([5, 5, 5, 5, 5, 5, 0, 0]))
     vecA .= 0
@@ -45,7 +45,7 @@ end
     vecA .= 0
 
     @test_throws InexactError @metal threads=(-2) tester(bufferA)
-    @test_throws InexactError @metal grid=(-2) tester(bufferA)
+    @test_throws InexactError @metal groups=(-2) tester(bufferA)
     @test_throws ArgumentError @metal threads=(1025) tester(bufferA)
     @test_throws ArgumentError @metal threads=(1000,2) tester(bufferA)
 end
