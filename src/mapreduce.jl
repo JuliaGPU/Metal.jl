@@ -171,9 +171,12 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # but allows us to write a generalized kernel supporting partial reductions.
     R′ = reshape(R, (size(R)..., 1))
 
-    # number of consecutive values in reduction dimension to be read by each thread.
-    # based on experiments, 16 / sizeof(T) elements is usually a good choice.
-    grain = prevpow(2, cld(16, sizeof(T)))
+    # when the reduction dimension is contiguous in memory, we can improve performance
+    # by having each thread read multiple consecutive elements. base on experiments,
+    # 16 / sizeof(T) elements is usually a good choice.
+    reduce_dim_start = findfirst(axis -> length(axis) > 1, axes(Rreduce))
+    contiguous = prod(size(R)[1:reduce_dim_start-1]) == 1
+    grain = contiguous ? prevpow(2, cld(16, sizeof(T))) : 1
 
     # how many threads can we launch?
     #
