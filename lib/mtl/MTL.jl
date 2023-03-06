@@ -3,7 +3,7 @@ module MTL
 using ..cmt
 
 using CEnum
-using ObjectiveC, ObjectiveC.Foundation
+using ObjectiveC, .Foundation, .Dispatch
 
 
 ## version information

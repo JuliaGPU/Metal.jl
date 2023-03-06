@@ -116,7 +116,9 @@ function unsafe_destroy!(cce::MtlComputePipelineState)
 end
 
 function MtlComputePipelineState(d::MTLDevice, f::MtlFunction)
-    handle = @mtlthrows _errptr mtNewComputePipelineStateWithFunction(d, f, _errptr)
+    err = Ref{id{NSError}}(nil)
+    handle = mtNewComputePipelineStateWithFunction(d, f, err)
+    err[] == nil || throw(NSError(err[]))
 
     obj = MtlComputePipelineState(handle, d)
     finalizer(unsafe_destroy!, obj)

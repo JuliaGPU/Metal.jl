@@ -171,7 +171,7 @@ end
 
 function mtlfunction_link(@nospecialize(job::CompilerJob), compiled)
     dev = current_device()
-    lib = MtlLibraryFromData(dev, compiled.image)
+    lib = MTLLibraryFromData(dev, compiled.image)
     fun = MtlFunction(lib, compiled.entry)
     pipeline_state = try
         MtlComputePipelineState(dev, fun)

@@ -44,30 +44,3 @@ end
 ##
 Base.convert(::Type{MtResourceOptions}, val::UInt32) =
     MtResourceOptions(val)
-
-##
-"""
-    @mtlthrows error_var function(..., error_var)
-
-Marks that this Metal function has an argument error_var which
-must be passed by reference in the underlying ccall, and when
-the function returns checks that no error has been set.
-
-Expands roughly to
-```julia
-error_var = Ref{id}()
-result = function(..., error_var)
-error[] != nil && throw(NSError(error[]))
-```
-"""
-macro mtlthrows(error, fun)
-    expr = quote
-        $error = Ref{id{NSError}}(nil)
-        result = $fun
-        if $error[] != nil
-            throw(NSError($(error)[]))
-        end
-        result
-    end
-    return esc(expr)
-end

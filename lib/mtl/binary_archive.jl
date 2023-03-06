@@ -82,7 +82,9 @@ Base.:(==)(a::MtlBinaryArchive, b::MtlBinaryArchive) = a.handle == b.handle
 Base.hash(lib::MtlBinaryArchive, h::UInt) = hash(lib.handle, h)
 
 function MtlBinaryArchive(device::MTLDevice, desc::MtlBinaryArchiveDescriptor)
-    handle = @mtlthrows _errptr mtNewBinaryArchiveWithDescriptor(device, desc, _errptr)
+    err = Ref{id{NSError}}(nil)
+    handle = mtNewBinaryArchiveWithDescriptor(device, desc, err)
+    err[] == nil || throw(NSError(err[]))
 
     obj = MtlBinaryArchive(handle, device, desc)
     finalizer(unsafe_destroy!, obj)
@@ -137,9 +139,13 @@ end
 ## operations
 
 function add_functions!(bin::MtlBinaryArchive, desc::MtlComputePipelineDescriptor)
-    @mtlthrows _errptr mtBinaryArchiveAddComputePipelineFunctions(bin, desc, _errptr)
+    err = Ref{id{NSError}}(nil)
+    mtBinaryArchiveAddComputePipelineFunctions(bin, desc, err)
+    err[] == nil || throw(NSError(err[]))
 end
 
 function Base.write(filename::String, bin::MtlBinaryArchive)
-    @mtlthrows _errptr mtBinaryArchiveSerialize(bin, filename, _errptr)
+    err = Ref{id{NSError}}(nil)
+    mtBinaryArchiveSerialize(bin, filename, err)
+    err[] == nil || throw(NSError(err[]))
 end

@@ -55,7 +55,7 @@ end
 dev = first(devices())
 opts = MTLCompileOptions()
 
-let lib = MtlLibrary(dev, "", opts)
+let lib = MTLLibrary(dev, "", opts)
     @test lib.device == dev
     @test lib.label === nothing
     lib.label = "MyLibrary"
@@ -64,7 +64,7 @@ let lib = MtlLibrary(dev, "", opts)
 end
 
 metal_code = read(joinpath(@__DIR__, "dummy.metal"), String)
-let lib = MtlLibrary(dev, metal_code, opts)
+let lib = MTLLibrary(dev, metal_code, opts)
     @test lib.device == dev
     @test lib.label === nothing
     fns = lib.functionNames
@@ -74,7 +74,7 @@ let lib = MtlLibrary(dev, metal_code, opts)
 end
 
 binary_path = joinpath(@__DIR__, "dummy.metallib")
-let lib = MtlLibraryFromFile(dev, binary_path)
+let lib = MTLLibraryFromFile(dev, binary_path)
     @test lib.device == dev
     @test lib.label === nothing
     fns = lib.functionNames
@@ -84,7 +84,7 @@ let lib = MtlLibraryFromFile(dev, binary_path)
 end
 
 binary_code = read(binary_path)
-let lib = MtlLibraryFromData(dev, binary_code)
+let lib = MTLLibraryFromData(dev, binary_code)
     @test lib.device == dev
     @test lib.label === nothing
     fns = lib.functionNames
@@ -115,7 +115,7 @@ desc.specializedName = "MySpecializedKernel"
 
 
 dev = first(devices())
-lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
+lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
 fun = MtlFunction(lib, "kernel_1")
 
 compact_str = sprint(io->show(io, fun))
@@ -340,7 +340,7 @@ end
 @testset "compute pipeline" begin
 
 dev = first(devices())
-lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
+lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
 fun = MtlFunction(lib, "kernel_1")
 
 pipeline = MtlComputePipelineState(dev, fun)
@@ -383,7 +383,7 @@ end
 @testset "binary archive" begin
 
 dev = first(devices())
-lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
+lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
 fun = MtlFunction(lib, "kernel_1")
 
 desc = MtlBinaryArchiveDescriptor()
