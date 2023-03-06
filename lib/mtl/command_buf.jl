@@ -125,7 +125,7 @@ function Base.getproperty(o::MtlCommandBuffer, f::Symbol)
         mtCommandBufferStatus(o)
     elseif f === :error
         ptr = mtCommandBufferError(o)
-        ptr == C_NULL ? nothing : NSError(ptr)
+        ptr == nil ? nothing : NSError(ptr)
     elseif f === :errorOptions
         mtCommandBufferErrorOptions(o)
     elseif f === :kernelStartTime

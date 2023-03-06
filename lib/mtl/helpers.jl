@@ -62,7 +62,7 @@ error[] != nil && throw(NSError(error[]))
 """
 macro mtlthrows(error, fun)
     expr = quote
-        $error = Ref{id}(nil)
+        $error = Ref{id{NSError}}(nil)
         result = $fun
         if $error[] != nil
             throw(NSError($(error)[]))

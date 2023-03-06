@@ -5,9 +5,10 @@ export MTLDevice, devices
 # compatibility with cmt
 Base.unsafe_convert(T::Type{Ptr{MtDevice}}, obj::MTLDevice) =
     reinterpret(T, Base.unsafe_convert(id, obj))
-MTLDevice(ptr::Ptr{MtDevice}) = MTLDevice(reinterpret(id, ptr))
+MTLDevice(ptr::Ptr{MtDevice}) = MTLDevice(reinterpret(id{MTLDevice}, ptr))
 
-MTLCreateSystemDefaultDevice() = MTLDevice(ccall(:MTLCreateSystemDefaultDevice, id, ()))
+MTLCreateSystemDefaultDevice() =
+    MTLDevice(ccall(:MTLCreateSystemDefaultDevice, id{MTLDevice}, ()))
 
 """
     devices()
@@ -15,8 +16,8 @@ MTLCreateSystemDefaultDevice() = MTLDevice(ccall(:MTLCreateSystemDefaultDevice, 
 Get an iterator for the compute devices.
 """
 function devices()
-    list = NSArray(ccall(:MTLCopyAllDevices, id, ()))
-    MTLDevice.(collect(list))
+    list = NSArray(ccall(:MTLCopyAllDevices, id{NSArray}, ()))
+    [reinterpret(MTLDevice, dev) for dev in list]
 end
 
 """

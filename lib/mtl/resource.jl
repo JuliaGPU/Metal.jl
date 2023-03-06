@@ -5,7 +5,7 @@ export MTLResource
 # compatibility with cmt
 Base.unsafe_convert(T::Type{Ptr{MtResource}}, obj::MTLResource) =
     reinterpret(T, Base.unsafe_convert(id, obj))
-MTLResource(ptr::Ptr{MtResource}) = MTLResource(reinterpret(id, ptr))
+MTLResource(ptr::Ptr{MtResource}) = MTLResource(reinterpret(id{MTLResource}, ptr))
 
 
 ## properties

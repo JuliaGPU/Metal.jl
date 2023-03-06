@@ -749,31 +749,31 @@ struct MtMPSMatrixMultiplication
 end
 
 function mtErrorCode(err)
-    ccall((:mtErrorCode, libcmt), NsInteger, (id,), err)
+    ccall((:mtErrorCode, libcmt), NsInteger, (id{NSError},), err)
 end
 
 function mtErrorDomain(err)
-    ccall((:mtErrorDomain, libcmt), Cstring, (id,), err)
+    ccall((:mtErrorDomain, libcmt), Cstring, (id{NSError},), err)
 end
 
 function mtErrorUserInfo(err)
-    ccall((:mtErrorUserInfo, libcmt), Cstring, (id,), err)
+    ccall((:mtErrorUserInfo, libcmt), Cstring, (id{NSError},), err)
 end
 
 function mtErrorLocalizedDescription(err)
-    ccall((:mtErrorLocalizedDescription, libcmt), Cstring, (id,), err)
+    ccall((:mtErrorLocalizedDescription, libcmt), Cstring, (id{NSError},), err)
 end
 
 function mtErrorLocalizedRecoveryOptions(err, count, options)
-    ccall((:mtErrorLocalizedRecoveryOptions, libcmt), Ptr{Cstring}, (id, Ptr{Csize_t}, Ptr{Cstring}), err, count, options)
+    ccall((:mtErrorLocalizedRecoveryOptions, libcmt), Ptr{Cstring}, (id{NSError}, Ptr{Csize_t}, Ptr{Cstring}), err, count, options)
 end
 
 function mtErrorLocalizedRecoverySuggestion(err)
-    ccall((:mtErrorLocalizedRecoverySuggestion, libcmt), Cstring, (id,), err)
+    ccall((:mtErrorLocalizedRecoverySuggestion, libcmt), Cstring, (id{NSError},), err)
 end
 
 function mtErrorLocalizedFailureReason(err)
-    ccall((:mtErrorLocalizedFailureReason, libcmt), Cstring, (id,), err)
+    ccall((:mtErrorLocalizedFailureReason, libcmt), Cstring, (id{NSError},), err)
 end
 
 @cenum MtPixelFormat::UInt32 begin
@@ -1156,15 +1156,15 @@ function mtComputePipelineDescriptorSupportAddingBinaryFunctions(desc)
 end
 
 function mtNewComputePipelineStateWithFunction(device, fun, error)
-    ccall((:mtNewComputePipelineStateWithFunction, libcmt), Ptr{MtComputePipelineState}, (Ptr{MtDevice}, Ptr{MtFunction}, Ptr{id}), device, fun, error)
+    ccall((:mtNewComputePipelineStateWithFunction, libcmt), Ptr{MtComputePipelineState}, (Ptr{MtDevice}, Ptr{MtFunction}, Ptr{id{NSError}}), device, fun, error)
 end
 
 function mtNewComputePipelineStateWithFunctionReflection(device, fun, opt, reflection, error)
-    ccall((:mtNewComputePipelineStateWithFunctionReflection, libcmt), Ptr{MtComputePipelineState}, (Ptr{MtDevice}, Ptr{MtFunction}, MtPipelineOption, Ptr{Ptr{MtComputePipelineReflection}}, Ptr{id}), device, fun, opt, reflection, error)
+    ccall((:mtNewComputePipelineStateWithFunctionReflection, libcmt), Ptr{MtComputePipelineState}, (Ptr{MtDevice}, Ptr{MtFunction}, MtPipelineOption, Ptr{Ptr{MtComputePipelineReflection}}, Ptr{id{NSError}}), device, fun, opt, reflection, error)
 end
 
 function mtNewComputePipelineStateWithDescriptor(device, desc, opt, reflection, error)
-    ccall((:mtNewComputePipelineStateWithDescriptor, libcmt), Ptr{MtComputePipelineState}, (Ptr{MtDevice}, Ptr{MtComputePipelineDescriptor}, MtPipelineOption, Ptr{Ptr{MtComputePipelineReflection}}, Ptr{id}), device, desc, opt, reflection, error)
+    ccall((:mtNewComputePipelineStateWithDescriptor, libcmt), Ptr{MtComputePipelineState}, (Ptr{MtDevice}, Ptr{MtComputePipelineDescriptor}, MtPipelineOption, Ptr{Ptr{MtComputePipelineReflection}}, Ptr{id{NSError}}), device, desc, opt, reflection, error)
 end
 
 function mtComputePipelineDevice(pip)
@@ -1276,7 +1276,7 @@ function mtNewFunctionWithName(lib, name)
 end
 
 function mtNewFunctionWithNameConstantValues(lib, name, constantValues, error)
-    ccall((:mtNewFunctionWithNameConstantValues, libcmt), Ptr{MtFunction}, (Ptr{MtLibrary}, Cstring, Ptr{MtFunctionConstantValues}, Ptr{id}), lib, name, constantValues, error)
+    ccall((:mtNewFunctionWithNameConstantValues, libcmt), Ptr{MtFunction}, (Ptr{MtLibrary}, Cstring, Ptr{MtFunctionConstantValues}, Ptr{id{NSError}}), lib, name, constantValues, error)
 end
 
 function mtFunctionDevice(fun)
@@ -1328,19 +1328,19 @@ function mtNewDefaultLibrary(device)
 end
 
 function mtNewLibraryWithFile(device, filepath, error)
-    ccall((:mtNewLibraryWithFile, libcmt), Ptr{MtLibrary}, (Ptr{MtDevice}, Cstring, Ptr{id}), device, filepath, error)
+    ccall((:mtNewLibraryWithFile, libcmt), Ptr{MtLibrary}, (Ptr{MtDevice}, Cstring, Ptr{id{NSError}}), device, filepath, error)
 end
 
 function mtNewLibraryWithURL(device, url, error)
-    ccall((:mtNewLibraryWithURL, libcmt), Ptr{MtLibrary}, (Ptr{MtDevice}, Cstring, Ptr{id}), device, url, error)
+    ccall((:mtNewLibraryWithURL, libcmt), Ptr{MtLibrary}, (Ptr{MtDevice}, Cstring, Ptr{id{NSError}}), device, url, error)
 end
 
 function mtNewLibraryWithSource(device, source, Opts, error)
-    ccall((:mtNewLibraryWithSource, libcmt), Ptr{MtLibrary}, (Ptr{MtDevice}, Cstring, Ptr{MtCompileOptions}, Ptr{id}), device, source, Opts, error)
+    ccall((:mtNewLibraryWithSource, libcmt), Ptr{MtLibrary}, (Ptr{MtDevice}, Cstring, Ptr{MtCompileOptions}, Ptr{id{NSError}}), device, source, Opts, error)
 end
 
 function mtNewLibraryWithData(device, buffer, size, error)
-    ccall((:mtNewLibraryWithData, libcmt), Ptr{MtLibrary}, (Ptr{MtDevice}, Ptr{Cvoid}, Csize_t, Ptr{id}), device, buffer, size, error)
+    ccall((:mtNewLibraryWithData, libcmt), Ptr{MtLibrary}, (Ptr{MtDevice}, Ptr{Cvoid}, Csize_t, Ptr{id{NSError}}), device, buffer, size, error)
 end
 
 function mtLibraryDevice(lib)
@@ -1372,7 +1372,7 @@ function mtBinaryArchiveDescriptorURLSet(desc, path)
 end
 
 function mtNewBinaryArchiveWithDescriptor(device, desc, error)
-    ccall((:mtNewBinaryArchiveWithDescriptor, libcmt), Ptr{MtBinaryArchive}, (Ptr{MtDevice}, Ptr{MtBinaryArchiveDescriptor}, Ptr{id}), device, desc, error)
+    ccall((:mtNewBinaryArchiveWithDescriptor, libcmt), Ptr{MtBinaryArchive}, (Ptr{MtDevice}, Ptr{MtBinaryArchiveDescriptor}, Ptr{id{NSError}}), device, desc, error)
 end
 
 function mtBinaryArchiveDevice(bin)
@@ -1388,15 +1388,15 @@ function mtBinaryArchiveLabelSet(bin, label)
 end
 
 function mtBinaryArchiveAddComputePipelineFunctions(bin, desc, error)
-    ccall((:mtBinaryArchiveAddComputePipelineFunctions, libcmt), Cvoid, (Ptr{MtBinaryArchive}, Ptr{MtComputePipelineDescriptor}, Ptr{id}), bin, desc, error)
+    ccall((:mtBinaryArchiveAddComputePipelineFunctions, libcmt), Cvoid, (Ptr{MtBinaryArchive}, Ptr{MtComputePipelineDescriptor}, Ptr{id{NSError}}), bin, desc, error)
 end
 
 function mtBinaryArchiveAddFunction(bin, desc, lib, error)
-    ccall((:mtBinaryArchiveAddFunction, libcmt), Cvoid, (Ptr{MtBinaryArchive}, Ptr{MtFunctionDescriptor}, Ptr{MtLibrary}, Ptr{id}), bin, desc, lib, error)
+    ccall((:mtBinaryArchiveAddFunction, libcmt), Cvoid, (Ptr{MtBinaryArchive}, Ptr{MtFunctionDescriptor}, Ptr{MtLibrary}, Ptr{id{NSError}}), bin, desc, lib, error)
 end
 
 function mtBinaryArchiveSerialize(bin, path, error)
-    ccall((:mtBinaryArchiveSerialize, libcmt), Cvoid, (Ptr{MtBinaryArchive}, Cstring, Ptr{id}), bin, path, error)
+    ccall((:mtBinaryArchiveSerialize, libcmt), Cvoid, (Ptr{MtBinaryArchive}, Cstring, Ptr{id{NSError}}), bin, path, error)
 end
 
 function mtBufferContents(buf)
@@ -1686,7 +1686,7 @@ function mtSetFunc(pipDesc, func, functype)
 end
 
 function mtNewRenderState(device, pipDesc, error)
-    ccall((:mtNewRenderState, libcmt), Ptr{MtRenderPipeline}, (Ptr{MtDevice}, Ptr{MtRenderDesc}, Ptr{id}), device, pipDesc, error)
+    ccall((:mtNewRenderState, libcmt), Ptr{MtRenderPipeline}, (Ptr{MtDevice}, Ptr{MtRenderDesc}, Ptr{id{NSError}}), device, pipDesc, error)
 end
 
 function mtColorPixelFormat(renderdesc, index, pixelFormat)
@@ -1876,7 +1876,7 @@ function mtCommandBufferErrorOptions(cmdb)
 end
 
 function mtCommandBufferError(cmdb)
-    ccall((:mtCommandBufferError, libcmt), id, (Ptr{MtCommandBuffer},), cmdb)
+    ccall((:mtCommandBufferError, libcmt), id{NSError}, (Ptr{MtCommandBuffer},), cmdb)
 end
 
 function mtCommandBufferKernelStartTime(cmdb)
@@ -2384,7 +2384,7 @@ function mtSupportsDestination(manager, destination)
 end
 
 function mtStartCaptureWithDescriptor(manager, descriptor, error)
-    ccall((:mtStartCaptureWithDescriptor, libcmt), Bool, (Ptr{MtCaptureManager}, Ptr{MtCaptureDescriptor}, Ptr{id}), manager, descriptor, error)
+    ccall((:mtStartCaptureWithDescriptor, libcmt), Bool, (Ptr{MtCaptureManager}, Ptr{MtCaptureDescriptor}, Ptr{id{NSError}}), manager, descriptor, error)
 end
 
 function mtStopCapture(manager)

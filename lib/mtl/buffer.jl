@@ -7,7 +7,7 @@ export MTLBuffer, device, contents, alloc, free, handle
 # compatibility with cmt
 Base.unsafe_convert(T::Type{Ptr{MtBuffer}}, obj::MTLBuffer) =
     reinterpret(T, Base.unsafe_convert(id, obj))
-MTLBuffer(ptr::Ptr{MtBuffer}) = MTLBuffer(reinterpret(id, ptr))
+MTLBuffer(ptr::Ptr{MtBuffer}) = MTLBuffer(reinterpret(id{MTLBuffer}, ptr))
 
 
 ## properties

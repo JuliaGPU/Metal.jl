@@ -15,10 +15,10 @@ end
 # compatibility with cmt
 Base.unsafe_convert(T::Type{Ptr{MtEvent}}, obj::Union{MTLEvent,MTLSharedEvent}) =
     reinterpret(T, Base.unsafe_convert(id, obj))
-MTLEvent(ptr::Ptr{MtEvent}) = MTLEvent(reinterpret(id, ptr))
+MTLEvent(ptr::Ptr{MtEvent}) = MTLEvent(reinterpret(id{MTLEvent}, ptr))
 Base.unsafe_convert(T::Type{Ptr{MtSharedEvent}}, obj::MTLSharedEvent) =
     reinterpret(T, Base.unsafe_convert(id, obj))
-MTLSharedEvent(ptr::Ptr{MtSharedEvent}) = MTLSharedEvent(reinterpret(id, ptr))
+MTLSharedEvent(ptr::Ptr{MtSharedEvent}) = MTLSharedEvent(reinterpret(id{MTLSharedEvent}, ptr))
 
 
 ## properties

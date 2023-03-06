@@ -5,7 +5,7 @@ export MTLCompileOptions
 # compatibility with cmt
 Base.unsafe_convert(T::Type{Ptr{MtCompileOptions}}, obj::MTLCompileOptions) =
     reinterpret(T, Base.unsafe_convert(id, obj))
-MTLCompileOptions(ptr::Ptr{MtCompileOptions}) = MTLCompileOptions(reinterpret(id, ptr))
+MTLCompileOptions(ptr::Ptr{MtCompileOptions}) = MTLCompileOptions(reinterpret(id{MTLCompileOptions}, ptr))
 
 function MTLCompileOptions()
     handle = @objc [MTLCompileOptions new]::id{MTLCompileOptions}

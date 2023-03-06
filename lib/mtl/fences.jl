@@ -9,7 +9,7 @@ end
 # compatibility with cmt
 Base.unsafe_convert(T::Type{Ptr{MtFence}}, obj::MTLFence) =
     reinterpret(T, Base.unsafe_convert(id, obj))
-MTLFence(ptr::Ptr{MtFence}) = MTLFence(reinterpret(id, ptr))
+MTLFence(ptr::Ptr{MtFence}) = MTLFence(reinterpret(id{MTLFence}, ptr))
 
 
 ## properties

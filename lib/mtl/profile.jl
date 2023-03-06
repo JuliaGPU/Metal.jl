@@ -137,7 +137,7 @@ function Base.getproperty(desc::MtlCaptureDescriptor, f::Symbol)
         ptr == C_NULL && return nothing
         if desc.cap_obj_type == MtCaptureDescriptorCaptureObjectTypeDevice
             # XXX: temporary hack while we migrate away from cmt
-            MTLDevice(reinterpret(id, ptr))
+            MTLDevice(reinterpret(id{MTLDevice}, ptr))
         else
             obj_enum_to_jl_typ[desc.cap_obj_type](ptr)
         end
@@ -267,7 +267,7 @@ function startCapture(manager::MtlCaptureManager, desc::MtlCaptureDescriptor)
             throw(ArgumentError("`dir` keyword argument to @profile should not be an existing directory"))
     end
 
-    _errptr = Ref{id}(nil)
+    _errptr = Ref{id{NSError}}(nil)
     success = mtStartCaptureWithDescriptor(manager.handle, desc.handle, _errptr)
     success || throw(NSError(_errptr[]))
     return
