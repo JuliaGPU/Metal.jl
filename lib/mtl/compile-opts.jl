@@ -60,20 +60,8 @@ end
 
 ## properties
 
-const compile_options_properties = [
-    (:fastMathEnabled,              Bool,
-     :setFastMathEnabled),
-    (:preserveInvariance,           Bool,
-     :setPreserveInvariance),
-    (:languageVersion,              MTLLanguageVersion => VersionNumber,
-     :setLanguageVersion),
-]
-# TODO: preprocessorMacros, optimizationLevel, libraries
-
-Base.propertynames(::MTLCompileOptions) = map(first, compile_options_properties)
-
-@eval Base.getproperty(obj::MTLCompileOptions, f::Symbol) =
-    $(emit_getproperties(:obj, MTLCompileOptions, :f, compile_options_properties))
-
-@eval Base.setproperty!(obj::MTLCompileOptions, f::Symbol, val) =
-    $(emit_setproperties(:obj, MTLCompileOptions, :f, :val, compile_options_properties))
+@objcproperties MTLCompileOptions begin
+    @autoproperty fastMathEnabled::Bool setter=setFastMathEnabled
+    @autoproperty preserveInvariance::Bool setter=setPreserveInvariance
+    @autoproperty languageVersion::MTLLanguageVersion type=VersionNumber setter=setLanguageVersion
+end

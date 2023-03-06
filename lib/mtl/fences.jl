@@ -14,16 +14,7 @@ MTLFence(ptr::Ptr{MtFence}) = MTLFence(reinterpret(id, ptr))
 
 ## properties
 
-const fence_properties = [
-    (:device,               :(id{MTLDevice})),
-    (:label,                :(id{NSString}),
-     :setLabel),
-]
-
-Base.propertynames(::MTLFence) = map(first, fence_properties)
-
-@eval Base.getproperty(obj::MTLFence, f::Symbol) =
-    $(emit_getproperties(:obj, MTLFence, :f, fence_properties))
-
-@eval Base.setproperty!(obj::MTLFence, f::Symbol, val) =
-    $(emit_setproperties(:obj, MTLFence, :f, :val, fence_properties))
+@objcproperties MTLFence begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString}
+end

@@ -9,29 +9,19 @@ Base.unsafe_convert(T::Type{Ptr{MtBuffer}}, obj::MTLBuffer) =
     reinterpret(T, Base.unsafe_convert(id, obj))
 MTLBuffer(ptr::Ptr{MtBuffer}) = MTLBuffer(reinterpret(id, ptr))
 
-# TODO: here
-
 
 ## properties
 
-const buffer_properties = [
-    (:contents,             Ptr{Cvoid}),
-    (:length,               NSUInteger),
-    (:remoteStorageBuffer,  :(id{MTLBuffer})),
-    (:gpuAddress,           UInt64 => Ptr{Cvoid}),
-]
-
-Base.propertynames(::MTLBuffer) = map(first, buffer_properties)
-
-@eval Base.getproperty(obj::MTLBuffer, f::Symbol) =
-    $(emit_getproperties(:obj, MTLBuffer, :f, buffer_properties))
-
-@eval Base.setproperty!(obj::MTLBuffer, f::Symbol, val) =
-    $(emit_setproperties(:obj, MTLBuffer, :f, :val, buffer_properties))
+@objcproperties MTLBuffer begin
+    @autoproperty length::NSUInteger
+    @autoproperty device::id{MTLDevice}
+    @autoproperty contents::Ptr{Cvoid}
+    @autoproperty remoteStorageBuffer::id{MTLBuffer}
+    @autoproperty gpuAddress::UInt64 type=Ptr{Cvoid}
+end
 
 Base.sizeof(buf::MTLBuffer) = Int(buf.length)
 
-# TODO: remove this
 function contents(buf::MTLBuffer)
     ptr = @objc [buf::id{MTLBuffer} contents]::Ptr{Cvoid}
     ptr == C_NULL && error("Cannot access the contents of a private buffer")

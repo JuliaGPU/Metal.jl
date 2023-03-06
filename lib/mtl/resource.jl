@@ -40,22 +40,11 @@ end
     MTLResourceHazardTrackingModeTracked = 512
 end
 
-const resource_properties = [
-    # identifying the resource
-    (:device,               :(id{MTLDevice})),
-    (:label,                :(id{NSString}),
-     :setLabel),
-    # reading memory and storage properties
-    (:cpuCacheMode,         :(MTLCPUCacheMode)),
-    (:storageMode,          :(MTLStorageMode)),
-    (:hazardTrackingMode,   :(MTLHazardTrackingMode)),
-    (:resourceOptions,      :(MTLResourceOptions)),
-]
-
-Base.propertynames(::MTLResource) = map(first, resource_properties)
-
-@eval Base.getproperty(obj::MTLResource, f::Symbol) =
-    $(emit_getproperties(:obj, MTLResource, :f, resource_properties))
-
-@eval Base.setproperty!(obj::MTLResource, f::Symbol, val) =
-    $(emit_setproperties(:obj, MTLResource, :f, :val, resource_properties))
+@objcproperties MTLResource begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString} setter=setLabel
+    @autoproperty cpuCacheMode::MTLCPUCacheMode
+    @autoproperty storageMode::MTLStorageMode
+    @autoproperty hazardTrackingMode::MTLHazardTrackingMode
+    @autoproperty resourceOptions::MTLResourceOptions
+end

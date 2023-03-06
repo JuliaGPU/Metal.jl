@@ -23,33 +23,14 @@ MTLSharedEvent(ptr::Ptr{MtSharedEvent}) = MTLSharedEvent(reinterpret(id, ptr))
 
 ## properties
 
-const event_properties = [
-    (:device,               :(id{MTLDevice})),
-    (:label,                :(id{NSString}),
-     :setLabel),
-]
+@objcproperties MTLEvent begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString} setter=setLabel
+end
 
-Base.propertynames(::MTLEvent) = map(first, event_properties)
-
-@eval Base.getproperty(ev::MTLEvent, f::Symbol) =
-    $(emit_getproperties(:ev, MTLEvent, :f, event_properties))
-
-@eval Base.setproperty!(ev::MTLEvent, f::Symbol, val) =
-    $(emit_setproperties(:ev, MTLEvent, :f, :val, event_properties))
-
-const shared_event_properties = [
-    (:signaledValue,        UInt64)
-]
-
-# TODO: these don't include MTLEvent's properties.
-#       use an emit_propertynames
-Base.propertynames(::MTLSharedEvent) = map(first, shared_event_properties)
-
-@eval Base.getproperty(ev::MTLSharedEvent, f::Symbol) =
-    $(emit_getproperties(:ev, MTLSharedEvent, :f, shared_event_properties))
-
-@eval Base.setproperty!(ev::MTLSharedEvent, f::Symbol, val) =
-    $(emit_setproperties(:ev, MTLSharedEvent, :f, :val, shared_event_properties))
+@objcproperties MTLSharedEvent begin
+    @autoproperty signaledValue::UInt64
+end
 
 
 ## shared event handle
