@@ -157,7 +157,7 @@ version = "1.2.0"
 
 [[deps.ObjectiveC]]
 deps = ["Lazy", "MacroTools"]
-git-tree-sha1 = "811dccfc4f2589a1814399c6369adbc7070e07dc"
+git-tree-sha1 = "e76cdd9b10873ac33830ccb59c826d4e22e575e6"
 repo-rev = "tb/modernize"
 repo-url = "https://github.com/JuliaInterop/ObjectiveC.jl"
 uuid = "e86c9b32-1129-44ac-8ea0-90d5bb39ded9"

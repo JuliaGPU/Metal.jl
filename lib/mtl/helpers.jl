@@ -6,11 +6,11 @@ function unsafe_string_maybe(ptr::Cstring)
     end
 end
 
-function NsError_maybe(ptr::MtlError)
+function NsError_maybe(ptr::NSError)
     if ptr === C_NULL
         return nothing
     else
-        return MtlError(ptr)
+        return NSError(ptr)
     end
 end
 
@@ -55,17 +55,17 @@ the function returns checks that no error has been set.
 
 Expands roughly to
 ```julia
-error_var = Ref{MTLError}()
+error_var = Ref{id}()
 result = function(..., error_var)
-error[] != C_NULL && throw(MtlError(error[]))
+error[] != nil && throw(NSError(error[]))
 ```
 """
 macro mtlthrows(error, fun)
     expr = quote
-        $error = Ref{MTLError}(C_NULL)
+        $error = Ref{id}(nil)
         result = $fun
-        if $error[] != C_NULL
-            throw(MtlError($(error)[]))
+        if $error[] != nil
+            throw(NSError($(error)[]))
         end
         result
     end

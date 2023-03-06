@@ -267,9 +267,9 @@ function startCapture(manager::MtlCaptureManager, desc::MtlCaptureDescriptor)
             throw(ArgumentError("`dir` keyword argument to @profile should not be an existing directory"))
     end
 
-    _errptr = Ref{MTLError}()
+    _errptr = Ref{id}(nil)
     success = mtStartCaptureWithDescriptor(manager.handle, desc.handle, _errptr)
-    success || throw(MtlError(_errptr[]))
+    success || throw(NSError(_errptr[]))
     return
 end
 

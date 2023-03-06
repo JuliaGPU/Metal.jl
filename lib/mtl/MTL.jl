@@ -29,7 +29,7 @@ end
 ## source code includes
 
 # low-level wrappers
-include("error.jl")
+#include("error.jl")
 include("helpers.jl")
 
 # high-level wrappers
