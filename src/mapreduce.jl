@@ -211,9 +211,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     #
     # also, make sure the grain size is not too high so as to starve threads of work.
     other_groups = length(Rother)
-    while grain > 1 && length(Rreduce) <= reduce_threads * prevpow(2, grain)
-        grain >>= 1
-    end
+    grain = min(grain, prevpow(2, cld(length(Rreduce), reduce_threads)))
     reduce_groups = cld(length(Rreduce), reduce_threads * grain)
 
     # determine the launch configuration
