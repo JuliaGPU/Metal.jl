@@ -1,15 +1,13 @@
 @testset "arrays" begin
 
-let mtl_arr = MtlArray{Int}(undef, 1)
-    arr = Array(mtl_arr)
-
+let arr = MtlArray{Int}(undef, 1)
     @test sizeof(arr) == 8
     @test length(arr) == 1
     @test eltype(arr) == Int
 end
 
-let mtl_arr = MtlArray{Int}(undef, 0)
-    @test pointer(mtl_arr).buffer.handle == C_NULL
+let arr = MtlArray{Int}(undef, 0)
+    @test sizeof(arr) == 0
 end
 
 @testset "mtl" begin

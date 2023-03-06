@@ -41,6 +41,8 @@ const shared_event_properties = [
     (:signaledValue,        UInt64)
 ]
 
+# TODO: these don't include MTLEvent's properties.
+#       use an emit_propertynames
 Base.propertynames(::MTLSharedEvent) = map(first, shared_event_properties)
 
 @eval Base.getproperty(ev::MTLSharedEvent, f::Symbol) =

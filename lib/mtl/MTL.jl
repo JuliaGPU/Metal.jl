@@ -2,6 +2,7 @@ module MTL
 
 using ..cmt
 
+using CEnum
 using ObjectiveC, ObjectiveC.Foundation
 
 

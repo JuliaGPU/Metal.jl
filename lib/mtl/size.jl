@@ -22,8 +22,8 @@ Base.convert(::Type{MtSize}, sz::MTLSize) = MtSize(sz.width, sz.height, sz.depth
 ## ranges
 
 # convert from 1 based indexing to 0 based indexing
-Base.convert(::Type{NsRange}, range::UnitRange{T}) where T <: Integer =
-	NsRange(first(range), length(range))
+Base.convert(::Type{NSRange}, range::UnitRange{T}) where T <: Integer =
+	NSRange(first(range), length(range))
 # used for byte ranges.
-Base.convert(::Type{NsRange}, range::StepRange{T}) where T <: Integer =
-	NsRange(first(range)-step(range), length(range)*step(range))
+Base.convert(::Type{NSRange}, range::StepRange{T}) where T <: Integer =
+	NSRange(first(range)-step(range), length(range)*step(range))

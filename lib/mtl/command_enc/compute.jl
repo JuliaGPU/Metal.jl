@@ -27,12 +27,12 @@ device(cce::MtlComputeCommandEncoder) = cce.cmdbuf.device
 set_function!(cce::MtlComputeCommandEncoder, pip::MtlComputePipelineState) =
     mtComputeCommandEncoderSetComputePipelineState(cce, pip)
 
-set_buffer!(cce::MtlComputeCommandEncoder, buf::MtlBuffer, offset::Integer, index::Integer) =
+set_buffer!(cce::MtlComputeCommandEncoder, buf::MTLBuffer, offset::Integer, index::Integer) =
     mtComputeCommandEncoderSetBufferOffsetAtIndex(cce, buf, offset, index - 1)
 #set_bufferoffset!(cce::MtlComputeCommandEncoder, offset::Integer, index::Integer) =
 #    mtComputeCommandEncoderBufferSetOffsetAtIndex(cce, offset, index)
 set_buffers!(cce::MtlComputeCommandEncoder, bufs::Vector{T},
-             offsets::Vector{Int}, indices::UnitRange{Int}) where {T<:MtlBuffer} =
+             offsets::Vector{Int}, indices::UnitRange{Int}) where {T<:MTLBuffer} =
     mtComputeCommandEncoderSetBuffersOffsetsWithRange(cce, handle_array(bufs), offsets, indices .- 1)
 #=set_buffers!(cce::MtlComputeCommandEncoder, bufs::Vector{MtlPtr{T}},
              offsets::Vector{Int}, indices::UnitRange{Int}) where {T} =
@@ -59,8 +59,8 @@ append_current_function!(cce::MtlComputeCommandEncoder, gridSize::MtSize, thread
     dispatchThreadgroups!(cce, gridSize, threadGroupSize)
 
 #### use
-use!(cce::MtlComputeCommandEncoder, buf::MtlBuffer, mode::MtResourceUsage=ReadWriteUsage) =
+use!(cce::MtlComputeCommandEncoder, buf::MTLBuffer, mode::MtResourceUsage=ReadWriteUsage) =
     mtComputeCommandEncoderUseResourceUsage(cce, buf, mode)
 
-use!(cce::MtlComputeCommandEncoder, buf::Vector{MtlBuffer}, mode::MtResourceUsage=ReadWriteUsage) =
+use!(cce::MtlComputeCommandEncoder, buf::Vector{MTLBuffer}, mode::MtResourceUsage=ReadWriteUsage) =
     mtComputeCommandEncoderUseResourceCountUsage(cce, handle_array(buf), length(buf), mode)

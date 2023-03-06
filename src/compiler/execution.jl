@@ -84,8 +84,8 @@ struct Adaptor
 end
 
 # convert Metal buffers to their GPU address
-function Adapt.adapt_storage(to::Adaptor, buf::MtlBuffer)
-    if to.cce !== nothing && buf.handle != C_NULL
+function Adapt.adapt_storage(to::Adaptor, buf::MTLBuffer)
+    if to.cce !== nothing
         MTL.use!(to.cce, buf, MTL.ReadWriteUsage)
     end
     reinterpret(Core.LLVMPtr{Nothing,AS.Device}, buf.gpuAddress)
@@ -203,14 +203,14 @@ function (kernel::HostKernel)(args...; grid=1, threads=1, queue=global_queue(cur
 
     cmdbuf = MtlCommandBuffer(queue)
     cmdbuf.label = "MtlCommandBuffer($(nameof(kernel.f)))"
-    argument_buffers = MtlBuffer[]
+    argument_buffers = MTLBuffer[]
     MtlComputeCommandEncoder(cmdbuf) do cce
         MTL.set_function!(cce, kernel.pipeline_state)
 
         # encode arguments
         idx = 1
         for arg in (kernel.f, args...)
-            if arg isa MtlBuffer
+            if arg isa MTLBuffer
                 # top-level buffers are passed as a pointer-valued argument
                 set_buffer!(cce, arg, 0, idx)
             elseif arg isa MtlPointer
@@ -226,7 +226,7 @@ function (kernel::HostKernel)(args...; grid=1, threads=1, queue=global_queue(cur
                 @assert isbits(arg)
                 argument_buffer = alloc(kernel.fun.lib.device, sizeof(argtyp),
                                         storage=Shared)
-                argument_buffer.label = "MtlBuffer for kernel argument"
+                argument_buffer.label = "MTLBuffer for kernel argument"
                 unsafe_store!(convert(Ptr{argtyp}, contents(argument_buffer)), arg)
                 set_buffer!(cce, argument_buffer, 0, idx)
                 push!(argument_buffers, argument_buffer)

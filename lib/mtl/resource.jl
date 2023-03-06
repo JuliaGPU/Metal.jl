@@ -1,40 +1,61 @@
-export MtlResource
+export MTLResource
 
-const MTLResource = Ptr{MtResource}
+@objcwrapper MTLResource <: NSObject
 
-abstract type MtlResource end
-
-Base.unsafe_convert(::Type{MTLResource}, res::MtlResource) = Base.bitcast(MTLResource, res.handle)
+# compatibility with cmt
+Base.unsafe_convert(T::Type{Ptr{MtResource}}, obj::MTLResource) =
+    reinterpret(T, Base.unsafe_convert(id, obj))
+MTLResource(ptr::Ptr{MtResource}) = MTLResource(reinterpret(id, ptr))
 
 
 ## properties
 
-Base.propertynames(::MtlResource) =
-    (:device, :label, :cpuCacheMode, :storageMode, :hazardTrackingMode, :resourceOptions)
-
-function Base.getproperty(res::MtlResource, f::Symbol)
-    if f === :device
-        MTLDevice(mtResourceDevice(res))
-    elseif f === :label
-        ptr = mtResourceLabel(res)
-        ptr == C_NULL ? nothing : unsafe_string(ptr)
-    elseif f === :cpuCacheMode
-        mtResourceCPUCacheMode(res)
-    elseif f === :storageMode
-        mtResourceStorageMode(res)
-    elseif f === :hazardTrackingMode
-        mtResourceHazardTrackingMode(res)
-    elseif f === :resourceOptions
-        mtResourceOptions(res)
-    else
-        getfield(res, f)
-    end
+@cenum MTLCPUCacheMode::NSUInteger begin
+    MTLCPUCacheModeDefaultCache = 0
+    MTLCPUCacheModeWriteCombined = 1
 end
 
-function Base.setproperty!(res::MtlResource, f::Symbol, val)
-    if f === :label
-		mtResourceLabelSet(res, val)
-    else
-        setfield!(res, f, val)
-    end
+@cenum MTLHazardTrackingMode::NSUInteger begin
+    MTLHazardTrackingModeDefault = 0
+    MTLHazardTrackingModeUntracked = 1
+    MTLHazardTrackingModeTracked = 2
 end
+
+@cenum MTLStorageMode::NSUInteger begin
+    MTLStorageModeShared = 0
+    MTLStorageModeManaged = 1
+    MTLStorageModePrivate = 2
+    MTLStorageModeMemoryless = 3
+end
+
+@cenum MTLResourceOptions::NSUInteger begin
+    MTLResourceCPUCacheModeDefaultCache = 0
+    MTLResourceCPUCacheModeWriteCombined = 1
+    MTLResourceStorageModeShared = 0
+    MTLResourceStorageModeManaged = 16
+    MTLResourceStorageModePrivate = 32
+    MTLResourceStorageModeMemoryless = 48
+    MTLResourceHazardTrackingModeDefault = 0
+    MTLResourceHazardTrackingModeUntracked = 256
+    MTLResourceHazardTrackingModeTracked = 512
+end
+
+const resource_properties = [
+    # identifying the resource
+    (:device,               :(id{MTLDevice})),
+    (:label,                :(id{NSString}),
+     :setLabel),
+    # reading memory and storage properties
+    (:cpuCacheMode,         :(MTLCPUCacheMode)),
+    (:storageMode,          :(MTLStorageMode)),
+    (:hazardTrackingMode,   :(MTLHazardTrackingMode)),
+    (:resourceOptions,      :(MTLResourceOptions)),
+]
+
+Base.propertynames(::MTLResource) = map(first, resource_properties)
+
+@eval Base.getproperty(obj::MTLResource, f::Symbol) =
+    $(emit_getproperties(:obj, MTLResource, :f, resource_properties))
+
+@eval Base.setproperty!(obj::MTLResource, f::Symbol, val) =
+    $(emit_setproperties(:obj, MTLResource, :f, :val, resource_properties))

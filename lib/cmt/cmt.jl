@@ -1,6 +1,7 @@
 module cmt
 
 using cmt_jll
+using ObjectiveC, .Foundation
 
 include("libcmt.jl")
 

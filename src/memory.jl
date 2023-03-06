@@ -4,14 +4,14 @@
 
 ## pointer type
 
-# we cannot take a MtlBuffer's handle and work with that as it were a pointer to memory.
+# we cannot take a MTLBuffer's handle and work with that as it were a pointer to memory.
 # instead, the Metal APIs always take the original handle and an offset parameter.
 
 struct MtlPointer{T}
-    buffer::MtlBuffer
+    buffer::MTLBuffer
     offset::UInt    # in bytes
 
-    function MtlPointer{T}(buffer::MtlBuffer, offset=0) where {T}
+    function MtlPointer{T}(buffer::MTLBuffer, offset=0) where {T}
         new(buffer, offset)
     end
 end
@@ -44,7 +44,7 @@ end
 function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPointer{T}, N::Integer;
                              queue::MtlCommandQueue=global_queue(dev), async::Bool=false) where T
     storage_type = src.buffer.storageMode
-    if storage_type ==  MTL.MtStorageModePrivate
+    if storage_type ==  MTL.MTLStorageModePrivate
         tmp_buf = alloc(T, dev, N, storage=Shared)
         unsafe_copyto!(dev, tmp_buf, 1, src.buffer, src.offset, N; queue, async)
         unsafe_copyto!(dst, contents(tmp_buf), N)
@@ -61,7 +61,7 @@ end
 function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPointer{T}, src::Ptr{T}, N::Integer;
                              queue::MtlCommandQueue=global_queue(dev), async::Bool=false) where T
     storage_type = dst.buffer.storageMode
-    if storage_type == MTL.MtStorageModePrivate
+    if storage_type == MTL.MTLStorageModePrivate
         tmp_buf = alloc(T, dev, N, src, storage=Shared)
         unsafe_copyto!(dev, tmp_buf, src, N; queue, async)
         unsafe_copyto!(dev, dst.buffer, dst.offset, tmp_buf, 1, N; queue, async)

@@ -6,11 +6,6 @@ const NsInteger = Clong
 
 const CfTimeInterval = Cdouble
 
-struct NsRange
-    location::NsUInteger
-    length::NsUInteger
-end
-
 struct NsError
     #= /Users/tim/Julia/pkg/Metal/res/wrap.jl:39 =#
 end
@@ -1273,7 +1268,7 @@ function mtFunctionConstantValuesSetWithName(funval, value, typ, name)
 end
 
 function mtFunctionConstantValuesSetWithRange(funval, value, typ, range)
-    ccall((:mtFunctionConstantValuesSetWithRange, libcmt), Cvoid, (Ptr{MtFunctionConstantValues}, Ptr{Cvoid}, MtDataType, NsRange), funval, value, typ, range)
+    ccall((:mtFunctionConstantValuesSetWithRange, libcmt), Cvoid, (Ptr{MtFunctionConstantValues}, Ptr{Cvoid}, MtDataType, NSRange), funval, value, typ, range)
 end
 
 function mtFunctionConstantValuesReset(funval)
@@ -1417,11 +1412,11 @@ function mtBufferLength(buf)
 end
 
 function mtBufferDidModifyRange(buf, ran)
-    ccall((:mtBufferDidModifyRange, libcmt), Cvoid, (Ptr{MtBuffer}, NsRange), buf, ran)
+    ccall((:mtBufferDidModifyRange, libcmt), Cvoid, (Ptr{MtBuffer}, NSRange), buf, ran)
 end
 
 function mtBufferAddDebugMarkerRange(buf, string, range)
-    ccall((:mtBufferAddDebugMarkerRange, libcmt), Cvoid, (Ptr{MtBuffer}, Cstring, NsRange), buf, string, range)
+    ccall((:mtBufferAddDebugMarkerRange, libcmt), Cvoid, (Ptr{MtBuffer}, Cstring, NSRange), buf, string, range)
 end
 
 function mtBufferRemoveAllDebugMarkers(buf)
@@ -1957,7 +1952,7 @@ function mtIndirectCommandBufferRenderCommandAtIndex(icb, index)
 end
 
 function mtIndirectCommandBufferResetWithRange(icb, range)
-    ccall((:mtIndirectCommandBufferResetWithRange, libcmt), Cvoid, (Ptr{MtIndirectCommandBuffer}, NsRange), icb, range)
+    ccall((:mtIndirectCommandBufferResetWithRange, libcmt), Cvoid, (Ptr{MtIndirectCommandBuffer}, NSRange), icb, range)
 end
 
 function mtCommandEncoderEndEncoding(ce)
@@ -1997,7 +1992,7 @@ function mtBlitCommandEncoderCopyFromBufferToBuffer(bce, src, src_offset, dst, d
 end
 
 function mtBlitCommandEncoderFillBuffer(bce, src, range, val)
-    ccall((:mtBlitCommandEncoderFillBuffer, libcmt), Cvoid, (Ptr{MtBlitCommandEncoder}, Ptr{MtBuffer}, NsRange, UInt8), bce, src, range, val)
+    ccall((:mtBlitCommandEncoderFillBuffer, libcmt), Cvoid, (Ptr{MtBlitCommandEncoder}, Ptr{MtBuffer}, NSRange, UInt8), bce, src, range, val)
 end
 
 function mtBlitCommandEncoderGenerateMipmaps(bce, texture)
@@ -2005,15 +2000,15 @@ function mtBlitCommandEncoderGenerateMipmaps(bce, texture)
 end
 
 function mtBlitCommandEncoderCopyIndirectCommandBuffer(bce, src, range, dst, dst_index)
-    ccall((:mtBlitCommandEncoderCopyIndirectCommandBuffer, libcmt), Cvoid, (Ptr{MtBlitCommandEncoder}, Ptr{MtIndirectCommandBuffer}, NsRange, Ptr{MtIndirectCommandBuffer}, NsUInteger), bce, src, range, dst, dst_index)
+    ccall((:mtBlitCommandEncoderCopyIndirectCommandBuffer, libcmt), Cvoid, (Ptr{MtBlitCommandEncoder}, Ptr{MtIndirectCommandBuffer}, NSRange, Ptr{MtIndirectCommandBuffer}, NsUInteger), bce, src, range, dst, dst_index)
 end
 
 function mtBlitCommandEncoderOptimizeIndirectCommandBuffer(bce, buffer, range)
-    ccall((:mtBlitCommandEncoderOptimizeIndirectCommandBuffer, libcmt), Cvoid, (Ptr{MtBlitCommandEncoder}, Ptr{MtIndirectCommandBuffer}, NsRange), bce, buffer, range)
+    ccall((:mtBlitCommandEncoderOptimizeIndirectCommandBuffer, libcmt), Cvoid, (Ptr{MtBlitCommandEncoder}, Ptr{MtIndirectCommandBuffer}, NSRange), bce, buffer, range)
 end
 
 function mtBlitCommandEncoderResetCommandsInBuffer(bce, buffer, range)
-    ccall((:mtBlitCommandEncoderResetCommandsInBuffer, libcmt), Cvoid, (Ptr{MtBlitCommandEncoder}, Ptr{MtIndirectCommandBuffer}, NsRange), bce, buffer, range)
+    ccall((:mtBlitCommandEncoderResetCommandsInBuffer, libcmt), Cvoid, (Ptr{MtBlitCommandEncoder}, Ptr{MtIndirectCommandBuffer}, NSRange), bce, buffer, range)
 end
 
 function mtBlitCommandEncoderSynchronizeResource(bce, resource)
@@ -2053,7 +2048,7 @@ function mtBlitCommandEncoderSampleCountersInBuffer(icb, sbuf, sampleindex, barr
 end
 
 function mtBlitCommandEncoderResolveCounters(icb, sbuf, range, dst, dst_offset)
-    ccall((:mtBlitCommandEncoderResolveCounters, libcmt), Cvoid, (Ptr{MtIndirectCommandBuffer}, Ptr{MtCounterSampleBuffer}, NsRange, Ptr{MtBuffer}, NsUInteger), icb, sbuf, range, dst, dst_offset)
+    ccall((:mtBlitCommandEncoderResolveCounters, libcmt), Cvoid, (Ptr{MtIndirectCommandBuffer}, Ptr{MtCounterSampleBuffer}, NSRange, Ptr{MtBuffer}, NsUInteger), icb, sbuf, range, dst, dst_offset)
 end
 
 function mtNewComputeCommandEncoder(cmdb)
@@ -2077,7 +2072,7 @@ function mtComputeCommandEncoderSetBufferOffsetAtIndex(cce, buf, offset, indx)
 end
 
 function mtComputeCommandEncoderSetBuffersOffsetsWithRange(cce, bufs, offsets, range)
-    ccall((:mtComputeCommandEncoderSetBuffersOffsetsWithRange, libcmt), Cvoid, (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtBuffer}}, Ptr{NsUInteger}, NsRange), cce, bufs, offsets, range)
+    ccall((:mtComputeCommandEncoderSetBuffersOffsetsWithRange, libcmt), Cvoid, (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtBuffer}}, Ptr{NsUInteger}, NSRange), cce, bufs, offsets, range)
 end
 
 function mtComputeCommandEncoderBufferSetOffsetAtIndex(cce, offset, indx)
@@ -2093,7 +2088,7 @@ function mtComputeCommandEncoderSetSamplerStateAtIndex(cce, sampler, indx)
 end
 
 function mtComputeCommandEncoderSetSamplerStatesWithRange(cce, samplers, range)
-    ccall((:mtComputeCommandEncoderSetSamplerStatesWithRange, libcmt), Cvoid, (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtSamplerState}}, NsRange), cce, samplers, range)
+    ccall((:mtComputeCommandEncoderSetSamplerStatesWithRange, libcmt), Cvoid, (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtSamplerState}}, NSRange), cce, samplers, range)
 end
 
 function mtComputeCommandEncoderSetSamplerStateLodMinClampLodMaxClampAtIndex(cce, sampler, lodMinClamp, lodMaxClamp, indx)
@@ -2105,7 +2100,7 @@ function mtComputeCommandEncoderSetTextureAtIndex(cce, tex, indx)
 end
 
 function mtComputeCommandEncoderSetTexturesWithRange(cce, textures, range)
-    ccall((:mtComputeCommandEncoderSetTexturesWithRange, libcmt), Cvoid, (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtTexture}}, NsRange), cce, textures, range)
+    ccall((:mtComputeCommandEncoderSetTexturesWithRange, libcmt), Cvoid, (Ptr{MtComputeCommandEncoder}, Ptr{Ptr{MtTexture}}, NSRange), cce, textures, range)
 end
 
 function mtComputeCommandEncoderSetThreadgroupMemoryLengthAtIndex(cce, length, indx)
@@ -2313,7 +2308,7 @@ function mtArgumentEncoderSetBufferOffsetAtIndex(cce, buf, offset, indx)
 end
 
 function mtArgumentEncoderSetBuffersOffsetsWithRange(cce, bufs, offsets, range)
-    ccall((:mtArgumentEncoderSetBuffersOffsetsWithRange, libcmt), Cvoid, (Ptr{MtArgumentEncoder}, Ptr{Ptr{MtBuffer}}, Ptr{NsUInteger}, NsRange), cce, bufs, offsets, range)
+    ccall((:mtArgumentEncoderSetBuffersOffsetsWithRange, libcmt), Cvoid, (Ptr{MtArgumentEncoder}, Ptr{Ptr{MtBuffer}}, Ptr{NsUInteger}, NSRange), cce, bufs, offsets, range)
 end
 
 function mtArgumentEncoderSetTextureAtIndex(cce, tex, indx)
@@ -2321,7 +2316,7 @@ function mtArgumentEncoderSetTextureAtIndex(cce, tex, indx)
 end
 
 function mtArgumentEncoderSetTexturesWithRange(cce, textures, range)
-    ccall((:mtArgumentEncoderSetTexturesWithRange, libcmt), Cvoid, (Ptr{MtArgumentEncoder}, Ptr{Ptr{MtTexture}}, NsRange), cce, textures, range)
+    ccall((:mtArgumentEncoderSetTexturesWithRange, libcmt), Cvoid, (Ptr{MtArgumentEncoder}, Ptr{Ptr{MtTexture}}, NSRange), cce, textures, range)
 end
 
 function mtArgumentEncoderSetSamplerStateAtIndex(cce, sampler, indx)
@@ -2329,7 +2324,7 @@ function mtArgumentEncoderSetSamplerStateAtIndex(cce, sampler, indx)
 end
 
 function mtArgumentEncoderSetSamplerStatesWithRange(cce, samplers, range)
-    ccall((:mtArgumentEncoderSetSamplerStatesWithRange, libcmt), Cvoid, (Ptr{MtArgumentEncoder}, Ptr{Ptr{MtSamplerState}}, NsRange), cce, samplers, range)
+    ccall((:mtArgumentEncoderSetSamplerStatesWithRange, libcmt), Cvoid, (Ptr{MtArgumentEncoder}, Ptr{Ptr{MtSamplerState}}, NSRange), cce, samplers, range)
 end
 
 function mtArgumentEncoderConstantDataAtIndex(cce, index)
@@ -2341,7 +2336,7 @@ function mtArgumentEncoderSetIndirectCommandBuffer(cce, cbuf, index)
 end
 
 function mtArgumentEncoderSetIndirectCommandBuffers(cce, cbufs, range)
-    ccall((:mtArgumentEncoderSetIndirectCommandBuffers, libcmt), Cvoid, (Ptr{MtArgumentEncoder}, Ptr{Ptr{MtIndirectCommandBuffer}}, NsRange), cce, cbufs, range)
+    ccall((:mtArgumentEncoderSetIndirectCommandBuffers, libcmt), Cvoid, (Ptr{MtArgumentEncoder}, Ptr{Ptr{MtIndirectCommandBuffer}}, NSRange), cce, cbufs, range)
 end
 
 function mtArgumentEncoderAlignment(cce)
