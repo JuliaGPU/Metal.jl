@@ -194,12 +194,12 @@ function (kernel::HostKernel)(args...; groups=1, threads=1, queue=global_queue(c
     groups = MTLSize(groups)
     threads = MTLSize(threads)
     (groups.width>0 && groups.height>0 && groups.depth>0) ||
-        throw(ArgumentError("Threadgroups dimensions should be non-null"))
+        throw(ArgumentError("All group dimensions should be non-zero"))
     (threads.width>0 && threads.height>0 && threads.depth>0) ||
-        throw(ArgumentError("Threads dimensions should be non-null"))
+        throw(ArgumentError("All thread dimensions should be non-zero"))
 
     (threads.width * threads.height * threads.depth) > kernel.pipeline_state.maxTotalThreadsPerThreadgroup &&
-        throw(ArgumentError("Max total thread size should not exceed $(kernel.pipeline_state.maxTotalThreadsPerThreadgroup)"))
+        throw(ArgumentError("Maximum number of threads in a group should not exceed $(kernel.pipeline_state.maxTotalThreadsPerThreadgroup)"))
 
     cmdbuf = MTLCommandBuffer(queue)
     cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
