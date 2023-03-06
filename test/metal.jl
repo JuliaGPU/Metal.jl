@@ -34,7 +34,7 @@ end
 
 @testset "compile options" begin
 
-opts = MtlCompileOptions()
+opts = MTLCompileOptions()
 
 compact_str = sprint(io->show(io, opts))
 full_str = sprint(io->show(io, MIME"text/plain"(), opts))
@@ -53,7 +53,7 @@ end
 @testset "libraries" begin
 
 dev = first(devices())
-opts = MtlCompileOptions()
+opts = MTLCompileOptions()
 
 let lib = MtlLibrary(dev, "", opts)
     @test lib.device == dev
