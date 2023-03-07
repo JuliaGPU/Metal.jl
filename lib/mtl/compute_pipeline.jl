@@ -108,6 +108,9 @@ end
 
 Base.unsafe_convert(::Type{MTLComputePipelineState}, q::MtlComputePipelineState) = q.handle
 
+# compatibility with ObjectiveC.jl
+Base.unsafe_convert(T::Type{<:id}, obj::MtlComputePipelineState) = reinterpret(T, obj.handle)
+
 Base.:(==)(a::MtlComputePipelineState, b::MtlComputePipelineState) = a.handle == b.handle
 Base.hash(q::MtlComputePipelineState, h::UInt) = hash(q.handle, h)
 

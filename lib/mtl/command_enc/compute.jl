@@ -1,53 +1,61 @@
-export MtlComputeCommandEncoder
+export MTLComputeCommandEncoder
 export set_function!, set_buffer!, set_bytes!, dispatchThreads!, endEncoding!
 export set_buffers!, append_current_function!
 
-const MTLComputeCommandEncoder = Ptr{MtComputeCommandEncoder}
+@objcwrapper immutable=false MTLComputeCommandEncoder <: MTLCommandEncoder
 
-mutable struct MtlComputeCommandEncoder <: MtlCommandEncoder
-    handle::MTLComputeCommandEncoder
-    cmdbuf::MtlCommandBuffer
-end
+# compatibility with cmt
+Base.unsafe_convert(T::Type{Ptr{MtComputeCommandEncoder}}, obj::MTLComputeCommandEncoder) =
+    reinterpret(T, Base.unsafe_convert(id, obj))
+MTLComputeCommandEncoder(ptr::Ptr{MtComputeCommandEncoder}) =
+    MTLComputeCommandEncoder(reinterpret(id{MTLComputeCommandEncoder}, ptr))
 
-Base.unsafe_convert(::Type{MTLComputeCommandEncoder}, q::MtlComputeCommandEncoder) = q.handle
-
-function MtlComputeCommandEncoder(cmdbuf::MtlCommandBuffer; dispatch_type::Union{Nothing,MtDispatchType} = nothing)
-    if isnothing(dispatch_type)
-        handle = mtNewComputeCommandEncoder(cmdbuf)
+function MTLComputeCommandEncoder(cmdbuf::MTLCommandBuffer;
+                                  dispatch_type::Union{Nothing,MtDispatchType} = nothing)
+    handle = if isnothing(dispatch_type)
+        @objc [cmdbuf::id{MTLCommandBuffer} computeCommandEncoder]::id{MTLComputeCommandEncoder}
     else
-        handle = mtNewComputeCommandEncoderWithDispatchtype(cmdbuf, dispatchtype)
+        @objc [cmdbuf::id{MTLCommandBuffer} computeCommandEncoderWithDispatchType:dispatch_type::MtDispatchType]::id{MTLComputeCommandEncoder}
     end
-    obj = MtlComputeCommandEncoder(handle, cmdbuf)
+
+    obj = MTLComputeCommandEncoder(handle)
     finalizer(unsafe_destroy!, obj)
+
+    # Per Apple's "Basic Memory Management Rules" the above invocation does not imply
+    # ownership. To be consistent the name of the function and CF_RETURNS_RETAINED, we
+    # explicitly claim ownership with an explicit `retain`
+    retain(obj)
+
     return obj
 end
 
-device(cce::MtlComputeCommandEncoder) = cce.cmdbuf.device
+device(cce::MTLComputeCommandEncoder) = cce.cmdbuf.device
 
-set_function!(cce::MtlComputeCommandEncoder, pip::MtlComputePipelineState) =
+set_function!(cce::MTLComputeCommandEncoder, pip::MtlComputePipelineState) =
     mtComputeCommandEncoderSetComputePipelineState(cce, pip)
 
-set_buffer!(cce::MtlComputeCommandEncoder, buf::MTLBuffer, offset::Integer, index::Integer) =
+set_buffer!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, offset::Integer, index::Integer) =
     mtComputeCommandEncoderSetBufferOffsetAtIndex(cce, buf, offset, index - 1)
-#set_bufferoffset!(cce::MtlComputeCommandEncoder, offset::Integer, index::Integer) =
+#set_bufferoffset!(cce::MTLComputeCommandEncoder, offset::Integer, index::Integer) =
 #    mtComputeCommandEncoderBufferSetOffsetAtIndex(cce, offset, index)
-set_buffers!(cce::MtlComputeCommandEncoder, bufs::Vector{T},
+set_buffers!(cce::MTLComputeCommandEncoder, bufs::Vector{T},
              offsets::Vector{Int}, indices::UnitRange{Int}) where {T<:MTLBuffer} =
     mtComputeCommandEncoderSetBuffersOffsetsWithRange(cce, handle_array(bufs), offsets, indices .- 1)
-#=set_buffers!(cce::MtlComputeCommandEncoder, bufs::Vector{MtlPtr{T}},
+#=set_buffers!(cce::MTLComputeCommandEncoder, bufs::Vector{MtlPtr{T}},
              offsets::Vector{Int}, indices::UnitRange{Int}) where {T} =
     mtComputeCommandEncoderSetBuffersOffsetsWithRange(cce, bufs, offsets, indices .- 1)=#
 
-set_bytes!(cce::MtlComputeCommandEncoder, ptr, length::Integer, index::Integer) =
+set_bytes!(cce::MTLComputeCommandEncoder, ptr, length::Integer, index::Integer) =
     mtComputeCommandEncoderSetBytesLengthAtIndex(cce, ptr, length, index - 1)
 
-dispatchThreadgroups!(cce::MtlComputeCommandEncoder, gridSize::MtSize, threadGroupSize::MtSize) =
+dispatchThreadgroups!(cce::MTLComputeCommandEncoder, gridSize::MtSize, threadGroupSize::MtSize) =
     mtComputeCommandEncoderDispatchThreadgroups_threadsPerThreadgroup(cce, gridSize, threadGroupSize)
 
 #####
 # encode in the Command Encoder
-function MtlComputeCommandEncoder(f::Base.Callable, cmdbuf::MtlCommandBuffer; kwargs...)
-    encoder = MtlComputeCommandEncoder(cmdbuf; kwargs...)
+
+function MTLComputeCommandEncoder(f::Base.Callable, cmdbuf::MTLCommandBuffer; kwargs...)
+    encoder = MTLComputeCommandEncoder(cmdbuf; kwargs...)
     try
         f(encoder)
     finally
@@ -55,12 +63,19 @@ function MtlComputeCommandEncoder(f::Base.Callable, cmdbuf::MtlCommandBuffer; kw
     end
 end
 
-append_current_function!(cce::MtlComputeCommandEncoder, gridSize::MtSize, threadGroupSize::MtSize) =
+function append_current_function!(cce::MTLComputeCommandEncoder, gridSize::MtSize, threadGroupSize::MtSize)
     dispatchThreadgroups!(cce, gridSize, threadGroupSize)
+end
 
 #### use
-use!(cce::MtlComputeCommandEncoder, buf::MTLBuffer, mode::MtResourceUsage=ReadWriteUsage) =
-    mtComputeCommandEncoderUseResourceUsage(cce, buf, mode)
 
-use!(cce::MtlComputeCommandEncoder, buf::Vector{MTLBuffer}, mode::MtResourceUsage=ReadWriteUsage) =
-    mtComputeCommandEncoderUseResourceCountUsage(cce, handle_array(buf), length(buf), mode)
+function use!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, mode::MtResourceUsage=ReadWriteUsage)
+    @objc [cce::id{MTLComputeCommandEncoder} useResource:buf::id{MTLBuffer}
+                                             usage:mode::MtResourceUsage]::Nothing
+end
+
+function use!(cce::MTLComputeCommandEncoder, buf::Vector{MTLBuffer}, mode::MtResourceUsage=ReadWriteUsage)
+    @objc [cce::id{MTLComputeCommandEncoder} useResources:buf::id{MTLBuffer}
+                                             count:length(buf)::Csize_t
+                                             usage:mode::MtResourceUsage]::Nothing
+end

@@ -68,7 +68,7 @@ Profile Metal/GPU work using XCode's GPU frame capture capabilities.
 
 Several keyword arguments are supported that influence the behavior of `Metal.@profile`:
 
-- `capture`: the object to capture GPU work on. Can be a MTLDevice, MtlCommandQueue, or
+- `capture`: the object to capture GPU work on. Can be a MTLDevice, MTLCommandQueue, or
    MtlCaptureScope. This defaults to the global command queue, and selecting a different
    capture object may result in no GPU commands detected when viewed from Xcode.
 - `dest`: the type of GPU frame capture output. Potential values:

@@ -1,40 +1,26 @@
 export endEncoding!
 
-abstract type MtlCommandEncoder end
+@objcwrapper MTLCommandEncoder <: NSObject
 
-Base.:(==)(a::T, b::T) where {T <: MtlCommandEncoder} = a.handle == b.handle
-Base.hash(q::MtlCommandEncoder, h::UInt) = hash(q.handle, h)
+# compatibility with cmt
+Base.unsafe_convert(T::Type{Ptr{MtCommandEncoder}}, obj::MTLCommandEncoder) =
+    reinterpret(T, Base.unsafe_convert(id, obj))
+MTLCommandEncoder(ptr::Ptr{MtCommandEncoder}) = MTLCommandEncoder(reinterpret(id{MTLCommandEncoder}, ptr))
 
-function unsafe_destroy!(cce::MtlCommandEncoder)
-    mtRelease(cce.handle)
+function unsafe_destroy!(cce::MTLCommandEncoder)
+    release(cce)
 end
 
 
 ## properties
 
-Base.propertynames(::MtlCommandEncoder) = (:device, :label)
-
-function Base.getproperty(o::MtlCommandEncoder, f::Symbol)
-    if f === :device
-        MTLDevice(mtCommandEncoderDevice(o))
-    elseif f === :label
-        ptr = mtCommandEncoderLabel(o)
-        ptr == C_NULL ? nothing : unsafe_string(ptr)
-    else
-        getfield(o, f)
-    end
-end
-
-function Base.setproperty!(o::MtlCommandEncoder, f::Symbol, val)
-    if f === :label
-		mtCommandEncoderLabelSet(o, val)
-    else
-        setfield!(o, f, val)
-    end
+@objcproperties MTLCommandEncoder begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString} setter=setLabel
 end
 
 
 ## encoding
 
-endEncoding!(ce::MtlCommandEncoder) = mtCommandEncoderEndEncoding(ce.handle)
-Base.close(ce::MtlCommandEncoder) = endEncoding!(ce)
+endEncoding!(ce::MTLCommandEncoder) = @objc [ce::id{MTLCommandEncoder} endEncoding]::Nothing
+Base.close(ce::MTLCommandEncoder) = endEncoding!(ce)

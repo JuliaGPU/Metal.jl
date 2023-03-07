@@ -1,176 +1,123 @@
 #
+# commannd buffer enums
+#
+
+@cenum MTLCommandBufferErrorOption::NSUInteger begin
+    MTLCommandBufferErrorOptionNone = 0
+    MTLCommandBufferErrorOptionEncoderExecutionStatus = 1
+end
+
+@cenum MTLCommandBufferStatus::NSUInteger begin
+    MTLCommandBufferStatusNotEnqueued = 0
+    MTLCommandBufferStatusEnqueued = 1
+    MTLCommandBufferStatusCommitted = 2
+    MTLCommandBufferStatusScheduled = 3
+    MTLCommandBufferStatusCompleted = 4
+    MTLCommandBufferStatusError = 5
+end
+
+
+#
 # command buffer descriptor
 #
 
-export MtlCommandBufferDescriptor
+export MTLCommandBufferDescriptor
 
-const MTLCommandBufferDescriptor = Ptr{MTL.MtCommandBufferDescriptor}
+@objcwrapper immutable=false MTLCommandBufferDescriptor <: NSObject
 
-mutable struct MtlCommandBufferDescriptor
-    handle::MTLCommandBufferDescriptor
-end
+# compatibility with cmt
+Base.unsafe_convert(T::Type{Ptr{MtCommandBufferDescriptor}}, obj::MTLCommandBufferDescriptor) =
+    reinterpret(T, Base.unsafe_convert(id, obj))
+MTLCommandBufferDescriptor(ptr::Ptr{MtCommandBufferDescriptor}) =
+    MTLCommandBufferDescriptor(reinterpret(id{MTLCommandBufferDescriptor}, ptr))
 
-Base.unsafe_convert(::Type{MTLCommandBufferDescriptor}, q::MtlCommandBufferDescriptor) =
-    q.handle
-
-function MtlCommandBufferDescriptor()
-    handle = mtNewCommandBufferDescriptor()
-    obj = MtlCommandBufferDescriptor(handle)
+function MTLCommandBufferDescriptor()
+    handle = @objc [MTLCommandBufferDescriptor new]::id{MTLCommandBufferDescriptor}
+    obj = MTLCommandBufferDescriptor(handle)
     finalizer(unsafe_destroy!, obj)
     return obj
 end
 
-function unsafe_destroy!(desc::MtlCommandBufferDescriptor)
-    mtRelease(desc.handle)
+function unsafe_destroy!(desc::MTLCommandBufferDescriptor)
+    release(desc)
 end
 
 
 ## properties
 
-Base.propertynames(::MtlCommandBufferDescriptor) = (
-    :retainedReferences, :errorOptions
-)
-
-function Base.getproperty(o::MtlCommandBufferDescriptor, f::Symbol)
-    if f === :errorOptions
-        mtCommandBufferDescriptorErrorOptions(o)
-    elseif f === :retainedReferences
-        mtCommandBufferDescriptorRetainedReferences(o)
-    else
-        getfield(o, f)
-    end
+@objcproperties MTLCommandBufferDescriptor begin
+    @autoproperty retainedReferences::Bool setter=setRetainedReferences
+    @autoproperty errorOptions::MTLCommandBufferErrorOption setter=setErrorOptions
 end
 
-function Base.setproperty!(o::MtlCommandBufferDescriptor, f::Symbol, val)
-    if f === :errorOptions
-        mtCommandBufferDescriptorErrorOptionsSet(o, val)
-    elseif f === :retainedReferences
-        mtCommandBufferDescriptorRetainedReferencesSet(o, val)
-    else
-        setfield!(o, f, val)
-    end
-end
-
-
-## display
-
-function Base.show(io::IO, desc::MtlCommandBufferDescriptor)
-    print(io, "MtlCommandBufferDescriptor(...)")
-end
-
-function show(io::IO, ::MIME"text/plain", q::MtlCommandBufferDescriptor)
-    println(io, "MtlCommandBufferDescriptor:")
-    println(io, " retainReferences:  ", q.retainReferences)
-    print(io,   " errorOption: ", q.errorOption)
-end
 
 
 #
 # command buffer
 #
 
-export MtlCommandBuffer, enqueue!, wait_scheduled, wait_completed, encode_signal!,
+export MTLCommandBuffer, enqueue!, wait_scheduled, wait_completed, encode_signal!,
        encode_wait!, commit!, on_scheduled, on_completed
 
-const MTLCommandBuffer = Ptr{MtCommandBuffer}
+@objcwrapper immutable=false MTLCommandBuffer <: NSObject
 
-"""
-    MtlCommandBuffer(queue::MtlCommandQueue, [desc::MtlCommandBufferDescriptor])
+# compatibility with cmt
+Base.unsafe_convert(T::Type{Ptr{MtCommandBuffer}}, obj::MTLCommandBuffer) =
+    reinterpret(T, Base.unsafe_convert(id, obj))
+MTLCommandBuffer(ptr::Ptr{MtCommandBuffer}) = MTLCommandBuffer(reinterpret(id{MTLCommandBuffer}, ptr))
 
-A container that stores encoded commands for the GPU to execute.
-"""
-mutable struct MtlCommandBuffer
-    handle::MTLCommandBuffer
-    queue::MtlCommandQueue
-    desc::Union{Nothing, MtlCommandBufferDescriptor}
-end
-
-Base.unsafe_convert(::Type{MTLCommandBuffer}, q::MtlCommandBuffer) = q.handle
-
-Base.:(==)(a::MtlCommandBuffer, b::MtlCommandBuffer) = a.handle == b.handle
-Base.hash(q::MtlCommandBuffer, h::UInt) = hash(q.handle, h)
-
-function MtlCommandBuffer(queue::MtlCommandQueue,
-                          desc::MtlCommandBufferDescriptor=MtlCommandBufferDescriptor())
-    handle = mtNewCommandBufferWithDescriptor(queue, desc)
-    obj = MtlCommandBuffer(handle, queue, desc)
+function MTLCommandBuffer(queue::MTLCommandQueue,
+                          desc::MTLCommandBufferDescriptor=MTLCommandBufferDescriptor())
+    handle = @objc [queue::id{MTLCommandQueue} commandBufferWithDescriptor:desc::id{MTLCommandBufferDescriptor}]::id{MTLCommandBuffer}
+    obj = MTLCommandBuffer(handle)
     finalizer(unsafe_destroy!, obj)
+
+    # Per Apple's "Basic Memory Management Rules" the above invocation does not imply
+    # ownership. To be consistent the name of the function and CF_RETURNS_RETAINED, we
+    # explicitly claim ownership with an explicit `retain`
+    retain(obj)
+
     return obj
 end
 
-function unsafe_destroy!(cmdbuf::MtlCommandBuffer)
-    mtRelease(cmdbuf.handle)
+function unsafe_destroy!(cmdbuf::MTLCommandBuffer)
+    release(cmdbuf)
 end
 
 
 ## properties
 
-Base.propertynames(::MtlCommandBuffer) = (
-    :device, :commandQueue, :label,
-    :status, :errorOptions, :error,
-    #=:logs,=#
-    :kernelStartTime, :kernelEndTime, :gpuStartTime, :gpuEndTime,
-    :retainedReferences, :encoderInfo
-)
+@objcproperties MTLCommandBuffer begin
+    # Identifying the Command Buffer
+    @autoproperty commandQueue::id{MTLCommandQueue}
+    @autoproperty label::id{NSString} setter=setLabel
+    @autoproperty device::id{MTLDevice}
+    @autoproperty status::MTLCommandBufferStatus
 
-function Base.getproperty(o::MtlCommandBuffer, f::Symbol)
-    if f === :device
-        MTLDevice(mtCommandBufferDevice(o))
-    elseif f === :commandQueue
-        MtlCommandQueue(mtCommandBufferCommandQueue(o), o.device)
-    elseif f === :label
-        ptr = mtCommandBufferLabel(o)
-        ptr == C_NULL ? nothing : unsafe_string(ptr)
-    elseif f === :status
-        mtCommandBufferStatus(o)
-    elseif f === :error
-        ptr = mtCommandBufferError(o)
-        ptr == nil ? nothing : NSError(ptr)
-    elseif f === :errorOptions
-        mtCommandBufferErrorOptions(o)
-    elseif f === :kernelStartTime
-        mtCommandBufferKernelStartTime(o)
-    elseif f === :kernelEndTime
-        mtCommandBufferKernelEndTime(o)
-    elseif f === :gpuStartTime
-        mtCommandBufferGPUStartTime(o)
-    elseif f === :gpuEndTime
-        mtCommandBufferGPUEndTime(o)
-    elseif f === :retainedReferences
-        mtCommandBufferRetainedReferences(o)
-    elseif f === :encoderInfo
-        mtCommandBufferEncoderInfo(o)
-    else
-        getfield(o, f)
-    end
-end
+    # Getting Error Details
+    @autoproperty error::id{NSError}
+    @autoproperty errorOptions::MTLCommandBufferErrorOption
 
-function Base.setproperty!(o::MtlCommandBuffer, f::Symbol, val)
-    if f === :label
-		mtCommandBufferLabelSet(o, val)
-    else
-        setfield!(o, f, val)
-    end
-end
+    # Reading the Runtime Message Logs
+    #@autoproperty logs::id{NSArray} type=Vector{MTLCommandBufferLogEntry}
 
+    # Checking Scheduling Times on the CPU
+    @autoproperty kernelStartTime::Cdouble
+    @autoproperty kernelEndTime::Cdouble
 
-## display
+    # Checking Execution Times on the GPU
+    @autoproperty GPUStartTime::Cdouble
+    @autoproperty GPUEndTime::Cdouble
 
-function Base.show(io::IO, q::MtlCommandBuffer)
-    print(io, "MtlCommandBuffer(...)")
-end
-
-function show(io::IO, ::MIME"text/plain", q::MtlCommandBuffer)
-    println(io, "MtlCommandBuffer:")
-    println(io, " queue:  ", q.commandQueue)
-    print(io,   " status: ", q.status)
+    # Determining Whether to Maintain Strong References
+    @autoproperty retainedReferences::Bool
 end
 
 
 ## operations
 
 """
-    enqueue!(q::MtlCommandBuffer)
+    enqueue!(q::MTLCommandBuffer)
 
 Enqueueing a command buffer reserves a place for the command buffer on the command
 queue without committing the command buffer for execution. When this command buffer
@@ -181,14 +128,14 @@ into the command buffers and those threads can complete in any order.
 
 [enqueue](https://developer.apple.com/documentation/metal/mtlcommandbuffer/1443019-enqueue?language=objc)
 """
-function enqueue!(q::MtlCommandBuffer)
+function enqueue!(q::MTLCommandBuffer)
     q.status in [MtCommandBufferStatusCompleted, MtCommandBufferStatusEnqueued] && error("Cannot enqueue an already enqueued command buffer")
-    mtCommandBufferEnqueue(q)
+    @objc [q::id{MTLCommandBuffer} enqueue]::Nothing
 end
 
-function commit!(q::MtlCommandBuffer)
+function commit!(q::MTLCommandBuffer)
     q.status in [MtCommandBufferStatusCompleted, MtCommandBufferStatusCommitted] && error("Cannot commit an already committed/completed command buffer")
-    mtCommandBufferCommit(q)
+    @objc [q::id{MTLCommandBuffer} commit]::Nothing
 end
 
 """
@@ -200,20 +147,24 @@ blocks registered by addScheduledHandler: have been invoked. A command buffer
 is considered scheduled after all its dependencies are resolved, and it is sent
 to the GPU for execution.
 """
-wait_scheduled(q::MtlCommandBuffer) = mtCommandBufferWaitUntilScheduled(q)
+function wait_scheduled(q::MTLCommandBuffer)
+    @objc [q::id{MTLCommandBuffer} waitUntilScheduled]::Nothing
+end
 
 """
-    wait_completed(cmdbuf::MtlCommandBuffer)
+    wait_completed(cmdbuf::MTLCommandBuffer)
 
 Blocks execution of the current thread until execution of the command
 buffer is completed.
 This method returns after the command buffer is completed and all code
 blocks registered by addCompletedHandler: are invoked.
 """
-wait_completed(q::MtlCommandBuffer) = mtCommandBufferWaitUntilCompleted(q)
+function wait_completed(q::MTLCommandBuffer)
+    @objc [q::id{MTLCommandBuffer} waitUntilCompleted]::Nothing
+end
 
 """
-    encode_signal!(buf::MtlCommandBuffer, ev::MTLEvent, val::UInt)
+    encode_signal!(buf::MTLCommandBuffer, ev::MTLEvent, val::UInt)
 
 Encodes a command that signals the given event, updating it to a new value.
 
@@ -225,11 +176,13 @@ waiting on the event are allowed to run if the new value is equal to or
 greater than the value for which they are waiting. For shared events, this
 update similarly triggers notification handlers waiting on the event.
 """
-encode_signal!(buf::MtlCommandBuffer, ev::MTLEvent, val::Integer) =
-    mtCommandBufferEncodeSignalEvent(buf, ev, val)
+function encode_signal!(buf::MTLCommandBuffer, ev::MTLEvent, val::Integer)
+    @objc [buf::id{MTLCommandBuffer} encodeSignalEvent:ev::id{MTLEvent}
+                                     value:val::UInt64]::Nothing
+end
 
 """
-    encode_wait!(buf::MtlCommandBuffer, ev::MTLEvent, val::UInt)
+    encode_wait!(buf::MTLCommandBuffer, ev::MTLEvent, val::UInt)
 
 Encodes a command that blocks the execution of the command buffer
 until the given event reaches the given value.
@@ -242,8 +195,10 @@ GPU executes commands that appear earlier than the wait command,
 but doesn't start any commands that appear after it. Execution continues
 immediately if the event already has an equal or larger value.
 """
-encode_wait!(buf::MtlCommandBuffer, ev::MTLEvent, val::Integer) =
-    mtCommandBufferEncodeWaitForEvent(buf, ev, val)
+function encode_wait!(buf::MTLCommandBuffer, ev::MTLEvent, val::Integer)
+    @objc [buf::id{MTLCommandBuffer} encodeWaitForEvent:ev::id{MTLEvent}
+                                     value:val::UInt64]::Nothing
+end
 
 async_send(data::Ptr{Cvoid}) = ccall(:uv_async_send, Cint, (Ptr{Cvoid},), data)
 
@@ -253,7 +208,7 @@ function _command_buffer_async_callback(handle, data)
     return
 end
 
-function _command_buffer_callback(f::Base.Callable, buf::MtlCommandBuffer)
+function _command_buffer_callback(f::Base.Callable, buf::MTLCommandBuffer)
     cond = Base.AsyncCondition() do async_cond
         f()
         close(async_cond)
@@ -272,25 +227,25 @@ function _command_buffer_callback(f::Base.Callable, buf::MtlCommandBuffer)
 end
 
 """
-    on_scheduled(buf::MtlCommandBuffer) do buf
+    on_scheduled(buf::MTLCommandBuffer) do buf
         ...
     end
 
 Execute a block of code when execution of the command buffer is scheduled.
 """
-function on_scheduled(f::Base.Callable, buf::MtlCommandBuffer)
+function on_scheduled(f::Base.Callable, buf::MTLCommandBuffer)
     handler, data = _command_buffer_callback(f, buf)
     MTL.mtCommandBufferOnScheduled(buf, data, handler)
 end
 
 """
-    on_completed(buf::MtlCommandBuffer) do buf
+    on_completed(buf::MTLCommandBuffer) do buf
         ...
     end
 
 Execute a block of code when execution of the command buffer is completed.
 """
-function on_completed(f::Base.Callable, buf::MtlCommandBuffer)
+function on_completed(f::Base.Callable, buf::MTLCommandBuffer)
     handler, data = _command_buffer_callback(f, buf)
     MTL.mtCommandBufferOnCompleted(buf, data, handler)
 end

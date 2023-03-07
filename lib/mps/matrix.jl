@@ -73,7 +73,7 @@ function matmul!(c::MtlMatrix, a::MtlMatrix, b::MtlMatrix,
                                          alpha, beta)
 
     # Encode and commit matmul kernel
-    cmdbuf = MtlCommandBuffer(global_queue(current_device()))
+    cmdbuf = MTLCommandBuffer(global_queue(current_device()))
     cmt.mtMPSMatMulEncodeToCommandBuffer(mat_mul_kernel, cmdbuf, mps_b, mps_a, mps_c)
     commit!(cmdbuf)
 

@@ -51,7 +51,7 @@ function Base.getproperty(o::MtlCaptureScope, f::Symbol)
     if f === :device
         MTLDevice(mtCaptureScopeDevice(o))
     elseif f === :commandQueue
-        MtlCommandQueue(mtCaptureScopeCommandQueue(o), o.device)
+        MTLCommandQueue(mtCaptureScopeCommandQueue(o))
     elseif f === :label
         ptr = mtCaptureScopeLabel(o)
         ptr == C_NULL ? nothing : unsafe_string(ptr)
@@ -83,7 +83,7 @@ const MTLCaptureDescriptor = Ptr{MtCaptureDescriptor}
 
 """
     MtlCaptureDescriptor()
-    MtlCaptureDescriptor(obj::Union{MTLDevice,MtlCommandQueue},
+    MtlCaptureDescriptor(obj::Union{MTLDevice,MTLCommandQueue},
                          destination::MtCaptureDestination;
                          folder::String=nothing)
 Create a GPU frame capture descriptor to alter the parameters of a profiling session.
@@ -100,7 +100,7 @@ mutable struct MtlCaptureDescriptor
     end
 
     # TODO: Add capture state
-    function MtlCaptureDescriptor(obj::Union{MTLDevice,MtlCommandQueue, MtlCaptureScope},
+    function MtlCaptureDescriptor(obj::Union{MTLDevice,MTLCommandQueue, MtlCaptureScope},
                                   destination::MtCaptureDestination;
                                   folder::String=nothing)
         desc = MtlCaptureDescriptor()
@@ -138,6 +138,9 @@ function Base.getproperty(desc::MtlCaptureDescriptor, f::Symbol)
         if desc.cap_obj_type == MtCaptureDescriptorCaptureObjectTypeDevice
             # XXX: temporary hack while we migrate away from cmt
             MTLDevice(reinterpret(id{MTLDevice}, ptr))
+        elseif desc.cap_obj_type == MtCaptureDescriptorCaptureObjectTypeQueue
+            # XXX: temporary hack while we migrate away from cmt
+            MTLCommandQueue(reinterpret(id{MTLCommandQueue}, ptr))
         else
             obj_enum_to_jl_typ[desc.cap_obj_type](ptr)
         end
@@ -154,7 +157,7 @@ end
 
 function Base.setproperty!(desc::MtlCaptureDescriptor, f::Symbol, val)
     if f === :captureObject
-        if isa(val, MtlCommandQueue)
+        if isa(val, MTLCommandQueue)
             mtCaptureDescriptorCaptureObjectSetQueue(desc, val)
             desc.cap_obj_type = MtCaptureDescriptorCaptureObjectTypeQueue
         elseif isa(val, MTLDevice)
@@ -164,7 +167,7 @@ function Base.setproperty!(desc::MtlCaptureDescriptor, f::Symbol, val)
             mtCaptureDescriptorCaptureObjectSetScope(desc, val)
             desc.cap_obj_type = MtCaptureDescriptorCaptureObjectTypeScope
         else
-            throw(ArgumentError("captureObject property should be a MtlCommandQueue, MTLDevice, or MtlCaptureScope."))
+            throw(ArgumentError("captureObject property should be a MTLCommandQueue, MTLDevice, or MtlCaptureScope."))
         end
     elseif f === :destination
         isa(val, MtCaptureDestination) ||
@@ -228,12 +231,12 @@ Base.hash(capman::MtlCaptureManager, h::UInt) = hash(capman.handle, h)
 
 
 """
-    startCapture(obj::Union{MTLDevice,MtlCommandQueue},
+    startCapture(obj::Union{MTLDevice,MTLCommandQueue},
                  destination::MtCaptureDestination=MtCaptureDestinationGPUTraceDocument;
                  folder::String=nothing)
 Start GPU frame capture using the default capture object and specifying capture descriptor parameters directly.
 """
-function startCapture(obj::Union{MTLDevice,MtlCommandQueue, MtlCaptureScope},
+function startCapture(obj::Union{MTLDevice,MTLCommandQueue, MtlCaptureScope},
                       destination::MtCaptureDestination=MtCaptureDestinationGPUTraceDocument;
                       folder::String=nothing)
     destination == MtCaptureDestinationGPUTraceDocument && folder == nothing &&

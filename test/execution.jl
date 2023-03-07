@@ -38,7 +38,7 @@ end
     vecA .= 0
 
     dev = current_device()
-    queue = MtlCommandQueue(dev)
+    queue = MTLCommandQueue(dev)
     @metal threads=(3) queue=queue tester(bufferA)
     synchronize(queue)
     @test all(vecA == Int.([5, 5, 5, 0, 0, 0, 0, 0]))

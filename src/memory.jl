@@ -31,9 +31,9 @@ MTL.contents(ptr::MtlPointer{T}) where {T} = convert(Ptr{T}, contents(ptr.buffer
 
 # GPU -> GPU
 function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPointer{T}, src::MtlPointer{T}, N::Integer;
-                             queue::MtlCommandQueue=global_queue(dev), async::Bool=false) where T
-    cmdbuf = MtlCommandBuffer(queue)
-    MtlBlitCommandEncoder(cmdbuf) do enc
+                             queue::MTLCommandQueue=global_queue(dev), async::Bool=false) where T
+    cmdbuf = MTLCommandBuffer(queue)
+    MTLBlitCommandEncoder(cmdbuf) do enc
         MTL.append_copy!(enc, dst.buffer, dst.offset, src.buffer, src.offset, N * sizeof(T))
     end
     commit!(cmdbuf)
@@ -42,7 +42,7 @@ end
 
 # GPU -> CPU
 function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPointer{T}, N::Integer;
-                             queue::MtlCommandQueue=global_queue(dev), async::Bool=false) where T
+                             queue::MTLCommandQueue=global_queue(dev), async::Bool=false) where T
     storage_type = src.buffer.storageMode
     if storage_type ==  MTL.MTLStorageModePrivate
         tmp_buf = alloc(T, dev, N, storage=Shared)
@@ -59,7 +59,7 @@ end
 
 # CPU -> GPU
 function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPointer{T}, src::Ptr{T}, N::Integer;
-                             queue::MtlCommandQueue=global_queue(dev), async::Bool=false) where T
+                             queue::MTLCommandQueue=global_queue(dev), async::Bool=false) where T
     storage_type = dst.buffer.storageMode
     if storage_type == MTL.MTLStorageModePrivate
         tmp_buf = alloc(T, dev, N, src, storage=Shared)
@@ -76,8 +76,8 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPointer{T}, src::Ptr{T}, N:
 end
 
 function unsafe_fill!(dev::MTLDevice, ptr::MtlPointer{T}, value::Union{UInt8,Int8}, N::Integer) where T
-    cmdbuf = MtlCommandBuffer(global_queue(dev))
-    MtlBlitCommandEncoder(cmdbuf) do enc
+    cmdbuf = MTLCommandBuffer(global_queue(dev))
+    MTLBlitCommandEncoder(cmdbuf) do enc
         MTL.append_fillbuffer!(enc, ptr.buffer, value, N * sizeof(T), ptr.offset)
     end
     commit!(cmdbuf)

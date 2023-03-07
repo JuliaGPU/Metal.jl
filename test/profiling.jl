@@ -23,7 +23,7 @@ desc = MtlCaptureDescriptor()
 @test desc.captureObject == nothing
 cmdq = global_queue(current_device())
 desc.captureObject = cmdq
-@test desc.captureObject == cmdq.handle
+@test desc.captureObject == cmdq
 dev = current_device()
 desc.captureObject = dev
 @test desc.captureObject == dev
@@ -40,7 +40,7 @@ desc.outputFolder = path
 @test desc.outputFolder == path
 
 # Capture Scope
-queue = MtlCommandQueue(current_device())
+queue = MTLCommandQueue(current_device())
 default_scope = manager.defaultCaptureScope
 @test default_scope == nothing
 new_scope = MtlCaptureScope(Metal.MTL.mtNewCaptureScopeWithCommandQueue(manager, queue))

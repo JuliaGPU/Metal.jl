@@ -252,7 +252,7 @@ end
 
 dev = first(devices())
 
-cmdq = MtlCommandQueue(dev)
+cmdq = MTLCommandQueue(dev)
 
 @test cmdq.device == dev
 @test cmdq.label === nothing
@@ -264,10 +264,10 @@ end
 @testset "command buffer" begin
 
 dev = first(devices())
-cmdq = MtlCommandQueue(dev)
+cmdq = MTLCommandQueue(dev)
 
 
-cmdbuf = MtlCommandBuffer(cmdq)
+cmdbuf = MTLCommandBuffer(cmdq)
 
 @test cmdbuf.device == dev
 @test cmdbuf.commandQueue == cmdq
@@ -278,8 +278,8 @@ cmdbuf.label = "MyCommandBuffer"
 @test cmdbuf.status == MTL.MtCommandBufferStatusNotEnqueued
 @test cmdbuf.kernelStartTime == 0
 @test cmdbuf.kernelEndTime == 0
-@test cmdbuf.gpuStartTime == 0
-@test cmdbuf.gpuEndTime == 0
+@test cmdbuf.GPUStartTime == 0
+@test cmdbuf.GPUEndTime == 0
 
 let ev = MTLSharedEvent(dev)
     @test ev.signaledValue == 0
@@ -290,7 +290,7 @@ let ev = MTLSharedEvent(dev)
     @test ev.signaledValue == 42
 end
 
-cmdbuf = MtlCommandBuffer(cmdq)
+cmdbuf = MTLCommandBuffer(cmdq)
 scheduled = Ref(false)
 completed = Ref(false)
 on_scheduled(cmdbuf) do
@@ -317,18 +317,18 @@ end()
 @test completed[] == true
 
 
-desc = MtlCommandBufferDescriptor()
+desc = MTLCommandBufferDescriptor()
 
 @test desc.retainedReferences == true
 desc.retainedReferences = false
 @test desc.retainedReferences == false
 
-@test desc.errorOptions == MTL.MtCommandBufferErrorOptionNone
-desc.errorOptions = MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
-@test desc.errorOptions == MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
+@test desc.errorOptions == MTL.MTLCommandBufferErrorOptionNone
+desc.errorOptions = MTL.MTLCommandBufferErrorOptionEncoderExecutionStatus
+@test desc.errorOptions == MTL.MTLCommandBufferErrorOptionEncoderExecutionStatus
 
-cmq = MtlCommandQueue(current_device())
-cmdbuf = MtlCommandBuffer(cmq, desc)
+cmq = MTLCommandQueue(current_device())
+cmdbuf = MTLCommandBuffer(cmq, desc)
 if !runtime_validation
     # when the debug layer is activated, Metal seems to retain all resources?
     @test cmdbuf.retainedReferences == false
@@ -421,10 +421,10 @@ end
     B = MtlArray(rand(Float32, N))
     a = Array{Float32}(undef, N)
 
-    queue1 = Metal.MtlCommandQueue(dev)
-    queue2 = Metal.MtlCommandQueue(dev)
-    buf1 = Metal.MtlCommandBuffer(queue1)
-    buf2 = Metal.MtlCommandBuffer(queue2)
+    queue1 = Metal.MTLCommandQueue(dev)
+    queue2 = Metal.MTLCommandQueue(dev)
+    buf1 = Metal.MTLCommandBuffer(queue1)
+    buf2 = Metal.MTLCommandBuffer(queue2)
     event = Metal.MTLEvent(dev)
 
 

@@ -24,20 +24,20 @@ Sets the Metal GPU device associated with the current Julia task.
 """
 device!(dev::MTLDevice) = task_local_storage(:MTLDevice, dev)
 
-const global_queues = WeakKeyDict{MtlCommandQueue,Nothing}()
+const global_queues = WeakKeyDict{MTLCommandQueue,Nothing}()
 
 """
-    global_queue(dev::MTLDevice)::MtlCommandQueue
+    global_queue(dev::MTLDevice)::MTLCommandQueue
 
 Return the Metal command queue associated with the current Julia thread.
 """
 function global_queue(dev::MTLDevice)
-    get!(task_local_storage(), (:MtlCommandQueue, dev)) do
-        queue = MtlCommandQueue(dev)
+    get!(task_local_storage(), (:MTLCommandQueue, dev)) do
+        queue = MTLCommandQueue(dev)
         queue.label = "global_queue($(current_task()))"
         global_queues[queue] = nothing
         queue
-    end::MtlCommandQueue
+    end::MTLCommandQueue
 end
 
 # TODO: Increase performance (currently ~15us)
@@ -46,12 +46,12 @@ end
 
 Wait for currently committed GPU work on this queue to finish.
 
-Create a new MtlCommandBuffer from the global command queue, commit it to the queue,
+Create a new MTLCommandBuffer from the global command queue, commit it to the queue,
 and simply wait for it to be completed. Since command buffers *should* execute in a
 First-In-First-Out manner, this synchronizes the GPU.
 """
-function synchronize(queue::MtlCommandQueue=global_queue(current_device()))
-    cmdbuf = MtlCommandBuffer(queue)
+function synchronize(queue::MTLCommandQueue=global_queue(current_device()))
+    cmdbuf = MTLCommandBuffer(queue)
     commit!(cmdbuf)
     wait_completed(cmdbuf)
 end

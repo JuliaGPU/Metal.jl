@@ -80,7 +80,7 @@ end
 ## argument conversion
 
 struct Adaptor
-    cce::Union{Nothing,MtlComputeCommandEncoder}
+    cce::Union{Nothing,MTLComputeCommandEncoder}
 end
 
 # convert Metal buffers to their GPU address
@@ -201,10 +201,10 @@ function (kernel::HostKernel)(args...; grid=1, threads=1, queue=global_queue(cur
     (threads.width * threads.height * threads.depth) > kernel.pipeline_state.maxTotalThreadsPerThreadgroup &&
         throw(ArgumentError("Max total threadgroup size should not exceed $(kernel.pipeline_state.maxTotalThreadsPerThreadgroup)"))
 
-    cmdbuf = MtlCommandBuffer(queue)
-    cmdbuf.label = "MtlCommandBuffer($(nameof(kernel.f)))"
+    cmdbuf = MTLCommandBuffer(queue)
+    cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
     argument_buffers = MTLBuffer[]
-    MtlComputeCommandEncoder(cmdbuf) do cce
+    MTLComputeCommandEncoder(cmdbuf) do cce
         MTL.set_function!(cce, kernel.pipeline_state)
 
         # encode arguments
