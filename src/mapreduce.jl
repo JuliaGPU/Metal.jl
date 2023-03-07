@@ -174,7 +174,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # XXX: can we query the 1024?
     kernel = @metal launch=false partial_mapreduce_device(f, op, init, Val(1024), Val(Rreduce), Val(Rother),
                                                           Val(UInt64(length(Rother))), Val(shuffle), R′, A)
-    pipeline = MtlComputePipelineState(kernel.fun.lib.device, kernel.fun)
+    pipeline = MTLComputePipelineState(kernel.fun.device, kernel.fun)
 
     # how many threads do we want?
     #

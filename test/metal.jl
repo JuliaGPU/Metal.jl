@@ -100,7 +100,7 @@ end
 
 @testset "functions" begin
 
-desc = MtlFunctionDescriptor()
+desc = MTLFunctionDescriptor()
 
 compact_str = sprint(io->show(io, desc))
 full_str = sprint(io->show(io, MIME"text/plain"(), desc))
@@ -116,7 +116,7 @@ desc.specializedName = "MySpecializedKernel"
 
 dev = first(devices())
 lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
-fun = MtlFunction(lib, "kernel_1")
+fun = MTLFunction(lib, "kernel_1")
 
 compact_str = sprint(io->show(io, fun))
 full_str = sprint(io->show(io, MIME"text/plain"(), fun))
@@ -341,9 +341,9 @@ end
 
 dev = first(devices())
 lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
-fun = MtlFunction(lib, "kernel_1")
+fun = MTLFunction(lib, "kernel_1")
 
-pipeline = MtlComputePipelineState(dev, fun)
+pipeline = MTLComputePipelineState(dev, fun)
 
 @test pipeline.device == dev
 @test pipeline.label === nothing
@@ -353,7 +353,7 @@ pipeline = MtlComputePipelineState(dev, fun)
 @test pipeline.staticThreadgroupMemoryLength == 0
 
 
-desc = MtlComputePipelineDescriptor()
+desc = MTLComputePipelineDescriptor()
 
 compact_str = sprint(io->show(io, desc))
 full_str = sprint(io->show(io, MIME"text/plain"(), desc))
@@ -384,7 +384,7 @@ end
 
 dev = first(devices())
 lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
-fun = MtlFunction(lib, "kernel_1")
+fun = MTLFunction(lib, "kernel_1")
 
 desc = MtlBinaryArchiveDescriptor()
 bin = MtlBinaryArchive(dev, desc)
@@ -396,7 +396,7 @@ full_str = sprint(io->show(io, MIME"text/plain"(), desc))
 desc.url = "/tmp/foo"
 @test desc.url == "/tmp/foo"
 
-pipeline_desc = MtlComputePipelineDescriptor()
+pipeline_desc = MTLComputePipelineDescriptor()
 pipeline_desc.computeFunction = fun
 if !runtime_validation
     # XXX: for some reason, this crashes under the validator

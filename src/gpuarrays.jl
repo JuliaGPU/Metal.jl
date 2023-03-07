@@ -17,7 +17,7 @@ struct mtlKernelContext <: AbstractKernelContext end
     threads = min(elements, kernel.pipeline_state.maxTotalThreadsPerThreadgroup)
     blocks  = cld(elements, threads)
 
-    return (; threads, blocks)
+    return (; threads=Int(threads), blocks=Int(blocks))
 end
 
 function GPUArrays.gpu_call(::mtlArrayBackend, f, args, threads::Int, blocks::Int;

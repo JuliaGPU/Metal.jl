@@ -31,7 +31,7 @@ end
 
 device(cce::MTLComputeCommandEncoder) = cce.cmdbuf.device
 
-set_function!(cce::MTLComputeCommandEncoder, pip::MtlComputePipelineState) =
+set_function!(cce::MTLComputeCommandEncoder, pip::MTLComputePipelineState) =
     mtComputeCommandEncoderSetComputePipelineState(cce, pip)
 
 set_buffer!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, offset::Integer, index::Integer) =

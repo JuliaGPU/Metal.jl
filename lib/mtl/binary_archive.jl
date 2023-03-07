@@ -138,7 +138,7 @@ end
 
 ## operations
 
-function add_functions!(bin::MtlBinaryArchive, desc::MtlComputePipelineDescriptor)
+function add_functions!(bin::MtlBinaryArchive, desc::MTLComputePipelineDescriptor)
     err = Ref{id{NSError}}(nil)
     mtBinaryArchiveAddComputePipelineFunctions(bin, desc, err)
     err[] == nil || throw(NSError(err[]))

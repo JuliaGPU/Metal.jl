@@ -124,8 +124,8 @@ mtlconvert(arg, cce=nothing) = adapt(Adaptor(cce), arg)
 
 struct HostKernel{F,TT}
     f::F
-    fun::MtlFunction
-    pipeline_state::MtlComputePipelineState
+    fun::MTLFunction
+    pipeline_state::MTLComputePipelineState
 end
 
 """
@@ -172,9 +172,9 @@ end
 function mtlfunction_link(@nospecialize(job::CompilerJob), compiled)
     dev = current_device()
     lib = MTLLibraryFromData(dev, compiled.image)
-    fun = MtlFunction(lib, compiled.entry)
+    fun = MTLFunction(lib, compiled.entry)
     pipeline_state = try
-        MtlComputePipelineState(dev, fun)
+        MTLComputePipelineState(dev, fun)
     catch
         # the back-end compiler likely failed
         # XXX: check more accurately? the error domain doesn't help much here
@@ -224,7 +224,7 @@ function (kernel::HostKernel)(args...; grid=1, threads=1, queue=global_queue(cur
                     continue
                 end
                 @assert isbits(arg)
-                argument_buffer = alloc(kernel.fun.lib.device, sizeof(argtyp),
+                argument_buffer = alloc(kernel.fun.device, sizeof(argtyp),
                                         storage=Shared)
                 argument_buffer.label = "MTLBuffer for kernel argument"
                 unsafe_store!(convert(Ptr{argtyp}, contents(argument_buffer)), arg)
@@ -266,12 +266,12 @@ end
 Returns the next or previous nearest number of threads that is a multiple of the warp size
 of a device `dev`. This is a common requirement when using intra-warp communication.
 """
-function nextwarp(pipe::MtlComputePipelineState, threads::Integer)
+function nextwarp(pipe::MTLComputePipelineState, threads::Integer)
     ws = pipe.threadExecutionWidth
     return threads + (ws - threads % ws) % ws
 end
 
-@doc (@doc nextwarp) function prevwarp(pipe::MtlComputePipelineState, threads::Integer)
+@doc (@doc nextwarp) function prevwarp(pipe::MTLComputePipelineState, threads::Integer)
     ws = pipe.threadExecutionWidth
     return threads - Base.rem(threads, ws)
 end
