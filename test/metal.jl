@@ -386,15 +386,15 @@ dev = first(devices())
 lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
 fun = MTLFunction(lib, "kernel_1")
 
-desc = MtlBinaryArchiveDescriptor()
-bin = MtlBinaryArchive(dev, desc)
+desc = MTLBinaryArchiveDescriptor()
+bin = MTLBinaryArchive(dev, desc)
 
 compact_str = sprint(io->show(io, desc))
 full_str = sprint(io->show(io, MIME"text/plain"(), desc))
 
 @test desc.url === nothing
-desc.url = "/tmp/foo"
-@test desc.url == "/tmp/foo"
+desc.url = NSFileURL("/tmp/foo")
+@test desc.url == NSFileURL("/tmp/foo")
 
 pipeline_desc = MTLComputePipelineDescriptor()
 pipeline_desc.computeFunction = fun
