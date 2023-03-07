@@ -12,13 +12,11 @@ function tester(A)
 end
 
 # Capture Manager
-manager = MtlCaptureManager()
-@test manager.supportsTraceXcode isa Bool
-@test manager.supportsTraceFile  isa Bool
+manager = MTLCaptureManager()
 @test manager.isCapturing isa Bool
 
 # Capture Descriptor
-desc = MtlCaptureDescriptor()
+desc = MTLCaptureDescriptor()
 # Capture Object
 @test desc.captureObject == nothing
 cmdq = global_queue(current_device())
@@ -29,21 +27,21 @@ desc.captureObject = dev
 @test desc.captureObject == dev
 
 # Capture Destination
-@test desc.destination == MTL.MtCaptureDestinationDeveloperTools
-desc.destination = MTL.MtCaptureDestinationGPUTraceDocument
-@test desc.destination == MTL.MtCaptureDestinationGPUTraceDocument
+@test desc.destination == MTL.MTLCaptureDestinationDeveloperTools
+desc.destination = MTL.MTLCaptureDestinationGPUTraceDocument
+@test desc.destination == MTL.MTLCaptureDestinationGPUTraceDocument
 
 # Output URL
-@test desc.outputFolder == nothing
+@test desc.outputURL == nothing
 path = joinpath(tmpdir, "test.gputrace")
-desc.outputFolder = path
-@test desc.outputFolder == path
+desc.outputURL = NSFileURL(path)
+@test desc.outputURL == NSFileURL(path)
 
 # Capture Scope
 queue = MTLCommandQueue(current_device())
 default_scope = manager.defaultCaptureScope
 @test default_scope == nothing
-new_scope = MtlCaptureScope(Metal.MTL.mtNewCaptureScopeWithCommandQueue(manager, queue))
+new_scope = MTLCaptureScope(@objc [manager::id{MTLCaptureManager} newCaptureScopeWithCommandQueue:queue::id{MTLCommandQueue}]::id{MTLCaptureScope})
 @test new_scope.commandQueue == queue
 @test new_scope.device == current_device()
 @test new_scope.label == nothing

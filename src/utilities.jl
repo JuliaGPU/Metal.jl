@@ -69,12 +69,12 @@ Profile Metal/GPU work using XCode's GPU frame capture capabilities.
 Several keyword arguments are supported that influence the behavior of `Metal.@profile`:
 
 - `capture`: the object to capture GPU work on. Can be a MTLDevice, MTLCommandQueue, or
-   MtlCaptureScope. This defaults to the global command queue, and selecting a different
+   MTLCaptureScope. This defaults to the global command queue, and selecting a different
    capture object may result in no GPU commands detected when viewed from Xcode.
 - `dest`: the type of GPU frame capture output. Potential values:
-   - `MTL.MtCaptureDestinationGPUTraceDocument` for folder output for later
+   - `MTL.MTLCaptureDestinationGPUTraceDocument` for folder output for later
      viewing/sharing. (default)
-   - `MTL.MtCaptureDestinationDeveloperTools` for direct XCode viewing.
+   - `MTL.MTLCaptureDestinationDeveloperTools` for direct XCode viewing.
 
 When profiling the resulting gputrace folder in Xcode, do so one at a time to avoid "no
 profiling data found" errors.
@@ -82,8 +82,8 @@ profiling data found" errors.
 macro profile(ex...)
     work = ex[end]
     kwargs = ex[1:end-1]
-    dest = MTL.MtCaptureDestinationGPUTraceDocument # default: folder output
-    capture = global_queue(current_device())        # default: capture global command queue
+    dest = MTL.MTLCaptureDestinationGPUTraceDocument # default: folder output
+    capture = global_queue(current_device())         # default: capture global command queue
     if !isempty(kwargs)
         for kwarg in kwargs
             key,val = kwarg.args
