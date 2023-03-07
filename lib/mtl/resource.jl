@@ -39,6 +39,8 @@ end
     MTLResourceHazardTrackingModeUntracked = 256
     MTLResourceHazardTrackingModeTracked = 512
 end
+## bitwise operations lose type information, so allow conversions
+Base.convert(::Type{MTLResourceOptions}, x::Integer) = MTLResourceOptions(x)
 
 @objcproperties MTLResource begin
     @autoproperty device::id{MTLDevice}

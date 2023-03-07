@@ -165,46 +165,46 @@ end
 
 dev = first(devices())
 
-let desc = MtlHeapDescriptor()
-    @test desc.type == MTL.MtHeapTypeAutomatic
-    desc.type = MTL.MtHeapTypePlacement
-    @test desc.type == MTL.MtHeapTypePlacement
+let desc = MTLHeapDescriptor()
+    @test desc.type == MTL.MTLHeapTypeAutomatic
+    desc.type = MTL.MTLHeapTypePlacement
+    @test desc.type == MTL.MTLHeapTypePlacement
 
     @test desc.size == 0
     desc.size = 1024
     @test desc.size == 1024
 
-    @test desc.storageMode == MTL.MtStorageModePrivate
-    desc.storageMode = MTL.MtStorageModeShared
-    @test desc.storageMode == MTL.MtStorageModeShared
+    @test desc.storageMode == MTL.MTLStorageModePrivate
+    desc.storageMode = MTL.MTLStorageModeShared
+    @test desc.storageMode == MTL.MTLStorageModeShared
 
-    @test desc.cpuCacheMode == MTL.MtCPUCacheModeDefaultCache
-    desc.cpuCacheMode = MTL.MtCPUCacheModeWriteCombined
-    @test desc.cpuCacheMode == MTL.MtCPUCacheModeWriteCombined
+    @test desc.cpuCacheMode == MTL.MTLCPUCacheModeDefaultCache
+    desc.cpuCacheMode = MTL.MTLCPUCacheModeWriteCombined
+    @test desc.cpuCacheMode == MTL.MTLCPUCacheModeWriteCombined
 
-    @test desc.hazardTrackingMode == MTL.MtHazardTrackingModeDefault
-    desc.hazardTrackingMode = MTL.MtHazardTrackingModeUntracked
-    @test desc.hazardTrackingMode == MTL.MtHazardTrackingModeUntracked
+    @test desc.hazardTrackingMode == MTL.MTLHazardTrackingModeDefault
+    desc.hazardTrackingMode = MTL.MTLHazardTrackingModeUntracked
+    @test desc.hazardTrackingMode == MTL.MTLHazardTrackingModeUntracked
 
-    @test desc.resourceOptions == MTL.MtResourceStorageModeShared |
-                                  MTL.MtResourceCPUCacheModeWriteCombined |
-                                  MTL.MtResourceHazardTrackingModeUntracked
-    desc.resourceOptions = MTL.MtResourceStorageModePrivate |
-                           MTL.MtResourceCPUCacheModeDefaultCache |
-                           MTL.MtResourceHazardTrackingModeDefault
-    @test desc.resourceOptions == MTL.MtResourceStorageModePrivate |
-                                  MTL.MtResourceCPUCacheModeDefaultCache |
-                                  MTL.MtResourceHazardTrackingModeDefault
+    @test desc.resourceOptions == MTL.MTLResourceStorageModeShared |
+                                  MTL.MTLResourceCPUCacheModeWriteCombined |
+                                  MTL.MTLResourceHazardTrackingModeUntracked
+    desc.resourceOptions = MTL.MTLResourceStorageModePrivate |
+                           MTL.MTLResourceCPUCacheModeDefaultCache |
+                           MTL.MTLResourceHazardTrackingModeDefault
+    @test desc.resourceOptions == MTL.MTLResourceStorageModePrivate |
+                                  MTL.MTLResourceCPUCacheModeDefaultCache |
+                                  MTL.MTLResourceHazardTrackingModeDefault
 
     # setting resource options should be reflected in individual fields
-    @test desc.storageMode == MTL.MtStorageModePrivate
-    @test desc.cpuCacheMode == MTL.MtCPUCacheModeDefaultCache
-    @test desc.hazardTrackingMode == MTL.MtHazardTrackingModeDefault
+    @test desc.storageMode == MTL.MTLStorageModePrivate
+    @test desc.cpuCacheMode == MTL.MTLCPUCacheModeDefaultCache
+    @test desc.hazardTrackingMode == MTL.MTLHazardTrackingModeDefault
 end
 
-desc = MtlHeapDescriptor()
+desc = MTLHeapDescriptor()
 desc.size = 0x4000 # TODO: use heapBufferSizeAndAlign
-let heap = MtlHeap(dev, desc)
+let heap = MTLHeap(dev, desc)
     @test heap.label === nothing
     heap.label = "MyHeap"
     @test heap.label == "MyHeap"

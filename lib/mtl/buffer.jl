@@ -41,10 +41,10 @@ alloc_buffer(dev::MTLDevice, bytesize, opts::MTLResourceOptions, ptr::Ptr) =
                               options:opts::MTLResourceOptions]::id{MTLBuffer}
 
 # from heap
-alloc_buffer(dev::MtlHeap, bytesize, opts::MTLResourceOptions) =
+alloc_buffer(dev::MTLHeap, bytesize, opts::MTLResourceOptions) =
     @objc [dev::id{MTLHeap} newBufferWithLength:bytesize::NSUInteger
                             options:opts::MTLResourceOptions]::id{MTLBuffer}
-alloc_buffer(dev::MtlHeap, bytesize, opts::MTLResourceOptions, ptr::Ptr) =
+alloc_buffer(dev::MTLHeap, bytesize, opts::MTLResourceOptions, ptr::Ptr) =
     @objc [dev::id{MTLHeap} newBufferWithBytes:ptr::Ptr{Cvoid}
                             length:bytesize::NSUInteger
                             options:opts::MTLResourceOptions]::id{MTLBuffer}
@@ -54,20 +54,20 @@ alloc_buffer(dev, bytesize, opts::Integer) =
 alloc_buffer(dev, bytesize, opts::Integer, ptr) =
     alloc_buffer(dev, bytesize, MTLResourceOptions(opts), ptr)
 
-function MTLBuffer(dev::Union{MTLDevice,MtlHeap},
+function MTLBuffer(dev::Union{MTLDevice,MTLHeap},
                    bytesize::Integer;
                    storage = Private,
                    hazard_tracking = DefaultTracking,
                    cache_mode = DefaultCPUCache)
     opts = storage | hazard_tracking | cache_mode
 
-    @assert 0 < bytesize <= dev.maxBufferLength # XXX: not supported by MtlHeap
+    @assert 0 < bytesize <= dev.maxBufferLength # XXX: not supported by MTLHeap
     ptr = alloc_buffer(dev, bytesize, opts)
 
     return MTLBuffer(ptr)
 end
 
-function MTLBuffer(dev::Union{MTLDevice,MtlHeap},
+function MTLBuffer(dev::Union{MTLDevice,MTLHeap},
                    bytesize::Integer,
                    ptr::Ptr;
                    storage = Managed,
@@ -76,7 +76,7 @@ function MTLBuffer(dev::Union{MTLDevice,MtlHeap},
     storage == Private && error("Can't create a Private copy-allocated buffer.")
     opts =  storage | hazard_tracking | cache_mode
 
-    @assert 0 < bytesize <= dev.maxBufferLength # XXX: not supported by MtlHeap
+    @assert 0 < bytesize <= dev.maxBufferLength # XXX: not supported by MTLHeap
     ptr = alloc_buffer(dev, bytesize, opts, ptr)
 
     return MTLBuffer(ptr)

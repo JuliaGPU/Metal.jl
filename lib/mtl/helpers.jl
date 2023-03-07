@@ -40,7 +40,3 @@ macro enum_without_prefix(enum, prefix)
 
     return esc(ex)
 end
-
-##
-Base.convert(::Type{MtResourceOptions}, val::UInt32) =
-    MtResourceOptions(val)
