@@ -29,27 +29,20 @@ function MTLComputeCommandEncoder(cmdbuf::MTLCommandBuffer;
     return obj
 end
 
-device(cce::MTLComputeCommandEncoder) = cce.cmdbuf.device
+function set_function!(cce::MTLComputeCommandEncoder, pip::MTLComputePipelineState)
+    @objc [cce::id{MTLComputeCommandEncoder} setComputePipelineState:pip::id{MTLComputePipelineState}]::Nothing
+end
 
-set_function!(cce::MTLComputeCommandEncoder, pip::MTLComputePipelineState) =
-    mtComputeCommandEncoderSetComputePipelineState(cce, pip)
+function set_buffer!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, offset, index)
+    @objc [cce::id{MTLComputeCommandEncoder} setBuffer:buf::id{MTLBuffer}
+                                             offset:offset::NSUInteger
+                                             atIndex:(index-1)::NSUInteger]::Nothing
+end
 
-set_buffer!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, offset::Integer, index::Integer) =
-    mtComputeCommandEncoderSetBufferOffsetAtIndex(cce, buf, offset, index - 1)
-#set_bufferoffset!(cce::MTLComputeCommandEncoder, offset::Integer, index::Integer) =
-#    mtComputeCommandEncoderBufferSetOffsetAtIndex(cce, offset, index)
-set_buffers!(cce::MTLComputeCommandEncoder, bufs::Vector{T},
-             offsets::Vector{Int}, indices::UnitRange{Int}) where {T<:MTLBuffer} =
-    mtComputeCommandEncoderSetBuffersOffsetsWithRange(cce, handle_array(bufs), offsets, indices .- 1)
-#=set_buffers!(cce::MTLComputeCommandEncoder, bufs::Vector{MtlPtr{T}},
-             offsets::Vector{Int}, indices::UnitRange{Int}) where {T} =
-    mtComputeCommandEncoderSetBuffersOffsetsWithRange(cce, bufs, offsets, indices .- 1)=#
-
-set_bytes!(cce::MTLComputeCommandEncoder, ptr, length::Integer, index::Integer) =
-    mtComputeCommandEncoderSetBytesLengthAtIndex(cce, ptr, length, index - 1)
-
-dispatchThreadgroups!(cce::MTLComputeCommandEncoder, gridSize::MtSize, threadGroupSize::MtSize) =
-    mtComputeCommandEncoderDispatchThreadgroups_threadsPerThreadgroup(cce, gridSize, threadGroupSize)
+function dispatchThreadgroups!(cce::MTLComputeCommandEncoder, gridSize, threadGroupSize)
+    @objc [cce::id{MTLComputeCommandEncoder} dispatchThreadgroups:gridSize::MTLSize
+                                             threadsPerThreadgroup:threadGroupSize::MTLSize]::Nothing
+end
 
 #####
 # encode in the Command Encoder
@@ -63,7 +56,7 @@ function MTLComputeCommandEncoder(f::Base.Callable, cmdbuf::MTLCommandBuffer; kw
     end
 end
 
-function append_current_function!(cce::MTLComputeCommandEncoder, gridSize::MtSize, threadGroupSize::MtSize)
+function append_current_function!(cce::MTLComputeCommandEncoder, gridSize, threadGroupSize)
     dispatchThreadgroups!(cce, gridSize, threadGroupSize)
 end
 
