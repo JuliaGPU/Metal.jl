@@ -87,12 +87,6 @@ git-tree-sha1 = "7718cf44439c676bc0ec66a87099f41015a522d6"
 uuid = "dad2f222-ce93-54a1-a47d-0025e8a3acab"
 version = "0.0.16+2"
 
-[[deps.Lazy]]
-deps = ["MacroTools"]
-git-tree-sha1 = "1370f8202dac30758f3c345f9909b97f53d87d3f"
-uuid = "50d2b5c4-7a5e-59d5-8109-a42b560f39c0"
-version = "0.15.1"
-
 [[deps.LazyArtifacts]]
 deps = ["Artifacts", "Pkg"]
 uuid = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
@@ -126,12 +120,6 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
-[[deps.MacroTools]]
-deps = ["Markdown", "Random"]
-git-tree-sha1 = "42324d08725e200c23d4dfb549e0d5d89dede2d2"
-uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
-version = "0.5.10"
-
 [[deps.Markdown]]
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
@@ -156,10 +144,8 @@ uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.2.0"
 
 [[deps.ObjectiveC]]
-deps = ["CEnum", "Lazy", "MacroTools"]
-git-tree-sha1 = "cd26e749d1250ab8a0f0d03e22ddeded75fa3bda"
-repo-rev = "tb/modernize"
-repo-url = "https://github.com/JuliaInterop/ObjectiveC.jl"
+deps = ["CEnum"]
+git-tree-sha1 = "5b3c98aacd5429e9c367e551134d9466e40ed6d5"
 uuid = "e86c9b32-1129-44ac-8ea0-90d5bb39ded9"
 version = "0.1.0"
 
