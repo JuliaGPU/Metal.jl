@@ -1,13 +1,37 @@
+#
+# matrix enums
+#
 
-# MPS Data Type Bitfields
-const MPSDataTypeComplexBit = UInt32(0x01000000)
-const MPSDataTypeFloatBit = UInt32(0x10000000)
-const MPSDataTypeSignedBit = UInt32(0x20000000)
-const MPSDataTypeNormalizedBit = UInt32(0x40000000)
-const MPSDataTypeAlternateEncodingBit = UInt32(0x80000000)
+@cenum MPSDataType::UInt32 begin
+    MPSDataTypeComplexBit = UInt32(0x01000000)
+    MPSDataTypeFloatBit = UInt32(0x10000000)
+    MPSDataTypeSignedBit = UInt32(0x20000000)
+    MPSDataTypeNormalizedBit = UInt32(0x40000000)
+    MPSDataTypeAlternateEncodingBit = UInt32(0x80000000)
+end
+## bitwise operations lose type information, so allow conversions
+Base.convert(::Type{MPSDataType}, x::Integer) = MPSDataType(x)
+
+@cenum MPSKernelOptions::NSUInteger begin
+    MPSKernelOptionsNone = 0
+    MPSKernelOptionsSkipAPIValidation = 1 << 0
+    MPSKernelOptionsAllowReducedPrecision = 1 << 1
+    MPSKernelOptionsDisableInternalTiling = 1 << 2
+    MPSKernelOptionsInsertDebugGroups = 1 << 3
+    MPSKernelOptionsVerbose = 1 << 4
+end
+
+
+#
+# matrix descriptor
+#
+
+export MPSMatrixDescriptor
+
+@objcwrapper MPSMatrixDescriptor <: NSObject
 
 # Mapping from Julia types to the Performance Shader bitfields
-const jl_typ_to_mps = Dict{DataType,UInt32}(
+const jl_typ_to_mps = Dict{DataType,MPSDataType}(
     UInt8       => UInt32(8),
     UInt16      => UInt32(16),
     UInt32      => UInt32(32),
@@ -25,11 +49,24 @@ const jl_typ_to_mps = Dict{DataType,UInt32}(
     ComplexF32  => MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(32)
 )
 
-const MPTMatrix = Ptr{cmt.MtMPSMatrix}
-
-mutable struct MpsMatrix
-    handle::MPTMatrix
+function MPSMatrixDescriptor(rows, columns, rowBytes, dataType)
+    desc = @objc [MPSMatrixDescriptor matrixDescriptorWithRows:rows::NSUInteger
+                                      columns:columns::NSUInteger
+                                      rowBytes:rowBytes::NSUInteger
+                                      dataType:jl_typ_to_mps[dataType]::MPSDataType]::id{MPSMatrixDescriptor}
+    obj = MPSMatrixDescriptor(desc)
+    # TODO: release?
+    return obj
 end
+
+
+#
+# matrix object
+#
+
+export MPSMatrix
+
+@objcwrapper MPSMatrix <: NSObject
 
 """
     MPSMatrix(arr::MtlMatrix)
@@ -41,9 +78,64 @@ as Metal stores matrices row-major instead of column-major.
 """
 function MPSMatrix(arr::MtlMatrix{T}) where T
     n_cols, n_rows = size(arr)
-    desc = cmt.mtNewMatrixDescriptorWithRows(n_rows, n_cols, sizeof(T)*n_cols,
-                                             jl_typ_to_mps[T])
-    return cmt.mtNewMPSMatrixInitWithBuffer(arr.buffer, desc)
+    desc = MPSMatrixDescriptor(n_rows, n_cols, sizeof(T)*n_cols, T)
+    mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
+    obj = MPSMatrix(mat)
+    # TODO: release?
+    @objc [obj::id{MPSMatrix} initWithBuffer:arr.buffer::id{MTLBuffer}
+                              descriptor:desc::id{MPSMatrixDescriptor}]::id{MPSMatrix}
+    return obj
+end
+
+
+#
+# kernels
+#
+
+@objcwrapper MPSKernel <: NSObject
+
+@objcproperties MPSKernel begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString} setter=setLabel
+    @autoproperty options::MPSKernelOptions setter=setOptions
+end
+
+
+#
+# matrix multiplication
+#
+
+@objcwrapper MPSMatrixMultiplication <: MPSKernel
+
+@objcproperties MPSMatrixMultiplication begin
+    @autoproperty leftMatrixOrigin::MTLOrigin setter=setLeftMatrixOrigin
+    @autoproperty rightMatrixOrigin::MTLOrigin setter=setRightMatrixOrigin
+    @autoproperty resultMatrixOrigin::MTLOrigin setter=setResultMatrixOrigin
+    @autoproperty batchSize::NSUInteger setter=setBatchSize
+    @autoproperty batchStart::NSUInteger setter=setBatchStart
+end
+
+function MPSMatrixMultiplication(device, transposeLeft, transposeRight, resultRows,
+                                 resultColumns, interiorColumns, alpha, beta)
+    kernel = @objc [MPSMatrixMultiplication alloc]::id{MPSMatrixMultiplication}
+    obj = MPSMatrixMultiplication(kernel)
+    # TODO: release?
+    @objc [obj::id{MPSMatrixMultiplication} initWithDevice:device::id{MTLDevice}
+                                            transposeLeft:transposeLeft::Bool
+                                            transposeRight:transposeRight::Bool
+                                            resultRows:resultRows::NSUInteger
+                                            resultColumns:resultColumns::NSUInteger
+                                            interiorColumns:interiorColumns::NSUInteger
+                                            alpha:alpha::Cdouble
+                                            beta:beta::Cdouble]::id{MPSMatrixMultiplication}
+    return obj
+end
+
+function encode!(cmdbuf::MTLCommandBuffer, matmul::MPSMatrixMultiplication, left, right, result)
+    @objc [matmul::id{MPSMatrixMultiplication} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+                                               leftMatrix:left::id{MPSMatrix}
+                                               rightMatrix:right::id{MPSMatrix}
+                                               resultMatrix:result::id{MPSMatrix}]::Nothing
 end
 
 """
@@ -66,15 +158,15 @@ function matmul!(c::MtlMatrix, a::MtlMatrix, b::MtlMatrix,
     mps_b = MPSMatrix(b)
     mps_c = MPSMatrix(c)
 
-    mat_mul_kernel =
-        cmt.mtNewMPSMatrixMultiplication(current_device(),
-                                         transpose_b, transpose_a,
-                                         rows_c, cols_c, cols_a,
-                                         alpha, beta)
+    mat_mul_kernel = MPSMatrixMultiplication(current_device(),
+                                             transpose_b, transpose_a,
+                                             rows_c, cols_c, cols_a,
+                                             alpha, beta)
+
 
     # Encode and commit matmul kernel
-    cmdbuf = MtlCommandBuffer(global_queue(current_device()))
-    cmt.mtMPSMatMulEncodeToCommandBuffer(mat_mul_kernel, cmdbuf, mps_b, mps_a, mps_c)
+    cmdbuf = MTLCommandBuffer(global_queue(current_device()))
+    encode!(cmdbuf, mat_mul_kernel, mps_b, mps_a, mps_c)
     commit!(cmdbuf)
 
     c

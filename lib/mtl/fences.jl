@@ -1,24 +1,12 @@
-export MtlFence
+export MTLFence
 
-const MTLFence = Ptr{MtFence}
+@objcwrapper MTLFence <: NSObject
 
-mutable struct MtlFence
-	handle::MTLFence
-	device::MtlDevice
+@objcproperties MTLFence begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString}
 end
 
-Base.unsafe_convert(::Type{MTLFence}, fen::MtlFence) = fen.handle
-
-Base.:(==)(a::MtlFence, b::MtlFence) = a.handle == b.handle
-Base.hash(ev::MtlFence, h::UInt) = hash(ev.handle, h)
-
-function MtlFence(dev::MtlDevice)
-	handle = mtDeviceNewFence(dev)
-	obj = MtlFence(handle, dev)
-	finalizer(unsafe_destroy!, obj)
-	return obj
-end
-
-function unsafe_destroy!(fen::MtlFence)
-	mtRelease(fen.handle)
+function MTLFence(dev::MTLDevice)
+    MTLFence(@objc [dev::id{MTLDevice} newFence]::id{MTLFence})
 end

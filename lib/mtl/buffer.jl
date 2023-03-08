@@ -1,44 +1,21 @@
-export MtlBuffer, device, contents, alloc, free, handle
-
-const MTLBuffer = Ptr{MtBuffer}
+export MTLBuffer, device, contents, alloc, free, handle
 
 # From docs: "MSL implements a buffer as a pointer to a built-in or user defined data type described in the
 # device, constant, or threadgroup address space.
-struct MtlBuffer <: MtlResource
-    handle::MTLBuffer
+@objcwrapper MTLBuffer <: MTLResource
+
+@objcproperties MTLBuffer begin
+    @autoproperty length::NSUInteger
+    @autoproperty device::id{MTLDevice}
+    @autoproperty contents::Ptr{Cvoid}
+    @autoproperty remoteStorageBuffer::id{MTLBuffer}
+    @autoproperty gpuAddress::UInt64 type=Ptr{Cvoid}
 end
 
-Base.unsafe_convert(::Type{MTLBuffer}, buf::MtlBuffer) = buf.handle
+Base.sizeof(buf::MTLBuffer) = Int(buf.length)
 
-Base.:(==)(a::MtlBuffer, b::MtlBuffer) = a.handle == b.handle
-Base.hash(buf::MtlBuffer, h::UInt) = hash(buf.handle, h)
-
-
-## properties
-
-Base.propertynames(o::MtlBuffer) = (
-    :length,
-    invoke(propertynames, Tuple{MtlResource}, o)...
-)
-
-function Base.getproperty(o::MtlBuffer, f::Symbol)
-    if f === :length
-        mtBufferLength(o)
-    elseif f === :gpuAddress
-        # XXX: even though the gpuAddress property is only documented in Metal 3,
-        #      it seems to be present in earlier versions of the API as well.
-        #      can we rely on this?
-        Base.bitcast(Ptr{Nothing}, mtBufferGPUAddress(o))
-    else
-        invoke(getproperty, Tuple{MtlResource, Symbol}, o, f)
-    end
-end
-
-Base.sizeof(buf::MtlBuffer) = Int(buf.length)
-
-function contents(buf::MtlBuffer)
-    buf.handle == C_NULL && return C_NULL
-    ptr = Base.bitcast(Ptr{Cvoid}, mtBufferContents(buf))
+function contents(buf::MTLBuffer)
+    ptr = @objc [buf::id{MTLBuffer} contents]::Ptr{Cvoid}
     ptr == C_NULL && error("Cannot access the contents of a private buffer")
     return ptr
 end
@@ -46,34 +23,43 @@ end
 
 ## allocation
 
-alloc_buffer(dev::MtlDevice, bytesize, opts::MtlResourceOptions) =
-    mtDeviceNewBufferWithLength(dev, bytesize, opts)
-alloc_buffer(dev::MtlHeap, bytesize, opts::MtlResourceOptions) =
-    mtHeapNewBufferWithLength(heap, bytesize, opts)
-alloc_buffer(dev::MtlDevice, bytesize, opts::MtlResourceOptions, ptr::Ptr) =
-    mtDeviceNewBufferWithBytes(dev, ptr, bytesize, opts)
-alloc_buffer(dev::MtlHeap, bytesize, opts::MtlResourceOptions, ptr::Ptr) =
-    mtHeapNewBufferWithBytes(heap, ptr, bytesize, opts)
+# from device
+alloc_buffer(dev::MTLDevice, bytesize, opts::MTLResourceOptions) =
+    @objc [dev::id{MTLDevice} newBufferWithLength:bytesize::NSUInteger
+                              options:opts::MTLResourceOptions]::id{MTLBuffer}
+alloc_buffer(dev::MTLDevice, bytesize, opts::MTLResourceOptions, ptr::Ptr) =
+    @objc [dev::id{MTLDevice} newBufferWithBytes:ptr::Ptr{Cvoid}
+                              length:bytesize::NSUInteger
+                              options:opts::MTLResourceOptions]::id{MTLBuffer}
+
+# from heap
+alloc_buffer(dev::MTLHeap, bytesize, opts::MTLResourceOptions) =
+    @objc [dev::id{MTLHeap} newBufferWithLength:bytesize::NSUInteger
+                            options:opts::MTLResourceOptions]::id{MTLBuffer}
+alloc_buffer(dev::MTLHeap, bytesize, opts::MTLResourceOptions, ptr::Ptr) =
+    @objc [dev::id{MTLHeap} newBufferWithBytes:ptr::Ptr{Cvoid}
+                            length:bytesize::NSUInteger
+                            options:opts::MTLResourceOptions]::id{MTLBuffer}
 
 alloc_buffer(dev, bytesize, opts::Integer) =
-    alloc_buffer(dev, bytesize, Base.bitcast(MtlResourceOptions, UInt32(opts)))
+    alloc_buffer(dev, bytesize, MTLResourceOptions(opts))
 alloc_buffer(dev, bytesize, opts::Integer, ptr) =
-    alloc_buffer(dev, bytesize, Base.bitcast(MtlResourceOptions, UInt32(opts)), ptr)
+    alloc_buffer(dev, bytesize, MTLResourceOptions(opts), ptr)
 
-function MtlBuffer(dev::Union{MtlDevice,MtlHeap},
+function MTLBuffer(dev::Union{MTLDevice,MTLHeap},
                    bytesize::Integer;
                    storage = Private,
                    hazard_tracking = DefaultTracking,
                    cache_mode = DefaultCPUCache)
     opts = storage | hazard_tracking | cache_mode
 
-    @assert 0 < bytesize <= dev.maxBufferLength # XXX: not supported by MtlHeap
+    @assert 0 < bytesize <= dev.maxBufferLength # XXX: not supported by MTLHeap
     ptr = alloc_buffer(dev, bytesize, opts)
 
-    return MtlBuffer(ptr)
+    return MTLBuffer(ptr)
 end
 
-function MtlBuffer(dev::Union{MtlDevice,MtlHeap},
+function MTLBuffer(dev::Union{MTLDevice,MTLHeap},
                    bytesize::Integer,
                    ptr::Ptr;
                    storage = Managed,
@@ -82,15 +68,15 @@ function MtlBuffer(dev::Union{MtlDevice,MtlHeap},
     storage == Private && error("Can't create a Private copy-allocated buffer.")
     opts =  storage | hazard_tracking | cache_mode
 
-    @assert 0 < bytesize <= dev.maxBufferLength # XXX: not supported by MtlHeap
+    @assert 0 < bytesize <= dev.maxBufferLength # XXX: not supported by MTLHeap
     ptr = alloc_buffer(dev, bytesize, opts, ptr)
 
-    return MtlBuffer(ptr)
+    return MTLBuffer(ptr)
 end
 
 """
     alloc(device, bytesize, [ptr=nothing]; storage=Default, hazard_tracking=Default, chache_mode=Default)
-    MtlBuffer(device, bytesize...)
+    MTLBuffer(device, bytesize...)
 
 Allocates a Metal buffer on `device` of`bytesize` bytes. If a CPU-pointer is passed as last
 argument, then the buffer is initialized with the content of the memory starting at `ptr`,
@@ -108,39 +94,24 @@ The storage kwarg controls where the buffer is stored. Possible values are:
 Note that `Private` buffers can't be directly accessed from the CPU, therefore you cannot
 use this option if you pass a ptr to initialize the memory.
 """
-alloc(args...; kwargs...) = MtlBuffer(args...; kwargs...)
+alloc(args...; kwargs...) = MTLBuffer(args...; kwargs...)
 
 """
-    free(buffer::MtlBuffer)
+    free(buffer::MTLBuffer)
 
 Frees the buffer if the handle is valid.
 This does not protect against double-freeing of the same buffer!
 """
-free(buf::MtlBuffer) = mtRelease(buf.handle)
+free(buf::MTLBuffer) = @objc [buf::id{MTLBuffer} release]::Nothing
 
 """
-    DidModifyRange!(buf::MtlBuffer, range::UnitRange)
+    DidModifyRange!(buf::MTLBuffer, range::UnitRange)
 
 Notifies the GPU that the range of bytes specified by `range` have been modified on the CPU,
 and that they should be transferred to the device before executing any following command.
 
 Only valid for `Managed` buffers.
 """
-function DidModifyRange!(buf::MtlBuffer, range::UnitRange)
-    mtBufferDidModifyRange(buf, range)
+function DidModifyRange!(buf::MTLBuffer, range)
+    @objc [buf::id{MTLBuffer} didModifyRange:range::NSRange]::Nothing
 end
-
-# Views on different device
-NewBuffer(buf::MtlBuffer, d::MtlDevice) =
-    mtBufferNewRemoteBufferViewForDevice(buf, d);
-
-function ParentBuffer(buf::MtlBuffer)
-    orig = mtBufferRemoteStorageBuffer(buf);
-    if orig == C_NULL
-        return nothing
-    else
-        return MtlBuffer(orig)
-    end
-end
-
-handle_array(vec::Vector{<:MtlBuffer}) = [buf.handle for buf in vec]

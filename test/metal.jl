@@ -15,7 +15,7 @@ end
 compact_str = sprint(io->show(io, dev))
 full_str = sprint(io->show(io, MIME"text/plain"(), dev))
 
-@test dev.name isa String
+@test dev.name isa NSString
 @test dev.isLowPower isa Bool
 @test dev.isRemovable isa Bool
 @test dev.hasUnifiedMemory isa Bool
@@ -24,8 +24,8 @@ full_str = sprint(io->show(io, MIME"text/plain"(), dev))
 
 @test dev.recommendedMaxWorkingSetSize isa Integer
 @test dev.maxThreadgroupMemoryLength isa Integer
-@test dev.maxThreadsPerThreadgroup isa MTL.MtSize
-@test dev.argumentBuffersSupport isa MTL.MtArgumentBuffersTier
+@test dev.maxThreadsPerThreadgroup isa MTL.MTLSize
+@test dev.argumentBuffersSupport isa MTL.MTLArgumentBuffersTier
 @test dev.maxBufferLength isa Integer
 
 @test dev.currentAllocatedSize isa Integer
@@ -34,7 +34,7 @@ end
 
 @testset "compile options" begin
 
-opts = MtlCompileOptions()
+opts = MTLCompileOptions()
 
 compact_str = sprint(io->show(io, opts))
 full_str = sprint(io->show(io, MIME"text/plain"(), opts))
@@ -53,9 +53,9 @@ end
 @testset "libraries" begin
 
 dev = first(devices())
-opts = MtlCompileOptions()
+opts = MTLCompileOptions()
 
-let lib = MtlLibrary(dev, "", opts)
+let lib = MTLLibrary(dev, "", opts)
     @test lib.device == dev
     @test lib.label === nothing
     lib.label = "MyLibrary"
@@ -64,7 +64,7 @@ let lib = MtlLibrary(dev, "", opts)
 end
 
 metal_code = read(joinpath(@__DIR__, "dummy.metal"), String)
-let lib = MtlLibrary(dev, metal_code, opts)
+let lib = MTLLibrary(dev, metal_code, opts)
     @test lib.device == dev
     @test lib.label === nothing
     fns = lib.functionNames
@@ -74,7 +74,7 @@ let lib = MtlLibrary(dev, metal_code, opts)
 end
 
 binary_path = joinpath(@__DIR__, "dummy.metallib")
-let lib = MtlLibraryFromFile(dev, binary_path)
+let lib = MTLLibraryFromFile(dev, binary_path)
     @test lib.device == dev
     @test lib.label === nothing
     fns = lib.functionNames
@@ -84,7 +84,7 @@ let lib = MtlLibraryFromFile(dev, binary_path)
 end
 
 binary_code = read(binary_path)
-let lib = MtlLibraryFromData(dev, binary_code)
+let lib = MTLLibraryFromData(dev, binary_code)
     @test lib.device == dev
     @test lib.label === nothing
     fns = lib.functionNames
@@ -100,7 +100,7 @@ end
 
 @testset "functions" begin
 
-desc = MtlFunctionDescriptor()
+desc = MTLFunctionDescriptor()
 
 compact_str = sprint(io->show(io, desc))
 full_str = sprint(io->show(io, MIME"text/plain"(), desc))
@@ -115,8 +115,8 @@ desc.specializedName = "MySpecializedKernel"
 
 
 dev = first(devices())
-lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
-fun = MtlFunction(lib, "kernel_1")
+lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
+fun = MTLFunction(lib, "kernel_1")
 
 compact_str = sprint(io->show(io, fun))
 full_str = sprint(io->show(io, MIME"text/plain"(), fun))
@@ -126,7 +126,7 @@ full_str = sprint(io->show(io, MIME"text/plain"(), fun))
 fun.label = "MyKernel"
 @test fun.label == "MyKernel"
 @test fun.name == "kernel_1"
-@test fun.functionType == MTL.MtFunctionTypeKernel
+@test fun.functionType == MTL.MTLFunctionTypeKernel
 
 end
 
@@ -134,15 +134,17 @@ end
 
 dev = first(devices())
 
-let ev = MtlEvent(dev)
+let ev = MTLEvent(dev)
     @test ev.device == dev
     @test ev.label === nothing
     ev.label = "MyEvent"
     @test ev.label == "MyEvent"
 end
 
-let ev = MtlSharedEvent(dev)
-    @test ev.device == dev
+let ev = MTLSharedEvent(dev)
+    # XXX: this returns nothing, which seems like a Metal bug,
+    #      especially because it does return a device under validation.
+    #@test ev.device == dev
     @test ev.label === nothing
     ev.label = "MyEvent"
     @test ev.label == "MyEvent"
@@ -155,7 +157,7 @@ end
 
 dev = first(devices())
 
-let fen = MtlFence(dev)
+let fen = MTLFence(dev)
     @test fen.device == dev
 end
 
@@ -165,46 +167,46 @@ end
 
 dev = first(devices())
 
-let desc = MtlHeapDescriptor()
-    @test desc.type == MTL.MtHeapTypeAutomatic
-    desc.type = MTL.MtHeapTypePlacement
-    @test desc.type == MTL.MtHeapTypePlacement
+let desc = MTLHeapDescriptor()
+    @test desc.type == MTL.MTLHeapTypeAutomatic
+    desc.type = MTL.MTLHeapTypePlacement
+    @test desc.type == MTL.MTLHeapTypePlacement
 
     @test desc.size == 0
     desc.size = 1024
     @test desc.size == 1024
 
-    @test desc.storageMode == MTL.MtStorageModePrivate
-    desc.storageMode = MTL.MtStorageModeShared
-    @test desc.storageMode == MTL.MtStorageModeShared
+    @test desc.storageMode == MTL.MTLStorageModePrivate
+    desc.storageMode = MTL.MTLStorageModeShared
+    @test desc.storageMode == MTL.MTLStorageModeShared
 
-    @test desc.cpuCacheMode == MTL.MtCPUCacheModeDefaultCache
-    desc.cpuCacheMode = MTL.MtCPUCacheModeWriteCombined
-    @test desc.cpuCacheMode == MTL.MtCPUCacheModeWriteCombined
+    @test desc.cpuCacheMode == MTL.MTLCPUCacheModeDefaultCache
+    desc.cpuCacheMode = MTL.MTLCPUCacheModeWriteCombined
+    @test desc.cpuCacheMode == MTL.MTLCPUCacheModeWriteCombined
 
-    @test desc.hazardTrackingMode == MTL.MtHazardTrackingModeDefault
-    desc.hazardTrackingMode = MTL.MtHazardTrackingModeUntracked
-    @test desc.hazardTrackingMode == MTL.MtHazardTrackingModeUntracked
+    @test desc.hazardTrackingMode == MTL.MTLHazardTrackingModeDefault
+    desc.hazardTrackingMode = MTL.MTLHazardTrackingModeUntracked
+    @test desc.hazardTrackingMode == MTL.MTLHazardTrackingModeUntracked
 
-    @test desc.resourceOptions == MTL.MtResourceStorageModeShared |
-                                  MTL.MtResourceCPUCacheModeWriteCombined |
-                                  MTL.MtResourceHazardTrackingModeUntracked
-    desc.resourceOptions = MTL.MtResourceStorageModePrivate |
-                           MTL.MtResourceCPUCacheModeDefaultCache |
-                           MTL.MtResourceHazardTrackingModeDefault
-    @test desc.resourceOptions == MTL.MtResourceStorageModePrivate |
-                                  MTL.MtResourceCPUCacheModeDefaultCache |
-                                  MTL.MtResourceHazardTrackingModeDefault
+    @test desc.resourceOptions == MTL.MTLResourceStorageModeShared |
+                                  MTL.MTLResourceCPUCacheModeWriteCombined |
+                                  MTL.MTLResourceHazardTrackingModeUntracked
+    desc.resourceOptions = MTL.MTLResourceStorageModePrivate |
+                           MTL.MTLResourceCPUCacheModeDefaultCache |
+                           MTL.MTLResourceHazardTrackingModeDefault
+    @test desc.resourceOptions == MTL.MTLResourceStorageModePrivate |
+                                  MTL.MTLResourceCPUCacheModeDefaultCache |
+                                  MTL.MTLResourceHazardTrackingModeDefault
 
     # setting resource options should be reflected in individual fields
-    @test desc.storageMode == MTL.MtStorageModePrivate
-    @test desc.cpuCacheMode == MTL.MtCPUCacheModeDefaultCache
-    @test desc.hazardTrackingMode == MTL.MtHazardTrackingModeDefault
+    @test desc.storageMode == MTL.MTLStorageModePrivate
+    @test desc.cpuCacheMode == MTL.MTLCPUCacheModeDefaultCache
+    @test desc.hazardTrackingMode == MTL.MTLHazardTrackingModeDefault
 end
 
-desc = MtlHeapDescriptor()
+desc = MTLHeapDescriptor()
 desc.size = 0x4000 # TODO: use heapBufferSizeAndAlign
-let heap = MtlHeap(dev, desc)
+let heap = MTLHeap(dev, desc)
     @test heap.label === nothing
     heap.label = "MyHeap"
     @test heap.label == "MyHeap"
@@ -230,12 +232,12 @@ end
 
 dev = first(devices())
 
-buf = MtlBuffer(dev, 8; storage=Shared)
+buf = MTLBuffer(dev, 8; storage=Shared)
 
 @test buf.length == 8
 @test sizeof(buf) == 8
 
-# MtlResource properties
+# MTLResource properties
 @test buf.device == dev
 @test buf.label === nothing
 buf.label = "MyBuffer"
@@ -252,7 +254,7 @@ end
 
 dev = first(devices())
 
-cmdq = MtlCommandQueue(dev)
+cmdq = MTLCommandQueue(dev)
 
 @test cmdq.device == dev
 @test cmdq.label === nothing
@@ -264,10 +266,10 @@ end
 @testset "command buffer" begin
 
 dev = first(devices())
-cmdq = MtlCommandQueue(dev)
+cmdq = MTLCommandQueue(dev)
 
 
-cmdbuf = MtlCommandBuffer(cmdq)
+cmdbuf = MTLCommandBuffer(cmdq)
 
 @test cmdbuf.device == dev
 @test cmdbuf.commandQueue == cmdq
@@ -275,13 +277,13 @@ cmdbuf = MtlCommandBuffer(cmdq)
 cmdbuf.label = "MyCommandBuffer"
 @test cmdbuf.label == "MyCommandBuffer"
 @test cmdbuf.error === nothing
-@test cmdbuf.status == MTL.MtCommandBufferStatusNotEnqueued
+@test cmdbuf.status == MTL.MTLCommandBufferStatusNotEnqueued
 @test cmdbuf.kernelStartTime == 0
 @test cmdbuf.kernelEndTime == 0
-@test cmdbuf.gpuStartTime == 0
-@test cmdbuf.gpuEndTime == 0
+@test cmdbuf.GPUStartTime == 0
+@test cmdbuf.GPUEndTime == 0
 
-let ev = MtlSharedEvent(dev)
+let ev = MTLSharedEvent(dev)
     @test ev.signaledValue == 0
     encode_signal!(cmdbuf, ev, 42)
     encode_wait!(cmdbuf, ev, 21)
@@ -290,25 +292,25 @@ let ev = MtlSharedEvent(dev)
     @test ev.signaledValue == 42
 end
 
-cmdbuf = MtlCommandBuffer(cmdq)
+cmdbuf = MTLCommandBuffer(cmdq)
 scheduled = Ref(false)
 completed = Ref(false)
-on_scheduled(cmdbuf) do
+on_scheduled(cmdbuf) do buf
     scheduled[] = true
 end
-on_completed(cmdbuf) do
+on_completed(cmdbuf) do buf
     completed[] = true
 end
 @test scheduled[] == false
 @test completed[] == false
-@test cmdbuf.status == MTL.MtCommandBufferStatusNotEnqueued
+@test cmdbuf.status == MTL.MTLCommandBufferStatusNotEnqueued
 enqueue!(cmdbuf)
-@test cmdbuf.status == MTL.MtCommandBufferStatusEnqueued
+@test cmdbuf.status == MTL.MTLCommandBufferStatusEnqueued
 commit!(cmdbuf)
 # XXX: happens too quickly to test for committed status
-#@test cmdbuf.status == MTL.MtCommandBufferStatusCommitted
-wait_completed(cmdbuf) == MTL.MtCommandBufferStatusCompleted
-@test cmdbuf.status == MTL.MtCommandBufferStatusCompleted
+#@test cmdbuf.status == MTL.MTLCommandBufferStatusCommitted
+wait_completed(cmdbuf) == MTL.MTLCommandBufferStatusCompleted
+@test cmdbuf.status == MTL.MTLCommandBufferStatusCompleted
 retry(; delays=[0, 0.1, 1]) do
     scheduled[] || error("scheduled callback not called")
     completed[] || error("completed callback not called")
@@ -317,33 +319,33 @@ end()
 @test completed[] == true
 
 
-desc = MtlCommandBufferDescriptor()
+desc = MTLCommandBufferDescriptor()
 
 @test desc.retainedReferences == true
 desc.retainedReferences = false
 @test desc.retainedReferences == false
 
-@test desc.errorOptions == MTL.MtCommandBufferErrorOptionNone
-desc.errorOptions = MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
-@test desc.errorOptions == MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
+@test desc.errorOptions == MTL.MTLCommandBufferErrorOptionNone
+desc.errorOptions = MTL.MTLCommandBufferErrorOptionEncoderExecutionStatus
+@test desc.errorOptions == MTL.MTLCommandBufferErrorOptionEncoderExecutionStatus
 
-cmq = MtlCommandQueue(current_device())
-cmdbuf = MtlCommandBuffer(cmq, desc)
+cmq = MTLCommandQueue(current_device())
+cmdbuf = MTLCommandBuffer(cmq, desc)
 if !runtime_validation
     # when the debug layer is activated, Metal seems to retain all resources?
     @test cmdbuf.retainedReferences == false
 end
-@test cmdbuf.errorOptions == MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
+@test cmdbuf.errorOptions == MTL.MTLCommandBufferErrorOptionEncoderExecutionStatus
 
 end
 
 @testset "compute pipeline" begin
 
 dev = first(devices())
-lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
-fun = MtlFunction(lib, "kernel_1")
+lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
+fun = MTLFunction(lib, "kernel_1")
 
-pipeline = MtlComputePipelineState(dev, fun)
+pipeline = MTLComputePipelineState(dev, fun)
 
 @test pipeline.device == dev
 @test pipeline.label === nothing
@@ -353,7 +355,7 @@ pipeline = MtlComputePipelineState(dev, fun)
 @test pipeline.staticThreadgroupMemoryLength == 0
 
 
-desc = MtlComputePipelineDescriptor()
+desc = MTLComputePipelineDescriptor()
 
 compact_str = sprint(io->show(io, desc))
 full_str = sprint(io->show(io, MIME"text/plain"(), desc))
@@ -383,20 +385,20 @@ end
 @testset "binary archive" begin
 
 dev = first(devices())
-lib = MtlLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
-fun = MtlFunction(lib, "kernel_1")
+lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "dummy.metallib"))
+fun = MTLFunction(lib, "kernel_1")
 
-desc = MtlBinaryArchiveDescriptor()
-bin = MtlBinaryArchive(dev, desc)
+desc = MTLBinaryArchiveDescriptor()
+bin = MTLBinaryArchive(dev, desc)
 
 compact_str = sprint(io->show(io, desc))
 full_str = sprint(io->show(io, MIME"text/plain"(), desc))
 
 @test desc.url === nothing
-desc.url = "/tmp/foo"
-@test desc.url == "/tmp/foo"
+desc.url = NSFileURL("/tmp/foo")
+@test desc.url == NSFileURL("/tmp/foo")
 
-pipeline_desc = MtlComputePipelineDescriptor()
+pipeline_desc = MTLComputePipelineDescriptor()
 pipeline_desc.computeFunction = fun
 if !runtime_validation
     # XXX: for some reason, this crashes under the validator
@@ -421,11 +423,11 @@ end
     B = MtlArray(rand(Float32, N))
     a = Array{Float32}(undef, N)
 
-    queue1 = Metal.MtlCommandQueue(dev)
-    queue2 = Metal.MtlCommandQueue(dev)
-    buf1 = Metal.MtlCommandBuffer(queue1)
-    buf2 = Metal.MtlCommandBuffer(queue2)
-    event = Metal.MtlEvent(dev)
+    queue1 = Metal.MTLCommandQueue(dev)
+    queue2 = Metal.MTLCommandQueue(dev)
+    buf1 = Metal.MTLCommandBuffer(queue1)
+    buf2 = Metal.MTLCommandBuffer(queue2)
+    event = Metal.MTLEvent(dev)
 
 
     Metal.encode_wait!(buf2, event, signal_value)

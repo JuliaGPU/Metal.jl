@@ -80,12 +80,12 @@ end
 ## argument conversion
 
 struct Adaptor
-    cce::Union{Nothing,MtlComputeCommandEncoder}
+    cce::Union{Nothing,MTLComputeCommandEncoder}
 end
 
 # convert Metal buffers to their GPU address
-function Adapt.adapt_storage(to::Adaptor, buf::MtlBuffer)
-    if to.cce !== nothing && buf.handle != C_NULL
+function Adapt.adapt_storage(to::Adaptor, buf::MTLBuffer)
+    if to.cce !== nothing
         MTL.use!(to.cce, buf, MTL.ReadWriteUsage)
     end
     reinterpret(Core.LLVMPtr{Nothing,AS.Device}, buf.gpuAddress)
@@ -124,8 +124,8 @@ mtlconvert(arg, cce=nothing) = adapt(Adaptor(cce), arg)
 
 struct HostKernel{F,TT}
     f::F
-    fun::MtlFunction
-    pipeline_state::MtlComputePipelineState
+    fun::MTLFunction
+    pipeline_state::MTLComputePipelineState
 end
 
 """
@@ -139,7 +139,7 @@ in a hot path without degrading performance. New code will be generated automati
 the function changes, or when different types or keyword arguments are provided.
 """
 function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
-    dev = MtlDevice(1)
+    dev = MTLDevice(1)
     cache = get!(()->Dict{UInt,Any}(), mtlfunction_cache, dev)
     source = FunctionSpec(f, tt, true, name)
     target = MetalCompilerTarget(macos=macos_version(); kwargs...)
@@ -171,10 +171,10 @@ end
 
 function mtlfunction_link(@nospecialize(job::CompilerJob), compiled)
     dev = current_device()
-    lib = MtlLibraryFromData(dev, compiled.image)
-    fun = MtlFunction(lib, compiled.entry)
+    lib = MTLLibraryFromData(dev, compiled.image)
+    fun = MTLFunction(lib, compiled.entry)
     pipeline_state = try
-        MtlComputePipelineState(dev, fun)
+        MTLComputePipelineState(dev, fun)
     catch
         # the back-end compiler likely failed
         # XXX: check more accurately? the error domain doesn't help much here
@@ -190,9 +190,9 @@ end
 
 ## kernel launching and argument encoding
 
-function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1, queue=global_queue(current_device()))
-    grid = MtlDim3(grid)
-    threads = MtlDim3(threads)
+function (kernel::HostKernel)(args...; grid=1, threads=1, queue=global_queue(current_device()))
+    grid = MTLSize(grid)
+    threads = MTLSize(threads)
     (grid.width>0 && grid.height>0 && grid.depth>0) ||
         throw(ArgumentError("Grid dimensions should be non-null"))
     (threads.width>0 && threads.height>0 && threads.depth>0) ||
@@ -201,16 +201,16 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1, queue=
     (threads.width * threads.height * threads.depth) > kernel.pipeline_state.maxTotalThreadsPerThreadgroup &&
         throw(ArgumentError("Max total threadgroup size should not exceed $(kernel.pipeline_state.maxTotalThreadsPerThreadgroup)"))
 
-    cmdbuf = MtlCommandBuffer(queue)
-    cmdbuf.label = "MtlCommandBuffer($(nameof(kernel.f)))"
-    argument_buffers = MtlBuffer[]
-    MtlComputeCommandEncoder(cmdbuf) do cce
+    cmdbuf = MTLCommandBuffer(queue)
+    cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
+    argument_buffers = MTLBuffer[]
+    MTLComputeCommandEncoder(cmdbuf) do cce
         MTL.set_function!(cce, kernel.pipeline_state)
 
         # encode arguments
         idx = 1
         for arg in (kernel.f, args...)
-            if arg isa MtlBuffer
+            if arg isa MTLBuffer
                 # top-level buffers are passed as a pointer-valued argument
                 set_buffer!(cce, arg, 0, idx)
             elseif arg isa MtlPointer
@@ -224,9 +224,9 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1, queue=
                     continue
                 end
                 @assert isbits(arg)
-                argument_buffer = alloc(kernel.fun.lib.device, sizeof(argtyp),
+                argument_buffer = alloc(kernel.fun.device, sizeof(argtyp),
                                         storage=Shared)
-                argument_buffer.label = "MtlBuffer for kernel argument"
+                argument_buffer.label = "MTLBuffer for kernel argument"
                 unsafe_store!(convert(Ptr{argtyp}, contents(argument_buffer)), arg)
                 set_buffer!(cce, argument_buffer, 0, idx)
                 push!(argument_buffers, argument_buffer)
@@ -246,7 +246,7 @@ function (kernel::HostKernel)(args...; grid::MtlDim=1, threads::MtlDim=1, queue=
     #
     # TODO: is there a way to bind additional resources to the command buffer?
     roots = [kernel.f, args]
-    MTL.on_completed(cmdbuf) do
+    MTL.on_completed(cmdbuf) do buf
         empty!(roots)
         foreach(free, argument_buffers)
 
@@ -266,12 +266,12 @@ end
 Returns the next or previous nearest number of threads that is a multiple of the warp size
 of a device `dev`. This is a common requirement when using intra-warp communication.
 """
-function nextwarp(pipe::MtlComputePipelineState, threads::Integer)
+function nextwarp(pipe::MTLComputePipelineState, threads::Integer)
     ws = pipe.threadExecutionWidth
     return threads + (ws - threads % ws) % ws
 end
 
-@doc (@doc nextwarp) function prevwarp(pipe::MtlComputePipelineState, threads::Integer)
+@doc (@doc nextwarp) function prevwarp(pipe::MTLComputePipelineState, threads::Integer)
     ws = pipe.threadExecutionWidth
     return threads - Base.rem(threads, ws)
 end

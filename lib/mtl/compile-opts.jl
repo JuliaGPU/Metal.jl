@@ -1,82 +1,61 @@
-export MtlCompileOptions
+#
+# enums
+#
 
-const MTLCompileOptions = Ptr{MtCompileOptions}
-
-mutable struct MtlCompileOptions
-    handle::MTLCompileOptions
+@cenum MTLLanguageVersion::NSUInteger begin
+    MTLLanguageVersion1_0 = (1 << 16)
+    MTLLanguageVersion1_1 = (1 << 16) + 1
+    MTLLanguageVersion1_2 = (1 << 16) + 2
+    MTLLanguageVersion2_0 = (2 << 16)
+    MTLLanguageVersion2_1 = (2 << 16) + 1
+    MTLLanguageVersion2_2 = (2 << 16) + 2
+    MTLLanguageVersion2_3 = (2 << 16) + 3
+    MTLLanguageVersion2_4 = (2 << 16) + 4
+    MTLLanguageVersion3_0 = (3 << 16) + 0
 end
-
-Base.unsafe_convert(::Type{MTLCompileOptions}, opts::MtlCompileOptions) = opts.handle
-
-Base.:(==)(a::MtlCompileOptions, b::MtlCompileOptions) = a.handle == b.handle
-Base.hash(opts::MtlCompileOptions, h::UInt) = hash(opts.handle, h)
-
-function MtlCompileOptions()
-    handle = mtNewCompileOpts()
-    obj = MtlCompileOptions(handle)
-    finalizer(unsafe_destroy!, obj)
-    return obj
-end
-
-function unsafe_destroy!(opts::MtlCompileOptions)
-    mtRelease(opts.handle)
-end
-
-
-## properties
-
-Base.propertynames(::MtlCompileOptions) = (:fastMathEnabled, :languageVersion)
 
 const language_versions = Dict(
-    MtLanguageVersion1_0 => v"1.0",
-    MtLanguageVersion1_1 => v"1.1",
-    MtLanguageVersion1_2 => v"1.2",
-    MtLanguageVersion2_0 => v"2.0",
-    MtLanguageVersion2_1 => v"2.1",
-    MtLanguageVersion2_2 => v"2.2",
-    MtLanguageVersion2_3 => v"2.3",
-    MtLanguageVersion2_4 => v"2.4",
+    MTLLanguageVersion1_0 => v"1.0",
+    MTLLanguageVersion1_1 => v"1.1",
+    MTLLanguageVersion1_2 => v"1.2",
+    MTLLanguageVersion2_0 => v"2.0",
+    MTLLanguageVersion2_1 => v"2.1",
+    MTLLanguageVersion2_2 => v"2.2",
+    MTLLanguageVersion2_3 => v"2.3",
+    MTLLanguageVersion2_4 => v"2.4",
+    MTLLanguageVersion3_0 => v"3.0",
 )
 
-function Base.getproperty(opts::MtlCompileOptions, f::Symbol)
-    if f === :fastMathEnabled
-        mtCompileOptsFastMath(opts)
-    elseif f === :languageVersion
-        ver = mtCompileOptsLanguageVersion(opts)
-        haskey(language_versions, ver) || error("Unknown language version $ver; please file an issue.")
-        language_versions[ver]
-    else
-        getfield(opts, f)
+function Base.convert(::Type{VersionNumber}, ver::MTLLanguageVersion)
+    haskey(language_versions, ver) || error("Unknown language version $ver; please file an issue.")
+    language_versions[ver]
+end
+
+function Base.convert(::Type{MTLLanguageVersion}, ver::VersionNumber)
+    for (k, v) in language_versions
+        v == ver && return k
     end
-end
-
-function Base.setproperty!(opts::MtlCompileOptions, f::Symbol, val)
-    if f === :fastMathEnabled
-        mtCompileOptsFastMathSet(opts, val)
-    elseif f === :languageVersion
-        isa(val, VersionNumber) ||
-            throw(ArgumentError("languageVersion property should be a version number"))
-        for (enum,ver) in language_versions
-            if ver === val
-                mtCompileOptsLanguageVersionSet(opts, enum)
-                return
-            end
-        end
-        error("Unknown language version $val")
-    else
-        setfield!(opts, f, val)
-    end
+    error("Unknown language version $ver; please file an issue.")
 end
 
 
-## display
+#
+# compile options
+#
 
-function Base.show(io::IO, opts::MtlCompileOptions)
-    print(io, "CompileOptions(…)")
+export MTLCompileOptions
+
+@objcwrapper immutable=false MTLCompileOptions <: NSObject
+
+@objcproperties MTLCompileOptions begin
+    @autoproperty fastMathEnabled::Bool setter=setFastMathEnabled
+    @autoproperty preserveInvariance::Bool setter=setPreserveInvariance
+    @autoproperty languageVersion::MTLLanguageVersion type=VersionNumber setter=setLanguageVersion
 end
 
-function Base.show(io::IO, ::MIME"text/plain", opts::MtlCompileOptions)
-    println(io, "CompileOptions:")
-    println(io, " fast math:        ", opts.fastMathEnabled)
-    print(io,   " language version: ", opts.languageVersion)
+function MTLCompileOptions()
+    handle = @objc [MTLCompileOptions new]::id{MTLCompileOptions}
+    obj = MTLCompileOptions(handle)
+    finalizer(release, obj)
+    return obj
 end

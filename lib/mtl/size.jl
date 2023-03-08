@@ -1,42 +1,29 @@
-## sizes
+## size
 
-export MtSize, MtlDim, MtlDim3
+export MTLSize
 
-const MTLDim = MtSize
-"""
-    MtlDim3(x)
+struct MTLSize
+    width::NSUInteger
+    height::NSUInteger
+    depth::NSUInteger
 
-    MtlDim3((x,))
-    MtlDim3((x, y))
-    MtlDim3((x, y, x))
+    MTLSize(w=1, h=1, d=1) = new(w, h, d)
+end
 
-A type used to specify dimensions, consisting of 3 integers for respectively the `x`, `y`
-and `z` dimension. Unspecified dimensions default to `1`.
-
-Often accepted as argument through the `MtlDim` type alias, eg. in the case of
-[`mtlcall`](@ref) or [`launch`](@ref), allowing to pass dimensions as a plain integer or a
-tuple without having to construct an explicit `MtlDim3` object.
-"""
-const MtlDim3 = MTLDim
-
-MtlDim3(dims::Integer)             = MtlDim3(dims,    NsUInteger(1), NsUInteger(1))
-MtlDim3(dims::NTuple{1,<:Integer}) = MtlDim3(dims[1], NsUInteger(1), NsUInteger(1))
-MtlDim3(dims::NTuple{2,<:Integer}) = MtlDim3(dims[1], dims[2],       NsUInteger(1))
-MtlDim3(dims::NTuple{3,<:Integer}) = MtlDim3(dims[1], dims[2],       dims[3])
-
-# Type alias for conveniently specifying the dimensions
-# (e.g. `(len, 2)` instead of `MtlDim3((len, 2))`)
-const MtlDim = Union{Integer,
-                     Tuple{Integer},
-                     Tuple{Integer, Integer},
-                     Tuple{Integer, Integer, Integer}}
+# convenience constructors from tuple inputs
+MTLSize(dims::NTuple{1,<:Integer}) = MTLSize(dims[1], 1,       1)
+MTLSize(dims::NTuple{2,<:Integer}) = MTLSize(dims[1], dims[2], 1)
+MTLSize(dims::NTuple{3,<:Integer}) = MTLSize(dims[1], dims[2], dims[3])
 
 
-## ranges
+## origin
 
-# convert from 1 based indexing to 0 based indexing
-Base.convert(::Type{NsRange}, range::UnitRange{T}) where T <: Integer =
-	NsRange(first(range), length(range))
-# used for byte ranges.
-Base.convert(::Type{NsRange}, range::StepRange{T}) where T <: Integer =
-	NsRange(first(range)-step(range), length(range)*step(range))
+export MTLOrigin
+
+struct MTLOrigin
+    x::NSUInteger
+    y::NSUInteger
+    z::NSUInteger
+
+    MTLOrigin(x=0, y=0, z=0) = new(x, y, z)
+end

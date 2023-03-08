@@ -1,69 +1,32 @@
 #
+# function enums
+#
+
+@cenum MTLFunctionType::NSUInteger begin
+    MTLFunctionTypeVertex = 1
+    MTLFunctionTypeFragment = 2
+    MTLFunctionTypeKernel = 3
+end
+
+
+#
 # function descriptor
 #
 
-export MtlFunctionDescriptor
+export MTLFunctionDescriptor
 
-const MTLFunctionDescriptor = Ptr{MtFunctionDescriptor}
+@objcwrapper immutable=false MTLFunctionDescriptor <: NSObject
 
-mutable struct MtlFunctionDescriptor
-    handle::MTLFunctionDescriptor
+@objcproperties MTLFunctionDescriptor begin
+    @autoproperty name::id{NSString} setter=setName
+    @autoproperty specializedName::id{NSString} setter=setSpecializedName
 end
 
-Base.unsafe_convert(::Type{MTLFunctionDescriptor}, q::MtlFunctionDescriptor) = q.handle
-
-Base.:(==)(a::MtlFunctionDescriptor, b::MtlFunctionDescriptor) = a.handle == b.handle
-Base.hash(lib::MtlFunctionDescriptor, h::UInt) = hash(lib.handle, h)
-
-function MtlFunctionDescriptor()
-    handle = mtNewFunctionDescriptor()
-    obj = MtlFunctionDescriptor(handle)
-    finalizer(unsafe_destroy!, obj)
+function MTLFunctionDescriptor()
+    handle = @objc [MTLFunctionDescriptor new]::id{MTLFunctionDescriptor}
+    obj = MTLFunctionDescriptor(handle)
+    finalizer(release, obj)
     return obj
-end
-
-function unsafe_destroy!(desc::MtlFunctionDescriptor)
-    mtRelease(desc.handle)
-end
-
-
-## properties
-
-Base.propertynames(::MtlFunctionDescriptor) = (:name, :specializedName)
-
-function Base.getproperty(desc::MtlFunctionDescriptor, f::Symbol)
-    if f === :name
-        ptr = mtFunctionDescriptorName(desc)
-        ptr == C_NULL ? nothing : unsafe_string(ptr)
-    elseif f === :specializedName
-        ptr = mtFunctionDescriptorSpecializedName(desc)
-        ptr == C_NULL ? nothing : unsafe_string(ptr)
-    else
-        getfield(desc, f)
-    end
-end
-
-function Base.setproperty!(desc::MtlFunctionDescriptor, f::Symbol, val)
-    if f === :name
-        mtFunctionDescriptorNameSet(desc, val)
-    elseif f === :specializedName
-        mtFunctionDescriptorSpecializedNameSet(desc, val)
-    else
-        setfield!(desc, f, val)
-    end
-end
-
-
-## display
-
-function Base.show(io::IO, ::MIME"text/plain", desc::MtlFunctionDescriptor)
-    println(io, "MtlFunctionDescriptor:")
-    println(io, " name:   ", desc.name)
-    println(io, " specializedName:   ", desc.specializedName)
-end
-
-function Base.show(io::IO, desc::MtlFunctionDescriptor)
-    print(io, "MtlFunctionDescriptor(...)")
 end
 
 
@@ -72,76 +35,22 @@ end
 # function
 #
 
-export MtlFunction
+export MTLFunction
 
-const MTLFunction = Ptr{MtFunction}
+@objcwrapper immutable=false MTLFunction <: NSObject
 
-mutable struct MtlFunction
-    handle::MTLFunction
-
-    # roots (can be nothing if the function was created directly from a handle)
-    lib::Union{Nothing,MtlLibrary}
-
-    MtlFunction(handle::MTLFunction, lib=nothing) = new(handle, lib)
+@objcproperties MTLFunction begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString} setter=setLabel
+    @autoproperty name::id{NSString}
+    @autoproperty functionType::MTLFunctionType
 end
-
-function unsafe_destroy!(fun::MtlFunction)
-    mtRelease(fun.handle)
-end
-
-Base.unsafe_convert(::Type{MTLFunction}, fun::MtlFunction) = fun.handle
-
-Base.:(==)(a::MtlFunction, b::MtlFunction) = a.handle == b.handle
-Base.hash(fun::MtlFunction, h::UInt) = hash(mod.handle, h)
 
 # Get a handle to a kernel function in a Metal Library.
-function MtlFunction(lib::MtlLibrary, name::String)
-    handle = mtNewFunctionWithName(lib, name)
-    handle == C_NULL && throw(KeyError(name))
-    obj = MtlFunction(handle, lib)
-    finalizer(unsafe_destroy!, obj)
+function MTLFunction(lib::MTLLibrary, name::String)
+    handle = @objc [lib::id{MTLLibrary} newFunctionWithName:name::id{NSString}]::id{MTLFunction}
+    handle == nil && throw(KeyError(name))
+    obj = MTLFunction(handle)
+    finalizer(release, obj)
     return obj
-end
-
-
-## properties
-
-Base.propertynames(::MtlFunction) = (:device, :label, :name, :functionType)
-
-function Base.getproperty(fun::MtlFunction, f::Symbol)
-    if f === :device
-        MtlDevice(mtFunctionDevice(fun))
-    elseif f === :label
-        ptr = mtFunctionLabel(fun)
-        ptr == C_NULL ? nothing : unsafe_string(ptr)
-    elseif f === :name
-        unsafe_string(mtFunctionName(fun))
-    elseif f === :functionType
-        mtFunctionType(fun)
-    else
-        getfield(fun, f)
-    end
-end
-
-function Base.setproperty!(fun::MtlFunction, f::Symbol, val)
-    if f === :label
-		mtFunctionLabelSet(fun, val)
-    else
-        setfield!(fun, f, val)
-    end
-end
-
-
-## display
-
-function Base.show(io::IO, ::MIME"text/plain", fun::MtlFunction)
-    println(io, "MtlFunction:")
-    println(io, " name:   ", fun.name)
-    println(io, " type:   ", fun.functionType)
-    println(io, " device: ", fun.device)
-    print(io,   " label:  ", fun.label)
-end
-
-function Base.show(io::IO, fun::MtlFunction)
-    print(io, "MtlFunction($(fun.name))")
 end

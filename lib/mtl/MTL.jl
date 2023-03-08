@@ -1,6 +1,7 @@
 module MTL
 
-using ..cmt
+using CEnum
+using ObjectiveC, .Foundation, .Dispatch
 
 
 ## version information
@@ -25,15 +26,10 @@ end
 
 ## source code includes
 
-# low-level wrappers
-include("error.jl")
-include("helpers.jl")
-
-# high-level wrappers
 include("size.jl")
-include("storage_type.jl")
-include("resource.jl")
 include("device.jl")
+include("resource.jl")
+include("storage_type.jl")
 include("compile-opts.jl")
 include("library.jl")
 include("function.jl")
@@ -44,11 +40,19 @@ include("buffer.jl")
 include("command_queue.jl")
 include("command_buf.jl")
 include("compute_pipeline.jl")
-include("compute_pipeline/reflection.jl")
 include("command_enc.jl")
 include("command_enc/blit.jl")
 include("command_enc/compute.jl")
 include("binary_archive.jl")
-include("profile.jl")
+include("capture.jl")
+
+function __init__()
+    precompiling = ccall(:jl_generating_output, Cint, ()) != 0
+    precompiling && return
+
+    Sys.isapple() || return
+
+    load_framework("CoreGraphics")
+end
 
 end # module

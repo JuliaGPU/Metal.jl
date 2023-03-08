@@ -2,89 +2,32 @@
 # compute pipeline descriptor
 #
 
-export MtlComputePipelineDescriptor
+export MTLComputePipelineDescriptor
 
-const MTLComputePipelineDescriptor = Ptr{MtComputePipelineDescriptor}
+@objcwrapper immutable=false MTLComputePipelineDescriptor <: NSObject
 
-mutable struct MtlComputePipelineDescriptor
-    handle::MTLComputePipelineDescriptor
-end
-
-Base.unsafe_convert(::Type{MTLComputePipelineDescriptor}, q::MtlComputePipelineDescriptor) = q.handle
-
-Base.:(==)(a::MtlComputePipelineDescriptor, b::MtlComputePipelineDescriptor) = a.handle == b.handle
-Base.hash(lib::MtlComputePipelineDescriptor, h::UInt) = hash(lib.handle, h)
-
-function MtlComputePipelineDescriptor()
-    handle = mtNewComputePipelineDescriptor()
-    obj = MtlComputePipelineDescriptor(handle)
-    finalizer(unsafe_destroy!, obj)
+function MTLComputePipelineDescriptor()
+    handle = @objc [MTLComputePipelineDescriptor new]::id{MTLComputePipelineDescriptor}
+    obj = MTLComputePipelineDescriptor(handle)
+    finalizer(release, obj)
     return obj
-end
-
-function unsafe_destroy!(desc::MtlComputePipelineDescriptor)
-    mtRelease(desc.handle)
 end
 
 
 ## properties
 
-Base.propertynames(::MtlComputePipelineDescriptor) = (
-    :label, :computeFunction, :threadGroupSizeIsMultipleOfExecutionWidth,
-    :maxTotalThreads, :maxCallStackDepth, :supportIndirectCommandBuffers
-)
+@objcproperties MTLComputePipelineDescriptor begin
+    # Specifying the Compute Function and Associated Data
+    @autoproperty computeFunction::id{MTLFunction} setter=setComputeFunction
+    @autoproperty threadGroupSizeIsMultipleOfThreadExecutionWidth::Bool setter=setThreadGroupSizeIsMultipleOfThreadExecutionWidth
+    @autoproperty maxTotalThreadsPerThreadgroup::NSUInteger setter=setMaxTotalThreadsPerThreadgroup
+    @autoproperty maxCallStackDepth::NSUInteger setter=setMaxCallStackDepth
 
-function Base.getproperty(o::MtlComputePipelineDescriptor, f::Symbol)
-    if f === :label
-        ptr = mtComputePipelineDescriptorLabel(o)
-        ptr == C_NULL ? nothing : unsafe_string(ptr)
-    elseif f === :computeFunction
-        ptr = mtComputePipelineDescriptorComputeFunction(o)
-        ptr == C_NULL ? nothing : MtlFunction(ptr)
-    elseif f === :threadGroupSizeIsMultipleOfThreadExecutionWidth
-        mtComputePipelineDescriptorThreadGroupSizeIsMultipleOfThreadExecutionWidth(o)
-    elseif f === :maxTotalThreadsPerThreadgroup
-        mtComputePipelineDescriptorMaxTotalThreadsPerThreadgroup(o)
-    elseif f === :maxCallStackDepth
-        mtComputePipelineDescriptorMaxCallStackDepth(o)
-    elseif f === :supportIndirectCommandBuffers
-        mtComputePipelineDescriptorSupportIndirectCommandBuffers(o)
-    else
-        getfield(o, f)
-    end
-end
+    # Identifying the Pipeline State Object
+    @autoproperty label::id{NSString} setter=setLabel
 
-function Base.setproperty!(o::MtlComputePipelineDescriptor, f::Symbol, val)
-    if f === :label
-        mtComputePipelineDescriptorLabelSet(o, val)
-    elseif f === :computeFunction
-        mtComputePipelineDescriptorComputeFunctionSet(o, val)
-    elseif f === :threadGroupSizeIsMultipleOfThreadExecutionWidth
-        mtComputePipelineDescriptorThreadGroupSizeIsMultipleOfThreadExecutionWidthSet(o, val)
-    elseif f === :maxTotalThreadsPerThreadgroup
-        mtComputePipelineDescriptorMaxTotalThreadsPerThreadgroupSet(o, val)
-    elseif f === :maxCallStackDepth
-        mtComputePipelineDescriptorMaxCallStackDepthSet(o, val)
-    else
-        setfield!(opts, f, val)
-    end
-end
-
-
-## display
-
-function Base.show(io::IO, bin::MtlComputePipelineDescriptor)
-    print(io, "MtlComputePipelineDescriptor(…)")
-end
-
-function Base.show(io::IO, ::MIME"text/plain", q::MtlComputePipelineDescriptor)
-    println(io, "MtlComputePipelineDescriptor:")
-    println(io, "  label: ", q.label)
-    println(io, "  computeFunction: ", q.computeFunction)
-    println(io, "  threadGroupSizeIsMultipleOfThreadExecutionWidth: ", q.threadGroupSizeIsMultipleOfThreadExecutionWidth)
-    println(io, "  maxTotalThreadsPerThreadgroup: ", q.maxTotalThreadsPerThreadgroup)
-    println(io, "  maxCallStackDepth: ", q.maxCallStackDepth)
-    println(io, "  supportIndirectCommandBuffers: ", q.supportIndirectCommandBuffers)
+    # Setting Indirect Command Buffer Support
+    @autoproperty supportIndirectCommandBuffers::Bool
 end
 
 
@@ -92,64 +35,33 @@ end
 # compute pipeline state
 #
 
-export MtlComputePipelineState
+export MTLComputePipelineState
 
-const MTLComputePipelineState = Ptr{MtComputePipelineState}
+@objcwrapper immutable=false MTLComputePipelineState <: NSObject
 
-"""
-    MtlComputePipelineState(d::MtlDevice, f::MtlFunction)
+@objcproperties MTLComputePipelineState begin
+    # Identifying Properties
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString} setter=setLabel
 
-Create an object that stores information about the execution parameters of a MtlFunction.
-"""
-mutable struct MtlComputePipelineState
-    handle::MTLComputePipelineState
-    device::MtlDevice
+    # Querying Threadgroup Attributes
+    @autoproperty maxTotalThreadsPerThreadgroup::NSUInteger
+    @autoproperty threadExecutionWidth::NSUInteger
+    @autoproperty staticThreadgroupMemoryLength::NSUInteger
+
+    # Querying Indirect Command Buffer Support
+    @autoproperty supportIndirectCommandBuffers::Bool
 end
 
-Base.unsafe_convert(::Type{MTLComputePipelineState}, q::MtlComputePipelineState) = q.handle
+function MTLComputePipelineState(dev::MTLDevice, fun::MTLFunction)
+    err = Ref{id{NSError}}(nil)
+    handle = @objc [dev::id{MTLDevice} newComputePipelineStateWithFunction:fun::id{MTLFunction}
+                                       error:err::Ptr{id{NSError}}]::id{MTLComputePipelineState}
+    err[] == nil || throw(NSError(err[]))
 
-Base.:(==)(a::MtlComputePipelineState, b::MtlComputePipelineState) = a.handle == b.handle
-Base.hash(q::MtlComputePipelineState, h::UInt) = hash(q.handle, h)
-
-function unsafe_destroy!(cce::MtlComputePipelineState)
-    mtRelease(cce.handle)
-end
-
-function MtlComputePipelineState(d::MtlDevice, f::MtlFunction)
-    handle = @mtlthrows _errptr mtNewComputePipelineStateWithFunction(d, f, _errptr)
-
-    obj = MtlComputePipelineState(handle, d)
-    finalizer(unsafe_destroy!, obj)
+    obj = MTLComputePipelineState(handle)
+    finalizer(release, obj)
     return obj
 end
 
-# TODO: MtlComputePipelineState(d::MtlDevice, desc::MtlComputePipelineDescriptor, ...)
-
-
-## properties
-
-Base.propertynames(o::MtlComputePipelineState) = (
-    # identification
-    :device, :label,
-    # threadgroup attributes
-    :maxTotalThreadsPerThreadgroup, :threadExecutionWidth, :staticThreadgroupMemoryLength,
-    #other
-    #=supportIndirectCommandBuffers=#
-)
-
-function Base.getproperty(o::MtlComputePipelineState, f::Symbol)
-    if f === :device
-        return MtlDevice(mtComputePipelineDevice(o))
-    elseif f === :label
-        ptr = mtComputePipelineLabel(o)
-        ptr == C_NULL ? nothing : unsafe_string(ptr)
-    elseif f === :maxTotalThreadsPerThreadgroup
-        return Int(mtComputePipelineMaxTotalThreadsPerThreadgroup(o))
-    elseif f === :threadExecutionWidth
-        return Int(mtComputePipelineThreadExecutionWidth(o))
-    elseif f === :staticThreadgroupMemoryLength
-        return Int(mtComputePipelineStaticThreadgroupMemoryLength(o))
-    else
-        getfield(o, f)
-    end
-end
+# TODO: MTLComputePipelineState(d::MTLDevice, desc::MTLComputePipelineDescriptor, ...)

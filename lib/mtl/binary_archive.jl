@@ -2,144 +2,59 @@
 # binary archive descriptor
 #
 
-export MtlBinaryArchiveDescriptor
+export MTLBinaryArchiveDescriptor
 
-const MTLBinaryArchiveDescriptor = Ptr{MTL.MtBinaryArchiveDescriptor}
+@objcwrapper immutable=false MTLBinaryArchiveDescriptor <: NSObject
 
-mutable struct MtlBinaryArchiveDescriptor
-    handle::MTLBinaryArchiveDescriptor
+@objcproperties MTLBinaryArchiveDescriptor begin
+    # Choosing an Archive File
+    @autoproperty url::id{NSURL} setter=setUrl
 end
 
-Base.unsafe_convert(::Type{MTLBinaryArchiveDescriptor}, q::MtlBinaryArchiveDescriptor) = q.handle
-
-Base.:(==)(a::MtlBinaryArchiveDescriptor, b::MtlBinaryArchiveDescriptor) = a.handle == b.handle
-Base.hash(lib::MtlBinaryArchiveDescriptor, h::UInt) = hash(lib.handle, h)
-
-function MtlBinaryArchiveDescriptor()
-    handle = mtNewBinaryArchiveDescriptor()
-    obj = MtlBinaryArchiveDescriptor(handle)
-    finalizer(unsafe_destroy!, obj)
+function MTLBinaryArchiveDescriptor()
+    handle = @objc [MTLBinaryArchiveDescriptor new]::id{MTLBinaryArchiveDescriptor}
+    obj = MTLBinaryArchiveDescriptor(handle)
+    finalizer(release, obj)
     return obj
 end
-
-function unsafe_destroy!(desc::MtlBinaryArchiveDescriptor)
-    mtRelease(desc.handle)
-end
-
-
-## properties
-
-Base.propertynames(::MtlBinaryArchiveDescriptor) = (:url,)
-
-function Base.getproperty(opts::MtlBinaryArchiveDescriptor, f::Symbol)
-    if f === :url
-        ptr = mtBinaryArchiveDescriptorURL(opts)
-        ptr == C_NULL ? nothing : unsafe_string(ptr)
-    else
-        getfield(opts, f)
-    end
-end
-
-function Base.setproperty!(opts::MtlBinaryArchiveDescriptor, f::Symbol, val)
-    if f === :url
-        mtBinaryArchiveDescriptorURLSet(opts, val)
-    else
-        setfield!(opts, f, val)
-    end
-end
-
-
-## display
-
-function Base.show(io::IO, opts::MtlBinaryArchiveDescriptor)
-    print(io, "MtlBinaryArchiveDescriptor(…)")
-end
-
-function Base.show(io::IO, ::MIME"text/plain", opts::MtlBinaryArchiveDescriptor)
-    println(io, "MtlBinaryArchiveDescriptor:")
-    println(io, " url: ", opts.url)
-end
-
 
 
 #
 # binary archive
 #
 
-export MtlBinaryArchive, add_functions!
+export MTLBinaryArchive, add_functions!
 
-const MTLBinaryArchive = Ptr{MTL.MtBinaryArchive}
+@objcwrapper immutable=false MTLBinaryArchive <: NSObject
 
-mutable struct MtlBinaryArchive
-    handle::MTLBinaryArchive
-    device::MtlDevice
-    desc::MtlBinaryArchiveDescriptor
+@objcproperties MTLBinaryArchive begin
+    # Identifying the Archive
+    @autoproperty label::id{NSString} setter=setLabel
+    @autoproperty device::id{MTLDevice}
 end
 
-Base.unsafe_convert(::Type{MTLBinaryArchive}, q::MtlBinaryArchive) = q.handle
+function MTLBinaryArchive(dev::MTLDevice, desc::MTLBinaryArchiveDescriptor)
+    err = Ref{id{NSError}}(nil)
+    handle = @objc [dev::id{MTLDevice} newBinaryArchiveWithDescriptor:desc::id{MTLBinaryArchiveDescriptor}
+                                       error:err::Ptr{id{NSError}}]::id{MTLBinaryArchive}
+    err[] == nil || throw(NSError(err[]))
 
-Base.:(==)(a::MtlBinaryArchive, b::MtlBinaryArchive) = a.handle == b.handle
-Base.hash(lib::MtlBinaryArchive, h::UInt) = hash(lib.handle, h)
-
-function MtlBinaryArchive(device::MtlDevice, desc::MtlBinaryArchiveDescriptor)
-    handle = @mtlthrows _errptr mtNewBinaryArchiveWithDescriptor(device, desc, _errptr)
-
-    obj = MtlBinaryArchive(handle, device, desc)
-    finalizer(unsafe_destroy!, obj)
+    obj = MTLBinaryArchive(handle)
+    finalizer(release, obj)
     return obj
 end
 
-function unsafe_destroy!(archive::MtlBinaryArchive)
-    mtRelease(archive.handle)
+function add_functions!(bin::MTLBinaryArchive, desc::MTLComputePipelineDescriptor)
+    err = Ref{id{NSError}}(nil)
+    @objc [bin::id{MTLBinaryArchive} addComputePipelineFunctionsWithDescriptor:desc::id{MTLComputePipelineDescriptor}
+                                     error:err::Ptr{id{NSError}}]::Nothing
+    err[] == nil || throw(NSError(err[]))
 end
 
-
-## properties
-
-Base.propertynames(o::MtlBinaryArchive) = (
-    # identification
-    :device, :label
-)
-
-function Base.getproperty(o::MtlBinaryArchive, f::Symbol)
-    if f === :device
-        return MtlDevice(mtBinaryArchiveDevice(o))
-    elseif f === :label
-        ptr = mtBinaryArchiveLabel(o)
-        ptr == C_NULL ? nothing : unsafe_string(ptr)
-    else
-        getfield(o, f)
-    end
-end
-
-function Base.setproperty!(o::MtlBinaryArchive, f::Symbol, val)
-    if f === :label
-        mtBinaryArchiveLabelSet(o, val)
-    else
-        setfield!(opts, f, val)
-    end
-end
-
-
-## display
-
-function Base.show(io::IO, bin::MtlBinaryArchive)
-    print(io, "MtlBinaryArchive(…)")
-end
-
-function Base.show(io::IO, ::MIME"text/plain", bin::MtlBinaryArchive)
-    println(io, "MtlBinaryArchive:")
-    println(io, " label:  ", bin.label)
-    println(io, " device: ", bin.device)
-end
-
-
-## operations
-
-function add_functions!(bin::MtlBinaryArchive, desc::MtlComputePipelineDescriptor)
-    @mtlthrows _errptr mtBinaryArchiveAddComputePipelineFunctions(bin, desc, _errptr)
-end
-
-function Base.write(filename::String, bin::MtlBinaryArchive)
-    @mtlthrows _errptr mtBinaryArchiveSerialize(bin, filename, _errptr)
+function Base.write(filename::String, bin::MTLBinaryArchive)
+    url = NSFileURL(filename)
+    err = Ref{id{NSError}}(nil)
+    @objc [bin::id{MTLBinaryArchive} serializeToURL:url::id{NSURL}
+                                     error:err::Ptr{id{NSError}}]::Nothing
+    err[] == nil || throw(NSError(err[]))
 end

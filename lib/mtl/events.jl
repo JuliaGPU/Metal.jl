@@ -1,89 +1,42 @@
-export MtlEvent, MtlSharedEvent, MtlSharedEventHandle
+#
+# event
+#
 
-abstract type MtlAbstractEvent end
+export MTLEvent
 
-const MTLEvent = Ptr{MtEvent}
-const MTLSharedEvent = Ptr{MtSharedEvent}
-const MTLSharedEventHandle = Ptr{MtSharedEventHandle}
+@objcwrapper MTLEvent <: NSObject
 
-mutable struct MtlEvent <: MtlAbstractEvent
-	handle::MTLEvent
-	device::MtlDevice
+@objcproperties MTLEvent begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString} setter=setLabel
 end
 
-mutable struct MtlSharedEvent <: MtlAbstractEvent
-	handle::MTLSharedEvent
-	device::MtlDevice
-end
-
-Base.unsafe_convert(::Type{MTLEvent}, ev::MtlAbstractEvent) = convert(MTLEvent, ev.handle)
-Base.unsafe_convert(::Type{MTLSharedEvent}, ev::MtlSharedEvent) = ev.handle
-
-Base.:(==)(a::MtlAbstractEvent, b::MtlAbstractEvent) = a.handle == b.handle
-Base.hash(ev::MtlAbstractEvent, h::UInt) = hash(ev.handle, h)
-
-function unsafe_destroy!(fun::MtlAbstractEvent)
-	mtRelease(fun.handle)
-end
-
-function MtlEvent(dev::MtlDevice)
-	handle = mtDeviceNewEvent(dev)
-	obj = MtlEvent(handle, dev)
-	finalizer(unsafe_destroy!, obj)
-	return obj
-end
-
-function MtlSharedEvent(dev::MtlDevice)
-	handle = mtDeviceNewSharedEvent(dev)
-	obj = MtlSharedEvent(handle, dev)
-	finalizer(unsafe_destroy!, obj)
-	return obj
+function MTLEvent(dev::MTLDevice)
+    MTLEvent(@objc [dev::id{MTLDevice} newEvent]::id{MTLEvent})
 end
 
 
-## properties
+#
+# shared event
+#
 
-Base.propertynames(::MtlAbstractEvent) = (:device, :label, :signaledValue)
+export MTLSharedEvent, MTLSharedEventHandle
 
-function Base.getproperty(ev::MtlAbstractEvent, f::Symbol)
-    if f === :label
-        ptr = mtEventLabel(ev)
-        ptr == C_NULL ? nothing : unsafe_string(ptr)
-    elseif ev isa MtlSharedEvent && f === :signaledValue
-        mtSharedEventSignaledValue(ev)
-    else
-        getfield(ev, f)
-    end
+@objcwrapper MTLSharedEvent <: MTLEvent
+
+@objcproperties MTLSharedEvent begin
+    @autoproperty signaledValue::UInt64
 end
 
-function Base.setproperty!(ev::MtlAbstractEvent, f::Symbol, val)
-    if f === :label
-		mtEventLabelSet(ev, val)
-    else
-        setfield!(ev, f, val)
-    end
+function MTLSharedEvent(dev::MTLDevice)
+    MTLSharedEvent(@objc [dev::id{MTLDevice} newSharedEvent]::id{MTLSharedEvent})
 end
 
 
 ## shared event handle
 
-mutable struct MtlSharedEventHandle
-	handle::MTLSharedEventHandle
-	event::MtlSharedEvent
+@objcwrapper MTLSharedEventHandle <: NSObject
+
+function MTLSharedEventHandle(ev::MTLSharedEvent)
+    MTLSharedEventHandle(@objc [ev::id{MTLSharedEvent} newSharedEventHandle]::id{MTLSharedEventHandle})
 end
-
-function MtlSharedEventHandle(ev::MtlSharedEvent)
-	handle = mtSharedEventNewHandle(ev)
-	obj = MtlSharedEventHandle(handle, ev)
-	finalizer(unsafe_destroy!, obj)
-	return obj
-end
-
-function unsafe_destroy!(evh::MtlSharedEventHandle)
-	mtRelease(evh.handle)
-end
-
-Base.unsafe_convert(::Type{MTLSharedEventHandle}, evh::MtlSharedEventHandle) = evh.handle
-
-Base.:(==)(a::MtlSharedEventHandle, b::MtlSharedEventHandle) = a.handle == b.handle
-Base.hash(evh::MtlSharedEventHandle, h::UInt) = hash(evh.handle, h)

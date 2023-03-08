@@ -17,7 +17,7 @@ struct mtlKernelContext <: AbstractKernelContext end
     threads = min(elements, kernel.pipeline_state.maxTotalThreadsPerThreadgroup)
     blocks  = cld(elements, threads)
 
-    return (; threads, blocks)
+    return (; threads=Int(threads), blocks=Int(blocks))
 end
 
 function GPUArrays.gpu_call(::mtlArrayBackend, f, args, threads::Int, blocks::Int;
@@ -63,9 +63,9 @@ end
 
 GPUArrays.backend(::Type{<:MtlArray}) = mtlArrayBackend()
 
-const GLOBAL_RNGs = Dict{MtlDevice,GPUArrays.RNG}()
+const GLOBAL_RNGs = Dict{MTLDevice,GPUArrays.RNG}()
 function GPUArrays.default_rng(::Type{<:MtlArray})
-    dev = MtlDevice(1)
+    dev = MTLDevice(1)
     get!(GLOBAL_RNGs, dev) do
         N = 128 # Size of default oneAPI working group with barrier, so should be good for Metal
         state = MtlArray{NTuple{4, UInt32}}(undef, N)

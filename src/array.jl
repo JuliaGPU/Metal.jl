@@ -27,7 +27,7 @@ function contains_double(T)
 end
 
 mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
-  buffer::MtlBuffer
+  buffer::MTLBuffer
 
   maxsize::Int  # maximum data size; excluding any selector bytes
   offset::Int   # offset of the data in the buffer, in number of elements
@@ -45,12 +45,13 @@ mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
       end
 
       dev = current_device()
-      if bufsize > 0
-        buf = alloc(dev, bufsize; storage=storage)
-        buf.label = "MtlArray{$(T),$(N)}(dims=$dims)"
-      else
-        buf = MtlBuffer(C_NULL)
+      if bufsize == 0
+        # Metal doesn't support empty allocations. for simplicity (i.e., the ability to get
+        # a pointer, query the buffer's properties, etc), we use a 1-byte buffer instead.
+        bufsize = 1
       end
+      buf = alloc(dev, bufsize; storage=storage)
+      buf.label = "MtlArray{$(T),$(N)}(dims=$dims)"
 
       obj = new(buf, maxsize, 0, dims)
       finalizer(obj) do arr
@@ -59,10 +60,10 @@ mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
       return obj
   end
 
-  function MtlArray{T,N}(buffer::MtlBuffer, dims::Dims{N};
+  function MtlArray{T,N}(buffer::MTLBuffer, dims::Dims{N};
                          maxsize::Int=prod(dims) * sizeof(T), offset::Int=0) where {T,N}
       Base.allocatedinline(T) || error("MtlArray only supports element types that are stored inline")
-      MTL.mtRetain(buffer.handle)
+      retain(buffer)
       obj = new{T,N}(buffer, maxsize, offset, dims)
       finalizer(obj) do arr
           free(arr.buffer)
@@ -220,7 +221,7 @@ end
 Base.copyto!(dest::MtlArray{T}, src::MtlArray{T}) where {T} =
     copyto!(dest, 1, src, 1, length(src))
 
-function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::Array{T}, soffs, n) where T
+function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::Array{T}, soffs, n) where T
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
   synchronize()
 
@@ -232,7 +233,7 @@ function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::Arra
   return dest
 end
 
-function Base.unsafe_copyto!(dev::MtlDevice, dest::Array{T}, doffs, src::MtlArray{T}, soffs, n) where T
+function Base.unsafe_copyto!(dev::MTLDevice, dest::Array{T}, doffs, src::MtlArray{T}, soffs, n) where T
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
   synchronize()
 
@@ -244,7 +245,7 @@ function Base.unsafe_copyto!(dev::MtlDevice, dest::Array{T}, doffs, src::MtlArra
   return dest
 end
 
-function Base.unsafe_copyto!(dev::MtlDevice, dest::MtlArray{T}, doffs, src::MtlArray{T}, soffs, n) where T
+function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::MtlArray{T}, soffs, n) where T
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
   synchronize()
 
@@ -508,7 +509,7 @@ end
 
 ## unsafe_wrap
 
-function Base.unsafe_wrap(t::Type{<:Array{T}}, buf::MtlBuffer, dims; own=false) where T
+function Base.unsafe_wrap(t::Type{<:Array{T}}, buf::MTLBuffer, dims; own=false) where T
     ptr = convert(Ptr{T}, contents(buf))
     return unsafe_wrap(t, ptr, dims; own)
 end

@@ -1,96 +1,56 @@
-export MtlLibrary, MtlLibraryFromFile, MtlLibraryFromData
+export MTLLibrary, MTLLibraryFromFile, MTLLibraryFromData
 
-const MTLLibrary = Ptr{MtLibrary}
+@objcwrapper immutable=false MTLLibrary <: NSObject
 
-"""
-    MtlDevice(i::Integer)
-
-Get a handle to a compute device.
-"""
-mutable struct MtlLibrary
-    handle::MTLLibrary
-    device::MtlDevice
+@objcproperties MTLLibrary begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString} setter=setLabel
+    @autoproperty functionNames::id{NSArray} type=Vector{NSString}
 end
 
-Base.unsafe_convert(::Type{MTLLibrary}, lib::MtlLibrary) = lib.handle
+function MTLLibrary(device::MTLDevice, src::String,
+                    opts::MTLCompileOptions=MTLCompileOptions())
+    err = Ref{id{NSError}}(nil)
+    handle = @objc [device::id{MTLDevice} newLibraryWithSource:src::id{NSString}
+                                          options:opts::id{MTLCompileOptions}
+                                          error:err::Ptr{id{NSError}}]::id{MTLLibrary}
+    err[] == nil || throw(NSError(err[]))
 
-Base.:(==)(a::MtlLibrary, b::MtlLibrary) = a.handle == b.handle
-Base.hash(lib::MtlLibrary, h::UInt) = hash(lib.handle, h)
-
-function MtlLibrary(device::MtlDevice, src::String, opts::MtlCompileOptions=MtlCompileOptions())
-    handle = @mtlthrows _errptr mtNewLibraryWithSource(device, src, opts, _errptr)
-
-    obj = MtlLibrary(handle, device)
-    finalizer(unsafe_destroy!, obj)
+    obj = MTLLibrary(handle)
+    finalizer(release, obj)
 
     return obj
 end
 
-function MtlLibraryFromFile(device::MtlDevice, path::String)
+function MTLLibraryFromFile(device::MTLDevice, path::String)
+    err = Ref{id{NSError}}(nil)
     handle = if macos_version() >= v"13"
-        @mtlthrows _errptr mtNewLibraryWithURL(device, path, _errptr)
+        url = NSFileURL(path)
+        @objc [device::id{MTLDevice} newLibraryWithURL:url::id{NSURL}
+                                     error:err::Ptr{id{NSError}}]::id{MTLLibrary}
     else
-        @mtlthrows _errptr mtNewLibraryWithFile(device, path, _errptr)
+        @objc [device::id{MTLDevice} newLibraryWithFile:path::id{NSString}
+                                     error:err::Ptr{id{NSError}}]::id{MTLLibrary}
     end
+    err[] == nil || throw(NSError(err[]))
 
-    obj = MtlLibrary(handle, device)
-    finalizer(unsafe_destroy!, obj)
+    obj = MTLLibrary(handle)
+    finalizer(release, obj)
 
     return obj
 end
 
-function MtlLibraryFromData(device::MtlDevice, data)
-    GC.@preserve data begin
-        handle = @mtlthrows _errptr mtNewLibraryWithData(device, pointer(data), sizeof(data), _errptr)
+function MTLLibraryFromData(device::MTLDevice, input_data)
+    err = Ref{id{NSError}}(nil)
+    GC.@preserve input_data begin
+        data = dispatch_data(pointer(input_data), sizeof(input_data))
+        handle = @objc [device::id{MTLDevice} newLibraryWithData:data::dispatch_data_t
+                                              error:err::Ptr{id{NSError}}]::id{MTLLibrary}
     end
+    err[] == nil || throw(NSError(err[]))
 
-    obj = MtlLibrary(handle, device)
-    finalizer(unsafe_destroy!, obj)
+    obj = MTLLibrary(handle)
+    finalizer(release, obj)
 
     return obj
-end
-
-function unsafe_destroy!(lib::MtlLibrary)
-    mtRelease(lib.handle)
-end
-
-
-## properties
-
-Base.propertynames(::MtlLibrary) = (:device, :label, :functionNames)
-
-function Base.getproperty(lib::MtlLibrary, f::Symbol)
-    if f === :label
-        ptr = mtLibraryLabel(lib)
-        ptr == C_NULL ? nothing : unsafe_string(ptr)
-    elseif f === :functionNames
-        count = Ref{Csize_t}(0)
-        mtLibraryFunctionNames(lib, count, C_NULL)
-        names = Vector{Cstring}(undef, count[])
-        mtLibraryFunctionNames(lib, count, names)
-        unsafe_string.(names)
-    else
-        getfield(lib, f)
-    end
-end
-
-function Base.setproperty!(lib::MtlLibrary, f::Symbol, val)
-    if f === :label
-		mtLibraryLabelSet(lib, val)
-    else
-        setfield!(lib, f, val)
-    end
-end
-
-
-## display
-
-function Base.show(io::IO, lib::MtlLibrary)
-    print(io, "MtlLibrary($(lib.device))")
-end
-
-function Base.show(io::IO, ::MIME"text/plain", lib::MtlLibrary)
-    println(io, "MtlLibrary:")
-    println(io, " device: ", lib.device)
-    print(io,   " label:  ", lib.label)
 end

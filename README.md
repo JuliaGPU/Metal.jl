@@ -154,61 +154,30 @@ may fail to start.
 
 ## Metal API wrapper
 
-Finally, all of the above functionality is made possible by interfacing with
-the Metal libraries through a [small C library](https://github.com/JuliaGPU/cmt)
-that wraps the ObjectiveC APIs.
-
-These low-level wrappers, along with some slightly higher-level Julia wrappers,
-are available in the `MTL` submodule exported by Metal.jl. All wrapped C
-functions and types start with the `mt` prefix, whereas the Julia wrappers are
-prefixed with `Mtl`:
+Finally, all of the above functionality is made possible by interfacing with the Metal
+libraries through [ObjectiveC.jl](https://github.com/JuliaInterop/ObjectiveC.jl). We provide low-level objects and functions that map  These
+low-level API wrappers, along with some slightly higher-level Julia wrappers, are available
+in the `MTL` submodule exported by Metal.jl:
 
 ```julia
-julia> dev = MtlDevice(1)
-MtlDevice:
- name:             Apple M1 Pro
- lowpower:         false
- headless:         false
- removable:        false
- unified memory:   true
- registry id:      4294969448
- transfer rate:    0
+julia> dev = MTLDevice(1)
+<AGXG13XDevice: 0x14c17f200>
+    name = Apple M1 Pro
 
 julia> dev.name
-"Apple M1 Pro"
+NSString("Apple M1 Pro")
 ```
 
 
 ## Hacking
 
-Metal.jl relies on two binary dependencies (provided as JLLs):
-
-- [cmt](https://github.com/JuliaGPU/Metal.jl/tree/main/deps/cmt)
-- [LLVM with an AIR back-end](https://github.com/JuliaGPU/llvm-metal)
-
-Normally, these dependencies are built on
-[Yggdrasil](https://github.com/JuliaPackaging/Yggdrasil/).
-If you need to make changes to these dependencies, have a look at the
-`build_cmt.jl` and `build_llvm.jl` scripts in the `deps/` folder. These
-scripts build a local version of the dependency, and configure a local
-preference such that any environment depending on the corresponding JLLs will
-pick-up the modified version (i.e., do `julia --project` in a clone
-of `Metal.jl`):
-
-```
-$ julia --project -e 'using Metal; @show MTL.cmt.libcmt'
-MTL.libcmt = "/Users/tim/Julia/depot/artifacts/6adc0ed9a8370ff1e3bb8fbaf36e8519ee11fd96/lib/libcmt.dylib"
-
-$ julia --project=deps deps/build_cmt.jl
-...
-[100%] Built target cmt
-
-$ julia --project -e 'using Metal; @show MTL.cmt.libcmt'
-MTL.libcmt = "/Users/tim/Julia/depot/scratchspaces/dde4c033-4e86-420c-a63e-0dd931031962/cmt/lib/libcmt.dylib"
-```
-
-These scripts are integrated with our CI, and will be triggered if
-the `ci.build_cmt` or `ci.build_llvm` labels are set on a pull request.
+Metal.jl relies on a custom [LLVM with an AIR
+back-end](https://github.com/JuliaGPU/llvm-metal), provided as a JLL. Normally, this JLLis
+built on [Yggdrasil](https://github.com/JuliaPackaging/Yggdrasil/). If you need to make
+changes to the LLVM back-end, have a look at the `build_llvm.jl` in the `deps/` folder. This
+scripts builds a local version of the LLVM back-end, and configures a local preference such
+that any environment depending on the corresponding JLLs will pick-up the modified version
+(i.e., do `julia --project` in a clone of `Metal.jl`).
 
 
 ## Acknowledgements

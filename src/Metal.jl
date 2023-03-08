@@ -8,9 +8,7 @@ using LLVM
 using LLVM.Interop
 using Metal_LLVM_Tools_jll
 using ExprTools: splitdef, combinedef
-
-# C wrappers
-include("../lib/cmt/cmt.jl")
+using ObjectiveC, .Foundation, .Dispatch
 
 # core library
 include("../lib/mtl/MTL.jl")
