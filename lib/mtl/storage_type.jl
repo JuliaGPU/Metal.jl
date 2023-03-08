@@ -27,9 +27,6 @@ Base.convert(::Type{MTLResourceOptions}, ::Type{AS.Managed})    = MTLResourceSto
 Base.convert(::Type{MTLResourceOptions}, ::Type{AS.Private})    = MTLResourceStorageModePrivate
 Base.convert(::Type{MTLResourceOptions}, ::Type{AS.Memoryless}) = MTLResourceStorageModeMemoryless
 
-# Broken because multiple zeros
-#@enum_without_prefix MTLResourceOptions MTLResource
-
 const Shared                = MTLResourceStorageModeShared
 const Managed               = MTLResourceStorageModeManaged
 const Private               = MTLResourceStorageModePrivate

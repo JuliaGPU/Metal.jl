@@ -1,34 +1,20 @@
-export MTLDevice, devices
-
-@objcwrapper MTLDevice <: NSObject
-
-MTLCreateSystemDefaultDevice() =
-    MTLDevice(ccall(:MTLCreateSystemDefaultDevice, id{MTLDevice}, ()))
-
-"""
-    devices()
-
-Get an iterator for the compute devices.
-"""
-function devices()
-    list = NSArray(ccall(:MTLCopyAllDevices, id{NSArray}, ()))
-    [reinterpret(MTLDevice, dev) for dev in list]
-end
-
-"""
-    MTLDevice(i::Integer)
-
-Get a handle to a compute device.
-"""
-MTLDevice(i::Integer) = devices()[i]
-
-
-## properties
+#
+# device enums
+#
 
 @enum MTLArgumentBuffersTier::NSUInteger begin
     MTLArgumentBuffersTier1 = 0
     MTLArgumentBuffersTier2 = 1
 end
+
+
+#
+# device
+#
+
+export MTLDevice, devices
+
+@objcwrapper MTLDevice <: NSObject
 
 @objcproperties MTLDevice begin
     ## device inspection
@@ -79,3 +65,23 @@ end
     @autoproperty argumentBuffersSupport::MTLArgumentBuffersTier
     @autoproperty maxArgumentBufferSamplerCount::NSUInteger
 end
+
+MTLCreateSystemDefaultDevice() =
+    MTLDevice(ccall(:MTLCreateSystemDefaultDevice, id{MTLDevice}, ()))
+
+"""
+    devices()
+
+Get an iterator for the compute devices.
+"""
+function devices()
+    list = NSArray(ccall(:MTLCopyAllDevices, id{NSArray}, ()))
+    [reinterpret(MTLDevice, dev) for dev in list]
+end
+
+"""
+    MTLDevice(i::Integer)
+
+Get a handle to a compute device.
+"""
+MTLDevice(i::Integer) = devices()[i]

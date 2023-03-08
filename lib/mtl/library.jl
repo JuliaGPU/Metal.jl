@@ -2,6 +2,12 @@ export MTLLibrary, MTLLibraryFromFile, MTLLibraryFromData
 
 @objcwrapper immutable=false MTLLibrary <: NSObject
 
+@objcproperties MTLLibrary begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString} setter=setLabel
+    @autoproperty functionNames::id{NSArray} type=Vector{NSString}
+end
+
 function MTLLibrary(device::MTLDevice, src::String,
                     opts::MTLCompileOptions=MTLCompileOptions())
     err = Ref{id{NSError}}(nil)
@@ -11,7 +17,7 @@ function MTLLibrary(device::MTLDevice, src::String,
     err[] == nil || throw(NSError(err[]))
 
     obj = MTLLibrary(handle)
-    finalizer(unsafe_destroy!, obj)
+    finalizer(release, obj)
 
     return obj
 end
@@ -29,7 +35,7 @@ function MTLLibraryFromFile(device::MTLDevice, path::String)
     err[] == nil || throw(NSError(err[]))
 
     obj = MTLLibrary(handle)
-    finalizer(unsafe_destroy!, obj)
+    finalizer(release, obj)
 
     return obj
 end
@@ -44,20 +50,7 @@ function MTLLibraryFromData(device::MTLDevice, input_data)
     err[] == nil || throw(NSError(err[]))
 
     obj = MTLLibrary(handle)
-    finalizer(unsafe_destroy!, obj)
+    finalizer(release, obj)
 
     return obj
-end
-
-function unsafe_destroy!(lib::MTLLibrary)
-    @objc [lib::id{MTLLibrary} release]::Nothing
-end
-
-
-## properties
-
-@objcproperties MTLLibrary begin
-    @autoproperty device::id{MTLDevice}
-    @autoproperty label::id{NSString} setter=setLabel
-    @autoproperty functionNames::id{NSArray} type=Vector{NSString}
 end

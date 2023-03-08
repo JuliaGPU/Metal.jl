@@ -4,9 +4,6 @@ export MTLBuffer, device, contents, alloc, free, handle
 # device, constant, or threadgroup address space.
 @objcwrapper MTLBuffer <: MTLResource
 
-
-## properties
-
 @objcproperties MTLBuffer begin
     @autoproperty length::NSUInteger
     @autoproperty device::id{MTLDevice}
@@ -118,12 +115,3 @@ Only valid for `Managed` buffers.
 function DidModifyRange!(buf::MTLBuffer, range)
     @objc [buf::id{MTLBuffer} didModifyRange:range::NSRange]::Nothing
 end
-
-# Views on different device
-NewBuffer(buf::MTLBuffer, d::MTLDevice) =
-    @objc [buf::id{MTLBuffer} newRemoteBufferViewForDevice:d::id{MTLDevice}]::id{MTLBuffer}
-
-# TODO: remove this
-ParentBuffer(buf::MTLBuffer) = buf.remoteStorageBuffer
-
-handle_array(vec::Vector{<:MTLBuffer}) = [buf.handle for buf in vec]

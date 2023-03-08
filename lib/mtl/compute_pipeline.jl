@@ -9,12 +9,8 @@ export MTLComputePipelineDescriptor
 function MTLComputePipelineDescriptor()
     handle = @objc [MTLComputePipelineDescriptor new]::id{MTLComputePipelineDescriptor}
     obj = MTLComputePipelineDescriptor(handle)
-    finalizer(unsafe_destroy!, obj)
+    finalizer(release, obj)
     return obj
-end
-
-function unsafe_destroy!(desc::MTLComputePipelineDescriptor)
-    release(desc)
 end
 
 
@@ -43,26 +39,6 @@ export MTLComputePipelineState
 
 @objcwrapper immutable=false MTLComputePipelineState <: NSObject
 
-function MTLComputePipelineState(dev::MTLDevice, fun::MTLFunction)
-    err = Ref{id{NSError}}(nil)
-    handle = @objc [dev::id{MTLDevice} newComputePipelineStateWithFunction:fun::id{MTLFunction}
-                                       error:err::Ptr{id{NSError}}]::id{MTLComputePipelineState}
-    err[] == nil || throw(NSError(err[]))
-
-    obj = MTLComputePipelineState(handle)
-    finalizer(unsafe_destroy!, obj)
-    return obj
-end
-
-function unsafe_destroy!(cce::MTLComputePipelineState)
-    release(cce)
-end
-
-# TODO: MTLComputePipelineState(d::MTLDevice, desc::MTLComputePipelineDescriptor, ...)
-
-
-## properties
-
 @objcproperties MTLComputePipelineState begin
     # Identifying Properties
     @autoproperty device::id{MTLDevice}
@@ -76,3 +52,16 @@ end
     # Querying Indirect Command Buffer Support
     @autoproperty supportIndirectCommandBuffers::Bool
 end
+
+function MTLComputePipelineState(dev::MTLDevice, fun::MTLFunction)
+    err = Ref{id{NSError}}(nil)
+    handle = @objc [dev::id{MTLDevice} newComputePipelineStateWithFunction:fun::id{MTLFunction}
+                                       error:err::Ptr{id{NSError}}]::id{MTLComputePipelineState}
+    err[] == nil || throw(NSError(err[]))
+
+    obj = MTLComputePipelineState(handle)
+    finalizer(release, obj)
+    return obj
+end
+
+# TODO: MTLComputePipelineState(d::MTLDevice, desc::MTLComputePipelineDescriptor, ...)

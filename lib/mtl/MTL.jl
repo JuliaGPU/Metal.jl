@@ -26,11 +26,6 @@ end
 
 ## source code includes
 
-# low-level wrappers
-#include("error.jl")
-include("helpers.jl")
-
-# high-level wrappers
 include("size.jl")
 include("device.jl")
 include("resource.jl")

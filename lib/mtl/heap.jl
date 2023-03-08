@@ -16,20 +16,6 @@ export MTLHeapDescriptor
 
 @objcwrapper immutable=false MTLHeapDescriptor <: NSObject
 
-function MTLHeapDescriptor()
-    handle = @objc [MTLHeapDescriptor new]::id{MTLHeapDescriptor}
-    obj = MTLHeapDescriptor(handle)
-    finalizer(unsafe_destroy!, obj)
-    return obj
-end
-
-function unsafe_destroy!(desc::MTLHeapDescriptor)
-    release(desc)
-end
-
-
-## properties
-
 @objcproperties MTLHeapDescriptor begin
     # Configuring a Heap
     @autoproperty type::MTLHeapType setter=setType
@@ -38,6 +24,13 @@ end
     @autoproperty hazardTrackingMode::MTLHazardTrackingMode setter=setHazardTrackingMode
     @autoproperty resourceOptions::MTLResourceOptions setter=setResourceOptions
     @autoproperty size::NSUInteger setter=setSize
+end
+
+function MTLHeapDescriptor()
+    handle = @objc [MTLHeapDescriptor new]::id{MTLHeapDescriptor}
+    obj = MTLHeapDescriptor(handle)
+    finalizer(release, obj)
+    return obj
 end
 
 
@@ -49,20 +42,6 @@ end
 export MTLHeap
 
 @objcwrapper immutable=false MTLHeap <: NSObject
-
-function MTLHeap(dev::MTLDevice, desc::MTLHeapDescriptor)
-    handle = @objc [dev::id{MTLDevice} newHeapWithDescriptor:desc::id{MTLHeapDescriptor}]::id{MTLHeap}
-    obj = MTLHeap(handle)
-    finalizer(unsafe_destroy!, obj)
-    return obj
-end
-
-function unsafe_destroy!(desc::MTLHeap)
-    release(desc)
-end
-
-
-## properties
 
 @objcproperties MTLHeap begin
     # Identifying the Heap
@@ -78,4 +57,11 @@ end
     @autoproperty size::NSUInteger
     @autoproperty usedSize::NSUInteger
     @autoproperty currentAllocatedSize::NSUInteger
+end
+
+function MTLHeap(dev::MTLDevice, desc::MTLHeapDescriptor)
+    handle = @objc [dev::id{MTLDevice} newHeapWithDescriptor:desc::id{MTLHeapDescriptor}]::id{MTLHeap}
+    obj = MTLHeap(handle)
+    finalizer(release, obj)
+    return obj
 end

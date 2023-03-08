@@ -1,27 +1,35 @@
-export MTLEvent, MTLSharedEvent, MTLSharedEventHandle
+#
+# event
+#
+
+export MTLEvent
 
 @objcwrapper MTLEvent <: NSObject
-
-function MTLEvent(dev::MTLDevice)
-    MTLEvent(@objc [dev::id{MTLDevice} newEvent]::id{MTLEvent})
-end
-
-@objcwrapper MTLSharedEvent <: MTLEvent
-
-function MTLSharedEvent(dev::MTLDevice)
-    MTLSharedEvent(@objc [dev::id{MTLDevice} newSharedEvent]::id{MTLSharedEvent})
-end
-
-
-## properties
 
 @objcproperties MTLEvent begin
     @autoproperty device::id{MTLDevice}
     @autoproperty label::id{NSString} setter=setLabel
 end
 
+function MTLEvent(dev::MTLDevice)
+    MTLEvent(@objc [dev::id{MTLDevice} newEvent]::id{MTLEvent})
+end
+
+
+#
+# shared event
+#
+
+export MTLSharedEvent, MTLSharedEventHandle
+
+@objcwrapper MTLSharedEvent <: MTLEvent
+
 @objcproperties MTLSharedEvent begin
     @autoproperty signaledValue::UInt64
+end
+
+function MTLSharedEvent(dev::MTLDevice)
+    MTLSharedEvent(@objc [dev::id{MTLDevice} newSharedEvent]::id{MTLSharedEvent})
 end
 
 

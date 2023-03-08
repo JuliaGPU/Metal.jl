@@ -25,23 +25,16 @@ export MTLCommandBufferDescriptor
 
 @objcwrapper immutable=false MTLCommandBufferDescriptor <: NSObject
 
-function MTLCommandBufferDescriptor()
-    handle = @objc [MTLCommandBufferDescriptor new]::id{MTLCommandBufferDescriptor}
-    obj = MTLCommandBufferDescriptor(handle)
-    finalizer(unsafe_destroy!, obj)
-    return obj
-end
-
-function unsafe_destroy!(desc::MTLCommandBufferDescriptor)
-    release(desc)
-end
-
-
-## properties
-
 @objcproperties MTLCommandBufferDescriptor begin
     @autoproperty retainedReferences::Bool setter=setRetainedReferences
     @autoproperty errorOptions::MTLCommandBufferErrorOption setter=setErrorOptions
+end
+
+function MTLCommandBufferDescriptor()
+    handle = @objc [MTLCommandBufferDescriptor new]::id{MTLCommandBufferDescriptor}
+    obj = MTLCommandBufferDescriptor(handle)
+    finalizer(release, obj)
+    return obj
 end
 
 
@@ -54,27 +47,6 @@ export MTLCommandBuffer, enqueue!, wait_scheduled, wait_completed, encode_signal
        encode_wait!, commit!, on_scheduled, on_completed
 
 @objcwrapper immutable=false MTLCommandBuffer <: NSObject
-
-function MTLCommandBuffer(queue::MTLCommandQueue,
-                          desc::MTLCommandBufferDescriptor=MTLCommandBufferDescriptor())
-    handle = @objc [queue::id{MTLCommandQueue} commandBufferWithDescriptor:desc::id{MTLCommandBufferDescriptor}]::id{MTLCommandBuffer}
-    obj = MTLCommandBuffer(handle)
-    finalizer(unsafe_destroy!, obj)
-
-    # Per Apple's "Basic Memory Management Rules" the above invocation does not imply
-    # ownership. To be consistent the name of the function and CF_RETURNS_RETAINED, we
-    # explicitly claim ownership with an explicit `retain`
-    retain(obj)
-
-    return obj
-end
-
-function unsafe_destroy!(cmdbuf::MTLCommandBuffer)
-    release(cmdbuf)
-end
-
-
-## properties
 
 @objcproperties MTLCommandBuffer begin
     # Identifying the Command Buffer
@@ -102,8 +74,19 @@ end
     @autoproperty retainedReferences::Bool
 end
 
+function MTLCommandBuffer(queue::MTLCommandQueue,
+                          desc::MTLCommandBufferDescriptor=MTLCommandBufferDescriptor())
+    handle = @objc [queue::id{MTLCommandQueue} commandBufferWithDescriptor:desc::id{MTLCommandBufferDescriptor}]::id{MTLCommandBuffer}
+    obj = MTLCommandBuffer(handle)
+    finalizer(release, obj)
 
-## operations
+    # Per Apple's "Basic Memory Management Rules" the above invocation does not imply
+    # ownership. To be consistent the name of the function and CF_RETURNS_RETAINED, we
+    # explicitly claim ownership with an explicit `retain`
+    retain(obj)
+
+    return obj
+end
 
 """
     enqueue!(q::MTLCommandBuffer)

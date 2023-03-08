@@ -36,7 +36,12 @@ MTLCaptureScope
 
 @objcwrapper MTLCaptureScope <: NSObject
 
-# no finalizer because handled by Metal
+@objcproperties MTLCaptureScope begin
+    # Identifying the Capture Scope
+    @autoproperty label::id{NSString} setter=setLabel
+    @autoproperty device::id{MTLDevice}
+    @autoproperty commandQueue::id{MTLCommandQueue}
+end
 
 """
     beginScope(scope::MTLCaptureScope)
@@ -57,17 +62,6 @@ function endScope(scope::MTLCaptureScope)
 end
 
 
-## properties
-
-@objcproperties MTLCaptureScope begin
-    # Identifying the Capture Scope
-    @autoproperty label::id{NSString} setter=setLabel
-    @autoproperty device::id{MTLDevice}
-    @autoproperty commandQueue::id{MTLCommandQueue}
-end
-
-
-
 #
 # capture descriptor
 #
@@ -86,10 +80,17 @@ MTLCaptureDescriptor
 
 @objcwrapper immutable=false MTLCaptureDescriptor <: NSObject
 
+@objcproperties MTLCaptureDescriptor begin
+    # Identifying the Capture Scope
+    @autoproperty captureObject::id{NSObject} setter=setCaptureObject
+    @autoproperty destination::MTLCaptureDestination setter=setDestination
+    @autoproperty outputURL::id{NSURL} setter=setOutputURL
+end
+
 function MTLCaptureDescriptor()
     handle = @objc [MTLCaptureDescriptor new]::id{MTLCaptureDescriptor}
     obj = MTLCaptureDescriptor(handle)
-    finalizer(unsafe_destroy!, obj)
+    finalizer(release, obj)
     return obj
 end
 
@@ -104,20 +105,6 @@ function MTLCaptureDescriptor(obj::Union{MTLDevice,MTLCommandQueue, MTLCaptureSc
         desc.outputURL = NSFileURL(folder)
     end
     return desc
-end
-
-function unsafe_destroy!(desc::MTLCaptureDescriptor)
-    release(desc)
-end
-
-
-## properties
-
-@objcproperties MTLCaptureDescriptor begin
-    # Identifying the Capture Scope
-    @autoproperty captureObject::id{NSObject} setter=setCaptureObject
-    @autoproperty destination::MTLCaptureDestination setter=setDestination
-    @autoproperty outputURL::id{NSURL} setter=setOutputURL
 end
 
 
@@ -138,6 +125,14 @@ MTLCaptureManager
 
 @objcwrapper MTLCaptureManager <: NSObject
 
+@objcproperties MTLCaptureManager begin
+    # Creating a Capture Scope
+    @autoproperty defaultCaptureScope::id{MTLCaptureScope} setter=setDefaultCaptureScope
+
+    # Monitoring Capture
+    @autoproperty isCapturing::Bool
+end
+
 """
     MTLCaptureManager()
 
@@ -149,9 +144,7 @@ function MTLCaptureManager()
     # One with capture enabled and one without
     MTLDevice(1)
     handle = @objc [MTLCaptureManager sharedCaptureManager]::id{MTLCaptureManager}
-    obj = MTLCaptureManager(handle)
-    # No finalizer needed since the manager is handled by Metal
-    return obj
+    MTLCaptureManager(handle)
 end
 
 """
@@ -203,15 +196,4 @@ end
 
 function supports_destination(manager::MTLCaptureManager, destination::MTLCaptureDestination)
     @objc [manager::id{MTLCaptureManager} supportsDestination:destination::MTLCaptureDestination]::Bool
-end
-
-
-## properties
-
-@objcproperties MTLCaptureManager begin
-    # Creating a Capture Scope
-    @autoproperty defaultCaptureScope::id{MTLCaptureScope} setter=setDefaultCaptureScope
-
-    # Monitoring Capture
-    @autoproperty isCapturing::Bool
 end

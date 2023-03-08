@@ -5,7 +5,7 @@ export MTLBlitCommandEncoder, append_copy!, append_fillbuffer!, append_sync!
 function MTLBlitCommandEncoder(cmdbuf::MTLCommandBuffer)
     handle = @objc [cmdbuf::id{MTLCommandBuffer} blitCommandEncoder]::id{MTLBlitCommandEncoder}
     obj = MTLBlitCommandEncoder(handle)
-    finalizer(unsafe_destroy!, obj)
+    finalizer(release, obj)
 
     # Per Apple's "Basic Memory Management Rules" the above invocation does not imply
     # ownership. To be consistent the name of the function and CF_RETURNS_RETAINED, we

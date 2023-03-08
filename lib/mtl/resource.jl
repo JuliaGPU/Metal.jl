@@ -1,9 +1,6 @@
-export MTLResource
-
-@objcwrapper MTLResource <: NSObject
-
-
-## properties
+#
+# resource enums
+#
 
 @cenum MTLCPUCacheMode::NSUInteger begin
     MTLCPUCacheModeDefaultCache = 0
@@ -42,6 +39,15 @@ Base.convert(::Type{MTLResourceOptions}, x::Integer) = MTLResourceOptions(x)
     MTLResourceUsageWrite = 2
     MTLResourceUsageSample = 4
 end
+
+
+#
+# resourcs
+#
+
+export MTLResource
+
+@objcwrapper MTLResource <: NSObject
 
 @objcproperties MTLResource begin
     @autoproperty device::id{MTLDevice}

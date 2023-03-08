@@ -18,7 +18,7 @@ function MTLComputeCommandEncoder(cmdbuf::MTLCommandBuffer;
     end
 
     obj = MTLComputeCommandEncoder(handle)
-    finalizer(unsafe_destroy!, obj)
+    finalizer(release, obj)
 
     # Per Apple's "Basic Memory Management Rules" the above invocation does not imply
     # ownership. To be consistent the name of the function and CF_RETURNS_RETAINED, we

@@ -1,20 +1,6 @@
-export MTLCompileOptions
-
-@objcwrapper immutable=false MTLCompileOptions <: NSObject
-
-function MTLCompileOptions()
-    handle = @objc [MTLCompileOptions new]::id{MTLCompileOptions}
-    obj = MTLCompileOptions(handle)
-    finalizer(unsafe_destroy!, obj)
-    return obj
-end
-
-function unsafe_destroy!(opts::MTLCompileOptions)
-    @objc [opts::id{MTLCompileOptions} release]::Nothing
-end
-
-
-## langauge version
+#
+# enums
+#
 
 @cenum MTLLanguageVersion::NSUInteger begin
     MTLLanguageVersion1_0 = (1 << 16)
@@ -53,10 +39,23 @@ function Base.convert(::Type{MTLLanguageVersion}, ver::VersionNumber)
 end
 
 
-## properties
+#
+# compile options
+#
+
+export MTLCompileOptions
+
+@objcwrapper immutable=false MTLCompileOptions <: NSObject
 
 @objcproperties MTLCompileOptions begin
     @autoproperty fastMathEnabled::Bool setter=setFastMathEnabled
     @autoproperty preserveInvariance::Bool setter=setPreserveInvariance
     @autoproperty languageVersion::MTLLanguageVersion type=VersionNumber setter=setLanguageVersion
+end
+
+function MTLCompileOptions()
+    handle = @objc [MTLCompileOptions new]::id{MTLCompileOptions}
+    obj = MTLCompileOptions(handle)
+    finalizer(release, obj)
+    return obj
 end
