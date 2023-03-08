@@ -4,9 +4,12 @@ using ..Metal
 
 using ..cmt
 
+using CEnum
+using ObjectiveC, .Foundation
+
 import GPUArrays
 
-is_supported(dev::MTLDevice) = mtMPSSupportsMTLDevice(dev)
+is_supported(dev::MTLDevice) = ccall(:MPSSupportsMTLDevice, Bool, (id{MTLDevice},), dev)
 
 # high-level wrappers
 include("matrix.jl")

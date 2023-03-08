@@ -1,4 +1,4 @@
-## sizes
+## size
 
 export MTLSize
 
@@ -19,7 +19,20 @@ MTLSize(dims::NTuple{3,<:Integer}) = MTLSize(dims[1], dims[2], dims[3])
 Base.convert(::Type{MtSize}, sz::MTLSize) = MtSize(sz.width, sz.height, sz.depth)
 
 
-## ranges
+## origin
+
+export MTLOrigin
+
+struct MTLOrigin
+    x::NSUInteger
+    y::NSUInteger
+    z::NSUInteger
+
+    MTLOrigin(x=0, y=0, z=0) = new(x, y, z)
+end
+
+
+## range
 
 # convert from 1 based indexing to 0 based indexing
 Base.convert(::Type{NSRange}, range::UnitRange{T}) where T <: Integer =
