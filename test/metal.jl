@@ -293,10 +293,10 @@ end
 cmdbuf = MTLCommandBuffer(cmdq)
 scheduled = Ref(false)
 completed = Ref(false)
-on_scheduled(cmdbuf) do
+on_scheduled(cmdbuf) do buf
     scheduled[] = true
 end
-on_completed(cmdbuf) do
+on_completed(cmdbuf) do buf
     completed[] = true
 end
 @test scheduled[] == false

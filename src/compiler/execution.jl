@@ -246,7 +246,7 @@ function (kernel::HostKernel)(args...; grid=1, threads=1, queue=global_queue(cur
     #
     # TODO: is there a way to bind additional resources to the command buffer?
     roots = [kernel.f, args]
-    MTL.on_completed(cmdbuf) do
+    MTL.on_completed(cmdbuf) do buf
         empty!(roots)
         foreach(free, argument_buffers)
 
