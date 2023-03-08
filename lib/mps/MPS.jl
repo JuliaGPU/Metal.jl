@@ -2,8 +2,6 @@ module MPS
 
 using ..Metal
 
-using ..cmt
-
 using CEnum
 using ObjectiveC, .Foundation
 

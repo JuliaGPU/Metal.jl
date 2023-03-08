@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "33e2a8866d137f8311546f3eb771f807b1c33216"
+project_hash = "f5746c1a98e06b2349e32c5d2131234120f2cc34"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
@@ -247,12 +247,6 @@ uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
 version = "1.2.12+3"
-
-[[deps.cmt_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "049e4965e08ffb1fe62f731c385b92cf62d34817"
-uuid = "65323cdd-17ec-5719-9643-72016a7f97e3"
-version = "0.2.0+0"
 
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]

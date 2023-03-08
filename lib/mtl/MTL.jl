@@ -1,7 +1,5 @@
 module MTL
 
-using ..cmt
-
 using CEnum
 using ObjectiveC, .Foundation, .Dispatch
 

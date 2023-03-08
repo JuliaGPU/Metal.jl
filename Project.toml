@@ -1,8 +1,6 @@
 name = "Metal"
 uuid = "dde4c033-4e86-420c-a63e-0dd931031962"
-authors = ["Filippo Vicentini <filippovicentini@gmail.com>",
-           "Tim Besard <tim.besard@gmail.com>",
-           "Max Hawkins <max.hawkins65@gmail.com>"]
+authors = ["Filippo Vicentini <filippovicentini@gmail.com>", "Tim Besard <tim.besard@gmail.com>", "Max Hawkins <max.hawkins65@gmail.com>"]
 version = "0.2.0"
 
 [deps]
@@ -17,7 +15,6 @@ Metal_LLVM_Tools_jll = "0418c028-ff8c-56b8-a53e-0f9676ed36fc"
 ObjectiveC = "e86c9b32-1129-44ac-8ea0-90d5bb39ded9"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
-cmt_jll = "65323cdd-17ec-5719-9643-72016a7f97e3"
 
 [compat]
 Adapt = "3"
@@ -25,8 +22,7 @@ CEnum = "0.4"
 ExprTools = "0.1"
 GPUArrays = "8.4"
 GPUCompiler = "0.16, 0.17"
-Reexport = "1.0"
 LLVM = "4.15"
 Metal_LLVM_Tools_jll = "~0.3"
-cmt_jll = "~0.2"
+Reexport = "1.0"
 julia = "1.8"

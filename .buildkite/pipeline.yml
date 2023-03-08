@@ -15,8 +15,6 @@ steps:
                 - src
                 - lib
                 - examples
-        command: |
-          julia --project=deps deps/build_ci.jl
         agents:
           queue: "juliaecosystem"
           os: "macos"
@@ -37,8 +35,6 @@ steps:
       #           - src
       #           - lib
       #           - examples
-      #   command: |
-      #     julia --project=deps deps/build_ci.jl
       #   agents:
       #     queue: "juliaecosystem"
       #     os: "macos"
@@ -58,8 +54,6 @@ steps:
       #           - src
       #           - lib
       #           - examples
-      #   command: |
-      #     julia --project=deps deps/build_ci.jl
       #   agents:
       #     queue: "juliaecosystem"
       #     os: "macos"
@@ -86,8 +80,6 @@ steps:
                 - src
                 - lib
                 - examples
-        command: |
-          julia --project=deps deps/build_ci.jl
         env:
           MTL_DEBUG_LAYER: '1'
           MTL_SHADER_VALIDATION: '1'

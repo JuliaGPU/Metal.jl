@@ -10,9 +10,6 @@ using Metal_LLVM_Tools_jll
 using ExprTools: splitdef, combinedef
 using ObjectiveC, .Foundation, .Dispatch
 
-# C wrappers
-include("../lib/cmt/cmt.jl")
-
 # core library
 include("../lib/mtl/MTL.jl")
 @reexport using .MTL
