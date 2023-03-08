@@ -142,7 +142,9 @@ let ev = MTLEvent(dev)
 end
 
 let ev = MTLSharedEvent(dev)
-    @test ev.device === nothing
+    # XXX: this returns nothing, which seems like a Metal bug,
+    #      especially because it does return a device under validation.
+    #@test ev.device == dev
     @test ev.label === nothing
     ev.label = "MyEvent"
     @test ev.label == "MyEvent"
