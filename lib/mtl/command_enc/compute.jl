@@ -2,20 +2,19 @@ export MTLComputeCommandEncoder
 export set_function!, set_buffer!, set_bytes!, dispatchThreads!, endEncoding!
 export set_buffers!, append_current_function!
 
+@cenum MTLDispatchType::NSUInteger begin
+    MTLDispatchTypeSerial = 0
+    MTLDispatchTypeConcurrent = 1
+end
+
 @objcwrapper immutable=false MTLComputeCommandEncoder <: MTLCommandEncoder
 
-# compatibility with cmt
-Base.unsafe_convert(T::Type{Ptr{MtComputeCommandEncoder}}, obj::MTLComputeCommandEncoder) =
-    reinterpret(T, Base.unsafe_convert(id, obj))
-MTLComputeCommandEncoder(ptr::Ptr{MtComputeCommandEncoder}) =
-    MTLComputeCommandEncoder(reinterpret(id{MTLComputeCommandEncoder}, ptr))
-
 function MTLComputeCommandEncoder(cmdbuf::MTLCommandBuffer;
-                                  dispatch_type::Union{Nothing,MtDispatchType} = nothing)
+                                  dispatch_type::Union{Nothing,MTLDispatchType} = nothing)
     handle = if isnothing(dispatch_type)
         @objc [cmdbuf::id{MTLCommandBuffer} computeCommandEncoder]::id{MTLComputeCommandEncoder}
     else
-        @objc [cmdbuf::id{MTLCommandBuffer} computeCommandEncoderWithDispatchType:dispatch_type::MtDispatchType]::id{MTLComputeCommandEncoder}
+        @objc [cmdbuf::id{MTLCommandBuffer} computeCommandEncoderWithDispatchType:dispatch_type::MTLDispatchType]::id{MTLComputeCommandEncoder}
     end
 
     obj = MTLComputeCommandEncoder(handle)
@@ -62,13 +61,13 @@ end
 
 #### use
 
-function use!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, mode::MtResourceUsage=ReadWriteUsage)
+function use!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, mode::MTLResourceUsage=ReadWriteUsage)
     @objc [cce::id{MTLComputeCommandEncoder} useResource:buf::id{MTLBuffer}
-                                             usage:mode::MtResourceUsage]::Nothing
+                                             usage:mode::MTLResourceUsage]::Nothing
 end
 
-function use!(cce::MTLComputeCommandEncoder, buf::Vector{MTLBuffer}, mode::MtResourceUsage=ReadWriteUsage)
+function use!(cce::MTLComputeCommandEncoder, buf::Vector{MTLBuffer}, mode::MTLResourceUsage=ReadWriteUsage)
     @objc [cce::id{MTLComputeCommandEncoder} useResources:buf::id{MTLBuffer}
                                              count:length(buf)::Csize_t
-                                             usage:mode::MtResourceUsage]::Nothing
+                                             usage:mode::MTLResourceUsage]::Nothing
 end

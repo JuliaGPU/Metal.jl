@@ -17,12 +17,6 @@ export MTLFunctionDescriptor
 
 @objcwrapper immutable=false MTLFunctionDescriptor <: NSObject
 
-# compatibility with cmt
-Base.unsafe_convert(T::Type{Ptr{MtFunctionDescriptor}}, obj::MTLFunctionDescriptor) =
-    reinterpret(T, Base.unsafe_convert(id, obj))
-MTLFunctionDescriptor(ptr::Ptr{MtFunctionDescriptor}) =
-    MTLFunctionDescriptor(reinterpret(id{MTLFunctionDescriptor}, ptr))
-
 function MTLFunctionDescriptor()
     handle = @objc [MTLFunctionDescriptor new]::id{MTLFunctionDescriptor}
     obj = MTLFunctionDescriptor(handle)
@@ -51,11 +45,6 @@ end
 export MTLFunction
 
 @objcwrapper immutable=false MTLFunction <: NSObject
-
-# compatibility with cmt
-Base.unsafe_convert(T::Type{Ptr{MtFunction}}, obj::MTLFunction) =
-    reinterpret(T, Base.unsafe_convert(id, obj))
-MTLFunction(ptr::Ptr{MtFunction}) = MTLFunction(reinterpret(id{MTLFunction}, ptr))
 
 # Get a handle to a kernel function in a Metal Library.
 function MTLFunction(lib::MTLLibrary, name::String)

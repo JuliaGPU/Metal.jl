@@ -2,11 +2,6 @@ export MTLDevice, devices
 
 @objcwrapper MTLDevice <: NSObject
 
-# compatibility with cmt
-Base.unsafe_convert(T::Type{Ptr{MtDevice}}, obj::MTLDevice) =
-    reinterpret(T, Base.unsafe_convert(id, obj))
-MTLDevice(ptr::Ptr{MtDevice}) = MTLDevice(reinterpret(id{MTLDevice}, ptr))
-
 MTLCreateSystemDefaultDevice() =
     MTLDevice(ccall(:MTLCreateSystemDefaultDevice, id{MTLDevice}, ()))
 
@@ -39,7 +34,7 @@ end
     ## device inspection
     # compute support
     @autoproperty maxThreadgroupMemoryLength::NSUInteger
-    @autoproperty maxThreadsPerThreadgroup::MTLSize type=MtSize
+    @autoproperty maxThreadsPerThreadgroup::MTLSize
     # render support
     @autoproperty supportsRaytracing::Bool
     @autoproperty supportsPrimitiveMotionBlur::Bool

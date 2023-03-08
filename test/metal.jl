@@ -24,7 +24,7 @@ full_str = sprint(io->show(io, MIME"text/plain"(), dev))
 
 @test dev.recommendedMaxWorkingSetSize isa Integer
 @test dev.maxThreadgroupMemoryLength isa Integer
-@test dev.maxThreadsPerThreadgroup isa MTL.MtSize
+@test dev.maxThreadsPerThreadgroup isa MTL.MTLSize
 @test dev.argumentBuffersSupport isa MTL.MTLArgumentBuffersTier
 @test dev.maxBufferLength isa Integer
 
@@ -126,7 +126,7 @@ full_str = sprint(io->show(io, MIME"text/plain"(), fun))
 fun.label = "MyKernel"
 @test fun.label == "MyKernel"
 @test fun.name == "kernel_1"
-@test fun.functionType == MTL.MtFunctionTypeKernel
+@test fun.functionType == MTL.MTLFunctionTypeKernel
 
 end
 
@@ -275,7 +275,7 @@ cmdbuf = MTLCommandBuffer(cmdq)
 cmdbuf.label = "MyCommandBuffer"
 @test cmdbuf.label == "MyCommandBuffer"
 @test cmdbuf.error === nothing
-@test cmdbuf.status == MTL.MtCommandBufferStatusNotEnqueued
+@test cmdbuf.status == MTL.MTLCommandBufferStatusNotEnqueued
 @test cmdbuf.kernelStartTime == 0
 @test cmdbuf.kernelEndTime == 0
 @test cmdbuf.GPUStartTime == 0
@@ -301,14 +301,14 @@ on_completed(cmdbuf) do buf
 end
 @test scheduled[] == false
 @test completed[] == false
-@test cmdbuf.status == MTL.MtCommandBufferStatusNotEnqueued
+@test cmdbuf.status == MTL.MTLCommandBufferStatusNotEnqueued
 enqueue!(cmdbuf)
-@test cmdbuf.status == MTL.MtCommandBufferStatusEnqueued
+@test cmdbuf.status == MTL.MTLCommandBufferStatusEnqueued
 commit!(cmdbuf)
 # XXX: happens too quickly to test for committed status
-#@test cmdbuf.status == MTL.MtCommandBufferStatusCommitted
-wait_completed(cmdbuf) == MTL.MtCommandBufferStatusCompleted
-@test cmdbuf.status == MTL.MtCommandBufferStatusCompleted
+#@test cmdbuf.status == MTL.MTLCommandBufferStatusCommitted
+wait_completed(cmdbuf) == MTL.MTLCommandBufferStatusCompleted
+@test cmdbuf.status == MTL.MTLCommandBufferStatusCompleted
 retry(; delays=[0, 0.1, 1]) do
     scheduled[] || error("scheduled callback not called")
     completed[] || error("completed callback not called")
@@ -333,7 +333,7 @@ if !runtime_validation
     # when the debug layer is activated, Metal seems to retain all resources?
     @test cmdbuf.retainedReferences == false
 end
-@test cmdbuf.errorOptions == MTL.MtCommandBufferErrorOptionEncoderExecutionStatus
+@test cmdbuf.errorOptions == MTL.MTLCommandBufferErrorOptionEncoderExecutionStatus
 
 end
 

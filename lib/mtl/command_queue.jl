@@ -2,12 +2,6 @@ export MTLCommandQueue
 
 @objcwrapper immutable=false MTLCommandQueue <: NSObject
 
-# compatibility with cmt
-Base.unsafe_convert(T::Type{Ptr{MtCommandQueue}}, obj::MTLCommandQueue) =
-    reinterpret(T, Base.unsafe_convert(id, obj))
-MTLCommandQueue(ptr::Ptr{MtCommandQueue}) =
-    MTLCommandQueue(reinterpret(id{MTLCommandQueue}, ptr))
-
 function MTLCommandQueue(dev::MTLDevice)
     handle = @objc [dev::id{MTLDevice} newCommandQueue]::id{MTLCommandQueue}
     obj = MTLCommandQueue(handle)

@@ -25,12 +25,6 @@ export MTLCommandBufferDescriptor
 
 @objcwrapper immutable=false MTLCommandBufferDescriptor <: NSObject
 
-# compatibility with cmt
-Base.unsafe_convert(T::Type{Ptr{MtCommandBufferDescriptor}}, obj::MTLCommandBufferDescriptor) =
-    reinterpret(T, Base.unsafe_convert(id, obj))
-MTLCommandBufferDescriptor(ptr::Ptr{MtCommandBufferDescriptor}) =
-    MTLCommandBufferDescriptor(reinterpret(id{MTLCommandBufferDescriptor}, ptr))
-
 function MTLCommandBufferDescriptor()
     handle = @objc [MTLCommandBufferDescriptor new]::id{MTLCommandBufferDescriptor}
     obj = MTLCommandBufferDescriptor(handle)
@@ -60,11 +54,6 @@ export MTLCommandBuffer, enqueue!, wait_scheduled, wait_completed, encode_signal
        encode_wait!, commit!, on_scheduled, on_completed
 
 @objcwrapper immutable=false MTLCommandBuffer <: NSObject
-
-# compatibility with cmt
-Base.unsafe_convert(T::Type{Ptr{MtCommandBuffer}}, obj::MTLCommandBuffer) =
-    reinterpret(T, Base.unsafe_convert(id, obj))
-MTLCommandBuffer(ptr::Ptr{MtCommandBuffer}) = MTLCommandBuffer(reinterpret(id{MTLCommandBuffer}, ptr))
 
 function MTLCommandBuffer(queue::MTLCommandQueue,
                           desc::MTLCommandBufferDescriptor=MTLCommandBufferDescriptor())
@@ -129,12 +118,14 @@ into the command buffers and those threads can complete in any order.
 [enqueue](https://developer.apple.com/documentation/metal/mtlcommandbuffer/1443019-enqueue?language=objc)
 """
 function enqueue!(q::MTLCommandBuffer)
-    q.status in [MtCommandBufferStatusCompleted, MtCommandBufferStatusEnqueued] && error("Cannot enqueue an already enqueued command buffer")
+    q.status in [MTLCommandBufferStatusCompleted, MTLCommandBufferStatusEnqueued] &&
+        error("Cannot enqueue an already enqueued command buffer")
     @objc [q::id{MTLCommandBuffer} enqueue]::Nothing
 end
 
 function commit!(q::MTLCommandBuffer)
-    q.status in [MtCommandBufferStatusCompleted, MtCommandBufferStatusCommitted] && error("Cannot commit an already committed/completed command buffer")
+    q.status in [MTLCommandBufferStatusCompleted, MTLCommandBufferStatusCommitted] &&
+        error("Cannot commit an already committed/completed command buffer")
     @objc [q::id{MTLCommandBuffer} commit]::Nothing
 end
 

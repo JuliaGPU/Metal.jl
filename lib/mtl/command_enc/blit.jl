@@ -2,11 +2,6 @@ export MTLBlitCommandEncoder, append_copy!, append_fillbuffer!, append_sync!
 
 @objcwrapper immutable=false MTLBlitCommandEncoder <: MTLCommandEncoder
 
-# compatibility with cmt
-Base.unsafe_convert(T::Type{Ptr{MtBlitCommandEncoder}}, obj::MTLBlitCommandEncoder) =
-    reinterpret(T, Base.unsafe_convert(id, obj))
-MTLBlitCommandEncoder(ptr::Ptr{MtBlitCommandEncoder}) = MTLBlitCommandEncoder(reinterpret(id{MTLBlitCommandEncoder}, ptr))
-
 function MTLBlitCommandEncoder(cmdbuf::MTLCommandBuffer)
     handle = @objc [cmdbuf::id{MTLCommandBuffer} blitCommandEncoder]::id{MTLBlitCommandEncoder}
     obj = MTLBlitCommandEncoder(handle)

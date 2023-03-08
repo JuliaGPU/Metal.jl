@@ -34,9 +34,9 @@ include("helpers.jl")
 
 # high-level wrappers
 include("size.jl")
-include("storage_type.jl")
 include("device.jl")
 include("resource.jl")
+include("storage_type.jl")
 include("compile-opts.jl")
 include("library.jl")
 include("function.jl")

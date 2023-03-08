@@ -49,9 +49,9 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPointer{T}, N:
         unsafe_copyto!(dev, tmp_buf, 1, src.buffer, src.offset, N; queue, async)
         unsafe_copyto!(dst, contents(tmp_buf), N)
         free(tmp_buf)
-    elseif storage_type ==  MTL.MtStorageModeShared
+    elseif storage_type ==  MTL.MTLStorageModeShared
         unsafe_copyto!(dst, contents(src), N)
-    elseif storage_type ==  MTL.MtStorageModeManaged
+    elseif storage_type ==  MTL.MTLStorageModeManaged
         unsafe_copyto!(dst, contents(src), N)
     end
     return dst
@@ -66,9 +66,9 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPointer{T}, src::Ptr{T}, N:
         unsafe_copyto!(dev, tmp_buf, src, N; queue, async)
         unsafe_copyto!(dev, dst.buffer, dst.offset, tmp_buf, 1, N; queue, async)
         free(tmp_buf)
-    elseif storage_type == MTL.MtStorageModeShared
+    elseif storage_type == MTL.MTLStorageModeShared
         unsafe_copyto!(contents(dst), src, N)
-    elseif storage_type == MTL.MtStorageModeManaged
+    elseif storage_type == MTL.MTLStorageModeManaged
         unsafe_copyto!(contents(dst), src, N)
         MTL.DidModifyRange!(dst, 1:N)
     end

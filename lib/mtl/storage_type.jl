@@ -1,5 +1,5 @@
 abstract type StorageMode end
-export MtStorageMode, Shared, Managed, Private
+export Shared, Managed, Private
 export ReadUsage, WriteUsage, ReadWriteUsage
 
 # Metal Has 4 storage types
@@ -17,43 +17,42 @@ struct Memoryless  <: StorageMode end
 end
 
 const CPUStorage = Union{AS.Shared,AS.Managed}
-Base.convert(::Type{MtStorageMode}, ::Type{AS.Shared})     = MtStorageModeShared
-Base.convert(::Type{MtStorageMode}, ::Type{AS.Managed})    = MtStorageModeManaged
-Base.convert(::Type{MtStorageMode}, ::Type{AS.Private})    = MtStorageModePrivate
-Base.convert(::Type{MtStorageMode}, ::Type{AS.Memoryless}) = MtStorageModeMemoryless
+Base.convert(::Type{MTLStorageMode}, ::Type{AS.Shared})     = MTLStorageModeShared
+Base.convert(::Type{MTLStorageMode}, ::Type{AS.Managed})    = MTLStorageModeManaged
+Base.convert(::Type{MTLStorageMode}, ::Type{AS.Private})    = MTLStorageModePrivate
+Base.convert(::Type{MTLStorageMode}, ::Type{AS.Memoryless}) = MTLStorageModeMemoryless
 
-Base.convert(::Type{MtResourceOptions}, ::Type{AS.Shared})     = MtResourceStorageModeShared
-Base.convert(::Type{MtResourceOptions}, ::Type{AS.Managed})    = MtResourceStorageModeManaged
-Base.convert(::Type{MtResourceOptions}, ::Type{AS.Private})    = MtResourceStorageModePrivate
-Base.convert(::Type{MtResourceOptions}, ::Type{AS.Memoryless}) = MtResourceStorageModeMemoryless
+Base.convert(::Type{MTLResourceOptions}, ::Type{AS.Shared})     = MTLResourceStorageModeShared
+Base.convert(::Type{MTLResourceOptions}, ::Type{AS.Managed})    = MTLResourceStorageModeManaged
+Base.convert(::Type{MTLResourceOptions}, ::Type{AS.Private})    = MTLResourceStorageModePrivate
+Base.convert(::Type{MTLResourceOptions}, ::Type{AS.Memoryless}) = MTLResourceStorageModeMemoryless
 
 # Broken because multiple zeros
-#@enum_without_prefix MtResourceOptions MtResource
-const MtlResourceOptions    = MtResourceOptions
+#@enum_without_prefix MTLResourceOptions MTLResource
 
-const Shared                = MtResourceStorageModeShared
-const Managed               = MtResourceStorageModeManaged
-const Private               = MtResourceStorageModePrivate
-const Memoryless            = MtResourceStorageModeMemoryless
+const Shared                = MTLResourceStorageModeShared
+const Managed               = MTLResourceStorageModeManaged
+const Private               = MTLResourceStorageModePrivate
+const Memoryless            = MTLResourceStorageModeMemoryless
 
-const DefaultCPUCache       = MtResourceCPUCacheModeDefaultCache
-const CombinedWriteCPUCache = MtResourceCPUCacheModeWriteCombined
+const DefaultCPUCache       = MTLResourceCPUCacheModeDefaultCache
+const CombinedWriteCPUCache = MTLResourceCPUCacheModeWriteCombined
 
-const DefaultTracking       = MtResourceHazardTrackingModeDefault
-const Untracked             = MtResourceHazardTrackingModeUntracked
-const Tracked               = MtResourceHazardTrackingModeTracked
+const DefaultTracking       = MTLResourceHazardTrackingModeDefault
+const Untracked             = MTLResourceHazardTrackingModeUntracked
+const Tracked               = MTLResourceHazardTrackingModeTracked
 
 const Default               = DefaultCPUCache
 
-Base.:(==)(a::MtlResourceOptions, b::MtStorageMode) =
+Base.:(==)(a::MTLResourceOptions, b::MTLStorageMode) =
     (UInt(a) >> 4) == UInt(b)
 
-Base.:(==)(a::MtStorageMode, b::MtlResourceOptions) =
+Base.:(==)(a::MTLStorageMode, b::MTLResourceOptions) =
     b == a
 
 ##################
-Base.convert(::Type{MtResourceUsage}, val::Integer)    = MtResourceUsage(val)
+Base.convert(::Type{MTLResourceUsage}, val::Integer)    = MTLResourceUsage(val)
 
-const ReadUsage = MtResourceUsageRead
-const WriteUsage = MtResourceUsageWrite
-const ReadWriteUsage = convert(MtResourceUsage, MtResourceUsageRead | MtResourceUsageWrite)
+const ReadUsage = MTLResourceUsageRead
+const WriteUsage = MTLResourceUsageWrite
+const ReadWriteUsage = convert(MTLResourceUsage, MTLResourceUsageRead | MTLResourceUsageWrite)

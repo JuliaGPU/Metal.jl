@@ -2,11 +2,6 @@ export MTLResource
 
 @objcwrapper MTLResource <: NSObject
 
-# compatibility with cmt
-Base.unsafe_convert(T::Type{Ptr{MtResource}}, obj::MTLResource) =
-    reinterpret(T, Base.unsafe_convert(id, obj))
-MTLResource(ptr::Ptr{MtResource}) = MTLResource(reinterpret(id{MTLResource}, ptr))
-
 
 ## properties
 
@@ -41,6 +36,12 @@ end
 end
 ## bitwise operations lose type information, so allow conversions
 Base.convert(::Type{MTLResourceOptions}, x::Integer) = MTLResourceOptions(x)
+
+@cenum MTLResourceUsage::NSUInteger begin
+    MTLResourceUsageRead = 1
+    MTLResourceUsageWrite = 2
+    MTLResourceUsageSample = 4
+end
 
 @objcproperties MTLResource begin
     @autoproperty device::id{MTLDevice}

@@ -50,11 +50,6 @@ export MTLHeap
 
 @objcwrapper immutable=false MTLHeap <: NSObject
 
-# compatibility with cmt
-Base.unsafe_convert(T::Type{Ptr{MtHeap}}, obj::MTLHeap) =
-    reinterpret(T, Base.unsafe_convert(id, obj))
-MTLHeap(ptr::Ptr{MtHeap}) = MTLHeap(reinterpret(id{MTLHeap}, ptr))
-
 function MTLHeap(dev::MTLDevice, desc::MTLHeapDescriptor)
     handle = @objc [dev::id{MTLDevice} newHeapWithDescriptor:desc::id{MTLHeapDescriptor}]::id{MTLHeap}
     obj = MTLHeap(handle)

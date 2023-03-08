@@ -2,11 +2,6 @@ export MTLLibrary, MTLLibraryFromFile, MTLLibraryFromData
 
 @objcwrapper immutable=false MTLLibrary <: NSObject
 
-# compatibility with cmt
-Base.unsafe_convert(T::Type{Ptr{MtLibrary}}, obj::MTLLibrary) =
-    reinterpret(T, Base.unsafe_convert(id, obj))
-MTLLibrary(ptr::Ptr{MtLibrary}) = MTLLibrary(reinterpret(id{MTLLibrary}, ptr))
-
 function MTLLibrary(device::MTLDevice, src::String,
                     opts::MTLCompileOptions=MTLCompileOptions())
     err = Ref{id{NSError}}(nil)

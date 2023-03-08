@@ -2,11 +2,6 @@ export endEncoding!
 
 @objcwrapper MTLCommandEncoder <: NSObject
 
-# compatibility with cmt
-Base.unsafe_convert(T::Type{Ptr{MtCommandEncoder}}, obj::MTLCommandEncoder) =
-    reinterpret(T, Base.unsafe_convert(id, obj))
-MTLCommandEncoder(ptr::Ptr{MtCommandEncoder}) = MTLCommandEncoder(reinterpret(id{MTLCommandEncoder}, ptr))
-
 function unsafe_destroy!(cce::MTLCommandEncoder)
     release(cce)
 end
