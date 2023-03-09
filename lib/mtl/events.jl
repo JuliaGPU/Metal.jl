@@ -4,7 +4,7 @@
 
 export MTLEvent
 
-@objcwrapper MTLEvent <: NSObject
+@objcwrapper immutable=false MTLEvent <: NSObject
 
 @objcproperties MTLEvent begin
     @autoproperty device::id{MTLDevice}
@@ -12,7 +12,10 @@ export MTLEvent
 end
 
 function MTLEvent(dev::MTLDevice)
-    MTLEvent(@objc [dev::id{MTLDevice} newEvent]::id{MTLEvent})
+    ptr = @objc [dev::id{MTLDevice} newEvent]::id{MTLEvent}
+    obj = MTLEvent(ptr)
+    finalizer(release, obj)
+    return obj
 end
 
 
@@ -22,14 +25,17 @@ end
 
 export MTLSharedEvent, MTLSharedEventHandle
 
-@objcwrapper MTLSharedEvent <: MTLEvent
+@objcwrapper immutable=false MTLSharedEvent <: MTLEvent
 
 @objcproperties MTLSharedEvent begin
     @autoproperty signaledValue::UInt64
 end
 
 function MTLSharedEvent(dev::MTLDevice)
-    MTLSharedEvent(@objc [dev::id{MTLDevice} newSharedEvent]::id{MTLSharedEvent})
+    ptr = @objc [dev::id{MTLDevice} newSharedEvent]::id{MTLSharedEvent}
+    obj = MTLSharedEvent(ptr)
+    finalizer(release, obj)
+    return obj
 end
 
 
@@ -38,5 +44,8 @@ end
 @objcwrapper MTLSharedEventHandle <: NSObject
 
 function MTLSharedEventHandle(ev::MTLSharedEvent)
-    MTLSharedEventHandle(@objc [ev::id{MTLSharedEvent} newSharedEventHandle]::id{MTLSharedEventHandle})
+    ptr = @objc [ev::id{MTLSharedEvent} newSharedEventHandle]::id{MTLSharedEventHandle}
+    obj = MTLSharedEventHandle(ptr)
+    finalizer(release, obj)
+    return obj
 end

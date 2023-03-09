@@ -18,7 +18,6 @@ function MTLLibrary(device::MTLDevice, src::String,
 
     obj = MTLLibrary(handle)
     finalizer(release, obj)
-
     return obj
 end
 
@@ -36,7 +35,6 @@ function MTLLibraryFromFile(device::MTLDevice, path::String)
 
     obj = MTLLibrary(handle)
     finalizer(release, obj)
-
     return obj
 end
 
@@ -51,6 +49,5 @@ function MTLLibraryFromData(device::MTLDevice, input_data)
 
     obj = MTLLibrary(handle)
     finalizer(release, obj)
-
     return obj
 end

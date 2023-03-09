@@ -102,7 +102,7 @@ alloc(args...; kwargs...) = MTLBuffer(args...; kwargs...)
 Frees the buffer if the handle is valid.
 This does not protect against double-freeing of the same buffer!
 """
-free(buf::MTLBuffer) = @objc [buf::id{MTLBuffer} release]::Nothing
+free(buf::MTLBuffer) = release(buf)
 
 """
     DidModifyRange!(buf::MTLBuffer, range::UnitRange)
