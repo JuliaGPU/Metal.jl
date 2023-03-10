@@ -55,7 +55,7 @@ function MPSMatrixDescriptor(rows, columns, rowBytes, dataType)
                                       rowBytes:rowBytes::NSUInteger
                                       dataType:jl_typ_to_mps[dataType]::MPSDataType]::id{MPSMatrixDescriptor}
     obj = MPSMatrixDescriptor(desc)
-    # TODO: release?
+    # XXX: who releases this object?
     return obj
 end
 
@@ -66,7 +66,7 @@ end
 
 export MPSMatrix
 
-@objcwrapper MPSMatrix <: NSObject
+@objcwrapper immutable=false MPSMatrix <: NSObject
 
 """
     MPSMatrix(arr::MtlMatrix)
@@ -81,7 +81,7 @@ function MPSMatrix(arr::MtlMatrix{T}) where T
     desc = MPSMatrixDescriptor(n_rows, n_cols, sizeof(T)*n_cols, T)
     mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
     obj = MPSMatrix(mat)
-    # TODO: release?
+    finalizer(release, obj)
     @objc [obj::id{MPSMatrix} initWithBuffer:arr.buffer::id{MTLBuffer}
                               descriptor:desc::id{MPSMatrixDescriptor}]::id{MPSMatrix}
     return obj
@@ -105,7 +105,7 @@ end
 # matrix multiplication
 #
 
-@objcwrapper MPSMatrixMultiplication <: MPSKernel
+@objcwrapper immutable=false MPSMatrixMultiplication <: MPSKernel
 
 @objcproperties MPSMatrixMultiplication begin
     @autoproperty leftMatrixOrigin::MTLOrigin setter=setLeftMatrixOrigin
@@ -119,7 +119,7 @@ function MPSMatrixMultiplication(device, transposeLeft, transposeRight, resultRo
                                  resultColumns, interiorColumns, alpha, beta)
     kernel = @objc [MPSMatrixMultiplication alloc]::id{MPSMatrixMultiplication}
     obj = MPSMatrixMultiplication(kernel)
-    # TODO: release?
+    finalizer(release, obj)
     @objc [obj::id{MPSMatrixMultiplication} initWithDevice:device::id{MTLDevice}
                                             transposeLeft:transposeLeft::Bool
                                             transposeRight:transposeRight::Bool

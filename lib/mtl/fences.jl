@@ -1,6 +1,6 @@
 export MTLFence
 
-@objcwrapper MTLFence <: NSObject
+@objcwrapper immutable=false MTLFence <: NSObject
 
 @objcproperties MTLFence begin
     @autoproperty device::id{MTLDevice}
@@ -8,5 +8,8 @@ export MTLFence
 end
 
 function MTLFence(dev::MTLDevice)
-    MTLFence(@objc [dev::id{MTLDevice} newFence]::id{MTLFence})
+    ptr = @objc [dev::id{MTLDevice} newFence]::id{MTLFence}
+    obj = MTLFence(ptr)
+    finalizer(release, obj)
+    return obj
 end

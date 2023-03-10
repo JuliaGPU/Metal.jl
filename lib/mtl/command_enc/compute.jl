@@ -17,15 +17,7 @@ function MTLComputeCommandEncoder(cmdbuf::MTLCommandBuffer;
         @objc [cmdbuf::id{MTLCommandBuffer} computeCommandEncoderWithDispatchType:dispatch_type::MTLDispatchType]::id{MTLComputeCommandEncoder}
     end
 
-    obj = MTLComputeCommandEncoder(handle)
-    finalizer(release, obj)
-
-    # Per Apple's "Basic Memory Management Rules" the above invocation does not imply
-    # ownership. To be consistent the name of the function and CF_RETURNS_RETAINED, we
-    # explicitly claim ownership with an explicit `retain`
-    retain(obj)
-
-    return obj
+    MTLComputeCommandEncoder(handle)
 end
 
 function set_function!(cce::MTLComputeCommandEncoder, pip::MTLComputePipelineState)

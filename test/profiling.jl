@@ -65,6 +65,7 @@ startCapture(manager, desc)
 stopCapture(manager)
 @test manager.isCapturing == false
 @test isdir(path)
+release(new_scope)
 
 # Profile Macro
 cd(path) do
