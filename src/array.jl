@@ -50,7 +50,7 @@ mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
         # a pointer, query the buffer's properties, etc), we use a 1-byte buffer instead.
         bufsize = 1
       end
-      buf = alloc(dev, bufsize; storage=storage)
+      buf = alloc(dev, bufsize; storage)
       buf.label = "MtlArray{$(T),$(N)}(dims=$dims)"
 
       obj = new(buf, maxsize, 0, dims)
@@ -73,6 +73,7 @@ mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
 end
 
 device(A::MtlArray) = A.buffer.device
+storagemode(A::MtlArray) = convert(MTL.MTLResourceOptions, A.buffer.storageMode)
 
 ## aliases
 
@@ -83,21 +84,21 @@ const MtlVecOrMat{T} = Union{MtlVector{T},MtlMatrix{T}}
 ## constructors
 
 # type and dimensionality specified, accepting dims as series of Ints
-MtlArray{T,N}(::UndefInitializer, dims::Integer...) where {T,N} =
-  MtlArray{T,N}(undef, Dims(dims))
+MtlArray{T,N}(::UndefInitializer, dims::Integer...; kwargs...) where {T,N} =
+  MtlArray{T,N}(undef, Dims(dims); kwargs...)
 
 # type but not dimensionality specified
-MtlArray{T}(::UndefInitializer, dims::Dims{N}) where {T,N} = MtlArray{T,N}(undef, dims)
-MtlArray{T}(::UndefInitializer, dims::Integer...) where {T} =
-    MtlArray{T}(undef, convert(Tuple{Vararg{Int}}, dims))
+MtlArray{T}(::UndefInitializer, dims::Dims{N}; kwargs...) where {T,N} = MtlArray{T,N}(undef, dims; kwargs...)
+MtlArray{T}(::UndefInitializer, dims::Integer...; kwargs...) where {T} =
+    MtlArray{T}(undef, convert(Tuple{Vararg{Int}}, dims); kwargs...)
 
 # empty vector constructor
-MtlArray{T,1}() where {T} = MtlArray{T,1}(undef, 0)
+MtlArray{T,1}(; kwargs...) where {T} = MtlArray{T,1}(undef, 0; kwargs...)
 
-Base.similar(a::MtlArray{T,N}) where {T,N} = MtlArray{T,N}(undef, size(a))
-Base.similar(a::MtlArray{T}, dims::Base.Dims{N}) where {T,N} = MtlArray{T,N}(undef, dims)
+Base.similar(a::MtlArray{T,N}) where {T,N} = MtlArray{T,N}(undef, size(a); storage=storagemode(a))
+Base.similar(a::MtlArray{T}, dims::Base.Dims{N}) where {T,N} = MtlArray{T,N}(undef, dims; storage=storagemode(a))
 Base.similar(a::MtlArray, ::Type{T}, dims::Base.Dims{N}) where {T,N} =
-  MtlArray{T,N}(undef, dims)
+  MtlArray{T,N}(undef, dims; storage=storagemode(a))
 
 function Base.copy(a::MtlArray{T,N}) where {T,N}
   b = similar(a)
@@ -131,12 +132,12 @@ Base.unsafe_convert(t::Type{MtlPointer{T}}, x::MtlArray) where {T} =
   return A
 end
 
-MtlArray{T,N}(xs::AbstractArray{S,N}) where {T,N,S} = MtlArray{T,N}(map(T, xs))
+MtlArray{T,N}(xs::AbstractArray{S,N}; kwargs...) where {T,N,S} = MtlArray{T,N}(map(T, xs); kwargs...)
 
 # underspecified constructors
-MtlArray{T}(xs::AbstractArray{S,N}) where {T,N,S} = MtlArray{T,N}(xs)
-(::Type{MtlArray{T,N} where T})(x::AbstractArray{S,N}) where {S,N} = MtlArray{S,N}(x)
-MtlArray(A::AbstractArray{T,N}) where {T,N} = MtlArray{T,N}(A)
+MtlArray{T}(xs::AbstractArray{S,N}; kwargs...) where {T,N,S} = MtlArray{T,N}(xs; kwargs...)
+(::Type{MtlArray{T,N} where T})(x::AbstractArray{S,N}; kwargs...) where {S,N} = MtlArray{S,N}(x; kwargs...)
+MtlArray(A::AbstractArray{T,N}; kwargs...) where {T,N} = MtlArray{T,N}(A; kwargs...)
 
 # idempotency
 MtlArray{T,N}(xs::MtlArray{T,N}) where {T,N} = xs
@@ -179,6 +180,7 @@ Base.collect(x::MtlArray{T,N}) where {T,N} = copyto!(Array{T,N}(undef, size(x)),
 
 ## memory copying
 
+# CPU -> GPU
 function Base.copyto!(dest::MtlArray{T}, doffs::Integer, src::Array{T}, soffs::Integer,
                       n::Integer) where T
   (n==0 || sizeof(T) == 0) && return dest
@@ -193,6 +195,7 @@ end
 Base.copyto!(dest::MtlArray{T}, src::Array{T}) where {T} =
     copyto!(dest, 1, src, 1, length(src))
 
+# GPU -> CPU
 function Base.copyto!(dest::Array{T}, doffs::Integer, src::MtlArray{T}, soffs::Integer,
                       n::Integer) where T
   (n==0 || sizeof(T) == 0) && return dest
@@ -207,6 +210,7 @@ end
 Base.copyto!(dest::Array{T}, src::MtlArray{T}) where {T} =
     copyto!(dest, 1, src, 1, length(src))
 
+# GPU -> GPU
 function Base.copyto!(dest::MtlArray{T}, doffs::Integer, src::MtlArray{T}, soffs::Integer,
                       n::Integer) where T
   (n==0 || sizeof(T) == 0) && return dest
@@ -226,6 +230,7 @@ end
 Base.copyto!(dest::MtlArray{T}, src::MtlArray{T}) where {T} =
     copyto!(dest, 1, src, 1, length(src))
 
+# CPU -> GPU
 function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::Array{T}, soffs, n) where T
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
   synchronize()
@@ -238,6 +243,7 @@ function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::Arra
   return dest
 end
 
+# GPU -> CPU
 function Base.unsafe_copyto!(dev::MTLDevice, dest::Array{T}, doffs, src::MtlArray{T}, soffs, n) where T
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
   synchronize()
@@ -250,6 +256,7 @@ function Base.unsafe_copyto!(dev::MTLDevice, dest::Array{T}, doffs, src::MtlArra
   return dest
 end
 
+# GPU -> GPU
 function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::MtlArray{T}, soffs, n) where T
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
   synchronize()
@@ -284,18 +291,18 @@ Adapt.adapt_storage(::Type{<:MtlArray{T, N}}, xs::AT) where {T, N, AT<:AbstractA
 
 struct MtlArrayAdaptor end
 
-Adapt.adapt_storage(::MtlArrayAdaptor, xs::AbstractArray{T,N}) where {T,N} =
-  isbits(xs) ? xs : MtlArray{T,N}(xs)
+Adapt.adapt_storage(::MtlArrayAdaptor, xs::AbstractArray{T,N}; kwargs...) where {T,N} =
+  isbits(xs) ? xs : MtlArray{T,N}(xs; kwargs...)
 
-Adapt.adapt_storage(::MtlArrayAdaptor, xs::AbstractArray{T,N}) where {T<:AbstractFloat,N} =
-  isbits(xs) ? xs : MtlArray{Float32,N}(xs)
+Adapt.adapt_storage(::MtlArrayAdaptor, xs::AbstractArray{T,N}; kwargs...) where {T<:AbstractFloat,N} =
+  isbits(xs) ? xs : MtlArray{Float32,N}(xs; kwargs...)
 
-Adapt.adapt_storage(::MtlArrayAdaptor, xs::AbstractArray{T,N}) where {T<:Complex{<:AbstractFloat},N} =
-  isbits(xs) ? xs : MtlArray{ComplexF32,N}(xs)
+Adapt.adapt_storage(::MtlArrayAdaptor, xs::AbstractArray{T,N}; kwargs...) where {T<:Complex{<:AbstractFloat},N} =
+  isbits(xs) ? xs : MtlArray{ComplexF32,N}(xs; kwargs...)
 
 # not for Float16
-Adapt.adapt_storage(::MtlArrayAdaptor, xs::AbstractArray{T,N}) where {T<:Float16,N} =
-  isbits(xs) ? xs : MtlArray{T,N}(xs)
+Adapt.adapt_storage(::MtlArrayAdaptor, xs::AbstractArray{T,N}; kwargs...) where {T<:Float16,N} =
+  isbits(xs) ? xs : MtlArray{T,N}(xs; kwargs...)
 
 """
     mtl(A)
@@ -315,12 +322,12 @@ Uses Adapt.jl to act inside some wrapper structs.
 
 ## utilities
 
-zeros(T::Type, dims...) = fill!(MtlArray{T}(undef, dims...), 0)
-ones(T::Type, dims...) = fill!(MtlArray{T}(undef, dims...), 1)
-zeros(dims...) = zeros(Float32, dims...)
-ones(dims...) = ones(Float32, dims...)
-fill(v, dims...) = fill!(MtlArray{typeof(v)}(undef, dims...), v)
-fill(v, dims::Dims) = fill!(MtlArray{typeof(v)}(undef, dims...), v)
+zeros(T::Type, dims...; kwargs...) = fill!(MtlArray{T}(undef, dims...; kwargs...), 0)
+ones(T::Type, dims...; kwargs...) = fill!(MtlArray{T}(undef, dims...; kwargs...), 1)
+zeros(dims...; kwargs...) = zeros(Float32, dims...; kwargs...)
+ones(dims...; kwargs...) = ones(Float32, dims...; kwargs...)
+fill(v, dims...; kwargs...) = fill!(MtlArray{typeof(v)}(undef, dims...; kwargs...), v)
+fill(v, dims::Dims; kwargs...) = fill!(MtlArray{typeof(v)}(undef, dims...; kwargs...), v)
 
 # optimized implementation of `fill!` for types that are directly supported by fillbuffer
 function Base.fill!(A::MtlArray{T}, val) where T <: Union{UInt8,Int8}

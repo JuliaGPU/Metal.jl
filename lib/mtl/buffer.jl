@@ -75,7 +75,7 @@ function MTLBuffer(dev::Union{MTLDevice,MTLHeap},
 end
 
 """
-    alloc(device, bytesize, [ptr=nothing]; storage=Default, hazard_tracking=Default, chache_mode=Default)
+    alloc(device, bytesize, [ptr=nothing]; storage=Default, hazard_tracking=Default, cache_mode=Default)
     MTLBuffer(device, bytesize...)
 
 Allocates a Metal buffer on `device` of`bytesize` bytes. If a CPU-pointer is passed as last
@@ -89,7 +89,7 @@ The storage kwarg controls where the buffer is stored. Possible values are:
  - Shared  : Residing on the host
  - Managed : Keeps two copies of the buffer, on device and on host. Explicit calls must be
    given to syncronize the two
- - Memoryless : an iOs specific thing that won't work on Mac.
+ - Memoryless : an iOS specific thing that won't work on Mac.
 
 Note that `Private` buffers can't be directly accessed from the CPU, therefore you cannot
 use this option if you pass a ptr to initialize the memory.
