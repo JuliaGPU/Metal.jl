@@ -1,154 +1,37 @@
 module MetalKernels
 
-import Metal
-import Metal: MTL
-import StaticArrays
 import KernelAbstractions
+import Metal
+import StaticArrays
+import GPUCompiler
 
-export MetalDevice
-
-KernelAbstractions.get_device(::Metal.MtlArray) = MetalDevice()
-
-
-const FREE_QUEUES = Metal.MtlCommandQueue[]
-const QUEUES = Metal.MtlCommandQueue[]
-const QUEUE_GC_THRESHOLD = Ref{Int}(16)
-
-# This code is loaded after an `@init` step
-if haskey(ENV, "KERNELABSTRACTIONS_QUEUES_GC_THRESHOLD")
-    global QUEUE_GC_THRESHOLD[] = parse(Int, ENV["KERNELABSTRACTIONS_QUEUES_GC_THRESHOLD"])
+struct MetalBackend <: KernelAbstractions.GPU
 end
 
-## Queue GC
-# Simplistic queue gc design in which when we have a total number
-# of queues bigger than a threshold, we start scanning the queues
-# and add them back to the freelist if all work on them has completed.
-# Alternative designs:
-# - Enqueue a host function on the stream that adds the stream back to the freelist
-# - Attach a finalizer to events that adds the stream back to the freelist
-# Possible improvements
-# - Add a background task that occasionally scans all queues
-# - Add a hysterisis by checking a "since last scanned" timestamp
-# - Add locking
-const QUEUE_GC_LOCK = Threads.ReentrantLock()
-function next_queue()
-    dev = Metal.current_device()
-    lock(QUEUE_GC_LOCK) do
-        if !isempty(FREE_QUEUES)
-            return pop!(FREE_QUEUES)
-        end
+export MetalBackend
 
-        if length(QUEUES) > QUEUE_GC_THRESHOLD[]
-            for queue in QUEUES
-                # XXX: can we check if the queue is idle?
-                 push!(FREE_QUEUES, queue)
-            end
-        end
+KernelAbstractions.allocate(::MetalBackend, ::Type{T}, dims::Tuple) where T = Metal.MtlArray{T}(undef, dims)
+KernelAbstractions.zeros(::MetalBackend, ::Type{T}, dims::Tuple) where T = Metal.zeros(T, dims)
+KernelAbstractions.ones(::MetalBackend, ::Type{T}, dims::Tuple) where T = Metal.ones(T, dims)
 
-        if !isempty(FREE_QUEUES)
-            return pop!(FREE_QUEUES)
-        end
+# Import through parent
+import KernelAbstractions: StaticArrays, Adapt
+import .StaticArrays: MArray
 
-        queue = Metal.MtlCommandQueue(dev)
-        push!(QUEUES, queue)
-        return queue
+KernelAbstractions.get_backend(::Metal.MtlArray) = MetalBackend()
+KernelAbstractions.synchronize(::MetalBackend) = Metal.synchronize()
+
+function KernelAbstractions.copyto!(::MetalBackend, A, B)
+    @assert !(A isa Array) "A must be a device array"
+    @assert !(B isa Array) "B must be a device array"
+
+    GC.@preserve A B begin
+        destptr = pointer(A)
+        srcptr  = pointer(B)
+        N       = length(A)
+        unsafe_copyto!(destptr, srcptr, N, async=true)
     end
-end
-
-function default_queue()
-    dev = Metal.current_device()
-    Metal.global_queue(dev)
-end
-
-import KernelAbstractions: Event, CPUEvent, NoneEvent, MultiEvent, CPU, GPU, isdone, failed
-
-struct MetalDevice <: GPU end
-
-const METAL_EVENT_SIGNAL_VALUE = UInt64(2)
-
-struct MetalEvent <: Event
-    event::Metal.MtlSharedEvent
-end
-
-failed(::MetalEvent) = false
-isdone(ev::MetalEvent) = ev.event.signaledValue == METAL_EVENT_SIGNAL_VALUE
-
-function Event(::MetalDevice)
-    device = Metal.current_device()
-    queue = Metal.global_queue(device)
-    cmdbuf = Metal.MtlCommandBuffer(queue)
-    event = Metal.MtlSharedEvent(device)
-
-    # The cmdbuf executes in-order on the global queue
-    # so this one just triggers our signal
-    MTL.encode_signal!(cmdbuf, event, METAL_EVENT_SIGNAL_VALUE)
-    Metal.commit!(cmdbuf)
-
-    MetalEvent(event)
-end
-
-import Base: wait
-
-wait(ev::MetalEvent, progress=nothing) = wait(CPU(), ev, progress)
-
-
-function wait(::CPU, ev::MetalEvent, progress=nothing)
-    buf = Metal.MtlCommandBuffer(next_queue())
-    Metal.encode_wait!(buf, ev.event, METAL_EVENT_SIGNAL_VALUE)
-    Metal.commit!(buf)
-    Metal.wait_completed(buf)
-end
-
-
-function wait(::MetalDevice, ev::MetalEvent, progress=nothing; queue::Metal.MtlCommandQueue=Metal.global_queue(Metal.current_device()))
-    buf = Metal.MtlCommandBuffer(queue)
-    Metal.enqueue!(buf)
-    Metal.encode_wait!(buf, ev.event, METAL_EVENT_SIGNAL_VALUE)
-    Metal.commit!(buf)
-end
-
-wait(::MetalDevice, ev::NoneEvent, progress=nothing; queue=nothing) = nothing
-
-function wait(::MetalDevice, ev::MultiEvent, progress=nothing; queue::Metal.MtlCommandQueue=Metal.global_queue(Metal.current_device()))
-    dependencies = collect(ev.events)
-    metaldeps  =  filter(d->d isa MetalEvent,  dependencies)
-    otherdeps = filter(d->!(d isa MetalEvent), dependencies)
-
-    buf = Metal.MtlCommandBuffer(queue)
-    Metal.enqueue!(buf)
-
-    for ev in metaldeps
-        Metal.encode_wait!(buf, ev.event, METAL_EVENT_SIGNAL_VALUE)
-    end
-
-    Metal.commit!(buf)
-
-    for ev in otherdeps
-        wait(MetalDevice(), ev, progress; queue)
-    end
-end
-
-wait(::MetalDevice, ev::CPUEvent, progress=nothing; queue=nothing) = error("GPU->CPU wait not implemented")
-
-
-function KernelAbstractions.async_copy!(::MetalDevice, A, B; dependencies=nothing, progress=nothing)
-    queue = next_queue()
-    dev = Metal.current_device()
-    wait(MetalDevice(), MultiEvent(dependencies), progress; queue)
-
-    event = Metal.MtlSharedEvent(dev)
-    cmdbuf = Metal.MtlCommandBuffer(queue)
-
-    dst = pointer(A)
-    src = pointer(B)
-    N = length(A)
-
-    unsafe_copyto!(dev, dst, src, N, queue=queue, async=true)
-
-    MTL.encode_signal!(cmdbuf, event, METAL_EVENT_SIGNAL_VALUE)
-    Metal.commit!(cmdbuf)
-
-    return MetalEvent(event)
+    return A
 end
 
 import KernelAbstractions: Kernel, StaticSize, DynamicSize, partition, blocks, workitems, launch_config
@@ -156,7 +39,7 @@ import KernelAbstractions: Kernel, StaticSize, DynamicSize, partition, blocks, w
 ###
 # Kernel launch
 ###
-function launch_config(kernel::Kernel{MetalDevice}, ndrange, workgroupsize)
+function launch_config(kernel::Kernel{MetalBackend}, ndrange, workgroupsize)
     if ndrange isa Integer
         ndrange = (ndrange,)
     end
@@ -189,7 +72,7 @@ function threads_to_workgroupsize(threads, ndrange)
     end
 end
 
-function (obj::Kernel{MetalDevice})(args...; ndrange=nothing, dependencies=Event(MetalDevice()), workgroupsize=nothing, progress=nothing)
+function (obj::Kernel{MetalBackend})(args...; ndrange=nothing, workgroupsize=nothing)
     ndrange, workgroupsize, iterspace, dynamic = launch_config(obj, ndrange, workgroupsize)
     # this might not be the final context, since we may tune the workgroupsize
     ctx = mkcontext(obj, ndrange, iterspace)
@@ -209,36 +92,55 @@ function (obj::Kernel{MetalDevice})(args...; ndrange=nothing, dependencies=Event
     threads = length(workitems(iterspace))
 
     if nblocks == 0
-        return MultiEvent(dependencies)
+        return nothing
     end
 
-    queue = next_queue()
-    wait(MetalDevice(), MultiEvent(dependencies), progress; queue)
-
-    event = Metal.MtlSharedEvent(Metal.current_device())
-
     # Launch kernel
-    kernel(ctx, args...; threads=threads, grid=nblocks, queue=queue)
-
-    buf = Metal.MtlCommandBuffer(queue)
-    Metal.enqueue!(buf)
-    Metal.encode_signal!(buf, event, METAL_EVENT_SIGNAL_VALUE)
-    Metal.commit!(buf)
-
-    return MetalEvent(event)
+    kernel(ctx, args...; threads=threads, groups=nblocks)
+    return nothing
 end
 
-import Metal: @device_override
+### TODO: why don't we import Metal: @device_override?
+
+# list of overrides (only for Julia 1.6)
+const overrides = Expr[]
+
+macro device_override(ex)
+    ex = macroexpand(__module__, ex)
+    if Meta.isexpr(ex, :call)
+        @show ex = eval(ex)
+        error()
+    end
+    code = quote
+        $GPUCompiler.@override($Metal.method_table, $ex)
+    end
+    if isdefined(Base.Experimental, Symbol("@overlay"))
+        return esc(code)
+    else
+        push!(overrides, code)
+        return
+    end
+end
+
+function __init__()
+    precompiling = ccall(:jl_generating_output, Cint, ()) != 0
+    precompiling && return
+    # register device overrides
+    eval(Expr(:block, overrides...))
+    empty!(overrides)
+end
+
+####################################################################################################
 
 import KernelAbstractions: CompilerMetadata, DynamicCheck, LinearIndices
 import KernelAbstractions: __index_Local_Linear, __index_Group_Linear, __index_Global_Linear, __index_Local_Cartesian, __index_Group_Cartesian, __index_Global_Cartesian, __validindex, __print
 import KernelAbstractions: mkcontext, expand, __iterspace, __ndrange, __dynamic_checkbounds
 
-function mkcontext(kernel::Kernel{MetalDevice}, _ndrange, iterspace)
-    metadata = CompilerMetadata{KernelAbstractions.ndrange(kernel), DynamicCheck}(_ndrange, iterspace)
+function mkcontext(kernel::Kernel{MetalBackend}, _ndrange, iterspace)
+    CompilerMetadata{KernelAbstractions.ndrange(kernel), DynamicCheck}(_ndrange, iterspace)
 end
-function mkcontext(kernel::Kernel{MetalDevice}, I, _ndrange, iterspace, ::Dynamic) where Dynamic
-    metadata = CompilerMetadata{KernelAbstractions.ndrange(kernel), Dynamic}(I, _ndrange, iterspace)
+function mkcontext(kernel::Kernel{MetalBackend}, I, _ndrange, iterspace, ::Dynamic) where Dynamic
+    CompilerMetadata{KernelAbstractions.ndrange(kernel), Dynamic}(I, _ndrange, iterspace)
 end
 
 @device_override @inline function __index_Local_Linear(ctx)
@@ -274,7 +176,7 @@ end
     end
 end
 
-import KernelAbstractions: groupsize, __groupsize, __workitems_iterspace, add_float_contract, sub_float_contract, mul_float_contract
+import KernelAbstractions: groupsize, __groupsize, __workitems_iterspace
 import KernelAbstractions: SharedMemory, Scratchpad, __synchronize, __size
 
 ###
@@ -302,6 +204,6 @@ end
     # TODO
 end
 
-KernelAbstractions.argconvert(::Kernel{MetalDevice}, arg) = Metal.mtlconvert(arg)
+KernelAbstractions.argconvert(::Kernel{MetalBackend}, arg) = Metal.mtlconvert(arg)
 
 end
