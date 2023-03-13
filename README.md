@@ -109,12 +109,15 @@ julia> function vadd(a, b, c)
        end
 vadd (generic function with 1 method)
 
-julia> a = MtlArray([1]); b = MtlArray([2]); c = similar(a);
+julia> a = MtlArray([1,1,1,1]); b = MtlArray([2,2,2,2]); c = similar(a);
 
-julia> @metal threads=length(c) vadd(a, b, c)
+julia> @metal threads=2 groups=2 vadd(a, b, c)
 
 julia> Array(c)
-1-element Vector{Int64}:
+4-element Vector{Int64}:
+ 3
+ 3
+ 3
  3
 ```
 

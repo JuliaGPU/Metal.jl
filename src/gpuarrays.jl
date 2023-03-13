@@ -22,7 +22,7 @@ end
 
 function GPUArrays.gpu_call(::mtlArrayBackend, f, args, threads::Int, blocks::Int;
                             name::Union{String,Nothing})
-    @metal threads=threads grid=blocks name=name f(mtlKernelContext(), args...)
+    @metal threads=threads groups=blocks name=name f(mtlKernelContext(), args...)
 end
 
 

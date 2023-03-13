@@ -38,7 +38,7 @@ arr_cpu .= pi
 Metal.@allowscalar @test arr_mtl[1] == Float32(pi)
 
 # Now launch a kernel altering the Metal array
-Metal.@sync @metal threads=1024 grid=1024 simple_kernel(arr_mtl)
+Metal.@sync @metal threads=1024 groups=1024 simple_kernel(arr_mtl)
 
 # These changes are reflected in the wrapped CPU array
 @test all(arr_cpu .== -1.0)
@@ -79,7 +79,7 @@ dummy_mtl = MtlArray{Float32}(undef, 1)
 
 rand!(arr_cpu)
 # Now launch a kernel altering the Metal array
-@metal threads=1024 grid=1024 long_kernel(arr_mtl, dummy_mtl)
+@metal threads=1024 groups=1024 long_kernel(arr_mtl, dummy_mtl)
 
 # we need to synchronize the device as the kernel may not have finished yet
 synchronize()

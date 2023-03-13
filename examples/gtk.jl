@@ -30,7 +30,9 @@ img = MtlArray{RGB{N0f8}}(undef, 800,600)
 host = unsafe_wrap(Array{RGB{N0f8}}, img, size(img))
 
 ## initial image
-Metal.@sync @metal threads=16,16 grid=size(img) generate(img, 0)
+threads = 16,16
+groups = cld.(size(img), threads)
+Metal.@sync @metal threads=16,16 groups=groups generate(img, 0)
 
 win = GtkWindow("Test", 800, 600);
 
@@ -41,7 +43,7 @@ view = GtkImage(pixbuf)
 push!(win,view)
  
 for i=1:400
-    Metal.@sync @metal threads=16,16 grid=size(img) generate(img, i*2)
+    Metal.@sync @metal threads=16,16 groups=groups generate(img, i*2)
     #forces redraw without copy
     Gtk4.G_.set_from_pixbuf(view, pixbuf)
     sleep(0.01)

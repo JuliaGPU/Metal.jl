@@ -28,7 +28,7 @@ function peakflops(len=1024*1024*100)
     grid = cld(len, threads)
 
     bench = @benchmark Metal.@sync begin
-        @metal threads=$threads grid=$grid kernel_fma($a, $b, $c, $out)
+        @metal threads=$threads groups=$grid kernel_fma($a, $b, $c, $out)
     end
 
     # Cleanup memory
