@@ -50,4 +50,8 @@ include("gpuarrays.jl")
 include("../lib/mps/MPS.jl")
 export MPS
 
+# KernelAbstractions
+include("MetalKernels.jl")
+export CUDABackend
+
 end # module
