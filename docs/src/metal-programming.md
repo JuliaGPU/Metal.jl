@@ -34,7 +34,7 @@ keyword determines the grid size while the `threads` keyword determines the thre
 
 For example, given a 10x10x3 image that you want to run a function independently on each pixel,
 the kernel launch code might look like the following:
-`@metal grid=(3) threads=(10,10) my_kernel(gpu_image_array)`
+`@metal threads=(10,10) groups=3 my_kernel(gpu_image_array)`
 This would launch 3 separate threadgroups of 100 threads each (10 in the first dimension and
 10 in the second dimension)
 
@@ -52,8 +52,8 @@ These are traditionally what are used to differentiate execution across threads.
 also query what the grid and threadgroup sizes are as well.
 
 For Metal.jl, these values are accessed via the following functions:
-- thread_index_in_threadgroup()
 
+- thread_index_in_threadgroup()
 - grid_size_Xd()
 - thread_position_in_grid_Xd()
 - thread_position_in_threadgroup_Xd()

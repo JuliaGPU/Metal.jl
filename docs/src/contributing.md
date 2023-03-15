@@ -34,10 +34,9 @@ directly (rather than high-level Julia functionality), the workflow will likely 
 the below. If you're adding something that only relies on pure Julia additions, you will
 skip the first two steps.
 
-1. Create Objective-C module
-2. Create low-level, Julia wrappers for the Obj-C interface
-3. Create high-level Julia structures and functionality
-4. Create tests for added functionality
+1. Create low-level, Julia wrappers for the Obj-C interface
+2. Create high-level Julia structures and functionality
+3. Create tests for added functionality
 
 ## Mapping to Metal Intrinsics
 
@@ -87,22 +86,6 @@ the normal set of input GPU data structures, it requires special `MPS` datatypes
 row-major memory layout. As this is not the Julia default, adapt accordingly. Adding MPS
 functionality should be mostly straightforward, so this can be an easy entrypoint to helping.
 
-## Building and Wrapping CMT
-
-### Building
-
-When new functionality is added to the low-level CMT library, it will
-need to be rebuilt. This is done by running the `deps/build_cmt.jl` script. If this
-successfully builds, you can move onto the next step: rewrapping CMT to include the added
-functionality. From the package's top-level directory, the command is
-`julia --project=deps deps/build_cmt.jl`
-
-### Wrapping
-
-With a succesfully-built CMT library, you'll need to re-wrap it to include the new
-functionality. From the `res` folder, run `julia --project=. wrap.jl`
-
-
 ## Exposing your Interface
 
 There are varying degrees of user-facing interfaces from Metal.jl. At the lowest level is
@@ -145,7 +128,7 @@ files by running them alone after running the `test/setup.jl` script:
 
 Open-source projects like this only happen because people like you are willing to spend
 their free time helping out. Most anything you're able to do is helpful, but if you get
-stuck, seek guidance from Slack or Discord. Don't feel like your contribution has to be
+stuck, seek guidance from Slack or Discourse. Don't feel like your contribution has to be
 perfect. If you put in effort and make progress, there will likely be some senior developer
 willing to polish your code before merging. Open-source software is a team effort...welcome
 to the team!
