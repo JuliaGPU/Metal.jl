@@ -1,5 +1,12 @@
 export @metal
 
+
+## high-level @metal interface
+
+const MACRO_KWARGS = [:launch]
+const COMPILER_KWARGS = [:kernel, :name, :always_inline]
+const LAUNCH_KWARGS = [:groups, :threads, :queue]
+
 """
     @metal [kwargs...] func(args...)
 
@@ -27,7 +34,7 @@ macro metal(ex...)
 
     # group keyword argument
     macro_kwargs, compiler_kwargs, call_kwargs, other_kwargs =
-        split_kwargs(kwargs, [:launch], [:name], [:groups, :threads, :queue])
+        split_kwargs(kwargs, MACRO_KWARGS, COMPILER_KWARGS, LAUNCH_KWARGS)
     if !isempty(other_kwargs)
         key,val = first(other_kwargs).args
         throw(ArgumentError("Unsupported keyword argument '$key'"))
@@ -124,9 +131,10 @@ mtlconvert(arg, cce=nothing) = adapt(Adaptor(cce), arg)
 
 struct HostKernel{F,TT}
     f::F
-    fun::MTLFunction
-    pipeline_state::MTLComputePipelineState
+    pipeline::MTLComputePipelineState
 end
+
+const mtlfunction_lock = ReentrantLock()
 
 """
     mtlfunction(f, tt=Tuple{}; kwargs...)
@@ -139,53 +147,29 @@ in a hot path without degrading performance. New code will be generated automati
 the function changes, or when different types or keyword arguments are provided.
 """
 function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
-    dev = MTLDevice(1)
-    cache = get!(()->Dict{UInt,Any}(), mtlfunction_cache, dev)
-    source = FunctionSpec(f, tt, true, name)
-    target = MetalCompilerTarget(macos=macos_version(); kwargs...)
-    params = MetalCompilerParams()
-    job = CompilerJob(target, source, params)
-    fun, pipeline_state =
-        GPUCompiler.cached_compilation(cache, job,
-                                       mtlfunction_compile, mtlfunction_link)
-    # compilation is cached on the function type, so we can only create a kernel object here
-    # (as it captures the function _instance_). we may want to cache those objects.
-    HostKernel{F,tt}(f, fun, pipeline_state)
-end
-
-const mtlfunction_cache = Dict{Any,Any}()
-
-function mtlfunction_compile(@nospecialize(job::CompilerJob))
-    # TODO: on 1.9, this actually creates a context. cache those.
-    JuliaContext() do ctx
-        mtlfunction_compile(job, ctx)
-    end
-end
-function mtlfunction_compile(@nospecialize(job::CompilerJob), ctx)
-    mi, mi_meta = GPUCompiler.emit_julia(job)
-    ir, ir_meta = GPUCompiler.emit_llvm(job, mi; ctx)
-    entry = LLVM.name(ir_meta.entry)
-    image, asm_meta = GPUCompiler.emit_asm(job, ir; format=LLVM.API.LLVMObjectFile)
-    return (; image, entry)
-end
-
-function mtlfunction_link(@nospecialize(job::CompilerJob), compiled)
     dev = current_device()
-    lib = MTLLibraryFromData(dev, compiled.image)
-    fun = MTLFunction(lib, compiled.entry)
-    pipeline_state = try
-        MTLComputePipelineState(dev, fun)
-    catch
-        # the back-end compiler likely failed
-        # XXX: check more accurately? the error domain doesn't help much here
-        metallib = tempname(cleanup=false) * ".metallib"
-        write(metallib, compiled.image)
-        @warn """Compilation of MetalLib to native code failed.
-                 If you think this is a bug, please file an issue and attach $(metallib)."""
-        rethrow()
+    Base.@lock mtlfunction_lock begin
+        # compile the function
+        cache = compiler_cache(dev)
+        config = compiler_config(dev; kwargs...)::MetalCompilerConfig
+        pipeline = GPUCompiler.cached_compilation(cache, config, F, tt,
+                                                  compile, link)
+
+        # create a callable object that captures the function instance. we don't need to think
+        # about world age here, as GPUCompiler already does and will return a different object
+        h = hash(pipeline, hash(f, hash(tt)))
+        kernel = get(_kernel_instances, h, nothing)
+        if kernel === nothing
+            # create the kernel state object
+            kernel = HostKernel{F,tt}(f, pipeline)
+            _kernel_instances[h] = kernel
+        end
+        return kernel::HostKernel{F,tt}
     end
-    fun, pipeline_state
 end
+
+# cache of kernel instances
+const _kernel_instances = Dict{UInt, Any}()
 
 
 ## kernel launching and argument encoding
@@ -198,14 +182,14 @@ function (kernel::HostKernel)(args...; groups=1, threads=1, queue=global_queue(c
     (threads.width>0 && threads.height>0 && threads.depth>0) ||
         throw(ArgumentError("All thread dimensions should be non-zero"))
 
-    (threads.width * threads.height * threads.depth) > kernel.pipeline_state.maxTotalThreadsPerThreadgroup &&
-        throw(ArgumentError("Number of threads in group ($(threads.width * threads.height * threads.depth)) should not exceed $(kernel.pipeline_state.maxTotalThreadsPerThreadgroup)"))
+    (threads.width * threads.height * threads.depth) > kernel.pipeline.maxTotalThreadsPerThreadgroup &&
+        throw(ArgumentError("Number of threads in group ($(threads.width * threads.height * threads.depth)) should not exceed $(kernel.pipeline.maxTotalThreadsPerThreadgroup)"))
 
     cmdbuf = MTLCommandBuffer(queue)
     cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
     argument_buffers = MTLBuffer[]
     MTLComputeCommandEncoder(cmdbuf) do cce
-        MTL.set_function!(cce, kernel.pipeline_state)
+        MTL.set_function!(cce, kernel.pipeline)
 
         # encode arguments
         idx = 1
@@ -224,7 +208,7 @@ function (kernel::HostKernel)(args...; groups=1, threads=1, queue=global_queue(c
                     continue
                 end
                 @assert isbits(arg)
-                argument_buffer = alloc(kernel.fun.device, sizeof(argtyp),
+                argument_buffer = alloc(kernel.pipeline.device, sizeof(argtyp),
                                         storage=Shared)
                 argument_buffer.label = "MTLBuffer for kernel argument"
                 unsafe_store!(convert(Ptr{argtyp}, contents(argument_buffer)), arg)
