@@ -1,5 +1,3 @@
-using Random
-
 if MPS.is_supported(current_device())
 
 @testset "mixed-precision matrix multiplication" begin
@@ -39,8 +37,6 @@ if MPS.is_supported(current_device())
         end
     end
 end
-
-Random.seed!(1234324)
 
 @testset "Square LU" begin
     A = MtlMatrix(rand(Float32, 1024, 1024))
