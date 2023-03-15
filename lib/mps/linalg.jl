@@ -64,3 +64,65 @@ for NT in (Number, Real)
                            a::$NT, b::$NT) = gemm_dispatch!(C, A, B, a, b)
     end
 end
+
+
+checkpositivedefinite(status) = status == MPSMatrixDecompositionStatusNonPositiveDefinite || throw(PosDefException(infstatuso))
+checknonsingular(status) = status != MPSMatrixDecompositionStatusSingular || throw(SingularException(status))
+
+export lu
+
+function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T}
+    M,N = size(A)
+    dev = current_device()
+
+    lu_kernel = MPSMatrixDecompositionLU(dev, N, M)
+
+    B = similar(A)
+    P = MtlMatrix{UInt32}(undef, 1, min(N, M))
+
+    mps_a = MPSMatrix(A)
+    mps_b = MPSMatrix(B)
+    mps_p = MPSMatrix(P)
+
+    status_buf = MTLBuffer(dev, sizeof(MPSMatrixDecompositionStatus); storage=Shared)
+
+    cmdbuf = MTLCommandBuffer(global_queue(dev))
+    Metal.MPS.encode!(cmdbuf, lu_kernel, mps_a, mps_b, mps_p, status_buf)
+    commit!(cmdbuf)
+    wait_completed(cmdbuf)
+
+    status_ptr = Ptr{Cint}(status_buf.contents)
+    status = unsafe_load(status_ptr)
+    check && checknonsingular(status)
+
+    return B, P
+    #return LinearAlgebra.LU(B, vec(P).+1, convert(LinearAlgebra.BlasInt, status))
+end
+
+export lu!
+
+function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T}
+    M,N = size(A)
+    dev = current_device()
+
+    lu_kernel = MPSMatrixDecompositionLU(dev, N, M)
+
+    P = MtlMatrix{UInt32}(undef, 1, min(N, M))
+
+    mps_a = MPSMatrix(A)
+    mps_p = MPSMatrix(P)
+
+    status_buf = MTLBuffer(dev, sizeof(MPSMatrixDecompositionStatus); storage=Shared)
+
+    cmdbuf = MTLCommandBuffer(global_queue(dev))
+    Metal.MPS.encode!(cmdbuf, lu_kernel, mps_a, mps_a, mps_p, status_buf)
+    commit!(cmdbuf)
+    wait_completed(cmdbuf)
+
+    status_ptr = Ptr{MPSMatrixDecompositionStatus}(status_buf.contents)
+    status = unsafe_load(status_ptr)
+    check && checknonsingular(status)
+
+    return A, P
+    #return LinearAlgebra.LU(A', vec(P), convert(LinearAlgebra.BlasInt, status))
+end
