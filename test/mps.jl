@@ -38,25 +38,19 @@ if MPS.is_supported(current_device())
     end
 end
 
-@testset "Square LU" begin
+@testset "decompositions" begin
     A = MtlMatrix(rand(Float32, 1024, 1024))
     lua = lu(A)
     @test Matrix(lua.L) * Matrix(lua.U) ≈ Matrix(lua.P) * Matrix(A)
-end
 
-@testset "Thin LU" begin
     A = MtlMatrix(rand(Float32, 1024, 512))
     lua = lu(A)
     @test Matrix(lua.L) * Matrix(lua.U) ≈ Matrix(lua.P) * Matrix(A)
-end
-        
-@testset "Fat LU" begin
+    
     A = MtlMatrix(rand(Float32, 512, 1024))
     lua = lu(A)
     @test Matrix(lua.L) * Matrix(lua.U) ≈ Matrix(lua.P) * Matrix(A)
-end
 
-@testset "Singular matrices" begin
     A = MtlMatrix{Float32}([1 2; 0 0])
     @test_throws SingularException lu(A)
 end
