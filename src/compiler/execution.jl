@@ -180,6 +180,8 @@ const _kernel_instances = Dict{UInt, Any}()
 
 ## kernel launching and argument encoding
 
+# TODO: generate code instead of iterating and converting arguments at run time
+#       (see CUDA.jl)
 function (kernel::HostKernel)(args...; groups=1, threads=1, queue=global_queue(current_device()))
     groups = MTLSize(groups)
     threads = MTLSize(threads)
@@ -212,8 +214,12 @@ function (kernel::HostKernel)(args...; groups=1, threads=1, queue=global_queue(c
                 argtyp = Core.typeof(arg)
                 if isghosttype(argtyp) || Core.Compiler.isconstType(argtyp)
                     continue
+                elseif !isbitstype(argtyp)
+                    # replace non-isbits arguments (they should be unused, or compilation
+                    # would have failed)
+                    arg = C_NULL
+                    argtyp = Ptr{Any}
                 end
-                @assert isbits(arg)
                 argument_buffer = alloc(kernel.pipeline.device, sizeof(argtyp),
                                         storage=Shared)
                 argument_buffer.label = "MTLBuffer for kernel argument"
