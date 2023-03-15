@@ -313,7 +313,7 @@ Uses Adapt.jl to act inside some wrapper structs.
 zeros(T::Type, dims...) = fill!(MtlArray{T}(undef, dims...), 0)
 ones(T::Type, dims...) = fill!(MtlArray{T}(undef, dims...), 1)
 zeros(dims...) = zeros(Float32, dims...)
-ones(dims...) = Mtls(Float32, dims...)
+ones(dims...) = ones(Float32, dims...)
 fill(v, dims...) = fill!(MtlArray{typeof(v)}(undef, dims...), v)
 fill(v, dims::Dims) = fill!(MtlArray{typeof(v)}(undef, dims...), v)
 

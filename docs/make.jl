@@ -31,6 +31,10 @@ function main()
                 "api/kernel.md",
                 "api/array.md",
             ],
+            "Usage" => Any[
+                "usage/overview.md",
+                "usage/array.md",
+            ],
             "Profiling" => "profiling.md",
             "FAQ" => "faq.md",
         ]
