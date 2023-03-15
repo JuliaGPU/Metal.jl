@@ -14,7 +14,7 @@ struct mtlKernelContext <: AbstractKernelContext end
     kernel = @metal launch=false f(mtlKernelContext(), args...)
 
     # The pipeline state automatically computes occupancy stats
-    threads = min(elements, kernel.pipeline_state.maxTotalThreadsPerThreadgroup)
+    threads = min(elements, kernel.pipeline.maxTotalThreadsPerThreadgroup)
     blocks  = cld(elements, threads)
 
     return (; threads=Int(threads), blocks=Int(blocks))

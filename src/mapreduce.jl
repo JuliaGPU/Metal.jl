@@ -186,22 +186,21 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # XXX: can we query the 1024?
     kernel = @metal launch=false partial_mapreduce_device(f, op, init, Val(1024), Val(Rreduce), Val(Rother),
                                                           Val(UInt64(length(Rother))), Val(grain), Val(shuffle), R′, A)
-    pipeline = MTLComputePipelineState(kernel.fun.device, kernel.fun)
 
     # how many threads do we want?
     #
     # threads in a group work together to reduce values across the reduction dimensions;
     # we want as many as possible to improve algorithm efficiency and execution occupancy.
-    wanted_threads = shuffle ? nextwarp(pipeline, length(Rreduce)) : length(Rreduce)
+    wanted_threads = shuffle ? nextwarp(kernel.pipeline, length(Rreduce)) : length(Rreduce)
     function compute_threads(max_threads)
         if wanted_threads > max_threads
-            shuffle ? prevwarp(pipeline, max_threads) : max_threads
+            shuffle ? prevwarp(kernel.pipeline, max_threads) : max_threads
         else
             wanted_threads
         end
     end
 
-    reduce_threads = compute_threads(pipeline.maxTotalThreadsPerThreadgroup)
+    reduce_threads = compute_threads(kernel.pipeline.maxTotalThreadsPerThreadgroup)
 
     # how many groups should we launch?
     #
