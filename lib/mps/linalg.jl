@@ -98,8 +98,6 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T}
     #return LinearAlgebra.LU(B, vec(P).+1, convert(LinearAlgebra.BlasInt, status))
 end
 
-export lu!
-
 function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T}
     M,N = size(A)
     dev = current_device()
