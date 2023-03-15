@@ -126,8 +126,8 @@ Base.unsafe_convert(t::Type{MtlPointer{T}}, x::MtlArray) where {T} =
 
 ## interop with other arrays
 
-@inline function MtlArray{T,N}(xs::AbstractArray{T,N}) where {T,N}
-  A = MtlArray{T,N}(undef, size(xs))
+@inline function MtlArray{T,N}(xs::AbstractArray{T,N}; kwargs...) where {T,N}
+  A = MtlArray{T,N}(undef, size(xs); kwargs...)
   copyto!(A, convert(Array{T}, xs))
   return A
 end
@@ -139,9 +139,16 @@ MtlArray{T}(xs::AbstractArray{S,N}; kwargs...) where {T,N,S} = MtlArray{T,N}(xs;
 (::Type{MtlArray{T,N} where T})(x::AbstractArray{S,N}; kwargs...) where {S,N} = MtlArray{S,N}(x; kwargs...)
 MtlArray(A::AbstractArray{T,N}; kwargs...) where {T,N} = MtlArray{T,N}(A; kwargs...)
 
-# idempotency
-MtlArray{T,N}(xs::MtlArray{T,N}) where {T,N} = xs
-
+# copy xs to match Array behavior
+function MtlArray{T,N}(xs::MtlArray{T,N}; kwargs...) where {T,N}
+  if :storage ∉ keys(kwargs)
+    A = similar(xs)
+  else
+    A = MtlArray{T,N}(undef, size(xs); kwargs...)
+  end
+  @inbounds copyto!(A, convert(Array{T}, xs))
+  return A
+end
 
 ## derived types
 
