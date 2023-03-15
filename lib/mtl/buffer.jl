@@ -15,8 +15,8 @@ end
 Base.sizeof(buf::MTLBuffer) = Int(buf.length)
 
 function contents(buf::MTLBuffer)
+    buf.storageMode == Private && error("Cannot access the contents of a private buffer")
     ptr = @objc [buf::id{MTLBuffer} contents]::Ptr{Cvoid}
-    ptr == C_NULL && error("Cannot access the contents of a private buffer")
     return ptr
 end
 

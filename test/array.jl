@@ -83,6 +83,13 @@ end
             @test check_storagemode(arr2,SM2)
         end
     end
+
+    # private storage errors
+    if SM == Metal.Private
+        let arr_mtl = Metal.zeros(Float32, dim; storage=Private)
+            @test_throws "Cannot access the contents of a private buffer" arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, dim)
+        end
+    end
 end
 
 @testset "fill($T)" for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
