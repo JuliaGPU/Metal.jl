@@ -41,6 +41,9 @@ The following resources may also be of interest (although are mainly focused on 
   [slides](https://docs.google.com/presentation/d/1l-BuAtyKgoVYakJSijaSqaTL3friESDyTOnU2OLqGoA/)
 - How Julia is compiled to GPUs: [video](https://www.youtube.com/watch?v=Fz-ogmASMAE)
 
+## Contributing
+
+If you want to help improve this package, look at [the contributing page](contributing.md) for more details.
 
 ## Acknowledgements
 
@@ -50,7 +53,6 @@ contributions have been made by the following individuals:
 - Tim Besard (@maleadt) (lead developer)
 - Filippo Vicentini (@PhilipVinc)
 - Max Hawkins (@max-Hawkins)
-
 
 ## Supporting and Citing
 
