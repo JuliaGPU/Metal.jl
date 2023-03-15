@@ -127,6 +127,17 @@ end
         @metal kernel((pointer(a), (20,22)))
         @test Array(a)[] == 42
     end
+
+    @testset "unused mutable types" begin
+        function kernel(ptr, T)
+            unsafe_store!(ptr, one(T))
+            return
+        end
+
+        a = MtlArray([0])
+        @metal kernel(pointer(a), Int)
+        @test Array(a)[] == 1
+    end
 end
 
 end
