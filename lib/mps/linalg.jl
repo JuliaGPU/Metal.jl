@@ -69,7 +69,6 @@ end
 checkpositivedefinite(status) = status == MPSMatrixDecompositionStatusNonPositiveDefinite || throw(PosDefException(infstatuso))
 checknonsingular(status) = status != MPSMatrixDecompositionStatusSingular || throw(SingularException(status))
 
-export lu
 
 function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T}
     M,N = size(A)
