@@ -122,4 +122,25 @@ function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T}
 
     return A, P
     #return LinearAlgebra.LU(A', vec(P), convert(LinearAlgebra.BlasInt, status))
+@inline function _transpose!(device::MTLDevice, cmdbuf::MTLCommandBuffer, rows, columns, A::MPSMatrix, B::MPSMatrix)
+    descriptor = MPS.MPSMatrixCopyDescriptor(A, B)
+    kernel = MPS.MPSMatrixCopy(device, rows, columns, false, true)
+    MPS.encode!(cmdbuf, kernel, descriptor)
+    return cmdbuf
+end
+
+function LinearAlgebra.transpose!(A::MtlMatrix{T}, B::MtlMatrix{T}) where {T}
+    M,N = size(A)
+    dev = current_device()
+    queue = global_queue(dev)
+    cmdbuf = MTLCommandBuffer(queue)
+    enqueue!(cmdbuf)
+
+    mps_a = MPSMatrix(A)
+    mps_b = MPSMatrix(B)
+
+    _transpose!(dev, cmdbuf, N, M, mps_a, mps_b)
+    commit!(cmdbuf)
+
+    return B
 end
