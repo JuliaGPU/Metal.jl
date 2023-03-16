@@ -9,6 +9,9 @@ import GPUArrays
 
 is_supported(dev::MTLDevice) = ccall(:MPSSupportsMTLDevice, Bool, (id{MTLDevice},), dev)
 
+# MPS kernel base clases
+include("kernel.jl")
+
 # high-level wrappers
 include("matrix.jl")
 
