@@ -66,15 +66,8 @@ for NT in (Number, Real)
 end
 
 
-checkpositivedefinite(status) = status == MPSMatrixDecompositionStatusNonPositiveDefinite || throw(PosDefException(infstatuso))
-checknonsingular(status) = status != MPSMatrixDecompositionStatusSingular || throw(SingularException(status))
-
-@inline function _lu!(device::MTLDevice, cmdbuf::MTLCommandBuffer, rows, columns, A::MPSMatrix, B::MPSMatrix, P::MPSMatrix, status::MTLBuffer)
-    lu_kernel = MPSMatrixDecompositionLU(device, rows, columns)
-    MPS.encode!(cmdbuf, lu_kernel, A, B, P, status)
-    return cmdbuf
-end
-
+@inline checkpositivedefinite(status) = status == MPSMatrixDecompositionStatusNonPositiveDefinite || throw(PosDefException(status))
+@inline checknonsingular(status) = status != MPSMatrixDecompositionStatusSingular || throw(SingularException(status))
 
 function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T}
     M,N = size(A)
@@ -83,37 +76,47 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T}
     cmdbuf = MTLCommandBuffer(queue)
     enqueue!(cmdbuf)
 
-    B = MtlMatrix{T}(undef, M, N)
+    At = MtlMatrix{T}(undef, (N, M); storage=Private)
     mps_a = MPSMatrix(A)
-    mps_b = MPSMatrix(B)
-
-    _transpose!(dev, cmdbuf, N, M, mps_a, mps_b) 
+    mps_at = MPSMatrix(At)
+    
+    transpose_kernel = MPSMatrixCopy(dev, N, M, false, true)
+    descriptor = MPSMatrixCopyDescriptor(mps_a, mps_at)
+    encode!(cmdbuf, transpose_kernel, descriptor)
     commit!(cmdbuf)
 
-    cmdbuf = MTLCommandBuffer(queue)
-    enqueue!(cmdbuf)
+    cmdbuflu = MTLCommandBuffer(queue)
+    enqueue!(cmdbuflu)
 
     P = MtlMatrix{UInt32}(undef, 1, min(N, M))
+    status_buf = MTLBuffer(dev, sizeof(MPSMatrixDecompositionStatus))
     mps_p = MPSMatrix(P)
 
-    status_buf = MTLBuffer(dev, sizeof(MPSMatrixDecompositionStatus))
+    lu_kernel = MPSMatrixDecompositionLU(dev, M, N)
 
-    _lu!(dev, cmdbuf, N, M, mps_b, mps_b, mps_p, status_buf)
-    commit!(cmdbuf)
+    encode!(cmdbuflu, lu_kernel, mps_at, mps_at, mps_p, status_buf)
+    commit!(cmdbuflu)
 
     cmdbuf = MTLCommandBuffer(queue)
     enqueue!(cmdbuf)
 
-    _transpose!(dev, cmdbuf, N, M, mps_b, mps_b) 
+    B = MtlMatrix{T}(undef, M, N)
+    mps_b = MPSMatrix(B)
+
+    transpose_kernel = MPSMatrixCopy(dev, M, N, false, true)
+    descriptor = MPSMatrixCopyDescriptor(mps_at, mps_b)
+    encode!(cmdbuf, transpose_kernel, descriptor)
     commit!(cmdbuf)
-    
-    wait_completed(cmdbuf)
+
+    p = vec(P).+1
+
+    wait_completed(cmdbuflu)
 
     status_ptr = Ptr{MPSMatrixDecompositionStatus}(status_buf.contents)
     status = unsafe_load(status_ptr)
     check && checknonsingular(status)
     
-    return LinearAlgebra.LU(B, vec(P).+1, convert(LinearAlgebra.BlasInt, status))
+    return LinearAlgebra.LU(B, p, convert(LinearAlgebra.BlasInt, status))
 end
 
 # TODO: dispatch on pivot strategy
@@ -124,42 +127,45 @@ function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T}
     cmdbuf = MTLCommandBuffer(queue)
     enqueue!(cmdbuf)
 
+    At = MtlMatrix{T}(undef, (N, M); storage=Private)
     mps_a = MPSMatrix(A)
+    mps_at = MPSMatrix(At)
 
-    _transpose!(dev, cmdbuf, N, M, mps_a, mps_a) 
+    transposekernel = MPSMatrixCopy(dev, N, M, false, true)
+    descriptor = MPSMatrixCopyDescriptor(mps_a, mps_at)
+    encode!(cmdbuf, transposekernel, descriptor)
     commit!(cmdbuf)
 
-    cmdbuf = MTLCommandBuffer(queue)
-    enqueue!(cmdbuf)
+    cmdbuflu = MTLCommandBuffer(queue)
+    enqueue!(cmdbuflu)
 
     P = MtlMatrix{UInt32}(undef, 1, min(N, M))
+    status_buf = MTLBuffer(dev, sizeof(MPSMatrixDecompositionStatus))
     mps_p = MPSMatrix(P)
 
-    status_buf = MTLBuffer(dev, sizeof(MPSMatrixDecompositionStatus))
-
-    _lu!(dev, cmdbuf, N, M, mps_a, mps_a, mps_p, status_buf)
-    commit!(cmdbuf)
+    lu_kernel = MPSMatrixDecompositionLU(dev, M, N)
+    encode!(cmdbuflu, lu_kernel, mps_at, mps_at, mps_p, status_buf)
+    commit!(cmdbuflu)
 
     cmdbuf = MTLCommandBuffer(queue)
     enqueue!(cmdbuf)
     
-    _transpose!(dev, cmdbuf, N, M, mps_a, mps_a) 
+    transposekernel = MPSMatrixCopy(dev, M, N, false, true)
+    descriptor = MPSMatrixCopyDescriptor(mps_at, mps_a)
+    encode!(cmdbuf, transposekernel, descriptor)
     commit!(cmdbuf)
-    
+
+    p = vec(P).+1
+
+    wait_completed(cmdbuflu)
+
     status_ptr = Ptr{MPSMatrixDecompositionStatus}(status_buf.contents)
     status = unsafe_load(status_ptr)
     check && checknonsingular(status)
 
-    return LinearAlgebra.LU(A, vec(P).+1, convert(LinearAlgebra.BlasInt, status))
+    return LinearAlgebra.LU(A, p, convert(LinearAlgebra.BlasInt, status))
 end
 
-
-@inline function _transpose!(device::MTLDevice, cmdbuf::MTLCommandBuffer, rows, columns, A::MPSMatrix, B::MPSMatrix)
-    descriptor = MPS.MPSMatrixCopyDescriptor(A, B)
-    kernel = MPS.MPSMatrixCopy(device, rows, columns, false, true)
-    MPS.encode!(cmdbuf, kernel, descriptor)
-    return cmdbuf
-end
 
 function LinearAlgebra.transpose!(A::MtlMatrix{T}, B::MtlMatrix{T}) where {T}
     M,N = size(A)
@@ -171,7 +177,10 @@ function LinearAlgebra.transpose!(A::MtlMatrix{T}, B::MtlMatrix{T}) where {T}
     mps_a = MPSMatrix(A)
     mps_b = MPSMatrix(B)
 
-    _transpose!(dev, cmdbuf, N, M, mps_a, mps_b)
+    descriptor = MPSMatrixCopyDescriptor(mps_a, mps_b)
+    kernel = MPSMatrixCopy(dev, N, M, false, true)
+    encode!(cmdbuf, kernel, descriptor)
+
     commit!(cmdbuf)
 
     return B
