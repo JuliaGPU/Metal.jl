@@ -175,7 +175,13 @@ if VERSION >= v"1.9-"
 function _command_buffer_callback(f, _)
     # convert the incoming pointer, and discard any return value
     function g(_buf)
-        f(_buf == nil ? nothing : MTLCommandBuffer(_buf))
+        try
+            f(_buf == nil ? nothing : MTLCommandBuffer(_buf))
+        catch err
+            # we might be on an unmanaged thread here, so display the error
+            # (otherwise it may get lost, or worse, crash Julia)
+            @error "Command buffer callback encountered an error: " * sprint(showerror, err)
+        end
         return
     end
     @objcblock(g, Nothing, (id{MTLCommandBuffer},))
@@ -189,7 +195,13 @@ else
 # we also cannot return any values, but that isn't needed for these handlers.
 function _command_buffer_callback(f, buf)
     cond = Base.AsyncCondition() do async_cond
-        f(buf)
+        try
+            f(buf)
+        catch err
+            # although we're on a managed thread here, so can just throw the error,
+            # let's report it similarly to how we do in the 1.9+ case.
+            @error "Command buffer callback encountered an error: " * sprint(showerror, err)
+        end
         close(async_cond)
     end
     @objcasyncblock(cond)
