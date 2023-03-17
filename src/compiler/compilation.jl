@@ -69,7 +69,7 @@ function link(@nospecialize(job::CompilerJob), compiled)
     dev = current_device()
     lib = MTLLibraryFromData(dev, compiled.image)
     fun = MTLFunction(lib, compiled.entry)
-    pipeline_state = try
+    pipeline = try
         MTLComputePipelineState(dev, fun)
     catch
         # the back-end compiler likely failed
@@ -80,5 +80,5 @@ function link(@nospecialize(job::CompilerJob), compiled)
                  If you think this is a bug, please file an issue and attach $(metallib)."""
         rethrow()
     end
-    pipeline_state
+    pipeline
 end
