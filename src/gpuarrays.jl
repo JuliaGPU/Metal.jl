@@ -34,6 +34,7 @@ GPUArrays.blockdim(ctx::mtlKernelContext)     = Metal.threads_per_threadgroup_1d
 GPUArrays.threadidx(ctx::mtlKernelContext)    = Metal.thread_position_in_threadgroup_1d()
 GPUArrays.griddim(ctx::mtlKernelContext)      = Metal.threadgroups_per_grid_1d()
 GPUArrays.global_index(ctx::mtlKernelContext) = Metal.thread_position_in_grid_1d()
+GPUArrays.global_size(ctx::mtlKernelContext)  = Metal.threads_per_grid_1d()
 
 # math
 
