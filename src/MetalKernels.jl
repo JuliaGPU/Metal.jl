@@ -21,16 +21,22 @@ import .StaticArrays: MArray
 KernelAbstractions.get_backend(::Metal.MtlArray) = MetalBackend()
 KernelAbstractions.synchronize(::MetalBackend) = Metal.synchronize()
 
-function KernelAbstractions.copyto!(::MetalBackend, A, B)
-    @assert !(A isa Array) "A must be a device array"
-    @assert !(B isa Array) "B must be a device array"
-
-    GC.@preserve A B begin
-        destptr = pointer(A)
-        srcptr  = pointer(B)
-        N       = length(A)
-        unsafe_copyto!(destptr, srcptr, N, async=true)
+function KernelAbstractions.copyto!(::MetalBackend, A::Metal.MtlArray{T}, B::Metal.MtlArray{T}) where T
+    if Metal.device(dest) == Metal.device(src)
+        GC.@preserve A B unsafe_copyto!(Metal.device(A), pointer(A), pointer(B), length(A); async=true)
+        return A
+    else
+        error("Copy between different devices not implemented")
     end
+end
+
+function KernelAbstractions.copyto!(::MetalBackend, A::Array{T}, B::Metal.MtlArray{T}) where T
+    GC.@preserve A B unsafe_copyto!(Metal.device(B), pointer(A), pointer(B), length(A); async=true)
+    return A
+end
+
+function KernelAbstractions.copyto!(::MetalBackend, A::Metal.MtlArray{T}, B::Array{T}) where T
+    GC.@preserve A B unsafe_copyto!(Metal.device(A), pointer(A), pointer(B), length(A); async=true)
     return A
 end
 
@@ -82,7 +88,7 @@ function (obj::Kernel{MetalBackend})(args...; ndrange=nothing, workgroupsize=not
         KernelAbstractions.workgroupsize(obj) <: DynamicSize &&
         isnothing(workgroupsize)
     if is_dynamic
-        groupsize = kernel.pipeline_state.maxTotalThreadsPerThreadgroup
+        groupsize = kernel.pipeline.maxTotalThreadsPerThreadgroup
         new_workgroupsize = threads_to_workgroupsize(groupsize, ndrange)
         iterspace, dynamic = partition(obj, ndrange, new_workgroupsize)
         ctx = mkcontext(obj, ndrange, iterspace)
