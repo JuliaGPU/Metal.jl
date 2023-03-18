@@ -52,6 +52,6 @@ export MPS
 
 # KernelAbstractions
 include("MetalKernels.jl")
-export CUDABackend
+export MetalBackend
 
 end # module
