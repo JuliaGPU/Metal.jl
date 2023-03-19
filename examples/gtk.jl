@@ -1,6 +1,6 @@
 # EXCLUDE FROM TESTING
 """
-This example demonstrates how to integrate Metal and Gtk4. 
+This example demonstrates how to integrate Metal and Gtk4.
 An image is generated using a Metal kernel and efficiently displayed using Gtk4
 """
 
@@ -26,7 +26,7 @@ function generate(img, pos)
     return
 end
 
-img = MtlArray{RGB{N0f8}}(undef, 800,600)
+img = MtlArray{RGB{N0f8}}(undef, 800,600, storage=Shared)
 host = unsafe_wrap(Array{RGB{N0f8}}, img, size(img))
 
 ## initial image
@@ -36,12 +36,12 @@ Metal.@sync @metal threads=16,16 groups=groups generate(img, 0)
 
 win = GtkWindow("Test", 800, 600);
 
-data = reinterpret(Gtk4.GdkPixbufLib.RGB, host) 
-pixbuf = Gtk4.GdkPixbufLib.GdkPixbuf(data,false) 
+data = reinterpret(Gtk4.GdkPixbufLib.RGB, host)
+pixbuf = Gtk4.GdkPixbufLib.GdkPixbuf(data,false)
 view = GtkImage(pixbuf)
 
 push!(win,view)
- 
+
 for i=1:400
     Metal.@sync @metal threads=16,16 groups=groups generate(img, i*2)
     #forces redraw without copy
@@ -52,4 +52,4 @@ end
 
 if !isinteractive()
     !win.visible || Gtk4.GLib.waitforsignal(win,:close_request)
-end 
+end
