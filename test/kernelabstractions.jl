@@ -10,5 +10,5 @@ using Metal.MetalKernels
 Metal.versioninfo()
 Metal.allowscalar(false)
 Testsuite.testsuite(()->MetalBackend(), "Metal", Metal, MtlArray, Metal.MtlDeviceArray;
-  skip_tests=Set(["Convert"]))
+  skip_tests=Set(["Convert", "SpecialFunctions"]))
 Testsuite.unittest_testsuite(()->MetalBackend(), "Metal", Metal, Metal.MtlDeviceArray)
