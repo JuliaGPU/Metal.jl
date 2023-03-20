@@ -21,7 +21,7 @@ for (intr, offset) in nodim_intr
     @eval begin
         export $(Symbol(intr))
 
-        $(Symbol(intr))() = ccall($"extern julia.air.$intr.i32", llvmcall, UInt32, ()) + UInt32($offset)
+        @device_function $(Symbol(intr))() = ccall($"extern julia.air.$intr.i32", llvmcall, UInt32, ()) + UInt32($offset)
     end
 end
 
@@ -45,13 +45,13 @@ for (intr, offset) in dim_intr
         export $(Symbol(intr * "_2d"))
         export $(Symbol(intr * "_3d"))
 
-        $(Symbol(intr * "_1d"))() =
+        @device_function $(Symbol(intr * "_1d"))() =
             ccall($"extern julia.air.$intr.i32", llvmcall, UInt32, ()) + UInt32($offset)
 
-        $(Symbol(intr * "_2d"))() =
+        @device_function $(Symbol(intr * "_2d"))() =
             NamedTuple{(:x,:y)}(ccall($"extern julia.air.$intr.v2i32", llvmcall, NTuple{2, UInt32}, ()) .+ UInt32($offset))
 
-        $(Symbol(intr * "_3d"))() =
+        @device_function $(Symbol(intr * "_3d"))() =
                 NamedTuple{(:x,:y,:z)}(ccall($"extern julia.air.$intr.v3i32", llvmcall, NTuple{3, UInt32}, ()) .+ UInt32($offset))
     end
 end
