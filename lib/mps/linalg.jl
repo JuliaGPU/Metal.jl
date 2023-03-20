@@ -69,6 +69,24 @@ end
 @inline checkpositivedefinite(status) = status == MPSMatrixDecompositionStatusNonPositiveDefinite || throw(PosDefException(status))
 @inline checknonsingular(status) = status != MPSMatrixDecompositionStatusSingular || throw(SingularException(status))
 
+# GPU-compatible accessors of the LU decomposition properties
+function Base.getproperty(F::LU{T,<:MtlMatrix}, d::Symbol) where T
+    m, n = size(F)
+    if d === :L
+        L = tril!(getfield(F, :factors)[1:m, 1:min(m,n)])
+        L[1:m+1:end] .= one(T)
+        return L
+    elseif VERSION >= v"1.9.0-DEV.1775"
+        invoke(getproperty, Tuple{LU{T}, Symbol}, F, d)
+    else
+        invoke(getproperty, Tuple{LU{T,<:StridedMatrix}, Symbol}, F, d)
+    end
+end
+
+# Metal's pivoting sequence needs to be iterated sequentially...
+# TODO: figure out a GPU-compatible way to get the permutation matrix
+LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T = LinearAlgebra.ipiv2perm(Array(v), maxi)
+
 function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T}
     M,N = size(A)
     dev = current_device()
