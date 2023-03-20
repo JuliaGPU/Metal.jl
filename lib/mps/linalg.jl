@@ -185,7 +185,9 @@ function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T}
 end
 
 
-function LinearAlgebra.transpose!(A::MtlMatrix{T}, B::MtlMatrix{T}) where {T}
+function LinearAlgebra.transpose!(B::MtlMatrix{T}, A::MtlMatrix{T}) where {T}
+    axes(B,2) == axes(A,1) && axes(B,1) == axes(A,2) || throw(DimensionMismatch("transpose"))
+
     M,N = size(A)
     dev = current_device()
     queue = global_queue(dev)
