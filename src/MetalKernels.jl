@@ -106,36 +106,6 @@ function (obj::Kernel{MetalBackend})(args...; ndrange=nothing, workgroupsize=not
     return nothing
 end
 
-### TODO: why don't we import Metal: @device_override?
-
-# list of overrides (only for Julia 1.6)
-const overrides = Expr[]
-
-macro device_override(ex)
-    ex = macroexpand(__module__, ex)
-    if Meta.isexpr(ex, :call)
-        @show ex = eval(ex)
-        error()
-    end
-    code = quote
-        $GPUCompiler.@override($Metal.method_table, $ex)
-    end
-    if isdefined(Base.Experimental, Symbol("@overlay"))
-        return esc(code)
-    else
-        push!(overrides, code)
-        return
-    end
-end
-
-function __init__()
-    precompiling = ccall(:jl_generating_output, Cint, ()) != 0
-    precompiling && return
-    # register device overrides
-    eval(Expr(:block, overrides...))
-    empty!(overrides)
-end
-
 ####################################################################################################
 
 import KernelAbstractions: CompilerMetadata, DynamicCheck, LinearIndices
@@ -149,31 +119,31 @@ function mkcontext(kernel::Kernel{MetalBackend}, I, _ndrange, iterspace, ::Dynam
     CompilerMetadata{KernelAbstractions.ndrange(kernel), Dynamic}(I, _ndrange, iterspace)
 end
 
-@device_override @inline function __index_Local_Linear(ctx)
+@Metal.device_override @inline function __index_Local_Linear(ctx)
     return Metal.thread_position_in_threadgroup_1d()
 end
 
-@device_override @inline function __index_Group_Linear(ctx)
+@Metal.device_override @inline function __index_Group_Linear(ctx)
     return Metal.threadgroup_position_in_grid_1d()
 end
 
-@device_override @inline function __index_Global_Linear(ctx)
+@Metal.device_override @inline function __index_Global_Linear(ctx)
     return Metal.thread_position_in_grid_1d()
 end
 
-@device_override @inline function __index_Local_Cartesian(ctx)
+@Metal.device_override @inline function __index_Local_Cartesian(ctx)
     @inbounds workitems(__iterspace(ctx))[Metal.thread_position_in_threadgroup_1d()]
 end
 
-@device_override @inline function __index_Group_Cartesian(ctx)
+@Metal.device_override @inline function __index_Group_Cartesian(ctx)
     @inbounds blocks(__iterspace(ctx))[Metal.threadgroup_position_in_grid_1d()]
 end
 
-@device_override @inline function __index_Global_Cartesian(ctx)
+@Metal.device_override @inline function __index_Global_Cartesian(ctx)
     return @inbounds expand(__iterspace(ctx), Metal.threadgroup_position_in_grid_1d(), Metal.thread_position_in_threadgroup_1d())
 end
 
-@device_override @inline function __validindex(ctx)
+@Metal.device_override @inline function __validindex(ctx)
     if __dynamic_checkbounds(ctx)
         I = @inbounds expand(__iterspace(ctx), Metal.threadgroup_position_in_grid_1d(), Metal.thread_position_in_threadgroup_1d())
         return I in __ndrange(ctx)
@@ -188,7 +158,7 @@ import KernelAbstractions: SharedMemory, Scratchpad, __synchronize, __size
 ###
 # GPU implementation of shared memory
 ###
-@device_override @inline function SharedMemory(::Type{T}, ::Val{Dims}, ::Val{Id}) where {T, Dims, Id}
+@Metal.device_override @inline function SharedMemory(::Type{T}, ::Val{Dims}, ::Val{Id}) where {T, Dims, Id}
     ptr = Metal.emit_threadgroup_memory(T, Val(prod(Dims)))
     Metal.MtlDeviceArray(Dims, ptr)
 end
@@ -198,15 +168,15 @@ end
 # - private memory for each workitem
 ###
 
-@device_override @inline function Scratchpad(ctx, ::Type{T}, ::Val{Dims}) where {T, Dims}
+@Metal.device_override @inline function Scratchpad(ctx, ::Type{T}, ::Val{Dims}) where {T, Dims}
     StaticArrays.MArray{__size(Dims), T}(undef)
 end
 
-@device_override @inline function __synchronize()
+@Metal.device_override @inline function __synchronize()
     Metal.threadgroup_barrier(Metal.MemoryFlagThreadGroup)
 end
 
-@device_override @inline function __print(args...)
+@Metal.device_override @inline function __print(args...)
     # TODO
 end
 
