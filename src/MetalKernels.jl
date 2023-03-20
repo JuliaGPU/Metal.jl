@@ -21,6 +21,11 @@ import .StaticArrays: MArray
 KernelAbstractions.get_backend(::Metal.MtlArray) = MetalBackend()
 KernelAbstractions.synchronize(::MetalBackend) = Metal.synchronize()
 
+# TODO: why are these not needed in https://github.com/JuliaGPU/CUDA.jl/pull/1772 ?
+Adapt.adapt_storage(::MetalBackend, a::Array) = Adapt.adapt(Metal.MtlArray, a)
+Adapt.adapt_storage(::MetalBackend, a::Metal.MtlArray) = a
+Adapt.adapt_storage(::KernelAbstractions.CPU, a::Metal.MtlArray) = convert(Array, a)
+
 function KernelAbstractions.copyto!(::MetalBackend, A::Metal.MtlArray{T}, B::Metal.MtlArray{T}) where T
     if Metal.device(dest) == Metal.device(src)
         GC.@preserve A B unsafe_copyto!(Metal.device(A), pointer(A), pointer(B), length(A); async=true)
