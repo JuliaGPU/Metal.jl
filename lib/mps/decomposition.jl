@@ -1,9 +1,9 @@
 
 @cenum MPSMatrixDecompositionStatus::Cint begin
-    MPSMatrixDecompositionStatusSuccess = Cint(0)
-    MPSMatrixDecompositionStatusFailure = Cint(-1)
-    MPSMatrixDecompositionStatusSingular = Cint(-2)
-    MPSMatrixDecompositionStatusNonPositiveDefinite = Cint(-3)
+    MPSMatrixDecompositionStatusSuccess =  0
+    MPSMatrixDecompositionStatusFailure = -1
+    MPSMatrixDecompositionStatusSingular = -2
+    MPSMatrixDecompositionStatusNonPositiveDefinite = -3
 end
 
 
