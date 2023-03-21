@@ -64,3 +64,131 @@ for NT in (Number, Real)
                            a::$NT, b::$NT) = gemm_dispatch!(C, A, B, a, b)
     end
 end
+
+
+@inline checkpositivedefinite(status) = status == MPSMatrixDecompositionStatusNonPositiveDefinite || throw(PosDefException(status))
+@inline checknonsingular(status) = status != MPSMatrixDecompositionStatusSingular || throw(SingularException(status))
+
+# GPU-compatible accessors of the LU decomposition properties
+function Base.getproperty(F::LU{T,<:MtlMatrix}, d::Symbol) where T
+    m, n = size(F)
+    if d === :L
+        L = tril!(getfield(F, :factors)[1:m, 1:min(m,n)])
+        L[1:m+1:end] .= one(T)
+        return L
+    elseif VERSION >= v"1.9.0-DEV.1775"
+        invoke(getproperty, Tuple{LU{T}, Symbol}, F, d)
+    else
+        invoke(getproperty, Tuple{LU{T,<:StridedMatrix}, Symbol}, F, d)
+    end
+end
+
+# Metal's pivoting sequence needs to be iterated sequentially...
+# TODO: figure out a GPU-compatible way to get the permutation matrix
+LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T = LinearAlgebra.ipiv2perm(Array(v), maxi)
+
+function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T}
+    M,N = size(A)
+    dev = current_device()
+    queue = global_queue(dev)
+
+    At = MtlMatrix{T}(undef, (N, M); storage=Private)
+    mps_a = MPSMatrix(A)
+    mps_at = MPSMatrix(At)
+
+    MTLCommandBuffer(queue) do cmdbuf
+        kernel = MPSMatrixCopy(dev, N, M, false, true)
+        descriptor = MPSMatrixCopyDescriptor(mps_a, mps_at)
+        encode!(cmdbuf, kernel, descriptor)
+    end
+
+    P = MtlMatrix{UInt32}(undef, 1, min(N, M))
+    status = MtlArray{MPSMatrixDecompositionStatus}(undef)
+
+    cmdbuf_lu = MTLCommandBuffer(queue) do cmdbuf
+        mps_p = MPSMatrix(P)
+        kernel = MPSMatrixDecompositionLU(dev, M, N)
+        encode!(cmdbuf, kernel, mps_at, mps_at, mps_p, status)
+    end
+
+    B = MtlMatrix{T}(undef, M, N)
+
+    MTLCommandBuffer(queue) do cmdbuf
+        mps_b = MPSMatrix(B)
+
+        kernel = MPSMatrixCopy(dev, M, N, false, true)
+        descriptor = MPSMatrixCopyDescriptor(mps_at, mps_b)
+        encode!(cmdbuf, kernel, descriptor)
+    end
+
+    p = vec(P).+1
+
+    wait_completed(cmdbuf_lu)
+
+    status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
+    check && checknonsingular(status)
+
+    return LinearAlgebra.LU(B, p, status)
+end
+
+# TODO: dispatch on pivot strategy
+function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T}
+    M,N = size(A)
+    dev = current_device()
+    queue = global_queue(dev)
+
+    At = MtlMatrix{T}(undef, (N, M); storage=Private)
+    mps_a = MPSMatrix(A)
+    mps_at = MPSMatrix(At)
+
+    MTLCommandBuffer(queue) do cmdbuf
+        kernel = MPSMatrixCopy(dev, N, M, false, true)
+        descriptor = MPSMatrixCopyDescriptor(mps_a, mps_at)
+        encode!(cmdbuf, kernel, descriptor)
+    end
+
+    P = MtlMatrix{UInt32}(undef, 1, min(N, M))
+    status = MtlArray{MPSMatrixDecompositionStatus}(undef)
+
+    cmdbuf_lu = MTLCommandBuffer(queue) do cmdbuf
+        mps_p = MPSMatrix(P)
+        kernel = MPSMatrixDecompositionLU(dev, M, N)
+        encode!(cmdbuf, kernel, mps_at, mps_at, mps_p, status)
+    end
+
+    MTLCommandBuffer(queue) do cmdbuf
+        kernel = MPSMatrixCopy(dev, M, N, false, true)
+        descriptor = MPSMatrixCopyDescriptor(mps_at, mps_a)
+        encode!(cmdbuf, kernel, descriptor)
+    end
+
+    p = vec(P).+1
+
+    wait_completed(cmdbuf_lu)
+
+    status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
+    check && checknonsingular(status)
+
+    return LinearAlgebra.LU(A, p, status)
+end
+
+
+function LinearAlgebra.transpose!(B::MtlMatrix{T}, A::MtlMatrix{T}) where {T}
+    axes(B,2) == axes(A,1) && axes(B,1) == axes(A,2) || throw(DimensionMismatch("transpose"))
+
+    M,N = size(A)
+    dev = current_device()
+    queue = global_queue(dev)
+    cmdbuf = MTLCommandBuffer(queue)
+
+    mps_a = MPSMatrix(A)
+    mps_b = MPSMatrix(B)
+
+    descriptor = MPSMatrixCopyDescriptor(mps_a, mps_b)
+    kernel = MPSMatrixCopy(dev, N, M, false, true)
+    encode!(cmdbuf, kernel, descriptor)
+
+    commit!(cmdbuf)
+
+    return B
+end

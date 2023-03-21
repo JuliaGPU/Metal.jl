@@ -15,4 +15,10 @@ include("matrix.jl")
 # integrations
 include("linalg.jl")
 
+# decompositions
+include("decomposition.jl")
+
+# matrix copy
+include("copy.jl")
+
 end

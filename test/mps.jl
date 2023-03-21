@@ -1,3 +1,5 @@
+using LinearAlgebra
+
 if MPS.is_supported(current_device())
 
 @testset "mixed-precision matrix multiplication" begin
@@ -36,6 +38,29 @@ if MPS.is_supported(current_device())
             @test all(arr_c .≈ truth_c)
         end
     end
+end
+
+@testset "decompositions" begin
+    A = MtlMatrix(rand(Float32, 1024, 1024))
+    lua = lu(A)
+    @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A
+
+    A = MtlMatrix(rand(Float32, 1024, 512))
+    lua = lu(A)
+    @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A
+    
+    A = MtlMatrix(rand(Float32, 512, 1024))
+    lua = lu(A)
+    @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A
+
+    a = rand(Float32, 1024, 1024)
+    A = MtlMatrix(a)
+    B = MtlMatrix(a)
+    lua = lu!(A)
+    @test lua.L * lua.U ≈ MtlMatrix(lua.P) * B
+
+    A = MtlMatrix{Float32}([1 2; 0 0])
+    @test_throws SingularException lu(A)
 end
 
 end

@@ -164,6 +164,11 @@ Base.unsafe_convert(::Type{<:Ptr}, x::MtlArray) =
 Base.unsafe_convert(t::Type{MTL.MTLBuffer}, x::MtlArray) = x.buffer
 
 
+## interop with ObjC libraries
+
+Base.cconvert(::Type{<:id}, x::MtlArray) = x.buffer
+
+
 ## interop with CPU arrays
 
 Base.unsafe_wrap(t::Type{<:Array}, arr::MtlArray, dims; own=false) =

@@ -82,6 +82,15 @@ function MTLCommandBuffer(queue::MTLCommandQueue,
     return obj
 end
 
+function MTLCommandBuffer(f::Base.Callable, queue::MTLCommandQueue,
+                          desc::MTLCommandBufferDescriptor=MTLCommandBufferDescriptor())
+    buf = MTLCommandBuffer(queue, desc)
+    enqueue!(buf)
+    ret = f(buf)
+    commit!(buf)
+    return buf
+end
+
 """
     enqueue!(q::MTLCommandBuffer)
 
