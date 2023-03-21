@@ -180,7 +180,6 @@ function LinearAlgebra.transpose!(B::MtlMatrix{T}, A::MtlMatrix{T}) where {T}
     dev = current_device()
     queue = global_queue(dev)
     cmdbuf = MTLCommandBuffer(queue)
-    enqueue!(cmdbuf)
 
     mps_a = MPSMatrix(A)
     mps_b = MPSMatrix(B)
