@@ -97,7 +97,7 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T}
     At = MtlMatrix{T}(undef, (N, M); storage=Private)
     mps_a = MPSMatrix(A)
     mps_at = MPSMatrix(At)
-    
+
     transpose_kernel = MPSMatrixCopy(dev, N, M, false, true)
     descriptor = MPSMatrixCopyDescriptor(mps_a, mps_at)
     encode!(cmdbuf, transpose_kernel, descriptor)
@@ -107,12 +107,12 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T}
     enqueue!(cmdbuflu)
 
     P = MtlMatrix{UInt32}(undef, 1, min(N, M))
-    status_buf = MTLBuffer(dev, sizeof(MPSMatrixDecompositionStatus))
+    status = MtlArray{MPSMatrixDecompositionStatus}(undef)
     mps_p = MPSMatrix(P)
 
     lu_kernel = MPSMatrixDecompositionLU(dev, M, N)
 
-    encode!(cmdbuflu, lu_kernel, mps_at, mps_at, mps_p, status_buf)
+    encode!(cmdbuflu, lu_kernel, mps_at, mps_at, mps_p, status)
     commit!(cmdbuflu)
 
     cmdbuf = MTLCommandBuffer(queue)
@@ -130,11 +130,10 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T}
 
     wait_completed(cmdbuflu)
 
-    status_ptr = Ptr{MPSMatrixDecompositionStatus}(status_buf.contents)
-    status = unsafe_load(status_ptr)
+    status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
     check && checknonsingular(status)
-    
-    return LinearAlgebra.LU(B, p, convert(LinearAlgebra.BlasInt, status))
+
+    return LinearAlgebra.LU(B, p, status)
 end
 
 # TODO: dispatch on pivot strategy
@@ -158,16 +157,16 @@ function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T}
     enqueue!(cmdbuflu)
 
     P = MtlMatrix{UInt32}(undef, 1, min(N, M))
-    status_buf = MTLBuffer(dev, sizeof(MPSMatrixDecompositionStatus))
+    status = MtlArray{MPSMatrixDecompositionStatus}(undef)
     mps_p = MPSMatrix(P)
 
     lu_kernel = MPSMatrixDecompositionLU(dev, M, N)
-    encode!(cmdbuflu, lu_kernel, mps_at, mps_at, mps_p, status_buf)
+    encode!(cmdbuflu, lu_kernel, mps_at, mps_at, mps_p, status)
     commit!(cmdbuflu)
 
     cmdbuf = MTLCommandBuffer(queue)
     enqueue!(cmdbuf)
-    
+
     transposekernel = MPSMatrixCopy(dev, M, N, false, true)
     descriptor = MPSMatrixCopyDescriptor(mps_at, mps_a)
     encode!(cmdbuf, transposekernel, descriptor)
@@ -177,11 +176,10 @@ function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T}
 
     wait_completed(cmdbuflu)
 
-    status_ptr = Ptr{MPSMatrixDecompositionStatus}(status_buf.contents)
-    status = unsafe_load(status_ptr)
+    status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
     check && checknonsingular(status)
 
-    return LinearAlgebra.LU(A, p, convert(LinearAlgebra.BlasInt, status))
+    return LinearAlgebra.LU(A, p, status)
 end
 
 
