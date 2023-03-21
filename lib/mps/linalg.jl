@@ -91,44 +91,39 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T}
     M,N = size(A)
     dev = current_device()
     queue = global_queue(dev)
-    cmdbuf = MTLCommandBuffer(queue)
-    enqueue!(cmdbuf)
 
     At = MtlMatrix{T}(undef, (N, M); storage=Private)
     mps_a = MPSMatrix(A)
     mps_at = MPSMatrix(At)
 
-    transpose_kernel = MPSMatrixCopy(dev, N, M, false, true)
-    descriptor = MPSMatrixCopyDescriptor(mps_a, mps_at)
-    encode!(cmdbuf, transpose_kernel, descriptor)
-    commit!(cmdbuf)
-
-    cmdbuflu = MTLCommandBuffer(queue)
-    enqueue!(cmdbuflu)
+    MTLCommandBuffer(queue) do cmdbuf
+        kernel = MPSMatrixCopy(dev, N, M, false, true)
+        descriptor = MPSMatrixCopyDescriptor(mps_a, mps_at)
+        encode!(cmdbuf, kernel, descriptor)
+    end
 
     P = MtlMatrix{UInt32}(undef, 1, min(N, M))
     status = MtlArray{MPSMatrixDecompositionStatus}(undef)
-    mps_p = MPSMatrix(P)
 
-    lu_kernel = MPSMatrixDecompositionLU(dev, M, N)
-
-    encode!(cmdbuflu, lu_kernel, mps_at, mps_at, mps_p, status)
-    commit!(cmdbuflu)
-
-    cmdbuf = MTLCommandBuffer(queue)
-    enqueue!(cmdbuf)
+    cmdbuf_lu = MTLCommandBuffer(queue) do cmdbuf
+        mps_p = MPSMatrix(P)
+        kernel = MPSMatrixDecompositionLU(dev, M, N)
+        encode!(cmdbuf, kernel, mps_at, mps_at, mps_p, status)
+    end
 
     B = MtlMatrix{T}(undef, M, N)
-    mps_b = MPSMatrix(B)
 
-    transpose_kernel = MPSMatrixCopy(dev, M, N, false, true)
-    descriptor = MPSMatrixCopyDescriptor(mps_at, mps_b)
-    encode!(cmdbuf, transpose_kernel, descriptor)
-    commit!(cmdbuf)
+    MTLCommandBuffer(queue) do cmdbuf
+        mps_b = MPSMatrix(B)
+
+        kernel = MPSMatrixCopy(dev, M, N, false, true)
+        descriptor = MPSMatrixCopyDescriptor(mps_at, mps_b)
+        encode!(cmdbuf, kernel, descriptor)
+    end
 
     p = vec(P).+1
 
-    wait_completed(cmdbuflu)
+    wait_completed(cmdbuf_lu)
 
     status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
     check && checknonsingular(status)
@@ -141,40 +136,35 @@ function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T}
     M,N = size(A)
     dev = current_device()
     queue = global_queue(dev)
-    cmdbuf = MTLCommandBuffer(queue)
-    enqueue!(cmdbuf)
 
     At = MtlMatrix{T}(undef, (N, M); storage=Private)
     mps_a = MPSMatrix(A)
     mps_at = MPSMatrix(At)
 
-    transposekernel = MPSMatrixCopy(dev, N, M, false, true)
-    descriptor = MPSMatrixCopyDescriptor(mps_a, mps_at)
-    encode!(cmdbuf, transposekernel, descriptor)
-    commit!(cmdbuf)
-
-    cmdbuflu = MTLCommandBuffer(queue)
-    enqueue!(cmdbuflu)
+    MTLCommandBuffer(queue) do cmdbuf
+        kernel = MPSMatrixCopy(dev, N, M, false, true)
+        descriptor = MPSMatrixCopyDescriptor(mps_a, mps_at)
+        encode!(cmdbuf, kernel, descriptor)
+    end
 
     P = MtlMatrix{UInt32}(undef, 1, min(N, M))
     status = MtlArray{MPSMatrixDecompositionStatus}(undef)
-    mps_p = MPSMatrix(P)
 
-    lu_kernel = MPSMatrixDecompositionLU(dev, M, N)
-    encode!(cmdbuflu, lu_kernel, mps_at, mps_at, mps_p, status)
-    commit!(cmdbuflu)
+    cmdbuf_lu = MTLCommandBuffer(queue) do cmdbuf
+        mps_p = MPSMatrix(P)
+        kernel = MPSMatrixDecompositionLU(dev, M, N)
+        encode!(cmdbuf, kernel, mps_at, mps_at, mps_p, status)
+    end
 
-    cmdbuf = MTLCommandBuffer(queue)
-    enqueue!(cmdbuf)
-
-    transposekernel = MPSMatrixCopy(dev, M, N, false, true)
-    descriptor = MPSMatrixCopyDescriptor(mps_at, mps_a)
-    encode!(cmdbuf, transposekernel, descriptor)
-    commit!(cmdbuf)
+    MTLCommandBuffer(queue) do cmdbuf
+        kernel = MPSMatrixCopy(dev, M, N, false, true)
+        descriptor = MPSMatrixCopyDescriptor(mps_at, mps_a)
+        encode!(cmdbuf, kernel, descriptor)
+    end
 
     p = vec(P).+1
 
-    wait_completed(cmdbuflu)
+    wait_completed(cmdbuf_lu)
 
     status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
     check && checknonsingular(status)
