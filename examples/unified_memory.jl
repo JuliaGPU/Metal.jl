@@ -26,8 +26,8 @@ end
 # be allocated, then wrapped by a CPU array...not the other way around.
 
 dims = tuple(16,16)
-# Create a Metal array with a default storage mode of shared (both CPU and GPU get access)
-arr_mtl = MtlArray{Float32}(undef, dims)
+# Create a Metal array with a storage mode of shared (both CPU and GPU get access)
+arr_mtl = MtlArray{Float32}(undef, dims, storage=Shared)
 # Unsafe wrap the contents of the Metal array with a CPU array
 arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, dims)
 
@@ -72,7 +72,7 @@ end
 # Make larger arrays to make the kernel take non-trivial time
 dims = 1024*1024
 # Create a Metal array with a default storage mode of shared (both CPU and GPU get access)
-arr_mtl = MtlArray{Float32}(undef, dims)
+arr_mtl = MtlArray{Float32}(undef, dims, storage=Shared)
 # Unsafe wrap the contents of the Metal array with a CPU array
 arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, dims)
 dummy_mtl = MtlArray{Float32}(undef, 1)

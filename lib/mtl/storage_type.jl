@@ -27,6 +27,8 @@ Base.convert(::Type{MTLResourceOptions}, ::Type{AS.Managed})    = MTLResourceSto
 Base.convert(::Type{MTLResourceOptions}, ::Type{AS.Private})    = MTLResourceStorageModePrivate
 Base.convert(::Type{MTLResourceOptions}, ::Type{AS.Memoryless}) = MTLResourceStorageModeMemoryless
 
+Base.convert(::Type{MTLResourceOptions}, SM::MTL.MTLStorageMode)     = MTLResourceOptions(UInt(SM) << 4)
+
 const Shared                = MTLResourceStorageModeShared
 const Managed               = MTLResourceStorageModeManaged
 const Private               = MTLResourceStorageModePrivate

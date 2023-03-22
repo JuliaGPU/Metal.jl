@@ -433,8 +433,8 @@ end
     Metal.encode_wait!(buf2, event, signal_value)
     Metal.commit!(buf2)
 
-    unsafe_copyto!(dev, pointer(a), pointer(B), N, queue=queue1, async=true)
-    unsafe_copyto!(dev, pointer(A), pointer(a), N, queue=queue1, async=true)
+    unsafe_copyto!(dev, pointer(a), pointer(B), N, queue=queue1, async=true) # GPU -> CPU
+    unsafe_copyto!(dev, pointer(A), pointer(a), N, queue=queue1, async=true) # CPU -> GPU
 
     Metal.encode_signal!(buf1, event, signal_value)
     Metal.commit!(buf1)

@@ -45,9 +45,9 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPointer{T}, N:
                              queue::MTLCommandQueue=global_queue(dev), async::Bool=false) where T
     storage_type = src.buffer.storageMode
     if storage_type ==  MTL.MTLStorageModePrivate
-        tmp_buf = alloc(T, dev, N, storage=Shared)
-        unsafe_copyto!(dev, tmp_buf, 1, src.buffer, src.offset, N; queue, async)
-        unsafe_copyto!(dst, contents(tmp_buf), N)
+        tmp_buf = alloc(dev, N*sizeof(T), storage=Shared)
+        unsafe_copyto!(dev, MtlPointer{T}(tmp_buf, 0), MtlPointer{T}(src.buffer, src.offset), N; queue, async=false)
+        unsafe_copyto!(dst, convert(Ptr{T},contents(tmp_buf)), N)
         free(tmp_buf)
     elseif storage_type ==  MTL.MTLStorageModeShared
         unsafe_copyto!(dst, contents(src), N)
@@ -62,9 +62,8 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPointer{T}, src::Ptr{T}, N:
                              queue::MTLCommandQueue=global_queue(dev), async::Bool=false) where T
     storage_type = dst.buffer.storageMode
     if storage_type == MTL.MTLStorageModePrivate
-        tmp_buf = alloc(T, dev, N, src, storage=Shared)
-        unsafe_copyto!(dev, tmp_buf, src, N; queue, async)
-        unsafe_copyto!(dev, dst.buffer, dst.offset, tmp_buf, 1, N; queue, async)
+        tmp_buf = alloc(dev, N*sizeof(T), src, storage=Shared) #CPU -> GPU (Shared)
+        unsafe_copyto!(dev, MtlPointer{T}(dst.buffer, dst.offset), MtlPointer{T}(tmp_buf, 0), N; queue, async=false) # GPU (Shared) -> GPU (Private)
         free(tmp_buf)
     elseif storage_type == MTL.MTLStorageModeShared
         unsafe_copyto!(contents(dst), src, N)
