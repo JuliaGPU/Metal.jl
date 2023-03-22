@@ -20,8 +20,9 @@ import .StaticArrays: MArray
 
 KernelAbstractions.get_backend(::Metal.MtlArray) = MetalBackend()
 KernelAbstractions.synchronize(::MetalBackend) = Metal.synchronize()
+KernelAbstractions.supports_float64(::MetalBackend) = false
+KernelAbstractions.supports_atomics(::MetalBackend) = false
 
-# TODO: why are these not needed in https://github.com/JuliaGPU/CUDA.jl/pull/1772 ?
 Adapt.adapt_storage(::MetalBackend, a::Array) = Adapt.adapt(Metal.MtlArray, a)
 Adapt.adapt_storage(::MetalBackend, a::Metal.MtlArray) = a
 Adapt.adapt_storage(::KernelAbstractions.CPU, a::Metal.MtlArray) = convert(Array, a)
