@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "7c57dde9c295c98177ad608871c4ba51950909d4"
+project_hash = "aa28b784637fb1b4bbad36026e5f51552ed1e832"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
@@ -83,7 +83,9 @@ version = "1.4.1"
 
 [[deps.KernelAbstractions]]
 deps = ["Adapt", "Atomix", "InteractiveUtils", "LinearAlgebra", "MacroTools", "SnoopPrecompile", "SparseArrays", "StaticArrays", "UUIDs", "UnsafeAtomics", "UnsafeAtomicsLLVM"]
-git-tree-sha1 = "17d0bb94eef881b09c57967be12cca70fefb3304"
+git-tree-sha1 = "1f6564e25c2e6e33f1f5caaf4b272d48e3c24a9f"
+repo-rev = "main"
+repo-url = "https://github.com/JuliaGPU/KernelAbstractions.jl.git"
 uuid = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 version = "0.9.0"
 
