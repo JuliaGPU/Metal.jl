@@ -46,13 +46,4 @@ include("command_enc/compute.jl")
 include("binary_archive.jl")
 include("capture.jl")
 
-function __init__()
-    precompiling = ccall(:jl_generating_output, Cint, ()) != 0
-    precompiling && return
-
-    Sys.isapple() || return
-
-    load_framework("CoreGraphics")
-end
-
 end # module

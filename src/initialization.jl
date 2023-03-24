@@ -1,3 +1,6 @@
+const _functional = Ref{Bool}(false)
+functional() = _functional[]
+
 function __init__()
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     precompiling && return
@@ -5,12 +8,6 @@ function __init__()
     if !Sys.isapple()
         @error("Metal.jl is only supported on macOS")
         return
-    end
-
-    # ensure that operations executed by the REPL back-end finish before returning,
-    # because displaying values happens on a different task
-    if isdefined(Base, :active_repl_backend)
-        push!(Base.active_repl_backend.ast_transforms, synchronize_metal_tasks)
     end
 
     if Base.JLOptions().debug_level >= 2
@@ -24,6 +21,22 @@ function __init__()
             # enable Metal shader validation
             ENV["MTL_SHADER_VALIDATION"] = "4"
         end
+    end
+
+    try
+        load_framework("CoreGraphics")
+        ver = MTL.MTLCompileOptions().languageVersion
+        @debug "Successfully loaded Metal; targeting v$ver."
+        _functional[] = true
+    catch err
+        @error "Failed to load Metal" exception=(err,catch_backtrace())
+        return
+    end
+
+    # ensure that operations executed by the REPL back-end finish before returning,
+    # because displaying values happens on a different task
+    if isdefined(Base, :active_repl_backend)
+        push!(Base.active_repl_backend.ast_transforms, synchronize_metal_tasks)
     end
 end
 
