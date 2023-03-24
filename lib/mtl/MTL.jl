@@ -46,23 +46,4 @@ include("command_enc/compute.jl")
 include("binary_archive.jl")
 include("capture.jl")
 
-const functional = Ref{Bool}(false)
-
-function __init__()
-    precompiling = ccall(:jl_generating_output, Cint, ()) != 0
-    precompiling && return
-
-    Sys.isapple() || return
-
-    try
-        load_framework("CoreGraphics")
-        ver = MTL.MTLCompileOptions().languageVersion
-        @debug "Loaded Metal $ver."
-        functional[] = true
-    catch err
-        @error "Failed to load Metal" exception=(err,catch_backtrace())
-        functional[] = false
-    end
-end
-
 end # module

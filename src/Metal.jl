@@ -13,7 +13,6 @@ using ObjectiveC, .Foundation, .Dispatch
 # core library
 include("../lib/mtl/MTL.jl")
 @reexport using .MTL
-functional() = MTL.functional[]
 
 # essential stuff
 include("state.jl")

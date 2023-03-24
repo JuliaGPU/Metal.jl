@@ -1,9 +1,22 @@
+const _functional = Ref{Bool}(false)
+functional() = _functional[]
+
 function __init__()
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     precompiling && return
 
     if !Sys.isapple()
         @error("Metal.jl is only supported on macOS")
+        return
+    end
+
+    try
+        load_framework("CoreGraphics")
+        ver = MTL.MTLCompileOptions().languageVersion
+        @debug "Successfully loaded Metal; targeting v$ver."
+        _functional[] = true
+    catch err
+        @error "Failed to load Metal" exception=(err,catch_backtrace())
         return
     end
 
