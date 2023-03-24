@@ -11,7 +11,7 @@ effectively returns the only system GPU.
 function current_device()
     get!(task_local_storage(), :MTLDevice) do
         dev = MTLDevice(1)
-        startswith(String(dev.name), "Apple M") || @warn """Metal.jl is only supported on M-series Macs, you may run into issues.
+        supports_family(dev, MTL.MTLGPUFamilyApple7) || @warn """Metal.jl is only supported on M-series Macs, you may run into issues.
                                                     See https://github.com/JuliaGPU/Metal.jl/issues/22 for more details.""" maxlog=1
         return dev
     end::MTLDevice
