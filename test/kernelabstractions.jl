@@ -1,5 +1,4 @@
 import KernelAbstractions
-using Test
 
 include(joinpath(dirname(pathof(KernelAbstractions)), "..", "test", "testsuite.jl"))
 
