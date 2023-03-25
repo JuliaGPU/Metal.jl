@@ -1,4 +1,5 @@
 import KernelAbstractions
+using Metal.MetalKernels
 
 include(joinpath(dirname(pathof(KernelAbstractions)), "..", "test", "testsuite.jl"))
 
