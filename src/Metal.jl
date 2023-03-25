@@ -52,6 +52,7 @@ export MPS
 
 # KernelAbstractions
 include("MetalKernels.jl")
+import .MetalKernels: MetalBackend
 export MetalBackend
 
 end # module
