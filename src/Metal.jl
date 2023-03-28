@@ -50,4 +50,9 @@ include("gpuarrays.jl")
 include("../lib/mps/MPS.jl")
 export MPS
 
+# KernelAbstractions
+include("MetalKernels.jl")
+import .MetalKernels: MetalBackend
+export MetalBackend
+
 end # module
