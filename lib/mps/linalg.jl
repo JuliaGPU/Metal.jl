@@ -121,7 +121,7 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T}
         encode!(cmdbuf, kernel, descriptor)
     end
 
-    p = vec(P).+1
+    p = vec(P) .+ UInt32(1)
 
     wait_completed(cmdbuf_lu)
 
@@ -162,7 +162,7 @@ function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T}
         encode!(cmdbuf, kernel, descriptor)
     end
 
-    p = vec(P).+1
+    p = vec(P) .+ UInt32(1)
 
     wait_completed(cmdbuf_lu)
 
