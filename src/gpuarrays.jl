@@ -29,12 +29,12 @@ end
 ## on-device
 
 # indexing
-GPUArrays.blockidx(ctx::mtlKernelContext)     = Metal.threadgroup_position_in_grid_1d()
-GPUArrays.blockdim(ctx::mtlKernelContext)     = Metal.threads_per_threadgroup_1d()
-GPUArrays.threadidx(ctx::mtlKernelContext)    = Metal.thread_position_in_threadgroup_1d()
-GPUArrays.griddim(ctx::mtlKernelContext)      = Metal.threadgroups_per_grid_1d()
-GPUArrays.global_index(ctx::mtlKernelContext) = Metal.thread_position_in_grid_1d()
-GPUArrays.global_size(ctx::mtlKernelContext)  = Metal.threads_per_grid_1d()
+GPUArrays.blockidx(ctx::mtlKernelContext)     = threadgroup_position_in_grid_1d()
+GPUArrays.blockdim(ctx::mtlKernelContext)     = threads_per_threadgroup_1d()
+GPUArrays.threadidx(ctx::mtlKernelContext)    = thread_position_in_threadgroup_1d()
+GPUArrays.griddim(ctx::mtlKernelContext)      = threadgroups_per_grid_1d()
+GPUArrays.global_index(ctx::mtlKernelContext) = thread_position_in_grid_1d()
+GPUArrays.global_size(ctx::mtlKernelContext)  = threads_per_grid_1d()
 
 # math
 
@@ -47,14 +47,14 @@ GPUArrays.global_size(ctx::mtlKernelContext)  = Metal.threads_per_grid_1d()
 
 @inline function GPUArrays.LocalMemory(::mtlKernelContext, ::Type{T}, ::Val{dims}, ::Val{id}
                                       ) where {T, dims, id}
-    ptr = Metal.emit_threadgroup_memory(T, Val(prod(dims)))
+    ptr = emit_threadgroup_memory(T, Val(prod(dims)))
     MtlDeviceArray(dims, ptr)
 end
 
 # synchronization
 
 @inline GPUArrays.synchronize_threads(::mtlKernelContext) =
-    Metal.threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+    threadgroup_barrier(MemoryFlagThreadGroup)
 
 
 
