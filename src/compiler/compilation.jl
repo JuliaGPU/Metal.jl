@@ -56,10 +56,8 @@ function compile(@nospecialize(job::CompilerJob))
     end
 end
 function compile(@nospecialize(job::CompilerJob), ctx)
-    mi, mi_meta = GPUCompiler.emit_julia(job)
-    ir, ir_meta = GPUCompiler.emit_llvm(job, mi; ctx)
-    entry = LLVM.name(ir_meta.entry)
-    image, asm_meta = GPUCompiler.emit_asm(job, ir; format=LLVM.API.LLVMObjectFile)
+    image, meta = GPUCompiler.compile(:obj, job; ctx)
+    entry = LLVM.name(meta.entry)
 
     return (; image, entry)
 end
