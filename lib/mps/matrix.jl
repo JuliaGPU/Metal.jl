@@ -132,6 +132,32 @@ function MPSMatrix(arr::MtlArray{T,3}) where T
     return obj
 end
 
+
+"""
+    MPSMatrix(arr::MtlMatrix)
+
+Metal matrix representation used in Performance Shaders.
+
+Note that this results in a transposed view of the input,
+as Metal stores matrices row-major instead of column-major.
+"""
+function MPSMatrix(arr::SubArray{T,2,MtlArray{T,3}}) where T
+    n_cols, n_rows = size(arr)
+    row_bytes = sizeof(T)*n_cols
+    index = parentindices(arr)[3]
+    offset = row_bytes * n_cols * (index-1)
+    desc = MPSMatrixDescriptor(n_rows, n_cols, row_bytes, T)
+    mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
+    obj = MPSMatrix(mat)
+    finalizer(release, obj)
+    @objc [obj::id{MPSMatrix} initWithBuffer:parent(arr).buffer::id{MTLBuffer}
+                              offset:offset::NSUInteger
+                              descriptor:desc::id{MPSMatrixDescriptor}]::id{MPSMatrix}
+    return obj
+end
+
+### parentindices(A)
+
 #
 # matrix multiplication
 #
