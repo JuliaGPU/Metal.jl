@@ -301,3 +301,32 @@ function topk(A::MtlMatrix{T,S}, k) where {T<:MtlFloat,S}
 
     return _topk!(A, I, V, k)
 end
+
+
+function matmul!(c::MtlArray{T,3}, a::MtlArray{T,3}, b::MtlArray{T,3},
+                 alpha::Number=true, beta::Number=true,
+                 transpose_a=false, transpose_b=false) where {T}
+    # NOTE: MPS uses row major, while Julia is col-major. Instead of transposing
+    #       the inputs (by passing !transpose_[ab]) and afterwards transposing
+    #       the output, we use the property that (AB)ᵀ = BᵀAᵀ
+    cols_a = size(a)[2]
+    cols_c, rows_c = size(c)
+
+    # Create MPS-compatible matrix from the MtlArrays
+    mps_a = MPSMatrix(a)
+    mps_b = MPSMatrix(b)
+    mps_c = MPSMatrix(c)
+
+    mat_mul_kernel = MPSMatrixMultiplication(current_device(),
+                                             transpose_b, transpose_a,
+                                             rows_c, cols_c, cols_a,
+                                             alpha, beta)
+
+
+    # Encode and commit matmul kernel
+    cmdbuf = MTLCommandBuffer(global_queue(current_device()))
+    encode!(cmdbuf, mat_mul_kernel, mps_b, mps_a, mps_c)
+    commit!(cmdbuf)
+
+    c
+end
