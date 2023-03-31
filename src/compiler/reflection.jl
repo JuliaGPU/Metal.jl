@@ -28,7 +28,7 @@ for method in (:code_typed, :code_warntype, :code_llvm, :code_native)
         function $method(io::IO, @nospecialize(func), @nospecialize(types);
                          kernel::Bool=false, kwargs...)
             compiler_kwargs, kwargs = split_kwargs_runtime(kwargs, COMPILER_KWARGS)
-            source = FunctionSpec(typeof(func), Base.to_tuple_type(types))
+            source = methodinstance(typeof(func), Base.to_tuple_type(types))
             config = compiler_config(current_device(); kernel, compiler_kwargs...)
             job = CompilerJob(source, config)
             GPUCompiler.$method($(args...); kwargs...)
@@ -65,7 +65,7 @@ export @device_code_lowered, @device_code_typed, @device_code_warntype,
 Return a type `r` such that `f(args...)::r` where `args::tt`.
 """
 function return_type(@nospecialize(func), @nospecialize(tt))
-    source = FunctionSpec(typeof(func), tt)
+    source = methodinstance(typeof(func), tt)
     config = compiler_config(current_device())
     job = CompilerJob(source, config)
     interp = GPUCompiler.get_interpreter(job)
