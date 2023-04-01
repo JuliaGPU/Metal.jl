@@ -8,6 +8,8 @@ const MPS_VALID_MATMUL_TYPES =
      (Float16, Float16),
      (Float32, Float32)]
 
+const MtlFloat = Union{Float32, Float16}
+
 function gemm_dispatch!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
                         alpha::Number=true, beta::Number=false)
     if ndims(A) > 2
@@ -87,7 +89,7 @@ end
 # TODO: figure out a GPU-compatible way to get the permutation matrix
 LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T = LinearAlgebra.ipiv2perm(Array(v), maxi)
 
-function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T}
+function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFloat}
     M,N = size(A)
     dev = current_device()
     queue = global_queue(dev)
@@ -121,7 +123,7 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T}
         encode!(cmdbuf, kernel, descriptor)
     end
 
-    p = vec(P).+1
+    p = vec(P) .+ UInt32(1)
 
     wait_completed(cmdbuf_lu)
 
@@ -132,7 +134,7 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T}
 end
 
 # TODO: dispatch on pivot strategy
-function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T}
+function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFloat}
     M,N = size(A)
     dev = current_device()
     queue = global_queue(dev)
@@ -162,7 +164,7 @@ function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T}
         encode!(cmdbuf, kernel, descriptor)
     end
 
-    p = vec(P).+1
+    p = vec(P) .+ UInt32(1)
 
     wait_completed(cmdbuf_lu)
 
