@@ -12,16 +12,6 @@ end
 ## bitwise operations lose type information, so allow conversions
 Base.convert(::Type{MPSDataType}, x::Integer) = MPSDataType(x)
 
-@cenum MPSKernelOptions::NSUInteger begin
-    MPSKernelOptionsNone = 0
-    MPSKernelOptionsSkipAPIValidation = 1 << 0
-    MPSKernelOptionsAllowReducedPrecision = 1 << 1
-    MPSKernelOptionsDisableInternalTiling = 1 << 2
-    MPSKernelOptionsInsertDebugGroups = 1 << 3
-    MPSKernelOptionsVerbose = 1 << 4
-end
-
-
 #
 # matrix descriptor
 #
@@ -85,19 +75,6 @@ function MPSMatrix(arr::MtlMatrix{T}) where T
     @objc [obj::id{MPSMatrix} initWithBuffer:arr.buffer::id{MTLBuffer}
                               descriptor:desc::id{MPSMatrixDescriptor}]::id{MPSMatrix}
     return obj
-end
-
-
-#
-# kernels
-#
-
-@objcwrapper MPSKernel <: NSObject
-
-@objcproperties MPSKernel begin
-    @autoproperty device::id{MTLDevice}
-    @autoproperty label::id{NSString} setter=setLabel
-    @autoproperty options::MPSKernelOptions setter=setOptions
 end
 
 

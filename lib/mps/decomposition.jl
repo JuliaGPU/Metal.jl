@@ -7,18 +7,6 @@
 end
 
 
-export MPSMatrixUnaryKernel
-
-@objcwrapper immutable=false MPSMatrixUnaryKernel <: MPSKernel
-
-@objcproperties MPSMatrixUnaryKernel begin
-    @autoproperty sourceMatrixOrigin::id{MTLOrigin} setter=setSourceMatrixOrigin
-    @autoproperty resultMatrixOrigin::id{MTLOrigin} setter=setResultMatrixOrigin
-    @autoproperty batchStart::NSUInteger setter=setBatchStart
-    @autoproperty batchSize::NSUInteger setter=setBatchSize
-end
-
-
 export MPSMatrixDecompositionLU
 
 @objcwrapper immutable=false MPSMatrixDecompositionLU <: MPSMatrixUnaryKernel
