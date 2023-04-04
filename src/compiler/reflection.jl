@@ -40,6 +40,9 @@ function code_agx(io::IO, job::MetalCompilerJob)
     if !job.config.kernel
         error("Can only generate AGX code for kernel functions")
     end
+    if macos_version() < v"13"
+        error("Native code reflection is only supported on OSX 13 or higher")
+    end
 
     # compile the kernel
     compiled = compile(job)
@@ -89,7 +92,7 @@ end
 
 function extract_gpu_code(f, binary)
     fat_handle = readmeta(open(binary))
-    fat_handle isa FatMachOHandle || error("Expected a universal binary")
+    fat_handle isa FatMachOHandle || error("Expected a universal binary, got a $(typeof(fat_handle))")
 
     # the universal binary contains several architectures; extract the GPU one
     arch = findfirst(fat_handle) do arch

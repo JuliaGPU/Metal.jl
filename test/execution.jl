@@ -48,14 +48,18 @@ end
     Metal.code_warntype(devnull, dummy, Tuple{})
     Metal.code_llvm(devnull, dummy, Tuple{})
     Metal.code_air(devnull, dummy, Tuple{})
-    Metal.code_agx(devnull, dummy, Tuple{})
+    if macos_version() >= v"13"
+        Metal.code_agx(devnull, dummy, Tuple{})
+    end
 
     @device_code_lowered @metal dummy()
     @device_code_typed @metal dummy()
     @device_code_warntype io=devnull @metal dummy()
     @device_code_llvm io=devnull @metal dummy()
     @device_code_air io=devnull @metal dummy()
-    @device_code_agx io=devnull @metal dummy()
+    if macos_version() >= v"13"
+        @device_code_agx io=devnull @metal dummy()
+    end
 
     mktempdir() do dir
         @device_code dir=dir @metal dummy()
@@ -67,7 +71,9 @@ end
     @test occursin("dummy", sprint(io->(@device_code_llvm io=io optimize=false @metal dummy())))
     @test occursin("dummy", sprint(io->(@device_code_llvm io=io @metal dummy())))
     @test occursin("dummy", sprint(io->(@device_code_air io=io @metal dummy())))
-    @test occursin("dummy", sprint(io->(@device_code_agx io=io @metal dummy())))
+    if macos_version() >= v"13"
+        @test occursin("dummy", sprint(io->(@device_code_agx io=io @metal dummy())))
+    end
 
     # make sure invalid kernels can be partially reflected upon
     let
