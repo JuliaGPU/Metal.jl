@@ -1,6 +1,6 @@
 [applegpu]
-git-tree-sha1 = "e701ae1c13f53ca04627a3ef7d3d1ff39e352e66"
+git-tree-sha1 = "d029712a0dc11cbf595d2475616fd8518abac0a8"
 
     [[applegpu.download]]
-    sha256 = "ab80d042e26ca6cb410f66b6baf854e20291f269cffe2cd07bd2ce3de6409997"
-    url = "https://github.com/dougallj/applegpu/tarball/98008ca1c6f413706e57465f8a4116021501196f"
+    sha256 = "a1518c5ddc3111373c6e358f1e8b3f30db78f387f67ecc3b43f390a436a3411e"
+    url = "https://github.com/dougallj/applegpu/tarball/edc82ee782e97892fd4fe729af469659e2b89e20"
