@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "57005a192a9f5ec9e64171b799301b4026ddb398"
+project_hash = "09045c5c1943e80c7027cf9e8199a68a17f0b82a"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
@@ -187,11 +187,9 @@ version = "1.2.0"
 
 [[deps.ObjectFile]]
 deps = ["Reexport", "StructIO"]
-git-tree-sha1 = "1b8da9ff0a2bf11a6e77086987ecdf878f4e861d"
-repo-rev = "metal"
-repo-url = "https://github.com/maleadt/ObjectFile.jl"
+git-tree-sha1 = "69607899b46e1f8ead70396bc51a4c361478d8f6"
 uuid = "d8793406-e978-5875-9003-1fc021f44a92"
-version = "0.3.7"
+version = "0.4.0"
 
 [[deps.ObjectiveC]]
 deps = ["CEnum"]

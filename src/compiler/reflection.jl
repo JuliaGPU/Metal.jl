@@ -105,7 +105,7 @@ function extract_gpu_code(f, binary)
     compute_section = findfirst(Sections(fat_handle[arch]), "__TEXT,__compute")
     compute_section === nothing && error("Could not find __compute section in GPU binary")
     compute_binary = read(compute_section)
-    native_handle = readmeta(IOBuffer(compute_binary))
+    native_handle = only(readmeta(IOBuffer(compute_binary)))
 
     # the start of the section should also alias with a symbol in the universal binary,
     # which we can use to identify the name of the kernel
