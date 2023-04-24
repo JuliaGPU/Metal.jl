@@ -34,6 +34,7 @@ include("device/intrinsics/simd.jl")
 include("device/quirks.jl")
 
 # array essentials
+include("pool.jl")
 include("memory.jl")
 include("array.jl")
 
