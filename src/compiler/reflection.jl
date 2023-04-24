@@ -192,9 +192,9 @@ export @device_code_lowered, @device_code_typed, @device_code_warntype,
 """
     @device_code_agx [io::IO=stdout, ...] ex
 
-Evaluates the expression `ex` and prints the result of [`CUDA.code_agx`](@ref) to
+Evaluates the expression `ex` and prints the result of [`Metal.code_agx`](@ref) to
 `io` for every compiled Metal kernel. For other supported keywords, see
-[`CUDA.code_agx`](@ref).
+[`Metal.code_agx`](@ref).
 """
 macro device_code_agx(ex...)
     function hook(job::MetalCompilerJob; io::IO=stdout, kwargs...)

@@ -2,7 +2,7 @@ using Documenter, Literate
 using Metal
 
 const src = "https://github.com/JuliaGPU/Metal.jl"
-const dst = "https://cuda.juliagpu.org/stable/" # TODO
+const dst = "https://metal.juliagpu.org/stable/" # TODO
 
 function main()
     ci = get(ENV, "CI", "") == "true"
