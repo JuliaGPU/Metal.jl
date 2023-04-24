@@ -5,39 +5,39 @@ using Printf
 # allocation statistics
 
 mutable struct AllocStats
-    alloc_count::Threads.Atomic{Int}
-    alloc_bytes::Threads.Atomic{Int}
+    @atomic alloc_count::Int
+    @atomic alloc_bytes::Int
 
-    free_count::Threads.Atomic{Int}
-    free_bytes::Threads.Atomic{Int}
+    @atomic free_count::Int
+    @atomic free_bytes::Int
 
-    total_time::Threads.Atomic{Float64}
+    @atomic total_time::Float64
     function AllocStats()
-        new(Threads.Atomic{Int}(0), Threads.Atomic{Int}(0),
-            Threads.Atomic{Int}(0), Threads.Atomic{Int}(0),
-            Threads.Atomic{Float64}(0.0))
+        new(Int(0), Int(0),
+            Int(0), Int(0),
+            Float64(0.0))
     end
 
     function AllocStats(alloc_count::Integer, alloc_bytes::Integer,
                           free_count::Integer, free_bytes::Integer,
                           total_time::Float64)
-        new(Threads.Atomic{Int}(alloc_count), Threads.Atomic{Int}(alloc_bytes),
-            Threads.Atomic{Int}(free_count), Threads.Atomic{Int}(free_bytes),
-            Threads.Atomic{Float64}(total_time))
+        new(Int(alloc_count), Int(alloc_bytes),
+            Int(free_count), Int(free_bytes),
+            Float64(total_time))
     end
-  end
+end
 
 Base.copy(alloc_stats::AllocStats) =
-    AllocStats(alloc_stats.alloc_count[], alloc_stats.alloc_bytes[],
-               alloc_stats.free_count[], alloc_stats.free_bytes[],
-               alloc_stats.total_time[])
+    AllocStats(alloc_stats.alloc_count, alloc_stats.alloc_bytes,
+               alloc_stats.free_count, alloc_stats.free_bytes,
+               alloc_stats.total_time)
 
 Base.:(-)(a::AllocStats, b::AllocStats) = (;
-    alloc_count = a.alloc_count[] - b.alloc_count[],
-    alloc_bytes = a.alloc_bytes[] - b.alloc_bytes[],
-    free_count  = a.free_count[]  - b.free_count[],
-    free_bytes  = a.free_bytes[]  - b.free_bytes[],
-    total_time  = a.total_time[]  - b.total_time[])
+    alloc_count = a.alloc_count - b.alloc_count,
+    alloc_bytes = a.alloc_bytes - b.alloc_bytes,
+    free_count  = a.free_count  - b.free_count,
+    free_bytes  = a.free_bytes  - b.free_bytes,
+    total_time  = a.total_time  - b.total_time)
 
 const alloc_stats = AllocStats()
 
@@ -69,9 +69,9 @@ function alloc(dev::Union{MTLDevice,MTLHeap},
         buf = MTLBuffer(dev, bytesize, args...; kwargs...)
     end
 
-    alloc_stats.alloc_count[] += 1
-    alloc_stats.alloc_bytes[] += bytesize
-    alloc_stats.total_time[] += time
+    @atomic alloc_stats.alloc_count + 1
+    @atomic alloc_stats.alloc_bytes + bytesize
+    @atomic alloc_stats.total_time + time
 
     return buf
 end
@@ -83,15 +83,15 @@ Frees the buffer if the handle is valid.
 This does not protect against double-freeing of the same buffer!
 """
 function free(buf::MTLBuffer)
-    sz = buf.length
+    sz::Int = buf.length
 
     time = Base.@elapsed begin
         release(buf)
     end
 
-    alloc_stats.free_count[] += 1
-    alloc_stats.free_bytes[] += sz
-    alloc_stats.total_time[] += time
+    @atomic alloc_stats.free_count + 1
+    @atomic alloc_stats.free_bytes + sz
+    @atomic alloc_stats.total_time + time
     return
 end
 
