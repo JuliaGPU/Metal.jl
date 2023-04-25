@@ -35,7 +35,7 @@ end
     foo() = @metal dummy()
     @inferred foo()
 
-    # with arguments, we call cudaconvert
+    # with arguments, we call mtlconvert
     kernel(a) = return
     bar(a) = @metal kernel(a)
     @inferred bar(MtlArray([1]))
