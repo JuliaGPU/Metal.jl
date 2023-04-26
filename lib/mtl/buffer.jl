@@ -1,11 +1,11 @@
-export MTLBuffer, device, contents, alloc, free, handle
+export MTLBuffer, device, contents, handle
 
 # From docs: "MSL implements a buffer as a pointer to a built-in or user defined data type described in the
 # device, constant, or threadgroup address space.
 @objcwrapper MTLBuffer <: MTLResource
 
 @objcproperties MTLBuffer begin
-    @autoproperty length::NSUInteger
+    @autoproperty length::NSUInteger # In bytes
     @autoproperty device::id{MTLDevice}
     @autoproperty contents::Ptr{Cvoid}
     @autoproperty remoteStorageBuffer::id{MTLBuffer}
@@ -73,36 +73,6 @@ function MTLBuffer(dev::Union{MTLDevice,MTLHeap},
 
     return MTLBuffer(ptr)
 end
-
-"""
-    alloc(device, bytesize, [ptr=nothing]; storage=Default, hazard_tracking=Default, cache_mode=Default)
-    MTLBuffer(device, bytesize...)
-
-Allocates a Metal buffer on `device` of`bytesize` bytes. If a CPU-pointer is passed as last
-argument, then the buffer is initialized with the content of the memory starting at `ptr`,
-otherwise it's zero-initialized.
-
-! Note: You are responsible for freeing the returned buffer
-
-The storage kwarg controls where the buffer is stored. Possible values are:
- - Private : Residing on the device
- - Shared  : Residing on the host
- - Managed : Keeps two copies of the buffer, on device and on host. Explicit calls must be
-   given to syncronize the two
- - Memoryless : an iOS specific thing that won't work on Mac.
-
-Note that `Private` buffers can't be directly accessed from the CPU, therefore you cannot
-use this option if you pass a ptr to initialize the memory.
-"""
-alloc(args...; kwargs...) = MTLBuffer(args...; kwargs...)
-
-"""
-    free(buffer::MTLBuffer)
-
-Frees the buffer if the handle is valid.
-This does not protect against double-freeing of the same buffer!
-"""
-free(buf::MTLBuffer) = release(buf)
 
 """
     DidModifyRange!(buf::MTLBuffer, range::UnitRange)
