@@ -66,9 +66,9 @@ GPUArrays.backend(::Type{<:MtlArray}) = mtlArrayBackend()
 
 const GLOBAL_RNGs = Dict{MTLDevice,GPUArrays.RNG}()
 function GPUArrays.default_rng(::Type{<:MtlArray})
-    dev = MTLDevice(1)
+    dev = current_device()
     get!(GLOBAL_RNGs, dev) do
-        N = 128 # Size of default oneAPI working group with barrier, so should be good for Metal
+        N = dev.maxThreadsPerThreadgroup.width
         state = MtlArray{NTuple{4, UInt32}}(undef, N)
         rng = GPUArrays.RNG(state)
         Random.seed!(rng)
