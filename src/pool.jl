@@ -12,20 +12,9 @@ mutable struct AllocStats
     @atomic free_bytes::Int
 
     @atomic total_time::Float64
-    function AllocStats()
-        new(Int(0), Int(0),
-            Int(0), Int(0),
-            Float64(0.0))
-    end
-
-    function AllocStats(alloc_count::Integer, alloc_bytes::Integer,
-                          free_count::Integer, free_bytes::Integer,
-                          total_time::Float64)
-        new(Int(alloc_count), Int(alloc_bytes),
-            Int(free_count), Int(free_bytes),
-            Float64(total_time))
-    end
 end
+
+AllocStats() = AllocStats(0, 0, 0, 0, 0.0)
 
 Base.copy(alloc_stats::AllocStats) =
     AllocStats(alloc_stats.alloc_count, alloc_stats.alloc_bytes,
@@ -41,8 +30,10 @@ Base.:(-)(a::AllocStats, b::AllocStats) = (;
 
 const alloc_stats = AllocStats()
 
+
 """
-    alloc(device, bytesize, [ptr=nothing]; storage=Default, hazard_tracking=Default, cache_mode=Default)
+    alloc(device, bytesize, [ptr=nothing];
+          storage=Default, hazard_tracking=Default, cache_mode=Default)
 
 Allocates a Metal buffer on `device` of`bytesize` bytes. If a CPU-pointer is passed as last
 argument, then the buffer is initialized with the content of the memory starting at `ptr`,
@@ -94,6 +85,7 @@ function free(buf::MTLBuffer)
     @atomic alloc_stats.total_time + time
     return
 end
+
 
 ## utilities
 
