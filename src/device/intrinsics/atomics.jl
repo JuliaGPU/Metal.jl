@@ -58,27 +58,17 @@ for typ in (:Int32, :Float32), as in (AS.Device, AS.ThreadGroup)
     end
 end
 
-for typ in (:Int32, :UInt32, :Float32), as in (AS.Device, AS.ThreadGroup),
-    op in (:add, :sub)
-    typnam = type_names[typ]
-    if typ in [:Int32]
-        typnam = "s.$typnam"
-    elseif typ in [:UInt32]
-        typnam = "u.$typnam"
-    end
-    memnam, memid = memory_names[as]
-    f = Symbol("atomic_fetch_$(op)_explicit")
-    @eval begin
-        function $f(ptr::LLVMPtr{$typ,$as}, desired::$typ)
-            @typed_ccall($"air.atomic.$memnam.$op.$typnam", llvmcall, $typ,
-                         (LLVMPtr{$typ,$as}, $typ, Int32, Int32, Bool),
-                         ptr, desired, Val(memory_order_relaxed), Val($memid), Val(true))
-        end
-    end
-end
+const atomic_fetch_and_modify = [
+    :add => [:Int32, :UInt32, :Float32],
+    :sub => [:Int32, :UInt32, :Float32],
+    :min => [:Int32, :UInt32],
+    :max => [:Int32, :UInt32],
+    :and => [:Int32, :UInt32],
+    :or  => [:Int32, :UInt32],
+    :xor => [:Int32, :UInt32]
+]
 
-for typ in (:Int32, :UInt32), as in (AS.Device, AS.ThreadGroup),
-    op in (:min, :max, :or, :xor)
+for (op, types) in atomic_fetch_and_modify, typ in types, as in (AS.Device, AS.ThreadGroup)
     typnam = type_names[typ]
     if typ in [:Int32, :Int64]
         typnam = "s.$typnam"
