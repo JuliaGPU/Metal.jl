@@ -399,7 +399,6 @@ end # End SIMD Intrinsics
             i = thread_position_in_grid_1d()
             b = MtlThreadGroupArray(T, 128)
             Metal.atomic_store_explicit(pointer(b, i), val)
-            threadgroup_barrier()
             a[i] = b[i]
             return
         end
@@ -432,7 +431,6 @@ end # End SIMD Intrinsics
             i = thread_position_in_grid_1d()
             c = MtlThreadGroupArray(T, 128)
             c[i] = a[i]
-            threadgroup_barrier()
             val = Metal.atomic_load_explicit(pointer(c, i))
             b[i] = val
             return
@@ -465,7 +463,6 @@ end # End SIMD Intrinsics
             i = thread_position_in_grid_1d()
             b = MtlThreadGroupArray(T, 128)
             Metal.atomic_exchange_explicit(pointer(b, i), val)
-            threadgroup_barrier()
             a[i] = b[i]
             return
         end
@@ -500,11 +497,9 @@ end # End SIMD Intrinsics
             i = thread_position_in_grid_1d()
             b = MtlThreadGroupArray(T, 128)
             b[i] = a[i]
-            threadgroup_barrier()
             while Metal.atomic_compare_exchange_weak_explicit(pointer(b, i), expected[i], desired) != expected[i]
                 # keep on trying
             end
-            threadgroup_barrier()
             a[i] = b[i]
             return
         end
@@ -541,7 +536,6 @@ end # End SIMD Intrinsics
                 b = MtlThreadGroupArray(T, 128)
                 b[i] = a[i]
                 f(pointer(b, i), val)
-                threadgroup_barrier()
                 a[i] = b[i]
                 return
             end
@@ -589,7 +583,6 @@ end # End SIMD Intrinsics
             b = MtlThreadGroupArray(T, 128)
             b[i] = a[i]
             Metal.atomic_fetch_op_explicit(pointer(b, i), op, val)
-            threadgroup_barrier()
             a[i] = b[i]
             return
         end
