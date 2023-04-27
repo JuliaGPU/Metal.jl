@@ -6,7 +6,7 @@ using ObjectiveC, .Foundation, .Dispatch
 
 ## version information
 
-export darwin_version, macos_version
+export darwin_version, macos_version, metal_version
 
 @noinline function _syscall_version(name)
     size = Ref{Csize_t}()
@@ -37,6 +37,25 @@ function macos_version()
         _macos_version[] = _syscall_version("kern.osproductversion")
     end
     _macos_version[]
+end
+
+function metal_version()
+    macos = macos_version()
+    if macos >= v"13"
+        v"3.0"
+    elseif macos >= v"12"
+        v"2.4"
+    elseif macos v> v"11"
+        v"2.3"
+    elseif macos >= v"10.15"
+        v"2.2"
+    elseif macos >= v"10.14"
+        v"2.1"
+    elseif macos >= v"10.13"
+        v"2.0"
+    else
+        error("Metal is not supported on macOS < 10.13")
+    end
 end
 
 

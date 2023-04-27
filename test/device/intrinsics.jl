@@ -378,6 +378,8 @@ end # End SIMD Intrinsics
 @testset "low-level" begin
     n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
 
+    # XXX: according to the docs, Float32 atomics should also work on threadgroup memory
+
     @testset "store_explicit" begin
         function global_kernel(a, val)
             i = thread_position_in_grid_1d()
@@ -385,7 +387,9 @@ end # End SIMD Intrinsics
             return
         end
 
-        @testset for T in (Int32, Float32)
+        types = [Int32]
+        metal_version() >= v"3.0" && push!(types, Float32)
+        @testset for T in types
             a = Metal.zeros(T, n)
             @metal threads=n global_kernel(a, T(42))
             @test all(isequal(42), Array(a))
@@ -400,8 +404,7 @@ end # End SIMD Intrinsics
             return
         end
 
-        # XXX: docs suggests Float32 should be supported, but that doesn't compile
-        @testset for T in (Int32,)
+        @testset for T in [Int32,]
             a = Metal.zeros(T, n)
             @metal threads=n local_kernel(a, T(42))
             @test all(isequal(42), Array(a))
@@ -416,7 +419,9 @@ end # End SIMD Intrinsics
             return
         end
 
-        @testset for T in (Int32, Float32)
+        types = [Int32]
+        metal_version() >= v"3.0" && push!(types, Float32)
+        @testset for T in types
             a = MtlArray(rand(T, n))
             b = Metal.zeros(T, n)
             @metal threads=n global_kernel(a, b)
@@ -433,8 +438,7 @@ end # End SIMD Intrinsics
             return
         end
 
-        # XXX: docs suggests Float32 should be supported, but that doesn't compile
-        @testset for T in (Int32,)
+        @testset for T in [Int32,]
             a = MtlArray(rand(T, n))
             b = Metal.zeros(T, n)
             @metal threads=n local_kernel(a, b)
@@ -449,7 +453,9 @@ end # End SIMD Intrinsics
             return
         end
 
-        @testset for T in (Int32, Float32)
+        types = [Int32]
+        metal_version() >= v"3.0" && push!(types, Float32)
+        @testset for T in types
             a = MtlArray(rand(T, n))
             @metal threads=n global_kernel(a, T(42))
             @test all(isequal(42), Array(a))
@@ -464,8 +470,7 @@ end # End SIMD Intrinsics
             return
         end
 
-        # XXX: docs suggests Float32 should be supported, but that doesn't compile
-        @testset for T in (Int32,)
+        @testset for T in [Int32,]
             a = Metal.zeros(T, n)
             @metal threads=n local_kernel(a, T(42))
             @test all(isequal(42), Array(a))
@@ -481,7 +486,9 @@ end # End SIMD Intrinsics
             return
         end
 
-        @testset for T in (Int32, Float32)
+        types = [Int32]
+        metal_version() >= v"3.0" && push!(types, Float32)
+        @testset for T in types
             a = MtlArray(rand(T, n))
             expected = copy(a)
             desired = T(42)
@@ -502,8 +509,7 @@ end # End SIMD Intrinsics
             return
         end
 
-        # XXX: docs suggests Float32 should be supported, but that doesn't compile
-        @testset for T in (Int32,)
+        @testset for T in [Int32,]
             a = Metal.zeros(T, n)
             expected = copy(a)
             desired = T(42)
@@ -519,7 +525,9 @@ end # End SIMD Intrinsics
             return
         end
 
-        @testset for T in (Int32, UInt32, Float32)
+        types = [Int32, UInt32]
+        metal_version() >= v"3.0" && push!(types, Float32)
+        @testset for T in types
             a = rand(T, n)
             b = MtlArray(a)
             val = rand(T)
@@ -537,8 +545,7 @@ end # End SIMD Intrinsics
             return
         end
 
-        # XXX: docs suggests Float32 should be supported, but that doesn't compile
-        @testset for T in (Int32, UInt32)
+        @testset for T in [Int32, UInt32]
             a = rand(T, n)
             b = MtlArray(a)
             val = rand(T)
@@ -554,7 +561,9 @@ end # End SIMD Intrinsics
             return
         end
 
-        @testset for T in (Int32, UInt32, Float32)
+        types = [Int32, UInt32]
+        metal_version() >= v"3.0" && push!(types, Float32)
+        @testset for T in types
             a = rand(T, n)
             b = MtlArray(a)
             val = rand(T)
@@ -572,8 +581,7 @@ end # End SIMD Intrinsics
             return
         end
 
-        # XXX: docs suggests Float32 should be supported, but that doesn't compile
-        @testset for T in (Int32, UInt32)
+        @testset for T in [Int32, UInt32]
             a = rand(T, n)
             b = MtlArray(a)
             val = rand(T)
@@ -589,7 +597,7 @@ end # End SIMD Intrinsics
             return
         end
 
-        @testset for T in (Int32, UInt32)
+        @testset for T in [Int32, UInt32]
             a = rand(T, n)
             b = MtlArray(a)
             val = rand(T)
@@ -607,7 +615,7 @@ end # End SIMD Intrinsics
             return
         end
 
-        @testset for T in (Int32, UInt32)
+        @testset for T in [Int32, UInt32]
             a = rand(T, n)
             b = MtlArray(a)
             val = rand(T)
@@ -623,7 +631,7 @@ end # End SIMD Intrinsics
             return
         end
 
-        @testset for T in (Int32, UInt32)
+        @testset for T in [Int32, UInt32]
             a = rand(T, n)
             b = MtlArray(a)
             val = rand(T)
@@ -641,7 +649,7 @@ end # End SIMD Intrinsics
             return
         end
 
-        @testset for T in (Int32, UInt32)
+        @testset for T in [Int32, UInt32]
             a = rand(T, n)
             b = MtlArray(a)
             val = rand(T)
@@ -657,7 +665,7 @@ end # End SIMD Intrinsics
             return
         end
 
-        @testset for T in (Int32, UInt32)
+        @testset for T in [Int32, UInt32]
             a = rand(T, n)
             b = MtlArray(a)
             val = rand(T)
@@ -675,7 +683,7 @@ end # End SIMD Intrinsics
             return
         end
 
-        @testset for T in (Int32, UInt32)
+        @testset for T in [Int32, UInt32]
             a = rand(T, n)
             b = MtlArray(a)
             val = rand(T)
@@ -691,7 +699,7 @@ end # End SIMD Intrinsics
             return
         end
 
-        @testset for T in (Int32, UInt32)
+        @testset for T in [Int32, UInt32]
             a = rand(T, n)
             b = MtlArray(a)
             val = rand(T)
@@ -709,7 +717,7 @@ end # End SIMD Intrinsics
             return
         end
 
-        @testset for T in (Int32, UInt32)
+        @testset for T in [Int32, UInt32]
             a = rand(T, n)
             b = MtlArray(a)
             val = rand(T)

@@ -21,6 +21,8 @@ const type_names = Dict(
 
 ## low-level functions
 
+# NOTE: Float32 atomics are only available on Metal 3.0, but we can't check that at runtime
+
 for typ in (:Int32, :Float32), as in (AS.Device, AS.ThreadGroup)
     typnam = type_names[typ]
     memnam, memid = memory_names[as]
