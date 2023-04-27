@@ -5,13 +5,13 @@ using Printf
 # allocation statistics
 
 mutable struct AllocStats
-    @atomic alloc_count::Int
-    @atomic alloc_bytes::Int
+    Base.@atomic alloc_count::Int
+    Base.@atomic alloc_bytes::Int
 
-    @atomic free_count::Int
-    @atomic free_bytes::Int
+    Base.@atomic free_count::Int
+    Base.@atomic free_bytes::Int
 
-    @atomic total_time::Float64
+    Base.@atomic total_time::Float64
 end
 
 AllocStats() = AllocStats(0, 0, 0, 0, 0.0)
@@ -61,9 +61,9 @@ function alloc(dev::Union{MTLDevice,MTLHeap},
         buf = MTLBuffer(dev, bytesize, args...; storage, kwargs...)
     end
 
-    @atomic alloc_stats.alloc_count + 1
-    @atomic alloc_stats.alloc_bytes + bytesize
-    @atomic alloc_stats.total_time + time
+    Base.@atomic alloc_stats.alloc_count + 1
+    Base.@atomic alloc_stats.alloc_bytes + bytesize
+    Base.@atomic alloc_stats.total_time + time
 
     return buf
 end
@@ -81,9 +81,9 @@ function free(buf::MTLBuffer)
         release(buf)
     end
 
-    @atomic alloc_stats.free_count + 1
-    @atomic alloc_stats.free_bytes + sz
-    @atomic alloc_stats.total_time + time
+    Base.@atomic alloc_stats.free_count + 1
+    Base.@atomic alloc_stats.free_bytes + sz
+    Base.@atomic alloc_stats.total_time + time
     return
 end
 

@@ -375,8 +375,10 @@ end # End SIMD Intrinsics
 
 @testset "atomics" begin
 
+n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
+
 @testset "low-level" begin
-    n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
+    # TODO: make these tests actually write to the overlapping memory locations
 
     # XXX: according to the docs, Float32 atomics should also work on threadgroup memory
 
@@ -593,6 +595,82 @@ end # End SIMD Intrinsics
             val = rand(T)
             @metal threads=n local_kernel(b, f, val)
             @test f.(a, val) ≈ Array(b)
+        end
+    end
+end
+
+@testset "high-level" begin
+    # NOTE: this doesn't test threadgroup atomics, as those are assumed to have been
+    #       covered by the low-level tests above, but only the atomic macro functionality.
+
+    @testset "load" begin
+        types = [Int32, UInt32]
+        metal_version() >= v"3.0" && append!(types, [Float32])
+
+        function kernel(a, b)
+            i = thread_position_in_grid_1d()
+            a[i] = Metal.@atomic b[i]
+            return
+        end
+
+        @testset for T in types
+            a = Metal.zeros(T, n)
+            b = MtlArray(rand(T, n))
+            @metal threads=n kernel(a, b)
+            @test Array(a) == Array(b)
+        end
+    end
+
+    @testset "store" begin
+        types = [Int32, UInt32]
+        metal_version() >= v"3.0" && append!(types, [Float32])
+
+        function kernel(a, b)
+            i = thread_position_in_grid_1d()
+            val = b[i]
+            Metal.@atomic a[i] = val
+            return
+        end
+
+        @testset for T in types
+            a = Metal.zeros(T, n)
+            b = MtlArray(rand(T, n))
+            @metal threads=n kernel(a, b)
+            @test Array(a) == Array(b)
+        end
+    end
+
+    @testset "add" begin
+        types = [Int32, UInt32]
+        metal_version() >= v"3.0" && append!(types, [Float32])
+
+        function kernel(a)
+            Metal.@atomic a[1] = a[1] + 1
+            Metal.@atomic a[1] += 1
+            return
+        end
+
+        @testset for T in types
+            a = Metal.zeros(T)
+            @metal threads=n kernel(a)
+            @test Array(a)[1] == 2*n
+        end
+    end
+
+    @testset "sub" begin
+        types = [Int32, UInt32]
+        metal_version() >= v"3.0" && append!(types, [Float32])
+
+        function kernel(a)
+            Metal.@atomic a[1] = a[1] - 1
+            Metal.@atomic a[1] -= 1
+            return
+        end
+
+        @testset for T in types
+            a = MtlArray(T[2n])
+            @metal threads=n kernel(a)
+            @test Array(a)[1] == 0
         end
     end
 end
