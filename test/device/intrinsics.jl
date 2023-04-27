@@ -523,12 +523,12 @@ end # End SIMD Intrinsics
         metal_version() >= v"3.0" && push!(add_sub_types, Float32)
         other_types = [Int32, UInt32]
         for (jlfun, mtlfun, types) in [(min, Metal.atomic_fetch_min_explicit, other_types),
-                                    (max, Metal.atomic_fetch_max_explicit, other_types),
-                                    (&, Metal.atomic_fetch_and_explicit, other_types),
-                                    (|, Metal.atomic_fetch_or_explicit, other_types),
-                                    (⊻, Metal.atomic_fetch_xor_explicit, other_types),
-                                    (+, Metal.atomic_fetch_add_explicit, add_sub_types),
-                                    (-, Metal.atomic_fetch_sub_explicit, add_sub_types)
+                                       (max, Metal.atomic_fetch_max_explicit, other_types),
+                                       (&,   Metal.atomic_fetch_and_explicit, other_types),
+                                       (|,   Metal.atomic_fetch_or_explicit,  other_types),
+                                       (⊻,   Metal.atomic_fetch_xor_explicit, other_types),
+                                       (+,   Metal.atomic_fetch_add_explicit, add_sub_types),
+                                       (-,   Metal.atomic_fetch_sub_explicit, add_sub_types)
                                     ]
             function global_kernel(f, a, val)
                 i = thread_position_in_grid_1d()
@@ -563,6 +563,43 @@ end # End SIMD Intrinsics
                     @test jlfun.(a, val) ≈ Array(b)
                 end
             end
+        end
+    end
+
+    @testset "generic fetch and modify" begin
+        # custom operator that doesn't map onto an atomic intrinsic
+        f(a::T, b::T) where {T} = a + b + one(T)
+
+        function global_kernel(a, op, val)
+            i = thread_position_in_grid_1d()
+            Metal.atomic_fetch_op_explicit(pointer(a, i), op, val)
+            return
+        end
+
+        @testset for T in (Int32, UInt32)
+            a = rand(T, n)
+            b = MtlArray(a)
+            val = rand(T)
+            @metal threads=n global_kernel(b, f, val)
+            @test f.(a, val) ≈ Array(b)
+        end
+
+        function local_kernel(a, op, val::T) where T
+            i = thread_position_in_grid_1d()
+            b = MtlThreadGroupArray(T, 128)
+            b[i] = a[i]
+            Metal.atomic_fetch_op_explicit(pointer(b, i), op, val)
+            threadgroup_barrier()
+            a[i] = b[i]
+            return
+        end
+
+        @testset for T in (Int32, UInt32)
+            a = rand(T, n)
+            b = MtlArray(a)
+            val = rand(T)
+            @metal threads=n local_kernel(b, f, val)
+            @test f.(a, val) ≈ Array(b)
         end
     end
 end

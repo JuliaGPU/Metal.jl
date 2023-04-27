@@ -5,16 +5,16 @@
 end
 
 # XXX: the integers should come from some enum
-const memory_names = Dict(
-    AS.Device => ("global", Int32(2)),
-    AS.ThreadGroup => ("local", Int32(1))
+const atomic_memory_names = Dict(
+    AS.Device      => ("global", Int32(2)),
+    AS.ThreadGroup => ("local",  Int32(1))
 )
 
-const type_names = Dict(
-    :Int32 => "i32",
-    :UInt32 => "i32",
-    :Int64 => "i64",
-    :UInt64 => "i64",
+const atomic_type_names = Dict(
+    :Int32   => "i32",
+    :UInt32  => "i32",
+    :Int64   => "i64",
+    :UInt64  => "i64",
     :Float32 => "f32"
 )
 
@@ -23,9 +23,9 @@ const type_names = Dict(
 
 # NOTE: Float32 atomics are only available on Metal 3.0, but we can't check that at runtime
 
-for typ in (:Int32, :Float32), as in (AS.Device, AS.ThreadGroup)
-    typnam = type_names[typ]
-    memnam, memid = memory_names[as]
+for typ in (:Int32, :UInt32, :Float32), as in (AS.Device, AS.ThreadGroup)
+    typnam = atomic_type_names[typ]
+    memnam, memid = atomic_memory_names[as]
     @eval begin
         function atomic_store_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ)
             @typed_ccall($"air.atomic.$memnam.store.$typnam", llvmcall, Nothing,
@@ -69,13 +69,13 @@ const atomic_fetch_and_modify = [
 ]
 
 for (op, types) in atomic_fetch_and_modify, typ in types, as in (AS.Device, AS.ThreadGroup)
-    typnam = type_names[typ]
+    typnam = atomic_type_names[typ]
     if typ in [:Int32, :Int64]
         typnam = "s.$typnam"
     elseif typ in [:UInt32, :UInt64]
         typnam = "u.$typnam"
     end
-    memnam, memid = memory_names[as]
+    memnam, memid = atomic_memory_names[as]
     f = Symbol("atomic_fetch_$(op)_explicit")
     @eval begin
         function $f(ptr::LLVMPtr{$typ,$as}, desired::$typ)
@@ -87,3 +87,14 @@ for (op, types) in atomic_fetch_and_modify, typ in types, as in (AS.Device, AS.T
 end
 
 # TODO: non-fetch 64-bit min/max atomics (hardware support?)
+
+# generic atomic support using compare-and-swap
+@inline function atomic_fetch_op_explicit(ptr::LLVMPtr{T}, op::Function, val) where {T}
+    old = Base.unsafe_load(ptr)
+    while true
+        cmp = old
+        new = convert(T, op(old, val))
+        old = atomic_compare_exchange_weak_explicit(ptr, cmp, new)
+        isequal(old, cmp) && return new
+    end
+end
