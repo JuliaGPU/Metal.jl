@@ -235,13 +235,13 @@ end
     end
 
     @testset "unused mutable types" begin
-        function kernel(ptr, T)
+        function kernel(T, ptr)
             unsafe_store!(ptr, one(T))
             return
         end
 
         a = MtlArray([0])
-        @metal kernel(pointer(a), Int)
+        @metal kernel(Int, pointer(a))
         @test Array(a)[] == 1
     end
 end
