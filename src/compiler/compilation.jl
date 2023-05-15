@@ -15,11 +15,11 @@ GPUCompiler.method_table(::MetalCompilerJob) = method_table
 ## compiler implementation (cache, configure, compile, and link)
 
 # cache of compilation caches, per device
-const _compiler_caches = Dict{MTLDevice, Dict{UInt, Any}}()
+const _compiler_caches = Dict{MTLDevice, Dict{Any, Any}}()
 function compiler_cache(ctx::MTLDevice)
     cache = get(_compiler_caches, ctx, nothing)
     if cache === nothing
-        cache = Dict{UInt, Any}()
+        cache = Dict{Any, Any}()
         _compiler_caches[ctx] = cache
     end
     return cache
