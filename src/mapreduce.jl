@@ -178,17 +178,21 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     contiguous = prod(size(R)[1:reduce_dim_start-1]) == 1
     grain = contiguous ? prevpow(2, cld(16, sizeof(T))) : 1
 
+    # the maximum number of threads is limited by the hardware
+    dev = current_device()
+    maxthreads = min(Int(dev.maxThreadsPerThreadgroup.width),
+                     Int(dev.maxThreadgroupMemoryLength) ÷ sizeof(T))
+
     # also want to make sure the grain size is not too high as to starve threads of work.
-    # as a simple heuristic, assume we can launch the maximum number of threads (1024).
-    # XXX: can we query the 1024?
-    grain = min(grain, prevpow(2, cld(length(Rreduce), 1024)))
+    # as a simple heuristic, assume we can launch the maximum number of threads.
+    grain = min(grain, prevpow(2, cld(length(Rreduce), maxthreads)))
 
     # how many threads can we launch?
     #
     # we might not be able to launch all those threads to reduce each slice in one go.
     # that's why each threads also loops across their inputs, processing multiple values
     # so that we can span the entire reduction dimension using a single item group.
-    kernel = @metal launch=false partial_mapreduce_device(f, op, init, Val(1024), Val(Rreduce), Val(Rother),
+    kernel = @metal launch=false partial_mapreduce_device(f, op, init, Val(maxthreads), Val(Rreduce), Val(Rother),
                                                           Val(UInt64(length(Rother))), Val(grain), Val(shuffle), R′, A)
 
     # how many threads do we want?
