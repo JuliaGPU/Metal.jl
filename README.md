@@ -185,6 +185,5 @@ that any environment depending on the corresponding JLLs will pick-up the modifi
 
 ## Acknowledgements
 
-The C library started by forking [recp/cmt](https://github.com/recp/cmt), to whom
-goes the original credit. This package builds upon the experience of several
+This package builds upon the experience of several
 Julia contributors to CUDA.jl, AMDGPU.jl and oneAPI.jl.
