@@ -176,7 +176,8 @@ NSString("Apple M1 Pro")
 
 Metal.jl relies on a custom [LLVM with an AIR
 back-end](https://github.com/JuliaGPU/llvm-metal), provided as a JLL. Normally, this JLLis
-built on [Yggdrasil]([https://github.com/JuliaPackaging/Yggdrasil/](https://github.com/JuliaPackaging/Yggdrasil/blob/master/M/Metal_LLVM_Tools/build_tarballs.jl)). If you need to make changes to the LLVM back-end, have a look at the `build_llvm.jl` in the `deps/` folder. This
+built on [Yggdrasil](https://github.com/JuliaPackaging/Yggdrasil/blob/master/M/Metal_LLVM_Tools/build_tarballs.jl)). 
+If you need to make changes to the LLVM back-end, have a look at the `build_llvm.jl` in the `deps/` folder. This
 scripts builds a local version of the LLVM back-end, and configures a local preference such
 that any environment depending on the corresponding JLLs will pick-up the modified version
 (i.e., do `julia --project` in a clone of `Metal.jl`).
