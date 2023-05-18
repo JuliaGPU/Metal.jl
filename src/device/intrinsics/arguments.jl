@@ -45,14 +45,24 @@ for (intr, offset) in dim_intr
         export $(Symbol(intr * "_2d"))
         export $(Symbol(intr * "_3d"))
 
-        @device_function $(Symbol(intr * "_1d"))() =
+        @device_function function $(Symbol(intr * "_1d"))()
             ccall($"extern julia.air.$intr.i32", llvmcall, UInt32, ()) + UInt32($offset)
+        end
 
-        @device_function $(Symbol(intr * "_2d"))() =
-            NamedTuple{(:x,:y)}(ccall($"extern julia.air.$intr.v2i32", llvmcall, NTuple{2, UInt32}, ()) .+ UInt32($offset))
+        @device_function function $(Symbol(intr * "_2d"))()
+            vec = ccall($"extern julia.air.$intr.v2i32", llvmcall,
+                        NTuple{2, VecElement{UInt32}}, ())
+            (x = vec[1].value + UInt32($offset),
+             y = vec[2].value + UInt32($offset))
+        end
 
-        @device_function $(Symbol(intr * "_3d"))() =
-                NamedTuple{(:x,:y,:z)}(ccall($"extern julia.air.$intr.v3i32", llvmcall, NTuple{3, UInt32}, ()) .+ UInt32($offset))
+        @device_function function $(Symbol(intr * "_3d"))()
+            vec = ccall($"extern julia.air.$intr.v3i32", llvmcall,
+                        NTuple{3, VecElement{UInt32}}, ())
+            (x = vec[1].value + UInt32($offset),
+             y = vec[2].value + UInt32($offset),
+             z = vec[3].value + UInt32($offset))
+        end
     end
 end
 
