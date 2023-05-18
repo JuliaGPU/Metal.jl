@@ -19,17 +19,22 @@ steps:
           queue: "juliaecosystem"
           os: "macos"
           arch: "aarch64"
+        commands: |
+          julia --project -e '
+              # make sure the 1.8-era Manifest works on this Julia version
+              using Pkg
+              Pkg.resolve()'
         if: build.message !~ /\[skip tests\]/
         timeout_in_minutes: 60
         matrix:
           setup:
             julia:
               - "1.8"
-              #- "1.9-nightly"
-              #- "nightly"
+              - "1.9"
+              - "nightly"
           adjustments:
             - with:
-                julia: "1.9-nightly"
+                julia: "nightly"
               soft_fail: true
 
   # special tests
