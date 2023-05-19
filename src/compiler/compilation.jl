@@ -45,7 +45,7 @@ end
     air = metal # XXX: do these ever differ?
 
     # create GPUCompiler objects
-    target = MetalCompilerTarget(macos, air, metal; kwargs...)
+    target = MetalCompilerTarget(; macos, air, metal, kwargs...)
     params = MetalCompilerParams()
     CompilerConfig(target, params; kernel, name, always_inline)
 end
