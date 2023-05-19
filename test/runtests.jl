@@ -243,6 +243,27 @@ try
 
                     local resp
 
+                    # catch timeouts
+                    pid = remotecall_fetch(getpid, wrkr)
+                    timer = Timer(300) do _
+                        @warn "Test timed out: $test"
+                        t1 = rmprocs(wrkr, waitfor=0)
+
+                        # rmprocs may fail if the worker is stuck, so fall back to kill
+                        t2 = Timer(10) do _
+                            @warn "Couldn't kill worker $wrkr, killing process $pid forcefully"
+                            ccall(:kill, Cint, (Cint, Cint), pid, Base.SIGTERM)
+                            t3 = Timer(5) do _
+                                ccall(:kill, Cint, (Cint, Cint), pid, Base.SIGKILL)
+                            end
+                            wait(t1)
+                            close(t3)
+                        end
+
+                        wait(t1)
+                        close(t2)
+                    end
+
                     # run the test
                     running_tests[test] = now()
                     try
@@ -251,6 +272,7 @@ try
                         isa(e, InterruptException) && return
                         resp = Any[e]
                     end
+                    close(timer)
                     delete!(running_tests, test)
                     push!(results, (test, resp))
 

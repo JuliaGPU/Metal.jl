@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "c57c9beac5a6d4b1e42e9865476537a4b557dbc0"
+project_hash = "7737629b7beddc7971b5210f0c04b23b63f995fb"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
@@ -79,9 +79,11 @@ version = "0.1.4"
 
 [[deps.GPUCompiler]]
 deps = ["ExprTools", "InteractiveUtils", "LLVM", "Libdl", "Logging", "Scratch", "TimerOutputs", "UUIDs"]
-git-tree-sha1 = "0db4ea03d80362521de8220d7fc8406281a6a42a"
+git-tree-sha1 = "540d0951ebaf17e70a633a48ea10c9c0890ee91b"
+repo-rev = "master"
+repo-url = "https://github.com/JuliaGPU/GPUCompiler.jl.git"
 uuid = "61eb1bfa-7361-4325-ad38-22787b887f55"
-version = "0.20.0"
+version = "0.20.2"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -172,10 +174,10 @@ uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
 version = "2.28.0+0"
 
 [[deps.Metal_LLVM_Tools_jll]]
-deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl", "Pkg", "TOML", "Zlib_jll"]
-git-tree-sha1 = "aca98c1b3884c9597962801c2491553798cc2175"
+deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML", "Zlib_jll"]
+git-tree-sha1 = "7fb1688d2e08c6e08840b41d9d46510f105b20e6"
 uuid = "0418c028-ff8c-56b8-a53e-0f9676ed36fc"
-version = "0.3.0+2"
+version = "0.5.1+0"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"

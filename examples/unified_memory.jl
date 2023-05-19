@@ -25,11 +25,10 @@ end
 # underlying data, in a unified memory architecture, the GPU array should first
 # be allocated, then wrapped by a CPU array...not the other way around.
 
-dims = tuple(16,16)
 # Create a Metal array with a storage mode of shared (both CPU and GPU get access)
-arr_mtl = MtlArray{Float32}(undef, dims, storage=Shared)
+arr_mtl = Metal.zeros(Float32, (16,16); storage=Shared)
 # Unsafe wrap the contents of the Metal array with a CPU array
-arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, dims)
+arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, size(arr_mtl))
 
 # Alter the CPU array data
 arr_cpu .= pi
@@ -41,6 +40,7 @@ Metal.@allowscalar @test arr_mtl[1] == Float32(pi)
 Metal.@sync @metal threads=1024 groups=1024 simple_kernel(arr_mtl)
 
 # These changes are reflected in the wrapped CPU array
+synchronize()
 @test all(arr_cpu .== -1.0)
 
 
@@ -70,11 +70,10 @@ function long_kernel(arr, dummy)
 end
 
 # Make larger arrays to make the kernel take non-trivial time
-dims = 1024*1024
 # Create a Metal array with a default storage mode of shared (both CPU and GPU get access)
-arr_mtl = MtlArray{Float32}(undef, dims, storage=Shared)
+arr_mtl = Metal.zeros(Float32, 1024*1024; storage=Shared)
 # Unsafe wrap the contents of the Metal array with a CPU array
-arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, dims)
+arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, size(arr_mtl))
 dummy_mtl = MtlArray{Float32}(undef, 1)
 
 rand!(arr_cpu)

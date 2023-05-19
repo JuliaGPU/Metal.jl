@@ -69,14 +69,15 @@ function link(@nospecialize(job::CompilerJob), compiled; return_function=false)
     fun = MTLFunction(lib, compiled.entry)
     pipeline_state = try
         MTLComputePipelineState(dev, fun)
-    catch
+    catch err
+        isa(err, NSError) || rethrow()
+
         # the back-end compiler likely failed
         # XXX: check more accurately? the error domain doesn't help much here
         metallib = tempname(cleanup=false) * ".metallib"
         write(metallib, compiled.image)
-        @warn """Compilation of MetalLib to native code failed.
-                 If you think this is a bug, please file an issue and attach $(metallib)."""
-        rethrow()
+        error("""Compilation to native code failed; see below for details.
+                 If you think this is a bug, please file an issue and attach $(metallib).""")
     end
 
     # most of the time, we don't need the function object,
