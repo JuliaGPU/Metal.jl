@@ -126,41 +126,42 @@ end
 ############################################################################################
 
 @testset "synchronization" begin
-    function sync_test_kernel(buf)
-        idx = thread_position_in_grid_1d()
-        buf[idx] += UInt8(1)
-        return nothing
-    end
-    buf = MtlArray{UInt8,1}(undef, tuple(1024); storage=Shared)
-    vec = unsafe_wrap(Vector{UInt8}, pointer(buf), (1024))
-    @metal threads=1024 sync_test_kernel(buf)
-    synchronize()
-    @test all(vec .== UInt8(1))
-
-    function barrier_test_kernel(buf)
-        idx = thread_position_in_grid_1d()
-        if thread_position_in_threadgroup_1d() != UInt32(1)
-            for i in range(1,threads_per_threadgroup_1d())
-                buf[idx] += UInt32(i)
-            end
-            buf[idx] = 1
+    # host/device synchronization
+    let
+        function sync_test_kernel(buf)
+            idx = thread_position_in_grid_1d()
+            @inbounds buf[idx] += 1
+            return nothing
         end
-
-        threadgroup_barrier()
-
-        if thread_position_in_threadgroup_1d() == UInt32(1)
-            for i in range(1,threads_per_threadgroup_1d())
-                buf[idx] += buf[idx+i-1]
-            end
-        end
-        return nothing
+        buf = Metal.zeros(Int, 1024; storage=Shared)
+        vec = unsafe_wrap(Vector{Int}, pointer(buf), size(buf))
+        @metal threads=length(buf) sync_test_kernel(buf)
+        synchronize()
+        @test all(vec .== 1)
     end
 
-    buf = MtlArray{Int,1}(undef, tuple(1024); storage=Shared)
-    vec = unsafe_wrap(Vector{Int}, pointer(buf), (1024))
-    @metal threads=1024 barrier_test_kernel(buf)
-    synchronize()
-    @test vec[1] == 992
+    # thread synchronization
+    let
+        function barrier_test_kernel(buf)
+            idx = thread_position_in_grid_1d()
+            if thread_position_in_threadgroup_1d() != 1
+                @inbounds buf[idx] = 1
+            end
+
+            threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+
+            if thread_position_in_threadgroup_1d() == 1
+                for i in 2:threads_per_threadgroup_1d()
+                    @inbounds buf[idx] += buf[i]
+                end
+            end
+            return nothing
+        end
+
+        buf = Metal.zeros(Int, 1000)
+        @metal threads=length(buf) barrier_test_kernel(buf)
+        @test Array(buf)[1] == 999
+    end
 
     # TODO: simdgroup barrier test
 end
@@ -276,8 +277,8 @@ end
         return
     end
 
-    dev_a = MtlArray{typ}(undef, 32, storage=Shared)
-    dev_b = MtlArray{typ}(undef, 32, storage=Shared)
+    dev_a = Metal.zeros(typ, 32; storage=Shared)
+    dev_b = Metal.zeros(typ, 32; storage=Shared)
     a = unsafe_wrap(Array{typ}, dev_a, 32)
     b = unsafe_wrap(Array{typ}, dev_b, 32)
 
