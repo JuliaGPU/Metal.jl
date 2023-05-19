@@ -64,14 +64,18 @@ importing the package:
 julia> using Metal
 
 julia> Metal.versioninfo()
-macOS 12.2.0, Darwin 21.3.0
+macOS 13.3.1, Darwin 22.4.0
 
 Toolchain:
-- Julia: 1.8.0-beta3
-- LLVM: 13.0.1
+- Julia: 1.9.0
+- LLVM: 14.0.6
+
+Julia packages:
+- Metal.jl: 0.3.0
+- Metal_LLVM_Tools_jll: 0.3.0+2
 
 1 device:
-- Apple M1 Pro (64.000 KiB allocated)
+- Apple M2 Max (64.000 KiB allocated)
 ```
 
 
@@ -176,7 +180,7 @@ NSString("Apple M1 Pro")
 
 Metal.jl relies on a custom [LLVM with an AIR
 back-end](https://github.com/JuliaGPU/llvm-metal), provided as a JLL. Normally, this JLLis
-built on [Yggdrasil](https://github.com/JuliaPackaging/Yggdrasil/blob/master/M/Metal_LLVM_Tools/build_tarballs.jl). 
+built on [Yggdrasil](https://github.com/JuliaPackaging/Yggdrasil/blob/master/M/Metal_LLVM_Tools/build_tarballs.jl).
 If you need to make changes to the LLVM back-end, have a look at the `build_llvm.jl` in the `deps/` folder. This
 scripts builds a local version of the LLVM back-end, and configures a local preference such
 that any environment depending on the corresponding JLLs will pick-up the modified version
