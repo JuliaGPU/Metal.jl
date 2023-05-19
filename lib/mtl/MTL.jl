@@ -8,10 +8,13 @@ using ObjectiveC, .Foundation, .Dispatch
 
 export darwin_version, macos_version
 
+const _darwin_version = Ref{VersionNumber}()
 function darwin_version()
-    # extract the trailing `-darwinXXX` bit from the triple
-    machine = Sys.MACHINE
-    VersionNumber(machine[findfirst("darwin", machine)[end]+1:end])
+    if !isassigned(_darwin_version)
+        verstr = read(`uname -r`, String)
+        _darwin_version[] = parse(VersionNumber, verstr)
+    end
+    _darwin_version[]
 end
 
 const _macos_version = Ref{VersionNumber}()
