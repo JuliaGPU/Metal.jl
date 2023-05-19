@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "a1e4d979563ac5e85d74221b8de8ba571667e738"
+project_hash = "7737629b7beddc7971b5210f0c04b23b63f995fb"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
@@ -79,7 +79,7 @@ version = "0.1.4"
 
 [[deps.GPUCompiler]]
 deps = ["ExprTools", "InteractiveUtils", "LLVM", "Libdl", "Logging", "Scratch", "TimerOutputs", "UUIDs"]
-git-tree-sha1 = "62cff6a9b910ed14fec9c218462bf2ef2a185339"
+git-tree-sha1 = "540d0951ebaf17e70a633a48ea10c9c0890ee91b"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaGPU/GPUCompiler.jl.git"
 uuid = "61eb1bfa-7361-4325-ad38-22787b887f55"
