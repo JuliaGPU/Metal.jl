@@ -148,3 +148,60 @@ function matmul!(c::MtlMatrix, a::MtlMatrix, b::MtlMatrix,
 
     c
 end
+
+export MPSMatrixFindTopK
+
+@objcwrapper immutable=false MPSMatrixFindTopK <: MPSMatrixUnaryKernel
+
+function MPSMatrixFindTopK(device, numberOfTopKValues)
+    kernel = @objc [MPSMatrixFindTopK alloc]::id{MPSMatrixFindTopK}
+    obj = MPSMatrixFindTopK(kernel)
+    finalizer(release, obj)
+    @objc [obj::id{MPSMatrixFindTopK} initWithDevice:device::id{MTLDevice}
+                                                   numberOfTopKValues:numberOfTopKValues::NSUInteger]::id{MPSMatrixFindTopK}
+    return obj
+end
+
+function encode!(cmdbuf::MTLCommandBuffer, kernel::MPSMatrixFindTopK, inputMatrix, resultIndexMatrix, resultValueMatrix)
+    @objc [kernel::id{MPSMatrixFindTopK} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+                                                      inputMatrix:inputMatrix::id{MPSMatrix}
+                                                      resultIndexMatrix:resultIndexMatrix::id{MPSMatrix}
+                                                      resultValueMatrix:resultValueMatrix::id{MPSMatrix}]::Nothing
+end
+
+export topk, topk!
+
+"""
+    topk!(A::MtlMatrix{T}, I::MtlMatrix{Int32}, V::MtlMatrix{T}, k)
+                                                     where {T<:MtlFloat}
+
+Compute the top-K values and their corresponding indices in a matrix in-place.
+"""
+function topk!(A::MtlMatrix{T}, I::MtlMatrix{Int32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
+    # Create MPS-compatible matrix from the MtlArrays
+    mps_a = MPSMatrix(A)
+    mps_i = MPSMatrix(I)
+    mps_v = MPSMatrix(V)
+
+    topk_kernel = MPSMatrixFindTopK(current_device(), k)
+
+    # Encode and commit topk kernel
+    cmdbuf = MTLCommandBuffer(global_queue(current_device()))
+    encode!(cmdbuf, topk_kernel, mps_a, mps_i, mps_v)
+    commit!(cmdbuf)
+
+    I .+ 1 ,V
+end
+
+"""
+    topk(A::MtlMatrix{T}, k) where {T<:MtlFloat}
+
+Compute the top-K values and their corresponding indices in a matrix.
+"""
+function topk(A::MtlMatrix{T}, k) where T<:MtlFloat
+    s = (k,size(A,2))
+    I = MtlMatrix{Int32}(undef, s; storage=Metal.storagemode(A))
+    V = MtlMatrix{T}(undef, s; storage=Metal.storagemode(A))
+
+    return topk!(A, I, V, k)
+end
