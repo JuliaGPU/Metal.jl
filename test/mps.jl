@@ -35,6 +35,76 @@ if MPS.is_supported(current_device())
     end
 end
 
+# Modified from https://github.com/FluxML/NNlib.jl/pull/353
+function cpu_topk(x::Matrix{T}, k; rev=true, dims=1) where {T}
+    if dims === nothing
+        y = vec(x)
+        perm = partialsortperm(y, 1:k; rev)
+        return CartesianIndices(x)[perm], y[perm]
+    else
+        @assert dims isa Int
+        sz1 = size(x)[1:dims-1]
+        sz2 = size(x)[dims+1:end]
+        slice1 = CartesianIndices(sz1)
+        slice2 = CartesianIndices(sz2)
+        perm = similar(x, Int, (sz1..., k, sz2...))
+        y = similar(x, (sz1..., k, sz2...))
+        for I1 in slice1
+            for I2 in slice2
+                xI = x[I1,:,I2]
+                permI = partialsortperm(x[I1,:,I2], 1:k; rev)
+                perm[I1,:,I2] .= permI
+                y[I1,:,I2] .= xI[permI]
+            end
+        end
+        return perm, y
+    end
+end
+
+@testset "topk & topk!" begin
+    for ftype in (Float16, Float32)
+        # Normal operation
+        @testset "$ftype" begin
+            for (shp,k) in [((3,1), 2), ((20,30), 5)]
+                cpu_a = rand(ftype, shp...)
+
+                #topk
+                cpu_i, cpu_v = cpu_topk(cpu_a, k)
+
+                a = MtlMatrix(cpu_a)
+                i, v = MPS.topk(a, k)
+
+                @test Array(i) == cpu_i
+                @test Array(v) == cpu_v
+
+                #topk!
+                i = MtlMatrix{Int32}(undef, (k, shp[2]))
+                v = MtlMatrix{ftype}(undef, (k, shp[2]))
+
+                i, v = MPS.topk!(a, i, v, k)
+
+                @test Array(i) == cpu_i
+                @test Array(v) == cpu_v
+            end
+            shp = (20,30)
+            k = 17
+
+            cpu_a = rand(ftype, shp...)
+            cpu_i, cpu_v = cpu_topk(cpu_a, k)
+
+            a = MtlMatrix(cpu_a)
+            @test_throws "MPS.topk does not support values of k > 16" i, v = MPS.topk(a, k)
+
+            #topk!
+            i = MtlMatrix{Int32}(undef, (k, shp[2]))
+            v = MtlMatrix{ftype}(undef, (k, shp[2]))
+
+            @test_throws "MPS.topk! does not support values of k > 16" i, v = MPS.topk!(a, i, v, k)
+
+        end
+    end
+end
+
 @testset "decompositions" begin
     A = MtlMatrix(rand(Float32, 1024, 1024))
     lua = lu(A)
@@ -43,7 +113,7 @@ end
     A = MtlMatrix(rand(Float32, 1024, 512))
     lua = lu(A)
     @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A
-    
+
     A = MtlMatrix(rand(Float32, 512, 1024))
     lua = lu(A)
     @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A

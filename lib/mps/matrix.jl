@@ -175,9 +175,18 @@ export topk, topk!
     topk!(A::MtlMatrix{T}, I::MtlMatrix{Int32}, V::MtlMatrix{T}, k)
                                                      where {T<:MtlFloat}
 
-Compute the top-K values and their corresponding indices in a matrix in-place.
+Compute the top `k` values and their corresponding indices column-wise in a matrix `A`.
+Return the indices in `I` and the values in `V`.
+
+`k` cannot be greater than 16.
+
+See also: [`topk`](@ref).
 """
 function topk!(A::MtlMatrix{T}, I::MtlMatrix{Int32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
+    k <= 16 || error("MPS.topk! does not support values of k > 16")
+    _topk!(A,I,V,k)
+end
+@inline function _topk!(A::MtlMatrix{T}, I::MtlMatrix{Int32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
     # Create MPS-compatible matrix from the MtlArrays
     mps_a = MPSMatrix(A)
     mps_i = MPSMatrix(I)
@@ -196,12 +205,18 @@ end
 """
     topk(A::MtlMatrix{T}, k) where {T<:MtlFloat}
 
-Compute the top-K values and their corresponding indices in a matrix.
+Compute the top `k` values and their corresponding indices column-wise in a matrix `A`.
+Return the indices in `I` and the values in `V`.
+
+`k` cannot be greater than 16.
+
+See also: [`topk!`](@ref).
 """
 function topk(A::MtlMatrix{T}, k) where T<:MtlFloat
+    k <= 16 || error("MPS.topk does not support values of k > 16")
     s = (k,size(A,2))
     I = MtlMatrix{Int32}(undef, s; storage=Metal.storagemode(A))
     V = MtlMatrix{T}(undef, s; storage=Metal.storagemode(A))
 
-    return topk!(A, I, V, k)
+    return _topk!(A, I, V, k)
 end
