@@ -8,8 +8,6 @@ const MPS_VALID_MATMUL_TYPES =
      (Float16, Float16),
      (Float32, Float32)]
 
-const MtlFloat = Union{Float32, Float16}
-
 function gemm_dispatch!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
                         alpha::Number=true, beta::Number=false)
     if ndims(A) > 2
