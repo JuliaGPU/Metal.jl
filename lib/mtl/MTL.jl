@@ -8,17 +8,33 @@ using ObjectiveC, .Foundation, .Dispatch
 
 export darwin_version, macos_version
 
+@noinline function _syscall_version(name)
+    size = Ref{Csize_t}()
+    err = @ccall sysctlbyname(name::Cstring, C_NULL::Ptr{Cvoid}, size::Ptr{Csize_t},
+                              C_NULL::Ptr{Cvoid}, 0::Csize_t)::Cint
+    Base.systemerror("sysctlbyname", err != 0)
+
+    osrelease = Vector{UInt8}(undef, size[])
+    err = @ccall sysctlbyname(name::Cstring, osrelease::Ptr{Cvoid}, size::Ptr{Csize_t},
+                              C_NULL::Ptr{Cvoid}, 0::Csize_t)::Cint
+    Base.systemerror("sysctlbyname", err != 0)
+
+    verstr = view(String(osrelease), 1:size[]-1)
+    parse(VersionNumber, verstr)
+end
+
+const _darwin_version = Ref{VersionNumber}()
 function darwin_version()
-    # extract the trailing `-darwinXXX` bit from the triple
-    machine = Sys.MACHINE
-    VersionNumber(machine[findfirst("darwin", machine)[end]+1:end])
+    if !isassigned(_darwin_version)
+        _darwin_version[] = _syscall_version("kern.osrelease")
+    end
+    _darwin_version[]
 end
 
 const _macos_version = Ref{VersionNumber}()
 function macos_version()
     if !isassigned(_macos_version)
-        verstr = read(`sw_vers -productVersion`, String)
-        _macos_version[] = parse(VersionNumber, verstr)
+        _macos_version[] = _syscall_version("kern.osproductversion")
     end
     _macos_version[]
 end
