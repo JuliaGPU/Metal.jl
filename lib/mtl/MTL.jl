@@ -11,7 +11,14 @@ export darwin_version, macos_version
 const _darwin_version = Ref{VersionNumber}()
 function darwin_version()
     if !isassigned(_darwin_version)
-        verstr = read(`uname -r`, String)
+        size = Ref{Csize_t}()
+        err = @ccall sysctlbyname("kern.osrelease"::Cstring, C_NULL::Ptr{Cvoid}, size::Ptr{Csize_t}, C_NULL::Ptr{Cvoid}, 0::Csize_t)::Cint
+        Base.systemerror("sysctlbyname", err != 0)
+        osrelease = Vector{Cchar}(undef, size[])
+        err = @ccall sysctlbyname("kern.osrelease"::Cstring, osrelease::Ptr{Cvoid}, size::Ptr{Csize_t}, C_NULL::Ptr{Cvoid}, 0::Csize_t)::Cint
+        Base.systemerror("sysctlbyname", err != 0)
+        osrelease[end] = 0
+        verstr = GC.@preserve osrelease unsafe_string(pointer(osrelease))
         _darwin_version[] = parse(VersionNumber, verstr)
     end
     _darwin_version[]
