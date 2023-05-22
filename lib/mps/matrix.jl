@@ -153,6 +153,13 @@ export MPSMatrixFindTopK
 
 @objcwrapper immutable=false MPSMatrixFindTopK <: MPSMatrixUnaryKernel
 
+@objcproperties MPSMatrixFindTopK begin
+    @autoproperty indexOffset::NSInteger setter=setIndexOffset
+    @autoproperty numberOfTopKValues::NSInteger
+    @autoproperty sourceColumns::NSInteger
+    @autoproperty sourceRows::NSInteger
+end
+
 function MPSMatrixFindTopK(device, numberOfTopKValues)
     kernel = @objc [MPSMatrixFindTopK alloc]::id{MPSMatrixFindTopK}
     obj = MPSMatrixFindTopK(kernel)
@@ -182,24 +189,33 @@ Return the indices in `I` and the values in `V`.
 
 See also: [`topk`](@ref).
 """
-function topk!(A::MtlMatrix{T}, I::MtlMatrix{Int32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
+function topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
     k <= 16 || error("MPS.topk! does not support values of k > 16")
+
+    @assert size(I,1) >= k         "Matrix 'I' must be large enough for k rows"
+    @assert size(I,2) >= size(A,2) "Matrix 'I' must have at least as many columns as A"
+    @assert size(V,1) >= k         "Matrix 'V' must be large enough for k rows"
+    @assert size(V,2) >= size(A,2) "Matrix 'V' must have at least as many columns as A"
+
     _topk!(A,I,V,k)
 end
-@inline function _topk!(A::MtlMatrix{T}, I::MtlMatrix{Int32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
+@inline function _topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
     # Create MPS-compatible matrix from the MtlArrays
     mps_a = MPSMatrix(A)
     mps_i = MPSMatrix(I)
     mps_v = MPSMatrix(V)
 
+    @assert size(A,1) >= k "Matrix 'A' must must have more rows than k"
+
     topk_kernel = MPSMatrixFindTopK(current_device(), k)
+    topk_kernel.indexOffset = 1
 
     # Encode and commit topk kernel
     cmdbuf = MTLCommandBuffer(global_queue(current_device()))
     encode!(cmdbuf, topk_kernel, mps_a, mps_i, mps_v)
     commit!(cmdbuf)
 
-    I .+ 1 ,V
+    I, V
 end
 
 """
@@ -215,7 +231,7 @@ See also: [`topk!`](@ref).
 function topk(A::MtlMatrix{T}, k) where T<:MtlFloat
     k <= 16 || error("MPS.topk does not support values of k > 16")
     s = (k,size(A,2))
-    I = MtlMatrix{Int32}(undef, s; storage=Metal.storagemode(A))
+    I = MtlMatrix{UInt32}(undef, s; storage=Metal.storagemode(A))
     V = MtlMatrix{T}(undef, s; storage=Metal.storagemode(A))
 
     return _topk!(A, I, V, k)

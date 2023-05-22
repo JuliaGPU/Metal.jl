@@ -78,7 +78,7 @@ end
                 @test Array(v) == cpu_v
 
                 #topk!
-                i = MtlMatrix{Int32}(undef, (k, shp[2]))
+                i = MtlMatrix{UInt32}(undef, (k, shp[2]))
                 v = MtlMatrix{ftype}(undef, (k, shp[2]))
 
                 i, v = MPS.topk!(a, i, v, k)
@@ -96,7 +96,7 @@ end
             @test_throws "MPS.topk does not support values of k > 16" i, v = MPS.topk(a, k)
 
             #topk!
-            i = MtlMatrix{Int32}(undef, (k, shp[2]))
+            i = MtlMatrix{UInt32}(undef, (k, shp[2]))
             v = MtlMatrix{ftype}(undef, (k, shp[2]))
 
             @test_throws "MPS.topk! does not support values of k > 16" i, v = MPS.topk!(a, i, v, k)
