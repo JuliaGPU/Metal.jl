@@ -8,18 +8,25 @@ using ObjectiveC, .Foundation, .Dispatch
 
 export darwin_version, macos_version
 
+@noinline function _syscall_version(name)
+    size = Ref{Csize_t}()
+    err = @ccall sysctlbyname(name::Cstring, C_NULL::Ptr{Cvoid}, size::Ptr{Csize_t},
+                              C_NULL::Ptr{Cvoid}, 0::Csize_t)::Cint
+    Base.systemerror("sysctlbyname", err != 0)
+
+    osrelease = Vector{UInt8}(undef, size[])
+    err = @ccall sysctlbyname(name::Cstring, osrelease::Ptr{Cvoid}, size::Ptr{Csize_t},
+                              C_NULL::Ptr{Cvoid}, 0::Csize_t)::Cint
+    Base.systemerror("sysctlbyname", err != 0)
+
+    verstr = view(String(osrelease), 1:size[]-1)
+    parse(VersionNumber, verstr)
+end
+
 const _darwin_version = Ref{VersionNumber}()
 function darwin_version()
     if !isassigned(_darwin_version)
-        size = Ref{Csize_t}()
-        err = @ccall sysctlbyname("kern.osrelease"::Cstring, C_NULL::Ptr{Cvoid}, size::Ptr{Csize_t}, C_NULL::Ptr{Cvoid}, 0::Csize_t)::Cint
-        Base.systemerror("sysctlbyname", err != 0)
-        osrelease = Vector{Cchar}(undef, size[])
-        err = @ccall sysctlbyname("kern.osrelease"::Cstring, osrelease::Ptr{Cvoid}, size::Ptr{Csize_t}, C_NULL::Ptr{Cvoid}, 0::Csize_t)::Cint
-        Base.systemerror("sysctlbyname", err != 0)
-        osrelease[end] = 0
-        verstr = GC.@preserve osrelease unsafe_string(pointer(osrelease))
-        _darwin_version[] = parse(VersionNumber, verstr)
+        _darwin_version[] = _syscall_version("kern.osrelease")
     end
     _darwin_version[]
 end
@@ -27,8 +34,7 @@ end
 const _macos_version = Ref{VersionNumber}()
 function macos_version()
     if !isassigned(_macos_version)
-        verstr = read(`sw_vers -productVersion`, String)
-        _macos_version[] = parse(VersionNumber, verstr)
+        _macos_version[] = _syscall_version("kern.osproductversion")
     end
     _macos_version[]
 end
