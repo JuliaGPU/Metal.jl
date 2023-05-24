@@ -1,4 +1,5 @@
 using LinearAlgebra
+using LinearAlgebra: MulAddMul, wrap
 
 # Valid combination of input (A and B matrices) and output (C) types
 const MPS_VALID_MATMUL_TYPES =
@@ -8,15 +9,14 @@ const MPS_VALID_MATMUL_TYPES =
      (Float16, Float16),
      (Float32, Float32)]
 
-function gemm_dispatch!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
-                        alpha::Number=true, beta::Number=false)
+function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul)
     if ndims(A) > 2
         throw(ArgumentError("A has more than 2 dimensions"))
     elseif ndims(B) > 2
         throw(ArgumentError("B has more than 2 dimensions"))
     end
-    mA, nA = size(A,1), size(A,2)
-    mB, nB = size(B,1), size(B,2)
+    mA, nA = LinearAlgebra.lapack_size(tA, A)
+    mB, nB = LinearAlgebra.lapack_size(tB, B)
 
     if nA != mB
         throw(DimensionMismatch("A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
@@ -32,17 +32,8 @@ function gemm_dispatch!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
         end
     end
 
-    tA, dA = if A isa Transpose
-        true, parent(A)
-    else
-        false, A
-    end
-
-    tB, dB = if B isa Transpose
-        true, parent(B)
-    else
-        false, B
-    end
+    transA = tA == 'T'
+    transB = tB == 'T'
 
     typA = eltype(A)
     typB = eltype(B)
@@ -51,20 +42,31 @@ function gemm_dispatch!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
     # If possible, dispatch to performance shaders
     if is_supported(current_device()) &&
        typA == typB && (typA, typC) in MPS_VALID_MATMUL_TYPES
-        matmul!(C, dA, dB, alpha, beta, tA, tB)
+        matmul!(C, A, B, _add.alpha, _add.beta, transA, transB)
     else
-        GPUArrays.generic_matmatmul!(C, A, B, alpha, beta)
+        GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), _add.alpha, _add.beta)
     end
 end
 
-for NT in (Number, Real)
-    # NOTE: alpha/beta also ::Real to avoid ambiguities with certain Base methods
-    @eval begin
-        LinearAlgebra.mul!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
-                           a::$NT, b::$NT) = gemm_dispatch!(C, A, B, a, b)
+if VERSION < v"1.10-"
+# catch other functions that are called by LinearAlgebra's mul!
+LinearAlgebra.gemm_wrapper!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
+    LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add)
+function LinearAlgebra.syrk_wrapper!(C::MtlMatrix, tA::AbstractChar, A::MtlMatrix, _add::MulAddMul = MulAddMul())
+    if tA == 'T'
+        LinearAlgebra.generic_matmatmul!(C, 'T', 'N', A, A, _add)
+    else # tA == 'N'
+        LinearAlgebra.generic_matmatmul!(C, 'N', 'T', A, A, _add)
     end
 end
-
+function LinearAlgebra.herk_wrapper!(C::MtlMatrix, tA::AbstractChar, A::MtlMatrix, _add::MulAddMul = MulAddMul())
+    if tA == 'C'
+        LinearAlgebra.generic_matmatmul!(C, 'C', 'N', A, A, _add)
+    else # tA == 'N'
+        LinearAlgebra.generic_matmatmul!(C, 'N', 'C', A, A, _add)
+    end
+end
+end
 
 @inline checkpositivedefinite(status) = status == MPSMatrixDecompositionStatusNonPositiveDefinite || throw(PosDefException(status))
 @inline checknonsingular(status) = status != MPSMatrixDecompositionStatusSingular || throw(SingularException(status))
