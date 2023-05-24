@@ -1,6 +1,28 @@
 using LinearAlgebra
 using LinearAlgebra: MulAddMul, wrap
 
+if isdefined(LinearAlgebra, :wrap) # i.e., VERSION >= v"1.10.0-DEV.1365"
+    using LinearAlgebra: wrap
+else
+    function wrap(A::AbstractVecOrMat, tA::AbstractChar)
+        if tA == 'N'
+            return A
+        elseif tA == 'T'
+            return transpose(A)
+        elseif tA == 'C'
+            return adjoint(A)
+        elseif tA == 'H'
+            return Hermitian(A, :U)
+        elseif tA == 'h'
+            return Hermitian(A, :L)
+        elseif tA == 'S'
+            return Symmetric(A, :U)
+        else # tA == 's'
+            return Symmetric(A, :L)
+        end
+    end
+end
+
 # Valid combination of input (A and B matrices) and output (C) types
 const MPS_VALID_MATMUL_TYPES =
     [(Int8, Float16),
@@ -48,7 +70,7 @@ function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B:
     end
 end
 
-if VERSION < v"1.10-"
+if VERSION < v"1.10.0-DEV.1365"
 # catch other functions that are called by LinearAlgebra's mul!
 LinearAlgebra.gemm_wrapper!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
     LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add)
