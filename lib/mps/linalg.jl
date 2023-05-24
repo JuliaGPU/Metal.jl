@@ -1,5 +1,5 @@
 using LinearAlgebra
-using LinearAlgebra: MulAddMul, wrap
+using LinearAlgebra: MulAddMul
 
 if isdefined(LinearAlgebra, :wrap) # i.e., VERSION >= v"1.10.0-DEV.1365"
     using LinearAlgebra: wrap
