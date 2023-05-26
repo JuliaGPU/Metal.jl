@@ -177,17 +177,10 @@ function encode_wait!(buf::MTLCommandBuffer, ev::MTLEvent, val::Integer)
                                      value:val::UInt64]::Nothing
 end
 
-if false && VERSION >= v"1.9-"
+if VERSION >= v"1.9-"
 
 # on 1.9, we can just have Metal call back into Julia regardless of the thread it's on.
 # this means we can have Metal pass us the buffer, and don't need any additional capture.
-#
-# XXX: this sometimes crashes during thread adoption with signal (10.1): Bus error: 10
-#      jl_gc_pool_alloc_noinline at libjulia-internal.1.9.dylib
-#      jl_init_root_task at libjulia-internal.1.9.dylib
-#      ijl_adopt_thread at libjulia-internal.1.9.dylib
-#      unknown function (ip: 0x146c5829b)
-#      MTLDispatchListApply at /System/Library/Frameworks/Metal.framework/Versions/A/Metal
 function _command_buffer_callback(f, _)
     # convert the incoming pointer, and discard any return value
     function g(_buf)
