@@ -103,7 +103,7 @@ end
 @testset "math" begin
     a = ones(Float32,1)
     a .* Float32(3.14)
-    bufferA = MtlArray(a, storage=Shared)
+    bufferA = MtlArray{eltype(a),length(size(a)),Shared}(a)
     vecA = unsafe_wrap(Vector{Float32}, pointer(bufferA), 1)
 
     function intr_test(arr)

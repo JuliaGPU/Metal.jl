@@ -26,7 +26,7 @@ function generate(img, pos)
     return
 end
 
-img = MtlArray{RGB{N0f8}}(undef, 800,600, storage=Shared)
+img = MtlMatrix{RGB{N0f8},Shared}(undef, 800,600)
 host = unsafe_wrap(Array{RGB{N0f8}}, img, size(img))
 
 ## initial image

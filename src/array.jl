@@ -26,14 +26,14 @@ function contains_double(T)
     return false
 end
 
-mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
+mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
   buffer::MTLBuffer
 
   maxsize::Int  # maximum data size; excluding any selector bytes
   offset::Int   # offset of the data in the buffer, in number of elements
   dims::Dims{N}
 
-  function MtlArray{T,N}(::UndefInitializer, dims::Dims{N}; storage::MTL.MTLResourceOptions=Private) where {T,N}
+  function MtlArray{T,N,S}(::UndefInitializer, dims::Dims{N}) where {T,N,S}
       Base.allocatedinline(T) || error("MtlArray only supports element types that are stored inline")
       contains_double(T) && @warn "Metal does not support Float64 values, try using Float32 instead" maxlog=1
       maxsize = prod(dims) * sizeof(T)
@@ -50,10 +50,10 @@ mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
         # a pointer, query the buffer's properties, etc), we use a 1-byte buffer instead.
         bufsize = 1
       end
-      buf = alloc(dev, bufsize; storage)
-      buf.label = "MtlArray{$(T),$(N)}(dims=$dims)"
+      buf = alloc(dev, bufsize; storage=S)
+      buf.label = "MtlArray{$(T),$(N),$(S)}(dims=$dims)"
 
-      obj = new(buf, maxsize, 0, dims)
+      obj = new{T,N,S}(buf, maxsize, 0, dims)
       finalizer(obj) do arr
           free(arr.buffer)
       end
@@ -64,7 +64,8 @@ mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
                          maxsize::Int=prod(dims) * sizeof(T), offset::Int=0) where {T,N}
       Base.allocatedinline(T) || error("MtlArray only supports element types that are stored inline")
       retain(buffer)
-      obj = new{T,N}(buffer, maxsize, offset, dims)
+      S = convert(MTL.MTLResourceOptions, buffer.storageMode)
+      obj = new{T,N,S}(buffer, maxsize, offset, dims)
       finalizer(obj) do arr
           free(arr.buffer)
       end
@@ -73,34 +74,44 @@ mutable struct MtlArray{T,N} <: AbstractGPUArray{T,N}
 end
 
 device(A::MtlArray) = A.buffer.device
-storagemode(A::MtlArray) = convert(MTL.MTLResourceOptions, A.buffer.storageMode)
+storagemode(::MtlArray{T,N,S}) where {T,N,S} = S
 
 ## aliases
 
-const MtlVector{T} = MtlArray{T,1}
-const MtlMatrix{T} = MtlArray{T,2}
-const MtlVecOrMat{T} = Union{MtlVector{T},MtlMatrix{T}}
+const MtlVector{T,S} = MtlArray{T,1,S}
+const MtlMatrix{T,S} = MtlArray{T,2,S}
+const MtlVecOrMat{T,S} = Union{MtlVector{T,S},MtlMatrix{T,S}}
+
+# default to Private memory
+const DefaultStorageMode = Private
+MtlArray{T,N}(::UndefInitializer, dims::Dims{N}) where {T,N} =
+  MtlArray{T,N,DefaultStorageMode}(undef, dims)
 
 ## constructors
 
 # type and dimensionality specified, accepting dims as series of Ints
-MtlArray{T,N}(::UndefInitializer, dims::Integer...; kwargs...) where {T,N} =
-  MtlArray{T,N}(undef, Dims(dims); kwargs...)
+MtlArray{T,N,S}(::UndefInitializer, dims::Integer...) where {T,N,S} =
+  MtlArray{T,N,S}(undef, convert(Tuple{Vararg{Int}}, dims))
+MtlArray{T,N}(::UndefInitializer, dims::Integer...) where {T,N} =
+  MtlArray{T,N}(undef, Dims(dims))
 
 # type but not dimensionality specified
-MtlArray{T}(::UndefInitializer, dims::Dims{N}; kwargs...) where {T,N} = MtlArray{T,N}(undef, dims; kwargs...)
-MtlArray{T}(::UndefInitializer, dims::Integer...; kwargs...) where {T} =
-    MtlArray{T}(undef, convert(Tuple{Vararg{Int}}, dims); kwargs...)
+MtlArray{T}(::UndefInitializer, dims::Dims{N}) where {T,N} = MtlArray{T,N}(undef, dims)
+MtlArray{T}(::UndefInitializer, dims::Integer...) where {T} =
+    MtlArray{T}(undef, convert(Tuple{Vararg{Int}}, dims))
 
 # empty vector constructor
-MtlArray{T,1}(; kwargs...) where {T} = MtlArray{T,1}(undef, 0; kwargs...)
+MtlArray{T,1,S}() where {T,S} = MtlArray{T,1,S}(undef, 0)
+MtlArray{T,1}() where {T} = MtlArray{T,1}(undef, 0)
 
-Base.similar(a::MtlArray{T,N}) where {T,N} = MtlArray{T,N}(undef, size(a); storage=storagemode(a))
-Base.similar(a::MtlArray{T}, dims::Base.Dims{N}) where {T,N} = MtlArray{T,N}(undef, dims; storage=storagemode(a))
-Base.similar(a::MtlArray, ::Type{T}, dims::Base.Dims{N}) where {T,N} =
-  MtlArray{T,N}(undef, dims; storage=storagemode(a))
+Base.similar(a::MtlArray{T,N,S}) where {T,N,S} =
+  MtlArray{T,N,S}(undef, size(a))
+Base.similar(a::MtlArray{T,<:Any,S}, dims::Base.Dims{N}) where {T,N,S} =
+  MtlArray{T,N,S}(undef, dims)
+Base.similar(a::MtlArray{<:Any,<:Any,S}, ::Type{T}, dims::Base.Dims{N}) where {T,N,S} =
+  MtlArray{T,N,S}(undef, dims)
 
-function Base.copy(a::MtlArray{T,N}) where {T,N}
+function Base.copy(a::MtlArray)
   b = similar(a)
   @inbounds copyto!(b, a)
 end
@@ -120,35 +131,33 @@ end
 
 Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S, T} =
   throw(ArgumentError("cannot take the CPU address of a $(typeof(x))"))
-Base.unsafe_convert(t::Type{MtlPointer{T}}, x::MtlArray) where {T} =
+Base.unsafe_convert(::Type{MtlPointer{T}}, x::MtlArray) where {T} =
   MtlPointer{T}(x.buffer, x.offset*Base.elsize(x))
 
 
 ## interop with other arrays
 
-@inline function MtlArray{T,N}(xs::AbstractArray{T,N}; kwargs...) where {T,N}
-  A = MtlArray{T,N}(undef, size(xs); kwargs...)
-  copyto!(A, convert(Array{T}, xs))
+@inline function MtlArray{T,N}(xs::AbstractArray{T,N}) where {T,N}
+  A = MtlArray{T,N}(undef, size(xs))
+  @inline copyto!(A, convert(Array{T}, xs))
+  return A
+end
+@inline function MtlArray{T,N,S}(xs::AbstractArray{T,N}) where {T,N,S}
+  A = MtlArray{T,N,S}(undef, size(xs))
+  @inline copyto!(A, convert(Array{T}, xs))
   return A
 end
 
-MtlArray{T,N}(xs::AbstractArray{S,N}; kwargs...) where {T,N,S} = MtlArray{T,N}(map(T, xs); kwargs...)
+MtlArray{T,N}(xs::AbstractArray{OT,N}) where {T,N,OT} = MtlArray{T,N}(map(T, xs))
+MtlArray{T,N,S}(xs::AbstractArray{OT,N}) where {T,N,S,OT} = MtlArray{T,N,S}(map(T, xs))
 
 # underspecified constructors
-MtlArray{T}(xs::AbstractArray{S,N}; kwargs...) where {T,N,S} = MtlArray{T,N}(xs; kwargs...)
-(::Type{MtlArray{T,N} where T})(x::AbstractArray{S,N}; kwargs...) where {S,N} = MtlArray{S,N}(x; kwargs...)
-MtlArray(A::AbstractArray{T,N}; kwargs...) where {T,N} = MtlArray{T,N}(A; kwargs...)
+MtlArray{T}(xs::AbstractArray{OT,N}) where {T,N,OT} = MtlArray{T,N}(xs)
+(::Type{MtlArray{T,N} where T})(x::AbstractArray{OT,N}) where {OT,N} = MtlArray{OT,N}(x)
+MtlArray(A::AbstractArray{T,N}) where {T,N} = MtlArray{T,N}(A)
 
-# copy xs to match Array behavior
-function MtlArray{T,N}(xs::MtlArray{T,N}; kwargs...) where {T,N}
-  if :storage ∉ keys(kwargs)
-    A = similar(xs)
-  else
-    A = MtlArray{T,N}(undef, size(xs); kwargs...)
-  end
-  @inbounds copyto!(A, convert(Array{T}, xs))
-  return A
-end
+# copy xs to match Array behavior with same storage mode
+MtlArray{T,N,S}(xs::MtlArray{T,N,S}) where {T,N,S} = copy(xs)
 
 ## derived types
 
@@ -296,20 +305,20 @@ Adapt.adapt_storage(::Type{<:MtlArray{T, N}}, xs::AT) where {T, N, AT<:AbstractA
 
 # eagerly converts Float64 to Float32, for compatibility reasons
 
-struct MtlArrayAdaptor end
+struct MtlArrayAdaptor{S} end
 
-Adapt.adapt_storage(::MtlArrayAdaptor, xs::AbstractArray{T,N}; kwargs...) where {T,N} =
-  isbits(xs) ? xs : MtlArray{T,N}(xs; kwargs...)
+Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T,N,S} =
+  isbits(xs) ? xs : MtlArray{T,N,S}(xs)
 
-Adapt.adapt_storage(::MtlArrayAdaptor, xs::AbstractArray{T,N}; kwargs...) where {T<:AbstractFloat,N} =
-  isbits(xs) ? xs : MtlArray{Float32,N}(xs; kwargs...)
+Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:AbstractFloat,N,S} =
+  isbits(xs) ? xs : MtlArray{Float32,N,S}(xs)
 
-Adapt.adapt_storage(::MtlArrayAdaptor, xs::AbstractArray{T,N}; kwargs...) where {T<:Complex{<:AbstractFloat},N} =
-  isbits(xs) ? xs : MtlArray{ComplexF32,N}(xs; kwargs...)
+Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Complex{<:AbstractFloat},N,S} =
+  isbits(xs) ? xs : MtlArray{ComplexF32,N,S}(xs)
 
 # not for Float16
-Adapt.adapt_storage(::MtlArrayAdaptor, xs::AbstractArray{T,N}; kwargs...) where {T<:Float16,N} =
-  isbits(xs) ? xs : MtlArray{T,N}(xs; kwargs...)
+Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Float16,N,S} =
+  isbits(xs) ? xs : MtlArray{T,N,S}(xs)
 
 """
     mtl(A)
@@ -324,15 +333,19 @@ By contrast, `MtlArray(A)` never changes the element type.
 
 Uses Adapt.jl to act inside some wrapper structs.
 """
-@inline mtl(xs; unified::Bool=false) = adapt(MtlArrayAdaptor(), xs)
+@inline mtl(xs; storage=DefaultStorageMode) = adapt(MtlArrayAdaptor{storage}(), xs)
 
+Base.getindex(::typeof(mtl), xs...) = MtlArray([xs...])
 
 ## utilities
 
-zeros(T::Type, dims...; kwargs...) = fill!(MtlArray{T}(undef, dims...; kwargs...), 0)
-ones(T::Type, dims...; kwargs...) = fill!(MtlArray{T}(undef, dims...; kwargs...), 1)
-zeros(dims...; kwargs...) = zeros(Float32, dims...; kwargs...)
-ones(dims...; kwargs...) = ones(Float32, dims...; kwargs...)
+for (fname, felt) in ((:zeros, :zero), (:ones, :one))
+  @eval begin
+      $fname(::Type{T}, dims::Base.Dims{N}; storage=DefaultStorageMode) where {T,N} = fill!(MtlArray{T,N,storage}(undef, dims), $felt(T))
+      $fname(::Type{T}, dims...; storage=DefaultStorageMode) where {T} = fill!(MtlArray{T,length(dims),storage}(undef, dims), $felt(T))
+      $fname(dims...; storage=DefaultStorageMode) = fill!(MtlArray{Float32,length(dims),storage}(undef, dims), $felt(Float32))
+  end
+end
 fill(v, dims...; kwargs...) = fill!(MtlArray{typeof(v)}(undef, dims...; kwargs...), v)
 fill(v, dims::Dims; kwargs...) = fill!(MtlArray{typeof(v)}(undef, dims...; kwargs...), v)
 
