@@ -26,12 +26,16 @@ function append_copy!(enc::MTLBlitCommandEncoder, dst::MTLBuffer, doff,
                                           size:len::Csize_t]::Nothing
 end
 
-function append_fillbuffer!(enc::MTLBlitCommandEncoder, src::MTLBuffer,
-                            val::Union{Int8, UInt8}, bytesize, offset=0)
-    range = NSRange(offset, bytesize)
-    @objc [enc::id{MTLBlitCommandEncoder} fillBuffer:src::id{MTLBuffer}
-                                          range:range::NSRange
-                                          value:val::UInt8]::Nothing
+for T in (UInt8, Int8)
+    @eval begin
+        function append_fillbuffer!(enc::MTLBlitCommandEncoder, src::MTLBuffer,
+                                    val::$T, bytesize, offset=0)
+            range = NSRange(offset, bytesize)
+            @objc [enc::id{MTLBlitCommandEncoder} fillBuffer:src::id{MTLBuffer}
+                                                  range:range::NSRange
+                                                  value:val::$T]::Nothing
+            end
+    end
 end
 
 # only for managed resources

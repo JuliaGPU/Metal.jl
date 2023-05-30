@@ -446,6 +446,18 @@ end
     @test isapprox(a, Array(B))
 end
 
+# Issue #192
+@testset "append_fillbuffer!" begin
+    for (T, val) in ((UInt8, 2), (Int8, 2), (Int8, -2))
+        arr = Metal.zeros(T, 4)
+
+        buf = arr.buffer
+        Metal.unsafe_fill!(current_device(), Metal.MtlPointer{T}(buf, 0), T(val), 4)
+
+        @test all(arr .== val)
+    end
+end
+
 # TODO: continue adding tests
 
 end
