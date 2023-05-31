@@ -72,9 +72,9 @@ end
 
 if VERSION < v"1.10.0-DEV.1365"
 # catch other functions that are called by LinearAlgebra's mul!
-LinearAlgebra.gemm_wrapper!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
+LinearAlgebra.gemm_wrapper!(C::MtlMatrix, tA::AbstractChar, tB::AbstractChar, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
     LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add)
-LinearAlgebra.gemm_wrapper!(C::MtlMatrix{T}, tA, tB, A::MtlMatrix{T}, B::MtlMatrix{T}, _add::MulAddMul) where {T<:LinearAlgebra.BlasFloat} =
+LinearAlgebra.gemm_wrapper!(C::MtlMatrix{T}, tA::AbstractChar, tB::AbstractChar, A::MtlMatrix{T}, B::MtlMatrix{T}, _add::MulAddMul) where {T<:LinearAlgebra.BlasFloat} =
     LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add)
 function LinearAlgebra.syrk_wrapper!(C::MtlMatrix, tA::AbstractChar, A::MtlMatrix, _add::MulAddMul = MulAddMul())
     if tA == 'T'
