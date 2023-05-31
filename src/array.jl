@@ -104,12 +104,12 @@ MtlArray{T}(::UndefInitializer, dims::Integer...) where {T} =
 MtlArray{T,1,S}() where {T,S} = MtlArray{T,1,S}(undef, 0)
 MtlArray{T,1}() where {T} = MtlArray{T,1}(undef, 0)
 
-Base.similar(a::MtlArray{T,N,S}) where {T,N,S} =
-  MtlArray{T,N,S}(undef, size(a))
-Base.similar(a::MtlArray{T,<:Any,S}, dims::Base.Dims{N}) where {T,N,S} =
-  MtlArray{T,N,S}(undef, dims)
-Base.similar(a::MtlArray{<:Any,<:Any,S}, ::Type{T}, dims::Base.Dims{N}) where {T,N,S} =
-  MtlArray{T,N,S}(undef, dims)
+Base.similar(a::MtlArray{T,N,S}; storage=S) where {T,N,S} =
+  MtlArray{T,N,storage}(undef, size(a))
+Base.similar(::MtlArray{T,<:Any,S}, dims::Base.Dims{N}; storage=S) where {T,N,S} =
+  MtlArray{T,N,storage}(undef, dims)
+Base.similar(::MtlArray{<:Any,<:Any,S}, ::Type{T}, dims::Base.Dims{N}; storage=S) where {T,N,S} =
+  MtlArray{T,N,storage}(undef, dims)
 
 function Base.copy(a::MtlArray)
   b = similar(a)

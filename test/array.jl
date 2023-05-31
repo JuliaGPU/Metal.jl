@@ -63,18 +63,6 @@ end
         @test check_storagemode(arr)
     end
 
-    # similar
-    let arr = MtlArray{Int, N, SM}(undef, dim)
-        s1 = similar(arr)
-        @test check_storagemode(s1)
-
-        s2 = similar(arr, dim[1:2])
-        @test check_storagemode(s2)
-
-        s3 = similar(arr, Float32, dim[1:2])
-        @test check_storagemode(s3)
-    end
-
     ## interop with other arrays
     let arr = MtlArray{Float32,N,SM}(rand(Float32,dim))
         @test check_storagemode(arr)
@@ -102,6 +90,42 @@ end
             @test_throws "Cannot access the contents of a private buffer" arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, dim)
         end
     end
+end
+
+@testset "similar" begin
+    check_similar(::MtlArray{T,N,S}, typ, dim, sm) where {T,N,S} =
+        T == typ && N == dim && S == sm
+    # similar
+    typ1 = Int
+    typ2 = Float32
+    dim1 = (10,10,10)
+    n1   = length(dim1)
+    dim2 = dim1[1:2]
+    n2   = length(dim2)
+    sm1  = Shared
+    sm2  = Private
+
+    arr = MtlArray{typ1, n1, sm1}(undef, dim1)
+
+    s1 = similar(arr)
+    @test check_similar(s1,typ1,n1,sm1)
+
+    s2 = similar(arr, dim2)
+    @test check_similar(s2,typ1,n2,sm1)
+
+    s3 = similar(arr, typ2, dim2)
+    @test check_similar(s3,typ2,n2,sm1)
+
+    # s4-s6 test for changing storagemode
+    s4 = similar(arr; storage=sm2)
+    @test check_similar(s4,typ1,n1,sm2)
+
+    s5 = similar(arr, dim2; storage=sm2)
+    @test check_similar(s5,typ1,n2,sm2)
+
+    s6 = similar(arr, typ2, dim2; storage=sm2)
+    @test check_similar(s6,typ2,n2,sm2)
+
 end
 
 @testset "fill($T)" for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
