@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Array programming · Metal.jl</title><script data-outdated-warner src="../../assets/warner.js"></script><link rel="canonical" href="https://metal.juliagpu.org/stable/usage/array/"/><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="Metal.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">Metal.jl</a></span></div><form class="docs-search" action="../../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">API reference</span><ul><li><a class="tocitem" href="../../api/essentials/">Essentials</a></li><li><a class="tocitem" href="../../api/compiler/">Compiler</a></li><li><a class="tocitem" href="../../api/kernel/">Kernel programming</a></li><li><a class="tocitem" href="../../api/array/">Array programming</a></li></ul></li><li><span class="tocitem">Usage</span><ul><li><a class="tocitem" href="../overview/">Overview</a></li><li class="is-active"><a class="tocitem" href>Array programming</a><ul class="internal"><li><a class="tocitem" href="#Construction-and-Initialization"><span>Construction and Initialization</span></a></li><li><a class="tocitem" href="#Higher-order-abstractions"><span>Higher-order abstractions</span></a></li></ul></li></ul></li><li><a class="tocitem" href="../../profiling/">Profiling</a></li><li><a class="tocitem" href="../../faq/">FAQ</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Usage</a></li><li class="is-active"><a href>Array programming</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Array programming</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/JuliaGPU/Metal.jl/blob/main/docs/src/usage/array.md#" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Array-programming"><a class="docs-heading-anchor" href="#Array-programming">Array programming</a><a id="Array-programming-1"></a><a class="docs-heading-anchor-permalink" href="#Array-programming" title="Permalink"></a></h1><p>The easiest way to use the GPU&#39;s massive parallelism, is by expressing operations in terms of arrays: Metal.jl provides an array type, <code>MtlArray</code>, and many specialized array operations that execute efficiently on the GPU hardware. In this section, we will briefly demonstrate use of the <code>MtlArray</code> type. Since we expose Metal&#39;s functionality by implementing existing Julia interfaces on the <code>MtlArray</code> type, you should refer to the <a href="https://docs.julialang.org">upstream Julia documentation</a> for more information on these operations.</p><p>If you encounter missing functionality, or are running into operations that trigger so-called &quot;scalar iteration&quot;, have a look at the <a href="https://github.com/JuliaGPU/Metal.jl/issues">issue tracker</a> and file a new issue if there&#39;s none. Do note that you can always access the underlying Metal APIs by calling into the relevant submodule.</p><h2 id="Construction-and-Initialization"><a class="docs-heading-anchor" href="#Construction-and-Initialization">Construction and Initialization</a><a id="Construction-and-Initialization-1"></a><a class="docs-heading-anchor-permalink" href="#Construction-and-Initialization" title="Permalink"></a></h2><p>The <code>MtlArray</code> type aims to implement the <code>AbstractArray</code> interface, and provide implementations of methods that are commonly used when working with arrays. That means you can construct <code>MtlArray</code>s in the same way as regular <code>Array</code> objects:</p><pre><code class="language-julia hljs">julia&gt; MtlArray{Int}(undef, 2)
+2-element MtlVector{Int64}:
+ 0
+ 0
+
+julia&gt; MtlArray{Int}(undef, (1,2))
+1×2 MtlMatrix{Int64}:
+ 0  0
+
+julia&gt; similar(ans)
+1×2 MtlMatrix{Int64}:
+ 0  0</code></pre><p>Copying memory to or from the GPU can be expressed using constructors as well, or by calling <code>copyto!</code>:</p><pre><code class="language-julia-repl hljs">julia&gt; a = MtlArray([1,2])
+2-element MtlVector{Int64}:
+ 1
+ 2
+
+julia&gt; b = Array(a)
+2-element Vector{Int64}:
+ 1
+ 2
+
+julia&gt; copyto!(b, a)
+2-element Vector{Int64}:
+ 1
+ 2</code></pre><h2 id="Higher-order-abstractions"><a class="docs-heading-anchor" href="#Higher-order-abstractions">Higher-order abstractions</a><a id="Higher-order-abstractions-1"></a><a class="docs-heading-anchor-permalink" href="#Higher-order-abstractions" title="Permalink"></a></h2><p>The real power of programming GPUs with arrays comes from Julia&#39;s higher-order array abstractions: Operations that take user code as an argument, and specialize execution on it. With these functions, you can often avoid having to write custom kernels. For example, to perform simple element-wise operations you can use <code>map</code> or <code>broadcast</code>:</p><pre><code class="language-julia-repl hljs">julia&gt; a = MtlArray{Float32}(undef, (1,2));
+
+julia&gt; a .= 5
+1×2 MtlMatrix{Float32}:
+ 5.0  5.0
+
+julia&gt; map(sin, a)
+1×2 MtlMatrix{Float32}:
+ -0.958924  -0.958924</code></pre><p>To reduce the dimensionality of arrays, Metal.jl implements the various flavours of <code>(map)reduce(dim)</code>:</p><pre><code class="language-julia-repl hljs">julia&gt; a = Metal.ones(2,3)
+2×3 MtlMatrix{Float32}:
+ 1.0  1.0  1.0
+ 1.0  1.0  1.0
+
+julia&gt; reduce(+, a)
+6.0f0
+
+julia&gt; mapreduce(sin, *, a; dims=2)
+2×1 MtlMatrix{Float32}:
+ 0.59582335
+ 0.59582335
+
+julia&gt; b = Metal.zeros(1)
+1-element MtlVector{Float32}:
+ 0.0
+
+julia&gt; Base.mapreducedim!(identity, +, b, a)
+1×1 MtlMatrix{Float32}:
+ 6.0</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../overview/">« Overview</a><a class="docs-footer-nextpage" href="../../profiling/">Profiling »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.23 on <span class="colophon-date" title="Thursday 1 June 2023 09:38">Thursday 1 June 2023</span>. Using Julia version 1.8.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
