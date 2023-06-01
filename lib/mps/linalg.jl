@@ -54,8 +54,8 @@ function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B:
         end
     end
 
-    transA = tA == 'T'
-    transB = tB == 'T'
+    transA = tA == 'T' || tA == 'C'
+    transB = tB == 'T' || tB == 'C'
 
     typA = eltype(A)
     typB = eltype(B)
