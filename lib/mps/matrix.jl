@@ -127,7 +127,7 @@ function matmul!(c::MtlMatrix, a::MtlMatrix, b::MtlMatrix,
     # NOTE: MPS uses row major, while Julia is col-major. Instead of transposing
     #       the inputs (by passing !transpose_[ab]) and afterwards transposing
     #       the output, we use the property that (AB)ᵀ = BᵀAᵀ
-    cols_a = size(a)[2]
+    cols_a = size(a, transpose_a ? 1 : 2)
     cols_c, rows_c = size(c)
 
     # Create MPS-compatible matrix from the MtlArrays
