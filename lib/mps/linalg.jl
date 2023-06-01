@@ -92,6 +92,60 @@ function LinearAlgebra.herk_wrapper!(C::MtlMatrix, tA::AbstractChar, A::MtlMatri
 end
 end
 
+const MPS_VALID_MATVECMUL_TYPES =
+    [(Float16, Float16),
+     (Float16, Float32),
+     (Float32, Float32)]
+
+function LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, _add::MulAddMul)
+    if ndims(A) > 2
+        throw(ArgumentError("A has more than 2 dimensions"))
+    end
+
+    mA, nA = LinearAlgebra.lapack_size(tA, A)
+    mB = length(B)
+    mC = length(C)
+
+    if nA != mB
+        throw(DimensionMismatch("A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
+    end
+
+    if B === C
+        throw(ArgumentError("output matrix must not be aliased with input matrix"))
+    end
+
+    if mA == 0 || nA == 0 || mB == 0
+        if mC != mB
+            throw(DimensionMismatch("C has length ($mC), should have ($mB)"))
+        end
+    end
+
+    transA = tA == 'T' || tA == 'C'
+
+    typA = eltype(A)
+    typB = eltype(B)
+    typC = eltype(C)
+
+    # If possible, dispatch to performance shaders
+    if is_supported(current_device()) && 
+        typA == typB && (typA, typC) in MPS_VALID_MATVECMUL_TYPES
+        matvecmul!(C, A, B, _add.alpha, _add.beta, transA)
+    else
+        GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, _add.alpha, _add.beta)
+    end
+end
+
+if VERSION < v"1.10.0-DEV.1365"
+# catch other functions that are called by LinearAlgebra's mul!
+function LinearAlgebra.gemv!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, a::Number, b::Number)
+    LinearAlgebra.generic_matvecmul!(C, tA, A, B, MulAddMul(a, b))
+end
+# disambiguation
+function LinearAlgebra.gemv!(C::MtlVector{T}, tA::AbstractChar, A::MtlMatrix{T}, B::MtlVector{T}, a::Number, b::Number) where {T<:LinearAlgebra.BlasFloat}
+    LinearAlgebra.generic_matvecmul!(C, tA, A, B, MulAddMul(a, b))
+end
+end
+
 @inline checkpositivedefinite(status) = status == MPSMatrixDecompositionStatusNonPositiveDefinite || throw(PosDefException(status))
 @inline checknonsingular(status) = status != MPSMatrixDecompositionStatusSingular || throw(SingularException(status))
 
