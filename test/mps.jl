@@ -2,7 +2,7 @@ using LinearAlgebra
 
 if MPS.is_supported(current_device())
 
-@testset "mixed-precision matrix multiplication" begin
+@testset "mixed-precision matrix matrix multiplication" begin
     N = 10
     rows_a = N
     cols_a = N
@@ -29,6 +29,33 @@ if MPS.is_supported(current_device())
             truth_c = (alpha .* accum_jl_type.(arr_a)) *  accum_jl_type.(arr_b) .+ (beta .* arr_c)
 
             Metal.@sync MPS.matmul!(buf_c, buf_a, buf_b, alpha, beta)
+
+            @test all(Array(buf_c) .≈ truth_c)
+        end
+    end
+end
+
+@testset "mixed-precision matrix vector multiplication" begin
+    N = 10
+    rows = N
+    cols = N
+
+    alpha = Float64(1)
+    beta  = Float64(0)
+
+    for (input_jl_type, accum_jl_type) in MPS.MPS_VALID_MATVECMUL_TYPES
+        @testset "$(input_jl_type) => $accum_jl_type" begin
+            arr_a = rand(input_jl_type, (rows,cols))
+            arr_b = rand(input_jl_type, (rows))
+            arr_c = zeros(accum_jl_type, (rows))
+
+            buf_a = MtlArray{input_jl_type}(arr_a)
+            buf_b = MtlArray{input_jl_type}(arr_b)
+            buf_c = MtlArray{accum_jl_type}(undef, (rows))
+
+            truth_c = (alpha .* accum_jl_type.(arr_a)) *  accum_jl_type.(arr_b) .+ (beta .* arr_c)
+
+            Metal.@sync MPS.matvecmul!(buf_c, buf_a, buf_b, alpha, beta)
 
             @test all(Array(buf_c) .≈ truth_c)
         end
