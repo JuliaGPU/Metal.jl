@@ -26,6 +26,13 @@ function contains_double(T)
     return false
 end
 
+"""
+    MtlArray{T,N,S} <: AbstractGPUArray{T,N}
+
+`N`-dimensional Metal array with storage mode `S` and elements of type `T`.
+
+`S` can be `Private` (default) or `Shared`.
+"""
 mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
   buffer::MTLBuffer
 
@@ -321,7 +328,9 @@ Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Floa
   isbits(xs) ? xs : MtlArray{T,N,S}(xs)
 
 """
-    mtl(A)
+    mtl(A; storage=Private)
+
+`storage` can be `Private` (default) or `Shared`.
 
 Opinionated GPU array adaptor, which may alter the element type `T` of arrays:
 * For `T<:AbstractFloat`, it makes a `MtlArray{Float32}` for performance and compatibility
@@ -332,6 +341,27 @@ Opinionated GPU array adaptor, which may alter the element type `T` of arrays:
 By contrast, `MtlArray(A)` never changes the element type.
 
 Uses Adapt.jl to act inside some wrapper structs.
+
+# Examples
+
+```
+julia> mtl(ones(3)')
+1×3 adjoint(::MtlVector{Float32, Metal.MTL.MTLResourceStorageModePrivate}) with eltype Float32:
+ 1.0  1.0  1.0
+
+julia> mtl(zeros(1,3); storage=Shared)
+1×3 MtlMatrix{Float32, Metal.MTL.MTLResourceCPUCacheModeDefaultCache}:
+ 0.0  0.0  0.0
+
+julia> mtl(1:3)
+1:3
+
+julia> MtlArray(1:3)
+3-element MtlVector{Int64, Metal.MTL.MTLResourceStorageModePrivate}:
+ 1
+ 2
+ 3
+```
 """
 @inline mtl(xs; storage=DefaultStorageMode) = adapt(MtlArrayAdaptor{storage}(), xs)
 
