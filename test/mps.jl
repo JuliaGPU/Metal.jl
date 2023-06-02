@@ -28,7 +28,7 @@ if MPS.is_supported(current_device())
 
             truth_c = (alpha .* accum_jl_type.(arr_a)) *  accum_jl_type.(arr_b) .+ (beta .* arr_c)
 
-            Metal.@sync MPS.matmul!(buf_c, buf_a, buf_b, alpha, beta)
+            MPS.matmul!(buf_c, buf_a, buf_b, alpha, beta)
 
             @test all(Array(buf_c) .≈ truth_c)
         end
@@ -55,7 +55,7 @@ end
 
             truth_c = (alpha .* accum_jl_type.(arr_a)) *  accum_jl_type.(arr_b) .+ (beta .* arr_c)
 
-            Metal.@sync MPS.matvecmul!(buf_c, buf_a, buf_b, alpha, beta)
+            MPS.matvecmul!(buf_c, buf_a, buf_b, alpha, beta)
 
             @test all(Array(buf_c) .≈ truth_c)
         end
