@@ -32,11 +32,6 @@ const MPS_VALID_MATMUL_TYPES =
      (Float32, Float32)]
 
 function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul)
-    if ndims(A) > 2
-        throw(ArgumentError("A has more than 2 dimensions"))
-    elseif ndims(B) > 2
-        throw(ArgumentError("B has more than 2 dimensions"))
-    end
     mA, nA = LinearAlgebra.lapack_size(tA, A)
     mB, nB = LinearAlgebra.lapack_size(tB, B)
 
@@ -98,10 +93,6 @@ const MPS_VALID_MATVECMUL_TYPES =
      (Float32, Float32)]
 
 function LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, _add::MulAddMul)
-    if ndims(A) > 2
-        throw(ArgumentError("A has more than 2 dimensions"))
-    end
-
     mA, nA = LinearAlgebra.lapack_size(tA, A)
     mB = length(B)
     mC = length(C)
