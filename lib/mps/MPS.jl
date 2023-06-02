@@ -16,6 +16,7 @@ include("kernel.jl")
 
 # high-level wrappers
 include("matrix.jl")
+include("vector.jl")
 
 # integrations
 include("linalg.jl")
