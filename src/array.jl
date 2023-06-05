@@ -376,8 +376,9 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
       $fname(dims...; storage=DefaultStorageMode) = fill!(MtlArray{Float32,length(dims),storage}(undef, dims), $felt(Float32))
   end
 end
-fill(v, dims...; kwargs...) = fill!(MtlArray{typeof(v)}(undef, dims...; kwargs...), v)
-fill(v, dims::Dims; kwargs...) = fill!(MtlArray{typeof(v)}(undef, dims...; kwargs...), v)
+
+fill(v::T, dims::Base.Dims{N}; storage=DefaultStorageMode) where {T,N} = fill!(MtlArray{T,N,storage}(undef, dims), v)
+fill(v::T, dims...; storage=DefaultStorageMode) where T = fill!(MtlArray{T,length(dims),storage}(undef, dims), v)
 
 # optimized implementation of `fill!` for types that are directly supported by fillbuffer
 function Base.fill!(A::MtlArray{T}, val) where T <: Union{UInt8,Int8}
