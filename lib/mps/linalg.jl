@@ -163,7 +163,7 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFloa
     dev = current_device()
     queue = global_queue(dev)
 
-    At = MtlMatrix{T}(undef, (N, M); storage=Private)
+    At = MtlMatrix{T,Private}(undef, (N, M))
     mps_a = MPSMatrix(A)
     mps_at = MPSMatrix(At)
 
@@ -208,7 +208,7 @@ function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFlo
     dev = current_device()
     queue = global_queue(dev)
 
-    At = MtlMatrix{T}(undef, (N, M); storage=Private)
+    At = MtlMatrix{T,Private}(undef, (N, M))
     mps_a = MPSMatrix(A)
     mps_at = MPSMatrix(At)
 

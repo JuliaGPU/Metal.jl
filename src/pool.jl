@@ -54,10 +54,11 @@ use this option if you pass a ptr to initialize the memory.
 function alloc(dev::Union{MTLDevice,MTLHeap},
                bytesize::Integer,
                args...;
+               storage,
                kwargs...)
 
     time = Base.@elapsed begin
-        buf = MTLBuffer(dev, bytesize, args...; kwargs...)
+        buf = MTLBuffer(dev, bytesize, args...; storage, kwargs...)
     end
 
     @atomic alloc_stats.alloc_count + 1

@@ -109,7 +109,7 @@ function tester(A)
 end
 
 bufferSize = 8
-bufferA = MtlArray{Int,1}(undef, tuple(bufferSize), storage=Shared)
+bufferA = MtlArray{Int,1,Shared}(undef, tuple(bufferSize))
 vecA = unsafe_wrap(Vector{Int}, pointer(bufferA), tuple(bufferSize))
 
 @testset "synchronization" begin

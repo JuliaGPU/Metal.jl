@@ -228,11 +228,11 @@ Return the indices in `I` and the values in `V`.
 
 See also: [`topk!`](@ref).
 """
-function topk(A::MtlMatrix{T}, k) where T<:MtlFloat
+function topk(A::MtlMatrix{T,S}, k) where {T<:MtlFloat,S}
     k <= 16 || error("MPS.topk does not support values of k > 16")
     s = (k,size(A,2))
-    I = MtlMatrix{UInt32}(undef, s; storage=Metal.storagemode(A))
-    V = MtlMatrix{T}(undef, s; storage=Metal.storagemode(A))
+    I = MtlMatrix{UInt32,S}(undef, s)
+    V = MtlMatrix{T,S}(undef, s)
 
     return _topk!(A, I, V, k)
 end
