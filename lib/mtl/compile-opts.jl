@@ -12,6 +12,7 @@
     MTLLanguageVersion2_3 = (2 << 16) + 3
     MTLLanguageVersion2_4 = (2 << 16) + 4
     MTLLanguageVersion3_0 = (3 << 16) + 0
+    MTLLanguageVersion3_1 = (3 << 16) + 1
 end
 
 const language_versions = Dict(
@@ -24,6 +25,7 @@ const language_versions = Dict(
     MTLLanguageVersion2_3 => v"2.3",
     MTLLanguageVersion2_4 => v"2.4",
     MTLLanguageVersion3_0 => v"3.0",
+    MTLLanguageVersion3_1 => v"3.1",
 )
 
 function Base.convert(::Type{VersionNumber}, ver::MTLLanguageVersion)
