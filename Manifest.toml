@@ -101,15 +101,15 @@ version = "0.9.4"
 
 [[deps.LLVM]]
 deps = ["CEnum", "LLVMExtra_jll", "Libdl", "Printf", "Unicode"]
-git-tree-sha1 = "26a31cdd9f1f4ea74f649a7bf249703c687a953d"
+git-tree-sha1 = "5007c1421563108110bbd57f63d8ad4565808818"
 uuid = "929cbde3-209d-540e-8aea-75f648917ca0"
-version = "5.1.0"
+version = "5.2.0"
 
 [[deps.LLVMExtra_jll]]
 deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML"]
-git-tree-sha1 = "09b7505cc0b1cee87e5d4a26eea61d2e1b0dcd35"
+git-tree-sha1 = "1222116d7313cdefecf3d45a2bc1a89c4e7c9217"
 uuid = "dad2f222-ce93-54a1-a47d-0025e8a3acab"
-version = "0.0.21+0"
+version = "0.0.22+0"
 
 [[deps.LazyArtifacts]]
 deps = ["Artifacts", "Pkg"]
@@ -282,9 +282,9 @@ uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "Random", "StaticArraysCore", "Statistics"]
-git-tree-sha1 = "8982b3607a212b070a5e46eea83eb62b4744ae12"
+git-tree-sha1 = "832afbae2a45b4ae7e831f86965469a24d1d8a83"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.5.25"
+version = "1.5.26"
 
 [[deps.StaticArraysCore]]
 git-tree-sha1 = "6b7ba252635a5eff6a0b0664a41ee140a1c9e72a"
@@ -340,10 +340,10 @@ uuid = "d80eeb9a-aca5-4d75-85e5-170c8b632249"
 version = "0.1.2"
 
 [[deps.XZ_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "7928d348322698fb93d5c14b184fdc176c8afc82"
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "8abe223c2549ea70be752b20a53aa236a7868eb0"
 uuid = "ffd25f8a-64ca-5728-b0f7-c24cf3aae800"
-version = "5.2.9+0"
+version = "5.4.3+0"
 
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
