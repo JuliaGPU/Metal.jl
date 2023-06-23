@@ -36,8 +36,8 @@ end
 # get a pointer to threadgroup memory, with known (static) or zero length (dynamic)
 @generated function emit_threadgroup_memory(::Type{T}, ::Val{len}=Val(0)) where {T,len}
     Context() do ctx
-        eltyp = convert(LLVMType, T; ctx)
-        T_ptr = convert(LLVMType, Core.LLVMPtr{T,AS.ThreadGroup}; ctx)
+        eltyp = convert(LLVMType, T)
+        T_ptr = convert(LLVMType, Core.LLVMPtr{T,AS.ThreadGroup})
 
         # create a function
         llvm_f, _ = create_function(T_ptr)
@@ -53,11 +53,11 @@ end
         alignment!(gv, 16)  # source: Metal Feature Set Tables
 
         # generate IR
-        IRBuilder(ctx) do builder
-            entry = BasicBlock(llvm_f, "entry"; ctx)
+        IRBuilder() do builder
+            entry = BasicBlock(llvm_f, "entry")
             position!(builder, entry)
 
-            ptr = gep!(builder, gv_typ, gv, [ConstantInt(0; ctx), ConstantInt(0; ctx)])
+            ptr = gep!(builder, gv_typ, gv, [ConstantInt(0), ConstantInt(0)])
 
             untyped_ptr = bitcast!(builder, ptr, T_ptr)
 

@@ -51,12 +51,9 @@ end
 # compile to executable machine code
 function compile(@nospecialize(job::CompilerJob))
     # TODO: on 1.9, this actually creates a context. cache those.
-    JuliaContext() do ctx
-        compile(job, ctx)
+    image, meta = JuliaContext() do ctx
+        GPUCompiler.compile(:obj, job)
     end
-end
-function compile(@nospecialize(job::CompilerJob), ctx)
-    image, meta = GPUCompiler.compile(:obj, job; ctx)
     entry = LLVM.name(meta.entry)
 
     return (; image, entry)
