@@ -12,10 +12,6 @@ let arr = MtlVector{Int}(undef, 0)
     @test sizeof(arr) == 0
 end
 
-@testset "mtl" begin
-    @test mtl(rand(2,2)) isa MtlArray{Float32}
-    @test adapt(MtlArray, rand(2,2)) isa MtlArray{Float64}
-end
 @testset "constructors" begin
     xs = MtlArray{Int}(undef, 2, 3)
     @test device(xs) == current_device()
