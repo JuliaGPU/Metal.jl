@@ -377,6 +377,8 @@ end # End SIMD Intrinsics
 
 n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
 
+# JuliaGPU/Metal.jl#217: threadgroup atomics seem to requires all-atomic operations
+
 @testset "low-level" begin
     # TODO: make these tests actually write to the overlapping memory locations
 
@@ -432,9 +434,12 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         function local_kernel(a::AbstractArray{T}, b::AbstractArray{T}) where T
             i = thread_position_in_grid_1d()
             c = MtlThreadGroupArray(T, 128)
-            c[i] = a[i]
+            #c[i] = a[i]
+            val = Metal.atomic_load_explicit(pointer(a, i))
+            Metal.atomic_store_explicit(pointer(c, i), val)
             val = Metal.atomic_load_explicit(pointer(c, i))
-            b[i] = val
+            #b[i] = val
+            Metal.atomic_store_explicit(pointer(b, i), val)
             return
         end
 
@@ -498,14 +503,12 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         function local_kernel(a, expected::AbstractArray{T}, desired::T) where T
             i = thread_position_in_grid_1d()
             b = MtlThreadGroupArray(T, 128)
-            # XXX: this doesn't work without additional atomics (upstream bug?)
             #b[i] = a[i]
             val = Metal.atomic_load_explicit(pointer(a, i))
             Metal.atomic_store_explicit(pointer(b, i), val)
             while Metal.atomic_compare_exchange_weak_explicit(pointer(b, i), expected[i], desired) != expected[i]
                 # keep on trying
             end
-            # XXX: this doesn't work without additional atomics (upstream bug?)
             #a[i] = b[i]
             val = Metal.atomic_load_explicit(pointer(b, i))
             Metal.atomic_store_explicit(pointer(a, i), val)
@@ -533,18 +536,22 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
                                        (+,   Metal.atomic_fetch_add_explicit, add_sub_types),
                                        (-,   Metal.atomic_fetch_sub_explicit, add_sub_types)
                                     ]
-            function global_kernel(f, a, val)
+            function global_kernel(f, a, arg)
                 i = thread_position_in_grid_1d()
-                f(pointer(a, i), val)
+                f(pointer(a, i), arg)
                 return
             end
 
-            function local_kernel(f, a, val::T) where T
+            function local_kernel(f, a, arg::T) where T
                 i = thread_position_in_grid_1d()
                 b = MtlThreadGroupArray(T, 128)
-                b[i] = a[i]
-                f(pointer(b, i), val)
-                a[i] = b[i]
+                #b[i] = a[i]
+                val = Metal.atomic_load_explicit(pointer(a, i))
+                Metal.atomic_store_explicit(pointer(b, i), val)
+                f(pointer(b, i), arg)
+                #a[i] = b[i]
+                val = Metal.atomic_load_explicit(pointer(b, i))
+                Metal.atomic_store_explicit(pointer(a, i), val)
                 return
             end
 
@@ -572,9 +579,9 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         # custom operator that doesn't map onto an atomic intrinsic
         f(a::T, b::T) where {T} = a + b + one(T)
 
-        function global_kernel(a, op, val)
+        function global_kernel(a, op, arg)
             i = thread_position_in_grid_1d()
-            Metal.atomic_fetch_op_explicit(pointer(a, i), op, val)
+            Metal.atomic_fetch_op_explicit(pointer(a, i), op, arg)
             return
         end
 
@@ -586,12 +593,16 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             @test f.(a, val) ≈ Array(b)
         end
 
-        function local_kernel(a, op, val::T) where T
+        function local_kernel(a, op, arg::T) where T
             i = thread_position_in_grid_1d()
             b = MtlThreadGroupArray(T, 128)
-            b[i] = a[i]
-            Metal.atomic_fetch_op_explicit(pointer(b, i), op, val)
-            a[i] = b[i]
+            #b[i] = a[i]
+            val = Metal.atomic_load_explicit(pointer(a, i))
+            Metal.atomic_store_explicit(pointer(b, i), val)
+            Metal.atomic_fetch_op_explicit(pointer(b, i), op, arg)
+            #a[i] = b[i]
+            val = Metal.atomic_load_explicit(pointer(b, i))
+            Metal.atomic_store_explicit(pointer(a, i), val)
             return
         end
 
