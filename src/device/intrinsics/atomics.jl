@@ -47,13 +47,15 @@ for typ in (:Int32, :UInt32, :Float32), as in (AS.Device, AS.ThreadGroup)
 
         function atomic_compare_exchange_weak_explicit(ptr::LLVMPtr{$typ,$as},
                                                        expected::$typ, desired::$typ)
-            # NOTE: we deviate slightly from the Metal/C++ API here
-            #       (why do they pass the expected value by reference?)
+            # NOTE: we deviate slightly from the Metal/C++ API here, not returning the
+            #       status boolean, but the contents of the expected value box, which will
+            #       have been changed to the current value if the exchange failed.
             expected_box = Ref(expected)
-            @typed_ccall($"air.atomic.$memnam.cmpxchg.weak.$typnam", llvmcall, $typ,
+            @typed_ccall($"air.atomic.$memnam.cmpxchg.weak.$typnam", llvmcall, Bool,
                          (LLVMPtr{$typ,$as}, Ptr{$typ}, $typ, Int32, Int32, Int32, Bool),
                          ptr, expected_box, desired, Val(memory_order_relaxed),
                          Val(memory_order_relaxed), Val($memid), Val(true))
+            expected_box[]
         end
     end
 end

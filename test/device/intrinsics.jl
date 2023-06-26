@@ -498,11 +498,17 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         function local_kernel(a, expected::AbstractArray{T}, desired::T) where T
             i = thread_position_in_grid_1d()
             b = MtlThreadGroupArray(T, 128)
-            b[i] = a[i]
+            # XXX: this doesn't work without additional atomics (upstream bug?)
+            #b[i] = a[i]
+            val = Metal.atomic_load_explicit(pointer(a, i))
+            Metal.atomic_store_explicit(pointer(b, i), val)
             while Metal.atomic_compare_exchange_weak_explicit(pointer(b, i), expected[i], desired) != expected[i]
                 # keep on trying
             end
-            a[i] = b[i]
+            # XXX: this doesn't work without additional atomics (upstream bug?)
+            #a[i] = b[i]
+            val = Metal.atomic_load_explicit(pointer(b, i))
+            Metal.atomic_store_explicit(pointer(a, i), val)
             return
         end
 
