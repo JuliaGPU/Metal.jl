@@ -40,10 +40,12 @@ end
 @noinline function _compiler_config(dev; kernel=true, name=nothing, always_inline=false, kwargs...)
     # TODO: configure the compiler target based on the device
 
-    macos=macos_version()
+    macos = macos_version()
+    metal = metal_version()
+    air = metal # XXX: do these ever differ?
 
     # create GPUCompiler objects
-    target = MetalCompilerTarget(macos; kwargs...)
+    target = MetalCompilerTarget(; macos, air, metal, kwargs...)
     params = MetalCompilerParams()
     CompilerConfig(target, params; kernel, name, always_inline)
 end

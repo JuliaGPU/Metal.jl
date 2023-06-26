@@ -211,7 +211,7 @@ function (kernel::HostKernel)(args...; groups=1, threads=1, queue=global_queue(c
             else
                 # everything else is passed by reference, and requires an argument buffer
                 arg = mtlconvert(arg, cce)
-                argtyp = Core.typeof(arg)
+                argtyp = Core.Typeof(arg)
                 if isghosttype(argtyp) || Core.Compiler.isconstType(argtyp)
                     continue
                 elseif !isbitstype(argtyp)
