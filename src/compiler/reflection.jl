@@ -60,16 +60,18 @@ function code_agx(io::IO, job::MetalCompilerJob)
 
     code = mktempdir() do dir
         # serialize the archive to a file
-        binary = joinpath(dir, "kernel")
+        binary = joinpath(dir, "kernel.macho")
         write(binary, bin)
 
         # disassemble the main function
         first = true
+        i = 0
         extract_gpu_code(binary) do name, code
             # skip all-zero functions
             all(code .== 0) && return
 
-            file = joinpath(dir, name * ".bin")
+            i += 1
+            file = joinpath(dir, "function$(i).bin")
             write(file, code)
 
             # disassemble the function
