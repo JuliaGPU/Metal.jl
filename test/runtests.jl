@@ -2,6 +2,7 @@ using Distributed
 using Dates
 import REPL
 using Printf: @sprintf
+using InteractiveUtils
 
 # parse some command-line arguments
 function extract_flag!(args, flag, default=nothing)
@@ -41,7 +42,8 @@ _, jobs = extract_flag!(ARGS, "--jobs", Sys.CPU_THREADS)
 do_quickfail, _ = extract_flag!(ARGS, "--quickfail")
 
 include("setup.jl")     # make sure everything is precompiled
-@info "System information:\n" * sprint(io->Metal.versioninfo(io))
+@info "Julia information:\n" * sprint(io->versioninfo(io))
+@info "Metal information:\n" * sprint(io->Metal.versioninfo(io))
 metallib_as_version = Metal.Metal_LLVM_Tools_jll.Metal_LLVM_Tools_jll.metallib_as() do metallib_as
     read(`$metallib_as --version`, String)
 end
