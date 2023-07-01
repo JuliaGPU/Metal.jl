@@ -1,7 +1,7 @@
 name = "Metal"
 uuid = "dde4c033-4e86-420c-a63e-0dd931031962"
 authors = ["Filippo Vicentini <filippovicentini@gmail.com>", "Tim Besard <tim.besard@gmail.com>", "Max Hawkins <max.hawkins65@gmail.com>"]
-version = "0.4.1"
+version = "0.5.0"
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
