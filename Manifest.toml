@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "617954e964a5116afabc8ebf962a6c16f3c378fa"
+project_hash = "17f6338709d8e3d7e22102efdc8723193032825e"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
@@ -58,9 +58,9 @@ uuid = "2e619515-83b5-522b-bb60-26c02a35a201"
 version = "2.5.0+0"
 
 [[deps.ExprTools]]
-git-tree-sha1 = "c1d06d129da9f55715c6c212866f5b1bddc5fa00"
+git-tree-sha1 = "27415f162e6028e81c72b82ef756bf321213b6ec"
 uuid = "e2ba6199-217a-4e67-a87a-7c52f15ade04"
-version = "0.1.9"
+version = "0.1.10"
 
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
@@ -95,9 +95,9 @@ version = "1.4.1"
 
 [[deps.KernelAbstractions]]
 deps = ["Adapt", "Atomix", "InteractiveUtils", "LinearAlgebra", "MacroTools", "PrecompileTools", "Requires", "SparseArrays", "StaticArrays", "UUIDs", "UnsafeAtomics", "UnsafeAtomicsLLVM"]
-git-tree-sha1 = "6d08ca80b621635fed9cdfeb9a4280a574020bf3"
+git-tree-sha1 = "4c5875e4c228247e1c2b087669846941fb6e0118"
 uuid = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
-version = "0.9.7"
+version = "0.9.8"
 
 [[deps.LLVM]]
 deps = ["CEnum", "LLVMExtra_jll", "Libdl", "Printf", "Unicode"]
@@ -192,10 +192,10 @@ uuid = "d8793406-e978-5875-9003-1fc021f44a92"
 version = "0.4.0"
 
 [[deps.ObjectiveC]]
-deps = ["CEnum"]
-git-tree-sha1 = "5b3c98aacd5429e9c367e551134d9466e40ed6d5"
+deps = ["CEnum", "Preferences"]
+git-tree-sha1 = "3138eba64eeb50c42fa79d7a5406cb422abeb7b0"
 uuid = "e86c9b32-1129-44ac-8ea0-90d5bb39ded9"
-version = "0.1.0"
+version = "1.0.0"
 
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
