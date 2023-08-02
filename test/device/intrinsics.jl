@@ -121,6 +121,23 @@ end
         return nothing
     end
     @metal intr_test2(bufferA)
+    synchronize()
+
+    bufferB = MtlArray{eltype(a),length(size(a)),Shared}(a)
+    vecB = unsafe_wrap(Vector{Float32}, pointer(bufferB), 1)
+
+    function intr_test3(arr_sin, arr_cos)
+        idx = thread_position_in_grid_1d()
+        s, c = sincos(arr_cos[idx])
+        arr_sin[idx] = s
+        arr_cos[idx] = c
+        return nothing
+    end
+
+    @metal intr_test3(bufferA, bufferB)
+    synchronize()
+    @test vecA ≈ sin.(a)
+    @test vecB ≈ cos.(a)
 end
 
 ############################################################################################

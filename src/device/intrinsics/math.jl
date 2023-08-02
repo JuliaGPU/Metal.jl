@@ -125,9 +125,21 @@ using Base: FastMath
 @device_override Base.sin(x::Float32) = ccall("extern air.sin.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.sin(x::Float16) = ccall("extern air.sin.f16", llvmcall, Float16, (Float16,), x)
 
-@device_override FastMath.sincos_fast(x::Float32) = ccall("extern air.fast_sincos.f32", llvmcall, Cfloat, (Cfloat,), x)
-@device_override Base.sincos(x::Float32) = ccall("extern air.sincos.f32", llvmcall, Cfloat, (Cfloat,), x)
-@device_override Base.sincos(x::Float16) = ccall("extern air.sincos.f16", llvmcall, Float16, (Float16,), x)
+@device_override function FastMath.sincos_fast(x::Float32) 
+    c = Ref{Cfloat}()
+    s = ccall("extern air.fast_sincos.f32", llvmcall, Cfloat, (Cfloat, Ptr{Cfloat}), x, c)
+    (s, c[])
+end
+@device_override function Base.sincos(x::Float32) 
+    c = Ref{Cfloat}()
+    s = ccall("extern air.sincos.f32", llvmcall, Cfloat, (Cfloat, Ptr{Cfloat}), x, c)
+    (s, c[])
+end
+@device_override function Base.sincos(x::Float16) 
+    c = Ref{Float16}()
+    s = ccall("extern air.sincos.f16", llvmcall, Float16, (Float16, Ptr{Float16}), x, c)
+    (s, c[])
+end
 
 @device_override FastMath.sinh_fast(x::Float32) = ccall("extern air.fast_sinh.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.sinh(x::Float32) = ccall("extern air.sinh.f32", llvmcall, Cfloat, (Cfloat,), x)
