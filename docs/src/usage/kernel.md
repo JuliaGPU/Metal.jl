@@ -1,4 +1,4 @@
-# Kernel Programming
+# Kernel programming
 
 Metal.jl is based off of Apple's [Metal Shading Language (MSL)](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf)
 and Metal framework. The interface allows you to utilize the graphics and computing power of
