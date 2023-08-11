@@ -25,18 +25,22 @@ function main()
         modules = [Metal],
         pages = Any[
             "Home" => "index.md",
+            "Usage" => Any[
+                "usage/overview.md",
+                "usage/array.md",
+                "usage/kernel.md",
+            ],
+            "Profiling" => "profiling.md",
             "API reference" => Any[
                 "api/essentials.md",
                 "api/compiler.md",
                 "api/kernel.md",
                 "api/array.md",
             ],
-            "Usage" => Any[
-                "usage/overview.md",
-                "usage/array.md",
+            "FAQ" => Any[
+                "faq/faq.md",
+                "faq/contributing.md",
             ],
-            "Profiling" => "profiling.md",
-            "FAQ" => "faq.md",
         ]
     )
 end

@@ -1,15 +1,4 @@
-# Introduction to Metal Programming in Julia
-
-*A quick and dirty introduction to GPU programming on MacOS*
-
-## High-Level Array Operations
-
-This document isn't meant to cover the high-level array operations that Metal.jl enables.
-Performing `Array` operations on `MtlArrays` should *just work* if the types are compatible.
-For example, `gpu_c .= gpu_a .+ gpu_b`
-Thus, this document is more about an introduction to explicit GPU *kernel* programming.
-
-## Kernel Programming
+# Kernel Programming
 
 Metal.jl is based off of Apple's [Metal Shading Language (MSL)](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf)
 and Metal framework. The interface allows you to utilize the graphics and computing power of
@@ -53,18 +42,18 @@ also query what the grid and threadgroup sizes are as well.
 
 For Metal.jl, these values are accessed via the following functions:
 
-- thread_index_in_threadgroup()
-- grid_size_Xd()
-- thread_position_in_grid_Xd()
-- thread_position_in_threadgroup_Xd()
-- threadgroup_position_in_grid_Xd()
-- threadgroups_per_grid_Xd()
-- threads_per_grid_Xd()
-- threads_per_threadgroup_Xd()
+- `thread_index_in_threadgroup()`
+- `grid_size_Xd()`
+- `thread_position_in_grid_Xd()`
+- `thread_position_in_threadgroup_Xd()`
+- `threadgroup_position_in_grid_Xd()`
+- `threadgroups_per_grid_Xd()`
+- `threads_per_grid_Xd()`
+- `threads_per_threadgroup_Xd()`
 
 *Where 'X' is 1, 2, or 3 according to the number of dimensions requested.*
 
-Using these in a kernel (taken directly from the [vadd example](../../examples/vadd.jl)):
+Using these in a kernel (taken directly from the [vadd example](../../../examples/vadd.jl)):
 
 ```julia
 function vadd(a, b, c)

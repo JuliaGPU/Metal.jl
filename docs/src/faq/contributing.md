@@ -43,7 +43,7 @@ skip the first two steps.
 Some Metal functions map directly to Apple intermediate representation intrinsics. In this
 case, wrapping them into Metal.jl is relatively easy. All that needs to be done is to create
 a mapping from a Julia function via a simple ccall. See the
-[threadgroup barrier implementation](../../src/device/intrinsics/synchronization.jl#L43) for
+[threadgroup barrier implementation](../../../src/device/intrinsics/synchronization.jl#L43) for
 reference.
 
 However, the Metal documentation doesn't tell you what the format of the intrinsic names
@@ -97,7 +97,7 @@ The only thing beyond this is exporting into the global namespace. That would be
 functions/structures/macros with clear and common use-cases (`MtlArray` or `@metal`).
 
 Additionally, you can override non-Metal.jl functions like `LinearAlgebra.mul!` seen
-[here](../../lib/mps/linalg.jl#L63). This is essentially (ab)using multiple dispatch to
+[here](../../../lib/mps/linalg.jl#L34). This is essentially (ab)using multiple dispatch to
 specialize for certain cases (usually for more performant execution).
 
 If your function is only available from within GPU kernels (like thread indexing intrinsics).
