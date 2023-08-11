@@ -53,7 +53,7 @@ For Metal.jl, these values are accessed via the following functions:
 
 *Where 'X' is 1, 2, or 3 according to the number of dimensions requested.*
 
-Using these in a kernel (taken directly from the [vadd example](../../../examples/vadd.jl)):
+Using these in a kernel (taken directly from the [vadd example](https://github.com/JuliaGPU/Metal.jl/blob/main/examples/vadd.jl)):
 
 ```julia
 function vadd(a, b, c)
