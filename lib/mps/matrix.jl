@@ -118,8 +118,11 @@ end
 """
     matMulMPS(a::MtlMatrix, b::MtlMatrix, c::MtlMatrix, alpha=1, beta=1,
               transpose_left=false, transpose_right=false)
+A `MPSMatrixMultiplication` kernel thay computes:
+`c = alpha * op(a) * beta * op(b) + beta * C`
 
-Perform `c = alpha * op(a) * beta * op(b) + beta * C`.
+This function should not typically be used. Rather, use the normal `LinearAlgebra` interface
+with any `MtlArray` and it should be accelerated using Metal Performance Shaders.
 """
 function matmul!(c::MtlMatrix, a::MtlMatrix, b::MtlMatrix,
                  alpha::Number=true, beta::Number=true,
@@ -146,7 +149,7 @@ function matmul!(c::MtlMatrix, a::MtlMatrix, b::MtlMatrix,
     encode!(cmdbuf, mat_mul_kernel, mps_b, mps_a, mps_c)
     commit!(cmdbuf)
 
-    c
+    return c
 end
 
 export MPSMatrixFindTopK
@@ -187,6 +190,8 @@ Return the indices in `I` and the values in `V`.
 
 `k` cannot be greater than 16.
 
+Uses `MPSMatrixFindTopK`.
+
 See also: [`topk`](@ref).
 """
 function topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
@@ -197,7 +202,7 @@ function topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) where 
     @assert size(V,1) >= k         "Matrix 'V' must be large enough for k rows"
     @assert size(V,2) >= size(A,2) "Matrix 'V' must have at least as many columns as A"
 
-    _topk!(A,I,V,k)
+    return _topk!(A,I,V,k)
 end
 @inline function _topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
     # Create MPS-compatible matrix from the MtlArrays
@@ -215,7 +220,7 @@ end
     encode!(cmdbuf, topk_kernel, mps_a, mps_i, mps_v)
     commit!(cmdbuf)
 
-    I, V
+    return I, V
 end
 
 """
@@ -225,6 +230,8 @@ Compute the top `k` values and their corresponding indices column-wise in a matr
 Return the indices in `I` and the values in `V`.
 
 `k` cannot be greater than 16.
+
+Uses `MPSMatrixFindTopK`.
 
 See also: [`topk!`](@ref).
 """

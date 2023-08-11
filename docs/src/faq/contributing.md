@@ -84,7 +84,10 @@ optimized away. Double-check that the kernel's IR makes sense for what you wrote
 Metal exposes a special interface to its library of optimized kernels. Rather than accepting
 the normal set of input GPU data structures, it requires special `MPS` datatypes that assume
 row-major memory layout. As this is not the Julia default, adapt accordingly. Adding MPS
-functionality should be mostly straightforward, so this can be an easy entrypoint to helping.
+functionality should be mostly straightforward, so this can be an easy entry point to helping.
+To get started, you can have a look at the [Metal Performance Shaders
+Documentation](https://developer.apple.com/documentation/metalperformanceshaders?language=objc)
+from Apple.
 
 ## Exposing your Interface
 

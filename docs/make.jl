@@ -36,6 +36,7 @@ function main()
                 "api/compiler.md",
                 "api/kernel.md",
                 "api/array.md",
+                "api/mps.md",
             ],
             "FAQ" => Any[
                 "faq/faq.md",
