@@ -64,15 +64,15 @@ importing the package:
 julia> using Metal
 
 julia> Metal.versioninfo()
-macOS 13.3.1, Darwin 22.4.0
+macOS 13.5.0, Darwin 22.6.0
 
 Toolchain:
-- Julia: 1.9.0
+- Julia: 1.9.3
 - LLVM: 14.0.6
 
 Julia packages:
-- Metal.jl: 0.3.0
-- Metal_LLVM_Tools_jll: 0.3.0+2
+- Metal.jl: 0.5.0
+- Metal_LLVM_Tools_jll: 0.5.1+0
 
 1 device:
 - Apple M2 Max (64.000 KiB allocated)
