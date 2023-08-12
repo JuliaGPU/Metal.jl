@@ -53,6 +53,7 @@ MtlThreadGroupArray
 ## Synchronization
 
 ```@docs
+MemoryFlags
 threadgroup_barrier
 simdgroup_barrier
 ```

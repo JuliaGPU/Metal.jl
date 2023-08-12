@@ -1,6 +1,6 @@
 # MacOS GPU programming in Julia
 
-The Metal.jl package is the main entrypoint for GPU programming on MacOS in Julia. The package
+The Metal.jl package is the main entry point for GPU programming on MacOS in Julia. The package
 makes it possible to do so at various abstraction levels, from easy-to-use arrays down to
 hand-written kernels using low-level Metal APIs.
 
@@ -37,13 +37,13 @@ Pkg.test("Metal")
 The following resources may also be of interest (although are mainly focused on the CUDA GPU
  backend):
 
-- Effectively using GPUs with Julia: [video](https://www.youtube.com/watch?v=7Yq1UyncDNc),
+- Effectively using GPUs with Julia:
   [slides](https://docs.google.com/presentation/d/1l-BuAtyKgoVYakJSijaSqaTL3friESDyTOnU2OLqGoA/)
 - How Julia is compiled to GPUs: [video](https://www.youtube.com/watch?v=Fz-ogmASMAE)
 
 ## Contributing
 
-If you want to help improve this package, look at [the contributing page](contributing.md) for more details.
+If you want to help improve this package, look at [the contributing page](faq/contributing.md) for more details.
 
 ## Acknowledgements
 
@@ -60,5 +60,5 @@ Some of the software in this ecosystem was developed as part of academic researc
 would like to help support it, please star the repository as such metrics may help us secure
 funding in the future. If you use our software as part of your research, teaching, or other
 activities, we would be grateful if you could cite our work. The
-[CITATION.bib](https://github.com/JuliaGPU/Metal.jl/blob/master/CITATION.bib) file in the
+[CITATION.cff](https://github.com/JuliaGPU/Metal.jl/blob/main/CITATION.cff) file in the
 root of this repository lists the relevant papers.

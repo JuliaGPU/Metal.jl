@@ -87,28 +87,33 @@ end
 
 
 """
-A MPSMatrixVectorMultiplication kernel thay computes:
-y = alpha * op(A) * x + beta * y
+    matVecMulMPS(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha=1, beta=1,
+                 transpose=false)
+A `MPSMatrixVectorMultiplication` kernel thay computes:
+`c = alpha * op(a) * b + beta * c`
+
+This function should not typically be used. Rather, use the normal `LinearAlgebra` interface
+with any `MtlArray` and it should be accelerated using Metal Performance Shaders.
 """
-function matvecmul!(y::MtlVector, a::MtlMatrix, x::MtlVector, alpha::Number=true, beta::Number=false,
+function matvecmul!(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha::Number=true, beta::Number=false,
                     transpose=false)
     # NOTE: MPS uses row major, while Julia is col-major
     cols_a = size(a, transpose ? 1 : 2)
-    rows_y = length(y)
+    rows_c = length(c)
 
     # Create MPS-compatible matrix/vector from the MtlArrays
     mps_a = MPSMatrix(a)
-    mps_x = MPSVector(x)
-    mps_y = MPSVector(y)
+    mps_b = MPSVector(b)
+    mps_c = MPSVector(c)
 
     matvec_mul_kernel = MPSMatrixVectorMultiplication(current_device(), !transpose,
-                                                      rows_y, cols_a,
+                                                      rows_c, cols_a,
                                                       alpha, beta)
 
     # Encode and commit matmul kernel
     cmdbuf = MTLCommandBuffer(global_queue(current_device()))
-    encode!(cmdbuf, matvec_mul_kernel, mps_a, mps_x, mps_y)
+    encode!(cmdbuf, matvec_mul_kernel, mps_a, mps_b, mps_c)
     commit!(cmdbuf)
 
-    return y
+    return c
 end

@@ -39,8 +39,3 @@ a = Metal.zeros(1024)
 b = Metal.ones(1024)
 a.^2 .+ sin.(b)
 ```
-
-When possible, these operations integrate with existing vendor libraries.For example,
-multiplying matrices or generating random numbers will automatically dispatch to these
-high-quality libraries, if types are supported, and fall back to generic implementations
-otherwise.

@@ -1,3 +1,5 @@
+# Frequently Asked Questions
+
 ## Can you wrap this Metal API?
 
 Most likely. Any help on designing or implementing high-level wrappers for MSL's low-level functionality

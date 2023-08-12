@@ -18,8 +18,8 @@ Note that the allocations as reported by BenchmarkTools are CPU allocations.
 
 ## Application profiling
 
-For profiling large applications, simple timings are insufficient. Instead, we want a
-overview of how and when the GPU was active, to avoid times where the device was idle and/or
+For profiling large applications, simple timings are insufficient. Instead, we want an
+overview of how and when the GPU was active to avoid times where the device was idle and/or
 find which kernels needs optimization.
 
 As we cannot use the Julia profiler for this task, we will use Metal's GPU profiler directly.
