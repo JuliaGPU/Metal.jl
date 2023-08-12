@@ -165,7 +165,7 @@ end
     ## Step 3
     @inline function truncate(x)
       reinterpret(Float32,
-                  reinterpret(Int32, 0.012512346f0) & 0b11111111111100000000000000000000)
+                  reinterpret(Int32, x) & 0b11111111111100000000000000000000)
     end
     u₁ = truncate(u)
     f₁ = truncate(f)
