@@ -344,7 +344,7 @@ Uses Adapt.jl to act inside some wrapper structs.
 
 # Examples
 
-```
+```jldoctests
 julia> mtl(ones(3)')
 1×3 adjoint(::MtlVector{Float32, Metal.MTL.MTLResourceStorageModePrivate}) with eltype Float32:
  1.0  1.0  1.0
@@ -357,6 +357,12 @@ julia> mtl(1:3)
 1:3
 
 julia> MtlArray(1:3)
+3-element MtlVector{Int64, Metal.MTL.MTLResourceStorageModePrivate}:
+ 1
+ 2
+ 3
+
+julia> mtl[1,2,3]
 3-element MtlVector{Int64, Metal.MTL.MTLResourceStorageModePrivate}:
  1
  2
