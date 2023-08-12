@@ -20,9 +20,3 @@ MPS.matvecmul!
 MPS.topk
 MPS.topk!
 ```
-
-### Linear Algebra
-
-Many of the currently implemented MPS functions are for linear algebra operations.
-Therefore, you use them by calling the corresponding LinearAlgebra function with an
-`MtlArray`. They are nonetheless listed below:
