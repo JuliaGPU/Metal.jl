@@ -163,9 +163,7 @@ end
                     0.012512346f0)
 
     ## Step 3
-    @inline function truncate(x)
-      reinterpret(Float32,
-                  reinterpret(Int32, x) & 0b11111111111100000000000000000000)
+    @inline truncate(x::Float32) = reinterpret(Float32, reinterpret(UInt32, x) & 0xfff0_0000)
     end
     u₁ = truncate(u)
     f₁ = truncate(f)
