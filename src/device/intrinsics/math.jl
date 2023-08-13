@@ -103,7 +103,6 @@ using Base.Math: @horner
 @device_override Base.log10(x::Float16) = ccall("extern air.log10.f16", llvmcall, Float16, (Float16,), x)
 
 # Re-implementation of Base.Math.log_proc1 and Base.Math.log_proc2 without upcasting to Float64
-
 const t_log_Float32 = [0.0f0, 0.0077821403f0, 0.015504187f0, 0.023167059f0,
     0.030771658f0, 0.038318865f0, 0.045809537f0, 0.053244516f0, 0.06062462f0, 0.06795066f0,
     0.07522342f0, 0.08244367f0, 0.089612156f0, 0.09672963f0, 0.103796795f0, 0.11081436f0,
@@ -151,6 +150,8 @@ const t_log_Float32 = [0.0f0, 0.0077821403f0, 0.015504187f0, 0.023167059f0,
     logb(base)*(l + (u + q))
 end
 
+@inline truncbits(x::Float32) = reinterpret(Float32, reinterpret(UInt32, x) & 0xfff0_0000)
+
 @device_override function Base.Math.log_proc2(f::Float32,base=Val(:ℯ))
     ## Step 1
     g = 1f0/(2f0+f)
@@ -163,10 +164,8 @@ end
                     0.012512346f0)
 
     ## Step 3
-    @inline truncate(x::Float32) = reinterpret(Float32, reinterpret(UInt32, x) & 0xfff0_0000)
-    end
-    u₁ = truncate(u)
-    f₁ = truncate(f)
+    u₁ = truncbits(u)
+    f₁ = truncbits(f)
     f₂ = f-f₁
     u₂ = ((2(f-u₁)-u₁*f₁) - u₁*f₂)*g
 
