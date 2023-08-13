@@ -128,12 +128,12 @@ const t_log_Float32 = [0.0f0, 0.0077821403f0, 0.015504187f0, 0.023167059f0,
 @inline logb(::Val{:ℯ}) = 1f0
 @inline logb(::Val{10}) = 0.4342945f0
 
-@device_override function Base.Math.log_proc1(y::Float32,mf::Float32,F::Float32,f::Float32,base=Val(:ℯ))
+@device_override Base.@assume_effects :consistent @inline function Base.Math.log_proc1(y::Float32,mf::Float32,F::Float32,f::Float32,base=Val(:ℯ))
     jp = unsafe_trunc(Int,128.0f0*F)-127
 
     ## Steps 1 and 2
-    hi = t_log_Float32[jp]
-    l = mf*t_log_Float32[129] + hi
+    @inbounds hi = t_log_Float32[jp]
+    l = mf*0.6931472f0 + hi
 
     ## Step 3
     # @inbounds u = f*c_invF[jp]
@@ -152,7 +152,7 @@ end
 
 @inline truncbits(x::Float32) = reinterpret(Float32, reinterpret(UInt32, x) & 0xfff0_0000)
 
-@device_override function Base.Math.log_proc2(f::Float32,base=Val(:ℯ))
+@device_override @inline function Base.Math.log_proc2(f::Float32,base=Val(:ℯ))
     ## Step 1
     g = 1f0/(2f0+f)
     u = 2(f*g)
