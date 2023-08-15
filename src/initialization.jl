@@ -43,6 +43,18 @@ function __init__()
     if isdefined(Base, :active_repl_backend)
         push!(Base.active_repl_backend.ast_transforms, synchronize_metal_tasks)
     end
+
+    # register device overrides
+    if !precompiling
+        eval(Expr(:block, overrides...))
+        empty!(overrides)
+
+        @require SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b" begin
+            include("device/intrinsics/special_math.jl")
+            eval(Expr(:block, overrides...))
+            empty!(overrides)
+        end
+    end
 end
 
 function synchronize_metal_tasks(ex)
