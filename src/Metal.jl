@@ -13,6 +13,8 @@ using ExprTools: splitdef, combinedef
 using Artifacts
 using ObjectiveC, .Foundation, .Dispatch
 
+using Requires: @require
+
 # core library
 include("../lib/mtl/MTL.jl")
 @reexport using .MTL
