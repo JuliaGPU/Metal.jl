@@ -140,7 +140,7 @@ end
     @test vecB ≈ cos.(a)
 
     b = collect(LinRange(nextfloat(-1f0), 10f0, 20))
-    bufferC = MtlArray{eltype(b),length(size(b)),Shared}(b)
+    bufferC = MtlArray(b)
     vecC = Array(log1p.(bufferC))
     @test vecC ≈ log1p.(b)
 end
