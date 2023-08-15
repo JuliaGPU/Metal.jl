@@ -139,7 +139,7 @@ const Lp7 = 0.14798199f0
         end
       end
 
-      if hx>0||hx<=reinterpret(Int32, 0xbe95f619)  # (sqrt(2)/2)-1 <= 1+x
+      if hx>0||hx<=reinterpret(Int32, 0xbe95f619)  # (sqrt(2)/2)-1 <= x
         k = 0
         f = x
         hu = 1f0
@@ -156,7 +156,7 @@ const Lp7 = 0.14798199f0
       hu = reinterpret(Int32, u)
       k = (hu>>23) - 127
       c = k>0 ? 1f0-(u-x) : x-(u-1f0)
-      c = c/u
+      c /= u
     else
       u = x
       hu = reinterpret(Int32, u)
@@ -164,7 +164,7 @@ const Lp7 = 0.14798199f0
       c = 0f0
     end
 
-    hu = hu & 0x007fffff
+    hu &= 0x007fffff
 
     if hu < 0x3504f4  # u < sqrt(2)
       u = reinterpret(Float32, hu|0x3f800000)
