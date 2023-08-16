@@ -1,3 +1,5 @@
+using SpecialFunctions
+
 @testset "arguments" begin
     @on_device dispatch_quadgroups_per_threadgroup()
     @on_device dispatch_simdgroups_per_threadgroup()
@@ -143,6 +145,18 @@ end
     bufferC = MtlArray(b)
     vecC = Array(log1p.(bufferC))
     @test vecC ≈ log1p.(b)
+
+
+    d = collect(LinRange(nextfloat(-3.0f0), 3.0f0, 20))
+    bufferD = MtlArray(d)
+    vecD = Array(SpecialFunctions.erf.(bufferD))
+    @test vecD ≈ SpecialFunctions.erf.(d)
+
+
+    e = collect(LinRange(nextfloat(-3.0f0), 3.0f0, 20))
+    bufferE = MtlArray(e)
+    vecE = Array(SpecialFunctions.erfc.(bufferE))
+    @test vecE ≈ SpecialFunctions.erfc.(e)
 end
 
 ############################################################################################
