@@ -1,5 +1,9 @@
-# math functionality corresponding to SpecialFunctions.jl
+module SpecialFunctionsExt # Should be same name as the file (just like a normal package)
 
+using Metal
+isdefined(Base, :get_extension) ? (using SpecialFunctions) : (using ..SpecialFunctions)
+
+# math functionality corresponding to SpecialFunctions.jl
 
 ## error function
 
@@ -52,15 +56,15 @@ const sb4  =  8.93033314f+00
 
 # Implementation of `erf(::Float32)` from openlibm's `erfcf`
 # https://github.com/JuliaMath/openlibm/blob/12f5ffcc990e16f4120d4bf607185243f5affcb8/src/s_erff.c
-@device_override function SpecialFunctions.erf(x::Float32)
+Metal.@device_override function SpecialFunctions.erf(x::Float32)
     hx = reinterpret(Int32, x)
     ix = hx & 0x7fffffff
-    
+
     if ix >= 0x7f800000	# erf(nan)=nan
         i = (reinterpret(UInt32, hx) >> 31) << 1
-        return reinterpret(Float32, 1 - i) + 1.0f0 / x # erf(+-inf)=+-1 
+        return reinterpret(Float32, 1 - i) + 1.0f0 / x # erf(+-inf)=+-1
     end
-    
+
     if ix < 0x3f580000 	# |x|<0.84375
         if ix < 0x38800000 	# |x|<2**-14
             if ix < 0x38800000 	#|x|<2**-14
@@ -71,7 +75,7 @@ const sb4  =  8.93033314f+00
             end
         end
     end
-    
+
     if ix < 0x3fa00000 	# 0.84375 <= |x| < 1.25
         s = abs(x) - 1.0f0
         P = pa0 + s * (pa1 + s * (pa2 + s * pa3))
@@ -82,18 +86,18 @@ const sb4  =  8.93033314f+00
             return -erx - P / Q
         end
     end
-    
+
     if ix >= 0x40800000	# inf>|x|>=4
-        if hx >= 0 
+        if hx >= 0
             return 1.0f0 - tiny
-        else 
+        else
             return tiny - 1.0f0
         end
     end
-    
+
     x = abs(x)
     s = 1.0f0 / (x * x)
-    
+
     if ix< 0x4036DB6E	# |x| < 1/0.35
         R = ra0 + s * (ra1 + s * (ra2 + s * ra3))
         S = 1.0f0 + s * (sa1 + s * (sa2 + s * (sa3 + s * sa4)))
@@ -101,38 +105,38 @@ const sb4  =  8.93033314f+00
         R = rb0 + s * (rb1 + s * (rb2 + s * (rb3 + s * rb4)))
         S = 1.0f0 + s * (sb1 + s * (sb2 + s * (sb3 + s * sb4)))
     end
-    
+
     z = reinterpret(Float32, hx & 0xffffe000)
     r  = exp(-z * z - 0.5625f0) * exp((z - x) * (z + x) + R / S)
-    
+
     if hx >= 0
         return 1.0f0 - r / x
-    else 
+    else
         return r / x - 1.0f0
     end
 end
 
 # Implementation of `erfc(::Float32)` from openlibm's `erfcf`
 # https://github.com/JuliaMath/openlibm/blob/12f5ffcc990e16f4120d4bf607185243f5affcb8/src/s_erff.c
-@device_override function SpecialFunctions.erfc(x::Float32)
+Metal.@device_override function SpecialFunctions.erfc(x::Float32)
     hx = reinterpret(Int32, x)
     ix = hx & 0x7fffffff
-    
+
     if ix>=0x7f800000	# erfc(nan)=nan
         # erfc(+-inf)=0,2
         return reinterpret(Float32, (reinterpret(UInt32, hx) >> 31) << 1) + 1.0f0 / x
     end
-    
+
     if ix < 0x3f580000	# |x|<0.84375
         if ix < 0x33800000 	# |x|<2**-56
             return 1.0f0 - x
         end
-        
+
         z = x * x
         r = pp0 + z * (pp1 + z * pp2)
         s = 1.0f0 + z * (qq1 + z * (qq2 + z * qq3))
         y = r / s
-        
+
         if hx < 0x3e800000	# x<1/4
             return 1.0f0 - (x + x * y)
         else
@@ -154,7 +158,7 @@ end
             return 1.0f0 + z
         end
     end
-    
+
     if ix < 0x41300000	# |x|<28
         x = abs(x);
         s = 1.0f0 / (x * x)
@@ -178,8 +182,10 @@ end
     else
         if hx > 0
             return tiny * tiny
-        else 
+        else
             return 2.0f0 - tiny
         end
     end
 end
+
+end # module

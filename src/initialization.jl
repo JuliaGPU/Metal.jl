@@ -49,10 +49,12 @@ function __init__()
         eval(Expr(:block, overrides...))
         empty!(overrides)
 
-        @require SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b" begin
-            include("device/intrinsics/special_math.jl")
-            eval(Expr(:block, overrides...))
-            empty!(overrides)
+        @static if !isdefined(Base, :get_extension)
+            @require SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b" begin
+                include("../ext/SpecialFunctionsExt.jl")
+                eval(Expr(:block, overrides...))
+                empty!(overrides)
+            end
         end
     end
 end
