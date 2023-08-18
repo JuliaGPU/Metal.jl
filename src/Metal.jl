@@ -13,7 +13,9 @@ using ExprTools: splitdef, combinedef
 using Artifacts
 using ObjectiveC, .Foundation, .Dispatch
 
-using Requires: @require
+if !isdefined(Base, :get_extension)
+    using Requires: @require
+end
 
 # core library
 include("../lib/mtl/MTL.jl")
