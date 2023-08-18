@@ -44,15 +44,9 @@ function __init__()
         push!(Base.active_repl_backend.ast_transforms, synchronize_metal_tasks)
     end
 
-    # register device overrides
-    eval(Expr(:block, overrides...))
-    empty!(overrides)
-
     @static if !isdefined(Base, :get_extension)
         @require SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b" begin
             include("../ext/SpecialFunctionsExt.jl")
-            eval(Expr(:block, overrides...))
-            empty!(overrides)
         end
     end
 end
