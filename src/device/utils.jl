@@ -1,12 +1,5 @@
 # local method table for device functions
-@static if isdefined(Base.Experimental, Symbol("@overlay"))
 Base.Experimental.@MethodTable(method_table)
-else
-const method_table = nothing
-end
-
-# list of overrides (only for Julia 1.6)
-const overrides = Expr[]
 
 macro device_override(ex)
     ex = macroexpand(__module__, ex)
@@ -14,15 +7,9 @@ macro device_override(ex)
         ex = eval(ex)
         error()
     end
-    code = quote
+    esc(quote
         $GPUCompiler.@override($method_table, $ex)
-    end
-    if isdefined(Base.Experimental, Symbol("@overlay"))
-        return esc(code)
-    else
-        push!(overrides, code)
-        return
-    end
+    end)
 end
 
 macro device_function(ex)
