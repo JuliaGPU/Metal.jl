@@ -39,7 +39,7 @@ function versioninfo(io::IO=stdout)
     end
     println(io)
 
-    env = filter(var->startswith(var, "JULIA_METAL") || startswith(var, "MTL"), keys(ENV))
+    env = filter(var->startswith(var, "JULIA_METAL") || startswith(var, "MTL") || startswith(var, "METAL"), keys(ENV))
     if !isempty(env)
         println(io, "Environment:")
         for var in env
