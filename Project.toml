@@ -28,7 +28,7 @@ Adapt = "3"
 CEnum = "0.4"
 ExprTools = "0.1"
 GPUArrays = "8.4"
-GPUCompiler = "0.20, 0.21, 0.22"
+GPUCompiler = "0.23"
 KernelAbstractions = "0.9.1"
 LLVM = "6"
 Metal_LLVM_Tools_jll = "~0.5"
@@ -43,4 +43,7 @@ julia = "1.8"
 SpecialFunctionsExt = "SpecialFunctions"
 
 [weakdeps]
+SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
+
+[extras]
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"

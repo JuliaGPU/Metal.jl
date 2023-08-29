@@ -3,12 +3,8 @@ Base.Experimental.@MethodTable(method_table)
 
 macro device_override(ex)
     ex = macroexpand(__module__, ex)
-    if Meta.isexpr(ex, :call)
-        ex = eval(ex)
-        error()
-    end
     esc(quote
-        $GPUCompiler.@override($method_table, $ex)
+        Base.Experimental.@overlay($method_table, $ex)
     end)
 end
 

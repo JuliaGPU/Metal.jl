@@ -42,7 +42,8 @@ do_quickfail, _ = extract_flag!(ARGS, "--quickfail")
 
 include("setup.jl")     # make sure everything is precompiled
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
-metallib_as_version = Metal.Metal_LLVM_Tools_jll.Metal_LLVM_Tools_jll.metallib_as() do metallib_as
+metallib_as_version = let
+    metallib_as = Metal.Metal_LLVM_Tools_jll.Metal_LLVM_Tools_jll.metallib_as()
     read(`$metallib_as --version`, String)
 end
 @info "Using Metal LLVM back-end from $(dirname(Metal.Metal_LLVM_Tools_jll.Metal_LLVM_Tools_jll.metallib_as_path)):\n" * metallib_as_version
@@ -354,11 +355,7 @@ for (testname, (resp,)) in results
     elseif isa(resp, Tuple{Int,Int})
         fake = Test.DefaultTestSet(testname)
         for i in 1:resp[1]
-            if VERSION >= v"1.7-"
-                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing, nothing))
-            else
-                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
-            end
+            Test.record(fake, Test.Pass(:test, nothing, nothing, nothing, nothing))
         end
         for i in 1:resp[2]
             Test.record(fake, Test.Broken(:test, nothing))
@@ -372,11 +369,7 @@ for (testname, (resp,)) in results
         println()
         fake = Test.DefaultTestSet(testname)
         for i in 1:resp.captured.ex.pass
-            if VERSION >= v"1.7-"
-                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing, nothing))
-            else
-                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
-            end
+            Test.record(fake, Test.Pass(:test, nothing, nothing, nothing, nothing))
         end
         for i in 1:resp.captured.ex.broken
             Test.record(fake, Test.Broken(:test, nothing))
