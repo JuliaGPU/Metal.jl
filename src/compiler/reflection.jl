@@ -153,9 +153,7 @@ end
 
 function disassemble(io::IO, path)
     disassembler = joinpath(only(readdir(artifact"applegpu"; join=true)), "disassemble.py")
-    python() do python_path
-        run(pipeline(`$python_path $disassembler $path`, stdout=io))
-    end
+    run(pipeline(`$(python()) $disassembler $path`, stdout=io))
     return
 end
 
@@ -230,10 +228,6 @@ function return_type(@nospecialize(func), @nospecialize(tt))
     config = compiler_config(current_device())
     job = CompilerJob(source, config)
     interp = GPUCompiler.get_interpreter(job)
-    if VERSION >= v"1.8-"
-        sig = Base.signature_type(func, tt)
-        Core.Compiler.return_type(interp, sig)
-    else
-        Core.Compiler.return_type(interp, func, tt)
-    end
+    sig = Base.signature_type(func, tt)
+    Core.Compiler.return_type(interp, sig)
 end
