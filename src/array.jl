@@ -11,19 +11,25 @@ function hasfieldcount(@nospecialize(dt))
     return true
 end
 
-function contains_double(T)
-    if T === Float64
+function contains_eltype(T, X)
+    if T === X
       return true
     elseif T isa Union
         for U in Base.uniontypes(T)
-            contains_double(U) && return true
+            contains_eltype(U, X) && return true
         end
     elseif hasfieldcount(T)
         for U in fieldtypes(T)
-            contains_double(U) && return true
+            contains_eltype(U, X) && return true
         end
     end
     return false
+end
+
+function check_eltype(T)
+  Base.allocatedinline(T) || error("MtlArray only supports element types that are stored inline")
+  Base.isbitsunion(T) && error("MtlArray does not yet support isbits-union arrays")
+  contains_eltype(T, Float64) && error("Metal does not support Float64 values, try using Float32 instead")
 end
 
 """
@@ -34,15 +40,14 @@ end
 `S` can be `Private` (default) or `Shared`.
 """
 mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
-  buffer::MTLBuffer
+  data::DataRef{<:MTLBuffer}
 
   maxsize::Int  # maximum data size; excluding any selector bytes
   offset::Int   # offset of the data in the buffer, in number of elements
   dims::Dims{N}
 
   function MtlArray{T,N,S}(::UndefInitializer, dims::Dims{N}) where {T,N,S}
-      Base.allocatedinline(T) || error("MtlArray only supports element types that are stored inline")
-      contains_double(T) && error("Metal does not support Float64 values, try using Float32 instead")
+      check_eltype(T)
       maxsize = prod(dims) * sizeof(T)
       bufsize = if Base.isbitsunion(T)
         # type tag array past the data
@@ -59,29 +64,28 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
       end
       buf = alloc(dev, bufsize; storage=S)
       buf.label = "MtlArray{$(T),$(N),$(S)}(dims=$dims)"
-
-      obj = new{T,N,S}(buf, maxsize, 0, dims)
-      finalizer(obj) do arr
-          free(arr.buffer)
+      data = DataRef(buf) do buf
+          free(buf)
       end
-      return obj
+
+      obj = new{T,N,S}(data, maxsize, 0, dims)
+      finalizer(unsafe_free!, obj)
   end
 
-  function MtlArray{T,N}(buffer::MTLBuffer, dims::Dims{N};
+  function MtlArray{T,N}(data::DataRef{<:MTLBuffer}, dims::Dims{N};
                          maxsize::Int=prod(dims) * sizeof(T), offset::Int=0) where {T,N}
-      Base.allocatedinline(T) || error("MtlArray only supports element types that are stored inline")
-      retain(buffer)
-      S = convert(MTL.MTLResourceOptions, buffer.storageMode)
-      obj = new{T,N,S}(buffer, maxsize, offset, dims)
-      finalizer(obj) do arr
-          free(arr.buffer)
-      end
-      return obj
+      check_eltype(T)
+      S = convert(MTL.MTLResourceOptions, data[].storageMode)
+      obj = new{T,N,S}(copy(data), maxsize, offset, dims)
+      finalizer(unsafe_free!, obj)
   end
 end
 
-device(A::MtlArray) = A.buffer.device
+unsafe_free!(a::MtlArray) = GPUArrays.unsafe_free!(a.data)
+
+device(A::MtlArray) = A.data[].device
 storagemode(::MtlArray{T,N,S}) where {T,N,S} = S
+
 
 ## aliases
 
@@ -93,6 +97,7 @@ const MtlVecOrMat{T,S} = Union{MtlVector{T,S},MtlMatrix{T,S}}
 const DefaultStorageMode = Private
 MtlArray{T,N}(::UndefInitializer, dims::Dims{N}) where {T,N} =
   MtlArray{T,N,DefaultStorageMode}(undef, dims)
+
 
 ## constructors
 
@@ -139,7 +144,7 @@ end
 Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S, T} =
   throw(ArgumentError("cannot take the CPU address of a $(typeof(x))"))
 Base.unsafe_convert(::Type{MtlPointer{T}}, x::MtlArray) where {T} =
-  MtlPointer{T}(x.buffer, x.offset*Base.elsize(x))
+  MtlPointer{T}(x.data[], x.offset*Base.elsize(x))
 
 
 ## interop with other arrays
@@ -185,18 +190,18 @@ Base.convert(::Type{T}, x::T) where T <: MtlArray = x
 Base.unsafe_convert(::Type{<:Ptr}, x::MtlArray) =
   throw(ArgumentError("cannot take the host address of a $(typeof(x))"))
 
-Base.unsafe_convert(t::Type{MTL.MTLBuffer}, x::MtlArray) = x.buffer
+Base.unsafe_convert(t::Type{MTL.MTLBuffer}, x::MtlArray) = x.data[]
 
 
 ## interop with ObjC libraries
 
-Base.cconvert(::Type{<:id}, x::MtlArray) = x.buffer
+Base.cconvert(::Type{<:id}, x::MtlArray) = x.data[]
 
 
 ## interop with CPU arrays
 
 Base.unsafe_wrap(t::Type{<:Array}, arr::MtlArray, dims; own=false) =
-  unsafe_wrap(t, arr.buffer, dims; own=own)
+  unsafe_wrap(t, arr.data[], dims; own=own)
 
 Base.collect(x::MtlArray{T,N}) where {T,N} = copyto!(Array{T,N}(undef, size(x)), x)
 
@@ -394,36 +399,23 @@ function Base.fill!(A::MtlArray{T}, val) where T <: Union{UInt8,Int8}
 end
 
 
+## derived arrays
+
+function GPUArrays.derive(::Type{T}, N::Int, a::MtlArray, dims::Dims, offset::Int) where {T}
+  offset = (a.offset * Base.elsize(a)) ÷ sizeof(T) + offset
+  MtlArray{T,N}(a.data, dims; a.maxsize, offset)
+end
+
+
 ## views
 
 device(a::SubArray) = device(parent(a))
 
-# we don't really want an array, so don't call `adapt(Array, ...)`,
-# but just want MtlArray indices to get downloaded back to the CPU.
-# this makes sure we preserve array-like containers, like Base.Slice.
-struct BackToCPU end
-Adapt.adapt_storage(::BackToCPU, xs::MtlArray) = convert(Array, xs)
-
-@inline function Base.view(A::MtlArray, I::Vararg{Any,N}) where {N}
-    J = to_indices(A, I)
-    @boundscheck begin
-        # Base's boundscheck accesses the indices, so make sure they reside on the CPU.
-        # this is expensive, but it's a bounds check after all.
-        J_cpu = map(j->adapt(BackToCPU(), j), J)
-        checkbounds(A, J_cpu...)
-    end
-    J_gpu = map(j->adapt(MtlArray, j), J)
-    Base.unsafe_view(Base._maybe_reshape_parent(A, Base.index_ndims(J_gpu...)), J_gpu...)
-end
-
 # pointer conversions
-## contiguous
 function Base.unsafe_convert(::Type{MTL.MTLBuffer}, V::SubArray{T,N,P,<:Tuple{Vararg{Base.RangeIndex}}}) where {T,N,P}
     return Base.unsafe_convert(MTL.MTLBuffer, parent(V)) +
            Base._memory_offset(V.parent, map(first, V.indices)...)
 end
-
-## reshaped
 function Base.unsafe_convert(::Type{MTL.MTLBuffer}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{Base.RangeIndex,Base.ReshapedUnitRange}}}}) where {T,N,P}
    return Base.unsafe_convert(MTL.MTLBuffer, parent(V)) +
           (Base.first_index(V)-1)*sizeof(T)
@@ -436,144 +428,6 @@ device(a::Base.PermutedDimsArray) = device(parent(a))
 
 Base.unsafe_convert(::Type{MTL.MTLBuffer}, A::PermutedDimsArray) =
     Base.unsafe_convert(MTL.MTLBuffer, parent(A))
-
-
-## reshape
-
-function Base.reshape(a::MtlArray{T,M}, dims::NTuple{N,Int}) where {T,N,M}
-  if prod(dims) != length(a)
-      throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(size(a))"))
-  end
-
-  if N == M && dims == size(a)
-      return a
-  end
-
-  _derived_array(T, N, a, dims)
-end
-
-# create a derived array (reinterpreted or reshaped) that's still a MtlArray
-@inline function _derived_array(::Type{T}, N::Int, a::MtlArray, osize::Dims) where {T}
-  offset = (a.offset * Base.elsize(a)) ÷ sizeof(T)
-  MtlArray{T,N}(a.buffer, osize; a.maxsize, offset)
-end
-
-
-## reinterpret
-
-device(a::Base.ReinterpretArray) = device(parent(a))
-
-function Base.reinterpret(::Type{T}, a::MtlArray{S,N}) where {T,S,N}
-  err = _reinterpret_exception(T, a)
-  err === nothing || throw(err)
-
-  if sizeof(T) == sizeof(S) # for N == 0
-    osize = size(a)
-  else
-    isize = size(a)
-    size1 = div(isize[1]*sizeof(S), sizeof(T))
-    osize = tuple(size1, Base.tail(isize)...)
-  end
-
-  return _derived_array(T, N, a, osize)
-end
-
-function _reinterpret_exception(::Type{T}, a::AbstractArray{S,N}) where {T,S,N}
-  if !isbitstype(T) || !isbitstype(S)
-    return MtlReinterpretBitsTypeError{T,typeof(a)}()
-  end
-  if N == 0 && sizeof(T) != sizeof(S)
-    return MtlReinterpretZeroDimError{T,typeof(a)}()
-  end
-  if N != 0 && sizeof(S) != sizeof(T)
-      ax1 = axes(a)[1]
-      dim = length(ax1)
-      if Base.rem(dim*sizeof(S),sizeof(T)) != 0
-        return MtlReinterpretDivisibilityError{T,typeof(a)}(dim)
-      end
-      if first(ax1) != 1
-        return MtlReinterpretFirstIndexError{T,typeof(a),typeof(ax1)}(ax1)
-      end
-  end
-  return nothing
-end
-
-struct MtlReinterpretBitsTypeError{T,A} <: Exception end
-function Base.showerror(io::IO, ::MtlReinterpretBitsTypeError{T, <:AbstractArray{S}}) where {T, S}
-  print(io, "cannot reinterpret an `$(S)` array to `$(T)`, because not all types are bitstypes")
-end
-
-struct MtlReinterpretZeroDimError{T,A} <: Exception end
-function Base.showerror(io::IO, ::MtlReinterpretZeroDimError{T, <:AbstractArray{S,N}}) where {T, S, N}
-  print(io, "cannot reinterpret a zero-dimensional `$(S)` array to `$(T)` which is of a different size")
-end
-
-struct MtlReinterpretDivisibilityError{T,A} <: Exception
-  dim::Int
-end
-function Base.showerror(io::IO, err::MtlReinterpretDivisibilityError{T, <:AbstractArray{S,N}}) where {T, S, N}
-  dim = err.dim
-  print(io, """
-      cannot reinterpret an `$(S)` array to `$(T)` whose first dimension has size `$(dim)`.
-      The resulting array would have non-integral first dimension.
-      """)
-end
-
-struct MtlReinterpretFirstIndexError{T,A,Ax1} <: Exception
-  ax1::Ax1
-end
-function Base.showerror(io::IO, err::MtlReinterpretFirstIndexError{T, <:AbstractArray{S,N}}) where {T, S, N}
-  ax1 = err.ax1
-  print(io, "cannot reinterpret a `$(S)` array to `$(T)` when the first axis is $ax1. Try reshaping first.")
-end
-
-
-## reinterpret(reshape)
-
-function Base.reinterpret(::typeof(reshape), ::Type{T}, a::MtlArray) where {T}
-  N, osize = _base_check_reshape_reinterpret(T, a)
-  return _derived_array(T, N, a, osize)
-end
-
-# taken from reinterpretarray.jl
-# TODO: move these Base definitions out of the ReinterpretArray struct for reuse
-function _base_check_reshape_reinterpret(::Type{T}, a::MtlArray{S}) where {T,S}
-  isbitstype(T) || throwbits(S, T, T)
-  isbitstype(S) || throwbits(S, T, S)
-  if sizeof(S) == sizeof(T)
-      N = ndims(a)
-      osize = size(a)
-  elseif sizeof(S) > sizeof(T)
-      d, r = divrem(sizeof(S), sizeof(T))
-      r == 0 || throwintmult(S, T)
-      N = ndims(a) + 1
-      osize = (d, size(a)...)
-  else
-      d, r = divrem(sizeof(T), sizeof(S))
-      r == 0 || throwintmult(S, T)
-      N = ndims(a) - 1
-      N > -1 || throwsize0(S, T, "larger")
-      axes(a, 1) == Base.OneTo(sizeof(T) ÷ sizeof(S)) || throwsize1(a, T)
-      osize = size(a)[2:end]
-  end
-  return N, osize
-end
-
-@noinline function throwbits(S::Type, T::Type, U::Type)
-  throw(ArgumentError("cannot reinterpret `$(S)` as `$(T)`, type `$(U)` is not a bits type"))
-end
-
-@noinline function throwintmult(S::Type, T::Type)
-  throw(ArgumentError("`reinterpret(reshape, T, a)` requires that one of `sizeof(T)` (got $(sizeof(T))) and `sizeof(eltype(a))` (got $(sizeof(S))) be an integer multiple of the other"))
-end
-
-@noinline function throwsize0(S::Type, T::Type, msg)
-  throw(ArgumentError("cannot reinterpret a zero-dimensional `$(S)` array to `$(T)` which is of a $msg size"))
-end
-
-@noinline function throwsize1(a::AbstractArray, T::Type)
-    throw(ArgumentError("`reinterpret(reshape, $T, a)` where `eltype(a)` is $(eltype(a)) requires that `axes(a, 1)` (got $(axes(a, 1))) be equal to 1:$(sizeof(T) ÷ sizeof(eltype(a))) (from the ratio of element sizes)"))
-end
 
 
 ## unsafe_wrap
