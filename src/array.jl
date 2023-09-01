@@ -87,30 +87,34 @@ device(A::MtlArray) = A.data[].device
 storagemode(::MtlArray{T,N,S}) where {T,N,S} = S
 
 
-## aliases
+## convenience constructors
 
 const MtlVector{T,S} = MtlArray{T,1,S}
 const MtlMatrix{T,S} = MtlArray{T,2,S}
 const MtlVecOrMat{T,S} = Union{MtlVector{T,S},MtlMatrix{T,S}}
 
-# default to Private memory
+# default to private memory
 const DefaultStorageMode = Private
 MtlArray{T,N}(::UndefInitializer, dims::Dims{N}) where {T,N} =
   MtlArray{T,N,DefaultStorageMode}(undef, dims)
 
-
-## constructors
-
-# type and dimensionality specified, accepting dims as series of Ints
-MtlArray{T,N,S}(::UndefInitializer, dims::Integer...) where {T,N,S} =
+# storage, type and dimensionality specified
+MtlArray{T,N,S}(::UndefInitializer, dims::NTuple{N,Integer}) where {T,N,S} =
   MtlArray{T,N,S}(undef, convert(Tuple{Vararg{Int}}, dims))
-MtlArray{T,N}(::UndefInitializer, dims::Integer...) where {T,N} =
-  MtlArray{T,N}(undef, Dims(dims))
+MtlArray{T,N,S}(::UndefInitializer, dims::Vararg{Integer,N}) where {T,N,S} =
+  MtlArray{T,N,S}(undef, convert(Tuple{Vararg{Int}}, dims))
 
-# type but not dimensionality specified
-MtlArray{T}(::UndefInitializer, dims::Dims{N}) where {T,N} = MtlArray{T,N}(undef, dims)
-MtlArray{T}(::UndefInitializer, dims::Integer...) where {T} =
-    MtlArray{T}(undef, convert(Tuple{Vararg{Int}}, dims))
+# type and dimensionality specified
+MtlArray{T,N}(::UndefInitializer, dims::NTuple{N,Integer}) where {T,N} =
+  MtlArray{T,N}(undef, convert(Tuple{Vararg{Int}}, dims))
+MtlArray{T,N}(::UndefInitializer, dims::Vararg{Integer,N}) where {T,N} =
+  MtlArray{T,N}(undef, convert(Tuple{Vararg{Int}}, dims))
+
+# only type specified
+MtlArray{T}(::UndefInitializer, dims::NTuple{N,Integer}) where {T,N} =
+  MtlArray{T,N}(undef, convert(Tuple{Vararg{Int}}, dims))
+MtlArray{T}(::UndefInitializer, dims::Vararg{Integer,N}) where {T,N} =
+    MtlArray{T,N}(undef, convert(Tuple{Vararg{Int}}, dims))
 
 # empty vector constructor
 MtlArray{T,1,S}() where {T,S} = MtlArray{T,1,S}(undef, 0)
