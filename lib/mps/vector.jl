@@ -54,7 +54,7 @@ function MPSVector(arr::MtlVector{T}) where T
     vec = @objc [MPSVector alloc]::id{MPSVector}
     obj = MPSVector(vec)
     finalizer(release, obj)
-    @objc [obj::id{MPSVector} initWithBuffer:arr.buffer::id{MTLBuffer}
+    @objc [obj::id{MPSVector} initWithBuffer:arr::id{MTLBuffer}
                               descriptor:desc::id{MPSVectorDescriptor}]::id{MPSVector}
     return obj
 end

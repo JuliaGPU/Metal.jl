@@ -72,7 +72,7 @@ function MPSMatrix(arr::MtlMatrix{T}) where T
     mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
     obj = MPSMatrix(mat)
     finalizer(release, obj)
-    @objc [obj::id{MPSMatrix} initWithBuffer:arr.buffer::id{MTLBuffer}
+    @objc [obj::id{MPSMatrix} initWithBuffer:arr::id{MTLBuffer}
                               descriptor:desc::id{MPSMatrixDescriptor}]::id{MPSMatrix}
     return obj
 end

@@ -451,7 +451,7 @@ end
     for (T, val) in ((UInt8, 2), (Int8, 2), (Int8, -2))
         arr = Metal.zeros(T, 4)
 
-        buf = arr.buffer
+        buf = Base.unsafe_convert(MTL.MTLBuffer, arr)
         Metal.unsafe_fill!(current_device(), Metal.MtlPointer{T}(buf, 0), T(val), 4)
 
         @test all(arr .== val)
