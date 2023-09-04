@@ -53,8 +53,10 @@ function MPSVector(arr::MtlVector{T}) where T
     desc = MPSVectorDescriptor(len, T)
     vec = @objc [MPSVector alloc]::id{MPSVector}
     obj = MPSVector(vec)
+    offset = arr.offset * sizeof(T)
     finalizer(release, obj)
     @objc [obj::id{MPSVector} initWithBuffer:arr::id{MTLBuffer}
+                              offset:offset::NSUInteger
                               descriptor:desc::id{MPSVectorDescriptor}]::id{MPSVector}
     return obj
 end

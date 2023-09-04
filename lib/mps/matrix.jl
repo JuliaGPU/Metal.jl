@@ -105,8 +105,10 @@ function MPSMatrix(arr::MtlMatrix{T}) where T
     desc = MPSMatrixDescriptor(n_rows, n_cols, sizeof(T)*n_cols, T)
     mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
     obj = MPSMatrix(mat)
+    offset = arr.offset * sizeof(T)
     finalizer(release, obj)
     @objc [obj::id{MPSMatrix} initWithBuffer:arr::id{MTLBuffer}
+                              offset:offset::NSUInteger
                               descriptor:desc::id{MPSMatrixDescriptor}]::id{MPSMatrix}
     return obj
 end
@@ -126,8 +128,10 @@ function MPSMatrix(arr::MtlArray{T,3}) where T
     desc = MPSMatrixDescriptor(n_rows, n_cols, n_matrices, row_bytes, row_bytes * n_rows, T)
     mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
     obj = MPSMatrix(mat)
+    offset = arr.offset * sizeof(T)
     finalizer(release, obj)
-    @objc [obj::id{MPSMatrix} initWithBuffer:arr.buffer::id{MTLBuffer}
+    @objc [obj::id{MPSMatrix} initWithBuffer:arr::id{MTLBuffer}
+                              offset:offset::NSUInteger
                               descriptor:desc::id{MPSMatrixDescriptor}]::id{MPSMatrix}
     return obj
 end
