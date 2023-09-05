@@ -35,6 +35,26 @@ if MPS.is_supported(current_device())
     end
 end
 
+@testset "test matrix vector multiplication of views" begin
+    N = 20
+    a = rand(Float32, N,N)
+    b = rand(Float32, N)
+
+    mtl_a = mtl(a)
+    mtl_b = mtl(b)
+
+    view_a = @view a[:,10:end]
+    view_b = @view b[10:end]
+
+    mtl_view_a = @view mtl_a[:,10:end]
+    mtl_view_b = @view mtl_b[10:end]
+
+    mtl_c = mtl_view_a * mtl_view_b
+    c = view_a * view_b
+
+    @test mtl_c == mtl(c)
+end
+
 @testset "mixed-precision matrix vector multiplication" begin
     N = 10
     rows = N
