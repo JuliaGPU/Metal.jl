@@ -18,7 +18,17 @@ Base.convert(::Type{MPSDataType}, x::Integer) = MPSDataType(x)
 
 export MPSMatrixDescriptor
 
-@objcwrapper MPSMatrixDescriptor <: NSObject
+@objcwrapper immutable=false MPSMatrixDescriptor <: NSObject
+
+@objcproperties MPSMatrixDescriptor begin
+    @autoproperty rows::NSUInteger setter=setRows
+    @autoproperty columns::NSUInteger setter=setColumns
+    @autoproperty matrices::NSUInteger
+    @autoproperty dataType::MPSDataType setter=setDataType
+    @autoproperty rowBytes::NSUInteger setter=setRowBytes
+    @autoproperty matrixBytes::NSUInteger
+end
+
 
 # Mapping from Julia types to the Performance Shader bitfields
 const jl_typ_to_mps = Dict{DataType,MPSDataType}(
@@ -49,6 +59,17 @@ function MPSMatrixDescriptor(rows, columns, rowBytes, dataType)
     return obj
 end
 
+function MPSMatrixDescriptor(rows, columns, matrices, rowBytes, matrixBytes, dataType)
+    desc = @objc [MPSMatrixDescriptor matrixDescriptorWithRows:rows::NSUInteger
+                                      columns:columns::NSUInteger
+                                      matrices:matrices::NSUInteger
+                                      rowBytes:rowBytes::NSUInteger
+                                      matrixBytes:matrixBytes::NSUInteger
+                                      dataType:jl_typ_to_mps[dataType]::MPSDataType]::id{MPSMatrixDescriptor}
+    obj = MPSMatrixDescriptor(desc)
+    # XXX: who releases this object?
+    return obj
+end
 
 #
 # matrix object
@@ -57,6 +78,19 @@ end
 export MPSMatrix
 
 @objcwrapper immutable=false MPSMatrix <: NSObject
+
+@objcproperties MPSMatrix begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty rows::NSUInteger
+    @autoproperty columns::NSUInteger
+    @autoproperty matrices::NSUInteger
+    @autoproperty dataType::MPSDataType
+    @autoproperty rowBytes::NSUInteger
+    @autoproperty matrixBytes::NSUInteger
+    @autoproperty offset::NSUInteger
+    @autoproperty data::id{MTLBuffer}
+end
+
 
 """
     MPSMatrix(arr::MtlMatrix)
@@ -71,12 +105,36 @@ function MPSMatrix(arr::MtlMatrix{T}) where T
     desc = MPSMatrixDescriptor(n_rows, n_cols, sizeof(T)*n_cols, T)
     mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
     obj = MPSMatrix(mat)
+    offset = arr.offset * sizeof(T)
     finalizer(release, obj)
     @objc [obj::id{MPSMatrix} initWithBuffer:arr::id{MTLBuffer}
+                              offset:offset::NSUInteger
                               descriptor:desc::id{MPSMatrixDescriptor}]::id{MPSMatrix}
     return obj
 end
 
+
+"""
+    MPSMatrix(arr::MtlArray{T,3})
+
+Metal batched matrix representation used in Performance Shaders.
+
+Note that this results in a transposed view of the input,
+as Metal stores matrices row-major instead of column-major.
+"""
+function MPSMatrix(arr::MtlArray{T,3}) where T
+    n_cols, n_rows, n_matrices = size(arr)
+    row_bytes = sizeof(T)*n_cols
+    desc = MPSMatrixDescriptor(n_rows, n_cols, n_matrices, row_bytes, row_bytes * n_rows, T)
+    mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
+    obj = MPSMatrix(mat)
+    offset = arr.offset * sizeof(T)
+    finalizer(release, obj)
+    @objc [obj::id{MPSMatrix} initWithBuffer:arr::id{MTLBuffer}
+                              offset:offset::NSUInteger
+                              descriptor:desc::id{MPSMatrixDescriptor}]::id{MPSMatrix}
+    return obj
+end
 
 #
 # matrix multiplication
