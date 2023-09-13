@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "3c71723ae8de626fd078be79d06f06f4692acdda"
+project_hash = "67c95e48b92cf80bdb2cbfc8401d817b3fca0d67"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
@@ -79,9 +79,9 @@ version = "0.1.5"
 
 [[deps.GPUCompiler]]
 deps = ["ExprTools", "InteractiveUtils", "LLVM", "Libdl", "Logging", "Scratch", "TimerOutputs", "UUIDs"]
-git-tree-sha1 = "8573c39f9c4e99720ab5ea44104efb3ed07a58b0"
+git-tree-sha1 = "e5e0f07db5c325860b21cadeb6e4271b0ff364c5"
 uuid = "61eb1bfa-7361-4325-ad38-22787b887f55"
-version = "0.23.0"
+version = "0.24.1"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -204,9 +204,9 @@ version = "0.3.20+0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "bbb5c2115d63c2f1451cb70e5ef75e8fe4707019"
+git-tree-sha1 = "a12e56c72edee3ce6b96667745e6cbbe5498f200"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "1.1.22+0"
+version = "1.1.23+0"
 
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
