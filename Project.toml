@@ -1,7 +1,7 @@
 name = "Metal"
 uuid = "dde4c033-4e86-420c-a63e-0dd931031962"
 authors = ["Filippo Vicentini <filippovicentini@gmail.com>", "Tim Besard <tim.besard@gmail.com>", "Max Hawkins <max.hawkins65@gmail.com>"]
-version = "0.5.0"
+version = "0.5.1"
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
@@ -25,10 +25,11 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
 Adapt = "3"
-CEnum = "0.4"
+Artifacts = "1"
+CEnum = "0.4, 0.5"
 ExprTools = "0.1"
 GPUArrays = "9"
-GPUCompiler = "0.23"
+GPUCompiler = "0.23, 0.24, 0.25"
 KernelAbstractions = "0.9.1"
 LLVM = "6"
 Metal_LLVM_Tools_jll = "~0.5"
@@ -42,8 +43,8 @@ julia = "1.8"
 [extensions]
 SpecialFunctionsExt = "SpecialFunctions"
 
-[weakdeps]
+[extras]
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
-[extras]
+[weakdeps]
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"

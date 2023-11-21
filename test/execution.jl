@@ -78,8 +78,8 @@ end
     # make sure invalid kernels can be partially reflected upon
     let
         invalid_kernel() = throw()
-        @test_throws Metal.KernelError @metal invalid_kernel()
-        @test_throws Metal.KernelError @grab_output @device_code_warntype @metal invalid_kernel()
+        @test_throws Metal.InvalidIRError @metal invalid_kernel()
+        @test_throws Metal.InvalidIRError @grab_output @device_code_warntype @metal invalid_kernel()
         out, err = @grab_output begin
             try
                 @device_code_warntype @metal invalid_kernel()
