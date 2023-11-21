@@ -2,8 +2,8 @@
 mktempdir() do tmpdir
 
 # Verify Metal capture is enabled via environment variable
-@test haskey(ENV, "METAL_CAPTURE_ENABLED")
-@test ENV["METAL_CAPTURE_ENABLED"]=="1"
+@test haskey(ENV, "MTL_CAPTURE_ENABLED")
+@test ENV["MTL_CAPTURE_ENABLED"]=="1"
 
 function tester(A)
     idx = thread_position_in_grid_1d()
