@@ -28,12 +28,12 @@ to track GPU calls and usage statistics and will save this information in a temp
 ending in '.gputrace'. For later viewing, copy this folder to a stable location or use
 the 'dir' argument of the profile macro to store the gputrace to a different location directly.
 
-To profile GPU code from a Julia process, you must set the `MTL_CAPTURE_ENABLED` environment
+To profile GPU code from a Julia process, you must set the `METAL_CAPTURE_ENABLED` environment
 variable. On the first Metal command detected, you should get a message stating "Metal GPU
 Frame Capture Enabled" if the variable was set correctly.
 
 ```julia
-$ MTL_CAPTURE_ENABLED=1 julia
+$ METAL_CAPTURE_ENABLED=1 julia
 ...
 
 julia> using Metal

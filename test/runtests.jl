@@ -233,7 +233,7 @@ try
                     # the `profiling` test is special, and needs an environment variable set
                     if test == "profiling"
                         recycle_worker(p)
-                        p = addworker(1; env=["MTL_CAPTURE_ENABLED"=>1])[1]
+                        p = addworker(1; env=["METAL_CAPTURE_ENABLED"=>1])[1]
                     end
 
                     # sometimes a worker failed, and we need to spawn a new one
@@ -301,7 +301,7 @@ try
                     # make sure the `profiling` test environment variable doesn't leak
                     if test == "profiling"
                         recycle_worker(p)
-                        p = addworker(1; env=["MTL_CAPTURE_ENABLED"=>0])[1]
+                        p = addworker(1; env=["METAL_CAPTURE_ENABLED"=>0])[1]
                     end
                 end
 
