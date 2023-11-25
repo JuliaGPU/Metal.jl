@@ -173,7 +173,6 @@ function encode!(cmdbuf::MTLCommandBuffer, matmul::MPSMatrixMultiplication, left
                                                resultMatrix:result::id{MPSMatrix}]::Nothing
 end
 
-const MtlMatrixBatch{T,S} = MtlArray{T,3,S}
 
 """
     matMulMPS(a::MtlMatrix, b::MtlMatrix, c::MtlMatrix, alpha=1, beta=1,
