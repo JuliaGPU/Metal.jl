@@ -93,6 +93,7 @@ end
 ## argument conversion
 
 struct Adaptor
+    # the current command encoder, if any.
     cce::Union{Nothing,MTLComputeCommandEncoder}
 end
 
@@ -180,9 +181,64 @@ const _kernel_instances = Dict{UInt, Any}()
 
 ## kernel launching and argument encoding
 
-# TODO: generate code instead of iterating and converting arguments at run time
-#       (see CUDA.jl)
-function (kernel::HostKernel)(args...; groups=1, threads=1, queue=global_queue(current_device()))
+@inline @generated function encode_arguments!(cce, kernel, args...)
+    ex = quote
+        bufs = MTLBuffer[]
+    end
+
+    # the arguments passed into this function have not been `mtlconvert`ed, because we need
+    # to retain the top-level MTLBuffer and MtlPointer objects. eager conversion of nested
+    # such objects to LLVMPtr seems fine, somehow.
+    # TODO: can we just convert everything eagerly and support top-level LLVMPtrs?
+
+    idx = 1
+    for (argidx, argtyp) in enumerate(args)
+        argex = :(args[$argidx])
+        if argtyp <: MTLBuffer
+            # top-level buffers are passed as a pointer-valued argument
+            push!(ex.args, :(set_buffer!(cce, $argex, 0, $idx)))
+        elseif argtyp <: MtlPointer
+            # the same as a buffer, but with an offset
+            push!(ex.args, :(set_buffer!(cce, $argex.buffer, $argex.offset, $idx)))
+        elseif isghosttype(argtyp) || Core.Compiler.isconstType(argtyp)
+            continue
+        else
+            # everything else is passed by reference, in an argument buffer
+            append!(ex.args, (quote
+                buf = encode_argument!(cce, kernel, mtlconvert($(argex), cce))
+                set_buffer!(cce, buf, 0, $idx)
+                push!(bufs, buf)
+            end).args)
+        end
+        idx += 1
+    end
+
+    append!(ex.args, (quote
+        return bufs
+    end).args)
+
+    ex
+end
+
+@inline function encode_argument!(cce, kernel, arg)
+    argtyp = typeof(arg)
+
+    # replace non-isbits arguments (they should be unused, or compilation
+    # would have failed) by a dummy reference
+    if !isbitstype(argtyp)
+        arg = C_NULL
+        argtyp = Ptr{Any}
+    end
+
+    # pass by reference, in an argument buffer
+    argument_buffer = alloc(kernel.pipeline.device, sizeof(argtyp), storage=Shared)
+    argument_buffer.label = "MTLBuffer for kernel argument"
+    unsafe_store!(convert(Ptr{argtyp}, contents(argument_buffer)), arg)
+    return argument_buffer
+end
+
+function (kernel::HostKernel)(args...; groups=1, threads=1,
+                              queue=global_queue(current_device()))
     groups = MTLSize(groups)
     threads = MTLSize(threads)
     (groups.width>0 && groups.height>0 && groups.depth>0) ||
@@ -195,42 +251,14 @@ function (kernel::HostKernel)(args...; groups=1, threads=1, queue=global_queue(c
 
     cmdbuf = MTLCommandBuffer(queue)
     cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
-    argument_buffers = MTLBuffer[]
-    MTLComputeCommandEncoder(cmdbuf) do cce
+    cce = MTLComputeCommandEncoder(cmdbuf)
+    argument_buffers = try
         MTL.set_function!(cce, kernel.pipeline)
-
-        # encode arguments
-        idx = 1
-        for arg in (kernel.f, args...)
-            if arg isa MTLBuffer
-                # top-level buffers are passed as a pointer-valued argument
-                set_buffer!(cce, arg, 0, idx)
-            elseif arg isa MtlPointer
-                # the same as a buffer, but with an offset
-                set_buffer!(cce, arg.buffer, arg.offset, idx)
-            else
-                # everything else is passed by reference, and requires an argument buffer
-                arg = mtlconvert(arg, cce)
-                argtyp = Core.Typeof(arg)
-                if isghosttype(argtyp) || Core.Compiler.isconstType(argtyp)
-                    continue
-                elseif !isbitstype(argtyp)
-                    # replace non-isbits arguments (they should be unused, or compilation
-                    # would have failed)
-                    arg = C_NULL
-                    argtyp = Ptr{Any}
-                end
-                argument_buffer = alloc(kernel.pipeline.device, sizeof(argtyp),
-                                        storage=Shared)
-                argument_buffer.label = "MTLBuffer for kernel argument"
-                unsafe_store!(convert(Ptr{argtyp}, contents(argument_buffer)), arg)
-                set_buffer!(cce, argument_buffer, 0, idx)
-                push!(argument_buffers, argument_buffer)
-            end
-            idx += 1
-        end
-
+        bufs = encode_arguments!(cce, kernel, kernel.f, args...)
         MTL.append_current_function!(cce, groups, threads)
+        bufs
+    finally
+        close(cce)
     end
 
     # the command buffer retains resources that are explicitly encoded (i.e. direct buffer
