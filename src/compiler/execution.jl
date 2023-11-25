@@ -205,7 +205,7 @@ const _kernel_instances = Dict{UInt, Any}()
         else
             # everything else is passed by reference, in an argument buffer
             append!(ex.args, (quote
-                buf = encode_argument!(cce, kernel, mtlconvert($(argex), cce))
+                buf = encode_argument!(kernel, mtlconvert($(argex), cce))
                 set_buffer!(cce, buf, 0, $idx)
                 push!(bufs, buf)
             end).args)
@@ -220,7 +220,7 @@ const _kernel_instances = Dict{UInt, Any}()
     ex
 end
 
-@inline function encode_argument!(cce, kernel, arg)
+@inline function encode_argument!(kernel, arg)
     argtyp = typeof(arg)
 
     # replace non-isbits arguments (they should be unused, or compilation
