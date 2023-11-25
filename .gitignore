@@ -1,3 +1,4 @@
 test/Manifest.toml
 LocalPreferences.toml
 *.DS_Store
+*.gputrace
