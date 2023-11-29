@@ -12,7 +12,7 @@ end
 # device
 #
 
-export MTLDevice, devices
+export MTLDevice, MTLCreateSystemDefaultDevice, devices
 
 @objcwrapper MTLDevice <: NSObject
 

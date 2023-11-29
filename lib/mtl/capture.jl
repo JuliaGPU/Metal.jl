@@ -171,13 +171,6 @@ Start a GPU frame capture session with the given capture manager and descriptor.
 function startCapture(manager::MTLCaptureManager, desc::MTLCaptureDescriptor)
     # Check not already capturing
     manager.isCapturing && throw(error("Capture manager is already capturing."))
-    # Warn users if environment variable isn't set (required in most cases)
-    haskey(ENV, "METAL_CAPTURE_ENABLED") ||
-        @warn """Environment variable 'METAL_CAPTURE_ENABLED' is not set. In most cases, this
-        will need to be set to 1 before launching Julia to enable GPU frame capture."""
-    # Error if explicitly disallowed
-    haskey(ENV, "METAL_CAPTURE_ENABLED") && ENV["METAL_CAPTURE_ENABLED"] == 0 &&
-        throw(error("Metal GPU frame capture explicitly disallowed via environment vairable."))
 
     err = Ref{id{NSError}}(nil)
     success = @objc [manager::id{MTLCaptureManager} startCaptureWithDescriptor:desc::id{MTLCaptureDescriptor}

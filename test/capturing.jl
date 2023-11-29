@@ -1,4 +1,4 @@
-@testset "profiling" begin
+@testset "capturing" begin
 mktempdir() do tmpdir
 
 # Verify Metal capture is enabled via environment variable
@@ -45,7 +45,7 @@ new_scope = MTLCaptureScope(@objc [manager::id{MTLCaptureManager} newCaptureScop
 @test new_scope.commandQueue == queue
 @test new_scope.device == current_device()
 @test new_scope.label == nothing
-new_label = "Metal.jl profiling test"
+new_label = "Metal.jl capturing test"
 new_scope.label = new_label
 @test new_scope.label == new_label
 
@@ -69,11 +69,10 @@ release(new_scope)
 
 # Profile Macro
 cd(path) do
-    Metal.@profile @metal threads=4 tester(bufferA)
-    @test isdir("julia_capture_1.gputrace")
-    Metal.@profile capture=current_device() @metal threads=4 tester(bufferA)
-    @test isdir("julia_capture_2.gputrace")
-    @test_throws ArgumentError Metal.@profile @metal threads=4 tester(bufferA)
+    Metal.@capture @metal threads=4 tester(bufferA)
+    @test isdir("julia_1.gputrace")
+    Metal.@capture object=current_device() @metal threads=4 tester(bufferA)
+    @test isdir("julia_2.gputrace")
 end
 
 end

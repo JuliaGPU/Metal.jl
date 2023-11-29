@@ -23,7 +23,7 @@ overview of how and when the GPU was active to avoid times where the device was 
 find which kernels needs optimization.
 
 As we cannot use the Julia profiler for this task, we will use Metal's GPU profiler directly.
-Use the `Metal.@profile` macro to surround the code code of interest. This macro tells your system
+Use the `Metal.@capture` macro to surround the code code of interest. This macro tells your system
 to track GPU calls and usage statistics and will save this information in a temporary folder
 ending in '.gputrace'. For later viewing, copy this folder to a stable location or use
 the 'dir' argument of the profile macro to store the gputrace to a different location directly.
@@ -48,7 +48,7 @@ vadd (generic function with 1 method)
 julia> a = MtlArray([1]); b = MtlArray([2]); c = similar(a);
 ... Metal GPU Frame Capture Enabled
 
-julia> Metal.@profile @metal threads=length(c) vadd(a, b, c);
+julia> Metal.@capture @metal threads=length(c) vadd(a, b, c);
 [ Info: GPU frame capture saved to /var/folders/x3/75r5z4sd2_bdwqs68_nfnxw40000gn/T/jl_WzKxYVMlon/jl_metal.gputrace/
 ```
 

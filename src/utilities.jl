@@ -63,27 +63,48 @@ function versioninfo(io::IO=stdout)
     return
 end
 
-function profile_dir()
+
+## capturing traces
+
+function trace_dir()
     root = pwd()
     i = 1
     while true
-        path = joinpath(root, "julia_capture_$i.gputrace/")
+        path = joinpath(root, "julia_$i.gputrace/")
         isdir(path) || return path
         i += 1
     end
 end
 
-"""
-    Metal.@profile [kwargs...] ex
+function captured(f; dest=MTL.MTLCaptureDestinationGPUTraceDocument,
+                     object=global_queue(current_device()))
+    if !haskey(ENV, "METAL_CAPTURE_ENABLED") || ENV["METAL_CAPTURE_ENABLED"] != "1"
+        @warn """Environment variable 'METAL_CAPTURE_ENABLED' is not set. In most cases, this
+        will need to be set to 1 before launching Julia to enable GPU frame capture."""
+    end
 
-Profile Metal/GPU work using XCode's GPU frame capture capabilities.
+    folder = trace_dir()
+    startCapture(object, dest; folder)
+    try
+       f()
+    finally
+        @info "GPU frame capture saved to $folder; open the resulting trace in Xcode"
+        stopCapture()
+    end
+end
+
+"""
+    Metal.@capture [kwargs...] ex
+
+Analyze Metal/GPU work using Xcode's GPU frame capture capabilities.
 
 !!! note
 
-    Metal frame capture must be enabled before launching Julia (METAL\\_CAPTURE\\_ENABLED=1)
-    and XCode is required to view and interpret the GPU trace output.
+    Metal frame capture must be enabled by setting the `METAL_FRAME_CAPTURE` environment
+    variable to `1` before launching Julia. Furthermore, Xcode is required to viewi and
+    interpret the GPU trace output.
 
-Several keyword arguments are supported that influence the behavior of `Metal.@profile`:
+Several keyword arguments are supported that influence the behavior of `Metal.@capture`:
 
 - `capture`: the object to capture GPU work on. Can be a MTLDevice, MTLCommandQueue, or
    MTLCaptureScope. This defaults to the global command queue, and selecting a different
@@ -96,34 +117,19 @@ Several keyword arguments are supported that influence the behavior of `Metal.@p
 When profiling the resulting gputrace folder in Xcode, do so one at a time to avoid "no
 profiling data found" errors.
 """
-macro profile(ex...)
+macro capture(ex...)
     work = ex[end]
-    kwargs = ex[1:end-1]
-    dest = MTL.MTLCaptureDestinationGPUTraceDocument # default: folder output
-    capture = global_queue(current_device())         # default: capture global command queue
-    if !isempty(kwargs)
-        for kwarg in kwargs
-            key,val = kwarg.args
-            if key == :dest
-                dest = val
-            elseif key == :capture
-                capture = val
-            else
-                throw(ArgumentError("Unsupported keyword argument '$key'"))
-            end
+    kwargs = map(ex[1:end-1]) do kwarg
+        if !Meta.isexpr(kwarg, :(=))
+            throw(ArgumentError("Invalid keyword argument '$kwarg'"))
         end
+        key, value = kwarg.args
+        Expr(:kw, key, esc(value))
     end
 
     quote
-        result = nothing
-        dir = profile_dir()
-        startCapture($capture, $dest; folder=dir)
-        try
-            result = $(esc(work))
-            @info "GPU frame capture saved to $dir"
-        finally
-            stopCapture()
+        $captured(; $(kwargs...)) do
+            $(esc(work))
         end
-        return result
     end
 end
