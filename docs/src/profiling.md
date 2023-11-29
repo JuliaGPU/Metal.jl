@@ -16,21 +16,43 @@ need to ensure the GPU is synchronized at the end of every sample, e.g. by calli
 
 Note that the allocations as reported by BenchmarkTools are CPU allocations.
 
-## Application profiling
+## Application tracing
 
 For profiling large applications, simple timings are insufficient. Instead, we want an
 overview of how and when the GPU was active to avoid times where the device was idle and/or
 find which kernels needs optimization.
 
-As we cannot use the Julia profiler for this task, we will use Metal's GPU profiler directly.
-Use the `Metal.@profile` macro to surround the code code of interest. This macro tells your system
-to track GPU calls and usage statistics and will save this information in a temporary folder
-ending in '.gputrace'. For later viewing, copy this folder to a stable location or use
-the 'dir' argument of the profile macro to store the gputrace to a different location directly.
+As we cannot use the Julia profiler for this task, we will use Metal's GPU profiler
+directly. Use the `Metal.@profile` macro to surround the code code of interest. This macro
+tells your system to track GPU calls and usage statistics and will save this information in
+a temporary folder ending in '.trace'. For later viewing, copy this folder to a stable
+location or use the 'dir' argument of the profile macro to store the gputrace to a different
+location directly.
 
-To profile GPU code from a Julia process, you must set the `METAL_CAPTURE_ENABLED` environment
-variable. On the first Metal command detected, you should get a message stating "Metal GPU
-Frame Capture Enabled" if the variable was set correctly.
+The resulting trace can be opened with the Instruments app, part of Xcode.
+
+```julia
+julia> using Metal
+
+julia> function vadd(a, b, c)
+           i = thread_position_in_grid_1d()
+           c[i] = a[i] + b[i]
+           return
+       end
+julia> a = MtlArray([1]); b = MtlArray([2]); c = similar(a);
+
+julia> Metal.@profile @metal threads=length(c) vadd(a, b, c);
+...
+[ Info: System trace saved to julia_3.trace; open the resulting trace in Instruments
+```
+
+## Frame capture
+
+For more details on specific operations, you can use Metal's frame capture feature to
+generate a more detailed, and replayable trace of the GPU operations. This requires that
+Julia is started with the `METAL_CAPTURE_ENABLED` environment variable set to 1. Frames are
+captured by wrapping the code of interest in `Metal.@capture`, and the resulting trace can
+be opened with Xcode.
 
 ```julia
 $ METAL_CAPTURE_ENABLED=1 julia
@@ -43,14 +65,11 @@ julia> function vadd(a, b, c)
            c[i] = a[i] + b[i]
            return
        end
-vadd (generic function with 1 method)
 
 julia> a = MtlArray([1]); b = MtlArray([2]); c = similar(a);
 ... Metal GPU Frame Capture Enabled
 
-julia> Metal.@profile @metal threads=length(c) vadd(a, b, c);
-[ Info: GPU frame capture saved to /var/folders/x3/75r5z4sd2_bdwqs68_nfnxw40000gn/T/jl_WzKxYVMlon/jl_metal.gputrace/
+julia> Metal.@capture @metal threads=length(c) vadd(a, b, c);
+...
+[ Info: GPU frame capture saved to julia_1.gputrace; open the resulting trace in Xcode
 ```
-
-To view these GPU traces though, Xcode, with its quite significant install size, needs to be
- installed.

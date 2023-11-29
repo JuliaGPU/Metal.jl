@@ -230,8 +230,8 @@ try
                 while length(tests) > 0
                     test = popfirst!(tests)
 
-                    # the `profiling` test is special, and needs an environment variable set
-                    if test == "profiling"
+                    # the `capturing` test is special, and needs an environment variable set
+                    if test == "capturing"
                         recycle_worker(p)
                         p = addworker(1; env=["METAL_CAPTURE_ENABLED"=>1])[1]
                     end
@@ -298,8 +298,8 @@ try
                         end
                     end
 
-                    # make sure the `profiling` test environment variable doesn't leak
-                    if test == "profiling"
+                    # make sure the `capturing` test environment variable doesn't leak
+                    if test == "capturing"
                         recycle_worker(p)
                         p = addworker(1; env=["METAL_CAPTURE_ENABLED"=>0])[1]
                     end
