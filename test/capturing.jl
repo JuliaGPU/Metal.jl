@@ -1,5 +1,6 @@
 @testset "capturing" begin
 mktempdir() do tmpdir
+cd(tmpdir) do
 
 # Verify Metal capture is enabled via environment variable
 @test haskey(ENV, "METAL_CAPTURE_ENABLED")
@@ -68,12 +69,13 @@ stopCapture(manager)
 release(new_scope)
 
 # Profile Macro
-cd(path) do
+@testset "macro" begin
     Metal.@capture @metal threads=4 tester(bufferA)
     @test isdir("julia_1.gputrace")
     Metal.@capture object=current_device() @metal threads=4 tester(bufferA)
     @test isdir("julia_2.gputrace")
 end
 
+end
 end
 end

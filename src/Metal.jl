@@ -11,7 +11,7 @@ using Python_jll
 using ObjectFile
 using ExprTools: splitdef, combinedef
 using Artifacts
-using ObjectiveC, .Foundation, .Dispatch
+using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch
 
 if !isdefined(Base, :get_extension)
     using Requires: @require
