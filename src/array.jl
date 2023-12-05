@@ -204,9 +204,6 @@ Base.cconvert(::Type{<:id}, x::MtlArray) = x.data[]
 
 ## interop with CPU arrays
 
-Base.unsafe_wrap(t::Type{<:Array}, arr::MtlArray, dims; own=false) =
-  unsafe_wrap(t, arr.data[], dims; own=own)
-
 Base.collect(x::MtlArray{T,N}) where {T,N} = copyto!(Array{T,N}(undef, size(x)), x)
 
 
@@ -436,11 +433,14 @@ Base.unsafe_convert(::Type{MTL.MTLBuffer}, A::PermutedDimsArray) =
 
 ## unsafe_wrap
 
+Base.unsafe_wrap(t::Type{<:Array}, arr::MtlArray, dims; own=false) =
+  unsafe_wrap(t, arr.data[], dims; own=own)
+
 function Base.unsafe_wrap(t::Type{<:Array{T}}, buf::MTLBuffer, dims; own=false) where T
-    ptr = convert(Ptr{T}, contents(buf))
+    ptr = convert(Ptr{T}, buf)
     return unsafe_wrap(t, ptr, dims; own)
 end
 
 function Base.unsafe_wrap(t::Type{<:Array{T}}, ptr::MtlPointer{T}, dims; own=false) where T
-    return unsafe_wrap(t, contents(ptr), dims; own)
+    return unsafe_wrap(t, convert(Ptr{T}, ptr), dims; own)
 end
