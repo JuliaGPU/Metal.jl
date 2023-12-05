@@ -9,10 +9,14 @@ dummy() = return
 @testset "launch configuration" begin
     @metal dummy()
 
+    threads = 1
+    @metal threads dummy()
     @metal threads=1 dummy()
     @metal threads=(1,1) dummy()
     @metal threads=(1,1,1) dummy()
 
+    groups = 1
+    @metal groups dummy()
     @metal groups=1 dummy()
     @metal groups=(1,1) dummy()
     @metal groups=(1,1,1) dummy()

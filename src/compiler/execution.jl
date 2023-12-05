@@ -28,7 +28,15 @@ There is one supported keyword argument that influences the behavior of `@metal`
 """
 macro metal(ex...)
     call = ex[end]
-    kwargs = ex[1:end-1]
+    kwargs = map(ex[1:end-1]) do kwarg
+        if kwarg isa Symbol
+            :($kwarg = $kwarg)
+        elseif Meta.isexpr(kwarg, :(=))
+            kwarg
+        else
+            throw(ArgumentError("Invalid keyword argument '$kwarg'"))
+        end
+    end
 
     # destructure the kernel call
     Meta.isexpr(call, :call) || throw(ArgumentError("second argument to @metal should be a function call"))
