@@ -143,7 +143,7 @@ end
 end
 
 @device_override @inline function KA.__index_Group_Cartesian(ctx)
-    @inbounds blocks(KA.__iterspace(ctx))[threadgroup_position_in_grid_1d()]
+    @inbounds KA.blocks(KA.__iterspace(ctx))[threadgroup_position_in_grid_1d()]
 end
 
 @device_override @inline function KA.__index_Global_Cartesian(ctx)
