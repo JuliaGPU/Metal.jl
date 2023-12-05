@@ -14,43 +14,17 @@ end
 
 Base.sizeof(buf::MTLBuffer) = Int(buf.length)
 
-function contents(buf::MTLBuffer)
+function Base.convert(::Type{Ptr{T}}, buf::MTLBuffer) where {T}
     buf.storageMode == Private && error("Cannot access the contents of a private buffer")
-    ptr = @objc [buf::id{MTLBuffer} contents]::Ptr{Cvoid}
-    return ptr
+    convert(Ptr{T}, buf.contents)
 end
 
 
 ## allocation
 
-# from device
-alloc_buffer(dev::MTLDevice, bytesize, opts::MTLResourceOptions) =
-    @objc [dev::id{MTLDevice} newBufferWithLength:bytesize::NSUInteger
-                              options:opts::MTLResourceOptions]::id{MTLBuffer}
-alloc_buffer(dev::MTLDevice, bytesize, opts::MTLResourceOptions, ptr::Ptr) =
-    @objc [dev::id{MTLDevice} newBufferWithBytes:ptr::Ptr{Cvoid}
-                              length:bytesize::NSUInteger
-                              options:opts::MTLResourceOptions]::id{MTLBuffer}
-
-# from heap
-alloc_buffer(dev::MTLHeap, bytesize, opts::MTLResourceOptions) =
-    @objc [dev::id{MTLHeap} newBufferWithLength:bytesize::NSUInteger
-                            options:opts::MTLResourceOptions]::id{MTLBuffer}
-alloc_buffer(dev::MTLHeap, bytesize, opts::MTLResourceOptions, ptr::Ptr) =
-    @objc [dev::id{MTLHeap} newBufferWithBytes:ptr::Ptr{Cvoid}
-                            length:bytesize::NSUInteger
-                            options:opts::MTLResourceOptions]::id{MTLBuffer}
-
-alloc_buffer(dev, bytesize, opts::Integer) =
-    alloc_buffer(dev, bytesize, MTLResourceOptions(opts))
-alloc_buffer(dev, bytesize, opts::Integer, ptr) =
-    alloc_buffer(dev, bytesize, MTLResourceOptions(opts), ptr)
-
-function MTLBuffer(dev::Union{MTLDevice,MTLHeap},
-                   bytesize::Integer;
-                   storage = Private,
-                   hazard_tracking = DefaultTracking,
-                   cache_mode = DefaultCPUCache)
+function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer;
+                   storage=Private, hazard_tracking=DefaultTracking,
+                   cache_mode=DefaultCPUCache)
     opts = storage | hazard_tracking | cache_mode
 
     @assert 0 < bytesize <= dev.maxBufferLength # XXX: not supported by MTLHeap
@@ -59,12 +33,9 @@ function MTLBuffer(dev::Union{MTLDevice,MTLHeap},
     return MTLBuffer(ptr)
 end
 
-function MTLBuffer(dev::Union{MTLDevice,MTLHeap},
-                   bytesize::Integer,
-                   ptr::Ptr;
-                   storage = Managed,
-                   hazard_tracking = DefaultTracking,
-                   cache_mode = DefaultCPUCache)
+function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer, ptr::Ptr;
+                   storage=Managed, hazard_tracking=DefaultTracking,
+                   cache_mode=DefaultCPUCache)
     storage == Private && error("Can't create a Private copy-allocated buffer.")
     opts =  storage | hazard_tracking | cache_mode
 
@@ -73,6 +44,24 @@ function MTLBuffer(dev::Union{MTLDevice,MTLHeap},
 
     return MTLBuffer(ptr)
 end
+
+# from device
+alloc_buffer(dev::MTLDevice, bytesize, opts) =
+    @objc [dev::id{MTLDevice} newBufferWithLength:bytesize::NSUInteger
+                              options:opts::MTLResourceOptions]::id{MTLBuffer}
+alloc_buffer(dev::MTLDevice, bytesize, opts, ptr::Ptr) =
+    @objc [dev::id{MTLDevice} newBufferWithBytes:ptr::Ptr{Cvoid}
+                              length:bytesize::NSUInteger
+                              options:opts::MTLResourceOptions]::id{MTLBuffer}
+
+# from heap
+alloc_buffer(dev::MTLHeap, bytesize, opts) =
+    @objc [dev::id{MTLHeap} newBufferWithLength:bytesize::NSUInteger
+                            options:opts::MTLResourceOptions]::id{MTLBuffer}
+alloc_buffer(dev::MTLHeap, bytesize, opts, ptr::Ptr) =
+    @objc [dev::id{MTLHeap} newBufferWithBytes:ptr::Ptr{Cvoid}
+                            length:bytesize::NSUInteger
+                            options:opts::MTLResourceOptions]::id{MTLBuffer}
 
 """
     DidModifyRange!(buf::MTLBuffer, range::UnitRange)

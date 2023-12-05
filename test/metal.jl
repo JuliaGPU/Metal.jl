@@ -244,7 +244,8 @@ buf.label = "MyBuffer"
 @test buf.label == "MyBuffer"
 @test buf.gpuAddress isa Ptr{Cvoid}
 
-@test contents(buf) isa Ptr{Cvoid}
+@test buf.contents isa Ptr{Cvoid}
+@test convert(Ptr{UInt8}, buf) isa Ptr{UInt8}
 
 free(buf)
 
