@@ -111,15 +111,15 @@ function (obj::KA.Kernel{MetalBackend})(args...; ndrange=nothing, workgroupsize=
         ctx = KA.mkcontext(obj, ndrange, iterspace)
     end
 
-    nblocks = length(KA.blocks(iterspace))
+    groups = length(KA.blocks(iterspace))
     threads = length(KA.workitems(iterspace))
 
-    if nblocks == 0
+    if groups == 0
         return nothing
     end
 
     # Launch kernel
-    kernel(ctx, args...; threads=threads, groups=nblocks)
+    kernel(ctx, args...; threads, groups)
     return nothing
 end
 
