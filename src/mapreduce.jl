@@ -225,7 +225,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # perform the actual reduction
     if reduce_groups == 1
         # we can cover the dimensions to reduce using a single group
-        @metal threads=threads groups=groups partial_mapreduce_device(
+        @metal threads groups partial_mapreduce_device(
             f, op, init, Val(threads), Val(Rreduce), Val(Rother),
             Val(UInt64(length(Rother))), Val(grain), Val(shuffle), R′, A)
     else
@@ -236,7 +236,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
             # use broadcasting to extend singleton dimensions
             partial .= R
         end
-        @metal threads=threads groups=groups partial_mapreduce_device(
+        @metal threads groups partial_mapreduce_device(
             f, op, init, Val(threads), Val(Rreduce), Val(Rother),
             Val(UInt64(length(Rother))), Val(grain), Val(shuffle), partial, A)
 

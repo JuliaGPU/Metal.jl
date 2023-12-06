@@ -20,9 +20,9 @@ struct mtlKernelContext <: AbstractKernelContext end
     return (; threads=Int(threads), blocks=Int(blocks))
 end
 
-function GPUArrays.gpu_call(::mtlArrayBackend, f, args, threads::Int, blocks::Int;
+function GPUArrays.gpu_call(::mtlArrayBackend, f, args, threads::Int, groups::Int;
                             name::Union{String,Nothing})
-    @metal threads=threads groups=blocks name=name f(mtlKernelContext(), args...)
+    @metal threads groups name f(mtlKernelContext(), args...)
 end
 
 
