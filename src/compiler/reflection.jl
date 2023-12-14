@@ -77,7 +77,7 @@ function code_agx(io::IO, job::MetalCompilerJob)
             # disassemble the function
             first || println(io)
             println(io, "$name:")
-            disassemble(io, file)
+            print(io, disassemble(file))
 
             first = false
         end
@@ -151,10 +151,11 @@ function extract_gpu_code(f, binary)
     return
 end
 
-function disassemble(io::IO, path)
+function disassemble(path)
+    io = IOBuffer()
     disassembler = joinpath(only(readdir(artifact"applegpu"; join=true)), "disassemble.py")
     run(pipeline(`$(python()) $disassembler $path`, stdout=io))
-    return
+    return String(take!(io))
 end
 
 code_agx(@nospecialize(func), @nospecialize(types); kwargs...) =
