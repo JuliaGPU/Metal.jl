@@ -116,18 +116,32 @@ function Adapt.adapt_storage(to::Adaptor, ptr::MtlPointer{T}) where {T}
     reinterpret(Core.LLVMPtr{T,AS.Device}, adapt(to, ptr.buffer)) + ptr.offset
 end
 
+# convert Metal host arrays to device arrays
+function Adapt.adapt_storage(to::Adaptor, xs::MtlArray{T,N}) where {T,N}
+    buf = pointer(xs)
+    ptr = adapt(to, buf)
+    MtlDeviceArray{T,N,AS.Device}(xs.dims, ptr)
+end
+
 # Base.RefValue isn't GPU compatible, so provide a compatible alternative
+# TODO: port improvements from CUDA.jl
 struct MtlRefValue{T} <: Ref{T}
   x::T
 end
 Base.getindex(r::MtlRefValue) = r.x
 Adapt.adapt_structure(to::Adaptor, r::Base.RefValue) = MtlRefValue(adapt(to, r[]))
 
-function Adapt.adapt_storage(to::Adaptor, xs::MtlArray{T,N}) where {T,N}
-    buf = pointer(xs)
-    ptr = adapt(to, buf)
-    MtlDeviceArray{T,N,AS.Device}(xs.dims, ptr)
-end
+# broadcast sometimes passes a ref(type), resulting in a GPU-incompatible DataType box.
+# avoid that by using a special kind of ref that knows about the boxed type.
+struct MtlRefType{T} <: Ref{DataType} end
+Base.getindex(r::MtlRefType{T}) where T = T
+Adapt.adapt_structure(to::Adaptor, r::Base.RefValue{<:Union{DataType,Type}}) =
+    MtlRefType{r[]}()
+
+# case where type is the function being broadcasted
+Adapt.adapt_structure(to::Adaptor,
+                      bc::Broadcast.Broadcasted{Style, <:Any, Type{T}}) where {Style, T} =
+    Broadcast.Broadcasted{Style}((x...) -> T(x...), adapt(to, bc.args), bc.axes)
 
 """
   mtlconvert(x, [cce])

@@ -84,7 +84,9 @@ end
 unsafe_free!(a::MtlArray) = GPUArrays.unsafe_free!(a.data)
 
 device(A::MtlArray) = A.data[].device
-storagemode(::MtlArray{T,N,S}) where {T,N,S} = S
+
+storagemode(x::MtlArray) = storagemode(typeof(x))
+storagemode(::Type{<:MtlArray{<:Any,<:Any,S}}) where {S} = S
 
 
 ## convenience constructors
@@ -402,7 +404,7 @@ end
 
 ## derived arrays
 
-function GPUArrays.derive(::Type{T}, N::Int, a::MtlArray, dims::Dims, offset::Int) where {T}
+function GPUArrays.derive(::Type{T}, a::MtlArray, dims::Dims{N}, offset::Int) where {T,N}
   offset = (a.offset * Base.elsize(a)) ÷ sizeof(T) + offset
   MtlArray{T,N}(a.data, dims; a.maxsize, offset)
 end

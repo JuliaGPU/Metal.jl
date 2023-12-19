@@ -214,4 +214,20 @@ end
     end
 end
 
+# https://github.com/JuliaGPU/CUDA.jl/issues/2191
+@testset "preserving storage mode" begin
+  a = mtl([1]; storage=Shared)
+  @test Metal.storagemode(a) == Shared
+
+  # storage mode should be preserved
+  b = a .+ 1
+  @test Metal.storagemode(b) == Shared
+
+  # when there's a conflict, we should defer to shared memory
+  c = mtl([1]; storage=Private)
+  d = mtl([1]; storage=Shared)
+  e = c .+ d
+  @test Metal.storagemode(e) == Shared
+end
+
 end

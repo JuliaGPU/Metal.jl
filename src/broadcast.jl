@@ -2,18 +2,20 @@
 
 using Base.Broadcast: BroadcastStyle, Broadcasted
 
-struct MtlArrayStyle{N} <: AbstractGPUArrayStyle{N} end
-MtlArrayStyle(::Val{N}) where N = MtlArrayStyle{N}()
-MtlArrayStyle{M}(::Val{N}) where {N,M} = MtlArrayStyle{N}()
+struct MtlArrayStyle{N,S} <: AbstractGPUArrayStyle{N} end
+MtlArrayStyle{M,S}(::Val{N}) where {N,M,S} = MtlArrayStyle{N,S}()
 
-BroadcastStyle(::Type{<:MtlArray{T,N}}) where {T,N} = MtlArrayStyle{N}()
+# identify the broadcast style of a (wrapped) MtlArray
+BroadcastStyle(::Type{<:MtlArray{T,N,S}}) where {T,N,S} = MtlArrayStyle{N,S}()
+BroadcastStyle(W::Type{<:WrappedMtlArray{T,N}}) where {T,N} =
+    MtlArrayStyle{N, storagemode(Adapt.unwrap_type(W))}()
 
-Base.similar(bc::Broadcasted{MtlArrayStyle{N}}, ::Type{T}) where {N,T} =
-    similar(MtlArray{T}, axes(bc))
+# when we are dealing with different buffer styles, we cannot know
+# which one is better, so use shared memory
+BroadcastStyle(::MtlArrayStyle{N, S1},
+               ::MtlArrayStyle{N, S2}) where {N,S1,S2} =
+    MtlArrayStyle{N, Shared}()
 
-Base.similar(bc::Broadcasted{MtlArrayStyle{N}}, ::Type{T}, dims...) where {N,T} =
-    MtlArray{T}(undef, dims...)
-
-# broadcasting type ctors isn't GPU compatible
-Broadcast.broadcasted(::MtlArrayStyle{N}, f::Type{T}, args...) where {N, T} =
-    Broadcasted{MtlArrayStyle{N}}((x...) -> T(x...), args, nothing)
+# allocation of output arrays
+Base.similar(bc::Broadcasted{MtlArrayStyle{N,S}}, ::Type{T}, dims) where {T,N,S} =
+    similar(MtlArray{T,length(dims),S}, dims)
