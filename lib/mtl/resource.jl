@@ -21,12 +21,12 @@ end
 end
 
 @cenum MTLResourceOptions::NSUInteger begin
-    MTLResourceCPUCacheModeDefaultCache = 0
-    MTLResourceCPUCacheModeWriteCombined = 1
     MTLResourceStorageModeShared = 0
     MTLResourceStorageModeManaged = 16
     MTLResourceStorageModePrivate = 32
     MTLResourceStorageModeMemoryless = 48
+    MTLResourceCPUCacheModeDefaultCache = 0
+    MTLResourceCPUCacheModeWriteCombined = 1
     MTLResourceHazardTrackingModeDefault = 0
     MTLResourceHazardTrackingModeUntracked = 256
     MTLResourceHazardTrackingModeTracked = 512
