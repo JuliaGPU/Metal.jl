@@ -446,3 +446,43 @@ end
 function Base.unsafe_wrap(t::Type{<:Array{T}}, ptr::MtlPointer{T}, dims; own=false) where T
     return unsafe_wrap(t, convert(Ptr{T}, ptr), dims; own)
 end
+
+## resizing
+
+"""
+  resize!(a::MtlVector, n::Integer)
+
+Resize `a` to contain `n` elements. If `n` is smaller than the current collection length,
+the first `n` elements will be retained. If `n` is larger, the new elements are not
+guaranteed to be initialized.
+"""
+function Base.resize!(A::MtlVector{T}, n::Integer) where T
+  # TODO: add additional space to allow for quicker resizing
+  maxsize = n * sizeof(T)
+  bufsize = if isbitstype(T)
+    maxsize
+  else
+    # type tag array past the data
+    maxsize + n
+  end
+
+  # replace the data with a new one. this 'unshares' the array.
+  # as a result, we can safely support resizing unowned buffers.
+  buf = alloc(device(A), bufsize; storage=storagemode(A))
+  ptr = MtlPointer{T}(buf)
+  m = min(length(A), n)
+  if m > 0
+    unsafe_copyto!(device(A), ptr, pointer(A), m)
+  end
+  new_data = DataRef(buf) do buf
+    free(buf)
+  end
+  unsafe_free!(A)
+
+  A.data = new_data
+  A.dims = (n,)
+  A.maxsize = maxsize
+  A.offset = 0
+
+  A
+end
