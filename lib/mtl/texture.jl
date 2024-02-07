@@ -196,6 +196,10 @@ end
 ## bitwise operations lose type information, so allow conversions
 Base.convert(::Type{MTLPixelFormat}, x::Integer) = MTLPixelFormat(x)
 
+function minimumLinearTextureAlignmentForPixelFormat(device, format)
+    return @objc [device::MTLDevice minimumLinearTextureAlignmentForPixelFormat:format::MTLPixelFormat]::NSUInteger
+end
+
 @cenum MTLTextureUsage::NSUInteger begin
     MTLTextureUsageUnknown         = 0x0000
     MTLTextureUsageShaderRead      = 0x0001
@@ -211,15 +215,27 @@ export MTLTextureDescriptor
 
 @objcwrapper MTLTextureDescriptor <: NSObject
 
-function MTLTextureDescriptor(pixelFormat, width, resourceOptions, usage)
-    desc = @objc [MTLTextureDescriptor textureBufferDescriptorWithPixelFormat:pixelFormat::MTLPixelFormat
+@objcproperties MTLTextureDescriptor begin
+    # Configuring an MTLTextureDescriptor
+    @autoproperty usage::MTLTextureUsage setter=setUsage
+    # @autoproperty storageMode::MTLStorageMode setter=setStorageMode
+    # @autoproperty cpuCacheMode::MTLCPUCacheMode setter=setCpuCacheMode
+    # @autoproperty hazardTrackingMode::MTLHazardTrackingMode setter=setHazardTrackingMode
+    # @autoproperty resourceOptions::MTLResourceOptions setter=setResourceOptions
+    # @autoproperty size::NSUInteger setter=setSize
+end
+
+function MTLTextureDescriptor(pixelFormat, width, height, mipmapped=false)
+    desc = @objc [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat::MTLPixelFormat
                                           width:width::NSUInteger
-                                          resourceOptions:resourceOptions::MTLResourceOptions
-                                          usage:usage::MTLTextureUsage]::id{MTLTextureDescriptor}
+                                          height:height::NSUInteger
+                                          mipmapped:mipmapped::Bool]::id{MTLTextureDescriptor}
     obj = MTLTextureDescriptor(desc)
     # XXX: who releases this object?
     return obj
 end
+
+export MTLTexture
 
 @objcwrapper MTLTexture <: NSObject
 
@@ -232,11 +248,16 @@ function newTextureWithDescriptor(buffer, descriptor, offset, bytesPerRow)
     return obj
 end
 
-# function newTextureWithDescriptor(buffer, descriptor, offset, bytesPerRow)
-#     desc = @objc [buffer newTextureWithDescriptor:descriptor::id{MTLTextureDescriptor}
-#                                           offset:offset::NSUInteger
-#                                           bytesPerRow:bytesPerRow::NSUInteger]::id{MTLTexture}
-#     obj = MTLTexture(desc)
-#     # XXX: who releases this object?
-#     return obj
-# end
+function newTextureWithDescriptor(device, descriptor)
+    texture = @objc [device::id{MTLDevice} newTextureWithDescriptor:descriptor::id{MTLTextureDescriptor}]::id{MTLTexture}
+    obj = MTLTexture(texture)
+    # XXX: who releases this object?
+    return obj
+end
+
+function newTextureViewWithPixelFormat(texture, pixelFormat)
+    tview = @objc [texture::id{MTLTexture} newTextureViewWithPixelFormat:pixelFormat::MTLPixelFormat]::id{MTLTexture}
+    obj = MTLTexture(tview)
+    # XXX: who releases this object?
+    return obj
+end
