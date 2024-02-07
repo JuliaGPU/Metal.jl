@@ -239,7 +239,7 @@ export MTLTexture
 
 @objcwrapper MTLTexture <: NSObject
 
-function newTextureWithDescriptor(buffer, descriptor, offset, bytesPerRow)
+function MTLTexture(buffer, descriptor, offset, bytesPerRow)
     texture = @objc [buffer::id{MTLBuffer} newTextureWithDescriptor:descriptor::id{MTLTextureDescriptor}
                                           offset:offset::NSUInteger
                                           bytesPerRow:bytesPerRow::NSUInteger]::id{MTLTexture}
@@ -248,16 +248,9 @@ function newTextureWithDescriptor(buffer, descriptor, offset, bytesPerRow)
     return obj
 end
 
-function newTextureWithDescriptor(device, descriptor)
+function MTLTexture(device, descriptor)
     texture = @objc [device::id{MTLDevice} newTextureWithDescriptor:descriptor::id{MTLTextureDescriptor}]::id{MTLTexture}
     obj = MTLTexture(texture)
-    # XXX: who releases this object?
-    return obj
-end
-
-function newTextureViewWithPixelFormat(texture, pixelFormat)
-    tview = @objc [texture::id{MTLTexture} newTextureViewWithPixelFormat:pixelFormat::MTLPixelFormat]::id{MTLTexture}
-    obj = MTLTexture(tview)
     # XXX: who releases this object?
     return obj
 end

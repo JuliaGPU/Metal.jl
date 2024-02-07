@@ -89,13 +89,13 @@ function blur(image, kernel; pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
 
     textDesc1 = MTLTextureDescriptor(pixelFormat, w, h)
     textDesc1.usage = MTL.MTLTextureUsageShaderRead | MTL.MTLTextureUsageShaderWrite
-    text1 = MTL.newTextureWithDescriptor(image.data.rc.obj, textDesc1, 0, bytesPerRow)
-    # text1 = MTL.newTextureWithDescriptor(image.data.rc.obj, textDesc1, offset, bytesPerRow)
+    text1 = MTL.MTLTexture(image.data.rc.obj, textDesc1, 0, bytesPerRow)
+    # text1 = MTL.MTLTexture(image.data.rc.obj, textDesc1, offset, bytesPerRow)
 
     textDesc2 = MTLTextureDescriptor(pixelFormat, w, h)
     textDesc2.usage = MTL.MTLTextureUsageShaderRead | MTL.MTLTextureUsageShaderWrite
-    text2 = MTL.newTextureWithDescriptor(res.data.rc.obj, textDesc2, 0, bytesPerRow)
-    # text2 = MTL.newTextureWithDescriptor(res.data.rc.obj, textDesc2, offset, bytesPerRow)
+    text2 = MTL.MTLTexture(res.data.rc.obj, textDesc2, 0, bytesPerRow)
+    # text2 = MTL.MTLTexture(res.data.rc.obj, textDesc2, offset, bytesPerRow)
 
     cmdbuf = MTLCommandBuffer(global_queue(current_device()))
     # encode!(cmdbuf, kernel, text1)
