@@ -19,17 +19,17 @@ end
 @objcproperties MPSUnaryImageKernel begin
     @autoproperty offset::MPSOffset
     @autoproperty clipRect::MTLRegion
-    @autoproperty edgeMode::MPSImageEdgeMode
+    @autoproperty edgeMode::MPSImageEdgeMode setter=setEdgeMode
 end
 
-function encode!(cmdbuf::MTLCommandBuffer, kernel::K, sourceTexture, destinationTexture) where {K<:MPSUnaryImageKernel}
+function encode!(cmdbuf::MTLCommandBuffer, kernel::K, sourceTexture::MTLTexture, destinationTexture::MTLTexture) where {K<:MPSUnaryImageKernel}
     @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                      sourceTexture:sourceTexture::id{MTLTexture}
                                      destinationTexture:destinationTexture::id{MTLTexture}]::Nothing
 end
 
-# Implementing MPSCopyAllocator would allow blurring (and other things) to be done in-place
-# function encode!(cmdbuf::MTLCommandBuffer, kernel::K, inPlaceTexture, copyAllocator=nothing) where {K<:MPSUnaryImageKernel}
+# TODO: Implement MPSCopyAllocator to allow blurring (and other things) to be done in-place
+# function encode!(cmdbuf::MTLCommandBuffer, kernel::K, inPlaceTexture::MTLTexture, copyAllocator=nothing) where {K<:MPSUnaryImageKernel}
 #     @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
 #                                      inPlaceTexture:inPlaceTexture::id{MTLTexture}
 #                                      fallbackCopyAllocator:copyAllocator::MPSCopyAllocator]::Bool
@@ -69,6 +69,9 @@ function MPSImageBox(device, kernelWidth, kernelHeight)
     return obj
 end
 
+
+# High-level functions for image blurring
+
 function blur(image, kernel; pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
     res = copy(image)
 
@@ -79,33 +82,21 @@ function blur(image, kernel; pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
 
     rowoffset = alignment - (preBytesPerRow - 1) % alignment - 1
     bytesPerRow = preBytesPerRow + rowoffset
-    offset = (rowoffset * h) % bytesPerRow
-
-    @show Int(alignment)
-    @show Int(preBytesPerRow)
-    @show Int(rowoffset)
-    @show Int(bytesPerRow)
-    @show Int(offset)
 
     textDesc1 = MTLTextureDescriptor(pixelFormat, w, h)
     textDesc1.usage = MTL.MTLTextureUsageShaderRead | MTL.MTLTextureUsageShaderWrite
     text1 = MTL.MTLTexture(image.data.rc.obj, textDesc1, 0, bytesPerRow)
-    # text1 = MTL.MTLTexture(image.data.rc.obj, textDesc1, offset, bytesPerRow)
 
     textDesc2 = MTLTextureDescriptor(pixelFormat, w, h)
     textDesc2.usage = MTL.MTLTextureUsageShaderRead | MTL.MTLTextureUsageShaderWrite
     text2 = MTL.MTLTexture(res.data.rc.obj, textDesc2, 0, bytesPerRow)
-    # text2 = MTL.MTLTexture(res.data.rc.obj, textDesc2, offset, bytesPerRow)
 
     cmdbuf = MTLCommandBuffer(global_queue(current_device()))
-    # encode!(cmdbuf, kernel, text1)
     encode!(cmdbuf, kernel, text1, text2)
     commit!(cmdbuf)
 
-    # return image
     return res
 end
-
 
 function gaussianblur(image; sigma, pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
     kernel = MPSImageGaussianBlur(current_device(), sigma)
