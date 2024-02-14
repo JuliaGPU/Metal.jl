@@ -72,7 +72,7 @@ end
 function blur(image, kernel; pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
     res = copy(image)
 
-    h,w = size(image)
+    w,h = size(image)
 
     alignment = MTL.minimumLinearTextureAlignmentForPixelFormat(current_device(), pixelFormat)
     preBytesPerRow = sizeof(eltype(image))*w
