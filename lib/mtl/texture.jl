@@ -1,3 +1,4 @@
+export MTLTextureDescriptor, MTLTexture
 
 # See https://developer.apple.com/documentation/metal/mtlpixelformat?language=objc
 #  for details on each format
@@ -211,8 +212,6 @@ end
 ## bitwise operations lose type information, so allow conversions
 Base.convert(::Type{MTLTextureUsage}, x::Integer) = MTLTextureUsage(x)
 
-export MTLTextureDescriptor
-
 @objcwrapper immutable=false MTLTextureDescriptor <: NSObject
 
 @objcproperties MTLTextureDescriptor begin
@@ -235,8 +234,6 @@ function MTLTextureDescriptor(pixelFormat, width, height, mipmapped=false)
 
     return obj
 end
-
-export MTLTexture
 
 @objcwrapper immutable=false MTLTexture <: NSObject
 
