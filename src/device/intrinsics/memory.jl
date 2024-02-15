@@ -36,7 +36,8 @@ end
 # get a pointer to threadgroup memory, with known (static) or zero length (dynamic)
 @generated function emit_threadgroup_memory(::Type{T}, ::Val{len}=Val(0)) where {T,len}
     Context() do ctx
-        eltyp = convert(LLVMType, T)
+        # XXX: as long as LLVMPtr is emitted as i8*, it doesn't make sense to type the GV
+        eltyp = convert(LLVMType, LLVM.Int8Type())
         T_ptr = convert(LLVMType, Core.LLVMPtr{T,AS.ThreadGroup})
 
         # create a function
@@ -44,7 +45,7 @@ end
 
         # create the global variable
         mod = LLVM.parent(llvm_f)
-        gv_typ = LLVM.ArrayType(eltyp, len)
+        gv_typ = LLVM.ArrayType(eltyp, len * sizeof(T))
         gv = GlobalVariable(mod, gv_typ, "threadgroup_memory", AS.ThreadGroup)
         if len > 0
             linkage!(gv, LLVM.API.LLVMInternalLinkage)
