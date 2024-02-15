@@ -81,5 +81,6 @@ include("command_enc/compute.jl")
 include("binary_archive.jl")
 include("capture.jl")
 include("family.jl")
+include("texture.jl")
 
 end # module
