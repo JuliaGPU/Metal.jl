@@ -3,10 +3,9 @@
 # Usage: julia --project res/metallib.jl <path-to-metallib>
 
 using Metal
-using Metal: MetalLibFunction, MetalLibHeader, MetalLib
+using Metal: MetalLibFunction, MetalLib
 
 using Printf: @printf
-using StructIO: unpack
 
 # display the contents of a file in hexadecimal
 hexdump(obj) = hexdump(stdout, obj)
@@ -102,17 +101,13 @@ function main(ref_path)
     ref_library = open(ref_path) do io
         read(io, MetalLib)
     end
-    ref_header = open(ref_path) do io
-        unpack(io, MetalLibHeader)
-    end
 
     print("Parsed ")
-    display(ref_header)
+    display(ref_library)
     println()
 
     # generate new data, and parse it again
     new_bytes = sprint(io -> write(io, ref_library))
-    #new_library = read_metallib(IOBuffer(new_bytes))
 
     # diff the binary data
     hexdiff(ref_bytes, new_bytes)

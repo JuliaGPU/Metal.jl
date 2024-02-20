@@ -50,17 +50,17 @@ end
 function metallib_support()
     macos = macos_version()
     if macos >= v"13"
-        v"2.7"
+        v"1.2.7"
     elseif macos >= v"12"
-        v"2.6"
+        v"1.2.6"
     elseif macos >= v"11"
-        v"2.5"
+        v"1.2.5"
     elseif macos >= v"10.15"
-        v"2.4"
+        v"1.2.4"
     elseif macos >= v"10.14"
-        v"2.3"
+        v"1.2.3"
     elseif macos >= v"10.13"
-        v"2.2"
+        v"1.2.2"
     else
         error("Metal.jl is not supported on macOS < 10.13")
     end
