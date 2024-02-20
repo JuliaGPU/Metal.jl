@@ -34,7 +34,7 @@ function versioninfo(io::IO=stdout)
     ## dependencies
     deps = Pkg.dependencies()
     versions = Dict(map(uuid->deps[uuid].name => deps[uuid].version, collect(keys(deps))))
-    for dep in ["Metal_LLVM_Tools_jll"]
+    for dep in ["LLVMDowngrader_jll"]
         println(io, "- $dep: $(versions[dep])")
     end
     println(io)

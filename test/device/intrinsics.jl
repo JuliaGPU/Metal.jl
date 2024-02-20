@@ -428,7 +428,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         end
 
         types = [Int32]
-        metal_version() >= v"3.0" && push!(types, Float32)
+        metal_support() >= v"3.0" && push!(types, Float32)
         @testset for T in types
             a = Metal.zeros(T, n)
             @metal threads=n global_kernel(a, T(42))
@@ -459,7 +459,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         end
 
         types = [Int32]
-        metal_version() >= v"3.0" && push!(types, Float32)
+        metal_support() >= v"3.0" && push!(types, Float32)
         @testset for T in types
             a = MtlArray(rand(T, n))
             b = Metal.zeros(T, n)
@@ -495,7 +495,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         end
 
         types = [Int32]
-        metal_version() >= v"3.0" && push!(types, Float32)
+        metal_support() >= v"3.0" && push!(types, Float32)
         @testset for T in types
             a = MtlArray(rand(T, n))
             @metal threads=n global_kernel(a, T(42))
@@ -527,7 +527,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         end
 
         types = [Int32]
-        metal_version() >= v"3.0" && push!(types, Float32)
+        metal_support() >= v"3.0" && push!(types, Float32)
         @testset for T in types
             a = MtlArray(rand(T, n))
             expected = copy(a)
@@ -562,7 +562,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
 
     @testset "fetch and modify" begin
         add_sub_types = [Int32, UInt32]
-        metal_version() >= v"3.0" && push!(add_sub_types, Float32)
+        metal_support() >= v"3.0" && push!(add_sub_types, Float32)
         other_types = [Int32, UInt32]
         for (jlfun, mtlfun, types) in [(min, Metal.atomic_fetch_min_explicit, other_types),
                                        (max, Metal.atomic_fetch_max_explicit, other_types),
@@ -658,7 +658,7 @@ end
 
     @testset "load" begin
         types = [Int32, UInt32]
-        metal_version() >= v"3.0" && append!(types, [Float32])
+        metal_support() >= v"3.0" && append!(types, [Float32])
 
         function kernel(a, b)
             i = thread_position_in_grid_1d()
@@ -676,7 +676,7 @@ end
 
     @testset "store" begin
         types = [Int32, UInt32]
-        metal_version() >= v"3.0" && append!(types, [Float32])
+        metal_support() >= v"3.0" && append!(types, [Float32])
 
         function kernel(a, b)
             i = thread_position_in_grid_1d()
@@ -695,7 +695,7 @@ end
 
     @testset "add" begin
         types = [Int32, UInt32]
-        metal_version() >= v"3.0" && append!(types, [Float32])
+        metal_support() >= v"3.0" && append!(types, [Float32])
 
         function kernel(a)
             Metal.@atomic a[1] = a[1] + 1
@@ -712,7 +712,7 @@ end
 
     @testset "sub" begin
         types = [Int32, UInt32]
-        metal_version() >= v"3.0" && append!(types, [Float32])
+        metal_support() >= v"3.0" && append!(types, [Float32])
 
         function kernel(a)
             Metal.@atomic a[1] = a[1] - 1

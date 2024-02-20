@@ -161,8 +161,10 @@ end
 code_agx(@nospecialize(func), @nospecialize(types); kwargs...) =
     code_agx(stdout, func, types; kwargs...)
 
+const code_native = code_agx
+
 # forward the rest to GPUCompiler with an appropriate CompilerJob
-for method in (:code_typed, :code_warntype, :code_llvm, :code_native)
+for method in (:code_typed, :code_warntype, :code_llvm)
     # only code_typed doesn't take a io argument
     args = method === :code_typed ? (:job,) : (:io, :job)
 
@@ -180,15 +182,13 @@ for method in (:code_typed, :code_warntype, :code_llvm, :code_native)
     end
 end
 
-const code_air = code_native
-
 
 #
 # @device_code_* functions
 #
 
 export @device_code_lowered, @device_code_typed, @device_code_warntype,
-       @device_code_llvm, @device_code_air, @device_code_agx, @device_code
+       @device_code_llvm, @device_code_native, @device_code_agx, @device_code
 
 """
     @device_code_agx [io::IO=stdout, ...] ex
@@ -206,12 +206,13 @@ macro device_code_agx(ex...)
     GPUCompiler.emit_hooked_compilation(hook, ex...)
 end
 
+const var"@device_code_native" = var"@device_code_agx"
+
 # forward to GPUCompiler
 @eval $(Symbol("@device_code_lowered")) = $(getfield(GPUCompiler, Symbol("@device_code_lowered")))
 @eval $(Symbol("@device_code_typed")) = $(getfield(GPUCompiler, Symbol("@device_code_typed")))
 @eval $(Symbol("@device_code_warntype")) = $(getfield(GPUCompiler, Symbol("@device_code_warntype")))
 @eval $(Symbol("@device_code_llvm")) = $(getfield(GPUCompiler, Symbol("@device_code_llvm")))
-@eval $(Symbol("@device_code_air")) = $(getfield(GPUCompiler, Symbol("@device_code_native")))
 @eval $(Symbol("@device_code")) = $(getfield(GPUCompiler, Symbol("@device_code")))
 
 

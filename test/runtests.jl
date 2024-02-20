@@ -42,11 +42,6 @@ do_quickfail, _ = extract_flag!(ARGS, "--quickfail")
 
 include("setup.jl")     # make sure everything is precompiled
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
-metallib_as_version = let
-    metallib_as = Metal.Metal_LLVM_Tools_jll.Metal_LLVM_Tools_jll.metallib_as()
-    read(`$metallib_as --version`, String)
-end
-@info "Using Metal LLVM back-end from $(dirname(Metal.Metal_LLVM_Tools_jll.Metal_LLVM_Tools_jll.metallib_as_path)):\n" * metallib_as_version
 @info "Running $jobs tests in parallel. If this is too many, specify the `--jobs` argument to the tests, or set the JULIA_CPU_THREADS environment variable."
 
 # choose tests

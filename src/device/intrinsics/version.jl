@@ -63,5 +63,5 @@ for var in ["metal_major", "metal_minor", "air_major", "air_minor"]
             """, "entry"), UInt32, Tuple{})
 end
 
-@device_override @inline metal_version() = SimpleVersion(metal_major(), metal_minor())
+@device_function @inline metal_version() = SimpleVersion(metal_major(), metal_minor())
 @device_function @inline air_version() = SimpleVersion(air_major(), air_minor())
