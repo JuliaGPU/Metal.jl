@@ -2,6 +2,9 @@
 #
 # see also:
 # - https://github.com/YuAo/MetalLibraryArchive
+# - floor library
+#   https://github.com/a2flo/floor_llvm/blob/floor_toolchain_1406/llvm/lib/Bitcode/MetalLib/MetalLibWriterPass.cpp
+#   https://github.com/a2flo/floor_llvm/blob/floor_toolchain_1406/llvm/tools/metallib-dis/metallib-dis.cpp
 
 using SHA: sha256
 using CEnum: @cenum
