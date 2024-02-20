@@ -62,7 +62,7 @@ function metallib_support()
     elseif macos >= v"10.13"
         v"2.2"
     else
-        error("Metal is not supported on macOS < 10.13")
+        error("Metal.jl is not supported on macOS < 10.13")
     end
 end
 
@@ -84,7 +84,7 @@ function air_support()
     elseif macos >= v"10.13"
         v"2.0"
     else
-        error("Metal is not supported on macOS < 10.13")
+        error("Metal.jl is not supported on macOS < 10.13")
     end
 end
 
@@ -106,6 +106,6 @@ function metal_support()
     elseif macos >= v"10.13"
         v"2.0"
     else
-        error("Metal is not supported on macOS < 10.13")
+        error("Metal.jl is not supported on macOS < 10.13")
     end
 end
