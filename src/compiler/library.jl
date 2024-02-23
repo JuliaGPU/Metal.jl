@@ -212,13 +212,17 @@ end
 
 Base.@kwdef struct MetalLibFunction
     name::String
-
     air_version::VersionNumber
     metal_version::VersionNumber
 
     bitcode::Vector{UInt8}
+
+    # public metadata
     constants::Vector{FunctionConstant} = FunctionConstant[]
+
+    # private metadata
     debug_info::Union{Nothing, DebugInfo} = nothing
+    dependent_file::Union{Nothing, String} = nothing
 end
 
 Base.@kwdef struct MetalLib
@@ -435,6 +439,9 @@ function Base.read(io::IO, ::Type{MetalLib})
                 line = reinterpret(UInt32, tag_data[1:4])[]
                 path = String(tag_data[5:end-1])
                 push!(tags, :debug_info => DebugInfo(path, line))
+            elseif tag_name == "DEPF"
+                file_name = String(tag_data[1:end-1])
+                push!(tags, :dependent_file => file_name)
             ## header extension tags
             elseif tag_name == "RLST"
                 section_info = reinterpret(UInt64, tag_data)
@@ -542,6 +549,9 @@ function Base.read(io::IO, ::Type{MetalLib})
         end
         if haskey(private_md[i], :debug_info)
             push!(optional_args, :debug_info => private_md[i].debug_info)
+        end
+        if haskey(private_md[i], :dependent_file)
+            push!(optional_args, :dependent_file => private_md[i].dependent_file)
         end
 
         push!(functions, MetalLibFunction(;
@@ -677,6 +687,11 @@ function emit_tag(io::IO, tag::String, value=nothing)
         write(debuginfo_buf, value.path)
         write(debuginfo_buf, UInt8(0))
         write_value(take!(debuginfo_buf))
+    elseif tag == "DEPF"
+        if !isa(value, String)
+            throw(ArgumentError("DEPF tag must be a string"))
+        end
+        write_value(UInt8[Vector{UInt8}(value); 0])
     else
         throw(ArgumentError("Unknown tag: $tag"))
     end
@@ -705,6 +720,9 @@ function Base.write(io::IO, lib::MetalLib)
         tags = []
         if fun.debug_info !== nothing
             push!(tags, "DEBI" => fun.debug_info)
+        end
+        if fun.dependent_file !== nothing
+            push!(tags, "DEPF" => fun.dependent_file)
         end
         emit_tag_group(private_md_stream, tags)
 
