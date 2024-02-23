@@ -205,18 +205,20 @@ struct FunctionConstant
     active::Bool
 end
 
-struct MetalLibFunction
-    name::String
+struct DebugInfo
+    path::String
+    line::Int
+end
 
-    bitcode::Vector{UInt8}
-    constants::Vector{FunctionConstant}
+Base.@kwdef struct MetalLibFunction
+    name::String
 
     air_version::VersionNumber
     metal_version::VersionNumber
-end
-function MetalLibFunction(name::String, bitcode; constants = FunctionConstant[],
-                          air_version::VersionNumber, metal_version::VersionNumber)
-    MetalLibFunction(name, bitcode, constants, air_version, metal_version)
+
+    bitcode::Vector{UInt8}
+    constants::Vector{FunctionConstant} = FunctionConstant[]
+    debug_info::Union{Nothing, DebugInfo} = nothing
 end
 
 Base.@kwdef struct MetalLib
@@ -428,6 +430,11 @@ function Base.read(io::IO, ::Type{MetalLib})
                     constants[i] = FunctionConstant(name, datatype, index, active)
                 end
                 push!(tags, :constants => constants)
+            ## private metadata tags
+            elseif tag_name == "DEBI"
+                line = reinterpret(UInt32, tag_data[1:4])[]
+                path = String(tag_data[5:end-1])
+                push!(tags, :debug_info => DebugInfo(path, line))
             ## header extension tags
             elseif tag_name == "RLST"
                 section_info = reinterpret(UInt64, tag_data)
@@ -529,12 +536,20 @@ function Base.read(io::IO, ::Type{MetalLib})
     # reconstruct objects
     functions = MetalLibFunction[]
     for i in 1:length(function_list)
-        push!(functions, MetalLibFunction(
-            function_list[i].name,
-            bitcode[i];
-            constants = get(public_md[i], :constants, FunctionConstant[]),
+        optional_args = []
+        if haskey(public_md[i], :constants)
+            push!(optional_args, :constants => public_md[i].constants)
+        end
+        if haskey(private_md[i], :debug_info)
+            push!(optional_args, :debug_info => private_md[i].debug_info)
+        end
+
+        push!(functions, MetalLibFunction(;
+            name = function_list[i].name,
+            bitcode = bitcode[i],
             air_version=function_list[i].versions.air,
-            metal_version=function_list[i].versions.metal
+            metal_version=function_list[i].versions.metal,
+            optional_args...
         ))
     end
 
@@ -636,6 +651,7 @@ function emit_tag(io::IO, tag::String, value=nothing)
     elseif tag == "RLST"
         # Unknown section; added in Metal 2.7
         write_value(UInt64[value.offset, value.size])
+    ## public metadata tags
     elseif tag == "CNST"
         # a list of function constants
         if !isa(value, Vector{FunctionConstant})
@@ -651,6 +667,16 @@ function emit_tag(io::IO, tag::String, value=nothing)
             write(constant_buf, UInt8(constant.active))
         end
         write_value(take!(constant_buf))
+    ## private metadata tags
+    elseif tag == "DEBI"
+        if !isa(value, DebugInfo)
+            throw(ArgumentError("DEBI tag must be a DebugInfo"))
+        end
+        debuginfo_buf = IOBuffer()
+        write(debuginfo_buf, UInt32(value.line))
+        write(debuginfo_buf, value.path)
+        write(debuginfo_buf, UInt8(0))
+        write_value(take!(debuginfo_buf))
     else
         throw(ArgumentError("Unknown tag: $tag"))
     end
@@ -666,7 +692,7 @@ function Base.write(io::IO, lib::MetalLib)
     tag_groups = []
 
     for fun in lib.functions
-        # TODO: public metadata
+        # public metadata
         public_md_offset = position(public_md_stream)
         tags = []
         if !isempty(fun.constants)
@@ -674,9 +700,13 @@ function Base.write(io::IO, lib::MetalLib)
         end
         emit_tag_group(public_md_stream, tags)
 
-        # TODO: private metadata
+        # private metadata
         private_md_offset = position(private_md_stream)
-        emit_tag_group(private_md_stream, [])
+        tags = []
+        if fun.debug_info !== nothing
+            push!(tags, "DEBI" => fun.debug_info)
+        end
+        emit_tag_group(private_md_stream, tags)
 
         # bitcode
         bitcode_offset = position(bitcode_stream)
