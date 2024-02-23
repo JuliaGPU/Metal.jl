@@ -50,23 +50,173 @@ end
     PROGRAM_NONE         = 255
 end
 
+@cenum MetalDataType::UInt8 begin
+	DATA_INVALID = 0
+
+	DATA_STRUCT = 1
+	DATA_ARRAY = 2
+
+	DATA_FLOAT1 = 3
+	DATA_FLOAT2 = 4
+	DATA_FLOAT3 = 5
+	DATA_FLOAT4 = 6
+	DATA_FLOAT2X2 = 7
+	DATA_FLOAT2X3 = 8
+	DATA_FLOAT2X4 = 9
+	DATA_FLOAT3X2 = 10
+	DATA_FLOAT3X3 = 11
+	DATA_FLOAT3X4 = 12
+	DATA_FLOAT4X2 = 13
+	DATA_FLOAT4X3 = 14
+	DATA_FLOAT4X4 = 15
+
+	DATA_HALF1 = 16
+	DATA_HALF2 = 17
+	DATA_HALF3 = 18
+	DATA_HALF4 = 19
+	DATA_HALF2X2 = 20
+	DATA_HALF2X3 = 21
+	DATA_HALF2X4 = 22
+	DATA_HALF3X2 = 23
+	DATA_HALF3X3 = 24
+	DATA_HALF3X4 = 25
+	DATA_HALF4X2 = 26
+	DATA_HALF4X3 = 27
+	DATA_HALF4X4 = 28
+
+	DATA_INT1 = 29
+	DATA_INT2 = 30
+	DATA_INT3 = 31
+	DATA_INT4 = 32
+
+	DATA_UINT1 = 33
+	DATA_UINT2 = 34
+	DATA_UINT3 = 35
+	DATA_UINT4 = 36
+
+	DATA_SHORT1 = 37
+	DATA_SHORT2 = 38
+	DATA_SHORT3 = 39
+	DATA_SHORT4 = 40
+
+	DATA_USHORT1 = 41
+	DATA_USHORT2 = 42
+	DATA_USHORT3 = 43
+	DATA_USHORT4 = 44
+
+	DATA_CHAR1 = 45
+	DATA_CHAR2 = 46
+	DATA_CHAR3 = 47
+	DATA_CHAR4 = 48
+
+	DATA_UCHAR1 = 49
+	DATA_UCHAR2 = 50
+	DATA_UCHAR3 = 51
+	DATA_UCHAR4 = 52
+
+	DATA_BOOL1 = 53
+	DATA_BOOL2 = 54
+	DATA_BOOL3 = 55
+	DATA_BOOL4 = 56
+
+	DATA__UNUSED_0 = 57
+
+	DATA_TEXTURE = 58
+	DATA_SAMPLER = 59
+	DATA_POINTER = 60
+
+	DATA__UNUSED_1 = 61
+
+	DATA_R8UNORM = 62
+	DATA_R8SNORM = 63
+	DATA_R16UNORM = 64
+	DATA_R16SNORM = 65
+	DATA_RG8UNORM = 66
+	DATA_RG8SNORM = 67
+	DATA_RG16UNORM = 68
+	DATA_RG16SNORM = 69
+	DATA_RGBA8UNORM = 70
+	DATA_RGBA8UNORM_SRGB = 71
+	DATA_RGBA8SNORM = 72
+	DATA_RGBA16UNORM = 73
+	DATA_RGBA16SNORM = 74
+	DATA_RGB10A2UNORM = 75
+	DATA_RG11B10FLOAT = 76
+	DATA_RGB9E5FLOAT = 77
+
+	DATA_RENDER_PIPELINE = 78
+	DATA_COMPUTE_PIPELINE = 79
+	DATA_INDIRECT_CMD_BUFFER = 80
+
+	DATA_LONG1 = 81
+	DATA_LONG2 = 82
+	DATA_LONG3 = 83
+	DATA_LONG4 = 84
+
+	DATA_ULONG1 = 85
+	DATA_ULONG2 = 86
+	DATA_ULONG3 = 87
+	DATA_ULONG4 = 88
+
+	DATA_DOUBLE1 = 89
+	DATA_DOUBLE2 = 90
+	DATA_DOUBLE3 = 91
+	DATA_DOUBLE4 = 92
+
+	DATA_FLOAT8 = 93
+	DATA_FLOAT16 = 94
+	DATA_HALF8 = 95
+	DATA_HALF16 = 96
+	DATA_INT8 = 97
+	DATA_INT16 = 98
+	DATA_UINT8 = 99
+	DATA_UINT16 = 100
+	DATA_SHORT8 = 101
+	DATA_SHORT16 = 102
+	DATA_USHORT8 = 103
+	DATA_USHORT16 = 104
+	DATA_CHAR8 = 105
+	DATA_CHAR16 = 106
+	DATA_UCHAR8 = 107
+	DATA_UCHAR16 = 108
+	DATA_LONG8 = 109
+	DATA_LONG16 = 110
+	DATA_ULONG8 = 111
+	DATA_ULONG16 = 112
+	DATA_DOUBLE8 = 113
+	DATA_DOUBLE16 = 114
+
+	DATA_VISIBLE_FUNCTION_TABLE = 115
+	DATA_INTERSECTION_FUNCTION_TABLE = 116
+	DATA_PRIMITIVE_ACCELERATION_STRUCTURE = 117
+	DATA_INSTANCE_ACCELERATION_STRUCTURE = 118
+
+	DATA_BOOL8 = 119
+	DATA_BOOL16 = 120
+end
+
 
 ## structures
+
+struct FunctionConstant
+    name::String
+    datatype::MetalDataType
+    index::Int
+    active::Bool
+end
 
 struct MetalLibFunction
     name::String
 
-    public_md::Vector{UInt8}    # unknown
-    private_md::Vector{UInt8}   # unknown
-    bitcode::Vector{UInt8}      # binary LLVM IR
+    bitcode::Vector{UInt8}
+    constants::Vector{FunctionConstant}
 
     air_version::VersionNumber
     metal_version::VersionNumber
 end
-function MetalLibFunction(name::String, bitcode;
-                          public_md = UInt8[], private_md = UInt8[],
+function MetalLibFunction(name::String, bitcode; constants = FunctionConstant[],
                           air_version::VersionNumber, metal_version::VersionNumber)
-    MetalLibFunction(name, public_md, private_md, bitcode, air_version, metal_version)
+    MetalLibFunction(name, bitcode, constants, air_version, metal_version)
 end
 
 Base.@kwdef struct MetalLib
@@ -122,6 +272,17 @@ end
 
 
 ## reading
+
+# generate a custom `read` function that also checks we don't over-read a section
+function checked_reader(io, maxpos, name)
+    function reader(io, args...)
+        ret = read(io, args...)
+        if position(io) > maxpos
+            throw(EOFError())
+        end
+        return ret
+    end
+end
 
 function Base.read(io::IO, ::Type{MetalLib})
     ## headers
@@ -199,7 +360,7 @@ function Base.read(io::IO, ::Type{MetalLib})
 
     ## helpers
 
-    function read_taggroup(read)
+    function read_taggroup(read, name)
         tags = []
         while true
             tag_name = String(read(io, 4*sizeof(Cchar)))
@@ -238,6 +399,35 @@ function Base.read(io::IO, ::Type{MetalLib})
                 push!(tags, :bitcode_size => only(reinterpret(UInt64, tag_data)))
             elseif tag_name == "RFLT"
                 push!(tags, :rflt => only(reinterpret(UInt64, tag_data)))
+            ## public metadata tags
+            elseif tag_name == "CNST"
+                num_constants = reinterpret(UInt16, tag_data[1:2])[]
+                constants = Vector{FunctionConstant}(undef, num_constants)
+                pos = 3
+                for i in 1:num_constants
+                    # name
+                    name_end = findnext(iszero, tag_data, pos)
+                    if name_end === nothing
+                        throw(ArgumentError("Unterminated string in constant name"))
+                    end
+                    name = String(tag_data[pos:name_end-1])
+                    pos = name_end + 1
+
+                    # data type
+                    datatype = reinterpret(MetalDataType, tag_data[pos])
+                    pos += 1
+
+                    # index
+                    index = reinterpret(UInt16, tag_data[pos:pos+1])[]
+                    pos += 2
+
+                    # active
+                    active = Bool(tag_data[pos])
+                    pos += 1
+
+                    constants[i] = FunctionConstant(name, datatype, index, active)
+                end
+                push!(tags, :constants => constants)
             ## header extension tags
             elseif tag_name == "RLST"
                 section_info = reinterpret(UInt64, tag_data)
@@ -252,21 +442,10 @@ function Base.read(io::IO, ::Type{MetalLib})
                 append!(tag_data, read(io, 2))
                 push!(tags, :reflection_buffer => tag_data)
             else
-                @warn "unknown tag: $tag_name" tag_size tag_data
+                @warn "Unknown tag in $name: $tag_name" tag_size tag_data
             end
         end
         return NamedTuple(tags)
-    end
-
-    # generate a custom `read` function that also checks we don't over-read the section
-    function checked_reader(io, maxpos, name)
-        function reader(io, args...)
-            ret = read(io, args...)
-            if position(io) > maxpos
-                throw(EOFError())
-            end
-            return ret
-        end
     end
 
 
@@ -281,7 +460,7 @@ function Base.read(io::IO, ::Type{MetalLib})
             tag_group_start = position(io)
             tag_group_size = read(io, UInt32)
             let read = checked_reader(io, tag_group_start + tag_group_size, "tag group")
-                push!(function_list, read_taggroup(read))
+                push!(function_list, read_taggroup(read, "function list"))
             end
         end
     end
@@ -290,7 +469,7 @@ function Base.read(io::IO, ::Type{MetalLib})
     header_ex = if position(io) < public_md_offset
         # the header extension group isn't preceded by a size field
         let read = checked_reader(io, public_md_offset, "header extension")
-            read_taggroup(read)
+            read_taggroup(read, "header extension")
         end
     else
         nothing
@@ -303,7 +482,7 @@ function Base.read(io::IO, ::Type{MetalLib})
             tag_group_start = position(io)
             tag_group_size = read(io, UInt32)
             let read = checked_reader(io, tag_group_start + tag_group_size, "tag group")
-                push!(public_md, read_taggroup(read))
+                push!(public_md, read_taggroup(read, "public metadata"))
             end
         end
     end
@@ -316,7 +495,7 @@ function Base.read(io::IO, ::Type{MetalLib})
             tag_group_start = position(io)
             tag_group_size = read(io, UInt32)
             let read = checked_reader(io, tag_group_start + tag_group_size, "tag group")
-                push!(private_md, read_taggroup(read))
+                push!(private_md, read_taggroup(read, "private metadata"))
             end
         end
     end
@@ -341,7 +520,7 @@ function Base.read(io::IO, ::Type{MetalLib})
                 list_start = position(io)
                 list_size = read(io, UInt32)
                 let read = checked_reader(io, list_start + list_size, "reflection sublist")
-                    push!(reflection_list, read_taggroup(read))
+                    push!(reflection_list, read_taggroup(read, "reflection list"))
                 end
             end
         end
@@ -353,6 +532,7 @@ function Base.read(io::IO, ::Type{MetalLib})
         push!(functions, MetalLibFunction(
             function_list[i].name,
             bitcode[i];
+            constants = get(public_md[i], :constants, FunctionConstant[]),
             air_version=function_list[i].versions.air,
             metal_version=function_list[i].versions.metal
         ))
@@ -456,6 +636,21 @@ function emit_tag(io::IO, tag::String, value=nothing)
     elseif tag == "RLST"
         # Unknown section; added in Metal 2.7
         write_value(UInt64[value.offset, value.size])
+    elseif tag == "CNST"
+        # a list of function constants
+        if !isa(value, Vector{FunctionConstant})
+            throw(ArgumentError("CNST tag must be a vector of FunctionConstants"))
+        end
+        constant_buf = IOBuffer()
+        write(constant_buf, UInt16(length(value)))
+        for constant in value
+            write(constant_buf, constant.name)
+            write(constant_buf, UInt8(0))
+            write(constant_buf, UInt8(constant.datatype))
+            write(constant_buf, UInt16(constant.index))
+            write(constant_buf, UInt8(constant.active))
+        end
+        write_value(take!(constant_buf))
     else
         throw(ArgumentError("Unknown tag: $tag"))
     end
@@ -473,7 +668,11 @@ function Base.write(io::IO, lib::MetalLib)
     for fun in lib.functions
         # TODO: public metadata
         public_md_offset = position(public_md_stream)
-        emit_tag_group(public_md_stream, [])
+        tags = []
+        if !isempty(fun.constants)
+            push!(tags, "CNST" => fun.constants)
+        end
+        emit_tag_group(public_md_stream, tags)
 
         # TODO: private metadata
         private_md_offset = position(private_md_stream)
