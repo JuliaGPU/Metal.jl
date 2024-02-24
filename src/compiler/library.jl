@@ -486,9 +486,6 @@ tag_value_io["RBUF"] = (
     # Reflection buffer
     Vector{UInt8},
     (io, nb)  -> begin
-        # XXX: there's a 2 byte mismatch between the reflection list size, and the
-        #      next token... bug in air-lld?
-        nb += 2
         read(io, nb)
     end,
     (io, val) -> write(io, val))
@@ -514,6 +511,12 @@ function Base.read!(io::IO, tg::TagGroup)
         # read the value size and note our position
         value_size = read(io, tg.size_type)
         tg.offsets[tag_name] = position(io)
+
+        # XXX: there's a 2 byte mismatch between the reflection list size, and the
+        #      next token... bug in air-lld?
+        if tag_name == "RBUF"
+            value_size += 2
+        end
 
         if !haskey(tag_value_io, tag_name)
             @warn "Unknown tag in $(tg.name): $tag_name"
