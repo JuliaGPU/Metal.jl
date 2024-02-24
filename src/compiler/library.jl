@@ -232,6 +232,9 @@ Base.@kwdef struct MetalLibFunction
     # private metadata
     debug_info::Union{Nothing, DebugInfo} = nothing
     dependent_file::Union{Nothing, String} = nothing
+
+    # reflection data
+    reflection_data::Union{Nothing, Vector{UInt8}} = nothing
 end
 
 Base.@kwdef struct MetalLib
@@ -559,9 +562,16 @@ function Base.write(io::IO, tg::TagGroup)
                 value_writer(io, convert(value_type, value))
                 take!(io)
             end
+            value_size = sizeof(value_bytes)
+
+            # XXX: there's a 2 byte mismatch between the reflection list size, and the
+            #      next token... bug in air-lld?
+            if tag == "RBUF"
+                value_size -= 2
+            end
 
             # write the value size and the value itself
-            write(io, tg.size_type(sizeof(value_bytes)))
+            write(io, tg.size_type(value_size))
             tg.offsets[tag] = position(io)
             write(io, value_bytes)
         end
@@ -655,9 +665,9 @@ function Base.read(io::IO, ::Type{MetalLib})
     private_md_offset = read(io, UInt64)
     private_md_size = read(io, UInt64)
 
-    # 2 x 8 bytes: bitcode offset and size
-    bitcode_offset = read(io, UInt64)
-    bitcode_size = read(io, UInt64)
+    # 2 x 8 bytes: bitcode list offset and size
+    bitcode_list_offset = read(io, UInt64)
+    bitcode_list_size = read(io, UInt64)
 
 
     ## sections
@@ -681,7 +691,7 @@ function Base.read(io::IO, ::Type{MetalLib})
         header_ex = nothing
     end
 
-    # public md
+    # public metadata
     public_md = []
     for i in 1:length(function_list)
         tag_group_start = position(io)
@@ -689,35 +699,50 @@ function Base.read(io::IO, ::Type{MetalLib})
     end
     @assert position(io) == private_md_offset
 
-    # private_md
+    # private metadata
     private_md = []
     for i in 1:length(function_list)
         tag_group_start = position(io)
         push!(private_md, read!(io, TagGroup(name="private metadata")))
     end
-    @assert position(io) == bitcode_offset
+    @assert position(io) == bitcode_list_offset
 
-    # bitcode
+    # bitcode list
     bitcode = []
     for i in 1:length(function_list)
         bitcode_size = function_list[i]["MDSZ"]
         push!(bitcode, read(io, bitcode_size))
     end
-    @assert position(io) == bitcode_offset + bitcode_size
+    @assert position(io) == bitcode_list_offset + bitcode_list_size
 
     # reflection list
-    reflection_list = []
+    #
+    # there always seems to be one buffer per function, so let's store it in MetalLibFunction
+    reflection_data = Vector{Vector{UInt8}}(undef, length(function_list))
     if header_ex !== nothing && haskey(header_ex, "RLST")
         seek(io, header_ex["RLST"].offset)
         num_lists = read(io, UInt32)
         for i in 1:num_lists
-            list_start = position(io)
-            push!(reflection_list, read!(io, TagGroup(name="reflection list")))
+            # note the offset as used by the RFLT tag
+            reflection_offset = position(io) - header_ex["RLST"].offset
+
+            reflection_buf = read!(io, TagGroup(name="reflection list"))
+
+            # check if any function points to this reflection
+            function_idx = findfirst(function_list) do fun
+                fun["RFLT"] == reflection_offset
+            end
+            if function_idx === nothing
+                error("No function points to this reflection")
+            end
+            reflection_data[function_idx] = reflection_buf["RBUF"]
         end
         @assert position(io) == header_ex["RLST"].offset + header_ex["RLST"].size
     end
 
     # embedded source
+    #
+    # there can be fewer sources than functions, so preserve the function -> source mapping
     embedded_source = nothing
     function_sources = Dict()
     if header_ex !== nothing && haskey(header_ex, "HSRD")
@@ -728,14 +753,14 @@ function Base.read(io::IO, ::Type{MetalLib})
 
         archives = []
         for i in 1:source_archive_count
-            tag_group_start = position(io) + sizeof(UInt32)  # SOFF points past the size field
-            data = read!(io, TagGroup(name="source archive"; size_type=UInt32, counts_size=false))
+            # note the offset as used by the SOFF tag
+            source_offset = position(io) + sizeof(UInt32) - header_ex["HSRD"].offset
 
+            data = read!(io, TagGroup(name="source archive"; size_type=UInt32, counts_size=false))
             id, archive = data["SARC"]
             push!(archives, id => archive)
 
             # check if any function points to this source
-            source_offset = tag_group_start - header_ex["HSRD"].offset
             for j in 1:length(function_list)
                 if function_list[j]["SOFF"] == source_offset
                     function_sources[j] = id
@@ -762,6 +787,9 @@ function Base.read(io::IO, ::Type{MetalLib})
         if haskey(function_sources, i)
             push!(optional_args, :source_id => function_sources[i])
         end
+        if isassigned(reflection_data, i)
+            push!(optional_args, :reflection_data => reflection_data[i])
+        end
 
         push!(functions, MetalLibFunction(;
             name = function_list[i]["NAME"],
@@ -780,7 +808,8 @@ function Base.read(io::IO, ::Type{MetalLib})
 
     MetalLib(; file_version, file_type, is_macos, is_stub,
                platform_version, platform_type, is_64bit,
-               functions, embedded_source, optional_args...)
+               functions, embedded_source,
+               optional_args...)
 end
 
 function Base.write(io::IO, lib::MetalLib)
@@ -788,23 +817,51 @@ function Base.write(io::IO, lib::MetalLib)
 
     embedded_source_offsets = Dict()
 
-    embedded_source_io = IOBuffer()
-    if lib.embedded_source !== nothing
-        write(embedded_source_io, UInt32(length(lib.embedded_source.archives)))
-        write(embedded_source_io, lib.embedded_source.link_options)
-        write(embedded_source_io, UInt8(0))
-        write(embedded_source_io, lib.embedded_source.working_directory)
-        write(embedded_source_io, UInt8(0))
-        for (id, archive) = lib.embedded_source.archives
-            # the offset points past the tag token
-            embedded_source_offsets[id] = position(embedded_source_io) + sizeof(UInt32)
+    embedded_source = let io=IOBuffer()
+        if lib.embedded_source !== nothing
+            write(io, UInt32(length(lib.embedded_source.archives)))
+            write(io, lib.embedded_source.link_options)
+            write(io, UInt8(0))
+            write(io, lib.embedded_source.working_directory)
+            write(io, UInt8(0))
+            for (id, archive) = lib.embedded_source.archives
+                # the offset points past the tag token
+                embedded_source_offsets[id] = position(io) + sizeof(UInt32)
 
-            archive_tags = TagGroup(name="source archive", size_type=UInt32, counts_size=false)
-            archive_tags["SARC"] = (; id, archive)
-            write(embedded_source_io, archive_tags)
+                archive_tags = TagGroup(name="source archive", size_type=UInt32, counts_size=false)
+                archive_tags["SARC"] = (; id, archive)
+                write(io, archive_tags)
+            end
         end
+        take!(io)
     end
-    embedded_source = take!(embedded_source_io)
+
+
+    ## reflection list
+
+    reflection_list_offsets = Int[]
+
+    reflection_list = let io=IOBuffer()
+        reflection_buffers = count(lib.functions) do fun
+            fun.reflection_data !== nothing
+        end
+
+        # we expect either no reflection buffers, or one for each function
+        # (otherwise it's not clear how to encode the offsets in the RFLT tags)
+        @assert reflection_buffers == 0 || reflection_buffers == length(lib.functions)
+
+        if reflection_buffers > 0
+            write(io, UInt32(reflection_buffers))
+            for fun in lib.functions
+                push!(reflection_list_offsets, position(io))
+
+                reflection_tags = TagGroup(name="reflection list")
+                reflection_tags["RBUF"] = fun.reflection_data
+                write(io, reflection_tags)
+            end
+        end
+        take!(io)
+    end
 
 
     ## function list
@@ -815,7 +872,7 @@ function Base.write(io::IO, lib::MetalLib)
 
     function_tag_groups = []
 
-    for fun in lib.functions
+    for (i, fun) in enumerate(lib.functions)
         # public metadata
         public_md_offset = position(public_md_stream)
         public_md_tags = TagGroup(name="public metadata")
@@ -856,8 +913,7 @@ function Base.write(io::IO, lib::MetalLib)
             function_tags["SOFF"] = embedded_source_offsets[fun.source_id]
         end
         if lib.file_version >= v"1.2.7"
-            # XXX: this data is invalid
-            function_tags["RFLT"] = 0
+            function_tags["RFLT"] = reflection_list_offsets[i]
         end
         push!(function_tag_groups, function_tags)
     end
@@ -883,8 +939,7 @@ function Base.write(io::IO, lib::MetalLib)
             header_ex_tags["HSRD"] = (; offset=0, size=sizeof(embedded_source))
         end
         if lib.file_version >= v"1.2.7"
-            # XXX: placeholder; this data is invalid
-            header_ex_tags["RLST"] = (; offset=0, size=0)
+            header_ex_tags["RLST"] = (; offset=0, size=sizeof(reflection_list))
         end
         # XXX: placeholder; this data is invalid
         #      it should be a UUID based on all of the module's data
@@ -980,7 +1035,10 @@ function Base.write(io::IO, lib::MetalLib)
 
     # header extension
     if sizeof(embedded_source) > 0
-        mark_placeholder(:embedded_source, position(io) + offsetof(header_ex_tags, "HSRD"))
+        mark_placeholder(:embedded_source_offset, position(io) + offsetof(header_ex_tags, "HSRD"))
+    end
+    if sizeof(reflection_list) > 0
+        mark_placeholder(:reflection_list_offset, position(io) + offsetof(header_ex_tags, "RLST"))
     end
     write(io, header_ex)
 
@@ -998,7 +1056,7 @@ function Base.write(io::IO, lib::MetalLib)
 
     # sources
     if sizeof(embedded_source) > 0
-        patch_placeholder(io, :embedded_source, position(io))
+        patch_placeholder(io, :embedded_source_offset, position(io))
         write(io, embedded_source)
     end
 
@@ -1008,7 +1066,11 @@ function Base.write(io::IO, lib::MetalLib)
 
     # TODO: imported symbol list
 
-    # TODO: reflection list
+    # reflection list
+    if sizeof(reflection_list) > 0
+        patch_placeholder(io, :reflection_list_offset, position(io))
+        write(io, reflection_list)
+    end
 
     # TODO: script list
 
