@@ -1,8 +1,5 @@
-# tool to test ability to parse and generate Metal libraries
-#
-# Usage: julia --project res/metallib.jl <path-to-metallib>
+# test that we can parse and regenerate Metal libraries accurately
 
-using Metal
 using Metal: MetalLibFunction, MetalLib
 
 using Printf: @printf
@@ -88,7 +85,6 @@ function colordiff(io, in1, in2; context=2)
     end
 
     if !any(line_status .== 1)
-        println(io, "No differences")
         return
     end
 
@@ -135,24 +131,47 @@ function colordiff(io, in1, in2; context=2)
     end
 end
 
-function main(ref_path)
+function compare(ref_path)
     # parse the reference version
     ref_bytes = read(ref_path)
     ref_library = open(ref_path) do io
         read(io, MetalLib)
     end
 
-    print("Parsed ")
-    display(ref_library)
-    println()
-
     # generate new data, and parse it again
-    new_bytes = sprint(io -> write(io, ref_library))
+    new_bytes = let IO=IOBuffer()
+        write(IO, ref_library)
+        take!(IO)
+    end
 
-    # diff the binary data
-    hexdiff(ref_bytes, new_bytes)
+    # compare
+    if ref_bytes == new_bytes
+        return true
+    else
+        println("Encountered differences while comparing $(basename(ref_path))")
 
-    return
+        display(ref_library)
+        println()
+
+        hexdiff(ref_bytes, new_bytes)
+
+        return false
+    end
 end
 
-isinteractive() || main(ARGS...)
+
+@testset "metallib" begin
+
+metallib_dir = joinpath(@__DIR__, "metallib")
+metallibs = String[]
+for file in readdir(metallib_dir)
+    if endswith(file, ".metallib")
+        push!(metallibs, file)
+    end
+end
+
+@testset for metallib in metallibs
+    @test compare(joinpath(metallib_dir, metallib))
+end
+
+end
