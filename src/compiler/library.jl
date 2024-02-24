@@ -681,8 +681,8 @@ function Base.read(io::IO, ::Type{MetalLib})
         tag_group_start = position(io)
         push!(function_list, read!(io, TagGroup(name="function list")))
     end
+    # the function list size excludes the size field at the start
     @assert position(io) <= function_list_offset + function_list_size + sizeof(UInt32)
-    # XXX: why do we need to add another size to the tag here?
 
     # header extension, if any
     if position(io) < public_md_offset
@@ -922,7 +922,6 @@ function Base.write(io::IO, lib::MetalLib)
         function_tags["VERS"] = (; air=fun.air_version, metal=fun.metal_version)
         function_tags["MDSZ"] = bitcode_size
         if fun.source_id !== nothing && haskey(embedded_source_offsets, fun.source_id)
-            # XXX: version check
             function_tags["SOFF"] = embedded_source_offsets[fun.source_id]
         end
         if lib.file_version >= v"1.2.7"
@@ -1025,7 +1024,7 @@ function Base.write(io::IO, lib::MetalLib)
     # function list offset and size
     write_placeholder(io, UInt64, :function_list_offset)
     # the function list size excludes the size field at the start
-    write(io, UInt64(sizeof(function_list)-sizeof(UInt32)))
+    write(io, UInt64(sizeof(function_list) - sizeof(UInt32)))
 
     # public metadata offset and size
     write_placeholder(io, UInt64, :public_md_offset)
