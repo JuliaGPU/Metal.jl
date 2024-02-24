@@ -222,7 +222,7 @@ Base.@kwdef struct MetalLibFunction
     air_version::VersionNumber
     metal_version::VersionNumber
 
-    bitcode::Vector{UInt8}
+    air_module::Vector{UInt8}
 
     source_id::Union{Nothing,String} = nothing
 
@@ -365,18 +365,18 @@ tag_value_io["TYPE"] = (
     (io, _)   -> read(io, ProgramType),
     (io, val) -> write(io, UInt8(val)))
 tag_value_io["HASH"] = (
-    # Hash of the bitcode data; 32 bytes (SHA-256)
+    # Hash of the module data; 32 bytes (SHA-256)
     Vector{UInt8},
     (io, nb)  -> read(io, nb),
     (io, val) -> write(io, val))
 tag_value_io["OFFT"] = (
     # Offsets of the information about this function in the public metadata section,
-    # private metadata section, and bitcode section; Each offset is a 64-bit unsigned integer
-    @NamedTuple{public_md::UInt64, private_md::UInt64, bitcode::UInt64},
+    # private metadata section, and module section; Each offset is a 64-bit unsigned integer
+    @NamedTuple{public_md::UInt64, private_md::UInt64, air_module::UInt64},
     (io, _)   -> (; public_md=read(io, UInt64),
                     private_md=read(io, UInt64),
-                    bitcode=read(io, UInt64)),
-    (io, val) -> write(io, UInt64[val.public_md, val.private_md, val.bitcode]))
+                    air_module=read(io, UInt64)),
+    (io, val) -> write(io, UInt64[val.public_md, val.private_md, val.air_module]))
 tag_value_io["SOFF"] = (
     # Offset of the source code archive of the function in the embedded source code section;
     # a 64-bit unsigned integer
@@ -384,7 +384,7 @@ tag_value_io["SOFF"] = (
     (io, _)   -> read(io, UInt64),
     (io, val) -> write(io, val))
 tag_value_io["VERS"] = (
-    # Bitcode and language versions (air.major, air.minor, language.major, language.minor);
+    # Module and language versions (air.major, air.minor, language.major, language.minor);
     # 4 x 16-bit unsigned integers
     @NamedTuple{air::VersionNumber, metal::VersionNumber},
     (io, _)   -> (; air=VersionNumber(read(io, UInt16), read(io, UInt16)),
@@ -392,7 +392,7 @@ tag_value_io["VERS"] = (
     (io, val) -> write(io, UInt16[val.air.major, val.air.minor,
                                   val.metal.major, val.metal.minor]))
 tag_value_io["MDSZ"] = (
-    # Size of the bitcode; a 64-bit unsigned integer
+    # Size of the module; a 64-bit unsigned integer
     UInt64,
     (io, _)   -> read(io, UInt64),
     (io, val) -> write(io, val))
@@ -665,9 +665,9 @@ function Base.read(io::IO, ::Type{MetalLib})
     private_md_offset = read(io, UInt64)
     private_md_size = read(io, UInt64)
 
-    # 2 x 8 bytes: bitcode list offset and size
-    bitcode_list_offset = read(io, UInt64)
-    bitcode_list_size = read(io, UInt64)
+    # 2 x 8 bytes: module list offset and size
+    module_list_offset = read(io, UInt64)
+    module_list_size = read(io, UInt64)
 
 
     ## sections
@@ -705,15 +705,15 @@ function Base.read(io::IO, ::Type{MetalLib})
         tag_group_start = position(io)
         push!(private_md, read!(io, TagGroup(name="private metadata")))
     end
-    @assert position(io) == bitcode_list_offset
+    @assert position(io) == module_list_offset
 
-    # bitcode list
-    bitcode = []
+    # module list
+    module_list = []
     for i in 1:length(function_list)
-        bitcode_size = function_list[i]["MDSZ"]
-        push!(bitcode, read(io, bitcode_size))
+        module_size = function_list[i]["MDSZ"]
+        push!(module_list, read(io, module_size))
     end
-    @assert position(io) == bitcode_list_offset + bitcode_list_size
+    @assert position(io) == module_list_offset + module_list_size
 
     # reflection list
     #
@@ -803,7 +803,7 @@ function Base.read(io::IO, ::Type{MetalLib})
 
         push!(functions, MetalLibFunction(;
             name = function_list[i]["NAME"],
-            bitcode = bitcode[i],
+            air_module = module_list[i],
             air_version=function_list[i]["VERS"].air,
             metal_version=function_list[i]["VERS"].metal,
             optional_args...
@@ -880,7 +880,7 @@ function Base.write(io::IO, lib::MetalLib)
 
     public_md_stream = IOBuffer()
     private_md_stream = IOBuffer()
-    bitcode_stream = IOBuffer()
+    module_list_stream = IOBuffer()
 
     function_tag_groups = []
 
@@ -904,22 +904,22 @@ function Base.write(io::IO, lib::MetalLib)
         end
         write(private_md_stream, private_md_tags)
 
-        # bitcode
-        bitcode_offset = position(bitcode_stream)
-        bitcode_hash = sha256(fun.bitcode)
-        bitcode_size = sizeof(fun.bitcode)
-        write(bitcode_stream, fun.bitcode)
+        # module
+        module_list_offset = position(module_list_stream)
+        module_hash = sha256(fun.air_module)
+        module_size = sizeof(fun.air_module)
+        write(module_list_stream, fun.air_module)
 
         # tags
         function_tags = TagGroup(name="function list")
         function_tags["NAME"] = fun.name
         function_tags["TYPE"] = PROGRAM_KERNEL
-        function_tags["HASH"] = bitcode_hash
+        function_tags["HASH"] = module_hash
         function_tags["OFFT"] = (; public_md=public_md_offset,
                                    private_md=private_md_offset,
-                                   bitcode=bitcode_offset)
+                                   air_module=module_list_offset)
         function_tags["VERS"] = (; air=fun.air_version, metal=fun.metal_version)
-        function_tags["MDSZ"] = bitcode_size
+        function_tags["MDSZ"] = module_size
         if fun.source_id !== nothing && haskey(embedded_source_offsets, fun.source_id)
             function_tags["SOFF"] = embedded_source_offsets[fun.source_id]
         end
@@ -938,7 +938,7 @@ function Base.write(io::IO, lib::MetalLib)
     function_list = take!(function_list_stream)
     public_md = take!(public_md_stream)
     private_md = take!(private_md_stream)
-    bitcode = take!(bitcode_stream)
+    module_list = take!(module_list_stream)
 
 
     ## header extensions
@@ -1033,9 +1033,9 @@ function Base.write(io::IO, lib::MetalLib)
     write_placeholder(io, UInt64, :private_md_offset)
     write(io, UInt64(sizeof(private_md)))
 
-    # bitcode offset and size
-    write_placeholder(io, UInt64, :bitcode_offset)
-    write(io, UInt64(sizeof(bitcode)))
+    # module list offset and size
+    write_placeholder(io, UInt64, :module_list_offset)
+    write(io, UInt64(sizeof(module_list)))
 
 
     ## write sections
@@ -1063,9 +1063,9 @@ function Base.write(io::IO, lib::MetalLib)
     patch_placeholder(io, :private_md_offset, position(io))
     write(io, private_md)
 
-    # bitcode
-    patch_placeholder(io, :bitcode_offset, position(io))
-    write(io, bitcode)
+    # module list
+    patch_placeholder(io, :module_list_offset, position(io))
+    write(io, module_list)
 
     # sources
     if sizeof(embedded_source) > 0
