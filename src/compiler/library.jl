@@ -296,7 +296,6 @@ end
 
 # a helper type for reading and writing tag groups
 Base.@kwdef struct TagGroup
-    name::String
     data::Vector{Pair{String,Any}}=Pair{String,Any}[]   # like an ordered dict
 
     offsets::Dict{String,Int} = Dict()
@@ -523,7 +522,7 @@ function Base.read!(io::IO, tg::TagGroup)
         end
 
         if !haskey(tag_value_io, tag_name)
-            @warn "Unknown tag in $(tg.name): $tag_name"
+            @warn "Unknown tag: $tag_name"
             skip(io, value_size)
             continue
         end
@@ -675,17 +674,17 @@ function Base.read(io::IO, ::Type{MetalLib})
     # function list
     function_list = []
     seek(io, function_list_offset)
-    entry_count = read(io, UInt32)
-    for i in 1:entry_count
+    function_count = read(io, UInt32)
+    for i in 1:function_count
         tag_group_start = position(io)
-        push!(function_list, read!(io, TagGroup(name="function list")))
+        push!(function_list, read!(io, TagGroup()))
     end
     # the function list size excludes the size field at the start
     @assert position(io) <= function_list_offset + function_list_size + sizeof(UInt32)
 
     # header extension, if any
     if position(io) < public_md_offset
-        header_ex = read!(io, TagGroup(name="header extension", has_size=false))
+        header_ex = read!(io, TagGroup(has_size=false))
         @assert position(io) == public_md_offset
     else
         header_ex = nothing
@@ -693,23 +692,23 @@ function Base.read(io::IO, ::Type{MetalLib})
 
     # public metadata
     public_md = []
-    for i in 1:length(function_list)
+    for i in 1:function_count
         tag_group_start = position(io)
-        push!(public_md, read!(io, TagGroup(name="public metadata")))
+        push!(public_md, read!(io, TagGroup()))
     end
     @assert position(io) == private_md_offset
 
     # private metadata
     private_md = []
-    for i in 1:length(function_list)
+    for i in 1:function_count
         tag_group_start = position(io)
-        push!(private_md, read!(io, TagGroup(name="private metadata")))
+        push!(private_md, read!(io, TagGroup()))
     end
     @assert position(io) == module_list_offset
 
     # module list
     module_list = []
-    for i in 1:length(function_list)
+    for i in 1:function_count
         module_size = function_list[i]["MDSZ"]
         push!(module_list, read(io, module_size))
     end
@@ -718,15 +717,15 @@ function Base.read(io::IO, ::Type{MetalLib})
     # reflection list
     #
     # there always seems to be one buffer per function, so let's store it in MetalLibFunction
-    reflection_data = Vector{Vector{UInt8}}(undef, length(function_list))
+    reflection_data = Vector{Vector{UInt8}}(undef, function_count)
     if header_ex !== nothing && haskey(header_ex, "RLST")
         seek(io, header_ex["RLST"].offset)
-        num_lists = read(io, UInt32)
-        for i in 1:num_lists
+        reflection_count = read(io, UInt32)
+        for i in 1:reflection_count
             # note the offset as used by the RFLT tag
             reflection_offset = position(io) - header_ex["RLST"].offset
 
-            reflection_buf = read!(io, TagGroup(name="reflection list"))
+            reflection_buf = read!(io, TagGroup())
 
             # check if any function points to this reflection
             function_idx = findfirst(function_list) do fun
@@ -766,7 +765,7 @@ function Base.read(io::IO, ::Type{MetalLib})
             # note the offset as used by the SOFF tag
             source_offset = position(io) + sizeof(UInt32) - header_ex[tag].offset
 
-            data = read!(io, TagGroup(name="source archive"; size_type=UInt32, counts_size=false))
+            data = read!(io, TagGroup(size_type=UInt32, counts_size=false))
             id, archive = data["SARC"]
             push!(archives, id => archive)
 
@@ -840,7 +839,7 @@ function Base.write(io::IO, lib::MetalLib)
                 # the offset points past the tag token
                 embedded_source_offsets[id] = position(io) + sizeof(UInt32)
 
-                archive_tags = TagGroup(name="source archive", size_type=UInt32, counts_size=false)
+                archive_tags = TagGroup(size_type=UInt32, counts_size=false)
                 archive_tags["SARC"] = (; id, archive)
                 write(io, archive_tags)
             end
@@ -867,7 +866,7 @@ function Base.write(io::IO, lib::MetalLib)
             for fun in lib.functions
                 push!(reflection_list_offsets, position(io))
 
-                reflection_tags = TagGroup(name="reflection list")
+                reflection_tags = TagGroup()
                 reflection_tags["RBUF"] = fun.reflection_data
                 write(io, reflection_tags)
             end
@@ -887,7 +886,7 @@ function Base.write(io::IO, lib::MetalLib)
     for (i, fun) in enumerate(lib.functions)
         # public metadata
         public_md_offset = position(public_md_stream)
-        public_md_tags = TagGroup(name="public metadata")
+        public_md_tags = TagGroup()
         if !isempty(fun.constants)
             public_md_tags["CNST"] = fun.constants
         end
@@ -895,7 +894,7 @@ function Base.write(io::IO, lib::MetalLib)
 
         # private metadata
         private_md_offset = position(private_md_stream)
-        private_md_tags = TagGroup(name="private metadata")
+        private_md_tags = TagGroup()
         if fun.debug_info !== nothing
             private_md_tags["DEBI"] = fun.debug_info
         end
@@ -911,7 +910,7 @@ function Base.write(io::IO, lib::MetalLib)
         write(module_list_stream, fun.air_module)
 
         # tags
-        function_tags = TagGroup(name="function list")
+        function_tags = TagGroup()
         function_tags["NAME"] = fun.name
         function_tags["TYPE"] = PROGRAM_KERNEL
         function_tags["HASH"] = module_hash
@@ -944,7 +943,7 @@ function Base.write(io::IO, lib::MetalLib)
     ## header extensions
 
     if lib.file_version >= v"1.2.3"
-        header_ex_tags = TagGroup(name="header extension", has_size=false)
+        header_ex_tags = TagGroup(has_size=false)
         if sizeof(embedded_source) > 0
             embedded_source_tag = lib.file_version >= v"1.2.6" ? "HSRD" : "HSRC"
             header_ex_tags[embedded_source_tag] = (; offset=0, size=sizeof(embedded_source))

@@ -88,7 +88,7 @@ function compile(@nospecialize(job::CompilerJob))
 
     # create a Metal library
     image = try
-        metallib_fun = MetalLibFunction(; name=entry, bitcode=air,
+        metallib_fun = MetalLibFunction(; name=entry, air_module=air,
                                           air_version=job.config.target.air,
                                           metal_version=job.config.target.metal)
         metallib = MetalLib(; functions = [metallib_fun])
