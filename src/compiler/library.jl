@@ -207,13 +207,13 @@ struct FunctionConstant
 end
 
 struct DebugInfo
-    path::String
     line::Int
+    path::String
 end
 
 struct EmbeddedSource
     link_options::String
-    working_directory::String
+    working_directory::Union{Nothing,String}
     archives::Vector{Pair{String,Vector{UInt8}}}
 end
 
@@ -403,11 +403,12 @@ tag_value_io["RFLT"] = (
     (io, _)   -> read(io, UInt64),
     (io, val) -> write(io, val))
 ## header extension
-tag_value_io["HSRD"] = (
+tag_value_io["HSRC"] = (
     # Offset and size of the embedded source code section; 2 x 64-bit unsigned integers
     @NamedTuple{offset::UInt64, size::UInt64},
     (io, _)   -> (; offset=read(io, UInt64), size=read(io, UInt64)),
     (io, val) -> write(io, UInt64[val.offset, val.size]))
+tag_value_io["HSRD"] = tag_value_io["HSRC"]
 tag_value_io["RLST"] = (
     # Offset and size of the reflection list section; 2 x 64-bit unsigned integers
     @NamedTuple{offset::UInt64, size::UInt64},
@@ -745,16 +746,26 @@ function Base.read(io::IO, ::Type{MetalLib})
     # there can be fewer sources than functions, so preserve the function -> source mapping
     embedded_source = nothing
     function_sources = Dict()
-    if header_ex !== nothing && haskey(header_ex, "HSRD")
-        seek(io, header_ex["HSRD"].offset)
+    have_hsrc = header_ex !== nothing && haskey(header_ex, "HSRC")
+    have_hsrd = header_ex !== nothing && haskey(header_ex, "HSRD")
+    if have_hsrc || have_hsrd
+        # HSRC and HSRC are identical except for the working directory field
+        @assert have_hsrc != have_hsrd
+        tag = have_hsrc ? "HSRC" : "HSRD"
+        seek(io, header_ex[tag].offset)
+
         source_archive_count = read(io, UInt32)
         command_line_info = String(readuntil(io, UInt8(0)))
-        working_directory = String(readuntil(io, UInt8(0)))
+        working_directory = if have_hsrd
+            String(readuntil(io, UInt8(0)))
+        else
+            nothing
+        end
 
         archives = []
         for i in 1:source_archive_count
             # note the offset as used by the SOFF tag
-            source_offset = position(io) + sizeof(UInt32) - header_ex["HSRD"].offset
+            source_offset = position(io) + sizeof(UInt32) - header_ex[tag].offset
 
             data = read!(io, TagGroup(name="source archive"; size_type=UInt32, counts_size=false))
             id, archive = data["SARC"]
@@ -822,8 +833,10 @@ function Base.write(io::IO, lib::MetalLib)
             write(io, UInt32(length(lib.embedded_source.archives)))
             write(io, lib.embedded_source.link_options)
             write(io, UInt8(0))
-            write(io, lib.embedded_source.working_directory)
-            write(io, UInt8(0))
+            if lib.file_version >= v"1.2.6"
+                write(io, lib.embedded_source.working_directory)
+                write(io, UInt8(0))
+            end
             for (id, archive) = lib.embedded_source.archives
                 # the offset points past the tag token
                 embedded_source_offsets[id] = position(io) + sizeof(UInt32)
@@ -934,9 +947,9 @@ function Base.write(io::IO, lib::MetalLib)
 
     if lib.file_version >= v"1.2.3"
         header_ex_tags = TagGroup(name="header extension", has_size=false)
-        # XXX: HSRD only on 12, 11 is HSRC
         if sizeof(embedded_source) > 0
-            header_ex_tags["HSRD"] = (; offset=0, size=sizeof(embedded_source))
+            embedded_source_tag = lib.file_version >= v"1.2.6" ? "HSRD" : "HSRC"
+            header_ex_tags[embedded_source_tag] = (; offset=0, size=sizeof(embedded_source))
         end
         if lib.file_version >= v"1.2.7"
             header_ex_tags["RLST"] = (; offset=0, size=sizeof(reflection_list))
@@ -1035,10 +1048,12 @@ function Base.write(io::IO, lib::MetalLib)
 
     # header extension
     if sizeof(embedded_source) > 0
-        mark_placeholder(:embedded_source_offset, position(io) + offsetof(header_ex_tags, "HSRD"))
+        mark_placeholder(:embedded_source_offset,
+                         position(io) + offsetof(header_ex_tags, embedded_source_tag))
     end
     if sizeof(reflection_list) > 0
-        mark_placeholder(:reflection_list_offset, position(io) + offsetof(header_ex_tags, "RLST"))
+        mark_placeholder(:reflection_list_offset,
+                         position(io) + offsetof(header_ex_tags, "RLST"))
     end
     write(io, header_ex)
 
