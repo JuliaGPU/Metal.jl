@@ -210,12 +210,20 @@ struct DebugInfo
     line::Int
 end
 
+struct EmbeddedSource
+    link_options::String
+    working_directory::String
+    archives::Vector{Pair{String,Vector{UInt8}}}
+end
+
 Base.@kwdef struct MetalLibFunction
     name::String
     air_version::VersionNumber
     metal_version::VersionNumber
 
     bitcode::Vector{UInt8}
+
+    source_id::Union{Nothing,String} = nothing
 
     # public metadata
     constants::Vector{FunctionConstant} = FunctionConstant[]
@@ -238,7 +246,10 @@ Base.@kwdef struct MetalLib
     platform_type::PlatformType=PLATFORM_MACOS
     is_64bit::Bool=true
 
+    uuid::Union{Nothing, UUID} = nothing
+
     functions::Vector{MetalLibFunction}
+    embedded_source::Union{Nothing, EmbeddedSource} = nothing
 end
 
 function Base.show(io::IO, lib::MetalLib)
@@ -282,9 +293,12 @@ end
 # generate a custom `read` function that also checks we don't over-read a section
 function checked_reader(io, maxpos, name)
     function reader(io, args...)
+        start = position(io)
         ret = read(io, args...)
         if position(io) > maxpos
-            throw(EOFError())
+            nbytes = position(io) - start
+            overread = position(io) - maxpos
+            error("Read of $nbytes bytes went $overread bytes past the end of the $name section")
         end
         return ret
     end
@@ -366,100 +380,94 @@ function Base.read(io::IO, ::Type{MetalLib})
 
     ## helpers
 
-    function read_taggroup(read, name)
-        tags = []
+    function read_taggroup(read, name; size_type=UInt16)
+        data = []
         while true
             tag_name = String(read(io, 4*sizeof(Cchar)))
             if tag_name == "ENDT"
                 break
             end
-            tag_size = read(io, UInt16)
-            tag_data = read(io, tag_size)
+            value_size = read(io, size_type)
+            value_position = position(io)
 
-            # parse tags
-            ## function list tags
+            # parse data
+            ## function list
             if tag_name == "NAME"
-                push!(tags, :name => String(tag_data[1:end-1]))
+                push!(data, :name => String(readuntil(io, UInt8(0))))
             elseif tag_name == "TYPE"
-                push!(tags, :type => only(reinterpret(ProgramType, tag_data)))
+                push!(data, :type => read(io, ProgramType))
             elseif tag_name == "HASH"
-                push!(tags, :hash => bytes2hex(tag_data))
+                push!(data, :hash => bytes2hex(read(io, value_size)))
             elseif tag_name == "OFFT"
-                offsets = reinterpret(UInt64, tag_data)
-                @assert length(offsets) == 3
-                push!(tags, :offsets => (;
-                    public_md = offsets[1],
-                    private_md = offsets[2],
-                    bitcode = offsets[3])
+                push!(data, :offsets => (;
+                    public_md = read(io, UInt64),
+                    private_md = read(io, UInt64),
+                    bitcode = read(io, UInt64))
                 )
             elseif tag_name == "SOFF"
-                push!(tags, :source_offset => only(reinterpret(UInt64, tag_data)))
+                push!(data, :source_offset => read(io, UInt64))
             elseif tag_name == "VERS"
-                vers = reinterpret(UInt16, tag_data)
-                @assert length(vers) == 4
-                push!(tags, :versions => (;
-                    air   = VersionNumber(vers[1], vers[2]),
-                    metal = VersionNumber(vers[3], vers[4]))
+                push!(data, :versions => (;
+                    air   = VersionNumber(read(io, UInt16), read(io, UInt16)),
+                    metal = VersionNumber(read(io, UInt16), read(io, UInt16)))
                 )
             elseif tag_name == "MDSZ"
-                push!(tags, :bitcode_size => only(reinterpret(UInt64, tag_data)))
+                push!(data, :bitcode_size => read(io, UInt64))
             elseif tag_name == "RFLT"
-                push!(tags, :rflt => only(reinterpret(UInt64, tag_data)))
-            ## public metadata tags
+                push!(data, :rflt => read(io, UInt64))
+            ## header extension
+            elseif tag_name == "HSRD"
+                push!(data, :embedded_source => (;
+                    offset = read(io, UInt64),
+                    size = read(io, UInt64)))
+            elseif tag_name == "RLST"
+                push!(data, :reflection => (;
+                    offset = read(io, UInt64),
+                    size = read(io, UInt64)))
+            elseif tag_name == "UUID"
+                uuid_bits = Vector{UInt64}(undef, 2)
+                read!(io, uuid_bits)
+                push!(data, :uuid => UUID(Tuple(uuid_bits)))
+            ## public metadata
             elseif tag_name == "CNST"
-                num_constants = reinterpret(UInt16, tag_data[1:2])[]
+                num_constants = read(io, UInt16)
                 constants = Vector{FunctionConstant}(undef, num_constants)
                 pos = 3
                 for i in 1:num_constants
-                    # name
-                    name_end = findnext(iszero, tag_data, pos)
-                    if name_end === nothing
-                        throw(ArgumentError("Unterminated string in constant name"))
-                    end
-                    name = String(tag_data[pos:name_end-1])
-                    pos = name_end + 1
-
-                    # data type
-                    datatype = reinterpret(MetalDataType, tag_data[pos])
-                    pos += 1
-
-                    # index
-                    index = reinterpret(UInt16, tag_data[pos:pos+1])[]
-                    pos += 2
-
-                    # active
-                    active = Bool(tag_data[pos])
-                    pos += 1
+                    name = String(readuntil(io, UInt8(0)))
+                    datatype = read(io, MetalDataType)
+                    index = read(io, UInt16)
+                    active = Bool(read(io, UInt8))
 
                     constants[i] = FunctionConstant(name, datatype, index, active)
                 end
-                push!(tags, :constants => constants)
-            ## private metadata tags
+                push!(data, :constants => constants)
+            ## private metadata
             elseif tag_name == "DEBI"
-                line = reinterpret(UInt32, tag_data[1:4])[]
-                path = String(tag_data[5:end-1])
-                push!(tags, :debug_info => DebugInfo(path, line))
+                line = read(io, UInt32)
+                path = String(readuntil(io, UInt8(0)))
+                push!(data, :debug_info => DebugInfo(path, line))
             elseif tag_name == "DEPF"
-                file_name = String(tag_data[1:end-1])
-                push!(tags, :dependent_file => file_name)
-            ## header extension tags
-            elseif tag_name == "RLST"
-                section_info = reinterpret(UInt64, tag_data)
-                @assert length(section_info) == 2
-                push!(tags, :reflection => (; offset=section_info[1], size=section_info[2]))
-            elseif tag_name == "UUID"
-                push!(tags, :uuid => UUID(only(reinterpret(UInt128, tag_data))))
+                file_name = String(readuntil(io, UInt8(0)))
+                push!(data, :dependent_file => file_name)
+            ## embedded sources
+            elseif tag_name == "SARC"
+                id = String(readuntil(io, UInt8(0)))
+                archive = read(io, value_size - sizeof(id) - 1)
+                push!(data, :embedded_source => (; id, archive))
             ## reflection lists
             elseif tag_name == "RBUF"
                 # XXX: there's a 2 byte mismatch between the reflection list size, and the
-                #      next ENDT token... bug in air-lld? let's eagerly read those bytes.
-                append!(tag_data, read(io, 2))
-                push!(tags, :reflection_buffer => tag_data)
+                #      next ENDT token... bug in air-lld?
+                value_size += 2
+                push!(data, :reflection_buffer => read(io, value_size))
             else
-                @warn "Unknown tag in $name: $tag_name" tag_size tag_data
+                @warn "Unknown $value_size-byte tag in $name: $tag_name"
             end
+
+            seek(io, value_position + value_size)
         end
-        return NamedTuple(tags)
+        return NamedTuple(data)
     end
 
 
@@ -540,6 +548,37 @@ function Base.read(io::IO, ::Type{MetalLib})
         end
     end
 
+    # embedded source
+    embedded_source = nothing
+    function_sources = Dict()
+    if header_ex !== nothing && haskey(header_ex, :embedded_source)
+        seek(io, header_ex.embedded_source.offset)
+        source_archive_count = read(io, UInt32)
+        command_line_info = String(readuntil(io, UInt8(0)))
+        working_directory = String(readuntil(io, UInt8(0)))
+
+        archives = []
+        for i in 1:source_archive_count
+            tag_group_size = read(io, UInt32)
+            tag_group_start = position(io)  # SOFF points to here
+            let read = checked_reader(io, tag_group_start + tag_group_size, "source archive")
+                data = read_taggroup(read, "source archive"; size_type=UInt32)
+                id, archive = data.embedded_source
+                push!(archives, id => archive)
+
+                # check if any function points to this source
+                source_offset = tag_group_start - header_ex.embedded_source.offset
+                for j in 1:length(function_list)
+                    if function_list[j].source_offset == source_offset
+                        function_sources[j] = id
+                    end
+                end
+            end
+        end
+
+        embedded_source = EmbeddedSource(command_line_info, working_directory, archives)
+    end
+
     # reconstruct objects
     functions = MetalLibFunction[]
     for i in 1:length(function_list)
@@ -553,6 +592,9 @@ function Base.read(io::IO, ::Type{MetalLib})
         if haskey(private_md[i], :dependent_file)
             push!(optional_args, :dependent_file => private_md[i].dependent_file)
         end
+        if haskey(function_sources, i)
+            push!(optional_args, :source_id => function_sources[i])
+        end
 
         push!(functions, MetalLibFunction(;
             name = function_list[i].name,
@@ -563,21 +605,30 @@ function Base.read(io::IO, ::Type{MetalLib})
         ))
     end
 
+    optional_args = []
+    if header_ex !== nothing && haskey(header_ex, :uuid)
+        # TODO: get rid of the nothing checks
+        push!(optional_args, :uuid => header_ex.uuid)
+    end
+
     MetalLib(; file_version, file_type, is_macos, is_stub,
                platform_version, platform_type, is_64bit,
-               functions)
+               functions, embedded_source, optional_args...)
 end
 
 
 ## writing
 
-function emit_tag_group(io::IO, data::Vector; emit_size=true)
-    # emit the tags and their values
+function emit_tag_group(io::IO, data::Vector; emit_size=true, size_type::Type=UInt16)
+    # keep track of where we write tag values
+    locations = Dict{String,Int}()
+
+    # emit the data and their values
     tag_stream = IOBuffer()
     for (tag, value) in data
-        emit_tag(tag_stream, tag, value)
+        emit_tag(tag_stream, tag, value; size_type, locations)
     end
-    emit_tag(tag_stream, "ENDT")
+    emit_tag(tag_stream, "ENDT"; size_type, locations)
     tag_group = take!(tag_stream)
 
     # emit the tag group
@@ -586,19 +637,21 @@ function emit_tag_group(io::IO, data::Vector; emit_size=true)
         write(io, UInt32(sizeof(tag_group) + sizeof(UInt32)))
     end
     write(io, tag_group)
-    return io
+
+    return locations
 end
 
-function emit_tag(io::IO, tag::String, value=nothing)
+function emit_tag(io::IO, tag::String, value=nothing; size_type::Type, locations::Dict)
     # emit the tag
     @assert length(tag) == 4
     write(io, tag)
 
     # helpers for emitting the value
-    write_len(len) = write(io, UInt16(len))
+    write_len(len) = write(io, size_type(len))
     function write_value(value, T=typeof(value))
         value = convert(T, value)
         write_len(sizeof(value))
+        locations[tag] = position(io)
         write(io, value)
     end
 
@@ -607,9 +660,7 @@ function emit_tag(io::IO, tag::String, value=nothing)
         # Name of the function
         isa(value, String) || throw(ArgumentError("Name must be a string"))
         length(value) <= typemax(UInt16)-1 || throw(ArgumentError("Name too long"))
-        write_len(length(value) + 1)
-        write(io, value)
-        write(io, UInt8(0))
+        write_value(UInt8[Vector{UInt8}(value); 0])
     elseif tag == "MDSZ"
         # Size of the bitcode
         write_value(value, UInt64)
@@ -655,13 +706,15 @@ function emit_tag(io::IO, tag::String, value=nothing)
             throw(ArgumentError("UUID must be a UUID"))
         end
         bits = convert(Tuple{UInt64,UInt64}, value)
-        write_len(16)
-        write(io, bits[1])
-        write(io, bits[2])
+        write_value([bits...])
     elseif tag == "RLST"
         # Unknown section; added in Metal 2.7
         write_value(UInt64[value.offset, value.size])
-    ## public metadata tags
+    elseif tag == "HSRD"
+        write_value(UInt64[value.offset, value.size])
+    elseif tag == "SOFF"
+        write_value(value, UInt64)
+    ## public metadata data
     elseif tag == "CNST"
         # a list of function constants
         if !isa(value, Vector{FunctionConstant})
@@ -677,7 +730,7 @@ function emit_tag(io::IO, tag::String, value=nothing)
             write(constant_buf, UInt8(constant.active))
         end
         write_value(take!(constant_buf))
-    ## private metadata tags
+    ## private metadata data
     elseif tag == "DEBI"
         if !isa(value, DebugInfo)
             throw(ArgumentError("DEBI tag must be a DebugInfo"))
@@ -692,13 +745,42 @@ function emit_tag(io::IO, tag::String, value=nothing)
             throw(ArgumentError("DEPF tag must be a string"))
         end
         write_value(UInt8[Vector{UInt8}(value); 0])
+    ## embedded sources
+    elseif tag == "SARC"
+        source_buf = IOBuffer()
+        write(source_buf, String(value.id))
+        write(source_buf, UInt8(0))
+        write(source_buf, value.archive)
+        write_value(take!(source_buf))
     else
         throw(ArgumentError("Unknown tag: $tag"))
     end
 end
 
 function Base.write(io::IO, lib::MetalLib)
-    ## section contents
+    ## embedded source
+
+    embedded_source_offsets = Dict()
+
+    embedded_source_io = IOBuffer()
+    if lib.embedded_source !== nothing
+        write(embedded_source_io, UInt32(length(lib.embedded_source.archives)))
+        write(embedded_source_io, lib.embedded_source.link_options)
+        write(embedded_source_io, UInt8(0))
+        write(embedded_source_io, lib.embedded_source.working_directory)
+        write(embedded_source_io, UInt8(0))
+        for (id, archive) = lib.embedded_source.archives
+            # the offset points past the tag token
+            embedded_source_offsets[id] = position(embedded_source_io) + sizeof(UInt32)
+
+            data = [ "SARC" => (; id, archive) ]
+            emit_tag_group(embedded_source_io, data; size_type=UInt32)
+        end
+    end
+    embedded_source = take!(embedded_source_io)
+
+
+    ## function list
 
     public_md_stream = IOBuffer()
     private_md_stream = IOBuffer()
@@ -709,22 +791,22 @@ function Base.write(io::IO, lib::MetalLib)
     for fun in lib.functions
         # public metadata
         public_md_offset = position(public_md_stream)
-        tags = []
+        data = []
         if !isempty(fun.constants)
-            push!(tags, "CNST" => fun.constants)
+            push!(data, "CNST" => fun.constants)
         end
-        emit_tag_group(public_md_stream, tags)
+        emit_tag_group(public_md_stream, data)
 
         # private metadata
         private_md_offset = position(private_md_stream)
-        tags = []
+        data = []
         if fun.debug_info !== nothing
-            push!(tags, "DEBI" => fun.debug_info)
+            push!(data, "DEBI" => fun.debug_info)
         end
         if fun.dependent_file !== nothing
-            push!(tags, "DEPF" => fun.dependent_file)
+            push!(data, "DEPF" => fun.dependent_file)
         end
-        emit_tag_group(private_md_stream, tags)
+        emit_tag_group(private_md_stream, data)
 
         # bitcode
         bitcode_offset = position(bitcode_stream)
@@ -733,7 +815,7 @@ function Base.write(io::IO, lib::MetalLib)
         write(bitcode_stream, fun.bitcode)
 
         # tags
-        tags = [
+        data = [
             "NAME" => fun.name,
             "TYPE" => PROGRAM_KERNEL,
             "HASH" => bitcode_hash,
@@ -743,45 +825,53 @@ function Base.write(io::IO, lib::MetalLib)
             "VERS" => (; air=fun.air_version, metal=fun.metal_version),
             "MDSZ" => bitcode_size,
         ]
+        if fun.source_id !== nothing && haskey(embedded_source_offsets, fun.source_id)
+            # XXX: version check
+            push!(data, "SOFF" => embedded_source_offsets[fun.source_id])
+        end
         if lib.file_version >= v"1.2.7"
             # XXX: placeholder; this data is invalid
-            push!(tags, "RFLT" => 0)
+            push!(data, "RFLT" => 0)
         end
         tag_stream = IOBuffer()
-        emit_tag_group(tag_stream, tags)
+        emit_tag_group(tag_stream, data)
         push!(tag_groups, take!(tag_stream))
     end
 
     function_list_stream = IOBuffer()
     write(function_list_stream, UInt32(length(lib.functions)))
-    for tags in tag_groups
-        write(function_list_stream, tags)
+    for data in tag_groups
+        write(function_list_stream, data)
     end
 
     function_list = take!(function_list_stream)
-    function_list_size = sizeof(function_list)
-
-    # header extensions
-    header_ex = if lib.file_version >= v"1.2.3"
-        tags = []
-        if lib.file_version >= v"1.2.7"
-            # XXX: placeholder; this data is invalid
-            push!(tags, "RLST" => (; offset=0, size=0))
-        end
-        # XXX: placeholder; this data is invalid
-        #      it should be a UUID based on all of the module's data
-        push!(tags, "UUID" => uuid1())
-
-        header_ex_stream = IOBuffer()
-        emit_tag_group(header_ex_stream, tags; emit_size=false)
-        take!(header_ex_stream)
-    else
-        UInt8[]
-    end
-
     public_md = take!(public_md_stream)
     private_md = take!(private_md_stream)
     bitcode = take!(bitcode_stream)
+
+
+    ## header extensions
+
+    if lib.file_version >= v"1.2.3"
+        data = []
+        # XXX: HSRD only on 12, 11 is HSRC
+        if sizeof(embedded_source) > 0
+            push!(data, "HSRD" => (; offset=0, size=sizeof(embedded_source)))
+        end
+        if lib.file_version >= v"1.2.7"
+            # XXX: placeholder; this data is invalid
+            push!(data, "RLST" => (; offset=0, size=0))
+        end
+        # XXX: placeholder; this data is invalid
+        #      it should be a UUID based on all of the module's data
+        if lib.uuid !== nothing
+            push!(data, "UUID" => lib.uuid)
+        end
+
+        header_ex_stream = IOBuffer()
+        header_ex_locations = emit_tag_group(header_ex_stream, data; emit_size=false)
+        header_ex = take!(header_ex_stream)
+    end
 
 
     ## header
@@ -822,10 +912,13 @@ function Base.write(io::IO, lib::MetalLib)
     # we can only write offset fields after having written the sections,
     # so keep track of their positions and patch them later
     placeholders = Dict{Symbol,Int}()
+    function mark_placeholder(name, location)
+        placeholders[name] = location
+    end
     function write_placeholder(io, T, name)
         pos = position(io)
         write(io, zero(T) #= placeholder =#)
-        placeholders[name] = pos
+        mark_placeholder(name, pos)
     end
     function patch_placeholder(io, name, value)
         position = mark(io)
@@ -864,6 +957,9 @@ function Base.write(io::IO, lib::MetalLib)
     write(io, function_list)
 
     # header extension
+    if sizeof(embedded_source) > 0
+        mark_placeholder(:embedded_source, position(io) + header_ex_locations["HSRD"])
+    end
     write(io, header_ex)
 
     # public metadata
@@ -878,7 +974,11 @@ function Base.write(io::IO, lib::MetalLib)
     patch_placeholder(io, :bitcode_offset, position(io))
     write(io, bitcode)
 
-    # TODO: sources
+    # sources
+    if sizeof(embedded_source) > 0
+        patch_placeholder(io, :embedded_source, position(io))
+        write(io, embedded_source)
+    end
 
     # TODO: dynamic header
 
