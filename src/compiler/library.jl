@@ -601,9 +601,8 @@ function Base.read(io::IO, ::Type{MetalLib})
     ## header
 
     # 4 bytes: "MTLB" magic
-    magic = Cchar[0,0,0,0]
-    read!(io, magic)
-    if Char.(magic) != ['M', 'T', 'L', 'B']
+    magic = String(read(io, 4))
+    if magic != "MTLB"
         throw(ArgumentError("Not a Metal library"))
     end
 
@@ -968,7 +967,7 @@ function Base.write(io::IO, lib::MetalLib)
     ## header
 
     # magic
-    write(io, Cchar['M', 'T', 'L', 'B'])
+    write(io, "MTLB")
 
     # file version
     write(io, UInt16(lib.file_version.major) | UInt16(lib.is_macos) << 15)
