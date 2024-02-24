@@ -88,9 +88,9 @@ function compile(@nospecialize(job::CompilerJob))
 
     # create a Metal library
     image = try
-        metallib_fun = MetalLibFunction(entry, air;
-                                        air_version=job.config.target.air,
-                                        metal_version=job.config.target.metal)
+        metallib_fun = MetalLibFunction(; name=entry, bitcode=air,
+                                          air_version=job.config.target.air,
+                                          metal_version=job.config.target.metal)
         metallib = MetalLib(; functions = [metallib_fun])
 
         image_stream = IOBuffer()
