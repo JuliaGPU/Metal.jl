@@ -303,6 +303,9 @@ Base.@kwdef struct TagGroup
 
     # whether the tag group starts with a 32-bit size field for the entire group
     has_size::Bool=true
+
+    # whether the tag group size field is included in the size
+    counts_size::Bool=true
 end
 
 # Dict-like methods to interact with a tag group
@@ -492,8 +495,13 @@ tag_value_io["RBUF"] = (
 
 function Base.read!(io::IO, tg::TagGroup)
     if tg.has_size
-        group_start = position(io)
+        if tg.counts_size
+            group_start = position(io)
+        end
         group_size = read(io, UInt32)
+        if !tg.counts_size
+            group_start = position(io)
+        end
     end
 
     while true
@@ -561,8 +569,11 @@ function Base.write(io::IO, tg::TagGroup)
 
     # emit the tag group
     if tg.has_size
-        # the size of the tag group includes the size bytes itself
-        write(io, UInt32(sizeof(group_data) + sizeof(UInt32)))
+        sz = sizeof(group_data)
+        if tg.counts_size
+            sz += sizeof(UInt32)
+        end
+        write(io, UInt32(sz))
     end
     write(io, group_data)
 
@@ -714,11 +725,8 @@ function Base.read(io::IO, ::Type{MetalLib})
 
         archives = []
         for i in 1:source_archive_count
-            # here, the size of the tag group excludes the size bytes itself.
-            tag_group_size = read(io, UInt32)
-            tag_group_start = position(io)  # SOFF points here
-            data = read!(io, TagGroup(name="source archive"; size_type=UInt32, has_size=false))
-            @assert position(io) == tag_group_start + tag_group_size
+            tag_group_start = position(io) + sizeof(UInt32)  # SOFF points past the size field
+            data = read!(io, TagGroup(name="source archive"; size_type=UInt32, counts_size=false))
 
             id, archive = data["SARC"]
             push!(archives, id => archive)
@@ -788,7 +796,7 @@ function Base.write(io::IO, lib::MetalLib)
             # the offset points past the tag token
             embedded_source_offsets[id] = position(embedded_source_io) + sizeof(UInt32)
 
-            archive_tags = TagGroup(name="source archive", size_type=UInt32)
+            archive_tags = TagGroup(name="source archive", size_type=UInt32, counts_size=false)
             archive_tags["SARC"] = (; id, archive)
             write(embedded_source_io, archive_tags)
         end
