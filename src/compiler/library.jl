@@ -288,336 +288,97 @@ function Base.show(io::IO, lib::MetalLib)
 end
 
 
-## reading
+## tag groups
 
-# generate a custom `read` function that also checks we don't over-read a section
-function checked_reader(io, maxpos, name)
-    function reader(io, args...)
-        start = position(io)
-        ret = read(io, args...)
-        if position(io) > maxpos
-            nbytes = position(io) - start
-            overread = position(io) - maxpos
-            error("Read of $nbytes bytes went $overread bytes past the end of the $name section")
+function read_taggroup(io, name; size_type=UInt16)
+    data = []
+    while true
+        tag_name = String(read(io, 4*sizeof(Cchar)))
+        if tag_name == "ENDT"
+            break
         end
-        return ret
+        value_size = read(io, size_type)
+        value_position = position(io)
+
+        # parse data
+        ## function list
+        if tag_name == "NAME"
+            push!(data, :name => String(readuntil(io, UInt8(0))))
+        elseif tag_name == "TYPE"
+            push!(data, :type => read(io, ProgramType))
+        elseif tag_name == "HASH"
+            push!(data, :hash => bytes2hex(read(io, value_size)))
+        elseif tag_name == "OFFT"
+            push!(data, :offsets => (;
+                public_md = read(io, UInt64),
+                private_md = read(io, UInt64),
+                bitcode = read(io, UInt64))
+            )
+        elseif tag_name == "SOFF"
+            push!(data, :source_offset => read(io, UInt64))
+        elseif tag_name == "VERS"
+            push!(data, :versions => (;
+                air   = VersionNumber(read(io, UInt16), read(io, UInt16)),
+                metal = VersionNumber(read(io, UInt16), read(io, UInt16)))
+            )
+        elseif tag_name == "MDSZ"
+            push!(data, :bitcode_size => read(io, UInt64))
+        elseif tag_name == "RFLT"
+            push!(data, :rflt => read(io, UInt64))
+        ## header extension
+        elseif tag_name == "HSRD"
+            push!(data, :embedded_source => (;
+                offset = read(io, UInt64),
+                size = read(io, UInt64)))
+        elseif tag_name == "RLST"
+            push!(data, :reflection => (;
+                offset = read(io, UInt64),
+                size = read(io, UInt64)))
+        elseif tag_name == "UUID"
+            uuid_bits = Vector{UInt64}(undef, 2)
+            read!(io, uuid_bits)
+            push!(data, :uuid => UUID(Tuple(uuid_bits)))
+        ## public metadata
+        elseif tag_name == "CNST"
+            num_constants = read(io, UInt16)
+            constants = Vector{FunctionConstant}(undef, num_constants)
+            pos = 3
+            for i in 1:num_constants
+                name = String(readuntil(io, UInt8(0)))
+                datatype = read(io, MetalDataType)
+                index = read(io, UInt16)
+                active = Bool(read(io, UInt8))
+
+                constants[i] = FunctionConstant(name, datatype, index, active)
+            end
+            push!(data, :constants => constants)
+        ## private metadata
+        elseif tag_name == "DEBI"
+            line = read(io, UInt32)
+            path = String(readuntil(io, UInt8(0)))
+            push!(data, :debug_info => DebugInfo(path, line))
+        elseif tag_name == "DEPF"
+            file_name = String(readuntil(io, UInt8(0)))
+            push!(data, :dependent_file => file_name)
+        ## embedded sources
+        elseif tag_name == "SARC"
+            id = String(readuntil(io, UInt8(0)))
+            archive = read(io, value_size - sizeof(id) - 1)
+            push!(data, :embedded_source => (; id, archive))
+        ## reflection lists
+        elseif tag_name == "RBUF"
+            # XXX: there's a 2 byte mismatch between the reflection list size, and the
+            #      next ENDT token... bug in air-lld?
+            value_size += 2
+            push!(data, :reflection_buffer => read(io, value_size))
+        else
+            @warn "Unknown $value_size-byte tag in $name: $tag_name"
+        end
+
+        seek(io, value_position + value_size)
     end
+    return NamedTuple(data)
 end
-
-function Base.read(io::IO, ::Type{MetalLib})
-    ## headers
-
-    # 4 bytes: "MTLB" magic
-    magic = Cchar[0,0,0,0]
-    read!(io, magic)
-    if Char.(magic) != ['M', 'T', 'L', 'B']
-        throw(ArgumentError("Not a Metal library"))
-    end
-
-    # 3 x 2 bytes: file version
-    file_major = read(io, UInt16)
-    file_minor = read(io, UInt16)
-    file_patch = read(io, UInt16)
-    ## upper bit of file_major indicates whether this is a macOS target
-    is_macos = file_major >> 15 == 1
-    file_major &= 0x7fff
-    file_version = VersionNumber(file_major, file_minor, file_patch)
-
-    # 1 byte: file type (on v1.2.4+)
-    if file_version >= v"1.2.4"
-        file_type = read(io, FileType)
-        ## upper bit of file_type indicates whether this is a stub library
-        is_stub = file_type >> 7 == 1
-        file_type = FileType(file_type & 0x7f)
-    else
-        read(io, 1)
-        file_type = FILE_EXECUTABLE
-        is_stub = false
-    end
-
-    # 1 byte: platform type (on v1.2.6+)
-    if file_version >= v"1.2.6"
-        platform_type = read(io, PlatformType)
-        ## upper bit of platform_type indicates whether this is a 64-bit library
-        is_64bit = platform_type >> 7 == 1
-        platform_type = PlatformType(platform_type & 0x7f)
-    else
-        read(io, 1)
-        platform_type = PLATFORM_MACOS
-        is_64bit = true
-    end
-
-    # 2+1+1 byte: platform version (on v1.2.6+)
-    if file_version >= v"1.2.6"
-        platform_major = read(io, UInt16)
-        platform_minor = read(io, UInt8)
-        platform_patch = read(io, UInt8)
-        platform_version = VersionNumber(platform_major, platform_minor, platform_patch)
-    else
-        read(io, 4)
-        platform_version = v"0"
-    end
-
-    # 8 bytes: file size
-    file_size = read(io, UInt64)
-
-    # 2 x 8 bytes: function list offset and size
-    function_list_offset = read(io, UInt64)
-    function_list_size = read(io, UInt64)
-
-    # 2 x 8 bytes: public metadata offset and size
-    public_md_offset = read(io, UInt64)
-    public_md_size = read(io, UInt64)
-
-    # 2 x 8 bytes: private metadata offset and size
-    private_md_offset = read(io, UInt64)
-    private_md_size = read(io, UInt64)
-
-    # 2 x 8 bytes: bitcode offset and size
-    bitcode_offset = read(io, UInt64)
-    bitcode_size = read(io, UInt64)
-
-
-    ## helpers
-
-    function read_taggroup(read, name; size_type=UInt16)
-        data = []
-        while true
-            tag_name = String(read(io, 4*sizeof(Cchar)))
-            if tag_name == "ENDT"
-                break
-            end
-            value_size = read(io, size_type)
-            value_position = position(io)
-
-            # parse data
-            ## function list
-            if tag_name == "NAME"
-                push!(data, :name => String(readuntil(io, UInt8(0))))
-            elseif tag_name == "TYPE"
-                push!(data, :type => read(io, ProgramType))
-            elseif tag_name == "HASH"
-                push!(data, :hash => bytes2hex(read(io, value_size)))
-            elseif tag_name == "OFFT"
-                push!(data, :offsets => (;
-                    public_md = read(io, UInt64),
-                    private_md = read(io, UInt64),
-                    bitcode = read(io, UInt64))
-                )
-            elseif tag_name == "SOFF"
-                push!(data, :source_offset => read(io, UInt64))
-            elseif tag_name == "VERS"
-                push!(data, :versions => (;
-                    air   = VersionNumber(read(io, UInt16), read(io, UInt16)),
-                    metal = VersionNumber(read(io, UInt16), read(io, UInt16)))
-                )
-            elseif tag_name == "MDSZ"
-                push!(data, :bitcode_size => read(io, UInt64))
-            elseif tag_name == "RFLT"
-                push!(data, :rflt => read(io, UInt64))
-            ## header extension
-            elseif tag_name == "HSRD"
-                push!(data, :embedded_source => (;
-                    offset = read(io, UInt64),
-                    size = read(io, UInt64)))
-            elseif tag_name == "RLST"
-                push!(data, :reflection => (;
-                    offset = read(io, UInt64),
-                    size = read(io, UInt64)))
-            elseif tag_name == "UUID"
-                uuid_bits = Vector{UInt64}(undef, 2)
-                read!(io, uuid_bits)
-                push!(data, :uuid => UUID(Tuple(uuid_bits)))
-            ## public metadata
-            elseif tag_name == "CNST"
-                num_constants = read(io, UInt16)
-                constants = Vector{FunctionConstant}(undef, num_constants)
-                pos = 3
-                for i in 1:num_constants
-                    name = String(readuntil(io, UInt8(0)))
-                    datatype = read(io, MetalDataType)
-                    index = read(io, UInt16)
-                    active = Bool(read(io, UInt8))
-
-                    constants[i] = FunctionConstant(name, datatype, index, active)
-                end
-                push!(data, :constants => constants)
-            ## private metadata
-            elseif tag_name == "DEBI"
-                line = read(io, UInt32)
-                path = String(readuntil(io, UInt8(0)))
-                push!(data, :debug_info => DebugInfo(path, line))
-            elseif tag_name == "DEPF"
-                file_name = String(readuntil(io, UInt8(0)))
-                push!(data, :dependent_file => file_name)
-            ## embedded sources
-            elseif tag_name == "SARC"
-                id = String(readuntil(io, UInt8(0)))
-                archive = read(io, value_size - sizeof(id) - 1)
-                push!(data, :embedded_source => (; id, archive))
-            ## reflection lists
-            elseif tag_name == "RBUF"
-                # XXX: there's a 2 byte mismatch between the reflection list size, and the
-                #      next ENDT token... bug in air-lld?
-                value_size += 2
-                push!(data, :reflection_buffer => read(io, value_size))
-            else
-                @warn "Unknown $value_size-byte tag in $name: $tag_name"
-            end
-
-            seek(io, value_position + value_size)
-        end
-        return NamedTuple(data)
-    end
-
-
-    ## sections
-
-    # function list
-    function_list = []
-    seek(io, function_list_offset)
-    let read = checked_reader(io, function_list_offset + function_list_size, "function list")
-        entry_count = read(io, UInt32)
-        for i in 1:entry_count
-            tag_group_start = position(io)
-            tag_group_size = read(io, UInt32)
-            let read = checked_reader(io, tag_group_start + tag_group_size, "tag group")
-                push!(function_list, read_taggroup(read, "function list"))
-            end
-        end
-    end
-
-    # header extension, if any
-    header_ex = if position(io) < public_md_offset
-        # the header extension group isn't preceded by a size field
-        let read = checked_reader(io, public_md_offset, "header extension")
-            read_taggroup(read, "header extension")
-        end
-    else
-        nothing
-    end
-
-    # public md
-    public_md = []
-    let read = checked_reader(io, private_md_offset, "public metadata")
-        for i in 1:length(function_list)
-            tag_group_start = position(io)
-            tag_group_size = read(io, UInt32)
-            let read = checked_reader(io, tag_group_start + tag_group_size, "tag group")
-                push!(public_md, read_taggroup(read, "public metadata"))
-            end
-        end
-    end
-
-    # private_md
-    @assert position(io) == private_md_offset
-    private_md = []
-    let read = checked_reader(io, bitcode_offset, "private metadata")
-        for i in 1:length(function_list)
-            tag_group_start = position(io)
-            tag_group_size = read(io, UInt32)
-            let read = checked_reader(io, tag_group_start + tag_group_size, "tag group")
-                push!(private_md, read_taggroup(read, "private metadata"))
-            end
-        end
-    end
-
-    # bitcode
-    @assert position(io) == bitcode_offset
-    bitcode = []
-    let read = checked_reader(io, bitcode_offset + bitcode_size, "bitcode")
-        for i in 1:length(function_list)
-            bitcode_size = function_list[i].bitcode_size
-            push!(bitcode, read(io, bitcode_size))
-        end
-    end
-
-    # reflection list
-    reflection_list = []
-    if header_ex !== nothing && haskey(header_ex, :reflection)
-        seek(io, header_ex.reflection.offset)
-        let read = checked_reader(io, header_ex.reflection.offset + header_ex.reflection.size, "reflection")
-            num_lists = read(io, UInt32)
-            for i in 1:num_lists
-                list_start = position(io)
-                list_size = read(io, UInt32)
-                let read = checked_reader(io, list_start + list_size, "reflection sublist")
-                    push!(reflection_list, read_taggroup(read, "reflection list"))
-                end
-            end
-        end
-    end
-
-    # embedded source
-    embedded_source = nothing
-    function_sources = Dict()
-    if header_ex !== nothing && haskey(header_ex, :embedded_source)
-        seek(io, header_ex.embedded_source.offset)
-        source_archive_count = read(io, UInt32)
-        command_line_info = String(readuntil(io, UInt8(0)))
-        working_directory = String(readuntil(io, UInt8(0)))
-
-        archives = []
-        for i in 1:source_archive_count
-            tag_group_size = read(io, UInt32)
-            tag_group_start = position(io)  # SOFF points to here
-            let read = checked_reader(io, tag_group_start + tag_group_size, "source archive")
-                data = read_taggroup(read, "source archive"; size_type=UInt32)
-                id, archive = data.embedded_source
-                push!(archives, id => archive)
-
-                # check if any function points to this source
-                source_offset = tag_group_start - header_ex.embedded_source.offset
-                for j in 1:length(function_list)
-                    if function_list[j].source_offset == source_offset
-                        function_sources[j] = id
-                    end
-                end
-            end
-        end
-
-        embedded_source = EmbeddedSource(command_line_info, working_directory, archives)
-    end
-
-    # reconstruct objects
-    functions = MetalLibFunction[]
-    for i in 1:length(function_list)
-        optional_args = []
-        if haskey(public_md[i], :constants)
-            push!(optional_args, :constants => public_md[i].constants)
-        end
-        if haskey(private_md[i], :debug_info)
-            push!(optional_args, :debug_info => private_md[i].debug_info)
-        end
-        if haskey(private_md[i], :dependent_file)
-            push!(optional_args, :dependent_file => private_md[i].dependent_file)
-        end
-        if haskey(function_sources, i)
-            push!(optional_args, :source_id => function_sources[i])
-        end
-
-        push!(functions, MetalLibFunction(;
-            name = function_list[i].name,
-            bitcode = bitcode[i],
-            air_version=function_list[i].versions.air,
-            metal_version=function_list[i].versions.metal,
-            optional_args...
-        ))
-    end
-
-    optional_args = []
-    if header_ex !== nothing && haskey(header_ex, :uuid)
-        # TODO: get rid of the nothing checks
-        push!(optional_args, :uuid => header_ex.uuid)
-    end
-
-    MetalLib(; file_version, file_type, is_macos, is_stub,
-               platform_version, platform_type, is_64bit,
-               functions, embedded_source, optional_args...)
-end
-
-
-## writing
 
 function emit_tag_group(io::IO, data::Vector; emit_size=true, size_type::Type=UInt16)
     # keep track of where we write tag values
@@ -755,6 +516,217 @@ function emit_tag(io::IO, tag::String, value=nothing; size_type::Type, locations
     else
         throw(ArgumentError("Unknown tag: $tag"))
     end
+end
+
+
+## metal library format
+
+function Base.read(io::IO, ::Type{MetalLib})
+    ## headers
+
+    # 4 bytes: "MTLB" magic
+    magic = Cchar[0,0,0,0]
+    read!(io, magic)
+    if Char.(magic) != ['M', 'T', 'L', 'B']
+        throw(ArgumentError("Not a Metal library"))
+    end
+
+    # 3 x 2 bytes: file version
+    file_major = read(io, UInt16)
+    file_minor = read(io, UInt16)
+    file_patch = read(io, UInt16)
+    ## upper bit of file_major indicates whether this is a macOS target
+    is_macos = file_major >> 15 == 1
+    file_major &= 0x7fff
+    file_version = VersionNumber(file_major, file_minor, file_patch)
+
+    # 1 byte: file type (on v1.2.4+)
+    if file_version >= v"1.2.4"
+        file_type = read(io, FileType)
+        ## upper bit of file_type indicates whether this is a stub library
+        is_stub = file_type >> 7 == 1
+        file_type = FileType(file_type & 0x7f)
+    else
+        read(io, 1)
+        file_type = FILE_EXECUTABLE
+        is_stub = false
+    end
+
+    # 1 byte: platform type (on v1.2.6+)
+    if file_version >= v"1.2.6"
+        platform_type = read(io, PlatformType)
+        ## upper bit of platform_type indicates whether this is a 64-bit library
+        is_64bit = platform_type >> 7 == 1
+        platform_type = PlatformType(platform_type & 0x7f)
+    else
+        read(io, 1)
+        platform_type = PLATFORM_MACOS
+        is_64bit = true
+    end
+
+    # 2+1+1 byte: platform version (on v1.2.6+)
+    if file_version >= v"1.2.6"
+        platform_major = read(io, UInt16)
+        platform_minor = read(io, UInt8)
+        platform_patch = read(io, UInt8)
+        platform_version = VersionNumber(platform_major, platform_minor, platform_patch)
+    else
+        read(io, 4)
+        platform_version = v"0"
+    end
+
+    # 8 bytes: file size
+    file_size = read(io, UInt64)
+
+    # 2 x 8 bytes: function list offset and size
+    function_list_offset = read(io, UInt64)
+    function_list_size = read(io, UInt64)
+
+    # 2 x 8 bytes: public metadata offset and size
+    public_md_offset = read(io, UInt64)
+    public_md_size = read(io, UInt64)
+
+    # 2 x 8 bytes: private metadata offset and size
+    private_md_offset = read(io, UInt64)
+    private_md_size = read(io, UInt64)
+
+    # 2 x 8 bytes: bitcode offset and size
+    bitcode_offset = read(io, UInt64)
+    bitcode_size = read(io, UInt64)
+
+
+    ## sections
+
+    # function list
+    function_list = []
+    seek(io, function_list_offset)
+    entry_count = read(io, UInt32)
+    for i in 1:entry_count
+        tag_group_start = position(io)
+        tag_group_size = read(io, UInt32)
+        push!(function_list, read_taggroup(io, "function list"))
+        @assert position(io) == tag_group_start + tag_group_size
+    end
+    @assert position(io) <= function_list_offset + function_list_size + sizeof(UInt32)
+    # XXX: why do we need to add another size to the tag here?
+
+    # header extension, if any
+    if position(io) < public_md_offset
+        # the header extension group isn't preceded by a size field
+        header_ex = read_taggroup(io, "header extension")
+        @assert position(io) == public_md_offset
+    else
+        header_ex = nothing
+    end
+
+    # public md
+    public_md = []
+    for i in 1:length(function_list)
+        tag_group_start = position(io)
+        tag_group_size = read(io, UInt32)
+        push!(public_md, read_taggroup(io, "public metadata"))
+        @assert position(io) == tag_group_start + tag_group_size
+    end
+    @assert position(io) == private_md_offset
+
+    # private_md
+    private_md = []
+    for i in 1:length(function_list)
+        tag_group_start = position(io)
+        tag_group_size = read(io, UInt32)
+        push!(private_md, read_taggroup(io, "private metadata"))
+        @assert position(io) == tag_group_start + tag_group_size
+    end
+    @assert position(io) == bitcode_offset
+
+    # bitcode
+    bitcode = []
+    for i in 1:length(function_list)
+        bitcode_size = function_list[i].bitcode_size
+        push!(bitcode, read(io, bitcode_size))
+    end
+    @assert position(io) == bitcode_offset + bitcode_size
+
+    # reflection list
+    reflection_list = []
+    if header_ex !== nothing && haskey(header_ex, :reflection)
+        seek(io, header_ex.reflection.offset)
+        num_lists = read(io, UInt32)
+        for i in 1:num_lists
+            list_start = position(io)
+            list_size = read(io, UInt32)
+            push!(reflection_list, read_taggroup(io, ead, "reflection list"))
+            @assert position(io) == list_start + list_size
+        end
+        @assert position(io) == header_ex.reflection.offset + header_ex.reflection.size
+    end
+
+    # embedded source
+    embedded_source = nothing
+    function_sources = Dict()
+    if header_ex !== nothing && haskey(header_ex, :embedded_source)
+        seek(io, header_ex.embedded_source.offset)
+        source_archive_count = read(io, UInt32)
+        command_line_info = String(readuntil(io, UInt8(0)))
+        working_directory = String(readuntil(io, UInt8(0)))
+
+        archives = []
+        for i in 1:source_archive_count
+            tag_group_size = read(io, UInt32)
+            tag_group_start = position(io)  # SOFF points to here
+            data = read_taggroup(io, "source archive"; size_type=UInt32)
+            @assert position(io) == tag_group_start + tag_group_size
+
+            id, archive = data.embedded_source
+            push!(archives, id => archive)
+
+            # check if any function points to this source
+            source_offset = tag_group_start - header_ex.embedded_source.offset
+            for j in 1:length(function_list)
+                if function_list[j].source_offset == source_offset
+                    function_sources[j] = id
+                end
+            end
+        end
+
+        embedded_source = EmbeddedSource(command_line_info, working_directory, archives)
+    end
+
+    # reconstruct objects
+    functions = MetalLibFunction[]
+    for i in 1:length(function_list)
+        optional_args = []
+        if haskey(public_md[i], :constants)
+            push!(optional_args, :constants => public_md[i].constants)
+        end
+        if haskey(private_md[i], :debug_info)
+            push!(optional_args, :debug_info => private_md[i].debug_info)
+        end
+        if haskey(private_md[i], :dependent_file)
+            push!(optional_args, :dependent_file => private_md[i].dependent_file)
+        end
+        if haskey(function_sources, i)
+            push!(optional_args, :source_id => function_sources[i])
+        end
+
+        push!(functions, MetalLibFunction(;
+            name = function_list[i].name,
+            bitcode = bitcode[i],
+            air_version=function_list[i].versions.air,
+            metal_version=function_list[i].versions.metal,
+            optional_args...
+        ))
+    end
+
+    optional_args = []
+    if header_ex !== nothing && haskey(header_ex, :uuid)
+        # TODO: get rid of the nothing checks
+        push!(optional_args, :uuid => header_ex.uuid)
+    end
+
+    MetalLib(; file_version, file_type, is_macos, is_stub,
+               platform_version, platform_type, is_64bit,
+               functions, embedded_source, optional_args...)
 end
 
 function Base.write(io::IO, lib::MetalLib)
