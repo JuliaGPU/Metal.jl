@@ -15,6 +15,7 @@ using SHA: sha256
 using CEnum: @cenum
 using UUIDs: UUID, uuid1
 using Printf: @printf
+using CodecBzip2: transcode, Bzip2Compressor, Bzip2Decompressor
 
 
 ## enums
@@ -472,17 +473,28 @@ tag_value_io["DEPF"] = (
     end)
 ## embedded sources
 tag_value_io["SARC"] = (
-    # Source archive; an identifier (null-terminated ASCII string) and the archive data
+    # Source archive; an identifier (null-terminated ASCII) and BZip2-compressed tarball
     @NamedTuple{id::String, archive::Vector{UInt8}},
     (io, nb)  -> begin
         id = String(readuntil(io, UInt8(0)))
-        archive = read(io, nb - sizeof(id) - 1)
+        compressed = read(io, nb - sizeof(id) - 1)
+
+        # unpad and decompress the archive
+        i = findlast(!iszero, compressed)
+        archive = transcode(Bzip2Decompressor, compressed[1:i])
+
         (; id, archive)
     end,
     (io, val) -> begin
         write(io, val.id)
         write(io, UInt8(0))
-        write(io, val.archive)
+
+        # compress and pad the archive
+        compressed = transcode(Bzip2Compressor, val.archive)
+        padding = 16*1024 - (sizeof(compressed) % (16*1024))
+        compressed = vcat(compressed, Base.zeros(UInt8, padding))
+
+        write(io, compressed)
     end)
 ## reflection lists
 tag_value_io["RBUF"] = (
