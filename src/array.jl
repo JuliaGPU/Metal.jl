@@ -379,7 +379,7 @@ julia> mtl[1,2,3]
 """
 @inline mtl(xs; storage=DefaultStorageMode) = adapt(MtlArrayAdaptor{storage}(), xs)
 
-Base.getindex(::typeof(mtl), xs...) = MtlArray([xs...])
+Base.getindex(::typeof(mtl), xs...) = mtl([xs...])
 
 ## utilities
 

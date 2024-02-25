@@ -26,6 +26,7 @@ end
     # test aggressive conversion to Float32, but only for floats, and only with `mtl`
     @test mtl([1]) isa MtlArray{Int}
     @test mtl(Float64[1]) isa MtlArray{Float32}
+    @test mtl[Float64(1)] isa MtlArray{Float32}
     @test mtl(ComplexF64[1+1im]) isa MtlArray{ComplexF32}
     @test Adapt.adapt(MtlArray{Float16}, Float64[1]) isa MtlArray{Float16}
 
