@@ -15,6 +15,7 @@ using SHA: sha256
 using CEnum: @cenum
 using UUIDs: UUID, uuid1
 using Printf: @printf
+using CodecBzip2: transcode, Bzip2Compressor, Bzip2Decompressor
 
 
 ## enums
@@ -50,23 +51,191 @@ end
     PROGRAM_NONE         = 255
 end
 
+# TODO: fetch this info through MTLTypeInternal?
+@cenum MetalDataType::UInt8 begin
+	DATA_INVALID = 0
+
+	DATA_STRUCT = 1
+	DATA_ARRAY = 2
+
+	DATA_FLOAT1 = 3
+	DATA_FLOAT2 = 4
+	DATA_FLOAT3 = 5
+	DATA_FLOAT4 = 6
+	DATA_FLOAT2X2 = 7
+	DATA_FLOAT2X3 = 8
+	DATA_FLOAT2X4 = 9
+	DATA_FLOAT3X2 = 10
+	DATA_FLOAT3X3 = 11
+	DATA_FLOAT3X4 = 12
+	DATA_FLOAT4X2 = 13
+	DATA_FLOAT4X3 = 14
+	DATA_FLOAT4X4 = 15
+
+	DATA_HALF1 = 16
+	DATA_HALF2 = 17
+	DATA_HALF3 = 18
+	DATA_HALF4 = 19
+	DATA_HALF2X2 = 20
+	DATA_HALF2X3 = 21
+	DATA_HALF2X4 = 22
+	DATA_HALF3X2 = 23
+	DATA_HALF3X3 = 24
+	DATA_HALF3X4 = 25
+	DATA_HALF4X2 = 26
+	DATA_HALF4X3 = 27
+	DATA_HALF4X4 = 28
+
+	DATA_INT1 = 29
+	DATA_INT2 = 30
+	DATA_INT3 = 31
+	DATA_INT4 = 32
+
+	DATA_UINT1 = 33
+	DATA_UINT2 = 34
+	DATA_UINT3 = 35
+	DATA_UINT4 = 36
+
+	DATA_SHORT1 = 37
+	DATA_SHORT2 = 38
+	DATA_SHORT3 = 39
+	DATA_SHORT4 = 40
+
+	DATA_USHORT1 = 41
+	DATA_USHORT2 = 42
+	DATA_USHORT3 = 43
+	DATA_USHORT4 = 44
+
+	DATA_CHAR1 = 45
+	DATA_CHAR2 = 46
+	DATA_CHAR3 = 47
+	DATA_CHAR4 = 48
+
+	DATA_UCHAR1 = 49
+	DATA_UCHAR2 = 50
+	DATA_UCHAR3 = 51
+	DATA_UCHAR4 = 52
+
+	DATA_BOOL1 = 53
+	DATA_BOOL2 = 54
+	DATA_BOOL3 = 55
+	DATA_BOOL4 = 56
+
+	DATA__UNUSED_0 = 57
+
+	DATA_TEXTURE = 58
+	DATA_SAMPLER = 59
+	DATA_POINTER = 60
+
+	DATA__UNUSED_1 = 61
+
+	DATA_R8UNORM = 62
+	DATA_R8SNORM = 63
+	DATA_R16UNORM = 64
+	DATA_R16SNORM = 65
+	DATA_RG8UNORM = 66
+	DATA_RG8SNORM = 67
+	DATA_RG16UNORM = 68
+	DATA_RG16SNORM = 69
+	DATA_RGBA8UNORM = 70
+	DATA_RGBA8UNORM_SRGB = 71
+	DATA_RGBA8SNORM = 72
+	DATA_RGBA16UNORM = 73
+	DATA_RGBA16SNORM = 74
+	DATA_RGB10A2UNORM = 75
+	DATA_RG11B10FLOAT = 76
+	DATA_RGB9E5FLOAT = 77
+
+	DATA_RENDER_PIPELINE = 78
+	DATA_COMPUTE_PIPELINE = 79
+	DATA_INDIRECT_CMD_BUFFER = 80
+
+	DATA_LONG1 = 81
+	DATA_LONG2 = 82
+	DATA_LONG3 = 83
+	DATA_LONG4 = 84
+
+	DATA_ULONG1 = 85
+	DATA_ULONG2 = 86
+	DATA_ULONG3 = 87
+	DATA_ULONG4 = 88
+
+	DATA_DOUBLE1 = 89
+	DATA_DOUBLE2 = 90
+	DATA_DOUBLE3 = 91
+	DATA_DOUBLE4 = 92
+
+	DATA_FLOAT8 = 93
+	DATA_FLOAT16 = 94
+	DATA_HALF8 = 95
+	DATA_HALF16 = 96
+	DATA_INT8 = 97
+	DATA_INT16 = 98
+	DATA_UINT8 = 99
+	DATA_UINT16 = 100
+	DATA_SHORT8 = 101
+	DATA_SHORT16 = 102
+	DATA_USHORT8 = 103
+	DATA_USHORT16 = 104
+	DATA_CHAR8 = 105
+	DATA_CHAR16 = 106
+	DATA_UCHAR8 = 107
+	DATA_UCHAR16 = 108
+	DATA_LONG8 = 109
+	DATA_LONG16 = 110
+	DATA_ULONG8 = 111
+	DATA_ULONG16 = 112
+	DATA_DOUBLE8 = 113
+	DATA_DOUBLE16 = 114
+
+	DATA_VISIBLE_FUNCTION_TABLE = 115
+	DATA_INTERSECTION_FUNCTION_TABLE = 116
+	DATA_PRIMITIVE_ACCELERATION_STRUCTURE = 117
+	DATA_INSTANCE_ACCELERATION_STRUCTURE = 118
+
+	DATA_BOOL8 = 119
+	DATA_BOOL16 = 120
+end
+
 
 ## structures
 
-struct MetalLibFunction
+struct FunctionConstant
     name::String
+    datatype::MetalDataType
+    index::Int
+    active::Bool
+end
 
-    public_md::Vector{UInt8}    # unknown
-    private_md::Vector{UInt8}   # unknown
-    bitcode::Vector{UInt8}      # binary LLVM IR
+struct DebugInfo
+    line::Int
+    path::String
+end
 
+struct EmbeddedSource
+    link_options::String
+    working_directory::Union{Nothing,String}
+    archives::Vector{Pair{String,Vector{UInt8}}}
+end
+
+Base.@kwdef struct MetalLibFunction
+    name::String
     air_version::VersionNumber
     metal_version::VersionNumber
-end
-function MetalLibFunction(name::String, bitcode;
-                          public_md = UInt8[], private_md = UInt8[],
-                          air_version::VersionNumber, metal_version::VersionNumber)
-    MetalLibFunction(name, public_md, private_md, bitcode, air_version, metal_version)
+
+    air_module::Vector{UInt8}
+
+    source_id::Union{Nothing,String} = nothing
+
+    # public metadata
+    constants::Vector{FunctionConstant} = FunctionConstant[]
+
+    # private metadata
+    debug_info::Union{Nothing, DebugInfo} = nothing
+    dependent_file::Union{Nothing, String} = nothing
+
+    # reflection data
+    reflection_data::Union{Nothing, Vector{UInt8}} = nothing
 end
 
 Base.@kwdef struct MetalLib
@@ -82,7 +251,10 @@ Base.@kwdef struct MetalLib
     platform_type::PlatformType=PLATFORM_MACOS
     is_64bit::Bool=true
 
+    uuid::Union{Nothing, UUID} = nothing
+
     functions::Vector{MetalLibFunction}
+    embedded_source::Union{Nothing, EmbeddedSource} = nothing
 end
 
 function Base.show(io::IO, lib::MetalLib)
@@ -121,15 +293,327 @@ function Base.show(io::IO, lib::MetalLib)
 end
 
 
-## reading
+## tag groups
+
+# a helper type for reading and writing tag groups
+Base.@kwdef struct TagGroup
+    data::Vector{Pair{String,Any}}=Pair{String,Any}[]   # like an ordered dict
+
+    offsets::Dict{String,Int} = Dict()
+
+    # the size of each tag's size fields in the tag group
+    size_type::Type=UInt16
+
+    # whether the tag group starts with a 32-bit size field for the entire group
+    has_size::Bool=true
+
+    # whether the tag group size field is included in the size
+    counts_size::Bool=true
+end
+
+# Dict-like methods to interact with a tag group
+function Base.get(tg::TagGroup, tag::String, default)
+    for (key, value) in tg.data
+        if key == tag
+            return value
+        end
+    end
+    return default
+end
+function Base.haskey(tg::TagGroup, tag::String)
+    value = get(tg, tag, nothing)
+    return value !== nothing
+end
+function Base.getindex(tg::TagGroup, tag::String)
+    value = get(tg, tag, nothing)
+    if value === nothing
+        throw(KeyError(tag))
+    end
+    return value
+end
+function Base.setindex!(tg::TagGroup, value, tag::String)
+    @assert value !== nothing
+    if haskey(tg, tag)
+        throw(ArgumentError("Tag $tag already exists"))
+    end
+    push!(tg.data, tag => value)
+end
+
+# look up the offset of a tag
+function offsetof(tg::TagGroup, tag::String)
+    if !haskey(tg, tag)
+        throw(KeyError(tag))
+    end
+    return tg.offsets[tag]
+end
+
+# for processing tag values: expected type, read function (io, nb), write function (io, val)
+const tag_value_io = Dict()
+## function list
+tag_value_io["NAME"] = (
+    # Name of the function; a null-terminated string
+    String,
+    (io, _)   -> String(readuntil(io, UInt8(0))),
+    (io, val) -> begin
+        length(val) <= typemax(UInt16)-1 || throw(ArgumentError("Name too long"))
+        write(io, val)
+        write(io, UInt8(0))
+    end)
+tag_value_io["TYPE"] = (
+    # Type of the function; 1 byte
+    ProgramType,
+    (io, _)   -> read(io, ProgramType),
+    (io, val) -> write(io, UInt8(val)))
+tag_value_io["HASH"] = (
+    # Hash of the module data; 32 bytes (SHA-256)
+    Vector{UInt8},
+    (io, nb)  -> read(io, nb),
+    (io, val) -> write(io, val))
+tag_value_io["OFFT"] = (
+    # Offsets of the information about this function in the public metadata section,
+    # private metadata section, and module section; Each offset is a 64-bit unsigned integer
+    @NamedTuple{public_md::UInt64, private_md::UInt64, air_module::UInt64},
+    (io, _)   -> (; public_md=read(io, UInt64),
+                    private_md=read(io, UInt64),
+                    air_module=read(io, UInt64)),
+    (io, val) -> write(io, UInt64[val.public_md, val.private_md, val.air_module]))
+tag_value_io["SOFF"] = (
+    # Offset of the source code archive of the function in the embedded source code section;
+    # a 64-bit unsigned integer
+    UInt64,
+    (io, _)   -> read(io, UInt64),
+    (io, val) -> write(io, val))
+tag_value_io["VERS"] = (
+    # Module and language versions (air.major, air.minor, language.major, language.minor);
+    # 4 x 16-bit unsigned integers
+    @NamedTuple{air::VersionNumber, metal::VersionNumber},
+    (io, _)   -> (; air=VersionNumber(read(io, UInt16), read(io, UInt16)),
+                    metal=VersionNumber(read(io, UInt16), read(io, UInt16))),
+    (io, val) -> write(io, UInt16[val.air.major, val.air.minor,
+                                  val.metal.major, val.metal.minor]))
+tag_value_io["MDSZ"] = (
+    # Size of the module; a 64-bit unsigned integer
+    UInt64,
+    (io, _)   -> read(io, UInt64),
+    (io, val) -> write(io, val))
+tag_value_io["RFLT"] = (
+    # Offset of the reflection list of the function in the reflection list section;
+    # a 64-bit unsigned integer
+    UInt64,
+    (io, _)   -> read(io, UInt64),
+    (io, val) -> write(io, val))
+## header extension
+tag_value_io["HSRC"] = (
+    # Offset and size of the embedded source code section; 2 x 64-bit unsigned integers
+    @NamedTuple{offset::UInt64, size::UInt64},
+    (io, _)   -> (; offset=read(io, UInt64), size=read(io, UInt64)),
+    (io, val) -> write(io, UInt64[val.offset, val.size]))
+tag_value_io["HSRD"] = tag_value_io["HSRC"]
+tag_value_io["RLST"] = (
+    # Offset and size of the reflection list section; 2 x 64-bit unsigned integers
+    @NamedTuple{offset::UInt64, size::UInt64},
+    (io, _)   -> (; offset=read(io, UInt64), size=read(io, UInt64)),
+    (io, val) -> write(io, UInt64[val.offset, val.size]))
+tag_value_io["UUID"] = (
+    # UUID of the module; 16 bytes
+    UUID,
+    (io, _)   -> begin
+        uuid_bits = Vector{UInt64}(undef, 2)
+        read!(io, uuid_bits)
+        UUID(Tuple(uuid_bits))
+    end,
+    (io, val) -> begin
+        bits = convert(Tuple{UInt64,UInt64}, val)
+        write(io, UInt64[bits...])
+    end)
+## public metadata
+tag_value_io["CNST"] = (
+    # A list of function constants
+    Vector{FunctionConstant},
+    (io, _)   -> begin
+        num_constants = read(io, UInt16)
+        constants = Vector{FunctionConstant}(undef, num_constants)
+        for i in 1:num_constants
+            name = String(readuntil(io, UInt8(0)))
+            datatype = read(io, MetalDataType)
+            index = read(io, UInt16)
+            active = Bool(read(io, UInt8))
+
+            constants[i] = FunctionConstant(name, datatype, index, active)
+        end
+        constants
+    end,
+    (io, val) -> begin
+        write(io, UInt16(length(val)))
+        for constant in val
+            write(io, constant.name)
+            write(io, UInt8(0))
+            write(io, UInt8(constant.datatype))
+            write(io, UInt16(constant.index))
+            write(io, UInt8(constant.active))
+        end
+    end)
+## private metadata
+tag_value_io["DEBI"] = (
+    # Debug information; line number and path of the source file
+    DebugInfo,
+    (io, _)   -> DebugInfo(read(io, UInt32), String(readuntil(io, UInt8(0)))),
+    (io, val) -> begin
+        write(io, UInt32(val.line))
+        write(io, val.path)
+        write(io, UInt8(0))
+    end)
+tag_value_io["DEPF"] = (
+    # Path of the dependent file; a null-terminated string
+    String,
+    (io, _)   -> String(readuntil(io, UInt8(0))),
+    (io, val) -> begin
+        write(io, val)
+        write(io, UInt8(0))
+    end)
+## embedded sources
+tag_value_io["SARC"] = (
+    # Source archive; an identifier (null-terminated ASCII) and BZip2-compressed tarball
+    @NamedTuple{id::String, archive::Vector{UInt8}},
+    (io, nb)  -> begin
+        id = String(readuntil(io, UInt8(0)))
+        compressed = read(io, nb - sizeof(id) - 1)
+
+        # unpad and decompress the archive
+        i = findlast(!iszero, compressed)
+        archive = transcode(Bzip2Decompressor, compressed[1:i])
+
+        (; id, archive)
+    end,
+    (io, val) -> begin
+        write(io, val.id)
+        write(io, UInt8(0))
+
+        # compress and pad the archive
+        compressed = transcode(Bzip2Compressor, val.archive)
+        padding = 16*1024 - (sizeof(compressed) % (16*1024))
+        compressed = vcat(compressed, Base.zeros(UInt8, padding))
+
+        write(io, compressed)
+    end)
+## reflection lists
+tag_value_io["RBUF"] = (
+    # Reflection buffer
+    Vector{UInt8},
+    (io, nb)  -> begin
+        read(io, nb)
+    end,
+    (io, val) -> write(io, val))
+
+function Base.read!(io::IO, tg::TagGroup)
+    if tg.has_size
+        if tg.counts_size
+            group_start = position(io)
+        end
+        group_size = read(io, UInt32)
+        if !tg.counts_size
+            group_start = position(io)
+        end
+    end
+
+    while true
+        # read the tag name
+        tag_name = String(read(io, 4*sizeof(Cchar)))
+        if tag_name == "ENDT"
+            break
+        end
+
+        # read the value size and note our position
+        value_size = read(io, tg.size_type)
+        tg.offsets[tag_name] = position(io)
+
+        # XXX: there's a 2 byte mismatch between the reflection list size, and the
+        #      next token... bug in air-lld?
+        if tag_name == "RBUF"
+            value_size += 2
+        end
+
+        if !haskey(tag_value_io, tag_name)
+            @warn "Unknown tag: $tag_name"
+            skip(io, value_size)
+            continue
+        end
+
+        # read and parse the value
+        value_type, value_parser, _ = tag_value_io[tag_name]
+        value = value_parser(io, value_size)
+        isa(value, value_type) || error("Value for tag $tag_name has type $(typeof(value)), expected $value_type")
+        tg[tag_name] = value
+
+        # ensure we consumed the entire value
+        @assert position(io) == tg.offsets[tag_name] + value_size
+    end
+
+    # ensure we consumed the entire group
+    if tg.has_size
+        @assert position(io) == group_start + group_size
+    end
+
+    return tg
+end
+
+function Base.write(io::IO, tg::TagGroup)
+    # emit the data and their values
+    group_data = let io=IOBuffer()
+        for (tag, value) in tg.data
+            # write the tag name
+            @assert length(tag) == 4
+            write(io, tag)
+
+            # look up the tag and validate the value
+            haskey(tag_value_io, tag) || error("Unknown tag $tag")
+            value_type, _, value_writer = tag_value_io[tag]
+
+            # serialize the value
+            value_bytes = let io=IOBuffer()
+                value_writer(io, convert(value_type, value))
+                take!(io)
+            end
+            value_size = sizeof(value_bytes)
+
+            # XXX: there's a 2 byte mismatch between the reflection list size, and the
+            #      next token... bug in air-lld?
+            if tag == "RBUF"
+                value_size -= 2
+            end
+
+            # write the value size and the value itself
+            write(io, tg.size_type(value_size))
+            tg.offsets[tag] = position(io)
+            write(io, value_bytes)
+        end
+        write(io, "ENDT")
+
+        take!(io)
+    end
+
+    # emit the tag group
+    if tg.has_size
+        sz = sizeof(group_data)
+        if tg.counts_size
+            sz += sizeof(UInt32)
+        end
+        write(io, UInt32(sz))
+    end
+    write(io, group_data)
+
+    return io
+end
+
+
+## metal library format
 
 function Base.read(io::IO, ::Type{MetalLib})
-    ## headers
+    ## header
 
     # 4 bytes: "MTLB" magic
-    magic = Cchar[0,0,0,0]
-    read!(io, magic)
-    if Char.(magic) != ['M', 'T', 'L', 'B']
+    magic = String(read(io, 4))
+    if magic != "MTLB"
         throw(ArgumentError("Not a Metal library"))
     end
 
@@ -192,82 +676,9 @@ function Base.read(io::IO, ::Type{MetalLib})
     private_md_offset = read(io, UInt64)
     private_md_size = read(io, UInt64)
 
-    # 2 x 8 bytes: bitcode offset and size
-    bitcode_offset = read(io, UInt64)
-    bitcode_size = read(io, UInt64)
-
-
-    ## helpers
-
-    function read_taggroup(read)
-        tags = []
-        while true
-            tag_name = String(read(io, 4*sizeof(Cchar)))
-            if tag_name == "ENDT"
-                break
-            end
-            tag_size = read(io, UInt16)
-            tag_data = read(io, tag_size)
-
-            # parse tags
-            ## function list tags
-            if tag_name == "NAME"
-                push!(tags, :name => String(tag_data[1:end-1]))
-            elseif tag_name == "TYPE"
-                push!(tags, :type => only(reinterpret(ProgramType, tag_data)))
-            elseif tag_name == "HASH"
-                push!(tags, :hash => bytes2hex(tag_data))
-            elseif tag_name == "OFFT"
-                offsets = reinterpret(UInt64, tag_data)
-                @assert length(offsets) == 3
-                push!(tags, :offsets => (;
-                    public_md = offsets[1],
-                    private_md = offsets[2],
-                    bitcode = offsets[3])
-                )
-            elseif tag_name == "SOFF"
-                push!(tags, :source_offset => only(reinterpret(UInt64, tag_data)))
-            elseif tag_name == "VERS"
-                vers = reinterpret(UInt16, tag_data)
-                @assert length(vers) == 4
-                push!(tags, :versions => (;
-                    air   = VersionNumber(vers[1], vers[2]),
-                    metal = VersionNumber(vers[3], vers[4]))
-                )
-            elseif tag_name == "MDSZ"
-                push!(tags, :bitcode_size => only(reinterpret(UInt64, tag_data)))
-            elseif tag_name == "RFLT"
-                push!(tags, :rflt => only(reinterpret(UInt64, tag_data)))
-            ## header extension tags
-            elseif tag_name == "RLST"
-                section_info = reinterpret(UInt64, tag_data)
-                @assert length(section_info) == 2
-                push!(tags, :reflection => (; offset=section_info[1], size=section_info[2]))
-            elseif tag_name == "UUID"
-                push!(tags, :uuid => UUID(only(reinterpret(UInt128, tag_data))))
-            ## reflection lists
-            elseif tag_name == "RBUF"
-                # XXX: there's a 2 byte mismatch between the reflection list size, and the
-                #      next ENDT token... bug in air-lld? let's eagerly read those bytes.
-                append!(tag_data, read(io, 2))
-                push!(tags, :reflection_buffer => tag_data)
-            else
-                @warn "unknown tag: $tag_name" tag_size tag_data
-            end
-        end
-        return NamedTuple(tags)
-    end
-
-    # generate a custom `read` function that also checks we don't over-read the section
-    function checked_reader(io, maxpos, name)
-        function reader(io, args...)
-            ret = read(io, args...)
-            if position(io) > maxpos
-                throw(EOFError())
-            end
-            return ret
-        end
-    end
+    # 2 x 8 bytes: module list offset and size
+    module_list_offset = read(io, UInt64)
+    module_list_size = read(io, UInt64)
 
 
     ## sections
@@ -275,272 +686,299 @@ function Base.read(io::IO, ::Type{MetalLib})
     # function list
     function_list = []
     seek(io, function_list_offset)
-    let read = checked_reader(io, function_list_offset + function_list_size, "function list")
-        entry_count = read(io, UInt32)
-        for i in 1:entry_count
-            tag_group_start = position(io)
-            tag_group_size = read(io, UInt32)
-            let read = checked_reader(io, tag_group_start + tag_group_size, "tag group")
-                push!(function_list, read_taggroup(read))
-            end
-        end
+    function_count = read(io, UInt32)
+    for i in 1:function_count
+        tag_group_start = position(io)
+        push!(function_list, read!(io, TagGroup()))
     end
+    # the function list size excludes the size field at the start
+    @assert position(io) <= function_list_offset + function_list_size + sizeof(UInt32)
 
     # header extension, if any
-    header_ex = if position(io) < public_md_offset
-        # the header extension group isn't preceded by a size field
-        let read = checked_reader(io, public_md_offset, "header extension")
-            read_taggroup(read)
-        end
+    if position(io) < public_md_offset
+        header_ex = read!(io, TagGroup(has_size=false))
+        @assert position(io) == public_md_offset
     else
-        nothing
+        header_ex = nothing
     end
 
-    # public md
+    # public metadata
     public_md = []
-    let read = checked_reader(io, private_md_offset, "public metadata")
-        for i in 1:length(function_list)
-            tag_group_start = position(io)
-            tag_group_size = read(io, UInt32)
-            let read = checked_reader(io, tag_group_start + tag_group_size, "tag group")
-                push!(public_md, read_taggroup(read))
-            end
-        end
+    for i in 1:function_count
+        tag_group_start = position(io)
+        push!(public_md, read!(io, TagGroup()))
     end
-
-    # private_md
     @assert position(io) == private_md_offset
-    private_md = []
-    let read = checked_reader(io, bitcode_offset, "private metadata")
-        for i in 1:length(function_list)
-            tag_group_start = position(io)
-            tag_group_size = read(io, UInt32)
-            let read = checked_reader(io, tag_group_start + tag_group_size, "tag group")
-                push!(private_md, read_taggroup(read))
-            end
-        end
-    end
 
-    # bitcode
-    @assert position(io) == bitcode_offset
-    bitcode = []
-    let read = checked_reader(io, bitcode_offset + bitcode_size, "bitcode")
-        for i in 1:length(function_list)
-            bitcode_size = function_list[i].bitcode_size
-            push!(bitcode, read(io, bitcode_size))
-        end
+    # private metadata
+    private_md = []
+    for i in 1:function_count
+        tag_group_start = position(io)
+        push!(private_md, read!(io, TagGroup()))
     end
+    @assert position(io) == module_list_offset
+
+    # module list
+    module_list = []
+    for i in 1:function_count
+        module_size = function_list[i]["MDSZ"]
+        push!(module_list, read(io, module_size))
+    end
+    @assert position(io) == module_list_offset + module_list_size
 
     # reflection list
-    reflection_list = []
-    if header_ex !== nothing && haskey(header_ex, :reflection)
-        seek(io, header_ex.reflection.offset)
-        let read = checked_reader(io, header_ex.reflection.offset + header_ex.reflection.size, "reflection")
-            num_lists = read(io, UInt32)
-            for i in 1:num_lists
-                list_start = position(io)
-                list_size = read(io, UInt32)
-                let read = checked_reader(io, list_start + list_size, "reflection sublist")
-                    push!(reflection_list, read_taggroup(read))
+    #
+    # there always seems to be one buffer per function, so let's store it in MetalLibFunction
+    reflection_data = Vector{Vector{UInt8}}(undef, function_count)
+    if header_ex !== nothing && haskey(header_ex, "RLST")
+        seek(io, header_ex["RLST"].offset)
+        reflection_count = read(io, UInt32)
+        for i in 1:reflection_count
+            # note the offset as used by the RFLT tag
+            reflection_offset = position(io) - header_ex["RLST"].offset
+
+            reflection_buf = read!(io, TagGroup())
+
+            # check if any function points to this reflection
+            function_idx = findfirst(function_list) do fun
+                fun["RFLT"] == reflection_offset
+            end
+            if function_idx === nothing
+                error("No function points to this reflection")
+            end
+            reflection_data[function_idx] = reflection_buf["RBUF"]
+        end
+        @assert position(io) == header_ex["RLST"].offset + header_ex["RLST"].size
+    end
+
+    # embedded source
+    #
+    # there can be fewer sources than functions, so preserve the function -> source mapping
+    embedded_source = nothing
+    function_sources = Dict()
+    have_hsrc = header_ex !== nothing && haskey(header_ex, "HSRC")
+    have_hsrd = header_ex !== nothing && haskey(header_ex, "HSRD")
+    if have_hsrc || have_hsrd
+        # HSRC and HSRC are identical except for the working directory field
+        @assert have_hsrc != have_hsrd
+        tag = have_hsrc ? "HSRC" : "HSRD"
+        seek(io, header_ex[tag].offset)
+
+        source_archive_count = read(io, UInt32)
+        command_line_info = String(readuntil(io, UInt8(0)))
+        working_directory = if have_hsrd
+            String(readuntil(io, UInt8(0)))
+        else
+            nothing
+        end
+
+        archives = []
+        for i in 1:source_archive_count
+            # note the offset as used by the SOFF tag
+            source_offset = position(io) + sizeof(UInt32) - header_ex[tag].offset
+
+            data = read!(io, TagGroup(size_type=UInt32, counts_size=false))
+            id, archive = data["SARC"]
+            push!(archives, id => archive)
+
+            # check if any function points to this source
+            for j in 1:length(function_list)
+                if function_list[j]["SOFF"] == source_offset
+                    function_sources[j] = id
                 end
             end
         end
+
+        embedded_source = EmbeddedSource(command_line_info, working_directory, archives)
     end
 
     # reconstruct objects
     functions = MetalLibFunction[]
     for i in 1:length(function_list)
-        push!(functions, MetalLibFunction(
-            function_list[i].name,
-            bitcode[i];
-            air_version=function_list[i].versions.air,
-            metal_version=function_list[i].versions.metal
+        optional_args = []
+        if haskey(public_md[i], "CNST")
+            push!(optional_args, :constants => public_md[i]["CNST"])
+        end
+        if haskey(private_md[i], "DEBI")
+            push!(optional_args, :debug_info => private_md[i]["DEBI"])
+        end
+        if haskey(private_md[i], "DEPF")
+            push!(optional_args, :dependent_file => private_md[i]["DEPF"])
+        end
+        if haskey(function_sources, i)
+            push!(optional_args, :source_id => function_sources[i])
+        end
+        if isassigned(reflection_data, i)
+            push!(optional_args, :reflection_data => reflection_data[i])
+        end
+
+        push!(functions, MetalLibFunction(;
+            name = function_list[i]["NAME"],
+            air_module = module_list[i],
+            air_version=function_list[i]["VERS"].air,
+            metal_version=function_list[i]["VERS"].metal,
+            optional_args...
         ))
+    end
+
+    optional_args = []
+    if header_ex !== nothing && haskey(header_ex, "UUID")
+        # TODO: get rid of the nothing checks
+        push!(optional_args, :uuid => header_ex["UUID"])
     end
 
     MetalLib(; file_version, file_type, is_macos, is_stub,
                platform_version, platform_type, is_64bit,
-               functions)
-end
-
-
-## writing
-
-function emit_tag_group(io::IO, data::Vector; emit_size=true)
-    # emit the tags and their values
-    tag_stream = IOBuffer()
-    for (tag, value) in data
-        emit_tag(tag_stream, tag, value)
-    end
-    emit_tag(tag_stream, "ENDT")
-    tag_group = take!(tag_stream)
-
-    # emit the tag group
-    if emit_size
-        # the size of the tag group includes the size bytes itself
-        write(io, UInt32(sizeof(tag_group) + sizeof(UInt32)))
-    end
-    write(io, tag_group)
-    return io
-end
-
-function emit_tag(io::IO, tag::String, value=nothing)
-    # emit the tag
-    @assert length(tag) == 4
-    write(io, tag)
-
-    # helpers for emitting the value
-    write_len(len) = write(io, UInt16(len))
-    function write_value(value, T=typeof(value))
-        value = convert(T, value)
-        write_len(sizeof(value))
-        write(io, value)
-    end
-
-    # emit the value
-    if tag == "NAME"
-        # Name of the function
-        isa(value, String) || throw(ArgumentError("Name must be a string"))
-        length(value) <= typemax(UInt16)-1 || throw(ArgumentError("Name too long"))
-        write_len(length(value) + 1)
-        write(io, value)
-        write(io, UInt8(0))
-    elseif tag == "MDSZ"
-        # Size of the bitcode
-        write_value(value, UInt64)
-    elseif tag == "TYPE"
-        # Type of the function
-        write_value(value, UInt8)
-    elseif tag == "HASH"
-        # Hash of the bitcode data (SHA256)
-        if !isa(value, Vector) || sizeof(value) != 32
-            throw(ArgumentError("Hash must be a 32-byte vector"))
-        end
-        write_value(value)
-    elseif tag == "OFFT"
-        # Offsets of the information about this function in the public metadata section,
-        # private metadata section, and bitcode section
-        write_value(UInt64[value.public_md, value.private_md, value.bitcode])
-    elseif tag == "SOFF"
-        # Offset of the source code archive of the function in the embedded source code
-        # section
-        write_value(value, UInt64)
-    elseif tag == "VERS"
-        # Bitcode and language versions (air.major, air.minor, metal.major, metal.minor)
-        write_value(UInt16[value.air.major, value.air.minor,
-                           value.metal.major, value.metal.minor])
-    elseif tag == "LAYR"
-        # Metal type of the render_target_array_index (for layered rendering)
-        write_value(value, UInt8)
-    elseif tag == "TESS"
-        # Patch type and number of control points per-patch (for post-tessellation vertex
-        # function)
-        write_value(value, UInt8)
-    elseif tag == "RFLT"
-        # Unknown tag; added in Metal 2.7
-        write_value(value, UInt64)
-    elseif tag == "ENDT"
-        # End of the tag group
-        if value !== nothing
-            throw(ArgumentError("ENDT tag must not have a value"))
-        end
-    elseif tag == "UUID"
-        # UUID of the Metal library
-        if !isa(value, UUID)
-            throw(ArgumentError("UUID must be a UUID"))
-        end
-        bits = convert(Tuple{UInt64,UInt64}, value)
-        write_len(16)
-        write(io, bits[1])
-        write(io, bits[2])
-    elseif tag == "RLST"
-        # Unknown section; added in Metal 2.7
-        write_value(UInt64[value.offset, value.size])
-    else
-        throw(ArgumentError("Unknown tag: $tag"))
-    end
+               functions, embedded_source,
+               optional_args...)
 end
 
 function Base.write(io::IO, lib::MetalLib)
-    ## section contents
+    ## embedded source
+
+    embedded_source_offsets = Dict()
+
+    embedded_source = let io=IOBuffer()
+        if lib.embedded_source !== nothing
+            write(io, UInt32(length(lib.embedded_source.archives)))
+            write(io, lib.embedded_source.link_options)
+            write(io, UInt8(0))
+            if lib.file_version >= v"1.2.6"
+                write(io, lib.embedded_source.working_directory)
+                write(io, UInt8(0))
+            end
+            for (id, archive) = lib.embedded_source.archives
+                # the offset points past the tag token
+                embedded_source_offsets[id] = position(io) + sizeof(UInt32)
+
+                archive_tags = TagGroup(size_type=UInt32, counts_size=false)
+                archive_tags["SARC"] = (; id, archive)
+                write(io, archive_tags)
+            end
+        end
+        take!(io)
+    end
+
+
+    ## reflection list
+
+    reflection_list_offsets = Int[]
+
+    reflection_list = let io=IOBuffer()
+        reflection_buffers = count(lib.functions) do fun
+            fun.reflection_data !== nothing
+        end
+
+        # we expect either no reflection buffers, or one for each function
+        # (otherwise it's not clear how to encode the offsets in the RFLT tags)
+        @assert reflection_buffers == 0 || reflection_buffers == length(lib.functions)
+
+        if reflection_buffers > 0
+            write(io, UInt32(reflection_buffers))
+            for fun in lib.functions
+                push!(reflection_list_offsets, position(io))
+
+                reflection_tags = TagGroup()
+                reflection_tags["RBUF"] = fun.reflection_data
+                write(io, reflection_tags)
+            end
+        end
+        take!(io)
+    end
+
+
+    ## function list
 
     public_md_stream = IOBuffer()
     private_md_stream = IOBuffer()
-    bitcode_stream = IOBuffer()
+    module_list_stream = IOBuffer()
 
-    tag_groups = []
+    function_tag_groups = []
 
-    for fun in lib.functions
-        # TODO: public metadata
+    for (i, fun) in enumerate(lib.functions)
+        # public metadata
         public_md_offset = position(public_md_stream)
-        emit_tag_group(public_md_stream, [])
+        public_md_tags = TagGroup()
+        if !isempty(fun.constants)
+            public_md_tags["CNST"] = fun.constants
+        end
+        write(public_md_stream, public_md_tags)
 
-        # TODO: private metadata
+        # private metadata
         private_md_offset = position(private_md_stream)
-        emit_tag_group(private_md_stream, [])
+        private_md_tags = TagGroup()
+        if fun.debug_info !== nothing
+            private_md_tags["DEBI"] = fun.debug_info
+        end
+        if fun.dependent_file !== nothing
+            private_md_tags["DEPF"] = fun.dependent_file
+        end
+        write(private_md_stream, private_md_tags)
 
-        # bitcode
-        bitcode_offset = position(bitcode_stream)
-        bitcode_hash = sha256(fun.bitcode)
-        bitcode_size = sizeof(fun.bitcode)
-        write(bitcode_stream, fun.bitcode)
+        # module
+        module_list_offset = position(module_list_stream)
+        module_hash = sha256(fun.air_module)
+        module_size = sizeof(fun.air_module)
+        write(module_list_stream, fun.air_module)
 
         # tags
-        tags = [
-            "NAME" => fun.name,
-            "TYPE" => PROGRAM_KERNEL,
-            "HASH" => bitcode_hash,
-            "OFFT" => (; public_md=public_md_offset,
-                         private_md=private_md_offset,
-                         bitcode=bitcode_offset),
-            "VERS" => (; air=fun.air_version, metal=fun.metal_version),
-            "MDSZ" => bitcode_size,
-        ]
-        if lib.file_version >= v"1.2.7"
-            # XXX: placeholder; this data is invalid
-            push!(tags, "RFLT" => 0)
+        function_tags = TagGroup()
+        function_tags["NAME"] = fun.name
+        function_tags["TYPE"] = PROGRAM_KERNEL
+        function_tags["HASH"] = module_hash
+        function_tags["OFFT"] = (; public_md=public_md_offset,
+                                   private_md=private_md_offset,
+                                   air_module=module_list_offset)
+        function_tags["VERS"] = (; air=fun.air_version, metal=fun.metal_version)
+        function_tags["MDSZ"] = module_size
+        if fun.source_id !== nothing && haskey(embedded_source_offsets, fun.source_id)
+            function_tags["SOFF"] = embedded_source_offsets[fun.source_id]
         end
-        tag_stream = IOBuffer()
-        emit_tag_group(tag_stream, tags)
-        push!(tag_groups, take!(tag_stream))
+        if lib.file_version >= v"1.2.7"
+            function_tags["RFLT"] = reflection_list_offsets[i]
+        end
+        push!(function_tag_groups, function_tags)
     end
 
     function_list_stream = IOBuffer()
-    write(function_list_stream, UInt32(length(lib.functions)))
-    for tags in tag_groups
-        write(function_list_stream, tags)
+    write(function_list_stream, UInt32(length(function_tag_groups)))
+    for tag_group in function_tag_groups
+        write(function_list_stream, tag_group)
     end
 
     function_list = take!(function_list_stream)
-    function_list_size = sizeof(function_list)
+    public_md = take!(public_md_stream)
+    private_md = take!(private_md_stream)
+    module_list = take!(module_list_stream)
 
-    # header extensions
-    header_ex = if lib.file_version >= v"1.2.3"
-        tags = []
+
+    ## header extensions
+
+    if lib.file_version >= v"1.2.3"
+        header_ex_tags = TagGroup(has_size=false)
+        if sizeof(embedded_source) > 0
+            embedded_source_tag = lib.file_version >= v"1.2.6" ? "HSRD" : "HSRC"
+            header_ex_tags[embedded_source_tag] = (; offset=0, size=sizeof(embedded_source))
+        end
         if lib.file_version >= v"1.2.7"
-            # XXX: placeholder; this data is invalid
-            push!(tags, "RLST" => (; offset=0, size=0))
+            header_ex_tags["RLST"] = (; offset=0, size=sizeof(reflection_list))
         end
         # XXX: placeholder; this data is invalid
         #      it should be a UUID based on all of the module's data
-        push!(tags, "UUID" => uuid1())
+        if lib.uuid !== nothing
+            header_ex_tags["UUID"] = lib.uuid
+        end
 
         header_ex_stream = IOBuffer()
-        emit_tag_group(header_ex_stream, tags; emit_size=false)
-        take!(header_ex_stream)
-    else
-        UInt8[]
+        write(header_ex_stream, header_ex_tags)
+        header_ex = take!(header_ex_stream)
     end
-
-    public_md = take!(public_md_stream)
-    private_md = take!(private_md_stream)
-    bitcode = take!(bitcode_stream)
 
 
     ## header
 
     # magic
-    write(io, Cchar['M', 'T', 'L', 'B'])
+    write(io, "MTLB")
 
     # file version
     write(io, UInt16(lib.file_version.major) | UInt16(lib.is_macos) << 15)
@@ -575,10 +1013,13 @@ function Base.write(io::IO, lib::MetalLib)
     # we can only write offset fields after having written the sections,
     # so keep track of their positions and patch them later
     placeholders = Dict{Symbol,Int}()
+    function mark_placeholder(name, location)
+        placeholders[name] = location
+    end
     function write_placeholder(io, T, name)
         pos = position(io)
         write(io, zero(T) #= placeholder =#)
-        placeholders[name] = pos
+        mark_placeholder(name, pos)
     end
     function patch_placeholder(io, name, value)
         position = mark(io)
@@ -592,10 +1033,8 @@ function Base.write(io::IO, lib::MetalLib)
 
     # function list offset and size
     write_placeholder(io, UInt64, :function_list_offset)
-    # the function list size excludes the size field at the start, but it is included in
-    # other offset calculations, so only substract it here. this isn't very nice; instead
-    # we could just determine the offsets by backpatching them after writing the sections.
-    write(io, UInt64(sizeof(function_list)-sizeof(UInt32)))
+    # the function list size excludes the size field at the start
+    write(io, UInt64(sizeof(function_list) - sizeof(UInt32)))
 
     # public metadata offset and size
     write_placeholder(io, UInt64, :public_md_offset)
@@ -605,9 +1044,9 @@ function Base.write(io::IO, lib::MetalLib)
     write_placeholder(io, UInt64, :private_md_offset)
     write(io, UInt64(sizeof(private_md)))
 
-    # bitcode offset and size
-    write_placeholder(io, UInt64, :bitcode_offset)
-    write(io, UInt64(sizeof(bitcode)))
+    # module list offset and size
+    write_placeholder(io, UInt64, :module_list_offset)
+    write(io, UInt64(sizeof(module_list)))
 
 
     ## write sections
@@ -617,6 +1056,14 @@ function Base.write(io::IO, lib::MetalLib)
     write(io, function_list)
 
     # header extension
+    if sizeof(embedded_source) > 0
+        mark_placeholder(:embedded_source_offset,
+                         position(io) + offsetof(header_ex_tags, embedded_source_tag))
+    end
+    if sizeof(reflection_list) > 0
+        mark_placeholder(:reflection_list_offset,
+                         position(io) + offsetof(header_ex_tags, "RLST"))
+    end
     write(io, header_ex)
 
     # public metadata
@@ -627,11 +1074,15 @@ function Base.write(io::IO, lib::MetalLib)
     patch_placeholder(io, :private_md_offset, position(io))
     write(io, private_md)
 
-    # bitcode
-    patch_placeholder(io, :bitcode_offset, position(io))
-    write(io, bitcode)
+    # module list
+    patch_placeholder(io, :module_list_offset, position(io))
+    write(io, module_list)
 
-    # TODO: sources
+    # sources
+    if sizeof(embedded_source) > 0
+        patch_placeholder(io, :embedded_source_offset, position(io))
+        write(io, embedded_source)
+    end
 
     # TODO: dynamic header
 
@@ -639,7 +1090,11 @@ function Base.write(io::IO, lib::MetalLib)
 
     # TODO: imported symbol list
 
-    # TODO: reflection list
+    # reflection list
+    if sizeof(reflection_list) > 0
+        patch_placeholder(io, :reflection_list_offset, position(io))
+        write(io, reflection_list)
+    end
 
     # TODO: script list
 

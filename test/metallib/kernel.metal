@@ -1,0 +1,5 @@
+//
+
+kernel void foo()
+{
+}

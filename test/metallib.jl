@@ -1,8 +1,5 @@
-# tool to test ability to parse and generate Metal libraries
-#
-# Usage: julia --project res/metallib.jl <path-to-metallib>
+# test that we can parse and regenerate Metal libraries accurately
 
-using Metal
 using Metal: MetalLibFunction, MetalLib
 
 using Printf: @printf
@@ -58,13 +55,52 @@ end
 
 # diff two streams, highlighting different lines and additionally different characters.
 colordiff(in1, in2) = colordiff(stdout, in1, in2)
-function colordiff(io, in1, in2)
+function colordiff(io, in1, in2; context=2)
     lines1 = collect(eachline(in1))
     lines2 = collect(eachline(in2))
     lines = max(length(lines1), length(lines2))
-    linelen = max(maximum(length, lines1), maximum(length, lines2))
 
+    # find relevant line numbers
+    line_status = fill(0, lines)
+    ## print those that differ
     for i in 1:lines
+        if get(lines1, i, "") != get(lines2, i, "")
+            line_status[i] = 1
+        end
+    end
+    ## if any differ, also include the start and end
+    if any(line_status .== 1)
+        line_status[1] = 1
+        line_status[end] = 1
+    end
+    ## include context
+    for i in 1:lines
+        if line_status[i] == 1
+            for j in max(1, i-context):min(lines, i+context)
+                if line_status[j] == 0
+                    line_status[j] = 2
+                end
+            end
+        end
+    end
+
+    if !any(line_status .== 1)
+        return
+    end
+
+    # print relevant lines
+    was_printing = true
+    linelen = max(maximum(length, lines1), maximum(length, lines2))
+    for i in 1:lines
+        if line_status[i] == 0
+            if was_printing
+                println(io, "...")
+                was_printing = false
+            end
+            continue
+        end
+        was_printing = true
+
         line1 = get(lines1, i, "")
         if length(line1) < linelen
             line1 *= " "^(linelen - length(line1))
@@ -95,24 +131,47 @@ function colordiff(io, in1, in2)
     end
 end
 
-function main(ref_path)
+function compare(ref_path)
     # parse the reference version
     ref_bytes = read(ref_path)
     ref_library = open(ref_path) do io
         read(io, MetalLib)
     end
 
-    print("Parsed ")
-    display(ref_library)
-    println()
-
     # generate new data, and parse it again
-    new_bytes = sprint(io -> write(io, ref_library))
+    new_bytes = let IO=IOBuffer()
+        write(IO, ref_library)
+        take!(IO)
+    end
 
-    # diff the binary data
-    hexdiff(ref_bytes, new_bytes)
+    # compare
+    if ref_bytes == new_bytes
+        return true
+    else
+        println("Encountered differences while comparing $(basename(ref_path))")
 
-    return
+        display(ref_library)
+        println()
+
+        hexdiff(ref_bytes, new_bytes)
+
+        return false
+    end
 end
 
-isinteractive() || main(ARGS...)
+
+@testset "metallib" begin
+
+metallib_dir = joinpath(@__DIR__, "metallib")
+metallibs = String[]
+for file in readdir(metallib_dir)
+    if endswith(file, ".metallib")
+        push!(metallibs, file)
+    end
+end
+
+@testset for metallib in metallibs
+    @test compare(joinpath(metallib_dir, metallib))
+end
+
+end
