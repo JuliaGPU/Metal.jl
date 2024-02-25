@@ -335,6 +335,9 @@ Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Comp
 Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Float16,N,S} =
   isbits(xs) ? xs : MtlArray{T,N,S}(xs)
 
+Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Complex{Float16},N,S} =
+  isbits(xs) ? xs : MtlArray{T,N,S}(xs)
+
 """
     mtl(A; storage=Private)
 
