@@ -27,16 +27,11 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 TranscodingStreams = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
-[weakdeps]
-SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
-
-[extensions]
-SpecialFunctionsExt = "SpecialFunctions"
-
 [compat]
 Adapt = "4"
 Artifacts = "1"
 CEnum = "0.4, 0.5"
+CodecBzip2 = "0.8"
 ExprTools = "0.1"
 GPUArrays = "10"
 GPUCompiler = "0.26"
@@ -51,5 +46,11 @@ SHA = "0.7"
 StaticArrays = "1"
 julia = "1.8"
 
+[extensions]
+SpecialFunctionsExt = "SpecialFunctions"
+
 [extras]
+SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
+
+[weakdeps]
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
