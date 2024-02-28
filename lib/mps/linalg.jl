@@ -31,7 +31,11 @@ const MPS_VALID_MATMUL_TYPES =
      (Float16, Float16),
      (Float32, Float32)]
 
-function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul)
+if VERSION < v"1.12.0-"
+LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
+    LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
+end
+function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, alpha::Number, beta::Number)
     mA, nA = LinearAlgebra.lapack_size(tA, A)
     mB, nB = LinearAlgebra.lapack_size(tB, B)
 
@@ -59,9 +63,9 @@ function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B:
     # If possible, dispatch to performance shaders
     if is_supported(current_device()) &&
        typA == typB && (typA, typC) in MPS_VALID_MATMUL_TYPES
-        matmul!(C, A, B, _add.alpha, _add.beta, transA, transB)
+        matmul!(C, A, B, alpha, beta, transA, transB)
     else
-        GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), _add.alpha, _add.beta)
+        GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
     end
 end
 
@@ -92,7 +96,11 @@ const MPS_VALID_MATVECMUL_TYPES =
      (Float16, Float32),
      (Float32, Float32)]
 
-function LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, _add::MulAddMul)
+if VERSION < v"1.12.0-"
+LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, _add::MulAddMul) =
+    LinearAlgebra.generic_matvecmul!(C, tA, A, B, _add.alpha, _add.beta)
+end
+function LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, alpha::Number, beta::Number)
     mA, nA = LinearAlgebra.lapack_size(tA, A)
     mB = length(B)
     mC = length(C)
@@ -120,20 +128,20 @@ function LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::Mtl
     # If possible, dispatch to performance shaders
     if is_supported(current_device()) && 
         typA == typB && (typA, typC) in MPS_VALID_MATVECMUL_TYPES
-        matvecmul!(C, A, B, _add.alpha, _add.beta, transA)
+        matvecmul!(C, A, B, alpha, beta, transA)
     else
-        GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, _add.alpha, _add.beta)
+        GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)
     end
 end
 
 if VERSION < v"1.10.0-DEV.1365"
 # catch other functions that are called by LinearAlgebra's mul!
 function LinearAlgebra.gemv!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, a::Number, b::Number)
-    LinearAlgebra.generic_matvecmul!(C, tA, A, B, MulAddMul(a, b))
+    LinearAlgebra.generic_matvecmul!(C, tA, A, B, a, b)
 end
 # disambiguation
 function LinearAlgebra.gemv!(C::MtlVector{T}, tA::AbstractChar, A::MtlMatrix{T}, B::MtlVector{T}, a::Number, b::Number) where {T<:LinearAlgebra.BlasFloat}
-    LinearAlgebra.generic_matvecmul!(C, tA, A, B, MulAddMul(a, b))
+    LinearAlgebra.generic_matvecmul!(C, tA, A, B, a, b)
 end
 end
 
