@@ -42,6 +42,12 @@ end
         @test mtl(Complex{SrcType}[1+1im]) isa MtlArray{Complex{TargType}}
     end
 
+    # test the regular adaptor
+    @test Adapt.adapt(MtlArray, [1 2;3 4]) isa MtlArray{Int, 2, Private}
+    @test Adapt.adapt(MtlArray{Float32}, [1 2;3 4]) isa MtlArray{Float32, 2, Private}
+    @test Adapt.adapt(MtlArray{Float32, 2}, [1 2;3 4]) isa MtlArray{Float32, 2, Private}
+    @test Adapt.adapt(MtlArray{Float32, 2, Shared}, [1 2;3 4]) isa MtlArray{Float32, 2, Shared}
+    @test Adapt.adapt(MtlMatrix{ComplexF32, Shared}, [1 2;3 4]) isa MtlArray{ComplexF32, 2, Shared}
     @test Adapt.adapt(MtlArray{Float16}, Float64[1]) isa MtlArray{Float16}
 
     # Test a few explicitly unsupported types

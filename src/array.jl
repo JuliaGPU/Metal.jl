@@ -316,6 +316,8 @@ Adapt.adapt_storage(::Type{<:MtlArray{T}}, xs::AT) where {T, AT<:AbstractArray} 
   isbitstype(AT) ? xs : convert(MtlArray{T}, xs)
 Adapt.adapt_storage(::Type{<:MtlArray{T, N}}, xs::AT) where {T, N, AT<:AbstractArray} =
   isbitstype(AT) ? xs : convert(MtlArray{T,N}, xs)
+Adapt.adapt_storage(::Type{<:MtlArray{T, N, S}}, xs::AT) where {T, N, S, AT<:AbstractArray} =
+ isbitstype(AT) ? xs : convert(MtlArray{T,N,S}, xs)
 
 
 ## opinionated gpu array adaptor
