@@ -16,8 +16,6 @@ struct MtlPointer{T}
     end
 end
 
-Base.pointer(buf::MTLBuffer) = MtlPointer{Nothing}(buf)
-
 Base.eltype(::Type{<:MtlPointer{T}}) where {T} = T
 
 # limited arithmetic
