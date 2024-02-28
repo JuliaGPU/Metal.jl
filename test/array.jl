@@ -16,7 +16,6 @@ end
     xs = MtlArray{Int}(undef, 2, 3)
     @test device(xs) == current_device()
     @test collect(MtlArray([1 2; 3 4])) == [1 2; 3 4]
-    @test collect(mtl[1, 2, 3]) == [1, 2, 3]
     @test collect(mtl([1, 2, 3])) == [1, 2, 3]
     @test testf(vec, rand(Float32, 5,3))
     @test mtl(1:3) === 1:3
@@ -27,6 +26,7 @@ end
     @test mtl([1]) isa MtlArray{Int}
     @test mtl(Float64[1]) isa MtlArray{Float32}
     @test mtl(ComplexF64[1+1im]) isa MtlArray{ComplexF32}
+    @test mtl(ComplexF16[1+1im]) isa MtlArray{ComplexF16}
     @test Adapt.adapt(MtlArray{Float16}, Float64[1]) isa MtlArray{Float16}
 
 
