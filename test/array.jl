@@ -22,13 +22,34 @@ end
     @test Base.elsize(xs) == sizeof(Int)
     @test pointer(MtlArray{Int, 2}(xs)) != pointer(xs)
 
-    # test aggressive conversion to Float32, but only for floats, and only with `mtl`
-    @test mtl([1]) isa MtlArray{Int}
-    @test mtl(Float64[1]) isa MtlArray{Float32}
-    @test mtl(ComplexF64[1+1im]) isa MtlArray{ComplexF32}
-    @test mtl(ComplexF16[1+1im]) isa MtlArray{ComplexF16}
+    # Page 22 of https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
+    # Only bfloat missing
+    supported_number_types = [Float16  => Float16,
+                              Float32  => Float32,
+                              Float64  => Float32,
+                              Bool     => Bool,
+                              Int16    => Int16,
+                              Int32    => Int32,
+                              Int64    => Int64,
+                              Int8     => Int8,
+                              UInt16   => UInt16,
+                              UInt32   => UInt32,
+                              UInt64   => UInt64,
+                              UInt8    => UInt8]
+    # Test supported types and ensure only Float64 get converted to Float32
+    for (SrcType, TargType) in supported_number_types
+        @test mtl(SrcType[1]) isa MtlArray{TargType}
+        @test mtl(Complex{SrcType}[1+1im]) isa MtlArray{Complex{TargType}}
+    end
+
     @test Adapt.adapt(MtlArray{Float16}, Float64[1]) isa MtlArray{Float16}
 
+    # Test a few explicitly unsupported types
+    @test_throws "MtlArray only supports element types that are stored inline" MtlArray(BigInt[1])
+    @test_throws "MtlArray only supports element types that are stored inline" MtlArray(BigFloat[1])
+    @test_throws "Metal does not support Float64 values" MtlArray(Float64[1])
+    @test_throws "Metal does not support Int128 values" MtlArray(Int128[1])
+    @test_throws "Metal does not support UInt128 values" MtlArray(UInt128[1])
 
     @test collect(Metal.zeros(2, 2)) == zeros(Float32, 2, 2)
     @test collect(Metal.ones(2, 2)) == ones(Float32, 2, 2)

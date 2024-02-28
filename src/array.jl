@@ -327,18 +327,11 @@ struct MtlArrayAdaptor{S} end
 Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T,N,S} =
   isbits(xs) ? xs : MtlArray{T,N,S}(xs)
 
-Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:AbstractFloat,N,S} =
+Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Float64,N,S} =
   isbits(xs) ? xs : MtlArray{Float32,N,S}(xs)
 
-Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Complex{<:AbstractFloat},N,S} =
+Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Complex{<:Float64},N,S} =
   isbits(xs) ? xs : MtlArray{ComplexF32,N,S}(xs)
-
-# not for Float16
-Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Float16,N,S} =
-  isbits(xs) ? xs : MtlArray{T,N,S}(xs)
-
-Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Complex{Float16},N,S} =
-  isbits(xs) ? xs : MtlArray{T,N,S}(xs)
 
 """
     mtl(A; storage=Private)
