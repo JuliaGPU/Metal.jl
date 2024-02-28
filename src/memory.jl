@@ -71,21 +71,25 @@ end
 # GPU -> GPU
 function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPointer{T}, src::MtlPointer{T}, N::Integer;
                              queue::MTLCommandQueue=global_queue(dev), async::Bool=false) where T
-    cmdbuf = MTLCommandBuffer(queue)
-    MTLBlitCommandEncoder(cmdbuf) do enc
-        MTL.append_copy!(enc, dst.buffer, dst.offset, src.buffer, src.offset, N * sizeof(T))
+    @autoreleasepool begin
+        cmdbuf = MTLCommandBuffer(queue)
+        MTLBlitCommandEncoder(cmdbuf) do enc
+            MTL.append_copy!(enc, dst.buffer, dst.offset, src.buffer, src.offset, N * sizeof(T))
+        end
+        commit!(cmdbuf)
+        async || wait_completed(cmdbuf)
     end
-    commit!(cmdbuf)
-    async || wait_completed(cmdbuf)
 end
 
 function unsafe_fill!(dev::MTLDevice, ptr::MtlPointer{T}, value::Union{UInt8,Int8}, N::Integer) where T
-    cmdbuf = MTLCommandBuffer(global_queue(dev))
-    MTLBlitCommandEncoder(cmdbuf) do enc
-        MTL.append_fillbuffer!(enc, ptr.buffer, value, N * sizeof(T), ptr.offset)
+    @autoreleasepool begin
+        cmdbuf = MTLCommandBuffer(global_queue(dev))
+        MTLBlitCommandEncoder(cmdbuf) do enc
+            MTL.append_fillbuffer!(enc, ptr.buffer, value, N * sizeof(T), ptr.offset)
+        end
+        commit!(cmdbuf)
+        wait_completed(cmdbuf)
     end
-    commit!(cmdbuf)
-    wait_completed(cmdbuf)
 end
 
 # TODO: Implement generic fill since mtBlitCommandEncoderFillBuffer is limiting

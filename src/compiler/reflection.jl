@@ -49,40 +49,41 @@ function code_agx(io::IO, job::MetalCompilerJob)
     pipeline, fun = link(job, compiled; return_function=true)
     # XXX: can we re-use this pipeline?
 
-    # register it with a pipeline descriptor
-    pipeline_desc = MTLComputePipelineDescriptor()
-    pipeline_desc.computeFunction = fun
+    @autoreleasepool begin
+        # register it with a pipeline descriptor
+        pipeline_desc = MTLComputePipelineDescriptor()
+        pipeline_desc.computeFunction = fun
 
-    # create a binary archive
-    bin_desc = MTLBinaryArchiveDescriptor()
-    bin = MTLBinaryArchive(current_device(), bin_desc)
-    add_functions!(bin, pipeline_desc)
+        # create a binary archive
+        bin_desc = MTLBinaryArchiveDescriptor()
+        bin = MTLBinaryArchive(current_device(), bin_desc)
+        add_functions!(bin, pipeline_desc)
 
-    code = mktempdir() do dir
-        # serialize the archive to a file
-        binary = joinpath(dir, "kernel.macho")
-        write(binary, bin)
+        mktempdir() do dir
+            # serialize the archive to a file
+            binary = joinpath(dir, "kernel.macho")
+            write(binary, bin)
 
-        # disassemble the main function
-        first = true
-        i = 0
-        extract_gpu_code(binary) do name, code
-            # skip all-zero functions
-            all(code .== 0) && return
+            # disassemble the main function
+            first = true
+            i = 0
+            extract_gpu_code(binary) do name, code
+                # skip all-zero functions
+                all(code .== 0) && return
 
-            i += 1
-            file = joinpath(dir, "function$(i).bin")
-            write(file, code)
+                i += 1
+                file = joinpath(dir, "function$(i).bin")
+                write(file, code)
 
-            # disassemble the function
-            first || println(io)
-            println(io, "$name:")
-            print(io, disassemble(file))
+                # disassemble the function
+                first || println(io)
+                println(io, "$name:")
+                print(io, disassemble(file))
 
-            first = false
+                first = false
+            end
         end
     end
-
 end
 
 @enum GPUMachineType::UInt32 begin

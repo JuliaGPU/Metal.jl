@@ -108,23 +108,25 @@ end
 
 # link into an executable kernel
 function link(@nospecialize(job::CompilerJob), compiled; return_function=false)
-    dev = current_device()
-    lib = MTLLibraryFromData(dev, compiled.image)
-    fun = MTLFunction(lib, compiled.entry)
-    pipeline_state = try
-        MTLComputePipelineState(dev, fun)
-    catch err
-        isa(err, NSError) || rethrow()
+    @autoreleasepool begin
+        dev = current_device()
+        lib = MTLLibraryFromData(dev, compiled.image)
+        fun = MTLFunction(lib, compiled.entry)
+        pipeline_state = try
+            MTLComputePipelineState(dev, fun)
+        catch err
+            isa(err, NSError) || rethrow()
 
-        # the back-end compiler likely failed
-        # XXX: check more accurately? the error domain doesn't help much here
-        file = tempname(cleanup=false) * ".metallib"
-        write(file, compiled.image)
-        error("""Compilation to native code failed; see below for details.
-                 If you think this is a bug, please file an issue and attach $(file)""")
+            # the back-end compiler likely failed
+            # XXX: check more accurately? the error domain doesn't help much here
+            file = tempname(cleanup=false) * ".metallib"
+            write(file, compiled.image)
+            error("""Compilation to native code failed; see below for details.
+                    If you think this is a bug, please file an issue and attach $(file)""")
+        end
+
+        # most of the time, we don't need the function object,
+        # so don't keep it alive unconditionally in GPUCompiler's caches
+        pipeline_state, return_function ? fun : nothing
     end
-
-    # most of the time, we don't need the function object,
-    # so don't keep it alive unconditionally in GPUCompiler's caches
-    pipeline_state, return_function ? fun : nothing
 end

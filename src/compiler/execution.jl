@@ -271,36 +271,38 @@ function (kernel::HostKernel)(args...; groups=1, threads=1,
     (threads.width * threads.height * threads.depth) > kernel.pipeline.maxTotalThreadsPerThreadgroup &&
         throw(ArgumentError("Number of threads in group ($(threads.width * threads.height * threads.depth)) should not exceed $(kernel.pipeline.maxTotalThreadsPerThreadgroup)"))
 
-    cmdbuf = MTLCommandBuffer(queue)
-    cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
-    cce = MTLComputeCommandEncoder(cmdbuf)
-    argument_buffers = try
-        MTL.set_function!(cce, kernel.pipeline)
-        bufs = encode_arguments!(cce, kernel, kernel.f, args...)
-        MTL.append_current_function!(cce, groups, threads)
-        bufs
-    finally
-        close(cce)
+    @autoreleasepool begin
+        cmdbuf = MTLCommandBuffer(queue)
+        cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
+        cce = MTLComputeCommandEncoder(cmdbuf)
+        argument_buffers = try
+            MTL.set_function!(cce, kernel.pipeline)
+            bufs = encode_arguments!(cce, kernel, kernel.f, args...)
+            MTL.append_current_function!(cce, groups, threads)
+            bufs
+        finally
+            close(cce)
+        end
+
+        # the command buffer retains resources that are explicitly encoded (i.e. direct buffer
+        # arguments, or the buffers allocated for each other argument), but that doesn't keep
+        # other resources alive for which we've encoded the GPU address ourselves. since it's
+        # possible for buffers to go out of scope while the kernel is still running, which
+        # triggers validation failures, keep track of things we need to keep alive until the
+        # kernel has actually completed.
+        #
+        # TODO: is there a way to bind additional resources to the command buffer?
+        roots = [kernel.f, args]
+        MTL.on_completed(cmdbuf) do buf
+            empty!(roots)
+            foreach(free, argument_buffers)
+
+            # TODO: access logs here to check for errors
+            #       https://developer.apple.com/videos/play/wwdc2020/10616/
+        end
+
+        commit!(cmdbuf)
     end
-
-    # the command buffer retains resources that are explicitly encoded (i.e. direct buffer
-    # arguments, or the buffers allocated for each other argument), but that doesn't keep
-    # other resources alive for which we've encoded the GPU address ourselves. since it's
-    # possible for buffers to go out of scope while the kernel is still running, which
-    # triggers validation failures, keep track of things we need to keep alive until the
-    # kernel has actually completed.
-    #
-    # TODO: is there a way to bind additional resources to the command buffer?
-    roots = [kernel.f, args]
-    MTL.on_completed(cmdbuf) do buf
-        empty!(roots)
-        foreach(free, argument_buffers)
-
-        # TODO: access logs here to check for errors
-        #       https://developer.apple.com/videos/play/wwdc2020/10616/
-    end
-
-    commit!(cmdbuf)
 end
 
 ## Intra-warp Helpers
