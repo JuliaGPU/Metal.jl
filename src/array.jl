@@ -30,6 +30,8 @@ function check_eltype(T)
   Base.allocatedinline(T) || error("MtlArray only supports element types that are stored inline")
   Base.isbitsunion(T) && error("MtlArray does not yet support isbits-union arrays")
   contains_eltype(T, Float64) && error("Metal does not support Float64 values, try using Float32 instead")
+  contains_eltype(T, Int128) && error("Metal does not support Int128 values, try using Int64 instead")
+  contains_eltype(T, UInt128) && error("Metal does not support UInt128 values, try using UInt64 instead")
 end
 
 """
@@ -314,6 +316,8 @@ Adapt.adapt_storage(::Type{<:MtlArray{T}}, xs::AT) where {T, AT<:AbstractArray} 
   isbitstype(AT) ? xs : convert(MtlArray{T}, xs)
 Adapt.adapt_storage(::Type{<:MtlArray{T, N}}, xs::AT) where {T, N, AT<:AbstractArray} =
   isbitstype(AT) ? xs : convert(MtlArray{T,N}, xs)
+Adapt.adapt_storage(::Type{<:MtlArray{T, N, S}}, xs::AT) where {T, N, S, AT<:AbstractArray} =
+ isbitstype(AT) ? xs : convert(MtlArray{T,N,S}, xs)
 
 
 ## opinionated gpu array adaptor
@@ -325,18 +329,11 @@ struct MtlArrayAdaptor{S} end
 Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T,N,S} =
   isbits(xs) ? xs : MtlArray{T,N,S}(xs)
 
-Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:AbstractFloat,N,S} =
+Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Float64,N,S} =
   isbits(xs) ? xs : MtlArray{Float32,N,S}(xs)
 
-Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Complex{<:AbstractFloat},N,S} =
+Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Complex{<:Float64},N,S} =
   isbits(xs) ? xs : MtlArray{ComplexF32,N,S}(xs)
-
-# not for Float16
-Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Float16,N,S} =
-  isbits(xs) ? xs : MtlArray{T,N,S}(xs)
-
-Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Complex{Float16},N,S} =
-  isbits(xs) ? xs : MtlArray{T,N,S}(xs)
 
 """
     mtl(A; storage=Private)
