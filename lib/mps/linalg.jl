@@ -31,10 +31,8 @@ const MPS_VALID_MATMUL_TYPES =
      (Float16, Float16),
      (Float32, Float32)]
 
-if VERSION < v"1.12.0-"
 LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
     LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
-end
 function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, alpha::Number, beta::Number)
     mA, nA = LinearAlgebra.lapack_size(tA, A)
     mB, nB = LinearAlgebra.lapack_size(tB, B)
@@ -96,10 +94,8 @@ const MPS_VALID_MATVECMUL_TYPES =
      (Float16, Float32),
      (Float32, Float32)]
 
-if VERSION < v"1.12.0-"
 LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, _add::MulAddMul) =
     LinearAlgebra.generic_matvecmul!(C, tA, A, B, _add.alpha, _add.beta)
-end
 function LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, alpha::Number, beta::Number)
     mA, nA = LinearAlgebra.lapack_size(tA, A)
     mB = length(B)
