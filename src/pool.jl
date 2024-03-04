@@ -55,7 +55,7 @@ function alloc(dev::Union{MTLDevice,MTLHeap}, sz::Integer, args...; storage, kwa
     @signpost_event log=log_array() "Allocate" "Size=$(Base.format_bytes(sz))"
 
     time = Base.@elapsed begin
-        buf = @autoreleasepool MTLBuffer(dev, bytesize, args...; storage, kwargs...)
+        buf = @autoreleasepool MTLBuffer(dev, sz, args...; storage, kwargs...)
     end
 
     Base.@atomic alloc_stats.alloc_count + 1
