@@ -126,6 +126,7 @@ end
             MTLComputePipelineState(dev, fun)
         catch err
             isa(err, NSError) || rethrow()
+            retain(err)
 
             # the back-end compiler likely failed
             # XXX: check more accurately? the error domain doesn't help much here
