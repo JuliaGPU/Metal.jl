@@ -57,7 +57,7 @@ end
 function compile(@nospecialize(job::CompilerJob))
     signpost_event(log_compiler(), "Compile", "Job=$job")
 
-    @signpost_interval "Generate LLVM IR" log=log_compiler() begin
+    @signpost_interval log=log_compiler() "Generate LLVM IR" begin
         # TODO: on 1.9, this actually creates a context. cache those.
         ir, entry = JuliaContext() do ctx
             mod, meta = GPUCompiler.compile(:llvm, job)
@@ -65,7 +65,7 @@ function compile(@nospecialize(job::CompilerJob))
         end
     end
 
-    @signpost_interval "Downgrade to AIR" log=log_compiler() begin
+    @signpost_interval log=log_compiler() "Downgrade to AIR" begin
         # generate AIR
         air = let
             input = Pipe()
@@ -92,7 +92,7 @@ function compile(@nospecialize(job::CompilerJob))
         end
     end
 
-    @signpost_interval "Create Metal library" log=log_compiler() begin
+    @signpost_interval log=log_compiler() "Create Metal library" begin
         image = try
             metallib_fun = MetalLibFunction(; name=entry, air_module=air,
                                             air_version=job.config.target.air,
@@ -118,7 +118,7 @@ end
                                return_function=false)
     signpost_event(log_compiler(), "Link", "Job=$job")
 
-    @signpost_interval "Instantiate compute pipeline" log=log_compiler() begin
+    @signpost_interval log=log_compiler() "Instantiate compute pipeline" begin
         dev = current_device()
         lib = MTLLibraryFromData(dev, compiled.image)
         fun = MTLFunction(lib, compiled.entry)
