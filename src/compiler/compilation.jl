@@ -122,7 +122,7 @@ end
         file = tempname(cleanup=false) * ".metallib"
         write(file, compiled.image)
         error("""Compilation to native code failed; see below for details.
-                If you think this is a bug, please file an issue and attach $(file)""")
+                 If you think this is a bug, please file an issue and attach $(file)""")
     end
 
     # most of the time, we don't need the function object,
