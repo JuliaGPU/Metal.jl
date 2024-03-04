@@ -55,7 +55,7 @@ end
 
 # compile to executable machine code
 function compile(@nospecialize(job::CompilerJob))
-    signpost_event(log_compiler(), "Compile", "Job=$job")
+    @signpost_event log=log_compiler() "Compile" "Job=$job"
 
     @signpost_interval log=log_compiler() "Generate LLVM IR" begin
         # TODO: on 1.9, this actually creates a context. cache those.
@@ -116,7 +116,7 @@ end
 # link into an executable kernel
 @autoreleasepool function link(@nospecialize(job::CompilerJob), compiled;
                                return_function=false)
-    signpost_event(log_compiler(), "Link", "Job=$job")
+    @signpost_event log=log_compiler() "Link" "Job=$job"
 
     @signpost_interval log=log_compiler() "Instantiate compute pipeline" begin
         dev = current_device()
