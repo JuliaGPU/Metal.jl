@@ -1,4 +1,5 @@
 @testset "MTL" begin
+@autoreleasepool begin
 
 @testset "devices" begin
 
@@ -461,4 +462,5 @@ end
 
 # TODO: continue adding tests
 
+end
 end

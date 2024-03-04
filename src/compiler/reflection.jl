@@ -36,7 +36,7 @@ function code_agx(io::IO, @nospecialize(func), @nospecialize(types),
     code_agx(io, job)
 end
 
-function code_agx(io::IO, job::MetalCompilerJob)
+@autoreleasepool function code_agx(io::IO, job::MetalCompilerJob)
     if !job.config.kernel
         error("Can only generate AGX code for kernel functions")
     end
@@ -58,7 +58,7 @@ function code_agx(io::IO, job::MetalCompilerJob)
     bin = MTLBinaryArchive(current_device(), bin_desc)
     add_functions!(bin, pipeline_desc)
 
-    code = mktempdir() do dir
+    mktempdir() do dir
         # serialize the archive to a file
         binary = joinpath(dir, "kernel.macho")
         write(binary, bin)
@@ -82,7 +82,6 @@ function code_agx(io::IO, job::MetalCompilerJob)
             first = false
         end
     end
-
 end
 
 @enum GPUMachineType::UInt32 begin

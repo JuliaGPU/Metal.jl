@@ -28,7 +28,7 @@ function __init__()
         end
     end
 
-    try
+    @autoreleasepool try
         load_framework("CoreGraphics")
         ver = MTL.MTLCompileOptions().languageVersion
         @debug "Successfully loaded Metal; targeting v$ver."

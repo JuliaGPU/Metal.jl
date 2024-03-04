@@ -107,7 +107,8 @@ function compile(@nospecialize(job::CompilerJob))
 end
 
 # link into an executable kernel
-function link(@nospecialize(job::CompilerJob), compiled; return_function=false)
+@autoreleasepool function link(@nospecialize(job::CompilerJob), compiled;
+                               return_function=false)
     dev = current_device()
     lib = MTLLibraryFromData(dev, compiled.image)
     fun = MTLFunction(lib, compiled.entry)
