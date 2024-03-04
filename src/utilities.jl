@@ -161,6 +161,7 @@ function profiled(f)
     notification_name = "julia.metal.profile"
     folder = profile_dir()
     instruments = [
+        # relevant instruments taken from `xcrun xctrace list instruments`
         "GPU",
 
         # CPU
@@ -169,6 +170,8 @@ function profiled(f)
         "Metal Application",
         "Metal GPU Counters",
         "Metal Resource Events",
+
+        "os_signpost",
     ]
     cmd = `xctrace record`
     for instrument in instruments
