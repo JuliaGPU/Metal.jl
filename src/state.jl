@@ -1,5 +1,10 @@
 export current_device, device!, global_queue, synchronize, device_synchronize
 
+log_compiler()          = OSLog("org.juliagpu.metal", "Compiler")
+log_compiler(args...)   = log_compiler()(args...)
+log_array()             = OSLog("org.juliagpu.metal", "Array")
+log_array(args...)      = log_array()(args...)
+
 """
     current_device()::MTLDevice
 

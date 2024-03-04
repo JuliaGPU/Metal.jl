@@ -51,15 +51,15 @@ The storage kwarg controls where the buffer is stored. Possible values are:
 Note that `Private` buffers can't be directly accessed from the CPU, therefore you cannot
 use this option if you pass a ptr to initialize the memory.
 """
-function alloc(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer, args...;
-               storage, kwargs...)
+function alloc(dev::Union{MTLDevice,MTLHeap}, sz::Integer, args...; storage, kwargs...)
+    signpost_event(log_array(), "Allocate", "Size=$(Base.format_bytes(sz))")
 
     time = Base.@elapsed begin
         buf = @autoreleasepool MTLBuffer(dev, bytesize, args...; storage, kwargs...)
     end
 
     Base.@atomic alloc_stats.alloc_count + 1
-    Base.@atomic alloc_stats.alloc_bytes + bytesize
+    Base.@atomic alloc_stats.alloc_bytes + sz
     Base.@atomic alloc_stats.total_time + time
 
     return buf
@@ -73,6 +73,7 @@ This does not protect against double-freeing of the same buffer!
 """
 function free(buf::MTLBuffer)
     sz::Int = buf.length
+    signpost_event(log_array(), "Free", "Size=$(Base.format_bytes(sz))")
 
     time = Base.@elapsed begin
         @autoreleasepool unsafe=true release(buf)
