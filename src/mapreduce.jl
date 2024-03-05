@@ -148,8 +148,8 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     Base.check_reducedims(R, A)
     length(A) == 0 && return R # isempty(::Broadcasted) iterates
 
-     # be conservative about using shuffle instructions
-     shuffle = T <: Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
+    # be conservative about using shuffle instructions
+    shuffle = T <: Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
 
     # add singleton dimensions to the output container, if needed
     if ndims(R) < ndims(A)
@@ -184,8 +184,8 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
                      Int(dev.maxThreadgroupMemoryLength) ÷ sizeof(T))
 
     # also want to make sure the grain size is not too high as to starve threads of work.
-    # as a simple heuristic, assume we can launch the maximum number of threads.
-    grain = min(grain, prevpow(2, cld(length(Rreduce), maxthreads)))
+    # as a simple heuristic, ensure we can launch the maximum number of threads.
+    grain = min(grain, nextpow(2, cld(length(Rreduce), maxthreads)))
 
     # how many threads can we launch?
     #
