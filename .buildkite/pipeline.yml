@@ -32,7 +32,8 @@ steps:
               - "1.8"
               - "1.9"
               - "1.10"
-              - "nightly"
+              - "1.11"
+              # - "nightly"
           adjustments:
             - with:
                 julia: "nightly"
