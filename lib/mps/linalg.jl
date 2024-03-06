@@ -109,8 +109,8 @@ end
 
 # Metal's pivoting sequence needs to be iterated sequentially...
 # TODO: figure out a GPU-compatible way to get the permutation matrix
-LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T =
-    LinearAlgebra.ipiv2perm(Array(v), maxi)
+LinearAlgebra.ipiv2perm(v::MtlVector{T,S}, maxi::Integer) where {T,S} = LinearAlgebra.ipiv2perm(Array(v), maxi)
+LinearAlgebra.ipiv2perm(v::MtlVector{T,S}, maxi::Integer) where {T,S<:CPUStorage} = LinearAlgebra.ipiv2perm(unsafe_wrap(Array, v), maxi)
 
 @autoreleasepool function LinearAlgebra.lu(A::MtlMatrix{T};
                                            check::Bool=true) where {T<:MtlFloat}
