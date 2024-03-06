@@ -45,7 +45,7 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPointer{T}, src::Ptr{T}, N:
         unsafe_copyto!(convert(Ptr{T}, dst), src, N)
     elseif storage_type == MTL.MTLStorageModeManaged
         unsafe_copyto!(convert(Ptr{T}, dst), src, N)
-        MTL.DidModifyRange!(dst, 1:N)
+        MTL.DidModifyRange!(dst.buffer, 1:N)
     end
     return dst
 end

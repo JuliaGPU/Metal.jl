@@ -28,16 +28,16 @@ can construct `MtlArray`s in the same way as regular `Array` objects:
 
 ```jldoctest
 julia> MtlArray{Int}(undef, 2)
-2-element MtlVector{Int64, Metal.MTL.MTLResourceStorageModePrivate}:
+2-element MtlVector{Int64, Private}:
  0
  0
 
 julia> MtlArray{Int}(undef, (1,2))
-1×2 MtlMatrix{Int64, Metal.MTL.MTLResourceStorageModePrivate}:
+1×2 MtlMatrix{Int64, Private}:
  0  0
 
 julia> similar(ans)
-1×2 MtlMatrix{Int64, Metal.MTL.MTLResourceStorageModePrivate}:
+1×2 MtlMatrix{Int64, Private}:
  0  0
 ```
 
@@ -46,7 +46,7 @@ Copying memory to or from the GPU can be expressed using constructors as well, o
 
 ```jldoctest
 julia> a = MtlArray([1,2])
-2-element MtlVector{Int64, Metal.MTL.MTLResourceStorageModePrivate}:
+2-element MtlVector{Int64, Private}:
  1
  2
 
@@ -73,11 +73,11 @@ perform simple element-wise operations you can use `map` or `broadcast`:
 julia> a = MtlArray{Float32}(undef, (1,2));
 
 julia> a .= 5
-1×2 MtlMatrix{Float32, Metal.MTL.MTLResourceStorageModePrivate}:
+1×2 MtlMatrix{Float32, Private}:
  5.0  5.0
 
 julia> map(sin, a)
-1×2 MtlMatrix{Float32, Metal.MTL.MTLResourceStorageModePrivate}:
+1×2 MtlMatrix{Float32, Private}:
  -0.958924  -0.958924
 ```
 
@@ -86,7 +86,7 @@ To reduce the dimensionality of arrays, Metal.jl implements the various flavours
 
 ```jldoctest
 julia> a = Metal.ones(2,3)
-2×3 MtlMatrix{Float32, Metal.MTL.MTLResourceStorageModePrivate}:
+2×3 MtlMatrix{Float32, Private}:
  1.0  1.0  1.0
  1.0  1.0  1.0
 
@@ -94,15 +94,15 @@ julia> reduce(+, a)
 6.0f0
 
 julia> mapreduce(sin, *, a; dims=2)
-2×1 MtlMatrix{Float32, Metal.MTL.MTLResourceStorageModePrivate}:
+2×1 MtlMatrix{Float32, Private}:
  0.59582335
  0.59582335
 
 julia> b = Metal.zeros(1)
-1-element MtlVector{Float32, Metal.MTL.MTLResourceStorageModePrivate}:
+1-element MtlVector{Float32, Private}:
  0.0
 
 julia> Base.mapreducedim!(identity, +, b, a)
-1×1 MtlMatrix{Float32, Metal.MTL.MTLResourceStorageModePrivate}:
+1×1 MtlMatrix{Float32, Private}:
  6.0
 ```

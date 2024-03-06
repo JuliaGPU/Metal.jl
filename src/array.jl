@@ -1,6 +1,6 @@
 # host array
 
-export MtlArray, MtlVector, MtlMatrix, MtlVecOrMat, mtl
+export MtlArray, MtlVector, MtlMatrix, MtlVecOrMat, mtl, is_shared, is_managed, is_private
 
 function hasfieldcount(@nospecialize(dt))
     try
@@ -77,8 +77,16 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
   function MtlArray{T,N}(data::DataRef{<:MTLBuffer}, dims::Dims{N};
                          maxsize::Int=prod(dims) * sizeof(T), offset::Int=0) where {T,N}
       check_eltype(T)
-      S = convert(MTL.MTLResourceOptions, data[].storageMode)
-      obj = new{T,N,S}(copy(data), maxsize, offset, dims)
+      storagemode = data[].storageMode
+      if storagemode == MTL.MTLStorageModeShared
+        obj = new{T,N,Shared}(copy(data), maxsize, offset, dims)
+      elseif storagemode == MTL.MTLStorageModeManaged
+        obj = new{T,N,Managed}(copy(data), maxsize, offset, dims)
+      elseif storagemode == MTL.MTLStorageModePrivate
+        obj = new{T,N,Private}(copy(data), maxsize, offset, dims)
+      elseif storagemode == MTL.MTLStorageModeMemoryless
+        obj = new{T,N,Memoryless}(copy(data), maxsize, offset, dims)
+      end
       finalizer(unsafe_free!, obj)
   end
 end
@@ -90,6 +98,10 @@ device(A::MtlArray) = A.data[].device
 storagemode(x::MtlArray) = storagemode(typeof(x))
 storagemode(::Type{<:MtlArray{<:Any,<:Any,S}}) where {S} = S
 
+is_shared(a::MtlArray) = storagemode(a) == Shared
+is_managed(a::MtlArray) = storagemode(a) == Managed
+is_private(a::MtlArray) = storagemode(a) == Private
+is_memoryless(a::MtlArray) = storagemode(a) == Memoryless
 
 ## convenience constructors
 
@@ -144,15 +156,42 @@ Base.elsize(::Type{<:MtlArray{T}}) where {T} = sizeof(T)
 Base.size(x::MtlArray) = x.dims
 Base.sizeof(x::MtlArray) = Base.elsize(x) * length(x)
 
-Base.pointer(x::MtlArray{T}) where {T} = Base.unsafe_convert(MtlPointer{T}, x)
-@inline function Base.pointer(x::MtlArray{T}, i::Integer) where T
-    Base.unsafe_convert(MtlPointer{T}, x) + Base._memory_offset(x, i)
+@inline function Base.pointer(x::MtlArray{T}, i::Integer=1; storage=Private) where {T}
+  PT = if storage == Private
+    MtlPointer{T}
+  elseif storage == Shared || storage == Managed
+    Ptr{T}
+  else
+    error("unknown memory type")
+  end
+  Base.unsafe_convert(PT, x) + Base._memory_offset(x, i)
 end
 
-Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S, T} =
-  throw(ArgumentError("cannot take the CPU address of a $(typeof(x))"))
-Base.unsafe_convert(::Type{MtlPointer{T}}, x::MtlArray) where {T} =
-  MtlPointer{T}(x.data[], x.offset*Base.elsize(x))
+
+function Base.unsafe_convert(::Type{MtlPointer{T}}, x::MtlArray) where {T}
+   buf = x.data[]
+   MtlPointer{T}(buf, x.offset*Base.elsize(x))
+ end
+
+function Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S, T}
+  buf = x.data[]
+  if is_private(x)
+    throw(ArgumentError("cannot take the CPU address of a $(typeof(x))"))
+  end
+  convert(Ptr{T}, buf) + x.offset*Base.elsize(x)
+end
+
+
+## indexing
+function Base.getindex(x::MtlArray{T,N,S}, I::Int) where {T,N,S<:Union{Shared,Managed}}
+  @boundscheck checkbounds(x, I)
+  unsafe_load(pointer(x, I; storage=S))
+end
+
+function Base.setindex!(x::MtlArray{T,N,S}, v, I::Int) where {T,N,S<:Union{Shared,Managed}}
+  @boundscheck checkbounds(x, I)
+  unsafe_store!(pointer(x, I; storage=S), v)
+end
 
 
 ## interop with other arrays
@@ -354,7 +393,7 @@ Uses Adapt.jl to act inside some wrapper structs.
 
 ```jldoctests
 julia> mtl(ones(3)')
-1×3 adjoint(::MtlVector{Float32, Metal.MTL.MTLResourceStorageModePrivate}) with eltype Float32:
+1×3 adjoint(::MtlVector{Float32, Private}) with eltype Float32:
  1.0  1.0  1.0
 
 julia> mtl(zeros(1,3); storage=Shared)
@@ -365,13 +404,13 @@ julia> mtl(1:3)
 1:3
 
 julia> MtlArray(1:3)
-3-element MtlVector{Int64, Metal.MTL.MTLResourceStorageModePrivate}:
+3-element MtlVector{Int64, Private}:
  1
  2
  3
 
 julia> mtl[1,2,3]
-3-element MtlVector{Int64, Metal.MTL.MTLResourceStorageModePrivate}:
+3-element MtlVector{Int64, Private}:
  1
  2
  3
@@ -433,8 +472,9 @@ Base.unsafe_convert(::Type{MTL.MTLBuffer}, A::PermutedDimsArray) =
 
 ## unsafe_wrap
 
-Base.unsafe_wrap(t::Type{<:Array}, arr::MtlArray, dims; own=false) =
-  unsafe_wrap(t, arr.data[], dims; own=own)
+function Base.unsafe_wrap(::Type{<:Array}, arr::MtlArray{T,N}, dims=size(arr); own=false) where {T,N}
+  return unsafe_wrap(Array{T,N}, arr.data[], dims; own=own)
+end
 
 function Base.unsafe_wrap(t::Type{<:Array{T}}, buf::MTLBuffer, dims; own=false) where T
     ptr = convert(Ptr{T}, buf)
