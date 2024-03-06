@@ -129,7 +129,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T =
     end
 
     P = similar(A, UInt32, 1, min(N, M))
-    status = MtlArray{MPSMatrixDecompositionStatus}(undef)
+    status = MtlArray{MPSMatrixDecompositionStatus,0,Shared}(undef)
 
     commitAndContinue!(cmdbuf) do cbuf
         mps_p = MPSMatrix(P)
@@ -150,7 +150,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T =
 
     wait_completed(cmdbuf)
 
-    status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
+    status = convert(LinearAlgebra.BlasInt, status[])
     check && checknonsingular(status)
 
     return LinearAlgebra.LU(B, p, status)
@@ -187,7 +187,7 @@ end
     end
 
     P = similar(A, UInt32, 1, min(N, M))
-    status = MtlArray{MPSMatrixDecompositionStatus}(undef)
+    status = MtlArray{MPSMatrixDecompositionStatus,0,Shared}(undef)
 
     commitAndContinue!(cmdbuf) do cbuf
         mps_p = MPSMatrix(P)
@@ -205,7 +205,7 @@ end
 
     wait_completed(cmdbuf)
 
-    status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
+    status = convert(LinearAlgebra.BlasInt, status[])
     check && _check_lu_success(status, allowsingular)
 
     return LinearAlgebra.LU(A, p, status)
