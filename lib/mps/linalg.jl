@@ -174,7 +174,7 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFloa
     end
 
     P = MtlMatrix{UInt32}(undef, 1, min(N, M))
-    status = MtlArray{MPSMatrixDecompositionStatus}(undef)
+    status = MtlArray{MPSMatrixDecompositionStatus,0,Shared}(undef)
 
     cmdbuf_lu = MTLCommandBuffer(queue) do cmdbuf
         mps_p = MPSMatrix(P)
@@ -196,7 +196,7 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFloa
 
     wait_completed(cmdbuf_lu)
 
-    status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
+    status = convert(LinearAlgebra.BlasInt, status[])
     check && checknonsingular(status)
 
     return LinearAlgebra.LU(B, p, status)
@@ -219,7 +219,7 @@ function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFlo
     end
 
     P = MtlMatrix{UInt32}(undef, 1, min(N, M))
-    status = MtlArray{MPSMatrixDecompositionStatus}(undef)
+    status = MtlArray{MPSMatrixDecompositionStatus,0,Shared}(undef)
 
     cmdbuf_lu = MTLCommandBuffer(queue) do cmdbuf
         mps_p = MPSMatrix(P)
@@ -237,7 +237,7 @@ function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFlo
 
     wait_completed(cmdbuf_lu)
 
-    status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
+    status = convert(LinearAlgebra.BlasInt, status[])
     check && checknonsingular(status)
 
     return LinearAlgebra.LU(A, p, status)
