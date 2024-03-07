@@ -34,10 +34,10 @@ steps:
               - "1.10"
               - "1.11"
               # - "nightly"
-          #adjustments:
-          #  - with:
-          #      julia: "nightly"
-          #    soft_fail: true
+          adjustments:
+            - with:
+                julia: "1.11"
+              soft_fail: true
 
   # special tests
   - group: ":eyes: Special"
