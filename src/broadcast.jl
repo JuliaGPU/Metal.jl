@@ -129,7 +129,8 @@ end
 
         kernel = @metal launch=false broadcast_3d(dest, bc)
         w = min(size(dest, 1), kernel.pipeline.threadExecutionWidth)
-        h = min(size(dest, 2), kernel.pipeline.threadExecutionWidth)
+        h = min(size(dest, 2), kernel.pipeline.threadExecutionWidth,
+                               kernel.pipeline.maxTotalThreadsPerThreadgroup ÷ w)
         d = min(size(dest, 3), kernel.pipeline.maxTotalThreadsPerThreadgroup ÷ (w*h))
         threads = (w, h, d)
         groups = cld.(size(dest), threads)
