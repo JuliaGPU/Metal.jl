@@ -103,7 +103,7 @@ end
              while 1 <= is[1] <= size(dest, 1) && 1 <= is[2] <= size(dest, 2)
                 I = CartesianIndex(is)
                 @inbounds dest[I] = bc[I]
-                is = is .+ stride
+                is = (is[1] + stride[1], is[2] + stride[2])
              end
              return
         end
@@ -122,7 +122,7 @@ end
                    1 <= is[3] <= size(dest, 3)
                 I = CartesianIndex(is)
                 @inbounds dest[I] = bc[I]
-                is = is .+ stride
+                is = (is[1] + stride[1], is[2] + stride[2], is[3] + stride[3])
              end
              return
         end
