@@ -456,7 +456,7 @@ end
         buf = Base.unsafe_convert(MTL.MTLBuffer, arr)
         Metal.unsafe_fill!(current_device(), Metal.MtlPointer{T}(buf, 0), T(val), 4)
 
-        @test all(arr .== val)
+        @test all(Array(arr) .== val)
     end
 end
 
