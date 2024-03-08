@@ -462,6 +462,10 @@ end
 
 ## metal library format
 
+Base.parse(::Type{MetalLib}, path::AbstractString) = open(path) do io
+    read(io, MetalLib)
+end
+
 function Base.read(io::IO, ::Type{MetalLib})
     ## header
 
@@ -685,6 +689,10 @@ function Base.read(io::IO, ::Type{MetalLib})
                platform_version, platform_type, is_64bit,
                functions, embedded_source,
                optional_args...)
+end
+
+Base.write(path::AbstractString, lib::MetalLib) = open(path, "w") do io
+    write(io, lib)
 end
 
 function Base.write(io::IO, lib::MetalLib)
