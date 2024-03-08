@@ -17,7 +17,11 @@ function current_device()
     get!(task_local_storage(), :MTLDevice) do
         dev = MTLDevice(1)
         if !supports_family(dev, MTL.MTLGPUFamilyApple7)
-            @warn """Metal.jl is only supported on M-series Macs, you may run into issues.
+            @warn """Metal.jl is only supported on Apple Silicon, you may run into issues.
+                     See https://github.com/JuliaGPU/Metal.jl/issues/22 for more details.""" maxlog=1
+        end
+        if !supports_family(dev, MTL.MTLGPUFamilyMetal3)
+            @warn """Metal.jl is only supported on Metal 3-capable devices, you may run into issues.
                      See https://github.com/JuliaGPU/Metal.jl/issues/22 for more details.""" maxlog=1
         end
         return dev
