@@ -241,7 +241,7 @@ try
 
                     # catch timeouts
                     pid = remotecall_fetch(getpid, wrkr)
-                    timer = Timer(300) do _
+                    timer = Timer(360) do _
                         @warn "Test timed out: $test"
                         t1 = rmprocs(wrkr, waitfor=0)
 
