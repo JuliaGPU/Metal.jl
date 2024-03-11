@@ -4,6 +4,7 @@ steps:
     key: "julia"
     steps:
       - label: "Julia {{matrix.julia}}"
+        key: "julia_{{matrix.julia}}"
         plugins:
           - JuliaCI/julia#v1:
               version: "{{matrix.julia}}"
@@ -29,9 +30,9 @@ steps:
         matrix:
           setup:
             julia:
+              - "1"
               - "1.8"
               - "1.9"
-              - "1.10"
               - "1.11"
               # - "nightly"
           adjustments:
@@ -41,7 +42,7 @@ steps:
 
   - group: ":floppy_disk: Storage mode"
     key: "storage"
-    depends_on: "julia"
+    depends_on: "julia_1"
     steps:
       - label: "MtlArray with {{matrix.storage}} storage"
         plugins:
