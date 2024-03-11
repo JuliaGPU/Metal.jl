@@ -1,4 +1,4 @@
-STORAGEMODES = [Private, Shared]#, Managed]
+STORAGEMODES = [Private, Shared, Managed]
 
 @testset "array" begin
 
