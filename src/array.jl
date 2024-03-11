@@ -181,6 +181,7 @@ end
 
 function Base.unsafe_convert(::Type{MtlPointer{T}}, x::MtlArray) where {T}
    buf = x.data[]
+   synchronize()
    MtlPointer{T}(buf, x.offset*Base.elsize(x))
  end
 
@@ -188,6 +189,7 @@ function Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S, T}
   if is_private(x)
     throw(ArgumentError("cannot take the CPU address of a $(typeof(x))"))
   end
+  synchronize()
   buf = x.data[]
   convert(Ptr{T}, buf) + x.offset*Base.elsize(x)
 end
