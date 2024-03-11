@@ -1,5 +1,4 @@
-abstract type StorageMode end
-export Shared, Managed, Private
+export Shared, Managed, Private, CPUStorage
 export ReadUsage, WriteUsage, ReadWriteUsage
 
 # Metal Has 4 storage types
@@ -7,32 +6,25 @@ export ReadUsage, WriteUsage, ReadWriteUsage
 # Managed -> Mirrored memory buffers in host and GPU. Requires syncing
 # Private -> Memory in Device, not accessible by Host.
 # Memoryless -> iOS stuff. ignore it
-module AS
-import ..StorageMode
 
+abstract type StorageMode end
 struct Shared      <: StorageMode end
 struct Managed     <: StorageMode end
 struct Private     <: StorageMode end
 struct Memoryless  <: StorageMode end
-end
 
-const CPUStorage = Union{AS.Shared,AS.Managed}
-Base.convert(::Type{MTLStorageMode}, ::Type{AS.Shared})     = MTLStorageModeShared
-Base.convert(::Type{MTLStorageMode}, ::Type{AS.Managed})    = MTLStorageModeManaged
-Base.convert(::Type{MTLStorageMode}, ::Type{AS.Private})    = MTLStorageModePrivate
-Base.convert(::Type{MTLStorageMode}, ::Type{AS.Memoryless}) = MTLStorageModeMemoryless
+const CPUStorage = Union{Shared,Managed}
+Base.convert(::Type{MTLStorageMode}, ::Type{Shared})     = MTLStorageModeShared
+Base.convert(::Type{MTLStorageMode}, ::Type{Managed})    = MTLStorageModeManaged
+Base.convert(::Type{MTLStorageMode}, ::Type{Private})    = MTLStorageModePrivate
+Base.convert(::Type{MTLStorageMode}, ::Type{Memoryless}) = MTLStorageModeMemoryless
 
-Base.convert(::Type{MTLResourceOptions}, ::Type{AS.Shared})     = MTLResourceStorageModeShared
-Base.convert(::Type{MTLResourceOptions}, ::Type{AS.Managed})    = MTLResourceStorageModeManaged
-Base.convert(::Type{MTLResourceOptions}, ::Type{AS.Private})    = MTLResourceStorageModePrivate
-Base.convert(::Type{MTLResourceOptions}, ::Type{AS.Memoryless}) = MTLResourceStorageModeMemoryless
+Base.convert(::Type{MTLResourceOptions}, ::Type{Shared})     = MTLResourceStorageModeShared
+Base.convert(::Type{MTLResourceOptions}, ::Type{Managed})    = MTLResourceStorageModeManaged
+Base.convert(::Type{MTLResourceOptions}, ::Type{Private})    = MTLResourceStorageModePrivate
+Base.convert(::Type{MTLResourceOptions}, ::Type{Memoryless}) = MTLResourceStorageModeMemoryless
 
-Base.convert(::Type{MTLResourceOptions}, SM::MTL.MTLStorageMode)     = MTLResourceOptions(UInt(SM) << 4)
-
-const Shared                = MTLResourceStorageModeShared
-const Managed               = MTLResourceStorageModeManaged
-const Private               = MTLResourceStorageModePrivate
-const Memoryless            = MTLResourceStorageModeMemoryless
+Base.convert(::Type{MTLResourceOptions}, SM::MTLStorageMode)     = MTLResourceOptions(UInt(SM) << 4)
 
 const DefaultCPUCache       = MTLResourceCPUCacheModeDefaultCache
 const CombinedWriteCPUCache = MTLResourceCPUCacheModeWriteCombined
