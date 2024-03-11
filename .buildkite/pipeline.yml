@@ -39,7 +39,7 @@ steps:
                 julia: "1.11"
               soft_fail: true
 
-  - group: "Storage Mode"
+  - group: ":floppy_disk: Storage mode"
     key: "storage"
     depends_on: "julia"
     steps:
