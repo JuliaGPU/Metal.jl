@@ -185,10 +185,10 @@ function Base.unsafe_convert(::Type{MtlPointer{T}}, x::MtlArray) where {T}
  end
 
 function Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S, T}
-  buf = x.data[]
   if is_private(x)
     throw(ArgumentError("cannot take the CPU address of a $(typeof(x))"))
   end
+  buf = x.data[]
   convert(Ptr{T}, buf) + x.offset*Base.elsize(x)
 end
 
@@ -248,7 +248,7 @@ Base.convert(::Type{T}, x::T) where T <: MtlArray = x
 Base.unsafe_convert(::Type{<:Ptr}, x::MtlArray) =
   throw(ArgumentError("cannot take the host address of a $(typeof(x))"))
 
-Base.unsafe_convert(t::Type{MTL.MTLBuffer}, x::MtlArray) = x.data[]
+Base.unsafe_convert(::Type{MTL.MTLBuffer}, x::MtlArray) = x.data[]
 
 
 ## interop with ObjC libraries
