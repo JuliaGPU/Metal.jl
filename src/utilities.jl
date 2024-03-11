@@ -48,6 +48,19 @@ function versioninfo(io::IO=stdout)
         println(io)
     end
 
+    prefs = [
+        "default_storage" => load_preference(Metal, "default_storage"),
+    ]
+    if any(x->!isnothing(x[2]), prefs)
+        println(io, "Preferences:")
+        for (key, val) in prefs
+            if !isnothing(val)
+                println(io, "- $key: $val")
+            end
+        end
+        println(io)
+    end
+
     devs = devices()
     if isempty(devs)
         println(io, "No Metal devices.")

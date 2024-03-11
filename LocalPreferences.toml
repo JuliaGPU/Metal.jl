@@ -1,0 +1,4 @@
+[Metal]
+# which storage mode unspecified allocations should default to.
+# possible values: "Private", "Shared", "Managed"
+#default_storage = "Private"

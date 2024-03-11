@@ -7,6 +7,7 @@ using GPUCompiler
 using LLVM
 using LLVM.Interop
 import LLVMDowngrader_jll
+using Preferences: @load_preference, load_preference
 using Python_jll
 using ObjectFile
 using ExprTools: splitdef, combinedef
