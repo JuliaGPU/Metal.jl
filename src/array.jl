@@ -397,19 +397,13 @@ julia> mtl(ones(3)')
  1.0  1.0  1.0
 
 julia> mtl(zeros(1,3); storage=Shared)
-1×3 MtlMatrix{Float32, Metal.MTL.MTLResourceCPUCacheModeDefaultCache}:
+1×3 MtlMatrix{Float32, Shared}:
  0.0  0.0  0.0
 
 julia> mtl(1:3)
 1:3
 
 julia> MtlArray(1:3)
-3-element MtlVector{Int64, Private}:
- 1
- 2
- 3
-
-julia> mtl[1,2,3]
 3-element MtlVector{Int64, Private}:
  1
  2
