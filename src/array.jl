@@ -110,7 +110,18 @@ const MtlMatrix{T,S} = MtlArray{T,2,S}
 const MtlVecOrMat{T,S} = Union{MtlVector{T,S},MtlMatrix{T,S}}
 
 # default to private memory
-const DefaultStorageMode = Private
+const DefaultStorageMode = let str = @load_preference("default_storage", "Private")
+  if str == "Private"
+    Private
+  elseif str == "Shared"
+    Shared
+  elseif str == "Managed"
+    Managed
+  else
+    error("unknown default storage mode: $default_storage")
+  end
+end
+
 MtlArray{T,N}(::UndefInitializer, dims::Dims{N}) where {T,N} =
   MtlArray{T,N,DefaultStorageMode}(undef, dims)
 
@@ -170,14 +181,16 @@ end
 
 function Base.unsafe_convert(::Type{MtlPointer{T}}, x::MtlArray) where {T}
    buf = x.data[]
+   synchronize()
    MtlPointer{T}(buf, x.offset*Base.elsize(x))
  end
 
 function Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S, T}
-  buf = x.data[]
   if is_private(x)
     throw(ArgumentError("cannot take the CPU address of a $(typeof(x))"))
   end
+  synchronize()
+  buf = x.data[]
   convert(Ptr{T}, buf) + x.offset*Base.elsize(x)
 end
 
@@ -237,7 +250,7 @@ Base.convert(::Type{T}, x::T) where T <: MtlArray = x
 Base.unsafe_convert(::Type{<:Ptr}, x::MtlArray) =
   throw(ArgumentError("cannot take the host address of a $(typeof(x))"))
 
-Base.unsafe_convert(t::Type{MTL.MTLBuffer}, x::MtlArray) = x.data[]
+Base.unsafe_convert(::Type{MTL.MTLBuffer}, x::MtlArray) = x.data[]
 
 
 ## interop with ObjC libraries

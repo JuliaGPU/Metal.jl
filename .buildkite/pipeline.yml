@@ -39,6 +39,31 @@ steps:
                 julia: "1.11"
               soft_fail: true
 
+  # Test Storage modes Shared and Managed
+  - group: ":floppy_disk: Storage mode"
+    key: "storage"
+    steps:
+      - label: "MtlArray with {{matrix.storage}} storage"
+        plugins:
+          - JuliaCI/julia#v1:
+              version: "1.10"
+          - JuliaCI/julia-test#v1:
+              test_args: "--quickfail"
+        agents:
+          queue: "juliaecosystem"
+          os: "macos"
+          arch: "aarch64"
+        if: build.message !~ /\[skip tests\]/ && build.message !~ /\[skip storage\]/ && !build.pull_request.draft
+        timeout_in_minutes: 60
+        matrix:
+          setup:
+            storage:
+              - "Shared"
+              - "Managed"
+        commands: |
+          echo -e "[Metal]\ndefault_storage = \"{{matrix.storage}}\"" >LocalPreferences.toml
+
+
   # special tests
   - group: ":eyes: Special"
     depends_on: "julia"
