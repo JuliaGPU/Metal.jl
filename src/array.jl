@@ -181,7 +181,6 @@ end
 
 function Base.unsafe_convert(::Type{MtlPointer{T}}, x::MtlArray) where {T}
    buf = x.data[]
-   synchronize()
    MtlPointer{T}(buf, x.offset*Base.elsize(x))
  end
 
