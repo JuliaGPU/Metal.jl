@@ -35,28 +35,20 @@ Adapt.adapt_storage(::KA.CPU, a::MtlArray) = convert(Array, a)
 
 function KA.copyto!(::MetalBackend, A::MtlArray{T}, B::MtlArray{T}) where T
     if device(dest) == device(src)
-        GC.@preserve A B unsafe_copyto!(device(A), pointer(A, storage=Private), pointer(B, storage=Private), length(A); async=true)
+        GC.@preserve A B copyto!(A, B)
         return A
     else
         error("Copy between different devices not implemented")
     end
 end
 
-function KA.copyto!(::MetalBackend, A::Array{T}, B::MtlArray{T,N,S}) where {T,N,S}
-    if (S == Metal.Private)
-        GC.@preserve A B unsafe_copyto!(device(B), pointer(A), pointer(B, storage=S), length(A); async=true)
-    else
-        GC.@preserve A B unsafe_copyto!(pointer(A), pointer(B, storage=S), length(A))
-    end
+function KA.copyto!(::MetalBackend, A::Array{T}, B::MtlArray{T}) where T
+    GC.@preserve A B copyto!(A, B)
     return A
 end
 
-function KA.copyto!(::MetalBackend, A::MtlArray{T,N,S}, B::Array{T}) where {T,N,S}
-    if S == Private
-        GC.@preserve A B unsafe_copyto!(device(A), pointer(A, storage=S), pointer(B), length(A); async=true)
-    else
-        GC.@preserve A B unsafe_copyto!(pointer(A, storage=S), pointer(B), length(A))
-    end
+function KA.copyto!(::MetalBackend, A::MtlArray{T}, B::Array{T}) where T
+    GC.@preserve A B copyto!(A, B)
     return A
 end
 
