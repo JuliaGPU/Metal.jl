@@ -35,7 +35,7 @@ Adapt.adapt_storage(::KA.CPU, a::MtlArray) = convert(Array, a)
 
 function KA.copyto!(::MetalBackend, A::MtlArray{T}, B::MtlArray{T}) where T
     if device(dest) == device(src)
-        GC.@preserve A B unsafe_copyto!(device(A), pointer(A), pointer(B), length(A); async=true)
+        GC.@preserve A B copyto!(A, B)
         return A
     else
         error("Copy between different devices not implemented")
@@ -43,12 +43,12 @@ function KA.copyto!(::MetalBackend, A::MtlArray{T}, B::MtlArray{T}) where T
 end
 
 function KA.copyto!(::MetalBackend, A::Array{T}, B::MtlArray{T}) where T
-    GC.@preserve A B unsafe_copyto!(device(B), pointer(A), pointer(B), length(A); async=true)
+    GC.@preserve A B copyto!(A, B)
     return A
 end
 
 function KA.copyto!(::MetalBackend, A::MtlArray{T}, B::Array{T}) where T
-    GC.@preserve A B unsafe_copyto!(device(A), pointer(A), pointer(B), length(A); async=true)
+    GC.@preserve A B copyto!(A, B)
     return A
 end
 
