@@ -305,4 +305,52 @@ end
   @test length(b) == 1
 end
 
+function _alignedvec(::Type{T}, n::Integer, alignment::Integer=16384) where {T}
+    ispow2(alignment) || throw(ArgumentError("$alignment is not a power of 2"))
+    alignment ≥ sizeof(Int) || throw(ArgumentError("$alignment is not a multiple of $(sizeof(Int))"))
+    isbitstype(T) || throw(ArgumentError("$T is not a bitstype"))
+    p = Ref{Ptr{T}}()
+    err = ccall(:posix_memalign, Cint, (Ref{Ptr{T}}, Csize_t, Csize_t), p, alignment, n*sizeof(T))
+    iszero(err) || throw(OutOfMemoryError())
+    return unsafe_wrap(Array, p[], n, own=true)
+end
+
+@testset "unsafe_wrap" begin
+    # Create page-aligned vector for testing
+    arr1 = _alignedvec(Float32, 18000);
+    fill!(arr1, zero(eltype(arr1)))
+    marr1 = unsafe_wrap(MtlVector{Float32}, arr1);
+
+    @test all(arr1 .== 0)
+    @test all(marr1 .== 0)
+
+    # XXX: Test fails when ordered as shown
+    # @test all(arr1 .== 1)
+    # @test all(marr1 .== 1)
+    marr1 .+= 1;
+    @test all(marr1 .== 1)
+    @test all(arr1 .== 1)
+
+    arr1 .+= 1;
+    @test all(marr1 .== 2)
+    @test all(arr1 .== 2)
+
+    marr2 = Metal.zeros(Float32, 18000; storage=Shared);
+    arr2 = unsafe_wrap(Vector{Float32}, marr2);
+
+    @test all(arr2 .== 0)
+    @test all(marr2 .== 0)
+
+    # XXX: Test fails when ordered as shown
+    # @test all(arr2 .== 1)
+    # @test all(marr2 .== 1)
+    marr2 .+= 1;
+    @test all(marr2 .== 1)
+    @test all(arr2 .== 1)
+
+    arr2 .+= 1;
+    @test all(arr2 .== 2)
+    @test all(marr2 .== 2)
+end
+
 end

@@ -34,13 +34,16 @@ function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer;
 end
 
 function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
-                   storage=Managed, hazard_tracking=DefaultTracking,
+                   nocopy = false, storage=Shared, hazard_tracking=DefaultTracking,
                    cache_mode=DefaultCPUCache)
-    storage == Private && error("Can't create a Private copy-allocated buffer.")
+    storage == Private && error(LazyString("Cannot create a Private ", (nocopy ? "buffer that shares memory with an Array" : "copy-allocated buffer.")))
     opts =  convert(MTLResourceOptions, storage) | hazard_tracking | cache_mode
 
     @assert 0 < bytesize <= dev.maxBufferLength
-    ptr = alloc_buffer(dev, bytesize, opts, ptr)
+
+    alloc_f = nocopy ? alloc_buffer_nocopy : alloc_buffer
+
+    ptr = alloc_f(dev, bytesize, opts, ptr)
 
     return MTLBuffer(ptr)
 end
@@ -53,6 +56,11 @@ alloc_buffer(dev::MTLDevice, bytesize, opts, ptr::Ptr) =
     @objc [dev::id{MTLDevice} newBufferWithBytes:ptr::Ptr{Cvoid}
                               length:bytesize::NSUInteger
                               options:opts::MTLResourceOptions]::id{MTLBuffer}
+alloc_buffer_nocopy(dev::MTLDevice, bytesize, opts, ptr::Ptr) = # ptr MUST be page-aligned
+    @objc [dev::id{MTLDevice} newBufferWithBytesNoCopy:ptr::Ptr{Cvoid}
+                              length:bytesize::NSUInteger
+                              options:opts::MTLResourceOptions
+                              deallocator:nil::id{Object}]::id{MTLBuffer}
 
 # from heap
 alloc_buffer(dev::MTLHeap, bytesize, opts) =
