@@ -253,7 +253,7 @@ end
     end
 
     # pass by reference, in an argument buffer
-    argument_buffer = alloc(kernel.pipeline.device, sizeof(argtyp), storage=Shared)
+    argument_buffer = alloc(kernel.pipeline.device, sizeof(argtyp); storage=Shared)
     argument_buffer.label = "MTLBuffer for kernel argument"
     unsafe_store!(convert(Ptr{argtyp}, argument_buffer), arg)
     return argument_buffer

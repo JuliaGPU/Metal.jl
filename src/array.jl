@@ -479,7 +479,7 @@ Base.unsafe_convert(::Type{MTL.MTLBuffer}, A::PermutedDimsArray) =
 ## unsafe_wrap
 
 function Base.unsafe_wrap(::Type{<:Array}, arr::MtlArray{T,N}, dims=size(arr); own=false) where {T,N}
-  return unsafe_wrap(Array{T,N}, arr.data[], dims; own=own)
+  return unsafe_wrap(Array{T,N}, arr.data[], dims; own)
 end
 
 function Base.unsafe_wrap(t::Type{<:Array{T}}, buf::MTLBuffer, dims; own=false) where T

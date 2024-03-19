@@ -72,7 +72,7 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
     N = length(dim)
 
     # mtl
-    let arr = mtl(rand(2,2), storage= SM)
+    let arr = mtl(rand(2,2); storage= SM)
         @test check_storagemode(arr,  SM)
     end
 
@@ -134,7 +134,7 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
         end
 
         let b = rand(Float32, 10)
-            arr_mtl = mtl(b, storage=Private)
+            arr_mtl = mtl(b; storage=Private)
             @test_throws ErrorException arr_mtl[1]
             @test Metal.@allowscalar arr_mtl[1] == b[1]
         end
@@ -145,7 +145,7 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
         end
 
         let b = rand(Float32, 10)
-            arr_mtl = mtl(b, storage=Shared)
+            arr_mtl = mtl(b; storage=Shared)
             @test arr_mtl[1] == b[1]
         end
     elseif SM == Metal.Managed
@@ -155,7 +155,7 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
         end
 
         let b = rand(Float32, 10)
-            arr_mtl = mtl(b, storage=Managed)
+            arr_mtl = mtl(b; storage=Managed)
             @test arr_mtl[1] == b[1]
         end
     end
