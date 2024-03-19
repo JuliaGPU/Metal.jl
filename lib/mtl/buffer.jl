@@ -33,13 +33,13 @@ function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer;
     return MTLBuffer(ptr)
 end
 
-function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer, ptr::Ptr;
+function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
                    storage=Managed, hazard_tracking=DefaultTracking,
                    cache_mode=DefaultCPUCache)
     storage == Private && error("Can't create a Private copy-allocated buffer.")
     opts =  convert(MTLResourceOptions, storage) | hazard_tracking | cache_mode
 
-    @assert 0 < bytesize <= dev.maxBufferLength # XXX: not supported by MTLHeap
+    @assert 0 < bytesize <= dev.maxBufferLength
     ptr = alloc_buffer(dev, bytesize, opts, ptr)
 
     return MTLBuffer(ptr)
@@ -57,10 +57,6 @@ alloc_buffer(dev::MTLDevice, bytesize, opts, ptr::Ptr) =
 # from heap
 alloc_buffer(dev::MTLHeap, bytesize, opts) =
     @objc [dev::id{MTLHeap} newBufferWithLength:bytesize::NSUInteger
-                            options:opts::MTLResourceOptions]::id{MTLBuffer}
-alloc_buffer(dev::MTLHeap, bytesize, opts, ptr::Ptr) =
-    @objc [dev::id{MTLHeap} newBufferWithBytes:ptr::Ptr{Cvoid}
-                            length:bytesize::NSUInteger
                             options:opts::MTLResourceOptions]::id{MTLBuffer}
 
 """
