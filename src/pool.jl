@@ -51,11 +51,11 @@ The storage kwarg controls where the buffer is stored. Possible values are:
 Note that `Private` buffers can't be directly accessed from the CPU, therefore you cannot
 use this option if you pass a ptr to initialize the memory.
 """
-function alloc(dev::Union{MTLDevice,MTLHeap}, sz::Integer, args...; storage, kwargs...)
+function alloc(dev::Union{MTLDevice,MTLHeap}, sz::Integer, args...; kwargs...)
     @signpost_event log=log_array() "Allocate" "Size=$(Base.format_bytes(sz))"
 
     time = Base.@elapsed begin
-        buf = @autoreleasepool MTLBuffer(dev, sz, args...; storage, kwargs...)
+        buf = @autoreleasepool MTLBuffer(dev, sz, args...; kwargs...)
     end
 
     Base.@atomic alloc_stats.alloc_count + 1
