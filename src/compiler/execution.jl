@@ -112,7 +112,7 @@ function Adapt.adapt_storage(to::Adaptor, buf::MTLBuffer)
     end
     reinterpret(Core.LLVMPtr{Nothing,AS.Device}, buf.gpuAddress)
 end
-function Adapt.adapt_storage(to::Adaptor, ptr::MtlPointer{T}) where {T}
+function Adapt.adapt_storage(to::Adaptor, ptr::MtlPtr{T}) where {T}
     reinterpret(Core.LLVMPtr{T,AS.Device}, adapt(to, ptr.buffer)) + ptr.offset
 end
 
@@ -209,7 +209,7 @@ const _kernel_instances = Dict{UInt, Any}()
     end
 
     # the arguments passed into this function have not been `mtlconvert`ed, because we need
-    # to retain the top-level MTLBuffer and MtlPointer objects. eager conversion of nested
+    # to retain the top-level MTLBuffer and MtlPtr objects. eager conversion of nested
     # such objects to LLVMPtr seems fine, somehow.
     # TODO: can we just convert everything eagerly and support top-level LLVMPtrs?
 
@@ -219,7 +219,7 @@ const _kernel_instances = Dict{UInt, Any}()
         if argtyp <: MTLBuffer
             # top-level buffers are passed as a pointer-valued argument
             push!(ex.args, :(set_buffer!(cce, $argex, 0, $idx)))
-        elseif argtyp <: MtlPointer
+        elseif argtyp <: MtlPtr
             # the same as a buffer, but with an offset
             push!(ex.args, :(set_buffer!(cce, $argex.buffer, $argex.offset, $idx)))
         elseif isghosttype(argtyp) || Core.Compiler.isconstType(argtyp)

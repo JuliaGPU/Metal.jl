@@ -169,7 +169,7 @@ Base.sizeof(x::MtlArray) = Base.elsize(x) * length(x)
 
 @inline function Base.pointer(x::MtlArray{T}, i::Integer=1; storage=Private) where {T}
   PT = if storage == Private
-    MtlPointer{T}
+    MtlPtr{T}
   elseif storage == Shared || storage == Managed
     Ptr{T}
   else
@@ -179,9 +179,9 @@ Base.sizeof(x::MtlArray) = Base.elsize(x) * length(x)
 end
 
 
-function Base.unsafe_convert(::Type{MtlPointer{T}}, x::MtlArray) where {T}
+function Base.unsafe_convert(::Type{MtlPtr{T}}, x::MtlArray) where {T}
    buf = x.data[]
-   MtlPointer{T}(buf, x.offset*Base.elsize(x))
+   MtlPtr{T}(buf, x.offset*Base.elsize(x))
  end
 
 function Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S, T}
@@ -487,7 +487,7 @@ function Base.unsafe_wrap(t::Type{<:Array{T}}, buf::MTLBuffer, dims; own=false) 
     return unsafe_wrap(t, ptr, dims; own)
 end
 
-function Base.unsafe_wrap(t::Type{<:Array{T}}, ptr::MtlPointer{T}, dims; own=false) where T
+function Base.unsafe_wrap(t::Type{<:Array{T}}, ptr::MtlPtr{T}, dims; own=false) where T
     return unsafe_wrap(t, convert(Ptr{T}, ptr), dims; own)
 end
 
@@ -513,7 +513,7 @@ function Base.resize!(A::MtlVector{T}, n::Integer) where T
   # replace the data with a new one. this 'unshares' the array.
   # as a result, we can safely support resizing unowned buffers.
   buf = alloc(device(A), bufsize; storage=storagemode(A))
-  ptr = MtlPointer{T}(buf)
+  ptr = MtlPtr{T}(buf)
   m = min(length(A), n)
   if m > 0
     unsafe_copyto!(device(A), ptr, pointer(A), m)
