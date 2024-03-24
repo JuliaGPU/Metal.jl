@@ -4,3 +4,4 @@ Manifest.toml
 *.trace
 wip.*
 dev
+.vscode
