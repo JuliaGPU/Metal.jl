@@ -15,9 +15,9 @@ end
 @objcwrapper MPSKernel <: NSObject
 
 @objcproperties MPSKernel begin
+    @autoproperty options::MPSKernelOptions setter=setOptions
     @autoproperty device::id{MTLDevice}
     @autoproperty label::id{NSString} setter=setLabel
-    @autoproperty options::MPSKernelOptions setter=setOptions
 end
 
 @autoreleasepool function Base.copy(kernel::K) where {K <: MPSKernel}

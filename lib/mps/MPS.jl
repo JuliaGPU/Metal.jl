@@ -29,6 +29,7 @@ include("images.jl")
 include("matrix.jl")
 include("vector.jl")
 include("matrixrandom.jl")
+include("ndarray.jl")
 include("decomposition.jl")
 include("copy.jl")
 
