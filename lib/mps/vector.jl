@@ -12,7 +12,7 @@ end
 
 function MPSVectorDescriptor(length, dataType)
     desc = @objc [MPSVectorDescriptor vectorDescriptorWithLength:length::NSUInteger
-                                      dataType:jl_typ_to_mps[dataType]::MPSDataType]::id{MPSVectorDescriptor}
+                                      dataType:dataType::MPSDataType]::id{MPSVectorDescriptor}
     obj = MPSVectorDescriptor(desc)
     # XXX: who releases this object?
     return obj
@@ -22,7 +22,7 @@ function MPSVectorDescriptor(length, vectors, vectorBytes, dataType)
     desc = @objc [MPSVectorDescriptor vectorDescriptorWithLength:length::NSUInteger
                                       vectors:vectors::NSUInteger
                                       vectorBytes:vectorBytes::NSUInteger
-                                      dataType:jl_typ_to_mps[dataType]::MPSDataType]::id{MPSVectorDescriptor}
+                                      dataType:dataType::MPSDataType]::id{MPSVectorDescriptor}
     obj = MPSVectorDescriptor(desc)
     # XXX: who releases this object?
     return obj
