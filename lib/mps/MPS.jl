@@ -20,6 +20,7 @@ include("images.jl")
 # high-level wrappers
 include("matrix.jl")
 include("vector.jl")
+include("matrixrandom.jl")
 
 # integrations
 include("linalg.jl")
