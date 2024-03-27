@@ -42,10 +42,13 @@ function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
     @assert 0 < bytesize <= dev.maxBufferLength
 
     alloc_f = nocopy ? alloc_buffer_nocopy : alloc_buffer
+    GC.@preserve ptr begin
 
-    ptr = alloc_f(dev, bytesize, opts, ptr)
+        ptr = alloc_f(dev, bytesize, opts, ptr)
 
-    return MTLBuffer(ptr)
+        buf = MTLBuffer(ptr)
+    end
+    return buf
 end
 
 # from device
