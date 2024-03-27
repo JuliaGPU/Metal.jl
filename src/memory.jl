@@ -7,39 +7,39 @@
 # we cannot take a MTLBuffer's handle and work with that as it were a pointer to memory.
 # instead, the Metal APIs always take the original handle and an offset parameter.
 
-struct MtlPointer{T}
+struct MtlPtr{T}
     buffer::MTLBuffer
     offset::UInt    # in bytes
 
-    function MtlPointer{T}(buffer::MTLBuffer, offset=0) where {T}
+    function MtlPtr{T}(buffer::MTLBuffer, offset=0) where {T}
         new(buffer, offset)
     end
 end
 
-Base.eltype(::Type{<:MtlPointer{T}}) where {T} = T
+Base.eltype(::Type{<:MtlPtr{T}}) where {T} = T
 
 # limited arithmetic
-Base.:(+)(x::MtlPointer{T}, y::Integer) where {T} = MtlPointer{T}(x.buffer, x.offset+y)
-Base.:(-)(x::MtlPointer{T}, y::Integer) where {T} = MtlPointer{T}(x.buffer, x.offset-y)
-Base.:(+)(x::Integer, y::MtlPointer{T}) where {T} = MtlPointer{T}(x.buffer, y+x.offset)
+Base.:(+)(x::MtlPtr{T}, y::Integer) where {T} = MtlPtr{T}(x.buffer, x.offset+y)
+Base.:(-)(x::MtlPtr{T}, y::Integer) where {T} = MtlPtr{T}(x.buffer, x.offset-y)
+Base.:(+)(x::Integer, y::MtlPtr{T}) where {T} = MtlPtr{T}(x.buffer, y+x.offset)
 
-Base.convert(::Type{Ptr{T}}, ptr::MtlPointer) where {T} =
+Base.convert(::Type{Ptr{T}}, ptr::MtlPtr) where {T} =
     convert(Ptr{T}, ptr.buffer) + ptr.offset
 
 
 ## operations
 
 # CPU -> GPU
-function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPointer{T}, src::Ptr{T}, N::Integer;
+function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T}, src::Ptr{T}, N::Integer;
                              queue::MTLCommandQueue=global_queue(dev), async::Bool=false) where T
     storage_type = dst.buffer.storageMode
     if storage_type == MTL.MTLStorageModePrivate
         # stage through a shared buffer
-        # shared = alloc(dev, N*sizeof(T), src, storage=Shared)
+        # shared = alloc(dev, N*sizeof(T), src; storage=Shared)
         # unsafe_copyto!(dev, dst, pointer(shared), N; queue, async=false)
         # free(shared)
-        tmp_buf = alloc(dev, N*sizeof(T), src, storage=Shared) #CPU -> GPU (Shared)
-        unsafe_copyto!(dev, MtlPointer{T}(dst.buffer, dst.offset), MtlPointer{T}(tmp_buf, 0), N; queue, async=false) # GPU (Shared) -> GPU (Private)
+        tmp_buf = alloc(dev, N*sizeof(T), src; storage=Shared) #CPU -> GPU (Shared)
+        unsafe_copyto!(dev, MtlPtr{T}(dst.buffer, dst.offset), MtlPtr{T}(tmp_buf, 0), N; queue, async=false) # GPU (Shared) -> GPU (Private)
         free(tmp_buf)
     elseif storage_type == MTL.MTLStorageModeShared
         unsafe_copyto!(convert(Ptr{T}, dst), src, N)
@@ -51,13 +51,13 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPointer{T}, src::Ptr{T}, N:
 end
 
 # GPU -> CPU
-function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPointer{T}, N::Integer;
+function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPtr{T}, N::Integer;
                              queue::MTLCommandQueue=global_queue(dev), async::Bool=false) where T
     storage_type = src.buffer.storageMode
     if storage_type ==  MTL.MTLStorageModePrivate
         # stage through a shared buffer
-        shared = alloc(dev, N*sizeof(T), storage=Shared)
-        unsafe_copyto!(dev, MtlPointer{T}(shared, 0), MtlPointer{T}(src.buffer, src.offset), N; queue, async=false)
+        shared = alloc(dev, N*sizeof(T); storage=Shared)
+        unsafe_copyto!(dev, MtlPtr{T}(shared, 0), MtlPtr{T}(src.buffer, src.offset), N; queue, async=false)
         unsafe_copyto!(dst, convert(Ptr{T}, shared), N)
         free(shared)
     elseif storage_type ==  MTL.MTLStorageModeShared
@@ -69,8 +69,8 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPointer{T}, N:
 end
 
 # GPU -> GPU
-@autoreleasepool function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPointer{T},
-                                              src::MtlPointer{T}, N::Integer;
+@autoreleasepool function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
+                                              src::MtlPtr{T}, N::Integer;
                                               queue::MTLCommandQueue=global_queue(dev),
                                               async::Bool=false) where T
     cmdbuf = MTLCommandBuffer(queue)
@@ -81,7 +81,7 @@ end
     async || wait_completed(cmdbuf)
 end
 
-@autoreleasepool function unsafe_fill!(dev::MTLDevice, ptr::MtlPointer{T},
+@autoreleasepool function unsafe_fill!(dev::MTLDevice, ptr::MtlPtr{T},
                                        value::Union{UInt8,Int8}, N::Integer) where T
     cmdbuf = MTLCommandBuffer(global_queue(dev))
     MTLBlitCommandEncoder(cmdbuf) do enc
