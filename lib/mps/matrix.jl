@@ -1,16 +1,55 @@
 #
 # matrix enums
 #
-
-@cenum MPSDataType::UInt32 begin
+@cenum MPSDataTypeBits::UInt32 begin
     MPSDataTypeComplexBit = UInt32(0x01000000)
     MPSDataTypeFloatBit = UInt32(0x10000000)
     MPSDataTypeSignedBit = UInt32(0x20000000)
     MPSDataTypeNormalizedBit = UInt32(0x40000000)
     MPSDataTypeAlternateEncodingBit = UInt32(0x80000000)
 end
+
+@enum MPSDataType::UInt32 begin
+    MPSDataTypeInvalid    = UInt32(0)
+
+    MPSDataTypeUInt8      = UInt32(8)
+    MPSDataTypeUInt16     = UInt32(16)
+    MPSDataTypeUInt32     = UInt32(32)
+    MPSDataTypeUInt64     = UInt32(64)
+
+    MPSDataTypeInt8       = MPSDataTypeSignedBit | UInt32(8)
+    MPSDataTypeInt16      = MPSDataTypeSignedBit | UInt32(16)
+    MPSDataTypeInt32      = MPSDataTypeSignedBit | UInt32(32)
+    MPSDataTypeInt64      = MPSDataTypeSignedBit | UInt32(64)
+
+    MPSDataTypeFloat16    = MPSDataTypeFloatBit | UInt32(16)
+    MPSDataTypeFloat32    = MPSDataTypeFloatBit | UInt32(32)
+
+    MPSDataTypeComplexF16 = MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(16)
+    MPSDataTypeComplexF32 = MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(32)
+
+    MPSDataTypeUnorm1     = MPSDataTypeNormalizedBit | UInt32(1)
+    MPSDataTypeUnorm8     = MPSDataTypeNormalizedBit | UInt32(8)
+
+    MPSDataTypeBool       = MPSDataTypeAlternateEncodingBit | UInt32(8)
+    MPSDataTypeBFloat16   = MPSDataTypeAlternateEncodingBit | MPSDataTypeFloatBit | UInt32(16)
+end
 ## bitwise operations lose type information, so allow conversions
 Base.convert(::Type{MPSDataType}, x::Integer) = MPSDataType(x)
+
+# Conversions for MPSDataTypes with Julia equivalents
+const jl_mps_to_typ = Dict{MPSDataType, DataType}()
+for type in [UInt8,UInt16,UInt32,UInt64,Int8,Int16,Int32,Int64,Float16,Float32,ComplexF16,ComplexF32,Bool]
+    @eval Base.convert(::Type{MPSDataType}, ::Type{$type}) = $(Symbol(:MPSDataType, type))
+    @eval jl_mps_to_typ[$(Symbol(:MPSDataType, type))] = $type
+end
+# BFloat is only supported in MPS starting in MacOS 14
+if macos_version() >= v"14" && isdefined(Core, :BFloat16)
+    Base.convert(::Type{MPSDataType}, ::Type{Core.BFloat16}) = MPSDataTypeBFloat16
+    jl_mps_to_typ[MPSDataTypeBFloat16] = Core.BFloat16
+end
+Base.convert(::Type{DataType}, mpstyp::MPSDataType) = jl_mps_to_typ[mpstyp]
+
 
 #
 # matrix descriptor
@@ -29,31 +68,11 @@ export MPSMatrixDescriptor
     @autoproperty matrixBytes::NSUInteger
 end
 
-
-# Mapping from Julia types to the Performance Shader bitfields
-const jl_typ_to_mps = Dict{DataType,MPSDataType}(
-    UInt8       => UInt32(8),
-    UInt16      => UInt32(16),
-    UInt32      => UInt32(32),
-    UInt64      => UInt32(64),
-
-    Int8        => MPSDataTypeSignedBit | UInt32(8),
-    Int16       => MPSDataTypeSignedBit | UInt32(16),
-    Int32       => MPSDataTypeSignedBit | UInt32(32),
-    Int64       => MPSDataTypeSignedBit | UInt32(64),
-
-    Float16     => MPSDataTypeFloatBit | UInt32(16),
-    Float32     => MPSDataTypeFloatBit | UInt32(32),
-
-    ComplexF16  => MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(16),
-    ComplexF32  => MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(32)
-)
-
 function MPSMatrixDescriptor(rows, columns, rowBytes, dataType)
     desc = @objc [MPSMatrixDescriptor matrixDescriptorWithRows:rows::NSUInteger
                                       columns:columns::NSUInteger
                                       rowBytes:rowBytes::NSUInteger
-                                      dataType:jl_typ_to_mps[dataType]::MPSDataType]::id{MPSMatrixDescriptor}
+                                      dataType:dataType::MPSDataType]::id{MPSMatrixDescriptor}
     obj = MPSMatrixDescriptor(desc)
     # XXX: who releases this object?
     return obj
@@ -65,7 +84,7 @@ function MPSMatrixDescriptor(rows, columns, matrices, rowBytes, matrixBytes, dat
                                       matrices:matrices::NSUInteger
                                       rowBytes:rowBytes::NSUInteger
                                       matrixBytes:matrixBytes::NSUInteger
-                                      dataType:jl_typ_to_mps[dataType]::MPSDataType]::id{MPSMatrixDescriptor}
+                                      dataType:dataType::MPSDataType]::id{MPSMatrixDescriptor}
     obj = MPSMatrixDescriptor(desc)
     # XXX: who releases this object?
     return obj
