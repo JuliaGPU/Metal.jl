@@ -43,11 +43,7 @@ for type in [UInt8,UInt16,UInt32,UInt64,Int8,Int16,Int32,Int64,Float16,Float32,C
     @eval Base.convert(::Type{MPSDataType}, ::Type{$type}) = $(Symbol(:MPSDataType, type))
     @eval jl_mps_to_typ[$(Symbol(:MPSDataType, type))] = $type
 end
-# BFloat is only supported in MPS starting in MacOS 14
-if macos_version() >= v"14" && isdefined(Core, :BFloat16)
-    Base.convert(::Type{MPSDataType}, ::Type{Core.BFloat16}) = MPSDataTypeBFloat16
-    jl_mps_to_typ[MPSDataTypeBFloat16] = Core.BFloat16
-end
+
 Base.convert(::Type{DataType}, mpstyp::MPSDataType) = jl_mps_to_typ[mpstyp]
 
 
