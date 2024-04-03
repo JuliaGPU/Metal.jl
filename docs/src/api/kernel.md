@@ -4,10 +4,7 @@ This section lists the package's public functionality that corresponds to specia
 functions for use in device code. For more information about these functions,
 please consult the [Metal Shading Language specification](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf).
 
-This is made possible by interfacing with the Metal libraries through a small C library that
-wraps the ObjectiveC APIs. These low-level wrappers, along with some slightly higher-level
-Julia wrappers, are available in the MTL submodule exported by Metal.jl. All wrapped C
-functions and types start with the mt prefix, whereas the Julia wrappers are prefixed with Mtl:
+This is made possible by interfacing with the Metal libraries by wrapping a subset of the ObjectiveC APIs using [ObjectiveC.jl](https://github.com/JuliaInterop/ObjectiveC.jl). These low-level wrappers are available in the MTL submodule exported by Metal.jl.
 
 
 ## Indexing and dimensions
