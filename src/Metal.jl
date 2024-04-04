@@ -67,4 +67,8 @@ include("MetalKernels.jl")
 import .MetalKernels: MetalBackend
 export MetalBackend
 
+@static if !isdefined(Base, :get_extension)
+    include("../ext/BFloat16sExt.jl")
+end
+
 end # module

@@ -19,11 +19,6 @@ steps:
           queue: "juliaecosystem"
           os: "macos"
           arch: "aarch64"
-        commands: |
-          julia --project -e '
-              # make sure the 1.8-era Manifest works on this Julia version
-              using Pkg
-              Pkg.resolve()'
         if: build.message !~ /\[skip tests\]/
         timeout_in_minutes: 60
         matrix:
