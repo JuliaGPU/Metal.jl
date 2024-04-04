@@ -40,9 +40,7 @@ function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
     opts =  convert(MTLResourceOptions, storage) | hazard_tracking | cache_mode
 
     @assert 0 < bytesize <= dev.maxBufferLength
-
     alloc_f = nocopy ? alloc_buffer_nocopy : alloc_buffer
-
     ptr = alloc_f(dev, bytesize, opts, ptr)
 
     return MTLBuffer(ptr)

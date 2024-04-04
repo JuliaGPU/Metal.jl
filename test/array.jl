@@ -317,7 +317,7 @@ end
 
 @testset "unsafe_wrap" begin
     # Create page-aligned vector for testing
-    arr1 = _alignedvec(Float32, 18000);
+    arr1 = _alignedvec(Float32, 16384*2);
     fill!(arr1, zero(eltype(arr1)))
     marr1 = unsafe_wrap(MtlVector{Float32}, arr1);
 
