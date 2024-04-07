@@ -10,7 +10,7 @@ export MPSVectorDescriptor
 end
 
 
-function MPSVectorDescriptor(length, dataType)
+function MPSVectorDescriptor(length::Integer, dataType::Union{DataType,MPSDataType})
     desc = @objc [MPSVectorDescriptor vectorDescriptorWithLength:length::NSUInteger
                                       dataType:dataType::MPSDataType]::id{MPSVectorDescriptor}
     obj = MPSVectorDescriptor(desc)
@@ -18,7 +18,7 @@ function MPSVectorDescriptor(length, dataType)
     return obj
 end
 
-function MPSVectorDescriptor(length, vectors, vectorBytes, dataType)
+function MPSVectorDescriptor(length::Integer, vectors, vectorBytes::Integer, dataType::Union{DataType,MPSDataType})
     desc = @objc [MPSVectorDescriptor vectorDescriptorWithLength:length::NSUInteger
                                       vectors:vectors::NSUInteger
                                       vectorBytes:vectorBytes::NSUInteger
@@ -43,22 +43,42 @@ export MPSVector
     @autoproperty data::id{MTLBuffer}
 end
 
+function MPSVector(buf, descriptor::MPSVectorDescriptor, offset::Integer=0)
+    vec = @objc [MPSVector alloc]::id{MPSVector}
+    obj = MPSVector(vec)
+    finalizer(release, obj)
+    @objc [obj::id{MPSVector} initWithBuffer:buf::id{MTLBuffer}
+                              offset:offset::NSUInteger
+                              descriptor:descriptor::id{MPSVectorDescriptor}]::id{MPSVector}
+    return obj
+end
+
+function MPSVector(dev::MTLDevice, descriptor::MPSVectorDescriptor)
+    vec = @objc [MPSVector alloc]::id{MPSVector}
+    obj = MPSVector(vec)
+    finalizer(release, obj)
+    @objc [obj::id{MPSVector} initWithDevice:dev::id{MTLDevice}
+                              descriptor:descriptor::id{MPSVectorDescriptor}]::id{MPSVector}
+    return obj
+end
+
 """
     MPSVector(arr::MtlVector)
 
 Metal vector representation used in Performance Shaders.
 """
 function MPSVector(arr::MtlVector{T}) where T
-    len = length(arr)
-    desc = MPSVectorDescriptor(len, T)
-    vec = @objc [MPSVector alloc]::id{MPSVector}
-    obj = MPSVector(vec)
+    desc = MPSVectorDescriptor(length(arr), T)
     offset = arr.offset * sizeof(T)
-    finalizer(release, obj)
-    @objc [obj::id{MPSVector} initWithBuffer:arr::id{MTLBuffer}
-                              offset:offset::NSUInteger
-                              descriptor:desc::id{MPSVectorDescriptor}]::id{MPSVector}
-    return obj
+    return MPSVector(arr, desc, offset)
+end
+
+@objcwrapper immutable=false MPSTemporaryVector <: MPSVector
+
+function MPSTemporaryVector(commandBuffer::MTLCommandBuffer, descriptor::MPSVectorDescriptor)
+    obj = @objc [MPSTemporaryVector temporaryVectorWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}
+                              descriptor:descriptor::id{MPSVectorDescriptor}]::id{MPSTemporaryVector}
+    return MPSTemporaryVector(obj)
 end
 
 #

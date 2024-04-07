@@ -13,14 +13,19 @@ let arr = MtlVector{Int}(undef, 0)
 end
 
 @testset "constructors" begin
-    xs = MtlArray{Int}(undef, 2, 3)
+    xs = MtlArray{Int8}(undef, 2, 3)
     @test device(xs) == current_device()
+    @test Base.elsize(xs) == sizeof(Int8)
+    @test xs.data[].length == 6
+    xs2 = MtlArray{Int8, 2}(xs)
+    @test xs2.data[].length == 6
+    @test pointer(xs2) != pointer(xs)
+
     @test collect(MtlArray([1 2; 3 4])) == [1 2; 3 4]
     @test collect(mtl([1, 2, 3])) == [1, 2, 3]
     @test testf(vec, rand(Float32, 5,3))
     @test mtl(1:3) === 1:3
-    @test Base.elsize(xs) == sizeof(Int)
-    @test pointer(MtlArray{Int, 2}(xs)) != pointer(xs)
+
 
     # Page 22 of https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
     # Only bfloat missing
@@ -265,6 +270,14 @@ end
     let V = MtlVector{T}(undef, 10)
         fill!(V, b)
         @test all(Array(V) .== b)
+    end
+
+    # 0-length array
+    let A = MtlArray{T}(undef, 0)
+        b = rand(T)
+        fill!(A, b)
+        @test A isa MtlArray{T,1}
+        @test Array(A) == fill(b, 0)
     end
 end
 

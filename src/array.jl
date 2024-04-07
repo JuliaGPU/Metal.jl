@@ -44,13 +44,14 @@ end
 mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
   data::DataRef{<:MTLBuffer}
 
-  maxsize::Int  # maximum data size; excluding any selector bytes
+  maxsize::Int  # maximum data size in bytes; excluding any selector bytes
   offset::Int   # offset of the data in the buffer, in number of elements
   dims::Dims{N}
 
   function MtlArray{T,N,S}(::UndefInitializer, dims::Dims{N}) where {T,N,S}
       check_eltype(T)
       maxsize = prod(dims) * sizeof(T)
+
       bufsize = if Base.isbitsunion(T)
         # type tag array past the data
         maxsize + prod(dims)
@@ -60,7 +61,7 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
 
       dev = current_device()
       if bufsize == 0
-        # Metal doesn't support empty allocations. for simplicity (i.e., the ability to get
+        # Metal doesn't support empty allocations. For simplicity (i.e., the ability to get
         # a pointer, query the buffer's properties, etc), we use a 1-byte buffer instead.
         bufsize = 1
       end
