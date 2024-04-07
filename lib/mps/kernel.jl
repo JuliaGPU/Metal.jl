@@ -20,6 +20,7 @@ end
     @autoproperty options::MPSKernelOptions setter=setOptions
 end
 
+@autoreleasepool Base.copy(kernel::K) where {K <: MPSKernel} = K(@objc [kernel::K copy]::id{K})
 
 @objcwrapper immutable=false MPSMatrixUnaryKernel <: MPSKernel
 

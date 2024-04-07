@@ -43,6 +43,7 @@ for type in [UInt8,UInt16,UInt32,UInt64,Int8,Int16,Int32,Int64,Float16,Float32,C
     @eval Base.convert(::Type{MPSDataType}, ::Type{$type}) = $(Symbol(:MPSDataType, type))
     @eval jl_mps_to_typ[$(Symbol(:MPSDataType, type))] = $type
 end
+Base.sizeof(t::MPS.MPSDataType) = sizeof(jl_mps_to_typ[t])
 
 Base.convert(::Type{DataType}, mpstyp::MPSDataType) = jl_mps_to_typ[mpstyp]
 
@@ -106,47 +107,54 @@ export MPSMatrix
     @autoproperty data::id{MTLBuffer}
 end
 
-
-"""
-    MPSMatrix(arr::MtlMatrix)
-
-Metal matrix representation used in Performance Shaders.
-
-Note that this results in a transposed view of the input,
-as Metal stores matrices row-major instead of column-major.
-"""
-function MPSMatrix(arr::MtlMatrix{T}) where T
-    n_cols, n_rows = size(arr)
-    desc = MPSMatrixDescriptor(n_rows, n_cols, sizeof(T)*n_cols, T)
+function MPSMatrix(buf, descriptor::MPSMatrixDescriptor, offset::Integer=0)
     mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
     obj = MPSMatrix(mat)
-    offset = arr.offset * sizeof(T)
     finalizer(release, obj)
-    @objc [obj::id{MPSMatrix} initWithBuffer:arr::id{MTLBuffer}
+    @objc [obj::id{MPSMatrix} initWithBuffer:buf::id{MTLBuffer}
                               offset:offset::NSUInteger
-                              descriptor:desc::id{MPSMatrixDescriptor}]::id{MPSMatrix}
+                              descriptor:descriptor::id{MPSMatrixDescriptor}]::id{MPSMatrix}
     return obj
 end
 
+function MPSMatrix(dev::MTLDevice, descriptor::MPSMatrixDescriptor)
+    mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
+    obj = MPSMatrix(mat)
+    finalizer(release, obj)
+    @objc [obj::id{MPSMatrix} initWithDevice:dev::id{MTLDevice}
+                              descriptor:descriptor::id{MPSMatrixDescriptor}]::id{MPSMatrix}
+    return obj
+end
+
+
 """
-    MPSMatrix(arr::MtlVector)
+    MPSMatrix(mat::MtlMatrix)
 
 Metal matrix representation used in Performance Shaders.
 
 Note that this results in a transposed view of the input,
 as Metal stores matrices row-major instead of column-major.
 """
-function MPSMatrix(arr::MtlVector{T}) where T
-    n_cols, n_rows = length(arr), 1
+function MPSMatrix(mat::MtlMatrix{T}) where T
+    n_cols, n_rows = size(mat)
     desc = MPSMatrixDescriptor(n_rows, n_cols, sizeof(T)*n_cols, T)
-    mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
-    obj = MPSMatrix(mat)
-    offset = arr.offset * sizeof(T)
-    finalizer(release, obj)
-    @objc [obj::id{MPSMatrix} initWithBuffer:arr::id{MTLBuffer}
-                              offset:offset::NSUInteger
-                              descriptor:desc::id{MPSMatrixDescriptor}]::id{MPSMatrix}
-    return obj
+    offset = mat.offset * sizeof(T)
+    return MPSMatrix(mat, desc, offset)
+end
+
+"""
+    MPSMatrix(vec::MtlVector)
+
+Metal matrix representation used in Performance Shaders.
+
+Note that this results in a transposed view of the input,
+as Metal stores matrices row-major instead of column-major.
+"""
+function MPSMatrix(vec::MtlVector{T}) where T
+    n_cols, n_rows = length(vec), 1
+    desc = MPSMatrixDescriptor(n_rows, n_cols, sizeof(T)*n_cols, T)
+    offset = vec.offset * sizeof(T)
+    return MPSMatrix(vec, desc, offset)
 end
 
 
@@ -162,14 +170,8 @@ function MPSMatrix(arr::MtlArray{T,3}) where T
     n_cols, n_rows, n_matrices = size(arr)
     row_bytes = sizeof(T)*n_cols
     desc = MPSMatrixDescriptor(n_rows, n_cols, n_matrices, row_bytes, row_bytes * n_rows, T)
-    mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
-    obj = MPSMatrix(mat)
     offset = arr.offset * sizeof(T)
-    finalizer(release, obj)
-    @objc [obj::id{MPSMatrix} initWithBuffer:arr::id{MTLBuffer}
-                              offset:offset::NSUInteger
-                              descriptor:desc::id{MPSMatrixDescriptor}]::id{MPSMatrix}
-    return obj
+    return MPSMatrix(arr, desc, offset)
 end
 
 #

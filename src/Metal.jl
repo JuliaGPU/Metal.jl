@@ -51,16 +51,16 @@ include("compiler/compilation.jl")
 include("compiler/execution.jl")
 include("compiler/reflection.jl")
 
+# libraries
+include("../lib/mps/MPS.jl")
+export MPS
+
 # array implementation
 include("utilities.jl")
 include("broadcast.jl")
 include("mapreduce.jl")
 include("random.jl")
 include("gpuarrays.jl")
-
-# libraries
-include("../lib/mps/MPS.jl")
-export MPS
 
 # KernelAbstractions
 include("MetalKernels.jl")
