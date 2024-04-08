@@ -156,7 +156,8 @@ end
 
 # Metal's pivoting sequence needs to be iterated sequentially...
 # TODO: figure out a GPU-compatible way to get the permutation matrix
-LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T = LinearAlgebra.ipiv2perm(Array(v), maxi)
+LinearAlgebra.ipiv2perm(v::MtlVector{T,S}, maxi::Integer) where {T,S} = LinearAlgebra.ipiv2perm(Array(v), maxi)
+LinearAlgebra.ipiv2perm(v::MtlVector{T,S}, maxi::Integer) where {T,S<:CPUStorage} = LinearAlgebra.ipiv2perm(unsafe_wrap(Array, v), maxi)
 
 function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFloat}
     M,N = size(A)
@@ -174,7 +175,7 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFloa
     end
 
     P = MtlMatrix{UInt32}(undef, 1, min(N, M))
-    status = MtlArray{MPSMatrixDecompositionStatus}(undef)
+    status = MtlArray{MPSMatrixDecompositionStatus,0,Shared}(undef)
 
     cmdbuf_lu = MTLCommandBuffer(queue) do cmdbuf
         mps_p = MPSMatrix(P)
@@ -196,7 +197,7 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFloa
 
     wait_completed(cmdbuf_lu)
 
-    status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
+    status = convert(LinearAlgebra.BlasInt, status[])
     check && checknonsingular(status)
 
     return LinearAlgebra.LU(B, p, status)
@@ -219,7 +220,7 @@ function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFlo
     end
 
     P = MtlMatrix{UInt32}(undef, 1, min(N, M))
-    status = MtlArray{MPSMatrixDecompositionStatus}(undef)
+    status = MtlArray{MPSMatrixDecompositionStatus,0,Shared}(undef)
 
     cmdbuf_lu = MTLCommandBuffer(queue) do cmdbuf
         mps_p = MPSMatrix(P)
@@ -237,7 +238,7 @@ function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFlo
 
     wait_completed(cmdbuf_lu)
 
-    status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
+    status = convert(LinearAlgebra.BlasInt, status[])
     check && checknonsingular(status)
 
     return LinearAlgebra.LU(A, p, status)
