@@ -85,7 +85,7 @@ end
 # matrix vector multiplication
 #
 
-@objcwrapper immutable=false MPSMatrixVectorMultiplication <: MPSKernel
+@objcwrapper immutable=false MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
 
 function MPSMatrixVectorMultiplication(device, transpose, rows, columns, alpha, beta)
     kernel = @objc [MPSMatrixVectorMultiplication alloc]::id{MPSMatrixVectorMultiplication}
