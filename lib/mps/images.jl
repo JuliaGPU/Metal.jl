@@ -1,11 +1,3 @@
-struct MPSOffset
-    x::NSInteger
-    y::NSInteger
-    z::NSInteger
-
-    MPSOffset(x=0, y=0, z=0) = new(x, y, z)
-end
-
 @cenum MPSImageEdgeMode::NSUInteger begin
     MPSImageEdgeModeZero           = 0
     MPSImageEdgeModeClamp          = 1

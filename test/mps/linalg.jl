@@ -178,13 +178,13 @@ end
             cpu_i, cpu_v = cpu_topk(cpu_a, k)
 
             a = MtlMatrix(cpu_a)
-            @test_throws "MPS.topk does not support values of k > 16" i, v = MPS.topk(a, k)
+            @test_throws "MPSMatrixFindTopK does not support values of k > 16" i, v = MPS.topk(a, k)
 
             #topk!
             i = MtlMatrix{UInt32}(undef, (k, shp[2]))
             v = MtlMatrix{ftype}(undef, (k, shp[2]))
 
-            @test_throws "MPS.topk! does not support values of k > 16" i, v = MPS.topk!(a, i, v, k)
+            @test_throws "MPSMatrixFindTopK does not support values of k > 16" i, v = MPS.topk!(a, i, v, k)
 
         end
     end

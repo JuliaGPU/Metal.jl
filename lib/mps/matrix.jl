@@ -256,8 +256,8 @@ export MPSMatrixFindTopK
 @objcproperties MPSMatrixFindTopK begin
     @autoproperty indexOffset::NSInteger setter=setIndexOffset
     @autoproperty numberOfTopKValues::NSInteger
-    @autoproperty sourceColumns::NSInteger
-    @autoproperty sourceRows::NSInteger
+    @autoproperty sourceColumns::NSInteger setter=setSourceColumns
+    @autoproperty sourceRows::NSInteger setter=setSourceRows
 end
 
 function MPSMatrixFindTopK(device, numberOfTopKValues)
@@ -292,22 +292,21 @@ Uses `MPSMatrixFindTopK`.
 See also: [`topk`](@ref).
 """
 function topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
-    k <= 16 || error("MPS.topk! does not support values of k > 16")
-
-    @assert size(I,1) >= k         "Matrix 'I' must be large enough for k rows"
-    @assert size(I,2) >= size(A,2) "Matrix 'I' must have at least as many columns as A"
-    @assert size(V,1) >= k         "Matrix 'V' must be large enough for k rows"
-    @assert size(V,2) >= size(A,2) "Matrix 'V' must have at least as many columns as A"
+    size(I,1) >= k         || throw(ArgumentError("Matrix 'I' must be large enough for k rows"))
+    size(I,2) >= size(A,2) || throw(ArgumentError("Matrix 'I' must have at least as many columns as A"))
+    size(V,1) >= k         || throw(ArgumentError("Matrix 'V' must be large enough for k rows"))
+    size(V,2) >= size(A,2) || throw(ArgumentError("Matrix 'V' must have at least as many columns as A"))
 
     return _topk!(A,I,V,k)
 end
 @inline function _topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
+    size(A,1) >= k || throw(ArgumentError("Matrix 'A' must must have more rows than k"))
+    k <= 16        || throw(ArgumentError("MPSMatrixFindTopK does not support values of k > 16"))
+
     # Create MPS-compatible matrix from the MtlArrays
     mps_a = MPSMatrix(A)
     mps_i = MPSMatrix(I)
     mps_v = MPSMatrix(V)
-
-    @assert size(A,1) >= k "Matrix 'A' must must have more rows than k"
 
     topk_kernel = MPSMatrixFindTopK(current_device(), k)
     topk_kernel.indexOffset = 1
@@ -333,7 +332,6 @@ Uses `MPSMatrixFindTopK`.
 See also: [`topk!`](@ref).
 """
 function topk(A::MtlMatrix{T,S}, k) where {T<:MtlFloat,S}
-    k <= 16 || error("MPS.topk does not support values of k > 16")
     s = (k,size(A,2))
     I = MtlMatrix{UInt32,S}(undef, s)
     V = MtlMatrix{T,S}(undef, s)
