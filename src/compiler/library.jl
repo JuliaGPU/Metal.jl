@@ -27,6 +27,7 @@ using CodecBzip2: transcode, Bzip2Compressor, Bzip2Decompressor
     FILE_SYMBOL_COMPANION    = 3
 end
 
+# https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/BinaryFormat/MachO.def
 @cenum PlatformType::UInt8 begin
     PLATFORM_UNKNOWN              = 0
     PLATFORM_MACOS                = 1
@@ -38,6 +39,9 @@ end
     PLATFORM_IOS_SIMULATOR        = 7
     PLATFORM_TVOS_SIMULATOR       = 8
     PLATFORM_WATCHOS_SIMULATOR    = 9
+    PLATFORM_DRIVERKIT            = 10
+    PLATFORM_XROS                 = 11
+    PLATFORM_MACOS_SIMULATOR      = 12
 end
 
 @cenum ProgramType::UInt8 begin
