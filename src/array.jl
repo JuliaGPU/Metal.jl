@@ -272,15 +272,6 @@ Base.collect(x::MtlArray{T,N}) where {T,N} = copyto!(Array{T,N}(undef, size(x)),
 
 ## memory copying
 
-# Check to see if a pointer is page-aligned
-const _PAGESIZE = ccall(:getpagesize, Cint, ())
-_ispagealigned(ptr::Ptr) = Int64(ptr) % _PAGESIZE == 0
-
-function valid_nocopy(arr::Array{T}, offset=1) where {T}
-  return GC.@preserve arr _ispagealigned(pointer(arr,offset)) &&
-        (macos_version() >= v"14" || sizeof(arr) % 4096 == 0)
-end
-
 # CPU -> GPU
 function Base.copyto!(dest::MtlArray{T}, doffs::Integer, src::Array{T}, soffs::Integer,
                       n::Integer) where T
@@ -289,8 +280,7 @@ function Base.copyto!(dest::MtlArray{T}, doffs::Integer, src::Array{T}, soffs::I
   @boundscheck checkbounds(dest, doffs+n-1)
   @boundscheck checkbounds(src, soffs)
   @boundscheck checkbounds(src, soffs+n-1)
-  nocopy = valid_nocopy(src, soffs)
-  unsafe_copyto!(device(dest), dest, doffs, src, soffs, n; nocopy)
+  unsafe_copyto!(device(dest), dest, doffs, src, soffs, n)
   return dest
 end
 
@@ -305,8 +295,7 @@ function Base.copyto!(dest::Array{T}, doffs::Integer, src::MtlArray{T}, soffs::I
   @boundscheck checkbounds(dest, doffs+n-1)
   @boundscheck checkbounds(src, soffs)
   @boundscheck checkbounds(src, soffs+n-1)
-  nocopy = valid_nocopy(dest, doffs)
-  unsafe_copyto!(device(src), dest, doffs, src, soffs, n; nocopy)
+  unsafe_copyto!(device(src), dest, doffs, src, soffs, n)
   return dest
 end
 
@@ -334,11 +323,11 @@ Base.copyto!(dest::MtlArray{T}, src::MtlArray{T}) where {T} =
     copyto!(dest, 1, src, 1, length(src))
 
 # CPU -> GPU
-function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::Array{T}, soffs, n; kwargs...) where T
+function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::Array{T}, soffs, n) where T
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
   synchronize()
 
-  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n; kwargs...)
+  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
   if Base.isbitsunion(T)
     # copy selector bytes
     error("Not implemented")
@@ -347,11 +336,11 @@ function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::Arra
 end
 
 # GPU -> CPU
-function Base.unsafe_copyto!(dev::MTLDevice, dest::Array{T}, doffs, src::MtlArray{T}, soffs, n; kwargs...) where T
+function Base.unsafe_copyto!(dev::MTLDevice, dest::Array{T}, doffs, src::MtlArray{T}, soffs, n) where T
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
   synchronize()
 
-  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n; kwargs...)
+  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
   if Base.isbitsunion(T)
     # copy selector bytes
     error("Not implemented")
@@ -360,11 +349,11 @@ function Base.unsafe_copyto!(dev::MTLDevice, dest::Array{T}, doffs, src::MtlArra
 end
 
 # GPU -> GPU
-function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::MtlArray{T}, soffs, n; kwargs...) where T
+function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::MtlArray{T}, soffs, n) where T
   # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
   synchronize()
 
-  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n; kwargs...)
+  GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
   if Base.isbitsunion(T)
     # copy selector bytes
     error("Not implemented")
@@ -510,12 +499,12 @@ function Base.unsafe_wrap(t::Type{<:Array{T}}, ptr::MtlPtr{T}, dims; own=false) 
     return unsafe_wrap(t, convert(Ptr{T}, ptr), dims; own)
 end
 
-function Base.unsafe_wrap(A::Type{<:MtlArray{T,N}},
-                          arr::Array,
-                          dims=size(arr);
-                          dev=current_device(),
-                          kwargs...) where {T,N}
-  return GC.@preserve arr A(MTLBuffer(dev, prod(dims) * sizeof(T), pointer(arr); nocopy=true, kwargs...),Dims(dims))
+function Base.unsafe_wrap(A::Type{<:MtlArray{T,N}}, arr::Array, dims=size(arr);
+                          dev=current_device(), kwargs...) where {T,N}
+  GC.@preserve arr begin
+    buf = MTLBuffer(dev, prod(dims) * sizeof(T), pointer(arr); nocopy=true, kwargs...)
+    return A(buf, Dims(dims))
+  end
 end
 
 ## resizing

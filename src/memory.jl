@@ -31,17 +31,16 @@ Base.convert(::Type{Ptr{T}}, ptr::MtlPtr) where {T} =
 
 # CPU -> GPU
 function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T}, src::Ptr{T}, N::Integer;
-                             queue::MTLCommandQueue=global_queue(dev), nocopy::Bool=false, async::Bool=false) where T
+                             queue::MTLCommandQueue=global_queue(dev), async::Bool=false) where T
     storage_type = dst.buffer.storageMode
     if storage_type == MTL.MTLStorageModePrivate
         # stage through a shared buffer
-        tmp_buf = if nocopy
-            MTLBuffer(dev, N*sizeof(T), src; nocopy=true, storage=Shared) #CPU -> GPU (Shared)
-        else
-            alloc(dev, N*sizeof(T), src; storage=Shared)
-        end
+        nocopy = MTL.can_alloc_nocopy(src, N*sizeof(T))
+        tmp_buf = alloc(dev, N*sizeof(T), src; storage=Shared, nocopy)
 
-        unsafe_copyto!(dev, MtlPtr{T}(dst.buffer, dst.offset), MtlPtr{T}(tmp_buf, 0), N; queue, async=(nocopy && async)) # GPU (Shared) -> GPU (Private)
+        # copy to the private buffer
+        unsafe_copyto!(dev, MtlPtr{T}(dst.buffer, dst.offset), MtlPtr{T}(tmp_buf, 0), N;
+                       queue, async=(nocopy && async))
         free(tmp_buf)
     elseif storage_type == MTL.MTLStorageModeShared
         unsafe_copyto!(convert(Ptr{T}, dst), src, N)
@@ -54,20 +53,24 @@ end
 
 # GPU -> CPU
 function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPtr{T}, N::Integer;
-                             queue::MTLCommandQueue=global_queue(dev), nocopy::Bool=false, async::Bool=false) where T
+                             queue::MTLCommandQueue=global_queue(dev), async::Bool=false) where T
     storage_type = src.buffer.storageMode
     if storage_type == MTL.MTLStorageModePrivate
         # stage through a shared buffer
+        nocopy = MTL.can_alloc_nocopy(dst, N*sizeof(T))
         tmp_buf = if nocopy
-            MTLBuffer(dev, N*sizeof(T), dst; nocopy=true, storage=Shared) #CPU -> GPU (Shared)
+            alloc(dev, N*sizeof(T), dst; storage=Shared, nocopy)
         else
             alloc(dev, N*sizeof(T); storage=Shared)
         end
-        unsafe_copyto!(dev, MtlPtr{T}(tmp_buf, 0), MtlPtr{T}(src.buffer, src.offset), N; queue, async=(nocopy && async))
+        unsafe_copyto!(dev, MtlPtr{T}(tmp_buf, 0), MtlPtr{T}(src.buffer, src.offset), N;
+                       queue, async=(nocopy && async))
+
+        # copy from the shared buffer
         if !nocopy
             unsafe_copyto!(dst, convert(Ptr{T}, tmp_buf), N)
-            free(tmp_buf)
         end
+        free(tmp_buf)
     elseif storage_type ==  MTL.MTLStorageModeShared
         unsafe_copyto!(dst, convert(Ptr{T}, src), N)
     elseif storage_type ==  MTL.MTLStorageModeManaged
