@@ -91,6 +91,14 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
   end
 end
 
+# Create MtlArray from MTLBuffer
+function MtlArray{T,N}(buf::B, dims::Dims{N}; kwargs...) where {B<:MTLBuffer,T,N}
+  data = DataRef(buf) do buf
+    free(buf)
+  end
+  return MtlArray{T,N}(data, dims; kwargs...)
+end
+
 unsafe_free!(a::MtlArray) = GPUArrays.unsafe_free!(a.data)
 
 device(A::MtlArray) = A.data[].device
@@ -489,6 +497,14 @@ end
 
 function Base.unsafe_wrap(t::Type{<:Array{T}}, ptr::MtlPtr{T}, dims; own=false) where T
     return unsafe_wrap(t, convert(Ptr{T}, ptr), dims; own)
+end
+
+function Base.unsafe_wrap(A::Type{<:MtlArray{T,N}}, arr::Array, dims=size(arr);
+                          dev=current_device(), kwargs...) where {T,N}
+  GC.@preserve arr begin
+    buf = MTLBuffer(dev, prod(dims) * sizeof(T), pointer(arr); nocopy=true, kwargs...)
+    return A(buf, Dims(dims))
+  end
 end
 
 ## resizing

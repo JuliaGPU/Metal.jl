@@ -35,11 +35,12 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T}, src::Ptr{T}, N::Int
     storage_type = dst.buffer.storageMode
     if storage_type == MTL.MTLStorageModePrivate
         # stage through a shared buffer
-        # shared = alloc(dev, N*sizeof(T), src; storage=Shared)
-        # unsafe_copyto!(dev, dst, pointer(shared), N; queue, async=false)
-        # free(shared)
-        tmp_buf = alloc(dev, N*sizeof(T), src; storage=Shared) #CPU -> GPU (Shared)
-        unsafe_copyto!(dev, MtlPtr{T}(dst.buffer, dst.offset), MtlPtr{T}(tmp_buf, 0), N; queue, async=false) # GPU (Shared) -> GPU (Private)
+        nocopy = MTL.can_alloc_nocopy(src, N*sizeof(T))
+        tmp_buf = alloc(dev, N*sizeof(T), src; storage=Shared, nocopy)
+
+        # copy to the private buffer
+        unsafe_copyto!(dev, MtlPtr{T}(dst.buffer, dst.offset), MtlPtr{T}(tmp_buf, 0), N;
+                       queue, async=(nocopy && async))
         free(tmp_buf)
     elseif storage_type == MTL.MTLStorageModeShared
         unsafe_copyto!(convert(Ptr{T}, dst), src, N)
@@ -54,12 +55,22 @@ end
 function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPtr{T}, N::Integer;
                              queue::MTLCommandQueue=global_queue(dev), async::Bool=false) where T
     storage_type = src.buffer.storageMode
-    if storage_type ==  MTL.MTLStorageModePrivate
+    if storage_type == MTL.MTLStorageModePrivate
         # stage through a shared buffer
-        shared = alloc(dev, N*sizeof(T); storage=Shared)
-        unsafe_copyto!(dev, MtlPtr{T}(shared, 0), MtlPtr{T}(src.buffer, src.offset), N; queue, async=false)
-        unsafe_copyto!(dst, convert(Ptr{T}, shared), N)
-        free(shared)
+        nocopy = MTL.can_alloc_nocopy(dst, N*sizeof(T))
+        tmp_buf = if nocopy
+            alloc(dev, N*sizeof(T), dst; storage=Shared, nocopy)
+        else
+            alloc(dev, N*sizeof(T); storage=Shared)
+        end
+        unsafe_copyto!(dev, MtlPtr{T}(tmp_buf, 0), MtlPtr{T}(src.buffer, src.offset), N;
+                       queue, async=(nocopy && async))
+
+        # copy from the shared buffer
+        if !nocopy
+            unsafe_copyto!(dst, convert(Ptr{T}, tmp_buf), N)
+        end
+        free(tmp_buf)
     elseif storage_type ==  MTL.MTLStorageModeShared
         unsafe_copyto!(dst, convert(Ptr{T}, src), N)
     elseif storage_type ==  MTL.MTLStorageModeManaged

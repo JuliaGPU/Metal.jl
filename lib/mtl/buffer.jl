@@ -34,15 +34,34 @@ function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer;
 end
 
 function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
-                   storage=Managed, hazard_tracking=DefaultTracking,
+                   nocopy=false, storage=Shared, hazard_tracking=DefaultTracking,
                    cache_mode=DefaultCPUCache)
-    storage == Private && error("Can't create a Private copy-allocated buffer.")
+    storage == Private && error("Cannot allocate-and-initialize a Private buffer")
     opts =  convert(MTLResourceOptions, storage) | hazard_tracking | cache_mode
 
     @assert 0 < bytesize <= dev.maxBufferLength
-    ptr = alloc_buffer(dev, bytesize, opts, ptr)
+    ptr = if nocopy
+        alloc_buffer_nocopy(dev, bytesize, opts, ptr)
+    else
+        alloc_buffer(dev, bytesize, opts, ptr)
+    end
 
     return MTLBuffer(ptr)
+end
+
+const PAGESIZE = ccall(:getpagesize, Cint, ())
+function can_alloc_nocopy(ptr::Ptr, bytesize::Integer)
+    # newBufferWithBytesNoCopy has several restrictions:
+    ## the pointer has to be page-aligned
+    if Int64(ptr) % PAGESIZE != 0
+        return false
+    end
+    ## the new buffer needs to be page-aligned
+    ## XXX: on macOS 14, this doesn't seem required; is this a documentation issue?
+    if bytesize % PAGESIZE != 0
+        return false
+    end
+    return true
 end
 
 # from device
@@ -53,6 +72,14 @@ alloc_buffer(dev::MTLDevice, bytesize, opts, ptr::Ptr) =
     @objc [dev::id{MTLDevice} newBufferWithBytes:ptr::Ptr{Cvoid}
                               length:bytesize::NSUInteger
                               options:opts::MTLResourceOptions]::id{MTLBuffer}
+function alloc_buffer_nocopy(dev::MTLDevice, bytesize, opts, ptr::Ptr)
+    can_alloc_nocopy(ptr, bytesize) ||
+        throw(ArgumentError("Cannot allocate nocopy buffer from non-aligned memory"))
+    @objc [dev::id{MTLDevice} newBufferWithBytesNoCopy:ptr::Ptr{Cvoid}
+                              length:bytesize::NSUInteger
+                              options:opts::MTLResourceOptions
+                              deallocator:nil::id{Object}]::id{MTLBuffer}
+end
 
 # from heap
 alloc_buffer(dev::MTLHeap, bytesize, opts) =
