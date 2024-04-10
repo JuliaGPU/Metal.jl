@@ -6,9 +6,6 @@ const MetalCompilerJob = CompilerJob{MetalCompilerTarget, MetalCompilerParams}
 
 GPUCompiler.runtime_module(::MetalCompilerJob) = Metal
 
-const ci_cache = GPUCompiler.CodeCache()
-GPUCompiler.ci_cache(::MetalCompilerJob) = ci_cache
-
 GPUCompiler.method_table(::MetalCompilerJob) = method_table
 
 
