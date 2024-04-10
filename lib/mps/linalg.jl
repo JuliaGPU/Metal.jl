@@ -202,8 +202,21 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFloa
     return LinearAlgebra.LU(B, p, status)
 end
 
+function _check_lu_success(info, allowsingular)
+    if VERSION >= v"1.11.0-DEV.1535"
+        if info < 0 # zero pivot error from unpivoted LU
+            LinearAlgebra.checknozeropivot(-info)
+        else
+            allowsingular || LinearAlgebra.checknonsingular(info)
+        end
+    else
+        LinearAlgebra.checknonsingular(info)
+    end
+end
+
 # TODO: dispatch on pivot strategy
-function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFloat}
+function LinearAlgebra.lu!(A::MtlMatrix{T};
+                           check::Bool=true, allowsingular::Bool=false) where {T<:MtlFloat}
     M,N = size(A)
     dev = current_device()
     queue = global_queue(dev)
@@ -238,7 +251,7 @@ function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFlo
     wait_completed(cmdbuf_lu)
 
     status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
-    check && checknonsingular(status)
+    check && _check_lu_success(status, allowsingular)
 
     return LinearAlgebra.LU(A, p, status)
 end

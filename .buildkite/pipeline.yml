@@ -28,10 +28,10 @@ steps:
               - "1.9"
               - "1.10"
               - "1.11"
-              # - "nightly"
+              - "nightly"
           adjustments:
             - with:
-                julia: "1.11"
+                julia: "nightly"
               soft_fail: true
 
   # Test Storage modes Shared and Managed

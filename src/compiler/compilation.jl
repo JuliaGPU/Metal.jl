@@ -6,9 +6,6 @@ const MetalCompilerJob = CompilerJob{MetalCompilerTarget, MetalCompilerParams}
 
 GPUCompiler.runtime_module(::MetalCompilerJob) = Metal
 
-const ci_cache = GPUCompiler.CodeCache()
-GPUCompiler.ci_cache(::MetalCompilerJob) = ci_cache
-
 GPUCompiler.method_table(::MetalCompilerJob) = method_table
 
 
@@ -72,6 +69,9 @@ function compile(@nospecialize(job::CompilerJob))
             output = Pipe()
 
             cmd = `$(LLVMDowngrader_jll.llvm_as()) --bitcode-version=5.0 -o -`
+            if LLVM.version() >= v"16"
+                cmd = `$cmd --opaque-pointers=0`
+            end
             proc = run(pipeline(cmd, stdout=output, stderr=stderr, stdin=input); wait=false)
             close(output.in)
 
