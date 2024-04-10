@@ -246,8 +246,7 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
             a = f(T, d)
             Metal.seed!(1)
             b = f(T, d)
-            # TODO: Remove broken parameter once https://github.com/JuliaGPU/GPUArrays.jl/issues/530 is fixed
-            @test Array(a) == Array(b) broken = (T == Float16 && d == (1000,1000))
+            @test Array(a) == Array(b)
         end
     end
 end # testset
