@@ -241,15 +241,17 @@ try
                     end
                     wrkr = p
 
-                    local resp
-
                     # catch timeouts
                     pid = remotecall_fetch(getpid, wrkr)
                     timer = Timer(480) do _
                         @warn "Test timed out: $test"
-                        t1 = rmprocs(wrkr, waitfor=0)
 
-                        # rmprocs may fail if the worker is stuck, so fall back to kill
+                        # trigger a stacktrace and profile dump
+                        ccall(:kill, Cint, (Cint, Cint), pid, #=SIGINFO=# 29)
+                        sleep(5)
+
+                        # exit the worker (which may fail, so fall back to killing it)
+                        t1 = rmprocs(wrkr, waitfor=0)
                         t2 = Timer(10) do _
                             @warn "Couldn't kill worker $wrkr, killing process $pid forcefully"
                             ccall(:kill, Cint, (Cint, Cint), pid, Base.SIGTERM)
@@ -259,12 +261,12 @@ try
                             wait(t1)
                             close(t3)
                         end
-
                         wait(t1)
                         close(t2)
                     end
 
                     # run the test
+                    local resp
                     running_tests[test] = now()
                     try
                         resp = remotecall_fetch(runtests, wrkr, test_runners[test], test)
