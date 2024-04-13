@@ -128,6 +128,27 @@ function MPSMatrix(arr::MtlMatrix{T}) where T
     return obj
 end
 
+"""
+    MPSMatrix(arr::MtlVector)
+
+Metal matrix representation used in Performance Shaders.
+
+Note that this results in a transposed view of the input,
+as Metal stores matrices row-major instead of column-major.
+"""
+function MPSMatrix(arr::MtlVector{T}) where T
+    n_cols, n_rows = length(arr), 1
+    desc = MPSMatrixDescriptor(n_rows, n_cols, sizeof(T)*n_cols, T)
+    mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
+    obj = MPSMatrix(mat)
+    offset = arr.offset * sizeof(T)
+    finalizer(release, obj)
+    @objc [obj::id{MPSMatrix} initWithBuffer:arr::id{MTLBuffer}
+                              offset:offset::NSUInteger
+                              descriptor:desc::id{MPSMatrixDescriptor}]::id{MPSMatrix}
+    return obj
+end
+
 
 """
     MPSMatrix(arr::MtlArray{T,3})
@@ -316,4 +337,30 @@ function topk(A::MtlMatrix{T,S}, k) where {T<:MtlFloat,S}
     V = MtlMatrix{T,S}(undef, s)
 
     return _topk!(A, I, V, k)
+end
+
+@objcwrapper immutable=false MPSMatrixSoftMax <: MPSMatrixUnaryKernel
+@objcwrapper immutable=false MPSMatrixLogSoftMax <: MPSMatrixSoftMax
+
+@objcproperties MPSMatrixSoftMax begin
+    @autoproperty sourceRows::NSInteger
+    @autoproperty sourceColumns::NSInteger
+end
+
+for f in (:MPSMatrixSoftMax, :MPSMatrixLogSoftMax)
+    @eval begin
+        function $(f)(device)
+            kernel = @objc [$(f) alloc]::id{$(f)}
+            obj = $(f)(kernel)
+            finalizer(release, obj)
+            @objc [obj::id{$(f)} initWithDevice:device::id{MTLDevice}]::id{$(f)}
+            return obj
+        end
+
+        function encode!(cmdbuf::MTLCommandBuffer, kernel::$(f), inputMatrix, resultMatrix)
+            @objc [kernel::id{$(f)} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+                                                            inputMatrix:inputMatrix::id{MPSMatrix}
+                                                            resultMatrix:resultMatrix::id{MPSMatrix}]::Nothing
+        end
+    end
 end
