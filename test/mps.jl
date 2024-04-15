@@ -60,7 +60,7 @@ end
             buf_a = MtlArray{input_jl_type}(arr_a)
             buf_b = MtlArray{input_jl_type}(arr_b)
             buf_c = MtlArray{accum_jl_type}(undef, (rows_c, cols_c, batch_size))
-                
+
             truth_c = Array{accum_jl_type}(undef, (rows_c, cols_c, batch_size))
             for i in 1:batch_size
                 @views truth_c[:, :, i] = (alpha .* accum_jl_type.(arr_a[:, :, i])) * accum_jl_type.(arr_b[:, :, i]) .+ (beta .* arr_c[:, :, i])
@@ -211,6 +211,28 @@ end
 
     A = MtlMatrix{Float32}([1 2; 0 0])
     @test_throws SingularException lu(A)
+end
+
+using .MPS: MPSMatrixSoftMax, MPSMatrixLogSoftMax
+@testset "MPSMatrixSoftMax" begin
+    cols = rand(UInt)
+    rows = rand(UInt)
+
+    skern = MPSMatrixSoftMax(current_device())
+    skern.sourceColumns = cols
+    skern.sourceRows = rows
+
+    @test skern isa MPSMatrixSoftMax
+    @test skern.sourceColumns == cols
+    @test skern.sourceRows == rows
+
+    lkern = MPSMatrixLogSoftMax(current_device())
+    lkern.sourceColumns = cols
+    lkern.sourceRows = rows
+
+    @test lkern isa MPSMatrixLogSoftMax
+    @test lkern.sourceColumns == cols
+    @test lkern.sourceRows == rows
 end
 
 end
