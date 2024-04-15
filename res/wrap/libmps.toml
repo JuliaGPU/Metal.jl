@@ -102,6 +102,15 @@ immutable=false
 [api.MPSMatrixSoftMax]
 immutable=false
 
+[api.MPSMatrixSolveTriangular]
+immutable=false
+
+[api.MPSMatrixSolveLU]
+immutable=false
+
+[api.MPSMatrixSolveCholesky]
+immutable=false
+
 [api.MPSMatrixUnaryKernel]
 immutable=false
 

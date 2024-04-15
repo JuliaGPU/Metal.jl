@@ -535,11 +535,11 @@ end
 
 @objcwrapper immutable = false MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
 
-@objcwrapper immutable = true MPSMatrixSolveTriangular <: MPSMatrixBinaryKernel
+@objcwrapper immutable = false MPSMatrixSolveTriangular <: MPSMatrixBinaryKernel
 
-@objcwrapper immutable = true MPSMatrixSolveLU <: MPSMatrixBinaryKernel
+@objcwrapper immutable = false MPSMatrixSolveLU <: MPSMatrixBinaryKernel
 
-@objcwrapper immutable = true MPSMatrixSolveCholesky <: MPSMatrixBinaryKernel
+@objcwrapper immutable = false MPSMatrixSolveCholesky <: MPSMatrixBinaryKernel
 
 @cenum MPSMatrixDecompositionStatus::Int32 begin
     MPSMatrixDecompositionStatusSuccess = 0
