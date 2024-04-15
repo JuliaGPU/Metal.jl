@@ -343,8 +343,8 @@ end
 @objcwrapper immutable=false MPSMatrixLogSoftMax <: MPSMatrixSoftMax
 
 @objcproperties MPSMatrixSoftMax begin
-    @autoproperty sourceRows::NSInteger
-    @autoproperty sourceColumns::NSInteger
+    @autoproperty sourceRows::NSInteger setter=setSourceRows
+    @autoproperty sourceColumns::NSInteger setter=setSourceColumns
 end
 
 for f in (:MPSMatrixSoftMax, :MPSMatrixLogSoftMax)
