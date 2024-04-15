@@ -213,18 +213,26 @@ end
     @test_throws SingularException lu(A)
 end
 
-using .MPS: MPSMatrixSoftMax
+using .MPS: MPSMatrixSoftMax, MPSMatrixLogSoftMax
 @testset "MPSMatrixSoftMax" begin
     cols = rand(UInt)
     rows = rand(UInt)
 
-    kern = MPSMatrixSoftMax(current_device())
-    kern.sourceColumns = cols
-    kern.sourceRows = rows
+    skern = MPSMatrixSoftMax(current_device())
+    skern.sourceColumns = cols
+    skern.sourceRows = rows
 
-    @test kern isa MPSMatrixSoftMax
-    @test kern.sourceColumns == cols
-    @test kern.sourceRows == rows
+    @test skern isa MPSMatrixSoftMax
+    @test skern.sourceColumns == cols
+    @test skern.sourceRows == rows
+
+    lkern = MPSMatrixLogSoftMax(current_device())
+    lkern.sourceColumns = cols
+    lkern.sourceRows = rows
+
+    @test lkern isa MPSMatrixLogSoftMax
+    @test lkern.sourceColumns == cols
+    @test lkern.sourceRows == rows
 end
 
 end
