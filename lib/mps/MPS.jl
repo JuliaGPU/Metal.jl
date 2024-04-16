@@ -32,6 +32,7 @@ include("decomposition.jl")
 include("copy.jl")
 
 # integrations
+include("random.jl")
 include("linalg.jl")
 
 end
