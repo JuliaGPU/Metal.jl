@@ -3,6 +3,11 @@
 ```@meta
 DocTestSetup = quote
     using Metal
+
+    import Random
+    Random.seed!(0)
+
+    Metal.seed!(0)
 end
 ```
 
@@ -106,3 +111,42 @@ julia> Base.mapreducedim!(identity, +, b, a)
 1×1 MtlMatrix{Float32, Metal.PrivateStorage}:
  6.0
 ```
+
+## Random numbers
+
+Base's convenience functions for generating random numbers are available in Metal as well:
+
+```jldoctest
+julia> Metal.rand(2)
+2-element MtlVector{Float32, Private}:
+ 0.39904642
+ 0.8805201
+
+julia> Metal.randn(Float32, 2, 1)
+2×1 MtlMatrix{Float32, Private}:
+ -0.18797699
+ -0.006818078
+```
+
+Behind the scenes, these random numbers come from two different generators: one backed by
+[Metal Performance Shaders](https://developer.apple.com/documentation/metalperformanceshaders/mpsmatrixrandom?language=objc),
+another by using the GPUArrays.jl random methods. Operations on these generators are implemented using methods from the Random
+standard library:
+
+```jldoctest
+julia> using Random, GPUArrays
+
+julia> a = Random.rand(MPS.default_rng(), Float32, 1)
+1-element MtlVector{Float32, Private}:
+ 0.39904642
+
+julia> a = Random.rand!(GPUArrays.default_rng(MtlArray), a)
+1-element MtlVector{Float32, Private}:
+ 0.13394515
+```
+
+!!! note
+    `MPSMatrixRandom` functionality requires Metal.jl > v1.1
+
+!!! warning
+    Do not use `Random.rand!(::MPS.RNG, args...)` or `Random.randn!(::MPS.RNG, args...)` on views as you will most likely overwrite values outside of the view due to limitations in random number generation in the Metal Performance Shaders framework.

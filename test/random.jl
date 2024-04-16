@@ -1,39 +1,251 @@
 using Random
 
-@testset "rand" begin
+const RAND_TYPES = [Float16, Float32, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64,
+                    UInt64]
+const RANDN_TYPES = [Float16, Float32]
+const INPLACE_TUPLES = [[(rand!, T) for T in RAND_TYPES];
+                        [(randn!, T) for T in RANDN_TYPES]]
+const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
+                        [(Metal.randn, rand, T) for T in RANDN_TYPES]]
 
-# in-place
-for (f,T) in ((rand!,Float16),
-              (rand!,Float32),
-              (randn!,Float16),
-              (randn!,Float32)),
-    d in (2, (2,2), (2,2,2), 3, (3,3), (3,3,3))
-    A = MtlArray{T}(undef, d)
-    fill!(A, T(0))
-    f(A)
-    @test !iszero(collect(A))
-end
+@testset "random" begin
+    # in-place
+    @testset "in-place" begin
+        rng = Metal.MPS.RNG()
 
-# out-of-place, with implicit type
-for (f,T) in ((Metal.rand,Float32), (Metal.randn,Float32)),
-    args in ((2,), (2, 2), (3,), (3, 3))
-    A = f(args...)
-    @test eltype(A) == T
-end
+        # Seed the default generators to work around value of 0 being
+        #  randomly generated in the size 1 Int8 Array test in 1.11
+        Metal.seed!(123)
 
-# out-of-place, with type specified
-for (f,T) in ((Metal.rand,Float32), (Metal.randn,Float32),
-              (rand,Float32), (randn,Float32)),
-    args in ((T, 2), (T, 2, 2), (T, (2, 2)), (T, 3), (T, 3, 3), (T, (3, 3)))
-    A = f(args...)
-    @test eltype(A) == T
-end
+        @testset "$f with $T" for (f, T) in INPLACE_TUPLES
+            @testset "$d" for d in (1, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000))
+                A = MtlArray{T}(undef, d)
 
-## seeding
-Metal.seed!(1)
-a = Metal.rand(Int32, 1)
-Metal.seed!(1)
-b = Metal.rand(Int32, 1)
-@test iszero(collect(a) - collect(b))
+                # default_rng
+                fill!(A, T(0))
+                f(A)
+                @test !iszero(collect(A))
 
+                # specified MPS rng
+                if T != Float16
+                    fill!(A, T(0))
+                    f(rng, A)
+                    @test !iszero(collect(A))
+                end
+            end
+
+            @testset "0" begin
+                A = MtlArray{T}(undef, 0)
+
+                # default_rng
+                f(A)
+                @test A isa MtlArray{T,1}
+                @test Array(A) == fill(1, 0)
+
+                # specified MPS rng
+                if T != Float16
+                    fill!(A, T(0))
+                    f(rng, A)
+                    @test Array(A) == fill(1, 0)
+                end
+            end
+        end
+    end
+
+    # in-place contiguous views
+    @testset "in-place for views" begin
+        @testset "$f with $T" for (f, T) in INPLACE_TUPLES
+            alen = 100
+            A = MtlArray{T}(undef, alen)
+            function test_view!(X::MtlArray{T}, idx) where {T}
+                fill!(X, T(0))
+                view_X = @view X[idx]
+                f(view_X)
+                cpuX = collect(X)
+                not_zero_in_view = !iszero(cpuX[idx])
+                rest_of_array_untouched = iszero(cpuX[1:alen .∉ Ref(idx)])
+                return not_zero_in_view, rest_of_array_untouched
+            end
+
+            # Test when view offset is 0 and buffer size not multiple of 4
+            @testset "Off == 0, buf % 4 != 0" begin
+                not_zero_in_view, rest_of_array_untouched = test_view!(A, 1:51)
+                @test not_zero_in_view
+                @test rest_of_array_untouched
+            end
+
+            # Test when view offset is 0 and buffer size is multiple of 16
+            @testset "Off == 0, buf % 16 == 0" begin
+                not_zero_in_view, rest_of_array_untouched = test_view!(A, 1:32)
+                @test not_zero_in_view
+                @test rest_of_array_untouched
+            end
+
+            # Test when view offset is 0 and buffer size is multiple of 4
+            @testset "Off == 0, buf % 4 == 0" begin
+                not_zero_in_view, rest_of_array_untouched = test_view!(A, 1:36)
+                @test not_zero_in_view
+                @test rest_of_array_untouched
+            end
+
+            # Test when view offset is not 0 nor multiple of 4 and buffer size not multiple of 16
+            @testset "Off != 0, buf % 4 != 0" begin
+                not_zero_in_view, rest_of_array_untouched = test_view!(A, 3:51)
+                @test not_zero_in_view
+                @test rest_of_array_untouched
+            end
+
+            # Test when view offset is multiple of 4 and buffer size not multiple of 4
+            @testset "Off % 4 == 0, buf % 4 != 0" begin
+                not_zero_in_view, rest_of_array_untouched = test_view!(A, 17:51)
+                @test not_zero_in_view
+                @test rest_of_array_untouched
+            end
+
+            # Test when view offset is multiple of 4 and buffer size multiple of 16
+            @testset "Off % 4 == 0, buf % 16 == 0" begin
+                not_zero_in_view, rest_of_array_untouched = test_view!(A, 9:40)
+                @test not_zero_in_view
+                @test rest_of_array_untouched
+            end
+
+            # Test when view offset is multiple of 4 and buffer size multiple of 4
+            @testset "Off % 16 == 0, buf % 4 == 0" begin
+                not_zero_in_view, rest_of_array_untouched = test_view!(A, 9:32)
+                @test not_zero_in_view
+                @test rest_of_array_untouched
+            end
+        end
+
+        # Test when views try to use rand!(rng, args..)
+        @testset "MPS.RNG with views" begin
+            rng = Metal.MPS.RNG()
+            @testset "$f with $T" for (f, T) in ((randn!, Float32),(rand!, Int64),(rand!, Float32), (rand!, UInt16), (rand!,Int8))
+                A = MtlArray{T}(undef, 100)
+
+                ## Offset > 0
+                fill!(A, T(0))
+                idx = 4:51
+                view_A = @view A[idx]
+
+                # Errors in Julia before crashing whole process
+                if view_A.offset * sizeof(T) % 4 != 0
+                    @test_throws "Destination buffer offset ($(view_A.offset*sizeof(T)))" f(rng, view_A)
+                else
+                    f(rng, view_A)
+
+                    cpuA = collect(A)
+                    @test !iszero(cpuA[idx])
+
+                    @test iszero(cpuA[1:100 .∉ Ref(idx)]) broken=(sizeof(view_A) % 4 != 0)
+                end
+
+                ## Offset == 0
+                fill!(A, T(0))
+                idx = 1:51
+                view_A = @view A[idx]
+                f(rng, view_A)
+
+                cpuA = collect(A)
+                @test !iszero(cpuA[idx])
+
+                # XXX: Why are the 8-bit and 16-bit type tests not broken?
+                @test iszero(cpuA[1:100 .∉ Ref(idx)])# broken=(sizeof(view_A) % 4 != 0)
+            end
+        end
+    end
+    # out-of-place
+    @testset "out-of-place" begin
+        @testset "$fr with implicit type" for (fm, fr, T) in
+                                             ((Metal.rand, rand, Float32), (Metal.randn, rand, Float32))
+            rng = Metal.MPS.RNG()
+            @testset "args" for args in ((0,), (1,), (3,), (3, 3), (16,), (16, 16), (1000,), (1000,1000))
+                # default_rng
+                A = fm(args...)
+                @test eltype(A) == T
+
+                # specified MPS rng
+                B = fr(rng, args...)
+                @test eltype(B) == T
+            end
+
+            @testset "scalar" begin
+                a = fm()
+                @test typeof(a) == T
+                b = fr(rng)
+                @test typeof(b) == T
+            end
+        end
+
+        # out-of-place, with type specified
+        @testset "$fr with $T" for (fm, fr, T) in OOPLACE_TUPLES
+            rng = Metal.MPS.RNG()
+            @testset "$args" for args in ((T, 0),
+                                          (T, 1),
+                                          (T, 3),
+                                          (T, 3, 3),
+                                          (T, (3, 3)),
+                                          (T, 16),
+                                          (T, 16, 16),
+                                          (T, (16, 16)),
+                                          (T, 1000),
+                                          (T, 1000, 1000),)
+                # default_rng
+                A = fm(args...)
+                @test eltype(A) == T
+
+                # specified MPS rng
+                if T != Float16
+                    B = fr(rng, args...)
+                    @test eltype(B) == T
+                end
+            end
+
+            @testset "scalar" begin
+                a = fm(T)
+                @test typeof(a) == T
+                b = fr(rng, T)
+                @test typeof(b) == T
+            end
+        end
+    end
+
+    ## CPU Arrays with MPS rng
+    @testset "CPU Arrays" begin
+        MPS_TUPLES = filter(INPLACE_TUPLES) do tup
+            tup[2] != Float16
+        end
+        rng = Metal.MPS.RNG()
+        @testset "$f with $T" for (f, T) in MPS_TUPLES
+
+            @testset "$d" for d in (1, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000))
+                A = zeros(T, d)
+                f(rng, A)
+                @test !iszero(collect(A))
+            end
+
+            @testset "0" begin
+                A = rand(T, 0)
+                b = rand(T)
+                fill!(A, b)
+                @test A isa Array{T,1}
+                @test Array(A) == fill(b, 0)
+            end
+        end
+    end
+
+    ## seeding
+    @testset "Seeding $L" for (f,T,L) in [(Metal.rand,UInt32,"Uniform Integers MPS"),
+                                          (Metal.rand,Float32,"Uniform Float32 MPS"),
+                                          (Metal.randn,Float32,"Normal Float32 MPS"),
+                                          (Metal.randn,Float16,"Float16 GPUArrays")]
+        @testset "$d" for d in (1, 3, (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000))
+            Metal.seed!(1)
+            a = f(T, d)
+            Metal.seed!(1)
+            b = f(T, d)
+            # TODO: Remove once https://github.com/JuliaGPU/Metal.jl/issues/331 is fixed
+            @test iszero(collect(a) - collect(b)) broken = (T == Float16 && d == (1000,1000))
+        end
+    end
 end # testset
