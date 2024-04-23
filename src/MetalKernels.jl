@@ -33,23 +33,23 @@ Adapt.adapt_storage(::KA.CPU, a::MtlArray) = convert(Array, a)
 
 ## memory operations
 
-function KA.copyto!(::MetalBackend, A::MtlArray{T}, B::MtlArray{T}) where T
+function KA.copyto!(::MetalBackend, dest::MtlArray{T}, src::MtlArray{T}) where T
     if device(dest) == device(src)
-        GC.@preserve A B copyto!(A, B)
-        return A
+        GC.@preserve dest src copyto!(dest, src)
+        return dest
     else
         error("Copy between different devices not implemented")
     end
 end
 
-function KA.copyto!(::MetalBackend, A::Array{T}, B::MtlArray{T}) where T
-    GC.@preserve A B copyto!(A, B)
-    return A
+function KA.copyto!(::MetalBackend, dest::Array{T}, src::MtlArray{T}) where T
+    GC.@preserve dest src copyto!(dest, src)
+    return dest
 end
 
-function KA.copyto!(::MetalBackend, A::MtlArray{T}, B::Array{T}) where T
-    GC.@preserve A B copyto!(A, B)
-    return A
+function KA.copyto!(::MetalBackend, dest::MtlArray{T}, src::Array{T}) where T
+    GC.@preserve dest src copyto!(dest, src)
+    return dest
 end
 
 
