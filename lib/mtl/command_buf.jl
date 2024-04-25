@@ -85,9 +85,7 @@ end
 function MTLCommandBuffer(f::Base.Callable, queue::MTLCommandQueue,
                           desc::MTLCommandBufferDescriptor=MTLCommandBufferDescriptor())
     cmdbuf = MTLCommandBuffer(queue, desc)
-    enqueue!(cmdbuf)
-    ret = f(cmdbuf)
-    commit!(cmdbuf)
+    commit!(f, cmdbuf)
     return cmdbuf
 end
 
@@ -113,6 +111,13 @@ function commit!(cmdbuf::MTLCommandBuffer)
     cmdbuf.status in [MTLCommandBufferStatusCompleted, MTLCommandBufferStatusCommitted] &&
         error("Cannot commit an already committed/completed command buffer")
     @objc [cmdbuf::id{MTLCommandBuffer} commit]::Nothing
+end
+
+function commit!(f::Base.Callable, cmdbuf::MTLCommandBuffer)
+    enqueue!(cmdbuf)
+    ret = f(cmdbuf)
+    commit!(cmdbuf)
+    return cmdbuf
 end
 
 """

@@ -36,6 +36,13 @@ end
 MTL.enqueue!(cmdbuf::MPSCommandBuffer) = @inline MTL.enqueue!(cmdbuf.commandBuffer)
 MTL.commit!(cmdbuf::MPSCommandBuffer) = @inline MTL.commit!(cmdbuf.commandBuffer)
 
+function MPS.commit!(f::Base.Callable, cmdbuf::MPSCommandBuffer)
+    enqueue!(cmdbuf)
+    ret = f(cmdbuf)
+    commit!(cmdbuf)
+    return cmdbuf
+end
+
 function commitAndContinue!(cmdbuf::MPSCommandBuffer)
     @objc [cmdbuf::id{MPSCommandBuffer} commitAndContinue]::Nothing
 end
