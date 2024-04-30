@@ -10,6 +10,11 @@ function __init__()
         return
     end
 
+    if process_translated()
+        @error("Metal.jl is not supported under Rosetta. Please consider using an ARM64 (Apple Silicon) version of Julia")
+        return
+    end
+
     # we use Python_jll, but don't actually want its environment to be active
     # (this breaks the call to pygmentize in GPUCompiler).
     # XXX: the JLL should only set PYTHONHOME when the executable is called
