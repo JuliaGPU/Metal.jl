@@ -1,17 +1,6 @@
 # version and support queries
 
-export darwin_version, macos_version, metallib_support, air_support, metal_support, process_translated
-
-@noinline function _syscall_status(name)
-    ret = Array{Cint, 0}(undef)
-    size = Array{Csize_t, 0}(undef)
-    size[] = sizeof(ret)
-    err = @ccall sysctlbyname(name::Cstring, ret::Ptr{Cvoid}, size::Ptr{Csize_t},
-                              C_NULL::Ptr{Cvoid}, 0::Csize_t)::Cint
-    Base.systemerror("sysctlbyname", err != 0)
-
-    return ret[]
-end
+export darwin_version, macos_version, metallib_support, air_support, metal_support
 
 @noinline function _syscall_version(name)
     size = Ref{Csize_t}()
@@ -44,9 +33,6 @@ function macos_version()
     _macos_version[]
 end
 
-function process_translated()
-    return Bool(_syscall_status("sysctl.proc_translated"))
-end
 
 ## support queries
 

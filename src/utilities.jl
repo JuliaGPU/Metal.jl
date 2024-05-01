@@ -14,11 +14,7 @@ macro sync(code)
 end
 
 function versioninfo(io::IO=stdout)
-    print(io, "macOS $(macos_version()), Darwin $(darwin_version())")
-    if process_translated()
-        print(io, ", using Rosetta")
-    end
-    println(io)
+    println(io, "macOS $(macos_version()), Darwin $(darwin_version())")
     println(io)
 
     println(io, "Toolchain:")
