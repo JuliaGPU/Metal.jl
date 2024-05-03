@@ -5,7 +5,7 @@
 #
 
 # XXX: Not actually inheritance but MPSCommandBuffer conforms to MTLCommandBuffer protocol
-@objcwrapper immutable=false MPSCommandBuffer <: MTLCommandBuffer
+@objcwrapper MPSCommandBuffer <: MTLCommandBuffer
 
 @objcproperties MPSCommandBuffer begin
     # Identifying the Command Buffer
@@ -17,21 +17,17 @@ end
 
 function MPSCommandBuffer(commandBuffer::MTLCommandBuffer)
     cmdbuf = @objc [MPSCommandBuffer commandBufferWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}]::id{MPSCommandBuffer}
-    obj = MPSCommandBuffer(cmdbuf)
-    finalizer(release, obj)
-    return obj
+    MPSCommandBuffer(cmdbuf)
 end
 
 function MPSCommandBuffer(commandQueue::MTLCommandQueue)
     cmdbuf = @objc [MPSCommandBuffer commandBufferFromCommandQueue:commandQueue::id{MTLCommandQueue}]::id{MPSCommandBuffer}
-    obj = MPSCommandBuffer(cmdbuf)
-    finalizer(release, obj)
-    return obj
+    MPSCommandBuffer(cmdbuf)
 end
 
-function MPSCommandBuffer(f::Base.Callable, queueOrBuf::Q) where Q <: Union{MTLCommandBuffer, MTLCommandQueue}
+function MPSCommandBuffer(f::Base.Callable, queueOrBuf)
     cmdbuf = MPSCommandBuffer(queueOrBuf)
-    cmdbuf = commitAndContinue!(f, cmdbuf)
+    commitAndContinue!(f, cmdbuf)
     return cmdbuf
 end
 
@@ -45,9 +41,8 @@ function MPS.commit!(f::Base.Callable, cmdbuf::MPSCommandBuffer)
     return cmdbuf
 end
 
-function commitAndContinue!(cmdbuf::MPSCommandBuffer)
+commitAndContinue!(cmdbuf::MPSCommandBuffer) =
     @objc [cmdbuf::id{MPSCommandBuffer} commitAndContinue]::Nothing
-end
 
 function commitAndContinue!(f::Base.Callable, cmdbuf::MPSCommandBuffer)
     enqueue!(cmdbuf)

@@ -1,3 +1,5 @@
+## descriptor
+
 export MPSVectorDescriptor
 
 @objcwrapper MPSVectorDescriptor <: NSObject
@@ -13,21 +15,20 @@ end
 function MPSVectorDescriptor(length::Integer, dataType::Union{DataType,MPSDataType})
     desc = @objc [MPSVectorDescriptor vectorDescriptorWithLength:length::NSUInteger
                                       dataType:dataType::MPSDataType]::id{MPSVectorDescriptor}
-    obj = MPSVectorDescriptor(desc)
-    # XXX: who releases this object?
-    return obj
+    MPSVectorDescriptor(desc)
 end
 
-function MPSVectorDescriptor(length::Integer, vectors, vectorBytes::Integer, dataType::Union{DataType,MPSDataType})
+function MPSVectorDescriptor(length::Integer, vectors, vectorBytes::Integer,
+                             dataType::Union{DataType,MPSDataType})
     desc = @objc [MPSVectorDescriptor vectorDescriptorWithLength:length::NSUInteger
                                       vectors:vectors::NSUInteger
                                       vectorBytes:vectorBytes::NSUInteger
                                       dataType:dataType::MPSDataType]::id{MPSVectorDescriptor}
-    obj = MPSVectorDescriptor(desc)
-    # XXX: who releases this object?
-    return obj
+    MPSVectorDescriptor(desc)
 end
 
+
+## high-level object
 
 export MPSVector
 
@@ -81,9 +82,10 @@ function MPSTemporaryVector(commandBuffer::MTLCommandBuffer, descriptor::MPSVect
     return MPSTemporaryVector(obj)
 end
 
-#
-# matrix vector multiplication
-#
+
+## matrix vector multiplication
+
+export MPSMatrixVectorMultiplication, matvecmul!
 
 @objcwrapper immutable=false MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
 
@@ -107,12 +109,11 @@ function encode!(cmdbuf::MTLCommandBuffer, matvecmul::MPSMatrixVectorMultiplicat
                                                         resultVector:resultVector::id{MPSVector}]::Nothing
 end
 
-
 """
-    matVecMulMPS(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha=1, beta=1,
-                 transpose=false)
+    matvecmul!(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha=1, beta=1, transpose=false)
+
 A `MPSMatrixVectorMultiplication` kernel thay computes:
-`c = alpha * op(a) * b + beta * c`
+  `c = alpha * op(a) * b + beta * c`
 
 This function should not typically be used. Rather, use the normal `LinearAlgebra` interface
 with any `MtlArray` and it should be accelerated using Metal Performance Shaders.

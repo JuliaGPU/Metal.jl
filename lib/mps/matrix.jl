@@ -1,6 +1,5 @@
-#
-# matrix enums
-#
+## enums
+
 @cenum MPSDataTypeBits::UInt32 begin
     MPSDataTypeComplexBit = UInt32(0x01000000)
     MPSDataTypeFloatBit = UInt32(0x10000000)
@@ -48,13 +47,11 @@ Base.sizeof(t::MPS.MPSDataType) = sizeof(jl_mps_to_typ[t])
 Base.convert(::Type{DataType}, mpstyp::MPSDataType) = jl_mps_to_typ[mpstyp]
 
 
-#
-# matrix descriptor
-#
+## descriptor
 
 export MPSMatrixDescriptor
 
-@objcwrapper immutable=false MPSMatrixDescriptor <: NSObject
+@objcwrapper MPSMatrixDescriptor <: NSObject
 
 @objcproperties MPSMatrixDescriptor begin
     @autoproperty rows::NSUInteger setter=setRows
@@ -70,9 +67,7 @@ function MPSMatrixDescriptor(rows, columns, rowBytes, dataType)
                                       columns:columns::NSUInteger
                                       rowBytes:rowBytes::NSUInteger
                                       dataType:dataType::MPSDataType]::id{MPSMatrixDescriptor}
-    obj = MPSMatrixDescriptor(desc)
-    # XXX: who releases this object?
-    return obj
+    MPSMatrixDescriptor(desc)
 end
 
 function MPSMatrixDescriptor(rows, columns, matrices, rowBytes, matrixBytes, dataType)
@@ -82,14 +77,11 @@ function MPSMatrixDescriptor(rows, columns, matrices, rowBytes, matrixBytes, dat
                                       rowBytes:rowBytes::NSUInteger
                                       matrixBytes:matrixBytes::NSUInteger
                                       dataType:dataType::MPSDataType]::id{MPSMatrixDescriptor}
-    obj = MPSMatrixDescriptor(desc)
-    # XXX: who releases this object?
-    return obj
+    MPSMatrixDescriptor(desc)
 end
 
-#
-# matrix object
-#
+
+## high-level object
 
 export MPSMatrix
 
@@ -126,7 +118,6 @@ function MPSMatrix(dev::MTLDevice, descriptor::MPSMatrixDescriptor)
     return obj
 end
 
-
 """
     MPSMatrix(mat::MtlMatrix)
 
@@ -157,7 +148,6 @@ function MPSMatrix(vec::MtlVector{T}) where T
     return MPSMatrix(vec, desc, offset)
 end
 
-
 """
     MPSMatrix(arr::MtlArray{T,3})
 
@@ -174,9 +164,10 @@ function MPSMatrix(arr::MtlArray{T,3}) where T
     return MPSMatrix(arr, desc, offset)
 end
 
-#
-# matrix multiplication
-#
+
+## matrix multiplication
+
+export MPSMatrixMultiplication, matmul!
 
 @objcwrapper immutable=false MPSMatrixMultiplication <: MPSKernel
 
@@ -210,7 +201,6 @@ function encode!(cmdbuf::MTLCommandBuffer, matmul::MPSMatrixMultiplication, left
                                                rightMatrix:right::id{MPSMatrix}
                                                resultMatrix:result::id{MPSMatrix}]::Nothing
 end
-
 
 """
     matMulMPS(a::MtlMatrix, b::MtlMatrix, c::MtlMatrix, alpha=1, beta=1,
@@ -249,7 +239,10 @@ function matmul!(c::MtlArray{T1,N}, a::MtlArray{T2,N}, b::MtlArray{T3,N},
     return c
 end
 
-export MPSMatrixFindTopK
+
+## topk
+
+export MPSMatrixFindTopK, topk, topk!
 
 @objcwrapper immutable=false MPSMatrixFindTopK <: MPSMatrixUnaryKernel
 
@@ -275,8 +268,6 @@ function encode!(cmdbuf::MTLCommandBuffer, kernel::MPSMatrixFindTopK, inputMatri
                                                       resultIndexMatrix:resultIndexMatrix::id{MPSMatrix}
                                                       resultValueMatrix:resultValueMatrix::id{MPSMatrix}]::Nothing
 end
-
-export topk, topk!
 
 """
     topk!(A::MtlMatrix{T}, I::MtlMatrix{Int32}, V::MtlMatrix{T}, k)
@@ -339,6 +330,9 @@ function topk(A::MtlMatrix{T,S}, k) where {T<:MtlFloat,S}
     return _topk!(A, I, V, k)
 end
 
+
+## softmax
+
 @objcwrapper immutable=false MPSMatrixSoftMax <: MPSMatrixUnaryKernel
 @objcwrapper immutable=false MPSMatrixLogSoftMax <: MPSMatrixSoftMax
 
@@ -359,8 +353,8 @@ for f in (:MPSMatrixSoftMax, :MPSMatrixLogSoftMax)
 
         function encode!(cmdbuf::MTLCommandBuffer, kernel::$(f), inputMatrix, resultMatrix)
             @objc [kernel::id{$(f)} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
-                                                            inputMatrix:inputMatrix::id{MPSMatrix}
-                                                            resultMatrix:resultMatrix::id{MPSMatrix}]::Nothing
+                                    inputMatrix:inputMatrix::id{MPSMatrix}
+                                    resultMatrix:resultMatrix::id{MPSMatrix}]::Nothing
         end
     end
 end
