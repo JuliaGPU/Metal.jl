@@ -147,6 +147,8 @@ using .MPS: MPSMatrixMultiplication
     @test mat_mul.resultMatrixOrigin == MTLOrigin(0, 0, 0)
     @test mat_mul.batchSize == typemax(UInt)
     @test mat_mul.batchStart == typemin(UInt)
+
+    @test copy(mat_mul) isa MPSMatrixMultiplication
 end
 
 
