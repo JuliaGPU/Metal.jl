@@ -118,7 +118,7 @@ function LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::Mtl
     typC = eltype(C)
 
     # If possible, dispatch to performance shaders
-    if is_supported(current_device()) && 
+    if is_supported(current_device()) &&
         typA == typB && (typA, typC) in MPS_VALID_MATVECMUL_TYPES
         matvecmul!(C, A, B, _add.alpha, _add.beta, transA)
     else
@@ -167,34 +167,33 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFloa
     mps_a = MPSMatrix(A)
     mps_at = MPSMatrix(At)
 
-    MTLCommandBuffer(queue) do cmdbuf
+    cmdbuf = MPSCommandBuffer(queue) do cbuf
         kernel = MPSMatrixCopy(dev, N, M, false, true)
         descriptor = MPSMatrixCopyDescriptor(mps_a, mps_at)
-        encode!(cmdbuf, kernel, descriptor)
+        encode!(cbuf, kernel, descriptor)
     end
 
     P = MtlMatrix{UInt32}(undef, 1, min(N, M))
     status = MtlArray{MPSMatrixDecompositionStatus}(undef)
 
-    cmdbuf_lu = MTLCommandBuffer(queue) do cmdbuf
+    cmdbuf = commitAndContinue!(cmdbuf) do cbuf
         mps_p = MPSMatrix(P)
         kernel = MPSMatrixDecompositionLU(dev, M, N)
-        encode!(cmdbuf, kernel, mps_at, mps_at, mps_p, status)
+        encode!(cbuf, kernel, mps_at, mps_at, mps_p, status)
     end
 
     B = MtlMatrix{T}(undef, M, N)
 
-    MTLCommandBuffer(queue) do cmdbuf
+    cmdbuf = commit!(cmdbuf) do cbuf
         mps_b = MPSMatrix(B)
-
         kernel = MPSMatrixCopy(dev, M, N, false, true)
         descriptor = MPSMatrixCopyDescriptor(mps_at, mps_b)
-        encode!(cmdbuf, kernel, descriptor)
+        encode!(cbuf, kernel, descriptor)
     end
 
     p = vec(P) .+ UInt32(1)
 
-    wait_completed(cmdbuf_lu)
+    wait_completed(cmdbuf)
 
     status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
     check && checknonsingular(status)
@@ -225,30 +224,30 @@ function LinearAlgebra.lu!(A::MtlMatrix{T};
     mps_a = MPSMatrix(A)
     mps_at = MPSMatrix(At)
 
-    MTLCommandBuffer(queue) do cmdbuf
+    cmdbuf = MPSCommandBuffer(queue) do cbuf
         kernel = MPSMatrixCopy(dev, N, M, false, true)
         descriptor = MPSMatrixCopyDescriptor(mps_a, mps_at)
-        encode!(cmdbuf, kernel, descriptor)
+        encode!(cbuf, kernel, descriptor)
     end
 
     P = MtlMatrix{UInt32}(undef, 1, min(N, M))
     status = MtlArray{MPSMatrixDecompositionStatus}(undef)
 
-    cmdbuf_lu = MTLCommandBuffer(queue) do cmdbuf
+    cmdbuf = commitAndContinue!(cmdbuf) do cbuf
         mps_p = MPSMatrix(P)
         kernel = MPSMatrixDecompositionLU(dev, M, N)
-        encode!(cmdbuf, kernel, mps_at, mps_at, mps_p, status)
+        encode!(cbuf, kernel, mps_at, mps_at, mps_p, status)
     end
 
-    MTLCommandBuffer(queue) do cmdbuf
+    cmdbuf = commit!(cmdbuf) do cbuf
         kernel = MPSMatrixCopy(dev, M, N, false, true)
         descriptor = MPSMatrixCopyDescriptor(mps_at, mps_a)
-        encode!(cmdbuf, kernel, descriptor)
+        encode!(cbuf, kernel, descriptor)
     end
 
     p = vec(P) .+ UInt32(1)
 
-    wait_completed(cmdbuf_lu)
+    wait_completed(cmdbuf)
 
     status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
     check && _check_lu_success(status, allowsingular)

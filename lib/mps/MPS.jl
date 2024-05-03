@@ -14,6 +14,7 @@ is_supported(dev::MTLDevice) = ccall(:MPSSupportsMTLDevice, Bool, (id{MTLDevice}
 include("size.jl")
 
 # MPS kernel base clases
+include("command_buf.jl")
 include("kernel.jl")
 include("images.jl")
 
