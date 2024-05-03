@@ -1,4 +1,3 @@
-
 @cenum MPSMatrixDecompositionStatus::Cint begin
     MPSMatrixDecompositionStatusSuccess =  0
     MPSMatrixDecompositionStatusFailure = -1
@@ -6,6 +5,8 @@
     MPSMatrixDecompositionStatusNonPositiveDefinite = -3
 end
 
+
+## lu
 
 export MPSMatrixDecompositionLU
 
@@ -29,6 +30,8 @@ function encode!(cmdbuf::MTLCommandBuffer, kernel::MPSMatrixDecompositionLU, sou
                                                 status:status::id{MTLBuffer}]::Nothing
 end
 
+
+## cholesky
 
 export MPSMatrixDecompositionCholesky
 

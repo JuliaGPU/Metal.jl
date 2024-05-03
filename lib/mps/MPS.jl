@@ -13,22 +13,16 @@ is_supported(dev::MTLDevice) = ccall(:MPSSupportsMTLDevice, Bool, (id{MTLDevice}
 
 include("size.jl")
 
-# MPS kernel base clases
+# high-level wrappers
 include("command_buf.jl")
 include("kernel.jl")
 include("images.jl")
-
-# high-level wrappers
 include("matrix.jl")
 include("vector.jl")
+include("decomposition.jl")
+include("copy.jl")
 
 # integrations
 include("linalg.jl")
-
-# decompositions
-include("decomposition.jl")
-
-# matrix copy
-include("copy.jl")
 
 end
