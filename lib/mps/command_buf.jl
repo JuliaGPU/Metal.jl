@@ -1,5 +1,7 @@
 #
-# command buffer
+# MPSCommandBuffer allows:
+#   - to predicate execution of MPS kernels
+#   - intermediate commits during encoding of MPS work using `commitAndContinue`
 #
 
 # XXX: Not actually inheritance but MPSCommandBuffer conforms to MTLCommandBuffer protocol
