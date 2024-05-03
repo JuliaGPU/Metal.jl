@@ -77,9 +77,7 @@ end
 function MTLCommandBuffer(queue::MTLCommandQueue,
                           desc::MTLCommandBufferDescriptor=MTLCommandBufferDescriptor())
     handle = @objc [queue::id{MTLCommandQueue} commandBufferWithDescriptor:desc::id{MTLCommandBufferDescriptor}]::id{MTLCommandBuffer}
-    obj = MTLCommandBuffer(handle)
-    # command buffers are part of the queue, so we don't need to manage memory
-    return obj
+    MTLCommandBuffer(handle)
 end
 
 function MTLCommandBuffer(f::Base.Callable, queue::MTLCommandQueue,
@@ -117,7 +115,7 @@ function commit!(f::Base.Callable, cmdbuf::MTLCommandBuffer)
     enqueue!(cmdbuf)
     ret = f(cmdbuf)
     commit!(cmdbuf)
-    return cmdbuf
+    return ret
 end
 
 """

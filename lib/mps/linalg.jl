@@ -189,7 +189,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T =
     P = MtlMatrix{UInt32}(undef, 1, min(N, M))
     status = MtlArray{MPSMatrixDecompositionStatus}(undef)
 
-    cmdbuf = commitAndContinue!(cmdbuf) do cbuf
+    commitAndContinue!(cmdbuf) do cbuf
         mps_p = MPSMatrix(P)
         kernel = MPSMatrixDecompositionLU(dev, M, N)
         encode!(cbuf, kernel, mps_at, mps_at, mps_p, status)
@@ -197,7 +197,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T =
 
     B = MtlMatrix{T}(undef, M, N)
 
-    cmdbuf = commit!(cmdbuf) do cbuf
+    commit!(cmdbuf) do cbuf
         mps_b = MPSMatrix(B)
         kernel = MPSMatrixCopy(dev, M, N, false, true)
         descriptor = MPSMatrixCopyDescriptor(mps_at, mps_b)
@@ -247,13 +247,13 @@ end
     P = MtlMatrix{UInt32}(undef, 1, min(N, M))
     status = MtlArray{MPSMatrixDecompositionStatus}(undef)
 
-    cmdbuf = commitAndContinue!(cmdbuf) do cbuf
+    commitAndContinue!(cmdbuf) do cbuf
         mps_p = MPSMatrix(P)
         kernel = MPSMatrixDecompositionLU(dev, M, N)
         encode!(cbuf, kernel, mps_at, mps_at, mps_p, status)
     end
 
-    cmdbuf = commit!(cmdbuf) do cbuf
+    commit!(cmdbuf) do cbuf
         kernel = MPSMatrixCopy(dev, M, N, false, true)
         descriptor = MPSMatrixCopyDescriptor(mps_at, mps_a)
         encode!(cbuf, kernel, descriptor)
