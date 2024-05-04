@@ -246,4 +246,3 @@ function on_completed(f::Base.Callable, cmdbuf::MTLCommandBuffer)
     block = _command_buffer_callback(f, cmdbuf)
     @objc [cmdbuf::id{MTLCommandBuffer} addCompletedHandler:block::id{NSBlock}]::Nothing
 end
-

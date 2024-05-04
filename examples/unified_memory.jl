@@ -83,4 +83,3 @@ rand!(arr_cpu)
 # we need to synchronize the device as the kernel may not have finished yet
 synchronize()
 @test all(arr_cpu .== -1.0)
-
