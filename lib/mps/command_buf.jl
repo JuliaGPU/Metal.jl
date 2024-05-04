@@ -16,13 +16,13 @@
 end
 
 function MPSCommandBuffer(commandBuffer::MTLCommandBuffer)
-    cmdbuf = @objc [MPSCommandBuffer commandBufferWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}]::id{MPSCommandBuffer}
-    MPSCommandBuffer(cmdbuf)
+    handle = @objc [MPSCommandBuffer commandBufferWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}]::id{MPSCommandBuffer}
+    MPSCommandBuffer(handle)
 end
 
 function MPSCommandBuffer(commandQueue::MTLCommandQueue)
-    cmdbuf = @objc [MPSCommandBuffer commandBufferFromCommandQueue:commandQueue::id{MTLCommandQueue}]::id{MPSCommandBuffer}
-    MPSCommandBuffer(cmdbuf)
+    handle = @objc [MPSCommandBuffer commandBufferFromCommandQueue:commandQueue::id{MTLCommandQueue}]::id{MPSCommandBuffer}
+    MPSCommandBuffer(handle)
 end
 
 function MPSCommandBuffer(f::Base.Callable, queueOrBuf)
@@ -38,7 +38,7 @@ function MPS.commit!(f::Base.Callable, cmdbuf::MPSCommandBuffer)
     enqueue!(cmdbuf)
     ret = f(cmdbuf)
     commit!(cmdbuf)
-    return cmdbuf
+    return ret
 end
 
 commitAndContinue!(cmdbuf::MPSCommandBuffer) =
@@ -48,5 +48,5 @@ function commitAndContinue!(f::Base.Callable, cmdbuf::MPSCommandBuffer)
     enqueue!(cmdbuf)
     ret = f(cmdbuf)
     commitAndContinue!(cmdbuf)
-    return cmdbuf
+    return ret
 end
