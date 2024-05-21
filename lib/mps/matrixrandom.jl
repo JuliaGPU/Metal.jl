@@ -114,29 +114,32 @@ synchronizeStateOnCommandBuffer(kern::MPSMatrixRandomMTGP32, cmdbuf::MTLCommandB
     @objc [obj::id{MPSMatrixRandomMTGP32} synchronizeStateOnCommandBuffer:cmdbuf::id{MTLCommandBuffer}]::Nothing
 
 
-
 @inline function _mpsmat_rand!(randkern::MPSMatrixRandom, dest::MtlArray{T}, ::Type{T2};
                         queue::MTLCommandQueue = global_queue(current_device()),
                         async::Bool=false) where {T,T2}
     byteoffset = dest.offset * sizeof(T)
+    bytesize = sizeof(dest)
+
+    # Even though `append_copy`` seems to work with any size or offset values, the documentation at
+    # https://developer.apple.com/documentation/metal/mtlblitcommandencoder/1400767-copyfrombuffer?language=objc
+    # mentions that both must be multiples of 4 bytes in MacOS so error when they are not
+    (bytesize % 4 == 0) || error(lazy"Destination buffer bytesize ($(bytesize)) must be a multiple of 4.")
     (byteoffset % 4 == 0) || error(lazy"Destination buffer offset ($(byteoffset)) must be a multiple of 4.")
 
-    srcbytes = sizeof(dest)
-
-    cmdbuf = if srcbytes % 16 == 0 && dest.offset == 0
+    cmdbuf = if bytesize % 16 == 0 && dest.offset == 0
         MTLCommandBuffer(queue) do cmdbuf
-            vecDesc = MPSVectorDescriptor(srcbytes ÷ sizeof(T2), T2)
+            vecDesc = MPSVectorDescriptor(bytesize ÷ sizeof(T2), T2)
             mpsdest = MPSVector(dest, vecDesc)
             encode!(cmdbuf, randkern, mpsdest)
         end
     else
         MTLCommandBuffer(queue) do cmdbuf
-            len = UInt(ceil(srcbytes / sizeof(T2)) * 4)
+            len = UInt(ceil(bytesize / sizeof(T2)) * 4)
             vecDesc = MPSVectorDescriptor(len, T2)
             tempVec = MPSTemporaryVector(cmdbuf, vecDesc)
             encode!(cmdbuf, randkern, tempVec)
             MTLBlitCommandEncoder(cmdbuf) do enc
-                MTL.append_copy!(enc, dest.data[], byteoffset, tempVec.data, tempVec.offset, srcbytes)
+                MTL.append_copy!(enc, dest.data[], byteoffset, tempVec.data, tempVec.offset, bytesize)
             end
         end
     end

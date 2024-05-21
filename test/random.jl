@@ -1,4 +1,5 @@
 using Random
+using Metal: can_use_mpsrandom
 
 const RAND_TYPES = [Float16, Float32, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64,
                     UInt64]
@@ -29,8 +30,12 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
                 # specified MPS rng
                 if T != Float16
                     fill!(A, T(0))
-                    f(rng, A)
-                    @test !iszero(collect(A))
+                    if can_use_mpsrandom(A)
+                        f(rng, A)
+                        @test !iszero(collect(A))
+                    else
+                        @test_throws "Destination buffer" f(rng, A)
+                    end
                 end
             end
 
@@ -45,8 +50,12 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
                 # specified MPS rng
                 if T != Float16
                     fill!(A, T(0))
-                    f(rng, A)
-                    @test Array(A) == fill(1, 0)
+                    if can_use_mpsrandom(A)
+                        f(rng, A)
+                        @test Array(A) == fill(1, 0)
+                    else
+                        @test_throws "Destination buffer" f(rng, A)
+                    end
                 end
             end
         end
@@ -125,32 +134,33 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
 
                 ## Offset > 0
                 fill!(A, T(0))
-                idx = 4:51
+                idx = 4:50
                 view_A = @view A[idx]
 
                 # Errors in Julia before crashing whole process
-                if view_A.offset * sizeof(T) % 4 != 0
-                    @test_throws "Destination buffer offset ($(view_A.offset*sizeof(T)))" f(rng, view_A)
-                else
+                if can_use_mpsrandom(view_A)
                     f(rng, view_A)
 
                     cpuA = collect(A)
                     @test !iszero(cpuA[idx])
-
                     @test iszero(cpuA[1:100 .∉ Ref(idx)]) broken=(sizeof(view_A) % 4 != 0)
+                else
+                    @test_throws "Destination buffer" f(rng, view_A)
                 end
 
                 ## Offset == 0
                 fill!(A, T(0))
                 idx = 1:51
                 view_A = @view A[idx]
-                f(rng, view_A)
+                if can_use_mpsrandom(view_A)
+                    f(rng, view_A)
 
-                cpuA = collect(A)
-                @test !iszero(cpuA[idx])
-
-                # XXX: Why are the 8-bit and 16-bit type tests not broken?
-                @test iszero(cpuA[1:100 .∉ Ref(idx)])# broken=(sizeof(view_A) % 4 != 0)
+                    cpuA = collect(A)
+                    @test !iszero(cpuA[idx])
+                    @test iszero(cpuA[1:100 .∉ Ref(idx)])
+                else
+                    @test_throws "Destination buffer" f(rng, view_A)
+                end
             end
         end
     end
@@ -196,8 +206,12 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
 
                 # specified MPS rng
                 if T != Float16
-                    B = fr(rng, args...)
-                    @test eltype(B) == T
+                    if length(zeros(args...)) * sizeof(T) % 4 == 0
+                        B = fr(rng, args...)
+                        @test eltype(B) == T
+                    else
+                        @test_throws "Destination buffer" fr(rng, args...)
+                    end
                 end
             end
 
@@ -212,24 +226,19 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
 
     ## CPU Arrays with MPS rng
     @testset "CPU Arrays" begin
-        MPS_TUPLES = filter(INPLACE_TUPLES) do tup
+        mps_tuples = filter(INPLACE_TUPLES) do tup
             tup[2] != Float16
         end
         rng = Metal.MPS.RNG()
-        @testset "$f with $T" for (f, T) in MPS_TUPLES
-
+        @testset "$f with $T" for (f, T) in mps_tuples
             @testset "$d" for d in (1, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000))
                 A = zeros(T, d)
-                f(rng, A)
-                @test !iszero(collect(A))
-            end
-
-            @testset "0" begin
-                A = rand(T, 0)
-                b = rand(T)
-                fill!(A, b)
-                @test A isa Array{T,1}
-                @test Array(A) == fill(b, 0)
+                if (prod(d) * sizeof(T)) % 4 == 0
+                    f(rng, A)
+                    @test !iszero(collect(A))
+                else
+                    @test_throws "Destination buffer" f(rng, A)
+                end
             end
         end
     end
