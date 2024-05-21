@@ -105,5 +105,5 @@ Random.randn(rng::RNG, dim1::Integer, dims::Integer...; storage=DefaultStorageMo
     Random.randn!(rng, MtlArray{Float32,length(dims) + 1,storage}(undef, dim1, dims...))
 
 # scalars
-Random.rand(rng::RNG, T::UniformType=Float32; storage=Shared) = rand(rng, T, 1; storage)[]
-Random.randn(rng::RNG, T::NormalType=Float32; storage=Shared) = randn(rng, T, 1; storage)[]
+Random.rand(rng::RNG, T::UniformType=Float32; storage=Shared) = rand(rng, T, 4; storage)[1]
+Random.randn(rng::RNG, T::NormalType=Float32; storage=Shared) = randn(rng, T, 4; storage)[1]
