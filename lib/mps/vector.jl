@@ -1,3 +1,5 @@
+## descriptor
+
 export MPSVectorDescriptor
 
 @objcwrapper MPSVectorDescriptor <: NSObject
@@ -10,24 +12,23 @@ export MPSVectorDescriptor
 end
 
 
-function MPSVectorDescriptor(length, dataType)
+function MPSVectorDescriptor(length::Integer, dataType::Union{DataType,MPSDataType})
     desc = @objc [MPSVectorDescriptor vectorDescriptorWithLength:length::NSUInteger
-                                      dataType:jl_typ_to_mps[dataType]::MPSDataType]::id{MPSVectorDescriptor}
-    obj = MPSVectorDescriptor(desc)
-    # XXX: who releases this object?
-    return obj
+                                      dataType:dataType::MPSDataType]::id{MPSVectorDescriptor}
+    MPSVectorDescriptor(desc)
 end
 
-function MPSVectorDescriptor(length, vectors, vectorBytes, dataType)
+function MPSVectorDescriptor(length::Integer, vectors, vectorBytes::Integer,
+                             dataType::Union{DataType,MPSDataType})
     desc = @objc [MPSVectorDescriptor vectorDescriptorWithLength:length::NSUInteger
                                       vectors:vectors::NSUInteger
                                       vectorBytes:vectorBytes::NSUInteger
-                                      dataType:jl_typ_to_mps[dataType]::MPSDataType]::id{MPSVectorDescriptor}
-    obj = MPSVectorDescriptor(desc)
-    # XXX: who releases this object?
-    return obj
+                                      dataType:dataType::MPSDataType]::id{MPSVectorDescriptor}
+    MPSVectorDescriptor(desc)
 end
 
+
+## high-level object
 
 export MPSVector
 
@@ -43,29 +44,50 @@ export MPSVector
     @autoproperty data::id{MTLBuffer}
 end
 
+function MPSVector(buf, descriptor::MPSVectorDescriptor, offset::Integer=0)
+    vec = @objc [MPSVector alloc]::id{MPSVector}
+    obj = MPSVector(vec)
+    finalizer(release, obj)
+    @objc [obj::id{MPSVector} initWithBuffer:buf::id{MTLBuffer}
+                              offset:offset::NSUInteger
+                              descriptor:descriptor::id{MPSVectorDescriptor}]::id{MPSVector}
+    return obj
+end
+
+function MPSVector(dev::MTLDevice, descriptor::MPSVectorDescriptor)
+    vec = @objc [MPSVector alloc]::id{MPSVector}
+    obj = MPSVector(vec)
+    finalizer(release, obj)
+    @objc [obj::id{MPSVector} initWithDevice:dev::id{MTLDevice}
+                              descriptor:descriptor::id{MPSVectorDescriptor}]::id{MPSVector}
+    return obj
+end
+
 """
     MPSVector(arr::MtlVector)
 
 Metal vector representation used in Performance Shaders.
 """
 function MPSVector(arr::MtlVector{T}) where T
-    len = length(arr)
-    desc = MPSVectorDescriptor(len, T)
-    vec = @objc [MPSVector alloc]::id{MPSVector}
-    obj = MPSVector(vec)
+    desc = MPSVectorDescriptor(length(arr), T)
     offset = arr.offset * sizeof(T)
-    finalizer(release, obj)
-    @objc [obj::id{MPSVector} initWithBuffer:arr::id{MTLBuffer}
-                              offset:offset::NSUInteger
-                              descriptor:desc::id{MPSVectorDescriptor}]::id{MPSVector}
-    return obj
+    return MPSVector(arr, desc, offset)
 end
 
-#
-# matrix vector multiplication
-#
+@objcwrapper immutable=false MPSTemporaryVector <: MPSVector
 
-@objcwrapper immutable=false MPSMatrixVectorMultiplication <: MPSKernel
+function MPSTemporaryVector(commandBuffer::MTLCommandBuffer, descriptor::MPSVectorDescriptor)
+    obj = @objc [MPSTemporaryVector temporaryVectorWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}
+                              descriptor:descriptor::id{MPSVectorDescriptor}]::id{MPSTemporaryVector}
+    return MPSTemporaryVector(obj)
+end
+
+
+## matrix vector multiplication
+
+export MPSMatrixVectorMultiplication, matvecmul!
+
+@objcwrapper immutable=false MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
 
 function MPSMatrixVectorMultiplication(device, transpose, rows, columns, alpha, beta)
     kernel = @objc [MPSMatrixVectorMultiplication alloc]::id{MPSMatrixVectorMultiplication}
@@ -87,12 +109,11 @@ function encode!(cmdbuf::MTLCommandBuffer, matvecmul::MPSMatrixVectorMultiplicat
                                                         resultVector:resultVector::id{MPSVector}]::Nothing
 end
 
-
 """
-    matVecMulMPS(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha=1, beta=1,
-                 transpose=false)
+    matvecmul!(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha=1, beta=1, transpose=false)
+
 A `MPSMatrixVectorMultiplication` kernel thay computes:
-`c = alpha * op(a) * b + beta * c`
+  `c = alpha * op(a) * b + beta * c`
 
 This function should not typically be used. Rather, use the normal `LinearAlgebra` interface
 with any `MtlArray` and it should be accelerated using Metal Performance Shaders.

@@ -33,7 +33,9 @@ const MPS_VALID_MATMUL_TYPES =
 
 LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
     LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
-function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, alpha::Number, beta::Number)
+@autoreleasepool function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB,
+                                                           A::MtlMatrix, B::MtlMatrix,
+                                                           alpha::Number, beta::Number)
     mA, nA = LinearAlgebra.lapack_size(tA, A)
     mB, nB = LinearAlgebra.lapack_size(tB, B)
 
@@ -69,18 +71,23 @@ end
 
 if VERSION < v"1.10.0-DEV.1365"
 # catch other functions that are called by LinearAlgebra's mul!
-LinearAlgebra.gemm_wrapper!(C::MtlMatrix, tA::AbstractChar, tB::AbstractChar, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
+LinearAlgebra.gemm_wrapper!(C::MtlMatrix, tA::AbstractChar, tB::AbstractChar, A::MtlMatrix,
+                            B::MtlMatrix, _add::MulAddMul) =
     LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add)
-LinearAlgebra.gemm_wrapper!(C::MtlMatrix{T}, tA::AbstractChar, tB::AbstractChar, A::MtlMatrix{T}, B::MtlMatrix{T}, _add::MulAddMul) where {T<:LinearAlgebra.BlasFloat} =
+LinearAlgebra.gemm_wrapper!(C::MtlMatrix{T}, tA::AbstractChar, tB::AbstractChar,
+                            A::MtlMatrix{T}, B::MtlMatrix{T},
+                            _add::MulAddMul) where {T<:LinearAlgebra.BlasFloat} =
     LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add)
-function LinearAlgebra.syrk_wrapper!(C::MtlMatrix, tA::AbstractChar, A::MtlMatrix, _add::MulAddMul = MulAddMul())
+function LinearAlgebra.syrk_wrapper!(C::MtlMatrix, tA::AbstractChar, A::MtlMatrix,
+                                     _add::MulAddMul = MulAddMul())
     if tA == 'T'
         LinearAlgebra.generic_matmatmul!(C, 'T', 'N', A, A, _add)
     else # tA == 'N'
         LinearAlgebra.generic_matmatmul!(C, 'N', 'T', A, A, _add)
     end
 end
-function LinearAlgebra.herk_wrapper!(C::MtlMatrix, tA::AbstractChar, A::MtlMatrix, _add::MulAddMul = MulAddMul())
+function LinearAlgebra.herk_wrapper!(C::MtlMatrix, tA::AbstractChar, A::MtlMatrix,
+                                     _add::MulAddMul = MulAddMul())
     if tA == 'C'
         LinearAlgebra.generic_matmatmul!(C, 'C', 'N', A, A, _add)
     else # tA == 'N'
@@ -96,7 +103,9 @@ const MPS_VALID_MATVECMUL_TYPES =
 
 LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, _add::MulAddMul) =
     LinearAlgebra.generic_matvecmul!(C, tA, A, B, _add.alpha, _add.beta)
-function LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, alpha::Number, beta::Number)
+@autoreleasepool function LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar,
+                                                           A::MtlMatrix, B::MtlVector,
+                                                           alpha::Number, beta::Number)
     mA, nA = LinearAlgebra.lapack_size(tA, A)
     mB = length(B)
     mC = length(C)
@@ -122,7 +131,7 @@ function LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::Mtl
     typC = eltype(C)
 
     # If possible, dispatch to performance shaders
-    if is_supported(current_device()) && 
+    if is_supported(current_device()) &&
         typA == typB && (typA, typC) in MPS_VALID_MATVECMUL_TYPES
         matvecmul!(C, A, B, alpha, beta, transA)
     else
@@ -132,17 +141,19 @@ end
 
 if VERSION < v"1.10.0-DEV.1365"
 # catch other functions that are called by LinearAlgebra's mul!
-function LinearAlgebra.gemv!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, a::Number, b::Number)
+LinearAlgebra.gemv!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector,
+                    a::Number, b::Number) =
     LinearAlgebra.generic_matvecmul!(C, tA, A, B, a, b)
-end
 # disambiguation
-function LinearAlgebra.gemv!(C::MtlVector{T}, tA::AbstractChar, A::MtlMatrix{T}, B::MtlVector{T}, a::Number, b::Number) where {T<:LinearAlgebra.BlasFloat}
+LinearAlgebra.gemv!(C::MtlVector{T}, tA::AbstractChar, A::MtlMatrix{T}, B::MtlVector{T},
+                    a::Number, b::Number) where {T<:LinearAlgebra.BlasFloat} =
     LinearAlgebra.generic_matvecmul!(C, tA, A, B, a, b)
-end
 end
 
-@inline checkpositivedefinite(status) = status == MPSMatrixDecompositionStatusNonPositiveDefinite || throw(PosDefException(status))
-@inline checknonsingular(status) = status != MPSMatrixDecompositionStatusSingular || throw(SingularException(status))
+@inline checkpositivedefinite(status) =
+    status == MPSMatrixDecompositionStatusNonPositiveDefinite || throw(PosDefException(status))
+@inline checknonsingular(status) =
+    status != MPSMatrixDecompositionStatusSingular || throw(SingularException(status))
 
 # GPU-compatible accessors of the LU decomposition properties
 function Base.getproperty(F::LU{T,<:MtlMatrix}, d::Symbol) where T
@@ -160,9 +171,11 @@ end
 
 # Metal's pivoting sequence needs to be iterated sequentially...
 # TODO: figure out a GPU-compatible way to get the permutation matrix
-LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T = LinearAlgebra.ipiv2perm(Array(v), maxi)
+LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T =
+    LinearAlgebra.ipiv2perm(Array(v), maxi)
 
-function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFloat}
+@autoreleasepool function LinearAlgebra.lu(A::MtlMatrix{T};
+                                           check::Bool=true) where {T<:MtlFloat}
     M,N = size(A)
     dev = current_device()
     queue = global_queue(dev)
@@ -171,34 +184,33 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFloa
     mps_a = MPSMatrix(A)
     mps_at = MPSMatrix(At)
 
-    MTLCommandBuffer(queue) do cmdbuf
+    cmdbuf = MPSCommandBuffer(queue) do cbuf
         kernel = MPSMatrixCopy(dev, N, M, false, true)
         descriptor = MPSMatrixCopyDescriptor(mps_a, mps_at)
-        encode!(cmdbuf, kernel, descriptor)
+        encode!(cbuf, kernel, descriptor)
     end
 
     P = MtlMatrix{UInt32}(undef, 1, min(N, M))
     status = MtlArray{MPSMatrixDecompositionStatus}(undef)
 
-    cmdbuf_lu = MTLCommandBuffer(queue) do cmdbuf
+    commitAndContinue!(cmdbuf) do cbuf
         mps_p = MPSMatrix(P)
         kernel = MPSMatrixDecompositionLU(dev, M, N)
-        encode!(cmdbuf, kernel, mps_at, mps_at, mps_p, status)
+        encode!(cbuf, kernel, mps_at, mps_at, mps_p, status)
     end
 
     B = MtlMatrix{T}(undef, M, N)
 
-    MTLCommandBuffer(queue) do cmdbuf
+    commit!(cmdbuf) do cbuf
         mps_b = MPSMatrix(B)
-
         kernel = MPSMatrixCopy(dev, M, N, false, true)
         descriptor = MPSMatrixCopyDescriptor(mps_at, mps_b)
-        encode!(cmdbuf, kernel, descriptor)
+        encode!(cbuf, kernel, descriptor)
     end
 
     p = vec(P) .+ UInt32(1)
 
-    wait_completed(cmdbuf_lu)
+    wait_completed(cmdbuf)
 
     status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
     check && checknonsingular(status)
@@ -206,8 +218,22 @@ function LinearAlgebra.lu(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFloa
     return LinearAlgebra.LU(B, p, status)
 end
 
+function _check_lu_success(info, allowsingular)
+    if VERSION >= v"1.11.0-DEV.1535"
+        if info < 0 # zero pivot error from unpivoted LU
+            LinearAlgebra.checknozeropivot(-info)
+        else
+            allowsingular || LinearAlgebra.checknonsingular(info)
+        end
+    else
+        LinearAlgebra.checknonsingular(info)
+    end
+end
+
 # TODO: dispatch on pivot strategy
-function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFloat}
+@autoreleasepool function LinearAlgebra.lu!(A::MtlMatrix{T};
+                                            check::Bool=true,
+                                            allowsingular::Bool=false) where {T<:MtlFloat}
     M,N = size(A)
     dev = current_device()
     queue = global_queue(dev)
@@ -216,39 +242,39 @@ function LinearAlgebra.lu!(A::MtlMatrix{T}; check::Bool = true) where {T<:MtlFlo
     mps_a = MPSMatrix(A)
     mps_at = MPSMatrix(At)
 
-    MTLCommandBuffer(queue) do cmdbuf
+    cmdbuf = MPSCommandBuffer(queue) do cbuf
         kernel = MPSMatrixCopy(dev, N, M, false, true)
         descriptor = MPSMatrixCopyDescriptor(mps_a, mps_at)
-        encode!(cmdbuf, kernel, descriptor)
+        encode!(cbuf, kernel, descriptor)
     end
 
     P = MtlMatrix{UInt32}(undef, 1, min(N, M))
     status = MtlArray{MPSMatrixDecompositionStatus}(undef)
 
-    cmdbuf_lu = MTLCommandBuffer(queue) do cmdbuf
+    commitAndContinue!(cmdbuf) do cbuf
         mps_p = MPSMatrix(P)
         kernel = MPSMatrixDecompositionLU(dev, M, N)
-        encode!(cmdbuf, kernel, mps_at, mps_at, mps_p, status)
+        encode!(cbuf, kernel, mps_at, mps_at, mps_p, status)
     end
 
-    MTLCommandBuffer(queue) do cmdbuf
+    commit!(cmdbuf) do cbuf
         kernel = MPSMatrixCopy(dev, M, N, false, true)
         descriptor = MPSMatrixCopyDescriptor(mps_at, mps_a)
-        encode!(cmdbuf, kernel, descriptor)
+        encode!(cbuf, kernel, descriptor)
     end
 
     p = vec(P) .+ UInt32(1)
 
-    wait_completed(cmdbuf_lu)
+    wait_completed(cmdbuf)
 
     status = convert(LinearAlgebra.BlasInt, Metal.@allowscalar status[])
-    check && checknonsingular(status)
+    check && _check_lu_success(status, allowsingular)
 
     return LinearAlgebra.LU(A, p, status)
 end
 
-
-function LinearAlgebra.transpose!(B::MtlMatrix{T}, A::MtlMatrix{T}) where {T}
+@autoreleasepool function LinearAlgebra.transpose!(B::MtlMatrix{T},
+                                                   A::MtlMatrix{T}) where {T}
     axes(B,2) == axes(A,1) && axes(B,1) == axes(A,2) || throw(DimensionMismatch("transpose"))
 
     M,N = size(A)

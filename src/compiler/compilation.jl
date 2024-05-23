@@ -6,9 +6,6 @@ const MetalCompilerJob = CompilerJob{MetalCompilerTarget, MetalCompilerParams}
 
 GPUCompiler.runtime_module(::MetalCompilerJob) = Metal
 
-const ci_cache = GPUCompiler.CodeCache()
-GPUCompiler.ci_cache(::MetalCompilerJob) = ci_cache
-
 GPUCompiler.method_table(::MetalCompilerJob) = method_table
 
 
@@ -55,73 +52,89 @@ end
 
 # compile to executable machine code
 function compile(@nospecialize(job::CompilerJob))
-    # TODO: on 1.9, this actually creates a context. cache those.
-    ir, entry = JuliaContext() do ctx
-        mod, meta = GPUCompiler.compile(:llvm, job)
-        string(mod), LLVM.name(meta.entry)
+    @signpost_event log=log_compiler() "Compile" "Job=$job"
+
+    @signpost_interval log=log_compiler() "Generate LLVM IR" begin
+        # TODO: on 1.9, this actually creates a context. cache those.
+        ir, entry = JuliaContext() do ctx
+            mod, meta = GPUCompiler.compile(:llvm, job)
+            string(mod), LLVM.name(meta.entry)
+        end
     end
 
-    # generate AIR
-    air = let
-        input = Pipe()
-        output = Pipe()
+    @signpost_interval log=log_compiler() "Downgrade to AIR" begin
+        # generate AIR
+        air = let
+            input = Pipe()
+            output = Pipe()
 
-        cmd = `$(LLVMDowngrader_jll.llvm_as()) --bitcode-version=5.0 -o -`
-        proc = run(pipeline(cmd, stdout=output, stderr=stderr, stdin=input); wait=false)
-        close(output.in)
+            cmd = `$(LLVMDowngrader_jll.llvm_as()) --bitcode-version=5.0 -o -`
+            if LLVM.version() >= v"16"
+                cmd = `$cmd --opaque-pointers=0`
+            end
+            proc = run(pipeline(cmd, stdout=output, stderr=stderr, stdin=input); wait=false)
+            close(output.in)
 
-        writer = @async begin
-            write(input, ir)
-            close(input)
+            writer = @async begin
+                write(input, ir)
+                close(input)
+            end
+            reader = @async read(output)
+
+            wait(proc)
+            if !success(proc)
+                file = tempname(cleanup=false) * ".ll"
+                write(file, ir)
+                error("""Compilation to AIR failed; see above for details.
+                        If you think this is a bug, please file an issue and attach $(file)""")
+            end
+            fetch(reader)
         end
-        reader = @async read(output)
-
-        wait(proc)
-        if !success(proc)
-            file = tempname(cleanup=false) * ".ll"
-            write(file, ir)
-            error("""Compilation to AIR failed; see above for details.
-                     If you think this is a bug, please file an issue and attach $(file)""")
-        end
-        fetch(reader)
     end
 
-    # create a Metal library
-    image = try
-        metallib_fun = MetalLibFunction(; name=entry, air_module=air,
-                                          air_version=job.config.target.air,
-                                          metal_version=job.config.target.metal)
-        metallib = MetalLib(; functions = [metallib_fun])
+    @signpost_interval log=log_compiler() "Create Metal library" begin
+        image = try
+            metallib_fun = MetalLibFunction(; name=entry, air_module=air,
+                                            air_version=job.config.target.air,
+                                            metal_version=job.config.target.metal)
+            metallib = MetalLib(; functions = [metallib_fun])
 
-        image_stream = IOBuffer()
-        write(image_stream, metallib)
-        take!(image_stream)
-    catch err
-        file = tempname(cleanup=false) * ".air"
-        write(file, air)
-        error("""Compilation to Metal library failed; see below for details.
-                 If you think this is a bug, please file an issue and attach $(file)""")
+            image_stream = IOBuffer()
+            write(image_stream, metallib)
+            take!(image_stream)
+        catch err
+            file = tempname(cleanup=false) * ".air"
+            write(file, air)
+            error("""Compilation to Metal library failed; see below for details.
+                    If you think this is a bug, please file an issue and attach $(file)""")
+        end
     end
 
     return (; image, entry)
 end
 
 # link into an executable kernel
-function link(@nospecialize(job::CompilerJob), compiled; return_function=false)
-    dev = current_device()
-    lib = MTLLibraryFromData(dev, compiled.image)
-    fun = MTLFunction(lib, compiled.entry)
-    pipeline_state = try
-        MTLComputePipelineState(dev, fun)
-    catch err
-        isa(err, NSError) || rethrow()
+@autoreleasepool function link(@nospecialize(job::CompilerJob), compiled;
+                               return_function=false)
+    @signpost_event log=log_compiler() "Link" "Job=$job"
 
-        # the back-end compiler likely failed
-        # XXX: check more accurately? the error domain doesn't help much here
-        file = tempname(cleanup=false) * ".metallib"
-        write(file, compiled.image)
-        error("""Compilation to native code failed; see below for details.
-                 If you think this is a bug, please file an issue and attach $(file)""")
+    @signpost_interval log=log_compiler() "Instantiate compute pipeline" begin
+        dev = current_device()
+        lib = MTLLibraryFromData(dev, compiled.image)
+        fun = MTLFunction(lib, compiled.entry)
+        pipeline_state = try
+            MTLComputePipelineState(dev, fun)
+        catch err
+            isa(err, NSError) || rethrow()
+            retain(err)
+
+            # the back-end compiler likely failed
+            # XXX: check more accurately? the error domain doesn't help much here
+            file = tempname(cleanup=false) * ".metallib"
+            write(file, compiled.image)
+            error("""Compilation to native code failed; see below for details.
+                    If you think this is a bug, please file an issue and attach $(file)""")
+        end
     end
 
     # most of the time, we don't need the function object,

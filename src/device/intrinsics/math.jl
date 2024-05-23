@@ -120,89 +120,89 @@ const Lp7 = 0.14798199f0
 
     k = 1
     if hx < 0x3ed413d0  # x < sqrt(2) - 1
-      if ax >= 0x3f800000  # |x| ≥ 1
-        if x == -1
-          return -Inf32
-        elseif isnan(x)
-          return NaN32
-        else  # x < -1
-          # TODO: switch to throw_complex_domainerror_neg1 for next Julia release
-          throw_complex_domainerror(:log1p, x)
+        if ax >= 0x3f800000  # |x| ≥ 1
+            if x == -1
+                return -Inf32
+            elseif isnan(x)
+                return NaN32
+            else  # x < -1
+                # TODO: switch to throw_complex_domainerror_neg1 for next Julia release
+                throw_complex_domainerror(:log1p, x)
+            end
         end
-      end
 
-      if ax < 0x38000000  # |x| < 2^-15
-        if ax < 0x33800000 # |x| < 2^-24
-          return x  # Inexact
-        else
-          return x - x*x*0.5f0
+        if ax < 0x38000000  # |x| < 2^-15
+            if ax < 0x33800000 # |x| < 2^-24
+                return x  # Inexact
+            else
+                return x - x * x * 0.5f0
+            end
         end
-      end
 
-      if hx>0||hx<=reinterpret(Int32, 0xbe95f619)  # (sqrt(2)/2)-1 <= x
-        k = 0
-        f = x
-        hu = 1f0
-      end
+        if hx > 0 || hx <= reinterpret(Int32, 0xbe95f619)  # (sqrt(2)/2)-1 <= x
+            k = 0
+            f = x
+            hu = 1f0
+        end
     end  # hx < 0x3ed413d0
 
-  if hx >= 0x7f800000
-    return x+x
-  end
-
-  if k ≠ 0
-    if hx < 0x5a000000
-      u = 1f0 + x
-      hu = reinterpret(Int32, u)
-      k = (hu>>23) - 127
-      c = k>0 ? 1f0-(u-x) : x-(u-1f0)
-      c /= u
-    else
-      u = x
-      hu = reinterpret(Int32, u)
-      k = (hu>>23) - 127
-      c = 0f0
+    if hx >= 0x7f800000
+        return x + x
     end
 
-    hu &= 0x007fffff
+    if k ≠ 0
+        if hx < 0x5a000000
+            u = 1f0 + x
+            hu = reinterpret(Int32, u)
+            k = (hu >> 23) - 127
+            c = k > 0 ? 1f0 - (u - x) : x - (u - 1f0)
+            c /= u
+        else
+            u = x
+            hu = reinterpret(Int32, u)
+            k = (hu >> 23) - 127
+            c = 0f0
+        end
 
-    if hu < 0x3504f4  # u < sqrt(2)
-      u = reinterpret(Float32, hu|0x3f800000)
-    else
-      k += 1
-      u = reinterpret(Float32, hu|0x3f000000)
-      hu = (0x00800000-hu)>>2
+        hu &= 0x007fffff
+
+        if hu < 0x3504f4  # u < sqrt(2)
+            u = reinterpret(Float32, hu | 0x3f800000)
+        else
+            k += 1
+            u = reinterpret(Float32, hu | 0x3f000000)
+            hu = (0x00800000 - hu) >> 2
+        end
+        f = u - 1f0
     end
-    f = u-1f0
-  end
 
-  hfsq = 0.5f0*f*f
+    hfsq = 0.5f0 * f * f
 
-  if hu == 0  # |f| < 2^-20
-    if f == 0
-      if k == 0
-        return 0f0
-      else
-        c += k*ln2_lo
-        return k*ln2_hi+c
-      end
+    if hu == 0  # |f| < 2^-20
+        if f == 0
+            if k == 0
+                return 0f0
+            else
+                c += k * ln2_lo
+                return k * ln2_hi + c
+            end
+        end
+        R = hfsq * (1f0 - Lp1 * f)
+        if k == 0
+            return f - R
+        else
+            return k * ln2_hi - ((R - (k * ln2_lo + c)) - f)
+        end
     end
-    R = hfsq*(1f0-Lp1*f)
+
+    s = f / (2f0 + f)
+    z = s * s
+    R = z * (Lp1 + z * (Lp2 + z * (Lp3 + z * (Lp4 + z * (Lp5 + z * (Lp6 + z * Lp7))))))
     if k == 0
-      return f-R
+        return f - (hfsq - s * (hfsq + R))
     else
-      return k*ln2_hi - ((R-(k*ln2_lo+c))-f)
+        return k * ln2_hi - ((hfsq - (s * (hfsq + R) + (k * ln2_lo + c))) - f)
     end
-  end
-
-  s = f/(2f0+f)
-  z = s*s
-  R = z*(Lp1+z*(Lp2+z*(Lp3+z*(Lp4+z*(Lp5+z*(Lp6+z*Lp7))))))
-  if k == 0
-    return f-(hfsq-s*(hfsq+R))
-  else
-    return k*ln2_hi-((hfsq-(s*(hfsq+R)+(k*ln2_lo+c)))-f)
-  end
 end
 
 
@@ -230,17 +230,17 @@ end
 @device_override Base.sin(x::Float32) = ccall("extern air.sin.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.sin(x::Float16) = ccall("extern air.sin.f16", llvmcall, Float16, (Float16,), x)
 
-@device_override function FastMath.sincos_fast(x::Float32) 
+@device_override function FastMath.sincos_fast(x::Float32)
     c = Ref{Cfloat}()
     s = ccall("extern air.fast_sincos.f32", llvmcall, Cfloat, (Cfloat, Ptr{Cfloat}), x, c)
     (s, c[])
 end
-@device_override function Base.sincos(x::Float32) 
+@device_override function Base.sincos(x::Float32)
     c = Ref{Cfloat}()
     s = ccall("extern air.sincos.f32", llvmcall, Cfloat, (Cfloat, Ptr{Cfloat}), x, c)
     (s, c[])
 end
-@device_override function Base.sincos(x::Float16) 
+@device_override function Base.sincos(x::Float16)
     c = Ref{Float16}()
     s = ccall("extern air.sincos.f16", llvmcall, Float16, (Float16, Ptr{Float16}), x, c)
     (s, c[])

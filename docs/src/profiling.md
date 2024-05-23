@@ -46,6 +46,24 @@ julia> Metal.@profile @metal threads=length(c) vadd(a, b, c);
 [ Info: System trace saved to julia_3.trace; open the resulting trace in Instruments
 ```
 
+It is possible to augment the trace with additional information by using signposts: Similar
+to NVTX markers and ranges in CUDA.jl, signpost intervals and events can be used to add
+respectively time intervals and points of interest to the trace. This can be done by using
+the signpost functionality from ObjectiveC.jl:
+
+```julia
+using ObjectiveC, .OS
+
+@signpost_interval "My Interval" begin
+    # code to profile
+    @signpost_event "My Event"
+end
+```
+
+For more information, e.g. how to pass additional messages to the signposts, or how to
+use a custom logger, consult the ObjectiveC.jl documentation, or the docstrings of the
+`@signpost_interval` and `@signpost_event` macros.
+
 ## Frame capture
 
 For more details on specific operations, you can use Metal's frame capture feature to

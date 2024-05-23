@@ -1,7 +1,7 @@
 Manifest.toml
-LocalPreferences.toml
 *.DS_Store
 *.gputrace
 *.trace
 wip.*
 dev
+.vscode

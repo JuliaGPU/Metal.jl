@@ -1,4 +1,4 @@
-STORAGEMODES = [Private, Shared]#, Managed]
+STORAGEMODES = [Private, Shared, Managed]
 
 @testset "array" begin
 
@@ -13,22 +13,54 @@ let arr = MtlVector{Int}(undef, 0)
 end
 
 @testset "constructors" begin
-    xs = MtlArray{Int}(undef, 2, 3)
+    xs = MtlArray{Int8}(undef, 2, 3)
     @test device(xs) == current_device()
+    @test Base.elsize(xs) == sizeof(Int8)
+    @test xs.data[].length == 6
+    xs2 = MtlArray{Int8, 2}(xs)
+    @test xs2.data[].length == 6
+    @test pointer(xs2) != pointer(xs)
+
     @test collect(MtlArray([1 2; 3 4])) == [1 2; 3 4]
     @test collect(mtl([1, 2, 3])) == [1, 2, 3]
     @test testf(vec, rand(Float32, 5,3))
     @test mtl(1:3) === 1:3
-    @test Base.elsize(xs) == sizeof(Int)
-    @test pointer(MtlArray{Int, 2}(xs)) != pointer(xs)
 
-    # test aggressive conversion to Float32, but only for floats, and only with `mtl`
-    @test mtl([1]) isa MtlArray{Int}
-    @test mtl(Float64[1]) isa MtlArray{Float32}
-    @test mtl(ComplexF64[1+1im]) isa MtlArray{ComplexF32}
-    @test mtl(ComplexF16[1+1im]) isa MtlArray{ComplexF16}
+
+    # Page 22 of https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
+    # Only bfloat missing
+    supported_number_types = [Float16  => Float16,
+                              Float32  => Float32,
+                              Float64  => Float32,
+                              Bool     => Bool,
+                              Int16    => Int16,
+                              Int32    => Int32,
+                              Int64    => Int64,
+                              Int8     => Int8,
+                              UInt16   => UInt16,
+                              UInt32   => UInt32,
+                              UInt64   => UInt64,
+                              UInt8    => UInt8]
+    # Test supported types and ensure only Float64 get converted to Float32
+    for (SrcType, TargType) in supported_number_types
+        @test mtl(SrcType[1]) isa MtlArray{TargType}
+        @test mtl(Complex{SrcType}[1+1im]) isa MtlArray{Complex{TargType}}
+    end
+
+    # test the regular adaptor
+    @test Adapt.adapt(MtlArray, [1 2;3 4]) isa MtlArray{Int, 2, Metal.DefaultStorageMode}
+    @test Adapt.adapt(MtlArray{Float32}, [1 2;3 4]) isa MtlArray{Float32, 2, Metal.DefaultStorageMode}
+    @test Adapt.adapt(MtlArray{Float32, 2}, [1 2;3 4]) isa MtlArray{Float32, 2, Metal.DefaultStorageMode}
+    @test Adapt.adapt(MtlArray{Float32, 2, Shared}, [1 2;3 4]) isa MtlArray{Float32, 2, Shared}
+    @test Adapt.adapt(MtlMatrix{ComplexF32, Shared}, [1 2;3 4]) isa MtlArray{ComplexF32, 2, Shared}
     @test Adapt.adapt(MtlArray{Float16}, Float64[1]) isa MtlArray{Float16}
 
+    # Test a few explicitly unsupported types
+    @test_throws "MtlArray only supports element types that are stored inline" MtlArray(BigInt[1])
+    @test_throws "MtlArray only supports element types that are stored inline" MtlArray(BigFloat[1])
+    @test_throws "Metal does not support Float64 values" MtlArray(Float64[1])
+    @test_throws "Metal does not support Int128 values" MtlArray(Int128[1])
+    @test_throws "Metal does not support UInt128 values" MtlArray(UInt128[1])
 
     @test collect(Metal.zeros(2, 2)) == zeros(Float32, 2, 2)
     @test collect(Metal.ones(2, 2)) == ones(Float32, 2, 2)
@@ -45,7 +77,7 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
     N = length(dim)
 
     # mtl
-    let arr = mtl(rand(2,2), storage= SM)
+    let arr = mtl(rand(2,2); storage= SM)
         @test check_storagemode(arr,  SM)
     end
 
@@ -102,7 +134,34 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
     # private storage errors.
     if SM == Metal.Private
         let arr_mtl = Metal.zeros(Float32, dim...; storage=Private)
+            @test is_private(arr_mtl) && !is_shared(arr_mtl) && !is_managed(arr_mtl)
             @test_throws "Cannot access the contents of a private buffer" arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, dim)
+        end
+
+        let b = rand(Float32, 10)
+            arr_mtl = mtl(b; storage=Private)
+            @test_throws ErrorException arr_mtl[1]
+            @test Metal.@allowscalar arr_mtl[1] == b[1]
+        end
+    elseif SM == Metal.Shared
+        let arr_mtl = Metal.zeros(Float32, dim...; storage=Shared)
+            @test !is_private(arr_mtl) && is_shared(arr_mtl) && !is_managed(arr_mtl)
+            @test unsafe_wrap(Array{Float32}, arr_mtl) isa Array{Float32}
+        end
+
+        let b = rand(Float32, 10)
+            arr_mtl = mtl(b; storage=Shared)
+            @test arr_mtl[1] == b[1]
+        end
+    elseif SM == Metal.Managed
+        let arr_mtl = Metal.zeros(Float32, dim...; storage=Managed)
+            @test !is_private(arr_mtl) && !is_shared(arr_mtl) && is_managed(arr_mtl)
+            @test unsafe_wrap(Array{Float32}, arr_mtl) isa Array{Float32}
+        end
+
+        let b = rand(Float32, 10)
+            arr_mtl = mtl(b; storage=Managed)
+            @test arr_mtl[1] == b[1]
         end
     end
 end
@@ -212,6 +271,14 @@ end
         fill!(V, b)
         @test all(Array(V) .== b)
     end
+
+    # 0-length array
+    let A = MtlArray{T}(undef, 0)
+        b = rand(T)
+        fill!(A, b)
+        @test A isa MtlArray{T,1}
+        @test Array(A) == fill(b, 0)
+    end
 end
 
 # https://github.com/JuliaGPU/CUDA.jl/issues/2191
@@ -249,6 +316,54 @@ end
   @test length(b) == 0
   resize!(b, 1)
   @test length(b) == 1
+end
+
+function _alignedvec(::Type{T}, n::Integer, alignment::Integer=16384) where {T}
+    ispow2(alignment) || throw(ArgumentError("$alignment is not a power of 2"))
+    alignment ≥ sizeof(Int) || throw(ArgumentError("$alignment is not a multiple of $(sizeof(Int))"))
+    isbitstype(T) || throw(ArgumentError("$T is not a bitstype"))
+    p = Ref{Ptr{T}}()
+    err = ccall(:posix_memalign, Cint, (Ref{Ptr{T}}, Csize_t, Csize_t), p, alignment, n*sizeof(T))
+    iszero(err) || throw(OutOfMemoryError())
+    return unsafe_wrap(Array, p[], n, own=true)
+end
+
+@testset "unsafe_wrap" begin
+    # Create page-aligned vector for testing
+    arr1 = _alignedvec(Float32, 16384*2);
+    fill!(arr1, zero(eltype(arr1)))
+    marr1 = unsafe_wrap(MtlVector{Float32}, arr1);
+
+    @test all(arr1 .== 0)
+    @test all(marr1 .== 0)
+
+    # XXX: Test fails when ordered as shown
+    # @test all(arr1 .== 1)
+    # @test all(marr1 .== 1)
+    marr1 .+= 1;
+    @test all(marr1 .== 1)
+    @test all(arr1 .== 1)
+
+    arr1 .+= 1;
+    @test all(marr1 .== 2)
+    @test all(arr1 .== 2)
+
+    marr2 = Metal.zeros(Float32, 18000; storage=Shared);
+    arr2 = unsafe_wrap(Vector{Float32}, marr2);
+
+    @test all(arr2 .== 0)
+    @test all(marr2 .== 0)
+
+    # XXX: Test fails when ordered as shown
+    # @test all(arr2 .== 1)
+    # @test all(marr2 .== 1)
+    marr2 .+= 1;
+    @test all(marr2 .== 1)
+    @test all(arr2 .== 1)
+
+    arr2 .+= 1;
+    @test all(arr2 .== 2)
+    @test all(marr2 .== 2)
 end
 
 end

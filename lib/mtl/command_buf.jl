@@ -77,22 +77,18 @@ end
 function MTLCommandBuffer(queue::MTLCommandQueue,
                           desc::MTLCommandBufferDescriptor=MTLCommandBufferDescriptor())
     handle = @objc [queue::id{MTLCommandQueue} commandBufferWithDescriptor:desc::id{MTLCommandBufferDescriptor}]::id{MTLCommandBuffer}
-    obj = MTLCommandBuffer(handle)
-    # command buffers are part of the queue, so we don't need to manage memory
-    return obj
+    MTLCommandBuffer(handle)
 end
 
 function MTLCommandBuffer(f::Base.Callable, queue::MTLCommandQueue,
                           desc::MTLCommandBufferDescriptor=MTLCommandBufferDescriptor())
-    buf = MTLCommandBuffer(queue, desc)
-    enqueue!(buf)
-    ret = f(buf)
-    commit!(buf)
-    return buf
+    cmdbuf = MTLCommandBuffer(queue, desc)
+    commit!(f, cmdbuf)
+    return cmdbuf
 end
 
 """
-    enqueue!(q::MTLCommandBuffer)
+    enqueue!(cmdbuf::MTLCommandBuffer)
 
 Enqueueing a command buffer reserves a place for the command buffer on the command
 queue without committing the command buffer for execution. When this command buffer
@@ -103,16 +99,23 @@ into the command buffers and those threads can complete in any order.
 
 [enqueue](https://developer.apple.com/documentation/metal/mtlcommandbuffer/1443019-enqueue?language=objc)
 """
-function enqueue!(q::MTLCommandBuffer)
-    q.status in [MTLCommandBufferStatusCompleted, MTLCommandBufferStatusEnqueued] &&
+function enqueue!(cmdbuf::MTLCommandBuffer)
+    cmdbuf.status in [MTLCommandBufferStatusCompleted, MTLCommandBufferStatusEnqueued] &&
         error("Cannot enqueue an already enqueued command buffer")
-    @objc [q::id{MTLCommandBuffer} enqueue]::Nothing
+    @objc [cmdbuf::id{MTLCommandBuffer} enqueue]::Nothing
 end
 
-function commit!(q::MTLCommandBuffer)
-    q.status in [MTLCommandBufferStatusCompleted, MTLCommandBufferStatusCommitted] &&
+function commit!(cmdbuf::MTLCommandBuffer)
+    cmdbuf.status in [MTLCommandBufferStatusCompleted, MTLCommandBufferStatusCommitted] &&
         error("Cannot commit an already committed/completed command buffer")
-    @objc [q::id{MTLCommandBuffer} commit]::Nothing
+    @objc [cmdbuf::id{MTLCommandBuffer} commit]::Nothing
+end
+
+function commit!(f::Base.Callable, cmdbuf::MTLCommandBuffer)
+    enqueue!(cmdbuf)
+    ret = f(cmdbuf)
+    commit!(cmdbuf)
+    return ret
 end
 
 """
@@ -124,8 +127,8 @@ blocks registered by addScheduledHandler: have been invoked. A command buffer
 is considered scheduled after all its dependencies are resolved, and it is sent
 to the GPU for execution.
 """
-function wait_scheduled(q::MTLCommandBuffer)
-    @objc [q::id{MTLCommandBuffer} waitUntilScheduled]::Nothing
+function wait_scheduled(cmdbuf::MTLCommandBuffer)
+    @objc [cmdbuf::id{MTLCommandBuffer} waitUntilScheduled]::Nothing
 end
 
 """
@@ -136,12 +139,12 @@ buffer is completed.
 This method returns after the command buffer is completed and all code
 blocks registered by addCompletedHandler: are invoked.
 """
-function wait_completed(q::MTLCommandBuffer)
-    @objc [q::id{MTLCommandBuffer} waitUntilCompleted]::Nothing
+function wait_completed(cmdbuf::MTLCommandBuffer)
+    @objc [cmdbuf::id{MTLCommandBuffer} waitUntilCompleted]::Nothing
 end
 
 """
-    encode_signal!(buf::MTLCommandBuffer, ev::MTLEvent, val::UInt)
+    encode_signal!(cmdbuf::MTLCommandBuffer, ev::MTLEvent, val::UInt)
 
 Encodes a command that signals the given event, updating it to a new value.
 
@@ -153,13 +156,13 @@ waiting on the event are allowed to run if the new value is equal to or
 greater than the value for which they are waiting. For shared events, this
 update similarly triggers notification handlers waiting on the event.
 """
-function encode_signal!(buf::MTLCommandBuffer, ev::MTLEvent, val::Integer)
-    @objc [buf::id{MTLCommandBuffer} encodeSignalEvent:ev::id{MTLEvent}
+function encode_signal!(cmdbuf::MTLCommandBuffer, ev::MTLEvent, val::Integer)
+    @objc [cmdbuf::id{MTLCommandBuffer} encodeSignalEvent:ev::id{MTLEvent}
                                      value:val::UInt64]::Nothing
 end
 
 """
-    encode_wait!(buf::MTLCommandBuffer, ev::MTLEvent, val::UInt)
+    encode_wait!(cmdbuf::MTLCommandBuffer, ev::MTLEvent, val::UInt)
 
 Encodes a command that blocks the execution of the command buffer
 until the given event reaches the given value.
@@ -172,8 +175,8 @@ GPU executes commands that appear earlier than the wait command,
 but doesn't start any commands that appear after it. Execution continues
 immediately if the event already has an equal or larger value.
 """
-function encode_wait!(buf::MTLCommandBuffer, ev::MTLEvent, val::Integer)
-    @objc [buf::id{MTLCommandBuffer} encodeWaitForEvent:ev::id{MTLEvent}
+function encode_wait!(cmdbuf::MTLCommandBuffer, ev::MTLEvent, val::Integer)
+    @objc [cmdbuf::id{MTLCommandBuffer} encodeWaitForEvent:ev::id{MTLEvent}
                                      value:val::UInt64]::Nothing
 end
 
@@ -202,10 +205,10 @@ else
 # unmanaged thread. instead, we use uv_async_send to notify the libuv event loop, but
 # that doesn't take any arguments so we have to capture the buffer in the callback.
 # we also cannot return any values, but that isn't needed for these handlers.
-function _command_buffer_callback(f, buf)
+function _command_buffer_callback(f, cmdbuf)
     cond = Base.AsyncCondition() do async_cond
         try
-            f(buf)
+            f(cmdbuf)
         catch err
             # although we're on a managed thread here, so can just throw the error,
             # let's report it similarly to how we do in the 1.9+ case.
@@ -219,28 +222,27 @@ end
 end
 
 """
-    on_scheduled(buf::MTLCommandBuffer) do buf
+    on_scheduled(cmdbuf::MTLCommandBuffer) do cbuf
         ...
         return
     end
 
 Execute a block of code when execution of the command buffer is scheduled.
 """
-function on_scheduled(f::Base.Callable, buf::MTLCommandBuffer)
-    block = _command_buffer_callback(f, buf)
-    @objc [buf::id{MTLCommandBuffer} addScheduledHandler:block::id{NSBlock}]::Nothing
+function on_scheduled(f::Base.Callable, cmdbuf::MTLCommandBuffer)
+    block = _command_buffer_callback(f, cmdbuf)
+    @objc [cmdbuf::id{MTLCommandBuffer} addScheduledHandler:block::id{NSBlock}]::Nothing
 end
 
 """
-    on_completed(buf::MTLCommandBuffer) do buf
+    on_completed(cmdbuf::MTLCommandBuffer) do cbuf
         ...
         return
     end
 
 Execute a block of code when execution of the command buffer is completed.
 """
-function on_completed(f::Base.Callable, buf::MTLCommandBuffer)
-    block = _command_buffer_callback(f, buf)
-    @objc [buf::id{MTLCommandBuffer} addCompletedHandler:block::id{NSBlock}]::Nothing
+function on_completed(f::Base.Callable, cmdbuf::MTLCommandBuffer)
+    block = _command_buffer_callback(f, cmdbuf)
+    @objc [cmdbuf::id{MTLCommandBuffer} addCompletedHandler:block::id{NSBlock}]::Nothing
 end
-

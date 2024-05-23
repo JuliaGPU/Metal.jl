@@ -27,6 +27,7 @@ using CodecBzip2: transcode, Bzip2Compressor, Bzip2Decompressor
     FILE_SYMBOL_COMPANION    = 3
 end
 
+# https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/BinaryFormat/MachO.def
 @cenum PlatformType::UInt8 begin
     PLATFORM_UNKNOWN              = 0
     PLATFORM_MACOS                = 1
@@ -38,6 +39,9 @@ end
     PLATFORM_IOS_SIMULATOR        = 7
     PLATFORM_TVOS_SIMULATOR       = 8
     PLATFORM_WATCHOS_SIMULATOR    = 9
+    PLATFORM_DRIVERKIT            = 10
+    PLATFORM_XROS                 = 11
+    PLATFORM_MACOS_SIMULATOR      = 12
 end
 
 @cenum ProgramType::UInt8 begin
@@ -462,6 +466,10 @@ end
 
 ## metal library format
 
+Base.parse(::Type{MetalLib}, path::AbstractString) = open(path) do io
+    read(io, MetalLib)
+end
+
 function Base.read(io::IO, ::Type{MetalLib})
     ## header
 
@@ -685,6 +693,10 @@ function Base.read(io::IO, ::Type{MetalLib})
                platform_version, platform_type, is_64bit,
                functions, embedded_source,
                optional_args...)
+end
+
+Base.write(path::AbstractString, lib::MetalLib) = open(path, "w") do io
+    write(io, lib)
 end
 
 function Base.write(io::IO, lib::MetalLib)

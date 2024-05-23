@@ -1,4 +1,5 @@
 @testset "MTL" begin
+@autoreleasepool begin
 
 @testset "devices" begin
 
@@ -453,12 +454,13 @@ end
         arr = Metal.zeros(T, 4)
 
         buf = Base.unsafe_convert(MTL.MTLBuffer, arr)
-        Metal.unsafe_fill!(current_device(), Metal.MtlPointer{T}(buf, 0), T(val), 4)
+        Metal.unsafe_fill!(current_device(), Metal.MtlPtr{T}(buf, 0), T(val), 4)
 
-        @test all(arr .== val)
+        @test all(Array(arr) .== val)
     end
 end
 
 # TODO: continue adding tests
 
+end
 end

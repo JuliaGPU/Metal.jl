@@ -23,7 +23,7 @@ should match the type of the pointer `ptr`.
 MtlDeviceArray
 
 # NOTE: we can't support the typical `tuple or series of integer` style construction,
-#       because we're Mtlrrently requiring a trailing pointer argument.
+#       because we're currently requiring a trailing pointer argument.
 
 struct MtlDeviceArray{T,N,A} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}

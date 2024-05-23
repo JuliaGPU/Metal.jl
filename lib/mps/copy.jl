@@ -1,3 +1,7 @@
+## descriptor
+
+export MPSMatrixCopyDescriptor
+
 struct MPSMatrixCopyOffsets
     sourceRowOffset::Cuint
     sourceColumnOffset::Cuint
@@ -5,20 +9,17 @@ struct MPSMatrixCopyOffsets
     destinationColumnOffset::Cuint
 end
 
-export MPSMatrixCopyDescriptor
-
 @objcwrapper MPSMatrixCopyDescriptor <: NSObject
-
 
 function MPSMatrixCopyDescriptor(sourceMatrix, destinationMatrix, offsets = MPSMatrixCopyOffsets(Cuint(0), Cuint(0), Cuint(0), Cuint(0)))
     desc = @objc [MPSMatrixCopyDescriptor descriptorWithSourceMatrix:sourceMatrix::id{MPSMatrix}
                                           destinationMatrix:destinationMatrix::id{MPSMatrix}
                                           offsets:offsets::MPSMatrixCopyOffsets]::id{MPSMatrixCopyDescriptor}
-    obj = MPSMatrixCopyDescriptor(desc)
-    # XXX: who releases this object?
-    return obj
+    MPSMatrixCopyDescriptor(desc)
 end
 
+
+## kernel
 
 export MPSMatrixCopy
 

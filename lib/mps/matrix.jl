@@ -1,24 +1,57 @@
-#
-# matrix enums
-#
+## enums
 
-@cenum MPSDataType::UInt32 begin
+@cenum MPSDataTypeBits::UInt32 begin
     MPSDataTypeComplexBit = UInt32(0x01000000)
     MPSDataTypeFloatBit = UInt32(0x10000000)
     MPSDataTypeSignedBit = UInt32(0x20000000)
     MPSDataTypeNormalizedBit = UInt32(0x40000000)
     MPSDataTypeAlternateEncodingBit = UInt32(0x80000000)
 end
+
+@enum MPSDataType::UInt32 begin
+    MPSDataTypeInvalid    = UInt32(0)
+
+    MPSDataTypeUInt8      = UInt32(8)
+    MPSDataTypeUInt16     = UInt32(16)
+    MPSDataTypeUInt32     = UInt32(32)
+    MPSDataTypeUInt64     = UInt32(64)
+
+    MPSDataTypeInt8       = MPSDataTypeSignedBit | UInt32(8)
+    MPSDataTypeInt16      = MPSDataTypeSignedBit | UInt32(16)
+    MPSDataTypeInt32      = MPSDataTypeSignedBit | UInt32(32)
+    MPSDataTypeInt64      = MPSDataTypeSignedBit | UInt32(64)
+
+    MPSDataTypeFloat16    = MPSDataTypeFloatBit | UInt32(16)
+    MPSDataTypeFloat32    = MPSDataTypeFloatBit | UInt32(32)
+
+    MPSDataTypeComplexF16 = MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(16)
+    MPSDataTypeComplexF32 = MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(32)
+
+    MPSDataTypeUnorm1     = MPSDataTypeNormalizedBit | UInt32(1)
+    MPSDataTypeUnorm8     = MPSDataTypeNormalizedBit | UInt32(8)
+
+    MPSDataTypeBool       = MPSDataTypeAlternateEncodingBit | UInt32(8)
+    MPSDataTypeBFloat16   = MPSDataTypeAlternateEncodingBit | MPSDataTypeFloatBit | UInt32(16)
+end
 ## bitwise operations lose type information, so allow conversions
 Base.convert(::Type{MPSDataType}, x::Integer) = MPSDataType(x)
 
-#
-# matrix descriptor
-#
+# Conversions for MPSDataTypes with Julia equivalents
+const jl_mps_to_typ = Dict{MPSDataType, DataType}()
+for type in [UInt8,UInt16,UInt32,UInt64,Int8,Int16,Int32,Int64,Float16,Float32,ComplexF16,ComplexF32,Bool]
+    @eval Base.convert(::Type{MPSDataType}, ::Type{$type}) = $(Symbol(:MPSDataType, type))
+    @eval jl_mps_to_typ[$(Symbol(:MPSDataType, type))] = $type
+end
+Base.sizeof(t::MPS.MPSDataType) = sizeof(jl_mps_to_typ[t])
+
+Base.convert(::Type{DataType}, mpstyp::MPSDataType) = jl_mps_to_typ[mpstyp]
+
+
+## descriptor
 
 export MPSMatrixDescriptor
 
-@objcwrapper immutable=false MPSMatrixDescriptor <: NSObject
+@objcwrapper MPSMatrixDescriptor <: NSObject
 
 @objcproperties MPSMatrixDescriptor begin
     @autoproperty rows::NSUInteger setter=setRows
@@ -29,34 +62,12 @@ export MPSMatrixDescriptor
     @autoproperty matrixBytes::NSUInteger
 end
 
-
-# Mapping from Julia types to the Performance Shader bitfields
-const jl_typ_to_mps = Dict{DataType,MPSDataType}(
-    UInt8       => UInt32(8),
-    UInt16      => UInt32(16),
-    UInt32      => UInt32(32),
-    UInt64      => UInt32(64),
-
-    Int8        => MPSDataTypeSignedBit | UInt32(8),
-    Int16       => MPSDataTypeSignedBit | UInt32(16),
-    Int32       => MPSDataTypeSignedBit | UInt32(32),
-    Int64       => MPSDataTypeSignedBit | UInt32(64),
-
-    Float16     => MPSDataTypeFloatBit | UInt32(16),
-    Float32     => MPSDataTypeFloatBit | UInt32(32),
-
-    ComplexF16  => MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(16),
-    ComplexF32  => MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(32)
-)
-
 function MPSMatrixDescriptor(rows, columns, rowBytes, dataType)
     desc = @objc [MPSMatrixDescriptor matrixDescriptorWithRows:rows::NSUInteger
                                       columns:columns::NSUInteger
                                       rowBytes:rowBytes::NSUInteger
-                                      dataType:jl_typ_to_mps[dataType]::MPSDataType]::id{MPSMatrixDescriptor}
-    obj = MPSMatrixDescriptor(desc)
-    # XXX: who releases this object?
-    return obj
+                                      dataType:dataType::MPSDataType]::id{MPSMatrixDescriptor}
+    MPSMatrixDescriptor(desc)
 end
 
 function MPSMatrixDescriptor(rows, columns, matrices, rowBytes, matrixBytes, dataType)
@@ -65,15 +76,12 @@ function MPSMatrixDescriptor(rows, columns, matrices, rowBytes, matrixBytes, dat
                                       matrices:matrices::NSUInteger
                                       rowBytes:rowBytes::NSUInteger
                                       matrixBytes:matrixBytes::NSUInteger
-                                      dataType:jl_typ_to_mps[dataType]::MPSDataType]::id{MPSMatrixDescriptor}
-    obj = MPSMatrixDescriptor(desc)
-    # XXX: who releases this object?
-    return obj
+                                      dataType:dataType::MPSDataType]::id{MPSMatrixDescriptor}
+    MPSMatrixDescriptor(desc)
 end
 
-#
-# matrix object
-#
+
+## high-level object
 
 export MPSMatrix
 
@@ -91,28 +99,54 @@ export MPSMatrix
     @autoproperty data::id{MTLBuffer}
 end
 
+function MPSMatrix(buf, descriptor::MPSMatrixDescriptor, offset::Integer=0)
+    mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
+    obj = MPSMatrix(mat)
+    finalizer(release, obj)
+    @objc [obj::id{MPSMatrix} initWithBuffer:buf::id{MTLBuffer}
+                              offset:offset::NSUInteger
+                              descriptor:descriptor::id{MPSMatrixDescriptor}]::id{MPSMatrix}
+    return obj
+end
+
+function MPSMatrix(dev::MTLDevice, descriptor::MPSMatrixDescriptor)
+    mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
+    obj = MPSMatrix(mat)
+    finalizer(release, obj)
+    @objc [obj::id{MPSMatrix} initWithDevice:dev::id{MTLDevice}
+                              descriptor:descriptor::id{MPSMatrixDescriptor}]::id{MPSMatrix}
+    return obj
+end
 
 """
-    MPSMatrix(arr::MtlMatrix)
+    MPSMatrix(mat::MtlMatrix)
 
 Metal matrix representation used in Performance Shaders.
 
 Note that this results in a transposed view of the input,
 as Metal stores matrices row-major instead of column-major.
 """
-function MPSMatrix(arr::MtlMatrix{T}) where T
-    n_cols, n_rows = size(arr)
+function MPSMatrix(mat::MtlMatrix{T}) where T
+    n_cols, n_rows = size(mat)
     desc = MPSMatrixDescriptor(n_rows, n_cols, sizeof(T)*n_cols, T)
-    mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
-    obj = MPSMatrix(mat)
-    offset = arr.offset * sizeof(T)
-    finalizer(release, obj)
-    @objc [obj::id{MPSMatrix} initWithBuffer:arr::id{MTLBuffer}
-                              offset:offset::NSUInteger
-                              descriptor:desc::id{MPSMatrixDescriptor}]::id{MPSMatrix}
-    return obj
+    offset = mat.offset * sizeof(T)
+    return MPSMatrix(mat, desc, offset)
 end
 
+"""
+    MPSMatrix(vec::MtlVector)
+
+Metal matrix representation used in Performance Shaders.
+
+Note that this results in a transposed view of the input,
+as Metal stores matrices row-major instead of column-major.
+"""
+function MPSMatrix(vec::MtlVector{T}) where T
+    n_cols, n_rows = length(vec), 1
+    desc = MPSMatrixDescriptor(n_rows, n_cols, sizeof(T)*n_cols, T)
+    offset = vec.offset * sizeof(T)
+    return MPSMatrix(vec, desc, offset)
+end
 
 """
     MPSMatrix(arr::MtlArray{T,3})
@@ -126,19 +160,14 @@ function MPSMatrix(arr::MtlArray{T,3}) where T
     n_cols, n_rows, n_matrices = size(arr)
     row_bytes = sizeof(T)*n_cols
     desc = MPSMatrixDescriptor(n_rows, n_cols, n_matrices, row_bytes, row_bytes * n_rows, T)
-    mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
-    obj = MPSMatrix(mat)
     offset = arr.offset * sizeof(T)
-    finalizer(release, obj)
-    @objc [obj::id{MPSMatrix} initWithBuffer:arr::id{MTLBuffer}
-                              offset:offset::NSUInteger
-                              descriptor:desc::id{MPSMatrixDescriptor}]::id{MPSMatrix}
-    return obj
+    return MPSMatrix(arr, desc, offset)
 end
 
-#
-# matrix multiplication
-#
+
+## matrix multiplication
+
+export MPSMatrixMultiplication, matmul!
 
 @objcwrapper immutable=false MPSMatrixMultiplication <: MPSKernel
 
@@ -172,7 +201,6 @@ function encode!(cmdbuf::MTLCommandBuffer, matmul::MPSMatrixMultiplication, left
                                                rightMatrix:right::id{MPSMatrix}
                                                resultMatrix:result::id{MPSMatrix}]::Nothing
 end
-
 
 """
     matMulMPS(a::MtlMatrix, b::MtlMatrix, c::MtlMatrix, alpha=1, beta=1,
@@ -211,15 +239,18 @@ function matmul!(c::MtlArray{T1,N}, a::MtlArray{T2,N}, b::MtlArray{T3,N},
     return c
 end
 
-export MPSMatrixFindTopK
+
+## topk
+
+export MPSMatrixFindTopK, topk, topk!
 
 @objcwrapper immutable=false MPSMatrixFindTopK <: MPSMatrixUnaryKernel
 
 @objcproperties MPSMatrixFindTopK begin
     @autoproperty indexOffset::NSInteger setter=setIndexOffset
     @autoproperty numberOfTopKValues::NSInteger
-    @autoproperty sourceColumns::NSInteger
-    @autoproperty sourceRows::NSInteger
+    @autoproperty sourceColumns::NSInteger setter=setSourceColumns
+    @autoproperty sourceRows::NSInteger setter=setSourceRows
 end
 
 function MPSMatrixFindTopK(device, numberOfTopKValues)
@@ -238,8 +269,6 @@ function encode!(cmdbuf::MTLCommandBuffer, kernel::MPSMatrixFindTopK, inputMatri
                                                       resultValueMatrix:resultValueMatrix::id{MPSMatrix}]::Nothing
 end
 
-export topk, topk!
-
 """
     topk!(A::MtlMatrix{T}, I::MtlMatrix{Int32}, V::MtlMatrix{T}, k)
                                                      where {T<:MtlFloat}
@@ -254,22 +283,21 @@ Uses `MPSMatrixFindTopK`.
 See also: [`topk`](@ref).
 """
 function topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
-    k <= 16 || error("MPS.topk! does not support values of k > 16")
-
-    @assert size(I,1) >= k         "Matrix 'I' must be large enough for k rows"
-    @assert size(I,2) >= size(A,2) "Matrix 'I' must have at least as many columns as A"
-    @assert size(V,1) >= k         "Matrix 'V' must be large enough for k rows"
-    @assert size(V,2) >= size(A,2) "Matrix 'V' must have at least as many columns as A"
+    size(I,1) >= k         || throw(ArgumentError("Matrix 'I' must be large enough for k rows"))
+    size(I,2) >= size(A,2) || throw(ArgumentError("Matrix 'I' must have at least as many columns as A"))
+    size(V,1) >= k         || throw(ArgumentError("Matrix 'V' must be large enough for k rows"))
+    size(V,2) >= size(A,2) || throw(ArgumentError("Matrix 'V' must have at least as many columns as A"))
 
     return _topk!(A,I,V,k)
 end
 @inline function _topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
+    size(A,1) >= k || throw(ArgumentError("Matrix 'A' must must have more rows than k"))
+    k <= 16        || throw(ArgumentError("MPSMatrixFindTopK does not support values of k > 16"))
+
     # Create MPS-compatible matrix from the MtlArrays
     mps_a = MPSMatrix(A)
     mps_i = MPSMatrix(I)
     mps_v = MPSMatrix(V)
-
-    @assert size(A,1) >= k "Matrix 'A' must must have more rows than k"
 
     topk_kernel = MPSMatrixFindTopK(current_device(), k)
     topk_kernel.indexOffset = 1
@@ -295,10 +323,38 @@ Uses `MPSMatrixFindTopK`.
 See also: [`topk!`](@ref).
 """
 function topk(A::MtlMatrix{T,S}, k) where {T<:MtlFloat,S}
-    k <= 16 || error("MPS.topk does not support values of k > 16")
     s = (k,size(A,2))
     I = MtlMatrix{UInt32,S}(undef, s)
     V = MtlMatrix{T,S}(undef, s)
 
     return _topk!(A, I, V, k)
+end
+
+
+## softmax
+
+@objcwrapper immutable=false MPSMatrixSoftMax <: MPSMatrixUnaryKernel
+@objcwrapper immutable=false MPSMatrixLogSoftMax <: MPSMatrixSoftMax
+
+@objcproperties MPSMatrixSoftMax begin
+    @autoproperty sourceRows::NSInteger setter=setSourceRows
+    @autoproperty sourceColumns::NSInteger setter=setSourceColumns
+end
+
+for f in (:MPSMatrixSoftMax, :MPSMatrixLogSoftMax)
+    @eval begin
+        function $(f)(device)
+            kernel = @objc [$(f) alloc]::id{$(f)}
+            obj = $(f)(kernel)
+            finalizer(release, obj)
+            @objc [obj::id{$(f)} initWithDevice:device::id{MTLDevice}]::id{$(f)}
+            return obj
+        end
+
+        function encode!(cmdbuf::MTLCommandBuffer, kernel::$(f), inputMatrix, resultMatrix)
+            @objc [kernel::id{$(f)} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+                                    inputMatrix:inputMatrix::id{MPSMatrix}
+                                    resultMatrix:resultMatrix::id{MPSMatrix}]::Nothing
+        end
+    end
 end

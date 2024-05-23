@@ -48,6 +48,19 @@ function versioninfo(io::IO=stdout)
         println(io)
     end
 
+    prefs = [
+        "default_storage" => load_preference(Metal, "default_storage"),
+    ]
+    if any(x->!isnothing(x[2]), prefs)
+        println(io, "Preferences:")
+        for (key, val) in prefs
+            if !isnothing(val)
+                println(io, "- $key: $val")
+            end
+        end
+        println(io)
+    end
+
     devs = devices()
     if isempty(devs)
         println(io, "No Metal devices.")
@@ -161,6 +174,7 @@ function profiled(f)
     notification_name = "julia.metal.profile"
     folder = profile_dir()
     instruments = [
+        # relevant instruments taken from `xcrun xctrace list instruments`
         "GPU",
 
         # CPU
@@ -169,6 +183,8 @@ function profiled(f)
         "Metal Application",
         "Metal GPU Counters",
         "Metal Resource Events",
+
+        "os_signpost",
     ]
     cmd = `xctrace record`
     for instrument in instruments

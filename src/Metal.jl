@@ -7,11 +7,12 @@ using GPUCompiler
 using LLVM
 using LLVM.Interop
 import LLVMDowngrader_jll
+using Preferences: @load_preference, load_preference
 using Python_jll
 using ObjectFile
 using ExprTools: splitdef, combinedef
 using Artifacts
-using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch
+using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
 
 if !isdefined(Base, :get_extension)
     using Requires: @require
@@ -50,6 +51,10 @@ include("compiler/compilation.jl")
 include("compiler/execution.jl")
 include("compiler/reflection.jl")
 
+# libraries
+include("../lib/mps/MPS.jl")
+export MPS
+
 # array implementation
 include("utilities.jl")
 include("broadcast.jl")
@@ -57,13 +62,13 @@ include("mapreduce.jl")
 include("random.jl")
 include("gpuarrays.jl")
 
-# libraries
-include("../lib/mps/MPS.jl")
-export MPS
-
 # KernelAbstractions
 include("MetalKernels.jl")
 import .MetalKernels: MetalBackend
 export MetalBackend
+
+@static if !isdefined(Base, :get_extension)
+    include("../ext/BFloat16sExt.jl")
+end
 
 end # module
