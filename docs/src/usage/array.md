@@ -149,4 +149,4 @@ julia> a = Random.rand!(GPUArrays.default_rng(MtlArray), a)
     `MPSMatrixRandom` functionality requires Metal.jl > v1.1
 
 !!! warning
-    `Random.rand!(::MPS.RNG, args...)` andc `Random.randn!(::MPS.RNG, args...)` have a framework limitation that requires the byte offset and byte size of the destination array to be a multiple of 4.
+    `Random.rand!(::MPS.RNG, args...)` and `Random.randn!(::MPS.RNG, args...)` have a framework limitation that requires the byte offset and byte size of the destination array to be a multiple of 4.

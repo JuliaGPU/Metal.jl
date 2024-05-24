@@ -24,7 +24,7 @@ end
 function MPSMatrixRandomDefaultDistributionDescriptor()
     desc = @objc [MPSMatrixRandomDistributionDescriptor defaultDistributionDescriptor]::id{MPSMatrixRandomDistributionDescriptor}
     obj = MPSMatrixRandomDistributionDescriptor(desc)
-    # XXX: who releases this object?
+    finalizer(release, obj)
     return obj
 end
 
@@ -35,7 +35,6 @@ function MPSMatrixRandomNormalDistributionDescriptor(mean, standardDeviation)
     desc = @objc [MPSMatrixRandomDistributionDescriptor normalDistributionDescriptorWithMean:mean::Float32
                                                         standardDeviation:standardDeviation::Float32]::id{MPSMatrixRandomDistributionDescriptor}
     obj = MPSMatrixRandomDistributionDescriptor(desc)
-    # XXX: who releases this object?
     return obj
 end
 
@@ -45,7 +44,6 @@ function MPSMatrixRandomNormalDistributionDescriptor(mean, standardDeviation, mi
                                                         minimum:minimum::Float32
                                                         maximum:maximum::Float32]::id{MPSMatrixRandomDistributionDescriptor}
     obj = MPSMatrixRandomDistributionDescriptor(desc)
-    # XXX: who releases this object?
     return obj
 end
 
@@ -53,7 +51,6 @@ function MPSMatrixRandomUniformDistributionDescriptor(minimum, maximum)
     desc = @objc [MPSMatrixRandomDistributionDescriptor uniformDistributionDescriptorWithMinimum:minimum::Float32
                                                         maximum:maximum::Float32]::id{MPSMatrixRandomDistributionDescriptor}
     obj = MPSMatrixRandomDistributionDescriptor(desc)
-    # XXX: who releases this object?
     return obj
 end
 
