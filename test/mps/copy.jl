@@ -1,4 +1,4 @@
-using Metal, Test
+using Metal, Random, Test
 
 # XXX: Why 64-bit Integers broken? Same behaviour with Swift
 const IGNORE_UNION = Union{Complex, Int64, UInt64}
@@ -35,7 +35,8 @@ end
     Ts = Ts[.!(Ts .<: IGNORE_UNION)]
     @testset "$T" for T in Ts
         for dim in ((16,16), (10,500), (500,10), (256,512))
-            srcMat = Metal.rand(T, dim)
+
+            srcMat = MtlArray(rand(T, dim))
 
             dstMat = copytest(srcMat, false, false)
             @test dstMat == srcMat
