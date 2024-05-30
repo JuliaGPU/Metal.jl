@@ -67,27 +67,33 @@ function compile(@nospecialize(job::CompilerJob))
         air = let
             input = Pipe()
             output = Pipe()
+            log = Pipe()
 
             cmd = `$(LLVMDowngrader_jll.llvm_as()) --bitcode-version=5.0 -o -`
             if LLVM.version() >= v"16"
                 cmd = `$cmd --opaque-pointers=0`
             end
-            proc = run(pipeline(cmd, stdout=output, stderr=stderr, stdin=input); wait=false)
+            proc = run(pipeline(cmd, stdout=output, stderr=log, stdin=input); wait=false)
             close(output.in)
+            close(log.in)
 
             writer = @async begin
                 write(input, ir)
                 close(input)
             end
             reader = @async read(output)
+            logger = @async read(log, String)
 
-            wait(proc)
-            if !success(proc)
+            try
+                wait(proc)
+                success(proc) || error(fetch(logger))
+            catch err
                 file = tempname(cleanup=false) * ".ll"
                 write(file, ir)
                 error("""Compilation to AIR failed; see above for details.
-                        If you think this is a bug, please file an issue and attach $(file)""")
+                         If you think this is a bug, please file an issue and attach $(file)""")
             end
+
             fetch(reader)
         end
     end
