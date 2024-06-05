@@ -1,4 +1,4 @@
-export MTLBuffer, device, handle
+export MTLBuffer
 
 # From docs: "MSL implements a buffer as a pointer to a built-in or user defined data type described in the
 # device, constant, or threadgroup address space.

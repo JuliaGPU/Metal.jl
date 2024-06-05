@@ -1,6 +1,6 @@
 # host array
 
-export MtlArray, MtlVector, MtlMatrix, MtlVecOrMat, mtl, is_shared, is_managed, is_private
+export MtlArray, MtlVector, MtlMatrix, MtlVecOrMat, mtl, is_shared, is_managed, is_private, device
 
 function hasfieldcount(@nospecialize(dt))
     try
