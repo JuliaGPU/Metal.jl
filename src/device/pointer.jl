@@ -1,5 +1,3 @@
-export AS
-
 module AS
     const Generic               = 0 # No Generic address space?
     const Device                = 1 # Checked
