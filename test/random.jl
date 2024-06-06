@@ -1,4 +1,5 @@
 using Random
+using Metal
 using Metal: can_use_mpsrandom
 
 const RAND_TYPES = [Float16, Float32, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64,
