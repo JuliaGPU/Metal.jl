@@ -5,8 +5,6 @@
 
 # XXX: this is duplicated with CUDA.jl; move it to a common place
 
-export SimpleVersion, @sv_str
-
 struct SimpleVersion
     major::UInt32
     minor::UInt32
