@@ -24,7 +24,6 @@ end
 function MPSMatrixRandomDefaultDistributionDescriptor()
     desc = @objc [MPSMatrixRandomDistributionDescriptor defaultDistributionDescriptor]::id{MPSMatrixRandomDistributionDescriptor}
     obj = MPSMatrixRandomDistributionDescriptor(desc)
-    finalizer(release, obj)
     return obj
 end
 
