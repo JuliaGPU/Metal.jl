@@ -146,4 +146,4 @@ NSString("Apple M1 Pro")
 ## Acknowledgements
 
 This package builds upon the experience of several
-Julia contributors to CUDA.jl, AMDGPU.jl and oneAPI.jl.
+Julia contributors to [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl), [AMDGPU.jl](https://github.com/JuliaGPU/AMDGPU.jl) and [oneAPI.jl](https://github.com/JuliaGPU/oneAPI.jl).
