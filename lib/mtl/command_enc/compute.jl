@@ -1,6 +1,6 @@
 export MTLComputeCommandEncoder
-export set_function!, set_buffer!, set_bytes!, dispatchThreads!, endEncoding!
-export set_buffers!, append_current_function!
+export set_function!, set_buffer!, dispatchThreadgroups!, endEncoding!
+export append_current_function!
 
 @cenum MTLDispatchType::NSUInteger begin
     MTLDispatchTypeSerial = 0
