@@ -3,11 +3,12 @@
 ```@meta
 DocTestSetup = quote
     using Metal
+    using GPUArrays
 
     import Random
-    Random.seed!(0)
+    Random.seed!(1)
 
-    Metal.seed!(0)
+    Metal.seed!(1)
 end
 ```
 
@@ -119,13 +120,13 @@ Base's convenience functions for generating random numbers are available in Meta
 ```jldoctest
 julia> Metal.rand(2)
 2-element MtlVector{Float32, Private}:
- 0.39904642
- 0.8805201
+ 0.89025915
+ 0.8946847
 
 julia> Metal.randn(Float32, 2, 1)
 2×1 MtlMatrix{Float32, Private}:
- -0.18797699
- -0.006818078
+ 1.2279074
+ 1.2518331
 ```
 
 Behind the scenes, these random numbers come from two different generators: one backed by
@@ -138,11 +139,11 @@ julia> using Random, GPUArrays
 
 julia> a = Random.rand(MPS.default_rng(), Float32, 1)
 1-element MtlVector{Float32, Private}:
- 0.39904642
+ 0.89025915
 
 julia> a = Random.rand!(GPUArrays.default_rng(MtlArray), a)
 1-element MtlVector{Float32, Private}:
- 0.13394515
+ 0.0705002
 ```
 
 !!! note
