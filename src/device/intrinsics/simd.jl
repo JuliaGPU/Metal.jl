@@ -7,7 +7,7 @@ function convert_origin(origin::NTuple{2, Int64})
     return (VecElement{Int64}(origin[1]-1), VecElement{Int64}(origin[2]-1))
 end
 
-for (jltype, suffix) in ((Float16, "f16"), (Float32, "f32"))
+for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"))
     for as in (AS.Device, AS.ThreadGroup)
         @eval begin
             @device_function simdgroup_load(
