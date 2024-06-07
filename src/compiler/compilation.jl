@@ -111,9 +111,6 @@ function compile(@nospecialize(job::CompilerJob))
             log = Pipe()
 
             cmd = `$(LLVMDowngrader_jll.llvm_as()) --bitcode-version=5.0 -o -`
-            if LLVM.version() >= v"16"
-                cmd = `$cmd --opaque-pointers=0`
-            end
             proc = run(pipeline(cmd, stdout=output, stderr=log, stdin=input); wait=false)
             close(output.in)
             close(log.in)
