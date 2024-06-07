@@ -23,3 +23,11 @@ Shared
 Managed
 CPUStorage
 ```
+
+There also exist the following convenience functions to check if an MtlArray is using a specific storage mode:
+
+```@docs
+is_private
+is_shared
+is_managed
+```

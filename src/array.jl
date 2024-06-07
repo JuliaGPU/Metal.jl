@@ -114,10 +114,32 @@ device(A::MtlArray) = A.data[].device
 storagemode(x::MtlArray) = storagemode(typeof(x))
 storagemode(::Type{<:MtlArray{<:Any,<:Any,S}}) where {S} = S
 
-is_shared(a::MtlArray) = storagemode(a) == Shared
-is_managed(a::MtlArray) = storagemode(a) == Managed
-is_private(a::MtlArray) = storagemode(a) == Private
-is_memoryless(a::MtlArray) = storagemode(a) == Memoryless
+is_shared(A::MtlArray) = storagemode(A) == Shared
+is_managed(A::MtlArray) = storagemode(A) == Managed
+is_private(A::MtlArray) = storagemode(A) == Private
+is_memoryless(A::MtlArray) = storagemode(A) == Memoryless
+
+# Generate docstrings for the is_<storagemode> functions defined above
+let
+    is_storagemode_to_document = [:is_shared, :is_private, :is_managed]
+    smodes = [:Shared, :Private, :Managed]
+    for (func, smode) in zip(is_storagemode_to_document, smodes)
+        name = string(func)
+        stmode = string(smode)
+        s1 = string(is_storagemode_to_document[func .!= is_storagemode_to_document][1])
+        s2 = string(is_storagemode_to_document[func .!= is_storagemode_to_document][2])
+        @eval begin
+            @doc """
+                $($name)(A::MtlArray) -> Bool
+
+            Returns true if `A` has storage mode `$($stmode)`.
+
+            See also `$($s1)` and `$($s2)`.
+            """ $(func)(A::MtlArray)
+        end
+        nothing
+    end
+end
 
 ## convenience constructors
 """
