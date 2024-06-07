@@ -39,7 +39,9 @@ end
 
 `N`-dimensional Metal array with storage mode `S` and elements of type `T`.
 
-`S` can be `Private` (default) or `Shared`.
+`S` can be `Private` (default), `Shared`, or `Managed`.
+
+See the Array Programming section of the Metal.jl docs for more details.
 """
 mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
     data::DataRef{<:MTLBuffer}
