@@ -1,3 +1,8 @@
+"""
+# MPS
+
+`MPS` is where the Metal Performance Shaders API wrappers are defined.
+"""
 module MPS
 
 using ..Metal

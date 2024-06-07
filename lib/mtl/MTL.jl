@@ -1,3 +1,8 @@
+"""
+# MTL
+
+`MTL` is where the Metal API wrappers are defined.
+"""
 module MTL
 
 using CEnum
