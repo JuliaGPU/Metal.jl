@@ -14,6 +14,11 @@ import Adapt
 
 export MetalBackend
 
+"""
+    struct MetalBackend <: KernelAbstractions.GPU
+
+The `KernelAbstractions` backend for running on Metal GPUs.
+"""
 struct MetalBackend <: KA.GPU
 end
 
