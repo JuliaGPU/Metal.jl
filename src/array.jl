@@ -120,9 +120,34 @@ is_private(a::MtlArray) = storagemode(a) == Private
 is_memoryless(a::MtlArray) = storagemode(a) == Memoryless
 
 ## convenience constructors
+"""
+    MtlVector{T,S} <: AbstractGPUVector{T}
 
+One-dimensional array with elements of type T for use with Apple Metal-compatible GPUs. Alias
+for MtlArray{T,1,S}.
+
+See also `Vector`(@ref), and the Array Programming section of the Metal.jl docs for more details.
+"""
 const MtlVector{T,S} = MtlArray{T,1,S}
+
+"""
+    MtlMatrix{T,S} <: AbstractGPUMatrix{T}
+
+Two-dimensional array with elements of type T for use with Apple Metal-compatible GPUs. Alias
+for MtlArray{T,2,S}.
+
+See also `Matrix`(@ref), and the Array Programming section of the Metal.jl docs for more details.
+"""
 const MtlMatrix{T,S} = MtlArray{T,2,S}
+
+"""
+    MtlVecOrMat{T,S}
+
+Union type of MtlVector{T,S} and MtlMatrix{T,S} which allows functions to accept either an
+MtlMatrix or an MtlVector.
+
+See also `VecOrMat`(@ref) for examples.
+"""
 const MtlVecOrMat{T,S} = Union{MtlVector{T,S},MtlMatrix{T,S}}
 
 # default to private memory
