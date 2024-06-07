@@ -7,6 +7,10 @@ However, there is the special function `mtl` for transferring an array over to t
 
 ```@docs
 mtl
+MtlArray
+MtlVector
+MtlMtrix
+MtlVecOrMat
 ```
 
 ## Storage modes

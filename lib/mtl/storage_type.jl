@@ -8,11 +8,48 @@ export ReadUsage, WriteUsage, ReadWriteUsage
 # Memoryless -> iOS stuff. ignore it
 
 abstract type StorageMode end
+
+"""
+    struct Shared <: Metal.MTL.StorageMode
+
+Used to indicate that the resource is stored using `MTLStorageModeShared` in memory.
+
+For more information on Metal storage modes, visit the official Metal documentation.
+
+See also [`Private`](@ref) and [`Managed`](@ref).
+"""
 struct Shared      <: StorageMode end
+
+"""
+    struct Managed <: Metal.MTL.StorageMode
+
+Used to indicate that the resource is stored using `MTLStorageModeManaged` in memory.
+
+For more information on Metal storage modes, visit the official Metal documentation.
+
+See also [`Shared`](@ref) and [`Private`](@ref).
+"""
 struct Managed     <: StorageMode end
+
+"""
+    struct Private <: Metal.MTL.StorageMode
+
+Used to indicate that the resource is stored using `MTLStorageModePrivate` in memory.
+
+For more information on Metal storage modes, visit the official Metal documentation.
+
+See also [`Shared`](@ref) and [`Managed`](@ref).
+"""
 struct Private     <: StorageMode end
 struct Memoryless  <: StorageMode end
 
+"""
+    CPUStorage
+
+Union type of [`Shared`](@ref) and [`Managed`](@ref) storage modes.
+
+Represents storage modes where the resource is accessible via the CPU.
+"""
 const CPUStorage = Union{Shared,Managed}
 Base.convert(::Type{MTLStorageMode}, ::Type{Shared})     = MTLStorageModeShared
 Base.convert(::Type{MTLStorageMode}, ::Type{Managed})    = MTLStorageModeManaged
