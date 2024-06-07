@@ -104,6 +104,11 @@ end
 
 unsafe_free!(a::MtlArray) = GPUArrays.unsafe_free!(a.data)
 
+"""
+    device(<:MtlArray)
+
+Get the Metal device for an MtlArray.
+"""
 device(A::MtlArray) = A.data[].device
 
 storagemode(x::MtlArray) = storagemode(typeof(x))
