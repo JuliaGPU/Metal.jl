@@ -9,6 +9,47 @@ GPUCompiler.runtime_module(::MetalCompilerJob) = Metal
 GPUCompiler.method_table(::MetalCompilerJob) = method_table
 
 
+function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
+                                    mod::LLVM.Module, entry::LLVM.Function)
+    entry = invoke(GPUCompiler.finish_ir!,
+                   Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module, LLVM.Function},
+                   job, mod, entry)
+
+    # pointer type information for typed intrinsics
+    # (this is consumed by the LLVM IR downgrader)
+    for (jltyp, llvmtyp) in (Int32 => :i32, Int64 => :i64,
+                             Float16 => :f16, Float32 => :f32),
+        (as, asname) in (AS.Device => "global", AS.ThreadGroup => "local")
+
+        # map of intrinsics to pointer operand indices and eltypes
+        intrinsics = Dict()
+        ## simd
+        intrinsics["simdgroup_matrix_8x8_load.v64$llvmtyp.p$as$llvmtyp"] = (1 => jltyp,)
+        intrinsics["simdgroup_matrix_8x8_store.v64$llvmtyp.p$as$llvmtyp"] = (2 => jltyp,)
+        ## atomics
+        for op in [:store, :load, :xchg, :add, :sub, :min, :max, :and, :or, :xor]
+            intrinsics["atomic.$asname.$op.$llvmtyp"] = (1 => jltyp,)
+        end
+        intrinsics["atomic.$asname.cmpxchg.weak.$llvmtyp"] = (1 => jltyp, 2 => jltyp)
+
+        # apply metadata to the function declarations
+        for (intr, args) in intrinsics
+            fn = "air.$intr"
+            haskey(functions(mod), fn) || continue
+            f = functions(mod)[fn]
+            mds = []
+            for (idx, typ) in args
+                push!(mds, ConstantInt(Int32(idx-1)))
+                push!(mds, null(convert(LLVMType, typ)))
+            end
+            metadata(f)["arg_eltypes"] = MDNode(mds)
+        end
+    end
+
+    return entry
+end
+
+
 ## compiler implementation (cache, configure, compile, and link)
 
 # cache of compilation caches, per device
@@ -70,9 +111,6 @@ function compile(@nospecialize(job::CompilerJob))
             log = Pipe()
 
             cmd = `$(LLVMDowngrader_jll.llvm_as()) --bitcode-version=5.0 -o -`
-            if LLVM.version() >= v"16"
-                cmd = `$cmd --opaque-pointers=0`
-            end
             proc = run(pipeline(cmd, stdout=output, stderr=log, stdin=input); wait=false)
             close(output.in)
             close(log.in)
