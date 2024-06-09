@@ -10,33 +10,33 @@ export ReadUsage, WriteUsage, ReadWriteUsage
 abstract type StorageMode end
 
 """
-    struct Shared <: Metal.MTL.StorageMode
+    struct Shared <: MTL.StorageMode
 
 Used to indicate that the resource is stored using `MTLStorageModeShared` in memory.
 
-For more information on Metal storage modes, visit the official Metal documentation.
+For more information on Metal storage modes, refer to the official Metal documentation.
 
 See also [`Private`](@ref) and [`Managed`](@ref).
 """
 struct Shared      <: StorageMode end
 
 """
-    struct Managed <: Metal.MTL.StorageMode
+    struct Managed <: MTL.StorageMode
 
 Used to indicate that the resource is stored using `MTLStorageModeManaged` in memory.
 
-For more information on Metal storage modes, visit the official Metal documentation.
+For more information on Metal storage modes, refer to the official Metal documentation.
 
 See also [`Shared`](@ref) and [`Private`](@ref).
 """
 struct Managed     <: StorageMode end
 
 """
-    struct Private <: Metal.MTL.StorageMode
+    struct Private <: MTL.StorageMode
 
 Used to indicate that the resource is stored using `MTLStorageModePrivate` in memory.
 
-For more information on Metal storage modes, visit the official Metal documentation.
+For more information on Metal storage modes, refer to the official Metal documentation.
 
 See also [`Shared`](@ref) and [`Managed`](@ref).
 """

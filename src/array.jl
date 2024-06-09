@@ -114,32 +114,34 @@ device(A::MtlArray) = A.data[].device
 storagemode(x::MtlArray) = storagemode(typeof(x))
 storagemode(::Type{<:MtlArray{<:Any,<:Any,S}}) where {S} = S
 
+"""
+    is_shared(A::MtlArray) -> Bool
+
+Returns true if `A` has storage mode [`Shared`](@ref).
+
+See also [`is_private`](@ref) and [`is_managed`](@ref).
+"""
 is_shared(A::MtlArray) = storagemode(A) == Shared
+
+"""
+    is_managed(A::MtlArray) -> Bool
+
+Returns true if `A` has storage mode [`Managed`](@ref).
+
+See also [`is_shared`](@ref) and [`is_private`](@ref).
+"""
 is_managed(A::MtlArray) = storagemode(A) == Managed
+
+"""
+    is_private(A::MtlArray) -> Bool
+
+Returns true if `A` has storage mode [`Private`](@ref).
+
+See also [`is_shared`](@ref) and [`is_managed`](@ref).
+"""
 is_private(A::MtlArray) = storagemode(A) == Private
+
 is_memoryless(A::MtlArray) = storagemode(A) == Memoryless
-
-# Generate docstrings for the is_<storagemode> functions defined above
-let
-    is_storagemode_to_document = [:is_shared, :is_private, :is_managed]
-    smodes = [:Shared, :Private, :Managed]
-    for (func, smode) in zip(is_storagemode_to_document, smodes)
-        name = string(func)
-        stmode = string(smode)
-        s1 = string(is_storagemode_to_document[func .!= is_storagemode_to_document][1])
-        s2 = string(is_storagemode_to_document[func .!= is_storagemode_to_document][2])
-        @eval begin
-            @doc """
-                $($name)(A::MtlArray) -> Bool
-
-            Returns true if `A` has storage mode `$($stmode)`.
-
-            See also `$($s1)` and `$($s2)`.
-            """ $(func)(A::MtlArray)
-        end
-        nothing
-    end
-end
 
 ## convenience constructors
 """
