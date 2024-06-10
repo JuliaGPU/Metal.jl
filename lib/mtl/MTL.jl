@@ -3,9 +3,8 @@
 
 `MTL` is where the Metal API wrappers are defined.
 
-For the full API, refer to Apple's documentation at https://developer.apple.com/documentation/metal.
-
-Not all functionality is currently implemented.
+Not all functionality is currently implemented or documented. For further details,
+refer to the [official Apple documentation](https://developer.apple.com/documentation/metal).
 """
 module MTL
 
