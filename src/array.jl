@@ -39,7 +39,9 @@ end
 
 `N`-dimensional Metal array with storage mode `S` and elements of type `T`.
 
-`S` can be `Private` (default) or `Shared`.
+`S` can be `Private` (default), `Shared`, or `Managed`.
+
+See the Array Programming section of the Metal.jl docs for more details.
 """
 mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
     data::DataRef{<:MTLBuffer}
@@ -102,20 +104,74 @@ end
 
 unsafe_free!(a::MtlArray) = GPUArrays.unsafe_free!(a.data)
 
+"""
+    device(<:MtlArray)
+
+Get the Metal device for an MtlArray.
+"""
 device(A::MtlArray) = A.data[].device
 
 storagemode(x::MtlArray) = storagemode(typeof(x))
 storagemode(::Type{<:MtlArray{<:Any,<:Any,S}}) where {S} = S
 
-is_shared(a::MtlArray) = storagemode(a) == Shared
-is_managed(a::MtlArray) = storagemode(a) == Managed
-is_private(a::MtlArray) = storagemode(a) == Private
-is_memoryless(a::MtlArray) = storagemode(a) == Memoryless
+"""
+    is_shared(A::MtlArray) -> Bool
+
+Returns true if `A` has storage mode [`Shared`](@ref).
+
+See also [`is_private`](@ref) and [`is_managed`](@ref).
+"""
+is_shared(A::MtlArray) = storagemode(A) == Shared
+
+"""
+    is_managed(A::MtlArray) -> Bool
+
+Returns true if `A` has storage mode [`Managed`](@ref).
+
+See also [`is_shared`](@ref) and [`is_private`](@ref).
+"""
+is_managed(A::MtlArray) = storagemode(A) == Managed
+
+"""
+    is_private(A::MtlArray) -> Bool
+
+Returns true if `A` has storage mode [`Private`](@ref).
+
+See also [`is_shared`](@ref) and [`is_managed`](@ref).
+"""
+is_private(A::MtlArray) = storagemode(A) == Private
+
+is_memoryless(A::MtlArray) = storagemode(A) == Memoryless
 
 ## convenience constructors
+"""
+    MtlVector{T,S} <: AbstractGPUVector{T}
 
+One-dimensional array with elements of type T for use with Apple Metal-compatible GPUs. Alias
+for MtlArray{T,1,S}.
+
+See also `Vector`(@ref), and the Array Programming section of the Metal.jl docs for more details.
+"""
 const MtlVector{T,S} = MtlArray{T,1,S}
+
+"""
+    MtlMatrix{T,S} <: AbstractGPUMatrix{T}
+
+Two-dimensional array with elements of type T for use with Apple Metal-compatible GPUs. Alias
+for MtlArray{T,2,S}.
+
+See also `Matrix`(@ref), and the Array Programming section of the Metal.jl docs for more details.
+"""
 const MtlMatrix{T,S} = MtlArray{T,2,S}
+
+"""
+    MtlVecOrMat{T,S}
+
+Union type of MtlVector{T,S} and MtlMatrix{T,S} which allows functions to accept either an
+MtlMatrix or an MtlVector.
+
+See also `VecOrMat`(@ref) for examples.
+"""
 const MtlVecOrMat{T,S} = Union{MtlVector{T,S},MtlMatrix{T,S}}
 
 # default to private memory
