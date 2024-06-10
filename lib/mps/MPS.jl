@@ -2,6 +2,10 @@
 # MPS
 
 `MPS` is where the Metal Performance Shaders API wrappers are defined.
+
+For the full API, refer to Apple's documentation at https://developer.apple.com/documentation/metalperformanceshaders.
+
+Not all functionality is currently implemented.
 """
 module MPS
 
