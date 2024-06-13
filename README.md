@@ -31,7 +31,7 @@ if you want to use it. PRs are very welcome!
 
 -  Mac device with M-series chip
 -  Julia 1.8-1.10
--  macOS 13 (Ventura) or 14 (Sonoma)
+-  macOS 13-16
 
 These requirements are fairly strict, and are due to our limited development
 resources (manpower, hardware). Technically, they can be relaxed. If you are
