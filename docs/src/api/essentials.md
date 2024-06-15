@@ -6,7 +6,7 @@
 ```@docs
 device!
 devices
-current_device
+device
 global_queue
 synchronize
 device_synchronize

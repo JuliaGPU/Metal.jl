@@ -4,7 +4,7 @@ using Metal, Test
 const IGNORE_UNION = Union{Complex, Int64, UInt64}
 
 function copytest(src, srctrans, dsttrans)
-    device = current_device()
+    device = device()
     queue = global_queue(device)
     dst = if srctrans == dsttrans
         similar(src)

@@ -129,12 +129,12 @@ function matvecmul!(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha::Number=true
     mps_b = MPSVector(b)
     mps_c = MPSVector(c)
 
-    matvec_mul_kernel = MPSMatrixVectorMultiplication(current_device(), !transpose,
+    matvec_mul_kernel = MPSMatrixVectorMultiplication(device(), !transpose,
                                                       rows_c, cols_a,
                                                       alpha, beta)
 
     # Encode and commit matmul kernel
-    cmdbuf = MTLCommandBuffer(global_queue(current_device()))
+    cmdbuf = MTLCommandBuffer(global_queue(device()))
     encode!(cmdbuf, matvec_mul_kernel, mps_a, mps_b, mps_c)
     commit!(cmdbuf)
 

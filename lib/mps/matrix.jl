@@ -225,14 +225,14 @@ function matmul!(c::MtlArray{T1,N}, a::MtlArray{T2,N}, b::MtlArray{T3,N},
     mps_b = MPSMatrix(b)
     mps_c = MPSMatrix(c)
 
-    mat_mul_kernel = MPSMatrixMultiplication(current_device(),
+    mat_mul_kernel = MPSMatrixMultiplication(device(),
                                              transpose_b, transpose_a,
                                              rows_c, cols_c, cols_a,
                                              alpha, beta)
 
 
     # Encode and commit matmul kernel
-    cmdbuf = MTLCommandBuffer(global_queue(current_device()))
+    cmdbuf = MTLCommandBuffer(global_queue(device()))
     encode!(cmdbuf, mat_mul_kernel, mps_b, mps_a, mps_c)
     commit!(cmdbuf)
 
@@ -299,11 +299,11 @@ end
     mps_i = MPSMatrix(I)
     mps_v = MPSMatrix(V)
 
-    topk_kernel = MPSMatrixFindTopK(current_device(), k)
+    topk_kernel = MPSMatrixFindTopK(device(), k)
     topk_kernel.indexOffset = 1
 
     # Encode and commit topk kernel
-    cmdbuf = MTLCommandBuffer(global_queue(current_device()))
+    cmdbuf = MTLCommandBuffer(global_queue(device()))
     encode!(cmdbuf, topk_kernel, mps_a, mps_i, mps_v)
     commit!(cmdbuf)
 

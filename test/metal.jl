@@ -331,7 +331,7 @@ desc.retainedReferences = false
 desc.errorOptions = MTL.MTLCommandBufferErrorOptionEncoderExecutionStatus
 @test desc.errorOptions == MTL.MTLCommandBufferErrorOptionEncoderExecutionStatus
 
-cmq = MTLCommandQueue(current_device())
+cmq = MTLCommandQueue(device())
 cmdbuf = MTLCommandBuffer(cmq, desc)
 if !runtime_validation
     # when the debug layer is activated, Metal seems to retain all resources?
@@ -454,7 +454,7 @@ end
         arr = Metal.zeros(T, 4)
 
         buf = Base.unsafe_convert(MTL.MTLBuffer, arr)
-        Metal.unsafe_fill!(current_device(), Metal.MtlPtr{T}(buf, 0), T(val), 4)
+        Metal.unsafe_fill!(device(), Metal.MtlPtr{T}(buf, 0), T(val), 4)
 
         @test all(Array(arr) .== val)
     end

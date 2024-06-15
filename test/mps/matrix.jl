@@ -37,7 +37,7 @@ end
 
 using .MPS: MPSMatrix
 @testset "MPSMatrix" begin
-    dev = current_device()
+    dev = device()
     T = Float32
     DT = convert(MPSDataType, T)
     rows = 2
@@ -136,7 +136,7 @@ using .MPS: MPSMatrixMultiplication
     alpha = 1
     beta = 0
 
-    mat_mul = MPSMatrixMultiplication(current_device(),
+    mat_mul = MPSMatrixMultiplication(device(),
                                         transpose_b, transpose_a,
                                         rows_c, cols_c, cols_a,
                                         alpha, beta)
@@ -159,7 +159,7 @@ using .MPS: MPSMatrixFindTopK
     rows = 2
     cols = 3
 
-    topk = MPSMatrixFindTopK(current_device(), k)
+    topk = MPSMatrixFindTopK(device(), k)
     topk.indexOffset = off
     topk.sourceColumns = cols
     topk.sourceRows = rows

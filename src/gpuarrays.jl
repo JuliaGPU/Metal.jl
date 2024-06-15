@@ -66,7 +66,7 @@ GPUArrays.backend(::Type{<:MtlArray}) = mtlArrayBackend()
 
 const GLOBAL_RNGs = Dict{MTLDevice,GPUArrays.RNG}()
 function GPUArrays.default_rng(::Type{<:MtlArray})
-    dev = current_device()
+    dev = device()
     get!(GLOBAL_RNGs, dev) do
         N = dev.maxThreadsPerThreadgroup.width
         state = MtlArray{NTuple{4, UInt32}}(undef, N)

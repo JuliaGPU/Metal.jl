@@ -90,7 +90,7 @@ function capture_dir()
 end
 
 function captured(f; dest=MTL.MTLCaptureDestinationGPUTraceDocument,
-                     object=global_queue(current_device()))
+                     object=global_queue(device()))
     if !haskey(ENV, "METAL_CAPTURE_ENABLED") || ENV["METAL_CAPTURE_ENABLED"] != "1"
         @warn """Environment variable 'METAL_CAPTURE_ENABLED' is not set. In most cases, this
         will need to be set to 1 before launching Julia to enable GPU frame capture."""

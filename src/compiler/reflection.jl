@@ -31,7 +31,7 @@ function code_agx(io::IO, @nospecialize(func), @nospecialize(types),
                   kernel::Bool=true; kwargs...)
     compiler_kwargs, kwargs = split_kwargs_runtime(kwargs, COMPILER_KWARGS)
     source = methodinstance(typeof(func), Base.to_tuple_type(types))
-    config = compiler_config(current_device(); kernel, compiler_kwargs...)
+    config = compiler_config(device(); kernel, compiler_kwargs...)
     job = CompilerJob(source, config)
     code_agx(io, job)
 end
@@ -55,7 +55,7 @@ end
 
     # create a binary archive
     bin_desc = MTLBinaryArchiveDescriptor()
-    bin = MTLBinaryArchive(current_device(), bin_desc)
+    bin = MTLBinaryArchive(device(), bin_desc)
     add_functions!(bin, pipeline_desc)
 
     mktempdir() do dir
@@ -172,7 +172,7 @@ for method in (:code_typed, :code_warntype, :code_llvm)
                          kernel::Bool=false, kwargs...)
             compiler_kwargs, kwargs = split_kwargs_runtime(kwargs, COMPILER_KWARGS)
             source = methodinstance(typeof(func), Base.to_tuple_type(types))
-            config = compiler_config(current_device(); kernel, compiler_kwargs...)
+            config = compiler_config(device(); kernel, compiler_kwargs...)
             job = CompilerJob(source, config)
             GPUCompiler.$method($(args...); kwargs...)
         end
@@ -226,7 +226,7 @@ Return a type `r` such that `f(args...)::r` where `args::tt`.
 """
 function return_type(@nospecialize(func), @nospecialize(tt))
     source = methodinstance(typeof(func), tt)
-    config = compiler_config(current_device())
+    config = compiler_config(device())
     job = CompilerJob(source, config)
     interp = GPUCompiler.get_interpreter(job)
     sig = Base.signature_type(func, tt)

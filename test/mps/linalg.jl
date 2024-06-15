@@ -1,6 +1,6 @@
 using LinearAlgebra
 
-if MPS.is_supported(current_device())
+if MPS.is_supported(device())
 
 @testset "mixed-precision matrix matrix multiplication" begin
     N = 10
@@ -218,7 +218,7 @@ using .MPS: MPSMatrixSoftMax, MPSMatrixLogSoftMax
     cols = rand(UInt)
     rows = rand(UInt)
 
-    skern = MPSMatrixSoftMax(current_device())
+    skern = MPSMatrixSoftMax(device())
     skern.sourceColumns = cols
     skern.sourceRows = rows
 
@@ -226,7 +226,7 @@ using .MPS: MPSMatrixSoftMax, MPSMatrixLogSoftMax
     @test skern.sourceColumns == cols
     @test skern.sourceRows == rows
 
-    lkern = MPSMatrixLogSoftMax(current_device())
+    lkern = MPSMatrixLogSoftMax(device())
     lkern.sourceColumns = cols
     lkern.sourceRows = rows
 

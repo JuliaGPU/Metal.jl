@@ -176,7 +176,7 @@ in a hot path without degrading performance. New code will be generated automati
 the function changes, or when different types or keyword arguments are provided.
 """
 function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
-    dev = current_device()
+    dev = device()
     Base.@lock mtlfunction_lock begin
         # compile the function
         cache = compiler_cache(dev)
@@ -260,7 +260,7 @@ end
 end
 
 @autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
-                                               queue=global_queue(current_device()))
+                                               queue=global_queue(device()))
     groups = MTLSize(groups)
     threads = MTLSize(threads)
     (groups.width>0 && groups.height>0 && groups.depth>0) ||

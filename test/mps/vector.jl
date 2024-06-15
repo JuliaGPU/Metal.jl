@@ -32,7 +32,7 @@ end
 
 using .MPS: MPSVector
 @testset "MPSVector" begin
-    dev = current_device()
+    dev = device()
     T = Float32
     DT = convert(MPSDataType, T)
     len = 4
@@ -90,7 +90,7 @@ using .MPS: MPSMatrixVectorMultiplication
     alpha = 1
     beta = 0
 
-    matvec_mul = MPSMatrixVectorMultiplication(current_device(), trans,
+    matvec_mul = MPSMatrixVectorMultiplication(device(), trans,
                                                       rows_c, cols_a,
                                                       alpha, beta)
 

@@ -1,4 +1,4 @@
-export current_device, device!, global_queue, synchronize, device_synchronize
+export current_device, device, device!, global_queue, synchronize, device_synchronize
 
 log_compiler()          = OSLog("org.juliagpu.metal", "Compiler")
 log_compiler(args...)   = log_compiler()(args...)
@@ -6,14 +6,14 @@ log_array()             = OSLog("org.juliagpu.metal", "Array")
 log_array(args...)      = log_array()(args...)
 
 """
-    current_device()::MTLDevice
+    device()::MTLDevice
 
 Return the Metal GPU device associated with the current Julia task.
 
 Since all M-series systems currently only externally show a single GPU, this function
 effectively returns the only system GPU.
 """
-function current_device()
+function device()
     get!(task_local_storage(), :MTLDevice) do
         dev = MTLDevice(1)
         if !supports_family(dev, MTL.MTLGPUFamilyApple7)
@@ -27,6 +27,16 @@ function current_device()
         return dev
     end::MTLDevice
 end
+
+"""
+    current_device()::MTLDevice
+
+Return the Metal GPU device associated with the current Julia task.
+
+Since all M-series systems currently only externally show a single GPU, this function
+effectively returns the only system GPU.
+"""
+current_device() = device()
 
 """
     device!(dev::MTLDevice)
@@ -65,7 +75,7 @@ Create a new MTLCommandBuffer from the global command queue, commit it to the qu
 and simply wait for it to be completed. Since command buffers *should* execute in a
 First-In-First-Out manner, this synchronizes the GPU.
 """
-@autoreleasepool function synchronize(queue::MTLCommandQueue=global_queue(current_device()))
+@autoreleasepool function synchronize(queue::MTLCommandQueue=global_queue(device()))
     cmdbuf = MTLCommandBuffer(queue)
     commit!(cmdbuf)
     wait_completed(cmdbuf)

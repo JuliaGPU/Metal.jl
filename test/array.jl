@@ -14,7 +14,7 @@ end
 
 @testset "constructors" begin
     xs = MtlArray{Int8}(undef, 2, 3)
-    @test device(xs) == current_device()
+    @test device(xs) == device()
     @test Base.elsize(xs) == sizeof(Int8)
     @test xs.data[].length == 6
     xs2 = MtlArray{Int8, 2}(xs)
