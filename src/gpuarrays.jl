@@ -1,8 +1,5 @@
 ## GPUArrays interfaces
 
-GPUArrays.device(x::MtlArray) = x.dev
-
-
 ## execution
 
 struct mtlArrayBackend <: AbstractGPUBackend end
