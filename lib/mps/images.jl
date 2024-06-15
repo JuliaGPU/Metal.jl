@@ -39,11 +39,11 @@ end
 
 @objcwrapper immutable=false MPSImageGaussianBlur <: MPSUnaryImageKernel
 
-function MPSImageGaussianBlur(device, sigma)
+function MPSImageGaussianBlur(dev, sigma)
     kernel = @objc [MPSImageGaussianBlur alloc]::id{MPSImageGaussianBlur}
     obj = MPSImageGaussianBlur(kernel)
     finalizer(release, obj)
-    @objc [obj::id{MPSImageGaussianBlur} initWithDevice:device::id{MTLDevice}
+    @objc [obj::id{MPSImageGaussianBlur} initWithDevice:dev::id{MTLDevice}
                                   sigma:sigma::Float32]::id{MPSImageGaussianBlur}
     return obj
 end
@@ -51,11 +51,11 @@ end
 
 @objcwrapper immutable=false MPSImageBox <: MPSUnaryImageKernel
 
-function MPSImageBox(device, kernelWidth, kernelHeight)
+function MPSImageBox(dev, kernelWidth, kernelHeight)
     kernel = @objc [MPSImageBox alloc]::id{MPSImageBox}
     obj = MPSImageBox(kernel)
     finalizer(release, obj)
-    @objc [obj::id{MPSImageBox} initWithDevice:device::id{MTLDevice}
+    @objc [obj::id{MPSImageBox} initWithDevice:dev::id{MTLDevice}
                                 kernelWidth:kernelWidth::Int
                                 kernelHeight:kernelHeight::Int]::id{MPSImageBox}
     return obj

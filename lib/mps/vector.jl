@@ -89,11 +89,11 @@ export MPSMatrixVectorMultiplication, matvecmul!
 
 @objcwrapper immutable=false MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
 
-function MPSMatrixVectorMultiplication(device, transpose, rows, columns, alpha, beta)
+function MPSMatrixVectorMultiplication(dev, transpose, rows, columns, alpha, beta)
     kernel = @objc [MPSMatrixVectorMultiplication alloc]::id{MPSMatrixVectorMultiplication}
     obj = MPSMatrixVectorMultiplication(kernel)
     finalizer(release, obj)
-    @objc [obj::id{MPSMatrixVectorMultiplication} initWithDevice:device::id{MTLDevice}
+    @objc [obj::id{MPSMatrixVectorMultiplication} initWithDevice:dev::id{MTLDevice}
                                                   transpose:transpose::Bool
                                                   rows:rows::NSUInteger
                                                   columns:columns::NSUInteger

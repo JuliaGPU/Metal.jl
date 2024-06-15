@@ -113,8 +113,8 @@ export supports_family, is_m3, is_m2, is_m1
     MTLGPUFamilyMac2 = 2002 # Mac family 2 GPU features
 end
 
-function supports_family(device::MTLDevice, gpufamily::MTLGPUFamily)
-    @objc [device::MTLDevice supportsFamily:gpufamily::MTLGPUFamily]::Bool
+function supports_family(dev::MTLDevice, gpufamily::MTLGPUFamily)
+    @objc [dev::MTLDevice supportsFamily:gpufamily::MTLGPUFamily]::Bool
 end
 
 is_m1(dev::MTLDevice) = supports_family(dev, MTLGPUFamilyApple7) &&

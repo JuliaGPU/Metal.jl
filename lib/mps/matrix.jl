@@ -179,12 +179,12 @@ export MPSMatrixMultiplication, matmul!
     @autoproperty batchStart::NSUInteger setter=setBatchStart
 end
 
-function MPSMatrixMultiplication(device, transposeLeft, transposeRight, resultRows,
+function MPSMatrixMultiplication(dev, transposeLeft, transposeRight, resultRows,
                                  resultColumns, interiorColumns, alpha, beta)
     kernel = @objc [MPSMatrixMultiplication alloc]::id{MPSMatrixMultiplication}
     obj = MPSMatrixMultiplication(kernel)
     finalizer(release, obj)
-    @objc [obj::id{MPSMatrixMultiplication} initWithDevice:device::id{MTLDevice}
+    @objc [obj::id{MPSMatrixMultiplication} initWithDevice:dev::id{MTLDevice}
                                             transposeLeft:transposeLeft::Bool
                                             transposeRight:transposeRight::Bool
                                             resultRows:resultRows::NSUInteger
@@ -253,11 +253,11 @@ export MPSMatrixFindTopK, topk, topk!
     @autoproperty sourceRows::NSInteger setter=setSourceRows
 end
 
-function MPSMatrixFindTopK(device, numberOfTopKValues)
+function MPSMatrixFindTopK(dev, numberOfTopKValues)
     kernel = @objc [MPSMatrixFindTopK alloc]::id{MPSMatrixFindTopK}
     obj = MPSMatrixFindTopK(kernel)
     finalizer(release, obj)
-    @objc [obj::id{MPSMatrixFindTopK} initWithDevice:device::id{MTLDevice}
+    @objc [obj::id{MPSMatrixFindTopK} initWithDevice:dev::id{MTLDevice}
                                                    numberOfTopKValues:numberOfTopKValues::NSUInteger]::id{MPSMatrixFindTopK}
     return obj
 end
@@ -343,11 +343,11 @@ end
 
 for f in (:MPSMatrixSoftMax, :MPSMatrixLogSoftMax)
     @eval begin
-        function $(f)(device)
+        function $(f)(dev)
             kernel = @objc [$(f) alloc]::id{$(f)}
             obj = $(f)(kernel)
             finalizer(release, obj)
-            @objc [obj::id{$(f)} initWithDevice:device::id{MTLDevice}]::id{$(f)}
+            @objc [obj::id{$(f)} initWithDevice:dev::id{MTLDevice}]::id{$(f)}
             return obj
         end
 
