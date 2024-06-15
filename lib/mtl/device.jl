@@ -96,15 +96,15 @@ export supports_family, is_m3, is_m2, is_m1
 @cenum MTLGPUFamily::NSUInteger begin
     MTLGPUFamilyMetal3 = 5001 # Metal 3 support
 
-    MTLGPUFamilyApple9 = 1009 # M3 & A17
-    MTLGPUFamilyApple8 = 1008 # M2 & A15, A16
-    MTLGPUFamilyApple7 = 1007 # M1 & A14
-    MTLGPUFamilyApple6 = 1006 #      A13
-    MTLGPUFamilyApple5 = 1005 #      A12
-    MTLGPUFamilyApple4 = 1004 #      A11
-    MTLGPUFamilyApple3 = 1003 #      A9, A10
-    MTLGPUFamilyApple2 = 1002 #      A8
-    MTLGPUFamilyApple1 = 1001 #      A7
+    MTLGPUFamilyApple9 = 1009 # M3, M4 & A17
+    MTLGPUFamilyApple8 = 1008 # M2     & A15, A16
+    MTLGPUFamilyApple7 = 1007 # M1     & A14
+    MTLGPUFamilyApple6 = 1006 #          A13
+    MTLGPUFamilyApple5 = 1005 #          A12
+    MTLGPUFamilyApple4 = 1004 #          A11
+    MTLGPUFamilyApple3 = 1003 #          A9,  A10
+    MTLGPUFamilyApple2 = 1002 #          A8
+    MTLGPUFamilyApple1 = 1001 #          A7
 
     MTLGPUFamilyCommon3 = 3003
     MTLGPUFamilyCommon2 = 3002
