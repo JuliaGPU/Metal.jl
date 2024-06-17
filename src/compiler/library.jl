@@ -337,9 +337,44 @@ tag_value_io["SARC"] = (
         id = String(readuntil(io, UInt8(0)))
         compressed = read(io, nb - sizeof(id) - 1)
 
-        # unpad and decompress the archive
-        i = findlast(!iszero, compressed)
-        archive = transcode(Bzip2Decompressor, compressed[1:i])
+        # Bzip2Decompressor doesn't support padding (JuliaIO/CodecBzip2.jl#31),
+        # so find the end marker and truncate the archive (in a naive way,
+        # but these source code archives are expected to be small)
+        compressed[1:2] == [0x42, 0x5a] || error("Not a BZip2 archive")
+        trailing_bytes = 10 # end marker + checksum
+        end_marker = 0x177245385090
+        i = 1
+        while i < length(compressed) - trailing_bytes
+            # aligned match
+            current_value = UInt64(compressed[i]) << 40 |
+                            UInt64(compressed[i+1]) << 32 |
+                            UInt64(compressed[i+2]) << 24 |
+                            UInt64(compressed[i+3]) << 16 |
+                            UInt64(compressed[i+4]) << 8 |
+                            UInt64(compressed[i+5])
+            if current_value == end_marker
+                break
+            end
+
+            # misaligned match
+            current_value = UInt64(current_value) << 8 | compressed[i+6]
+            if end_marker in ((current_value >> 1) & 0xffffffffffff,
+                              (current_value >> 2) & 0xffffffffffff,
+                              (current_value >> 3) & 0xffffffffffff,
+                              (current_value >> 4) & 0xffffffffffff,
+                              (current_value >> 5) & 0xffffffffffff,
+                              (current_value >> 6) & 0xffffffffffff,
+                              (current_value >> 7) & 0xffffffffffff)
+                i += 1
+                break
+            end
+
+            i += 1
+        end
+        compressed = compressed[1:i+trailing_bytes-1]
+
+        # decompress the archive
+        archive = transcode(Bzip2Decompressor, compressed)
 
         (; id, archive)
     end,

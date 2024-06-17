@@ -1,5 +1,5 @@
 METAL := xcrun -sdk macosx metal
-MACOSX_VERSIONS := 11 12 13 14
+MACOSX_VERSIONS := 11 12 13 14 15
 
 SOURCES := $(wildcard *.metal)
 METALLIBS := $(foreach ver,$(MACOSX_VERSIONS),$(SOURCES:.metal=.$(ver).metallib))
