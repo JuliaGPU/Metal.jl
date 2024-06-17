@@ -49,7 +49,9 @@ end
 # support for the metallib file format
 function metallib_support()
     macos = macos_version()
-    if macos >= v"13"
+    if macos >= v"15"
+       v"1.2.8"
+    elseif macos >= v"13"
         v"1.2.7"
     elseif macos >= v"12"
         v"1.2.6"
