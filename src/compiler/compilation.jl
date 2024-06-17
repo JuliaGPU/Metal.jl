@@ -128,6 +128,9 @@ function compile(@nospecialize(job::CompilerJob))
             catch err
                 file = tempname(cleanup=false) * ".ll"
                 write(file, ir)
+                if parse(Bool, get(ENV, "BUILDKITE", "false"))
+                    run(`buildkite-agent artifact upload $(file)`)
+                end
                 error("""Compilation to AIR failed; see above for details.
                          If you think this is a bug, please file an issue and attach $(file)""")
             end
@@ -149,6 +152,9 @@ function compile(@nospecialize(job::CompilerJob))
         catch err
             file = tempname(cleanup=false) * ".air"
             write(file, air)
+            if parse(Bool, get(ENV, "BUILDKITE", "false"))
+                run(`buildkite-agent artifact upload $(file)`)
+            end
             error("""Compilation to Metal library failed; see below for details.
                     If you think this is a bug, please file an issue and attach $(file)""")
         end
@@ -176,6 +182,9 @@ end
             # XXX: check more accurately? the error domain doesn't help much here
             file = tempname(cleanup=false) * ".metallib"
             write(file, compiled.image)
+            if parse(Bool, get(ENV, "BUILDKITE", "false"))
+                run(`buildkite-agent artifact upload $(file)`)
+            end
             error("""Compilation to native code failed; see below for details.
                     If you think this is a bug, please file an issue and attach $(file)""")
         end
