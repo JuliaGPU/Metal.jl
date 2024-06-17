@@ -1,0 +1,57 @@
+#!/usr/bin/env -S julia --project
+
+using Metal
+
+function main(args)
+    # parse arguments
+    # TODO: when we can have separate deps for scripts, use ArgParse.jl
+    input = nothing
+    name = nothing
+    usage = "metallib-load [-h] input.metallib name"
+    while !isempty(args)
+        arg = popfirst!(args)
+        if arg == "-h"
+            println(stderr, """
+                metallib-load: Load a Metal library and extract a function.
+
+                Usage: $usage
+
+                Options:
+                    -h          Show this help message.""")
+            return
+        else
+            input = arg
+        end
+    end
+    if input === nothing
+        println(stderr, "Usage: $usage")
+        exit(1)
+    end
+
+    # read the input
+    metallib = if input == "-"
+        read(stdin)
+    else
+        ispath(input) || error("File not found: $input")
+        read(input)
+    end
+    isempty(metallib) && error("Empty input")
+
+    dev = current_device()
+    lib = try
+        MTLLibraryFromData(dev, metallib)
+    catch
+        error("Failed to load Metal library; the library is likely invalid or corrupt.")
+    end
+
+    for fn in lib.functionNames
+        metal_function = MTLFunction(lib, fn)
+        try
+            MTLComputePipelineState(dev, metal_function)
+        catch err
+            error("Failed to instantiate compute pipeline; code in the Metal library is likely unsupported.")
+        end
+    end
+end
+
+isinteractive() || main([ARGS...])
