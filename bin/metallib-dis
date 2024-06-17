@@ -1,0 +1,95 @@
+#!/usr/bin/env -S julia --project
+
+using Metal, LLVM
+
+function main(args)
+    # parse arguments
+    # TODO: when we can have separate deps for scripts, use ArgParse.jl
+    input = nothing
+    disassemble = nothing
+    force = false
+    output = nothing
+    usage = "metallib-dis [-h] [-f] [-S] [-o output.(bc|ll)] input.metallib"
+    while !isempty(args)
+        arg = popfirst!(args)
+        if arg == "-h"
+            println("""
+                metallib-dis: Disassemble a Metal library into its LLVM modules.
+
+                Usage: $usage
+
+                Options:
+                    -h          Show this help message.
+                    -f          Overwrite output file if it exists.
+                    -S          Force disassembly of the LLVM bitcode into textual IR.
+                    -o output   Write output to the specified file.
+
+                If the library contains multiple functions, each function
+                will be written to a separate file with a number suffix.""")
+        elseif arg == "-f"
+            force = true
+        elseif arg == "-S"
+            disassemble = true
+        elseif arg == "-o"
+            isempty(args) && error("Missing argument for -o")
+            output = popfirst!(args)
+        else
+            @assert input == nothing "Only one filename allowed"
+            input = arg
+        end
+    end
+    if input === nothing
+        println("Usage: $usage")
+        return
+    end
+    if disassemble === nothing
+        disassemble = endswith(output, ".ll") || output == "-"
+    end
+
+    # parse the file
+    ispath(input) || error("File not found: $input")
+    metallib = parse(Metal.MetalLib, input)
+
+    function write_module(path::String, air_module)
+        if path != "-" && isfile(path)
+            force || error("File already exists: $path; use -f to overwrite.")
+        end
+        if disassemble
+            @dispose ctx=Context() mod=parse(LLVM.Module, air_module) begin
+                if path == "-"
+                    println(string(mod))
+                else
+                    write(path, string(mod))
+                end
+            end
+        else
+            @assert path != "-"
+            write(path, air_module)
+        end
+    end
+
+    function output_path(i)
+        # if the output path has special meaning, retain it
+        if output == "-"
+            output
+
+        # if it wasn't specified, splice the count before the extension
+        elseif output === nothing
+            prefix = splitext(input)[1]
+            extension = disassemble ? "ll" : "bc"
+            i == 1 ? "$(prefix).$extension" : "$(prefix).$i.$extension"
+
+        # if output was user specified specified, append the count at the end
+        else
+            i == 1 ? output : "$output.$i"
+        end
+    end
+
+    for (i, fun) in enumerate(metallib.functions)
+        write_module(output_path(i), fun.air_module)
+    end
+
+    return
+end
+
+isinteractive() || main([ARGS...])
