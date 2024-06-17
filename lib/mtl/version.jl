@@ -49,7 +49,9 @@ end
 # support for the metallib file format
 function metallib_support()
     macos = macos_version()
-    if macos >= v"13"
+    if macos >= v"15"
+       v"1.2.8"
+    elseif macos >= v"13"
         v"1.2.7"
     elseif macos >= v"12"
         v"1.2.6"
@@ -69,7 +71,9 @@ end
 # support for the embedded AIR bitcode format
 function air_support()
     macos = macos_version()
-    if macos >= v"14"
+    if macos >= v"15"
+        v"2.7"
+    elseif macos >= v"14"
         v"2.6"
     elseif macos >= v"13"
         v"2.5"
@@ -91,7 +95,9 @@ end
 # support for the Metal language
 function metal_support()
     macos = macos_version()
-    if macos >= v"14"
+    if macos >= v"15"
+        v"3.2"
+    elseif macos >= v"14"
         v"3.1"
     elseif macos >= v"13"
         v"3.0"
