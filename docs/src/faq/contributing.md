@@ -95,7 +95,7 @@ There are varying degrees of user-facing interfaces from Metal.jl. At the lowest
 `Metal.MTL.xxx`. This is for low-level functionality close to or at bare Objective-C, or things
 that a normal user wouldn't directly be using. `Metal.MPS.xxx` is for Metal Performance Shader
 specifics (like `MPSMatrix`).
-Next, is `Metal.xxx`. This is for higher-level, usually pure-Julian functionality (like `current_device()`).
+Next, is `Metal.xxx`. This is for higher-level, usually pure-Julian functionality (like `device()`).
 The only thing beyond this is exporting into the global namespace. That would be useful for uniquely-named
 functions/structures/macros with clear and common use-cases (`MtlArray` or `@metal`).
 

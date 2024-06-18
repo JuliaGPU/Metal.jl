@@ -47,7 +47,7 @@ function main(args)
     end
     isempty(metallib) && error("Empty input")
 
-    dev = current_device()
+    dev = device()
     verbose && println("Using device: ", dev.name)
 
     lib = try

@@ -179,7 +179,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     grain = contiguous ? prevpow(2, cld(16, sizeof(T))) : 1
 
     # the maximum number of threads is limited by the hardware
-    dev = current_device()
+    dev = device()
     maxthreads = min(Int(dev.maxThreadsPerThreadgroup.width),
                      Int(dev.maxThreadgroupMemoryLength) ÷ sizeof(T))
 

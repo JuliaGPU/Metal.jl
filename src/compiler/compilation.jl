@@ -169,7 +169,7 @@ end
     @signpost_event log=log_compiler() "Link" "Job=$job"
 
     @signpost_interval log=log_compiler() "Instantiate compute pipeline" begin
-        dev = current_device()
+        dev = device()
         lib = MTLLibraryFromData(dev, compiled.image)
         fun = MTLFunction(lib, compiled.entry)
         pipeline_state = try

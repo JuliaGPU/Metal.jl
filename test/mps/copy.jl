@@ -4,8 +4,8 @@ using Metal, Test
 const IGNORE_UNION = Union{Complex, Int64, UInt64}
 
 function copytest(src, srctrans, dsttrans)
-    device = current_device()
-    queue = global_queue(device)
+    dev = device()
+    queue = global_queue(dev)
     dst = if srctrans == dsttrans
         similar(src)
     else
@@ -23,7 +23,7 @@ function copytest(src, srctrans, dsttrans)
         dstMPS = MPS.MPSMatrix(dst)
 
         copydesc = MPS.MPSMatrixCopyDescriptor(srcMPS, dstMPS)
-        copykern = MPS.MPSMatrixCopy(device, cprows, cpcols, srctrans, dsttrans)
+        copykern = MPS.MPSMatrixCopy(dev, cprows, cpcols, srctrans, dsttrans)
         MPS.encode!(cbuf, copykern, copydesc)
     end
     wait_completed(cmdbuf)

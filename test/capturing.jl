@@ -20,10 +20,10 @@ manager = MTLCaptureManager()
 desc = MTLCaptureDescriptor()
 # Capture Object
 @test desc.captureObject == nothing
-cmdq = global_queue(current_device())
+cmdq = global_queue(device())
 desc.captureObject = cmdq
 @test desc.captureObject == cmdq
-dev = current_device()
+dev = device()
 desc.captureObject = dev
 @test desc.captureObject == dev
 
@@ -39,12 +39,12 @@ desc.outputURL = NSFileURL(path)
 @test desc.outputURL == NSFileURL(path)
 
 # Capture Scope
-queue = MTLCommandQueue(current_device())
+queue = MTLCommandQueue(device())
 default_scope = manager.defaultCaptureScope
 @test default_scope == nothing
 new_scope = MTLCaptureScope(@objc [manager::id{MTLCaptureManager} newCaptureScopeWithCommandQueue:queue::id{MTLCommandQueue}]::id{MTLCaptureScope})
 @test new_scope.commandQueue == queue
-@test new_scope.device == current_device()
+@test new_scope.device == device()
 @test new_scope.label == nothing
 new_label = "Metal.jl capturing test"
 new_scope.label = new_label
@@ -72,7 +72,7 @@ release(new_scope)
 @testset "macro" begin
     Metal.@capture @metal threads=4 tester(bufferA)
     @test isdir("julia_1.gputrace")
-    Metal.@capture object=current_device() @metal threads=4 tester(bufferA)
+    Metal.@capture object=device() @metal threads=4 tester(bufferA)
     @test isdir("julia_2.gputrace")
 end
 

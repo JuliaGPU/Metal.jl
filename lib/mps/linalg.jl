@@ -61,7 +61,7 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     typC = eltype(C)
 
     # If possible, dispatch to performance shaders
-    if is_supported(current_device()) &&
+    if is_supported(device()) &&
        typA == typB && (typA, typC) in MPS_VALID_MATMUL_TYPES
         matmul!(C, A, B, alpha, beta, transA, transB)
     else
@@ -131,7 +131,7 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
     typC = eltype(C)
 
     # If possible, dispatch to performance shaders
-    if is_supported(current_device()) &&
+    if is_supported(device()) &&
         typA == typB && (typA, typC) in MPS_VALID_MATVECMUL_TYPES
         matvecmul!(C, A, B, alpha, beta, transA)
     else
@@ -177,7 +177,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T =
 @autoreleasepool function LinearAlgebra.lu(A::MtlMatrix{T};
                                            check::Bool=true) where {T<:MtlFloat}
     M,N = size(A)
-    dev = current_device()
+    dev = device()
     queue = global_queue(dev)
 
     At = MtlMatrix{T,Private}(undef, (N, M))
@@ -235,7 +235,7 @@ end
                                             check::Bool=true,
                                             allowsingular::Bool=false) where {T<:MtlFloat}
     M,N = size(A)
-    dev = current_device()
+    dev = device()
     queue = global_queue(dev)
 
     At = MtlMatrix{T,Private}(undef, (N, M))
@@ -278,7 +278,7 @@ end
     axes(B,2) == axes(A,1) && axes(B,1) == axes(A,2) || throw(DimensionMismatch("transpose"))
 
     M,N = size(A)
-    dev = current_device()
+    dev = device()
     queue = global_queue(dev)
     cmdbuf = MTLCommandBuffer(queue)
 

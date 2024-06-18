@@ -1,6 +1,6 @@
 # host array
 
-export MtlArray, MtlVector, MtlMatrix, MtlVecOrMat, mtl, is_shared, is_managed, is_private, device
+export MtlArray, MtlVector, MtlMatrix, MtlVecOrMat, mtl, is_shared, is_managed, is_private
 
 function hasfieldcount(@nospecialize(dt))
     try
@@ -61,7 +61,7 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
             maxsize
         end
 
-        dev = current_device()
+        dev = device()
         if bufsize == 0
             # Metal doesn't support empty allocations. For simplicity (i.e., the ability to get
             # a pointer, query the buffer's properties, etc), we use a 1-byte buffer instead.
@@ -557,7 +557,7 @@ function Base.unsafe_wrap(t::Type{<:Array{T}}, ptr::MtlPtr{T}, dims; own=false) 
 end
 
 function Base.unsafe_wrap(A::Type{<:MtlArray{T,N}}, arr::Array, dims=size(arr);
-                          dev=current_device(), kwargs...) where {T,N}
+                          dev=device(), kwargs...) where {T,N}
     GC.@preserve arr begin
         buf = MTLBuffer(dev, prod(dims) * sizeof(T), pointer(arr); nocopy=true, kwargs...)
         return A(buf, Dims(dims))

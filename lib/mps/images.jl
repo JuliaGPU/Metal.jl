@@ -39,11 +39,11 @@ end
 
 @objcwrapper immutable=false MPSImageGaussianBlur <: MPSUnaryImageKernel
 
-function MPSImageGaussianBlur(device, sigma)
+function MPSImageGaussianBlur(dev, sigma)
     kernel = @objc [MPSImageGaussianBlur alloc]::id{MPSImageGaussianBlur}
     obj = MPSImageGaussianBlur(kernel)
     finalizer(release, obj)
-    @objc [obj::id{MPSImageGaussianBlur} initWithDevice:device::id{MTLDevice}
+    @objc [obj::id{MPSImageGaussianBlur} initWithDevice:dev::id{MTLDevice}
                                   sigma:sigma::Float32]::id{MPSImageGaussianBlur}
     return obj
 end
@@ -51,11 +51,11 @@ end
 
 @objcwrapper immutable=false MPSImageBox <: MPSUnaryImageKernel
 
-function MPSImageBox(device, kernelWidth, kernelHeight)
+function MPSImageBox(dev, kernelWidth, kernelHeight)
     kernel = @objc [MPSImageBox alloc]::id{MPSImageBox}
     obj = MPSImageBox(kernel)
     finalizer(release, obj)
-    @objc [obj::id{MPSImageBox} initWithDevice:device::id{MTLDevice}
+    @objc [obj::id{MPSImageBox} initWithDevice:dev::id{MTLDevice}
                                 kernelWidth:kernelWidth::Int
                                 kernelHeight:kernelHeight::Int]::id{MPSImageBox}
     return obj
@@ -69,7 +69,7 @@ function blur(image, kernel; pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
 
     w,h = size(image)
 
-    alignment = MTL.minimumLinearTextureAlignmentForPixelFormat(current_device(), pixelFormat)
+    alignment = MTL.minimumLinearTextureAlignmentForPixelFormat(device(), pixelFormat)
     preBytesPerRow = sizeof(eltype(image))*w
 
     rowoffset = alignment - (preBytesPerRow - 1) % alignment - 1
@@ -83,7 +83,7 @@ function blur(image, kernel; pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
     textDesc2.usage = MTL.MTLTextureUsageShaderRead | MTL.MTLTextureUsageShaderWrite
     text2 = MTL.MTLTexture(res.data.rc.obj, textDesc2, 0, bytesPerRow)
 
-    cmdbuf = MTLCommandBuffer(global_queue(current_device()))
+    cmdbuf = MTLCommandBuffer(global_queue(device()))
     encode!(cmdbuf, kernel, text1, text2)
     commit!(cmdbuf)
 
@@ -91,11 +91,11 @@ function blur(image, kernel; pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
 end
 
 function gaussianblur(image; sigma, pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
-    kernel = MPSImageGaussianBlur(current_device(), sigma)
+    kernel = MPSImageGaussianBlur(device(), sigma)
     return blur(image, kernel; pixelFormat)
 end
 
 function boxblur(image, kernelWidth, kernelHeight; pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
-    kernel = MPSImageBox(current_device(), kernelWidth, kernelHeight)
+    kernel = MPSImageBox(device(), kernelWidth, kernelHeight)
     return blur(image, kernel; pixelFormat)
 end

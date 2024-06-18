@@ -197,8 +197,8 @@ end
 ## bitwise operations lose type information, so allow conversions
 Base.convert(::Type{MTLPixelFormat}, x::Integer) = MTLPixelFormat(x)
 
-function minimumLinearTextureAlignmentForPixelFormat(device, format)
-    return @objc [device::MTLDevice minimumLinearTextureAlignmentForPixelFormat:format::MTLPixelFormat]::NSUInteger
+function minimumLinearTextureAlignmentForPixelFormat(dev, format)
+    return @objc [dev::MTLDevice minimumLinearTextureAlignmentForPixelFormat:format::MTLPixelFormat]::NSUInteger
 end
 
 @cenum MTLTextureUsage::NSUInteger begin
@@ -247,8 +247,8 @@ function MTLTexture(buffer, descriptor, offset, bytesPerRow)
     return obj
 end
 
-function MTLTexture(device, descriptor)
-    texture = @objc [device::id{MTLDevice} newTextureWithDescriptor:descriptor::id{MTLTextureDescriptor}]::id{MTLTexture}
+function MTLTexture(dev, descriptor)
+    texture = @objc [dev::id{MTLDevice} newTextureWithDescriptor:descriptor::id{MTLTextureDescriptor}]::id{MTLTexture}
     obj = MTLTexture(texture)
     finalizer(release, obj)
 

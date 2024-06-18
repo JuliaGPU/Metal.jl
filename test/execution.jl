@@ -140,7 +140,7 @@ end
     @test all(vecA == Int.([5, 5, 5, 5, 5, 5, 0, 0]))
     vecA .= 0
 
-    dev = current_device()
+    dev = device()
     queue = MTLCommandQueue(dev)
     @metal threads=(3) queue=queue tester(bufferA)
     synchronize(queue)

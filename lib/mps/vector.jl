@@ -89,11 +89,11 @@ export MPSMatrixVectorMultiplication, matvecmul!
 
 @objcwrapper immutable=false MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
 
-function MPSMatrixVectorMultiplication(device, transpose, rows, columns, alpha, beta)
+function MPSMatrixVectorMultiplication(dev, transpose, rows, columns, alpha, beta)
     kernel = @objc [MPSMatrixVectorMultiplication alloc]::id{MPSMatrixVectorMultiplication}
     obj = MPSMatrixVectorMultiplication(kernel)
     finalizer(release, obj)
-    @objc [obj::id{MPSMatrixVectorMultiplication} initWithDevice:device::id{MTLDevice}
+    @objc [obj::id{MPSMatrixVectorMultiplication} initWithDevice:dev::id{MTLDevice}
                                                   transpose:transpose::Bool
                                                   rows:rows::NSUInteger
                                                   columns:columns::NSUInteger
@@ -129,12 +129,12 @@ function matvecmul!(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha::Number=true
     mps_b = MPSVector(b)
     mps_c = MPSVector(c)
 
-    matvec_mul_kernel = MPSMatrixVectorMultiplication(current_device(), !transpose,
+    matvec_mul_kernel = MPSMatrixVectorMultiplication(device(), !transpose,
                                                       rows_c, cols_a,
                                                       alpha, beta)
 
     # Encode and commit matmul kernel
-    cmdbuf = MTLCommandBuffer(global_queue(current_device()))
+    cmdbuf = MTLCommandBuffer(global_queue(device()))
     encode!(cmdbuf, matvec_mul_kernel, mps_a, mps_b, mps_c)
     commit!(cmdbuf)
 

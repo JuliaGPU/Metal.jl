@@ -179,12 +179,12 @@ export MPSMatrixMultiplication, matmul!
     @autoproperty batchStart::NSUInteger setter=setBatchStart
 end
 
-function MPSMatrixMultiplication(device, transposeLeft, transposeRight, resultRows,
+function MPSMatrixMultiplication(dev, transposeLeft, transposeRight, resultRows,
                                  resultColumns, interiorColumns, alpha, beta)
     kernel = @objc [MPSMatrixMultiplication alloc]::id{MPSMatrixMultiplication}
     obj = MPSMatrixMultiplication(kernel)
     finalizer(release, obj)
-    @objc [obj::id{MPSMatrixMultiplication} initWithDevice:device::id{MTLDevice}
+    @objc [obj::id{MPSMatrixMultiplication} initWithDevice:dev::id{MTLDevice}
                                             transposeLeft:transposeLeft::Bool
                                             transposeRight:transposeRight::Bool
                                             resultRows:resultRows::NSUInteger
@@ -225,14 +225,14 @@ function matmul!(c::MtlArray{T1,N}, a::MtlArray{T2,N}, b::MtlArray{T3,N},
     mps_b = MPSMatrix(b)
     mps_c = MPSMatrix(c)
 
-    mat_mul_kernel = MPSMatrixMultiplication(current_device(),
+    mat_mul_kernel = MPSMatrixMultiplication(device(),
                                              transpose_b, transpose_a,
                                              rows_c, cols_c, cols_a,
                                              alpha, beta)
 
 
     # Encode and commit matmul kernel
-    cmdbuf = MTLCommandBuffer(global_queue(current_device()))
+    cmdbuf = MTLCommandBuffer(global_queue(device()))
     encode!(cmdbuf, mat_mul_kernel, mps_b, mps_a, mps_c)
     commit!(cmdbuf)
 
@@ -253,11 +253,11 @@ export MPSMatrixFindTopK, topk, topk!
     @autoproperty sourceRows::NSInteger setter=setSourceRows
 end
 
-function MPSMatrixFindTopK(device, numberOfTopKValues)
+function MPSMatrixFindTopK(dev, numberOfTopKValues)
     kernel = @objc [MPSMatrixFindTopK alloc]::id{MPSMatrixFindTopK}
     obj = MPSMatrixFindTopK(kernel)
     finalizer(release, obj)
-    @objc [obj::id{MPSMatrixFindTopK} initWithDevice:device::id{MTLDevice}
+    @objc [obj::id{MPSMatrixFindTopK} initWithDevice:dev::id{MTLDevice}
                                                    numberOfTopKValues:numberOfTopKValues::NSUInteger]::id{MPSMatrixFindTopK}
     return obj
 end
@@ -299,11 +299,11 @@ end
     mps_i = MPSMatrix(I)
     mps_v = MPSMatrix(V)
 
-    topk_kernel = MPSMatrixFindTopK(current_device(), k)
+    topk_kernel = MPSMatrixFindTopK(device(), k)
     topk_kernel.indexOffset = 1
 
     # Encode and commit topk kernel
-    cmdbuf = MTLCommandBuffer(global_queue(current_device()))
+    cmdbuf = MTLCommandBuffer(global_queue(device()))
     encode!(cmdbuf, topk_kernel, mps_a, mps_i, mps_v)
     commit!(cmdbuf)
 
@@ -343,11 +343,11 @@ end
 
 for f in (:MPSMatrixSoftMax, :MPSMatrixLogSoftMax)
     @eval begin
-        function $(f)(device)
+        function $(f)(dev)
             kernel = @objc [$(f) alloc]::id{$(f)}
             obj = $(f)(kernel)
             finalizer(release, obj)
-            @objc [obj::id{$(f)} initWithDevice:device::id{MTLDevice}]::id{$(f)}
+            @objc [obj::id{$(f)} initWithDevice:dev::id{MTLDevice}]::id{$(f)}
             return obj
         end
 

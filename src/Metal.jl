@@ -71,6 +71,8 @@ export MetalBackend
     include("../ext/BFloat16sExt.jl")
 end
 
+include("deprecated.jl")
+
 include("precompile.jl")
 
 end # module

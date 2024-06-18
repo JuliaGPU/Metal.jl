@@ -32,11 +32,11 @@ export MPSMatrixCopy
     @autoproperty destinationsAreTransposed::Bool
 end
 
-function MPSMatrixCopy(device, copyRows, copyColumns, sourcesAreTransposed, destinationsAreTransposed)
+function MPSMatrixCopy(dev, copyRows, copyColumns, sourcesAreTransposed, destinationsAreTransposed)
     kernel = @objc [MPSMatrixCopy alloc]::id{MPSMatrixCopy}
     obj = MPSMatrixCopy(kernel)
     finalizer(release, obj)
-    @objc [obj::id{MPSMatrixCopy} initWithDevice:device::id{MTLDevice}
+    @objc [obj::id{MPSMatrixCopy} initWithDevice:dev::id{MTLDevice}
                                   copyRows:copyRows::NSUInteger
                                   copyColumns:copyColumns::NSUInteger
                                   sourcesAreTransposed:sourcesAreTransposed::Bool
