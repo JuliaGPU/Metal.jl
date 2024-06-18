@@ -6,21 +6,27 @@ function main(args)
     # parse arguments
     # TODO: when we can have separate deps for scripts, use ArgParse.jl
     input = nothing
-    name = nothing
-    usage = "metallib-load [-h] input.metallib name"
+    verbose = false
+    functions = []
+    usage = "metallib-load [-h] [-v] input.metallib [functions...]"
     while !isempty(args)
         arg = popfirst!(args)
         if arg == "-h"
             println(stderr, """
-                metallib-load: Load a Metal library and extract a function.
+                metallib-load: Load a Metal library and functions within.
 
                 Usage: $usage
 
                 Options:
-                    -h          Show this help message.""")
+                    -h          Show this help message.
+                    -v          Enable verbose output.""")
             return
-        else
+        elseif arg == "-v"
+            verbose = true
+        elseif input === nothing
             input = arg
+        else
+            push!(functions, arg)
         end
     end
     if input === nothing
@@ -38,13 +44,21 @@ function main(args)
     isempty(metallib) && error("Empty input")
 
     dev = current_device()
+    verbose && println("Using device: ", dev.name)
+
     lib = try
         MTLLibraryFromData(dev, metallib)
     catch
         error("Failed to load Metal library; the library is likely invalid or corrupt.")
     end
+    verbose && println("Successfully loaded $(something(lib.label, "unlabeled")) Metal library")
 
-    for fn in lib.functionNames
+    if isempty(functions)
+        functions = lib.functionNames
+    end
+
+    for fn in functions
+        verbose && println("Instantiating function $fn")
         metal_function = MTLFunction(lib, fn)
         try
             MTLComputePipelineState(dev, metal_function)
