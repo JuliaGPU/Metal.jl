@@ -1,3 +1,3 @@
 export current_device
 
-Base.@deprecate current_device() device()
+@deprecate current_device() device()
