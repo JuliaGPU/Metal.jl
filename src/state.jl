@@ -1,4 +1,4 @@
-export current_device, device, device!, global_queue, synchronize, device_synchronize
+export device, device!, global_queue, synchronize, device_synchronize
 
 log_compiler()          = OSLog("org.juliagpu.metal", "Compiler")
 log_compiler(args...)   = log_compiler()(args...)
@@ -27,16 +27,6 @@ function device()
         return dev
     end::MTLDevice
 end
-
-"""
-    current_device()::MTLDevice
-
-Return the Metal GPU device associated with the current Julia task.
-
-Since all M-series systems currently only externally show a single GPU, this function
-effectively returns the only system GPU.
-"""
-current_device() = device()
 
 """
     device!(dev::MTLDevice)
