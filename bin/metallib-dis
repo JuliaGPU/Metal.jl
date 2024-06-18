@@ -65,8 +65,13 @@ function main(args)
     end
 
     # parse the file
-    ispath(input) || error("File not found: $input")
-    metallib = parse(Metal.MetalLib, input)
+    metallib = if input == "-"
+        data = read(stdin)
+        read(IOBuffer(data), Metal.MetalLib)
+    else
+        ispath(input) || error("File not found: $input")
+        parse(Metal.MetalLib, input)
+    end
 
     function write_module(path::String, air_module)
         if path != "-" && isfile(path)
