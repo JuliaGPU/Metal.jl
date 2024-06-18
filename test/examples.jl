@@ -15,10 +15,15 @@ examples_dir = joinpath(@__DIR__, "..", "examples")
 examples = find_sources(examples_dir)
 filter!(file -> readline(file) != "# EXCLUDE FROM TESTING", examples)
 
-examples = relpath.(examples, Ref(examples_dir))
-@testset for example in examples
-    cmd = `$(Base.julia_cmd()) --project=$(Base.active_project())`
-    @test success(pipeline(`$cmd $(joinpath(examples_dir, example))`, stderr=stderr))
+cd(examples_dir) do
+    @testset for example in examples
+        mod = @eval module $(gensym()) end
+        @eval mod begin
+            redirect_stdout(devnull) do
+                include($example)
+            end
+        end
+    end
 end
 
 end
