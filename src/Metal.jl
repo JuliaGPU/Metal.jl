@@ -71,4 +71,6 @@ export MetalBackend
     include("../ext/BFloat16sExt.jl")
 end
 
+include("precompile.jl")
+
 end # module

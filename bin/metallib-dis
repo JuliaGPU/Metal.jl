@@ -1,0 +1,127 @@
+#!/bin/sh
+#= Execute the script in the Metal package's environment
+DIR="$(dirname "$(cd "$(dirname "$0")" && pwd)")"
+exec julia --project="$DIR" "$0" "$@"
+=#
+
+using Metal, LLVM
+
+function main(args)
+    # parse arguments
+    # TODO: when we can have separate deps for scripts, use ArgParse.jl
+    input = nothing
+    disassemble = nothing
+    force = false
+    output = nothing
+    name = nothing
+    usage = "metallib-dis [-h] [-f] [-S] [-l] [-o output.(bc|ll)] input.metallib [name]"
+    while !isempty(args)
+        arg = popfirst!(args)
+        if arg == "-h"
+            println(stderr, """
+                metallib-dis: Disassemble a Metal library into its LLVM modules.
+
+                Usage: $usage
+
+                Options:
+                    -h          Show this help message.
+                    -f          Overwrite output file if it exists.
+                    -S          Force disassembly of the LLVM bitcode into textual IR.
+                    -o output   Write output to the specified file.
+
+                If the library contains multiple functions, each function
+                will be written to a separate file with a number suffix.""")
+                return
+        elseif arg == "-f"
+            force = true
+        elseif arg == "-S"
+            disassemble = true
+        elseif arg == "-o"
+            isempty(args) && error("Missing argument for -o")
+            output = popfirst!(args)
+        elseif input === nothing
+            input = arg
+        elseif name === nothing
+            name = arg
+        else
+            error("Unexpected argument: $arg")
+        end
+    end
+    if input === nothing
+        println(stderr, "Usage: $usage")
+        exit(1)
+    end
+    if disassemble === nothing
+        disassemble = if output !== nothing
+            endswith(output, ".ll") || (output == "-" && isa(stdout, Base.TTY))
+        else
+            false
+        end
+    end
+    if output === nothing
+        prefix = splitext(input)[1]
+        extension = disassemble ? "ll" : "bc"
+        output = "$(prefix).$extension"
+    end
+
+    # parse the file
+    metallib = if input == "-"
+        data = read(stdin)
+        read(IOBuffer(data), Metal.MetalLib)
+    else
+        ispath(input) || error("File not found: $input")
+        parse(Metal.MetalLib, input)
+    end
+
+    function write_module(path::String, air_module)
+        if path != "-" && isfile(path)
+            force || error("File already exists: $path; use -f to overwrite.")
+        end
+        if disassemble
+            @dispose ctx=Context() mod=parse(LLVM.Module, air_module) begin
+                if path == "-"
+                    println(string(mod))
+                else
+                    write(path, string(mod))
+                end
+            end
+        else
+            if path == "-"
+                @assert !isa(stdout, Base.TTY)
+                write(stdout, air_module)
+            else
+                write(path, air_module)
+            end
+        end
+    end
+
+    if isempty(metallib.functions)
+        println(stderr, "WARNING: No functions in the library.")
+        return
+    end
+    if name === nothing
+        if length(metallib.functions) == 1
+            name = metallib.functions[1].name
+        else
+            msg = "Multiple functions in the library; specify one of the following:"
+            for fun in metallib.functions
+                msg *= "\n - $(fun.name)"
+            end
+            error(msg)
+        end
+    end
+    found = false
+    for fun in metallib.functions
+        fun.name == name || continue
+        write_module(output, fun.air_module)
+        found = true
+        break
+    end
+    if !found
+        error("Function not found: $name")
+    end
+
+    return
+end
+
+isinteractive() || main([ARGS...])

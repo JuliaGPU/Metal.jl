@@ -1,0 +1,123 @@
+#!/bin/sh
+#= Execute the script in the Metal package's environment
+DIR="$(dirname "$(cd "$(dirname "$0")" && pwd)")"
+exec julia --project="$DIR" "$0" "$@"
+=#
+
+using Metal, LLVM, Metal.LLVMDowngrader_jll
+
+function main(args)
+    # parse arguments
+    # TODO: when we can have separate deps for scripts, use ArgParse.jl
+    inputs = String[]
+    force = false
+    output = nothing
+    downgrade = false
+    air_version = air_support()
+    metal_version = metal_support()
+    usage = "metallib-as [-h] [-f] [-d] [-l] [-o output.metallib] inputs.(bc|ll)..."
+    while !isempty(args)
+        arg = popfirst!(args)
+        if arg == "-h"
+            println(stderr, """
+                metallib-as: Create a Metal library from LLVM IR inputs.
+
+                Usage: $usage
+
+                Options:
+                    -h          Show this help message.
+                    -f          Overwrite output file if it exists.
+                    -d          Always downgrade the LLVM IR, even when reading bitcode.
+                    -o output   Write output to the specified file.""")
+            return
+        elseif arg == "-f"
+            force = true
+        elseif arg == "-d"
+            downgrade = true
+        elseif arg == "-o"
+            isempty(args) && error("Missing argument for -o")
+            output = popfirst!(args)
+        else
+            push!(inputs, arg)
+        end
+    end
+    if isempty(inputs)
+        println(stderr, "Usage: $usage")
+        exit(1)
+    end
+
+    # create functions
+    functions = []
+    @dispose ctx=Context() begin
+        for input in inputs
+            data = if input == "-"
+                read(stdin)
+            else
+                read(input)
+            end
+            if data[1:4] != [0xde, 0xc0, 0x17, 0x0b]
+                # not bitcode; assume textual IR
+                data = String(data)
+            end
+
+            name, ir = @dispose mod = parse(LLVM.Module, data) begin
+                # find external functions
+                external_functions = filter(collect(LLVM.functions(mod))) do fun
+                    !isdeclaration(fun) && linkage(fun) == LLVM.API.LLVMExternalLinkage
+                end
+                isempty(external_functions) && error("No external functions found in $input")
+                if length(external_functions) > 1
+                    error("Multiple external functions found in $input: $(join(LLVM.name.(external_functions), ", ")))")
+                end
+                LLVM.name(external_functions[1]), string(mod)
+            end
+
+            air_module = if endswith(input, ".bc") && !downgrade
+                # use the input as-is
+                read(input)
+            else
+                let input=Pipe(), output=Pipe()
+                    cmd = `$(LLVMDowngrader_jll.llvm_as()) --bitcode-version=5.0 -o -`
+                    proc = run(pipeline(cmd, stdin=input, stdout=output); wait=false)
+                    close(output.in)
+                    writer = @async begin
+                        write(input, ir)
+                        close(input)
+                    end
+                    reader = @async read(output)
+                    wait(proc)
+                    fetch(reader)
+                end
+            end
+
+            let fun = Metal.MetalLibFunction(; name, air_module, air_version, metal_version)
+                push!(functions, fun)
+            end
+        end
+    end
+
+    # create library
+    library = Metal.MetalLib(; functions)
+
+    # write output
+    metallib = sprint(write, library)
+    if output == "-"
+        isa(stdout, Base.TTY) && error("Cannot write binary output to stdout")
+        write(stdout, metallib)
+    else
+        if output === nothing
+            if length(inputs) == 1
+                prefix = replace(basename(inputs[1]), r"\..*$" => "")
+                output = "$prefix.metallib"
+            else
+                error("Multiple inputs require -o to specify output file")
+            end
+        end
+        if ispath(output)
+            force || error("File already exists: $output; use -f to overwrite.")
+        end
+        write(output, metallib)
+    end
+end
+
+isinteractive() || main([ARGS...])

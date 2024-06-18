@@ -1,0 +1,75 @@
+#!/bin/sh
+#= Execute the script in the Metal package's environment
+DIR="$(dirname "$(cd "$(dirname "$0")" && pwd)")"
+exec julia --project="$DIR" "$0" "$@"
+=#
+
+using Metal
+
+function main(args)
+    # parse arguments
+    # TODO: when we can have separate deps for scripts, use ArgParse.jl
+    input = nothing
+    verbose = false
+    functions = []
+    usage = "metallib-load [-h] [-v] input.metallib [functions...]"
+    while !isempty(args)
+        arg = popfirst!(args)
+        if arg == "-h"
+            println(stderr, """
+                metallib-load: Load a Metal library and functions within.
+
+                Usage: $usage
+
+                Options:
+                    -h          Show this help message.
+                    -v          Enable verbose output.""")
+            return
+        elseif arg == "-v"
+            verbose = true
+        elseif input === nothing
+            input = arg
+        else
+            push!(functions, arg)
+        end
+    end
+    if input === nothing
+        println(stderr, "Usage: $usage")
+        exit(1)
+    end
+
+    # read the input
+    metallib = if input == "-"
+        read(stdin)
+    else
+        ispath(input) || error("File not found: $input")
+        read(input)
+    end
+    isempty(metallib) && error("Empty input")
+
+    dev = current_device()
+    verbose && println("Using device: ", dev.name)
+
+    lib = try
+        MTLLibraryFromData(dev, metallib)
+    catch
+        error("Failed to load Metal library; the library is likely invalid or corrupt.")
+    end
+    verbose && println("Successfully loaded $(something(lib.label, "unlabeled")) Metal library")
+
+    if isempty(functions)
+        functions = lib.functionNames
+    end
+
+    for fn in functions
+        verbose && println("Instantiating function $fn")
+        metal_function = MTLFunction(lib, fn)
+        try
+            MTLComputePipelineState(dev, metal_function)
+        catch err
+            error("Failed to instantiate compute pipeline; code in the Metal library is likely unsupported.")
+        end
+    end
+end
+
+isinteractive() || main([ARGS...])
