@@ -1,4 +1,8 @@
-#!/usr/bin/env -S julia --project
+#!/bin/sh
+#= Execute the script in the Metal package's environment
+DIR="$(dirname "$(cd "$(dirname "$0")" && pwd)")"
+exec julia --project="$DIR" "$0" "$@"
+=#
 
 using Metal, LLVM
 
