@@ -161,6 +161,15 @@ end
 
 ############################################################################################
 
+@testset "complex" begin
+    a = rand(ComplexF32,4)
+    bufferA = MtlArray(a)
+    vecA = Array(sqrt.(bufferA))
+    @test vecA ≈ sqrt.(a)
+end
+
+############################################################################################
+
 @testset "synchronization" begin
     # host/device synchronization
     let
