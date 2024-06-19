@@ -6,8 +6,15 @@ function __init__()
     precompiling && return
 
     if !Sys.isapple()
-        @error("Metal.jl is only supported on macOS")
+        @error "Metal.jl is only supported on macOS"
         return
+    end
+
+    if macos_version() < v"13"
+        @error "Metal.jl requires macOS 13 or later"
+        return
+    elseif macos_version() >= v"16"
+        @warn "Metal.jl has not been tested on macOS 16 or later, you may run into issues."
     end
 
     # we use Python_jll, but don't actually want its environment to be active
