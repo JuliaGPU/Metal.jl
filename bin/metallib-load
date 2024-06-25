@@ -1,6 +1,7 @@
 #!/bin/sh
 #= Execute the script in the Metal package's environment
 DIR="$(dirname "$(cd "$(dirname "$0")" && pwd)")"
+[ -f "$DIR/Manifest.toml" ] || julia -e 'using Pkg; Pkg.activate(ARGS[1]); Pkg.instantiate()' $DIR
 exec julia --project="$DIR" "$0" "$@"
 =#
 
