@@ -75,8 +75,6 @@ function partial_scan(op::Function, output::AbstractArray{T}, input::AbstractArr
 end
 
 function aggregate_partial_scan(op::Function, output::AbstractArray, aggregates::AbstractArray, Rdim, Rpre, Rpost, Rother, init)
-    threads = threads_per_threadgroup_3d().x
-    thread = thread_position_in_threadgroup_3d().x
     block = threadgroup_position_in_grid_3d().x
 
     i = (threadgroup_position_in_grid_3d().x - Int32(1)) * threads_per_threadgroup_3d().x + thread_position_in_threadgroup_3d().x
