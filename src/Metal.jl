@@ -59,6 +59,7 @@ export MPS
 include("utilities.jl")
 include("broadcast.jl")
 include("mapreduce.jl")
+include("accumulate.jl")
 include("random.jl")
 include("gpuarrays.jl")
 
