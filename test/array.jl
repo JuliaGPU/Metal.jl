@@ -366,4 +366,10 @@ end
     @test all(marr2 .== 2)
 end
 
+@testset "ReshapedArray" begin
+    @test Array(sum(reshape(Metal.ones(3, 10)', (5, 3, 2)); dims=1)) == fill(5, (1,3,2))
+    @test Array(sum(reshape(PermutedDimsArray(reshape(mtl(collect(Float32, 1:30)), 5, 3, 2), (3, 1, 2)), (10, 3)); dims=1)) ==
+        sum(reshape(PermutedDimsArray(reshape(Float32.(1:30), 5, 3, 2), (3, 1, 2)), (10, 3)); dims=1)
+end
+
 end
