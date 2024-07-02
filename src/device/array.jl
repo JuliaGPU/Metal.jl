@@ -169,7 +169,7 @@ end
 # create a derived device array (reinterpreted or reshaped) that's still a MtlDeviceArray
 @inline function _derived_array(::Type{T}, N::Int, a::MtlDeviceArray{T,M,A},
                                 osize::Dims) where {T, M, A}
-  return MtlDeviceArray{T,N,A}(a.ptr, osize)
+  return MtlDeviceArray{T,N,A}(osize, a.ptr)
 end
 
 function Base.reinterpret(::Type{T}, a::MtlDeviceArray{S,N,A}) where {T,S,N,A}
@@ -177,13 +177,13 @@ function Base.reinterpret(::Type{T}, a::MtlDeviceArray{S,N,A}) where {T,S,N,A}
   err === nothing || throw(err)
 
   if sizeof(T) == sizeof(S) # fast case
-    return MtlDeviceArray{T,N,A}(reinterpret(LLVMPtr{T,A}, a.ptr), size(a))
+    return MtlDeviceArray{T,N,A}(size(a), reinterpret(LLVMPtr{T,A}, a.ptr))
   end
 
   isize = size(a)
   size1 = div(isize[1]*sizeof(S), sizeof(T))
   osize = tuple(size1, Base.tail(isize)...)
-  return MtlDeviceArray{T,N,A}(reinterpret(LLVMPtr{T,A}, a.ptr), osize)
+  return MtlDeviceArray{T,N,A}(osize, reinterpret(LLVMPtr{T,A}, a.ptr))
 end
 
 function Base.reshape(a::MtlDeviceArray{T,M}, dims::NTuple{N,Int}) where {T,N,M}
