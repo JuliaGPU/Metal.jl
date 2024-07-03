@@ -34,6 +34,13 @@ function check_eltype(T)
     contains_eltype(T, UInt128) && error("Metal does not support UInt128 values, try using UInt64 instead")
 end
 
+getstoragemodetag(::Type{MTL.Shared}) = MTL.MTLStorageModeShared
+getstoragemodetag(::Type{MTL.Managed}) = MTL.MTLStorageModeManaged
+getstoragemodetag(::Type{MTL.Private}) = MTL.MTLStorageModePrivate
+getstoragemodetag(::Type{MTL.Memoryless}) = MTL.MTLStorageModeMemoryless
+getstoragemodetag(buffer::MTLBuffer) = buffer.storageMode
+check_storagemode(S, data) = @assert getstoragemodetag(S) == getstoragemodetag(data[])
+
 """
     MtlArray{T,N,S} <: AbstractGPUArray{T,N}
 
@@ -77,6 +84,13 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
         finalizer(unsafe_free!, obj)
     end
 
+    function MtlArray{T,N,S}(data::DataRef{<:MTLBuffer}, dims::Dims{N};
+                             maxsize::Int=prod(dims) * sizeof(T), offset::Int=0) where {T,N,S}
+        check_eltype(T)
+        check_storagemode(S, data)
+        obj = new{T, N, S}(copy(data), maxsize, offset, dims)
+        finalizer(unsafe_free!, obj)
+    end
     function MtlArray{T,N}(data::DataRef{<:MTLBuffer}, dims::Dims{N};
                            maxsize::Int=prod(dims) * sizeof(T), offset::Int=0) where {T,N}
         check_eltype(T)
@@ -92,6 +106,7 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
         end
         finalizer(unsafe_free!, obj)
     end
+
 end
 
 # Create MtlArray from MTLBuffer
@@ -514,7 +529,7 @@ end
 
 function GPUArrays.derive(::Type{T}, a::MtlArray, dims::Dims{N}, offset::Int) where {T,N}
     offset = (a.offset * Base.elsize(a)) ÷ sizeof(T) + offset
-    MtlArray{T,N}(a.data, dims; a.maxsize, offset)
+    MtlArray{T,N,storagemode(a)}(a.data, dims; a.maxsize, offset)
 end
 
 
