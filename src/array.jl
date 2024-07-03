@@ -106,7 +106,6 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
         end
         finalizer(unsafe_free!, obj)
     end
-
 end
 
 # Create MtlArray from MTLBuffer
