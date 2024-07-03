@@ -34,13 +34,6 @@ function check_eltype(T)
     contains_eltype(T, UInt128) && error("Metal does not support UInt128 values, try using UInt64 instead")
 end
 
-getstoragemodetag(::Type{MTL.Shared}) = MTL.MTLStorageModeShared
-getstoragemodetag(::Type{MTL.Managed}) = MTL.MTLStorageModeManaged
-getstoragemodetag(::Type{MTL.Private}) = MTL.MTLStorageModePrivate
-getstoragemodetag(::Type{MTL.Memoryless}) = MTL.MTLStorageModeMemoryless
-getstoragemodetag(buffer::MTLBuffer) = buffer.storageMode
-check_storagemode(S, data) = @assert getstoragemodetag(S) == getstoragemodetag(data[])
-
 """
     MtlArray{T,N,S} <: AbstractGPUArray{T,N}
 
@@ -87,7 +80,10 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
     function MtlArray{T,N,S}(data::DataRef{<:MTLBuffer}, dims::Dims{N};
                              maxsize::Int=prod(dims) * sizeof(T), offset::Int=0) where {T,N,S}
         check_eltype(T)
-        check_storagemode(S, data)
+        storagemode = convert(MTL.MTLStorageMode, S)
+        if storagemode != data[].storageMode
+            error("Storage mode mismatch: expected $S, got $(data[].storageMode)")
+        end
         obj = new{T, N, S}(copy(data), maxsize, offset, dims)
         finalizer(unsafe_free!, obj)
     end
@@ -95,14 +91,14 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
                            maxsize::Int=prod(dims) * sizeof(T), offset::Int=0) where {T,N}
         check_eltype(T)
         storagemode = data[].storageMode
-        if storagemode == MTL.MTLStorageModeShared
-            obj = new{T,N,Shared}(copy(data), maxsize, offset, dims)
+        obj = if storagemode == MTL.MTLStorageModeShared
+            new{T,N,Shared}(copy(data), maxsize, offset, dims)
         elseif storagemode == MTL.MTLStorageModeManaged
-            obj = new{T,N,Managed}(copy(data), maxsize, offset, dims)
+            new{T,N,Managed}(copy(data), maxsize, offset, dims)
         elseif storagemode == MTL.MTLStorageModePrivate
-            obj = new{T,N,Private}(copy(data), maxsize, offset, dims)
+            new{T,N,Private}(copy(data), maxsize, offset, dims)
         elseif storagemode == MTL.MTLStorageModeMemoryless
-            obj = new{T,N,Memoryless}(copy(data), maxsize, offset, dims)
+            new{T,N,Memoryless}(copy(data), maxsize, offset, dims)
         end
         finalizer(unsafe_free!, obj)
     end
