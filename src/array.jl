@@ -77,18 +77,28 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
         finalizer(unsafe_free!, obj)
     end
 
+    function MtlArray{T,N,S}(data::DataRef{<:MTLBuffer}, dims::Dims{N};
+                             maxsize::Int=prod(dims) * sizeof(T), offset::Int=0) where {T,N,S}
+        check_eltype(T)
+        storagemode = convert(MTL.MTLStorageMode, S)
+        if storagemode != data[].storageMode
+            error("Storage mode mismatch: expected $S, got $(data[].storageMode)")
+        end
+        obj = new{T, N, S}(copy(data), maxsize, offset, dims)
+        finalizer(unsafe_free!, obj)
+    end
     function MtlArray{T,N}(data::DataRef{<:MTLBuffer}, dims::Dims{N};
                            maxsize::Int=prod(dims) * sizeof(T), offset::Int=0) where {T,N}
         check_eltype(T)
         storagemode = data[].storageMode
-        if storagemode == MTL.MTLStorageModeShared
-            obj = new{T,N,Shared}(copy(data), maxsize, offset, dims)
+        obj = if storagemode == MTL.MTLStorageModeShared
+            new{T,N,Shared}(copy(data), maxsize, offset, dims)
         elseif storagemode == MTL.MTLStorageModeManaged
-            obj = new{T,N,Managed}(copy(data), maxsize, offset, dims)
+            new{T,N,Managed}(copy(data), maxsize, offset, dims)
         elseif storagemode == MTL.MTLStorageModePrivate
-            obj = new{T,N,Private}(copy(data), maxsize, offset, dims)
+            new{T,N,Private}(copy(data), maxsize, offset, dims)
         elseif storagemode == MTL.MTLStorageModeMemoryless
-            obj = new{T,N,Memoryless}(copy(data), maxsize, offset, dims)
+            new{T,N,Memoryless}(copy(data), maxsize, offset, dims)
         end
         finalizer(unsafe_free!, obj)
     end
@@ -512,9 +522,9 @@ end
 
 ## derived arrays
 
-function GPUArrays.derive(::Type{T}, a::MtlArray, dims::Dims{N}, offset::Int) where {T,N}
+function GPUArrays.derive(::Type{T}, a::MtlArray{<:Any,<:Any,S}, dims::Dims{N}, offset::Int) where {T,N,S}
     offset = (a.offset * Base.elsize(a)) ÷ sizeof(T) + offset
-    MtlArray{T,N}(a.data, dims; a.maxsize, offset)
+    MtlArray{T,N,S}(a.data, dims; a.maxsize, offset)
 end
 
 
