@@ -527,9 +527,9 @@ end
 
 ## derived arrays
 
-function GPUArrays.derive(::Type{T}, a::MtlArray, dims::Dims{N}, offset::Int) where {T,N}
+function GPUArrays.derive(::Type{T}, a::MtlArray{<:Any,<:Any,S}, dims::Dims{N}, offset::Int) where {T,N,S}
     offset = (a.offset * Base.elsize(a)) ÷ sizeof(T) + offset
-    MtlArray{T,N,storagemode(a)}(a.data, dims; a.maxsize, offset)
+    MtlArray{T,N,S}(a.data, dims; a.maxsize, offset)
 end
 
 
