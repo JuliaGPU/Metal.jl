@@ -404,4 +404,18 @@ end
     @test testf(cumprod, rand(Float32, 2))
 end
 
+@testset "findall" begin
+    # 1D
+    @test testf(x->findall(x), rand(Bool, 1000))
+    @test testf(x->findall(y->y>Float32(0.5), x), rand(Float32,1000))
+
+    # ND
+    let x = rand(Bool, 1000, 1000)
+      @test findall(x) == Array(findall(MtlArray(x)))
+    end
+    let x = rand(Float32, 1000, 1000)
+      @test findall(y->y>Float32(0.5), x) == Array(findall(y->y>Float32(0.5), MtlArray(x)))
+    end
+end
+
 end

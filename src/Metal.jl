@@ -60,6 +60,7 @@ include("utilities.jl")
 include("broadcast.jl")
 include("mapreduce.jl")
 include("accumulate.jl")
+include("indexing.jl")
 include("random.jl")
 include("gpuarrays.jl")
 
