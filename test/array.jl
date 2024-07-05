@@ -407,14 +407,14 @@ end
 @testset "findall" begin
     # 1D
     @test testf(x->findall(x), rand(Bool, 100))
-    @test testf(x->findall(y->y>0.5, x), rand(100))
+    @test testf(x->findall(y->y>Float32(0.5), x), rand(Float32,100))
 
     # ND
     let x = rand(Bool, 10, 10)
       @test findall(x) == Array(findall(MtlArray(x)))
     end
-    let x = rand(10, 10)
-      @test findall(y->y>0.5, x) == Array(findall(y->y>0.5, MtlArray(x)))
+    let x = rand(Float32, 10, 10)
+      @test findall(y->y>Float32(0.5), x) == Array(findall(y->y>Float32(0.5), MtlArray(x)))
     end
 end
 
