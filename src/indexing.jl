@@ -2,6 +2,13 @@
 
 using Base.Cartesian
 
+
+## logical indexing
+
+# we cannot use Base.LogicalIndex, which does not support indexing but requires iteration.
+# TODO: it should still be possible to use the same technique;
+#       Base.LogicalIndex basically contains the same as our `findall` here does.
+
 Base.to_index(::MtlArray, I::AbstractArray{Bool}) = findall(I)
 if VERSION >= v"1.11.0-DEV.1157"
     Base.to_indices(A::MtlArray, I::Tuple{AbstractArray{Bool}}) = (Base.to_index(A, I[1]),)
@@ -10,6 +17,9 @@ else
                     I::Tuple{Union{Array{Bool,N}, BitArray{N}}}) where {N} =
         (Base.to_index(A, I[1]),)
 end
+
+
+## find*
 
 function Base.findall(bools::WrappedMtlArray{Bool})
     I = keytype(bools)
