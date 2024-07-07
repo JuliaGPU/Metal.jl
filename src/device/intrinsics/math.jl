@@ -384,3 +384,77 @@ else
         ifelse(abs(b.divisor) == 1, a*b.divisor, (signbit(x) + (x >> b.shift)) % Int64)
     end
 end
+
+# Original license copied below:
+#  Copyright (c) 2015-2023 Norbert Juffa
+#  All rights reserved.
+#
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions
+#  are met:
+#
+#  1. Redistributions of source code must retain the above copyright
+#     notice, this list of conditions and the following disclaimer.
+#
+#  2. Redistributions in binary form must reproduce the above copyright
+#     notice, this list of conditions and the following disclaimer in the
+#     documentation and/or other materials provided with the distribution.
+#
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+#  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+#  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+#  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+#  HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+#  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+#  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+#  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+#  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+#  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+function expm1f_scaled_unchecked(a::Float32, b::Float32)
+  # exp(a) = 2**i * exp(f); i = rintf (a / log(2))
+  j = fma(1.442695f0, a, 12582912.f0)
+  j = j - 12582912.0f0
+  i = reinterpret(Int32, j)
+  f = fma(j, -6.93145752f-1, a)
+
+  # approximate r = exp(f)-1 on interval [-log(2)/2, +log(2)/2]
+  s = f * f;
+  if a == 0.0f0
+    s = a # ensure -0 is passed through
+  end
+  # err = 0.997458  ulp1 = 11081805
+  r = 1.97350979f-4
+  r = fma(r, f, 1.39309070f-3)
+  r = fma(r, f, 8.33343994f-3)
+  r = fma(r, f, 4.16668020f-2)
+  r = fma(r, f, 1.66666716f-1)
+  r = fma(r, f, 4.99999970f-1)
+  u = (j == 1) ? (f + 0.5f0) : f
+  v = fma(r, s, u)
+  s = 0.5f0 * b
+  t = ldexp(s, i)
+  y = t - s
+  x = (t - y) - s # double-float canonicalization of difference
+  r = fma(v, t, x) + y
+  r = r + r
+  if j == 0
+    r = v
+  end
+
+  if j == 1
+    r = v + v
+  end
+
+  return r
+end
+
+@device_override function Base.expm1(a::Float32)
+  r = expm1f_scaled_unchecked(a, 1.0f0)
+  # handle severe overflow and underflow
+  if abs(a - 1.0f0 > 88.0f0)
+    r = fma(r, r, -1.0f0)
+  end
+  return r
+end
