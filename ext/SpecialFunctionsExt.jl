@@ -188,4 +188,41 @@ Metal.@device_override function SpecialFunctions.erfc(x::Float32)
     end
 end
 
+#
+#  Approximation to the error function.
+#  Based on code from:
+#  https://stackoverflow.com/questions/35148198/efficient-faithfully-rounded-implementation-of-error-function-erff#answer-35148199
+#
+
+Metal.@device_override function SpecialFunctions.erfinv(a::Float32)
+    t = fma(a, 0.0f0 - a, 1.0f0)
+    t = log(t)
+
+    if abs(t) > 6.125f0
+        p =  3.03697567f-10
+        p = fma(p, t, 2.93243101f-8)
+        p = fma(p, t, 1.22150334f-6)
+        p = fma(p, t, 2.84108955f-5)
+        p = fma(p, t, 3.93552968f-4)
+        p = fma(p, t, 3.02698812f-3)
+        p = fma(p, t, 4.83185798f-3)
+        p = fma(p, t, -2.64646143f-1)
+        p = fma(p, t, 8.40016484f-1)
+        return a * p
+    else
+        p = 5.43877832f-9
+        p = fma(p, t, 1.43285448f-7)
+        p = fma(p, t, 1.22774793f-6)
+        p = fma(p, t, 1.12963626f-7)
+        p = fma(p, t, -5.61530760f-5)
+        p = fma(p, t, -1.47697632f-4)
+        p = fma(p, t, 2.31468678f-3)
+        p = fma(p, t, 1.15392581f-2)
+        p = fma(p, t, -2.32015476f-1)
+        p = fma(p, t, 8.86226892f-1)
+        return a * p
+    end
+end
+
+
 end # module
