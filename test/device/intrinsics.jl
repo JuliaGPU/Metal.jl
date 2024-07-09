@@ -157,6 +157,12 @@ end
     bufferE = MtlArray(e)
     vecE = Array(SpecialFunctions.erfc.(bufferE))
     @test vecE ≈ SpecialFunctions.erfc.(e)
+
+
+    f = collect(LinRange(nextfloat(-0.1f0), 1f0, 20))
+    bufferF = MtlArray(f)
+    vecF = Array(expm1.(bufferF))
+    @test vecF ≈ expm1.(f)
 end
 
 ############################################################################################
