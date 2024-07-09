@@ -9,7 +9,7 @@ However, there is the special function `mtl` for transferring an array over to t
 mtl
 MtlArray
 MtlVector
-MtlMtrix
+MtlMatrix
 MtlVecOrMat
 ```
 
