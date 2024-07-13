@@ -14,10 +14,6 @@ using ExprTools: splitdef, combinedef
 using Artifacts
 using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
 
-if !isdefined(Base, :get_extension)
-    using Requires: @require
-end
-
 # core library
 include("../lib/mtl/MTL.jl")
 @reexport using .MTL
@@ -68,10 +64,6 @@ include("gpuarrays.jl")
 include("MetalKernels.jl")
 import .MetalKernels: MetalBackend
 export MetalBackend
-
-@static if !isdefined(Base, :get_extension)
-    include("../ext/BFloat16sExt.jl")
-end
 
 include("deprecated.jl")
 
