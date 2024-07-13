@@ -1,3 +1,5 @@
+using Metal.MTL
+
 @testset "MTL" begin
 @autoreleasepool begin
 

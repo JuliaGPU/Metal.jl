@@ -1,3 +1,4 @@
+using Metal.MTL
 @testset "capturing" begin
 mktempdir() do tmpdir
 cd(tmpdir) do

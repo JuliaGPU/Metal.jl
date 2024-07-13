@@ -1,3 +1,5 @@
+using Metal: macos_version, MTLCommandQueue
+
 dummy() = return
 
 @testset "@metal" begin

@@ -9,6 +9,7 @@ refer to the [official Apple documentation](https://developer.apple.com/document
 module MPS
 
 using ..Metal
+using Metal.MTL
 
 using CEnum
 using ObjectiveC, .Foundation

@@ -16,7 +16,8 @@ using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
 
 # core library
 include("../lib/mtl/MTL.jl")
-@reexport using .MTL
+using .MTL
+export MTL, Shared, Private, Managed
 
 # essential stuff
 include("state.jl")

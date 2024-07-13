@@ -1,4 +1,5 @@
 using SpecialFunctions
+using Metal: metal_support
 
 @testset "arguments" begin
     @on_device dispatch_quadgroups_per_threadgroup()

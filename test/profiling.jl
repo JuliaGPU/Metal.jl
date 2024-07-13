@@ -1,3 +1,4 @@
+using Metal: macos_version
 @testset "profiling" begin
 
 # determine if we can even run these tests

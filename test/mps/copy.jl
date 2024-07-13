@@ -18,7 +18,7 @@ function copytest(src, srctrans, dsttrans)
         cpcols,cprows = size(dst)
     end
 
-    cmdbuf = MTLCommandBuffer(queue) do cbuf
+    cmdbuf = MTL.MTLCommandBuffer(queue) do cbuf
         srcMPS = MPS.MPSMatrix(src)
         dstMPS = MPS.MPSMatrix(dst)
 
@@ -26,7 +26,7 @@ function copytest(src, srctrans, dsttrans)
         copykern = MPS.MPSMatrixCopy(dev, cprows, cpcols, srctrans, dsttrans)
         MPS.encode!(cbuf, copykern, copydesc)
     end
-    wait_completed(cmdbuf)
+    MTL.wait_completed(cmdbuf)
     return dst
 end
 
