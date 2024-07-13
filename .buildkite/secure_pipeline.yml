@@ -5,7 +5,7 @@ steps:
       BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET: ${BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET?}
     plugins:
       - JuliaCI/julia#v1:
-          version: 1.8
+          version: "1.10"
       - staticfloat/cryptic#v2:
           files:
             - ./docs/documenter.key
