@@ -23,6 +23,7 @@ is_supported(dev::MTLDevice) = ccall(:MPSSupportsMTLDevice, Bool, (id{MTLDevice}
 include("size.jl")
 
 # high-level wrappers
+export encode! # Defined in multiple files
 include("command_buf.jl")
 include("kernel.jl")
 include("images.jl")
