@@ -30,7 +30,7 @@ if you want to use it. PRs are very welcome!
 ## Requirements
 
 -  Mac device with M-series chip
--  Julia 1.8-1.10
+-  Julia 1.10-1.11
 -  macOS 13-15
 
 These requirements are fairly strict, and are due to our limited development
@@ -70,7 +70,7 @@ Toolchain:
 - Julia: 1.10.4
 - LLVM: 15.0.7
 
-Julia packages: 
+Julia packages:
 - Metal.jl: 1.2.0
 - LLVMDowngrader_jll: 0.3.0+1
 

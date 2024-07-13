@@ -180,15 +180,11 @@ function encode_wait!(cmdbuf::MTLCommandBuffer, ev::MTLEvent, val::Integer)
                                      value:val::UInt64]::Nothing
 end
 
-if VERSION >= v"1.9-"
-
-# on 1.9, we can just have Metal call back into Julia regardless of the thread it's on.
-# this means we can have Metal pass us the buffer, and don't need any additional capture.
-function _command_buffer_callback(f, _)
+function _command_buffer_callback(f)
     # convert the incoming pointer, and discard any return value
-    function g(_buf)
+    function wrapper(ptr)
         try
-            f(_buf == nil ? nothing : MTLCommandBuffer(_buf))
+            f(ptr == nil ? nothing : MTLCommandBuffer(ptr))
         catch err
             # we might be on an unmanaged thread here, so display the error
             # (otherwise it may get lost, or worse, crash Julia)
@@ -196,29 +192,7 @@ function _command_buffer_callback(f, _)
         end
         return
     end
-    @objcblock(g, Nothing, (id{MTLCommandBuffer},))
-end
-
-else
-
-# on 1.8 and earlier, we cannot have Metal call into Julia because it may happen from an
-# unmanaged thread. instead, we use uv_async_send to notify the libuv event loop, but
-# that doesn't take any arguments so we have to capture the buffer in the callback.
-# we also cannot return any values, but that isn't needed for these handlers.
-function _command_buffer_callback(f, cmdbuf)
-    cond = Base.AsyncCondition() do async_cond
-        try
-            f(cmdbuf)
-        catch err
-            # although we're on a managed thread here, so can just throw the error,
-            # let's report it similarly to how we do in the 1.9+ case.
-            @error "Command buffer callback encountered an error: " * sprint(showerror, err)
-        end
-        close(async_cond)
-    end
-    @objcasyncblock(cond)
-end
-
+    @objcblock(wrapper, Nothing, (id{MTLCommandBuffer},))
 end
 
 """
@@ -230,7 +204,7 @@ end
 Execute a block of code when execution of the command buffer is scheduled.
 """
 function on_scheduled(f::Base.Callable, cmdbuf::MTLCommandBuffer)
-    block = _command_buffer_callback(f, cmdbuf)
+    block = _command_buffer_callback(f)
     @objc [cmdbuf::id{MTLCommandBuffer} addScheduledHandler:block::id{NSBlock}]::Nothing
 end
 
@@ -243,6 +217,6 @@ end
 Execute a block of code when execution of the command buffer is completed.
 """
 function on_completed(f::Base.Callable, cmdbuf::MTLCommandBuffer)
-    block = _command_buffer_callback(f, cmdbuf)
+    block = _command_buffer_callback(f)
     @objc [cmdbuf::id{MTLCommandBuffer} addCompletedHandler:block::id{NSBlock}]::Nothing
 end
