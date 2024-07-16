@@ -101,23 +101,36 @@ function extract_gpu_code(f, binary)
     end
     arch == nothing && error("Could not find GPU architecture in universal binary")
 
-    # the GPU binary contains several sections (metallib, descriptor, reflection, compute?,
-    # fragment?, vertex?); extract the compute section, which is another Mach-O binary
+    # the GPU binary contains several sections...
+    ## ... extract the compute section, which is another Mach-O binary
     compute_section = findfirst(Sections(fat_handle[arch]), "__TEXT,__compute")
     compute_section === nothing && error("Could not find __compute section in GPU binary")
     compute_binary = read(compute_section)
     native_handle = only(readmeta(IOBuffer(compute_binary)))
+    ## ... extract the metallib section, which is a Metal library
+    metallib_section = findfirst(Sections(fat_handle[arch]), "__TEXT,__metallib")
+    metallib_section === nothing && error("Could not find __metallib section in GPU binary")
+    metallib_binary = read(metallib_section)
+    metallib = read(IOBuffer(metallib_binary), Metal.MetalLib)
+    # TODO: use this to implement a do-block device_code_air like CUDA.jl?
 
-    # the start of the section should also alias with a symbol in the universal binary,
-    # which we can use to identify the name of the kernel
-    compute_symbol = nothing
-    for symbol in Symbols(fat_handle[arch])
-        symbol_value(symbol) == section_offset(compute_section) || continue
-        endswith(symbol_name(symbol), "_begin") || continue
-        compute_symbol = symbol
+    # identify the kernel name
+    kernel_name = "unknown_kernel"
+    # XXX: does it happen that these metallibs contain multiple functions?
+    if length(metallib.functions) == 1
+        kernel_name = metallib.functions[1].name
     end
-    compute_symbol === nothing && error("Could not find symbol for __compute section")
-    kernel_name = symbol_name(compute_symbol)[1:end-6]
+    # XXX: we used to be able to identify the kernel by looking at symbols in
+    #      the fat binary, one of which aliased with the start of the compute
+    #      section. these symbols have disappeared on macOS 15.
+    #compute_symbol = nothing
+    #for symbol in Symbols(fat_handle[arch])
+    #    symbol_value(symbol) == section_offset(compute_section) || continue
+    #    endswith(symbol_name(symbol), "_begin") || continue
+    #    compute_symbol = symbol
+    #end
+    #compute_symbol === nothing && error("Could not find symbol for __compute section")
+    #kernel_name = symbol_name(compute_symbol)[1:end-6]
 
     # within the native GPU binary, isolate the section containing code
     section = findfirst(Sections(native_handle), "__TEXT,__text")

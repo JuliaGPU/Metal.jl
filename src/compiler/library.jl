@@ -272,6 +272,11 @@ tag_value_io["RLST"] = (
     @NamedTuple{offset::UInt64, size::UInt64},
     (io, _)   -> (; offset=read(io, UInt64), size=read(io, UInt64)),
     (io, val) -> write(io, UInt64[val.offset, val.size]))
+tag_value_io["SLST"] = (
+    # Offset and size of the script list section; 2 x 64-bit unsigned integers
+    @NamedTuple{offset::UInt64, size::UInt64},
+    (io, _)   -> (; offset=read(io, UInt64), size=read(io, UInt64)),
+    (io, val) -> write(io, UInt64[val.offset, val.size]))
 tag_value_io["UUID"] = (
     # UUID of the module; 16 bytes
     UUID,
@@ -393,7 +398,16 @@ tag_value_io["SARC"] = (
 tag_value_io["RBUF"] = (
     # Reflection buffer
     Vector{UInt8},
-    (io, nb)  -> begin
+    (io, nb) -> begin
+        read(io, nb)
+    end,
+    (io, val) -> write(io, val))
+## script lists
+tag_value_io["SBUF"] = (
+    # Script buffer
+    Vector{UInt8},
+    (io, nb) -> begin
+        # XXX: these are probably flatbuffers; decode here?
         read(io, nb)
     end,
     (io, val) -> write(io, val))
@@ -420,9 +434,9 @@ function Base.read!(io::IO, tg::TagGroup)
         value_size = read(io, tg.size_type)
         tg.offsets[tag_name] = position(io)
 
-        # XXX: there's a 2 byte mismatch between the reflection list size, and the
-        #      next token... bug in air-lld?
-        if tag_name == "RBUF"
+        # XXX: there's a 2 byte mismatch between the buffers in list, and
+        #      the next token. bug in air-lld, or are we missing something?
+        if tag_name in ["RBUF", "SBUF"]
             value_size += 2
         end
 
@@ -469,9 +483,9 @@ function Base.write(io::IO, tg::TagGroup)
             end
             value_size = sizeof(value_bytes)
 
-            # XXX: there's a 2 byte mismatch between the reflection list size, and the
-            #      next token... bug in air-lld?
-            if tag == "RBUF"
+            # XXX: there's a 2 byte mismatch between the buffers in list, and
+            #      the next token. bug in air-lld, or are we missing something?
+            if tag in ["RBUF", "SBUF"]
                 value_size -= 2
             end
 
@@ -646,6 +660,22 @@ function Base.read(io::IO, ::Type{MetalLib})
             reflection_data[function_idx] = reflection_buf["RBUF"]
         end
         @assert position(io) == header_ex["RLST"].offset + header_ex["RLST"].size
+    end
+
+    # script list
+    #
+    # this section contains pipeline descriptor scripts
+    if header_ex !== nothing && haskey(header_ex, "SLST")
+        seek(io, header_ex["SLST"].offset)
+        script_count = read(io, UInt32)
+        for i in 1:script_count
+            script_buf = read!(io, TagGroup())
+
+            # script_buf["SBUF"] contains flatbuffer data; compare with:
+            # $ metal-source -flatbuffers=binary
+            # $ metal-source -flatbuffers=json
+        end
+        @assert position(io) == header_ex["SLST"].offset + header_ex["SLST"].size
     end
 
     # embedded source
