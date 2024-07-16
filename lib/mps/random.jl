@@ -23,10 +23,10 @@ function RNG(device::MTLDevice, seed::Integer)
         MPSMatrixRandomPhilox(device, Float32, seed, MPSMatrixRandomUniformDistributionDescriptor(0, 1)),
         MPSMatrixRandomPhilox(device, Float32, seed, MPSMatrixRandomNormalDistributionDescriptor(0, 1)),)
 end
-@autoreleasepool RNG(seed::Integer) = RNG(current_device(), seed)
+@autoreleasepool RNG(seed::Integer) = RNG(device(), seed)
 RNG(device::MTLDevice) = RNG(device, make_seed())
 
-@autoreleasepool RNG() = RNG(current_device(), make_seed())
+@autoreleasepool RNG() = RNG(device(), make_seed())
 
 Base.copy(rng::RNG) = RNG(copy(rng.device), copy(rng.uniformInteger), copy(rng.uniformFloat32), copy(rng.normalFloat32))
 
@@ -41,7 +41,7 @@ Random.seed!(rng::RNG) = Random.seed!(rng, make_seed())
 
 const GLOBAL_RNGs = Dict{MTLDevice,MPS.RNG}()
 @autoreleasepool function default_rng()
-    dev = current_device()
+    dev = device()
     get!(GLOBAL_RNGs, dev) do
         RNG(dev)
     end
