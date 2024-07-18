@@ -14,6 +14,8 @@ using ExprTools: splitdef, combinedef
 using Artifacts
 using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
 
+include("version.jl")
+
 # core library
 include("../lib/mtl/MTL.jl")
 using .MTL

@@ -1,6 +1,6 @@
 # version and support queries
 
-export darwin_version, macos_version, metallib_support, air_support, metal_support
+export macos_version
 
 @noinline function _syscall_version(name)
     size = Ref{Csize_t}()
@@ -18,6 +18,13 @@ export darwin_version, macos_version, metallib_support, air_support, metal_suppo
 end
 
 const _darwin_version = Ref{VersionNumber}()
+"""
+    Metal.darwin_version() -> VersionNumber
+
+Returns the host Darwin kernel version.
+
+See also [`macos_version`](@ref).
+"""
 function darwin_version()
     if !isassigned(_darwin_version)
         _darwin_version[] = _syscall_version("kern.osrelease")
@@ -26,6 +33,13 @@ function darwin_version()
 end
 
 const _macos_version = Ref{VersionNumber}()
+"""
+    macos_version() -> VersionNumber
+
+Returns the host macOS version.
+
+See also [`Metal.darwin_version`](@ref).
+"""
 function macos_version()
     if !isassigned(_macos_version)
         _macos_version[] = _syscall_version("kern.osproductversion")
@@ -46,7 +60,13 @@ end
 # - metal support: last 2 bytes of the VERS tag in the function list,
 #                  or air.language_version in the embedded bitcode
 
-# support for the metallib file format
+"""
+    Metal.metallib_support() -> VersionNumber
+
+Returns the highest supported version for the metallib file format.
+
+See also [`Metal.air_support`](@ref) and [`Metal.metal_support`](@ref).
+"""
 function metallib_support()
     macos = macos_version()
     if macos >= v"15"
@@ -68,7 +88,13 @@ function metallib_support()
     end
 end
 
-# support for the embedded AIR bitcode format
+"""
+    Metal.air_support() -> VersionNumber
+
+Returns the highest supported version for the embedded AIR bitcode format.
+
+See also [`Metal.metallib_support`](@ref) and [`Metal.metal_support`](@ref).
+"""
 function air_support()
     macos = macos_version()
     if macos >= v"15"
@@ -92,7 +118,13 @@ function air_support()
     end
 end
 
-# support for the Metal language
+"""
+    Metal.metal_support() -> VersionNumber
+
+Returns the highest supported version for the Metal Shading Language.
+
+See also [`Metal.metallib_support`](@ref) and [`Metal.air_support`](@ref).
+"""
 function metal_support()
     macos = macos_version()
     if macos >= v"15"

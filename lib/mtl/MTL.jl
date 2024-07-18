@@ -11,6 +11,8 @@ module MTL
 using CEnum
 using ObjectiveC, .Foundation, .Dispatch
 
+using ..Metal
+
 # Metal APIs generally expect to be running under an autorelease pool.
 # In most cases, we handle this in the code calling into the MTL module,
 # however, finalizers are out of the caller's control, so we need to
@@ -20,7 +22,6 @@ release(obj) = @autoreleasepool unsafe=true Foundation.release(obj)
 
 ## source code includes
 
-include("version.jl")
 include("size.jl")
 include("device.jl")
 include("resource.jl")

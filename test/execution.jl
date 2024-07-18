@@ -1,4 +1,3 @@
-using Metal: macos_version, MTLCommandQueue
 
 dummy() = return
 
@@ -143,7 +142,7 @@ end
     vecA .= 0
 
     dev = device()
-    queue = MTLCommandQueue(dev)
+    queue = MTL.MTLCommandQueue(dev)
     @metal threads=(3) queue=queue tester(bufferA)
     synchronize(queue)
     @test all(vecA == Int.([5, 5, 5, 0, 0, 0, 0, 0]))
