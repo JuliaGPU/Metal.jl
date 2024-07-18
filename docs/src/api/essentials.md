@@ -2,7 +2,7 @@
 
 ## Versions and Support
 ```@docs
-macos_version
+Metal.macos_version
 Metal.darwin_version
 Metal.metal_support
 Metal.metallib_support

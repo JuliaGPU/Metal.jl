@@ -1,7 +1,5 @@
 # version and support queries
 
-export macos_version
-
 @noinline function _syscall_version(name)
     size = Ref{Csize_t}()
     err = @ccall sysctlbyname(name::Cstring, C_NULL::Ptr{Cvoid}, size::Ptr{Csize_t},
@@ -23,7 +21,7 @@ const _darwin_version = Ref{VersionNumber}()
 
 Returns the host Darwin kernel version.
 
-See also [`macos_version`](@ref).
+See also [`Metal.macos_version`](@ref).
 """
 function darwin_version()
     if !isassigned(_darwin_version)
@@ -34,7 +32,7 @@ end
 
 const _macos_version = Ref{VersionNumber}()
 """
-    macos_version() -> VersionNumber
+    Metal.macos_version() -> VersionNumber
 
 Returns the host macOS version.
 

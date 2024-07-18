@@ -23,7 +23,7 @@ end
 
 function MTLLibraryFromFile(dev::MTLDevice, path::String)
     err = Ref{id{NSError}}(nil)
-    handle = if macos_version() >= v"13"
+    handle = if Metal.macos_version() >= v"13"
         url = NSFileURL(path)
         @objc [dev::id{MTLDevice} newLibraryWithURL:url::id{NSURL}
                                      error:err::Ptr{id{NSError}}]::id{MTLLibrary}
