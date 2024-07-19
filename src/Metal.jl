@@ -19,7 +19,7 @@ include("version.jl")
 # core library
 include("../lib/mtl/MTL.jl")
 using .MTL
-export MTL, Shared, Private, Managed
+export MTL
 
 # essential stuff
 include("state.jl")
