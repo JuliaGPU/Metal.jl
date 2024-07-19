@@ -4,11 +4,11 @@ using LLVM
 
 # for some reason, the environment shenanigans done by the scripts only work when
 # invoked from the Metal.jl CI, and not from GPUArrays.jl' reverse CI
-# if get(ENV, "BUILDKITE_PIPELINE_NAME", "") != "Metal.jl"
+if get(ENV, "BUILDKITE_PIPELINE_NAME", "") != "Metal.jl"
 
-# @warn "Skipping script tests"
+@warn "Skipping script tests"
 
-# else
+else
 
 mktempdir() do dir
     metallib_as = joinpath(dirname(@__DIR__), "bin", "metallib-as")
@@ -50,4 +50,4 @@ end
 
 end
 
-# end
+end
