@@ -106,7 +106,7 @@ end
 @testset "math" begin
     a = ones(Float32,1)
     a .* Float32(3.14)
-    bufferA = MtlArray{eltype(a),length(size(a)),Shared}(a)
+    bufferA = MtlArray{eltype(a),length(size(a)),Metal.SharedStorage}(a)
     vecA = unsafe_wrap(Vector{Float32}, pointer(bufferA), 1)
 
     function intr_test(arr)
@@ -126,7 +126,7 @@ end
     @metal intr_test2(bufferA)
     synchronize()
 
-    bufferB = MtlArray{eltype(a),length(size(a)),Shared}(a)
+    bufferB = MtlArray{eltype(a),length(size(a)),Metal.SharedStorage}(a)
     vecB = unsafe_wrap(Vector{Float32}, pointer(bufferB), 1)
 
     function intr_test3(arr_sin, arr_cos)
@@ -189,7 +189,7 @@ end
             @inbounds buf[idx] += 1
             return nothing
         end
-        buf = Metal.zeros(Int, 1024; storage=Shared)
+        buf = Metal.zeros(Int, 1024; storage=Metal.SharedStorage)
         vec = unsafe_wrap(Vector{Int}, pointer(buf), size(buf))
         @metal threads=length(buf) sync_test_kernel(buf)
         synchronize()
@@ -333,8 +333,8 @@ end
         return
     end
 
-    dev_a = Metal.zeros(typ, 32; storage=Shared)
-    dev_b = Metal.zeros(typ, 32; storage=Shared)
+    dev_a = Metal.zeros(typ, 32; storage=Metal.SharedStorage)
+    dev_b = Metal.zeros(typ, 32; storage=Metal.SharedStorage)
     a = unsafe_wrap(Array{typ}, dev_a, 32)
     b = unsafe_wrap(Array{typ}, dev_b, 32)
 

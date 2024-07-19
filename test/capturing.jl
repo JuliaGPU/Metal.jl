@@ -58,7 +58,7 @@ manager.defaultCaptureScope = new_scope
 @test manager.defaultCaptureScope == new_scope
 
 # Capturing
-bufferA = MtlArray{Float32,1,Shared}(undef, tuple(4))
+bufferA = MtlArray{Float32,1,SharedStorage}(undef, tuple(4))
 
 @test !isdir(path)
 @test manager.isCapturing == false

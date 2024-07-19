@@ -54,8 +54,8 @@ steps:
         matrix:
           setup:
             storage:
-              - "Shared"
-              - "Managed"
+              - "SharedStorage"
+              - "ManagedStorage"
         commands: |
           echo -e "[Metal]\ndefault_storage = \"{{matrix.storage}}\"" >LocalPreferences.toml
       - label: "API validation"

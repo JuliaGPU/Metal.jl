@@ -1,64 +1,64 @@
-export Shared, Managed, Private, CPUStorage
+export SharedStorage, ManagedStorage, PrivateStorage, CPUStorage
 export ReadUsage, WriteUsage, ReadWriteUsage
 
 # Metal Has 4 storage types
-# Shared  -> Buffer in Host memory, accessed by the GPU. Requires no sync
-# Managed -> Mirrored memory buffers in host and GPU. Requires syncing
-# Private -> Memory in Device, not accessible by Host.
+# SharedStorage  -> Buffer in Host memory, accessed by the GPU. Requires no sync
+# ManagedStorage -> Mirrored memory buffers in host and GPU. Requires syncing
+# PrivateStorage -> Memory in Device, not accessible by Host.
 # Memoryless -> iOS stuff. ignore it
 
 abstract type StorageMode end
 
 """
-    struct Shared <: Metal.StorageMode
+    struct SharedStorage <: Metal.StorageMode
 
 Used to indicate that the resource is stored using `MTLStorageModeShared` in memory.
 
 For more information on Metal storage modes, refer to the official Metal documentation.
 
-See also [`Metal.Private`](@ref) and [`Metal.Managed`](@ref).
+See also [`Metal.PrivateStorage`](@ref) and [`Metal.ManagedStorage`](@ref).
 """
-struct Shared      <: StorageMode end
+struct SharedStorage      <: StorageMode end
 
 """
-    struct Managed <: Metal.StorageMode
+    struct ManagedStorage <: Metal.StorageMode
 
 Used to indicate that the resource is stored using `MTLStorageModeManaged` in memory.
 
 For more information on Metal storage modes, refer to the official Metal documentation.
 
-See also [`Metal.Shared`](@ref) and [`Metal.Private`](@ref).
+See also [`Metal.SharedStorage`](@ref) and [`Metal.PrivateStorage`](@ref).
 """
-struct Managed     <: StorageMode end
+struct ManagedStorage     <: StorageMode end
 
 """
-    struct Private <: Metal.StorageMode
+    struct PrivateStorage <: Metal.StorageMode
 
 Used to indicate that the resource is stored using `MTLStorageModePrivate` in memory.
 
 For more information on Metal storage modes, refer to the official Metal documentation.
 
-See also [`Metal.Shared`](@ref) and [`Metal.Managed`](@ref).
+See also [`Metal.SharedStorage`](@ref) and [`Metal.ManagedStorage`](@ref).
 """
-struct Private     <: StorageMode end
+struct PrivateStorage     <: StorageMode end
 struct Memoryless  <: StorageMode end
 
 """
     CPUStorage
 
-Union type of [`Metal.Shared`](@ref) and [`Metal.Managed`](@ref) storage modes.
+Union type of [`Metal.SharedStorage`](@ref) and [`Metal.ManagedStorage`](@ref) storage modes.
 
 Represents storage modes where the resource is accessible via the CPU.
 """
-const CPUStorage = Union{Shared,Managed}
-Base.convert(::Type{MTLStorageMode}, ::Type{Shared})     = MTLStorageModeShared
-Base.convert(::Type{MTLStorageMode}, ::Type{Managed})    = MTLStorageModeManaged
-Base.convert(::Type{MTLStorageMode}, ::Type{Private})    = MTLStorageModePrivate
+const CPUStorage = Union{SharedStorage,ManagedStorage}
+Base.convert(::Type{MTLStorageMode}, ::Type{SharedStorage})     = MTLStorageModeShared
+Base.convert(::Type{MTLStorageMode}, ::Type{ManagedStorage})    = MTLStorageModeManaged
+Base.convert(::Type{MTLStorageMode}, ::Type{PrivateStorage})    = MTLStorageModePrivate
 Base.convert(::Type{MTLStorageMode}, ::Type{Memoryless}) = MTLStorageModeMemoryless
 
-Base.convert(::Type{MTLResourceOptions}, ::Type{Shared})     = MTLResourceStorageModeShared
-Base.convert(::Type{MTLResourceOptions}, ::Type{Managed})    = MTLResourceStorageModeManaged
-Base.convert(::Type{MTLResourceOptions}, ::Type{Private})    = MTLResourceStorageModePrivate
+Base.convert(::Type{MTLResourceOptions}, ::Type{SharedStorage})     = MTLResourceStorageModeShared
+Base.convert(::Type{MTLResourceOptions}, ::Type{ManagedStorage})    = MTLResourceStorageModeManaged
+Base.convert(::Type{MTLResourceOptions}, ::Type{PrivateStorage})    = MTLResourceStorageModePrivate
 Base.convert(::Type{MTLResourceOptions}, ::Type{Memoryless}) = MTLResourceStorageModeMemoryless
 
 Base.convert(::Type{MTLResourceOptions}, SM::MTLStorageMode)     = MTLResourceOptions(UInt(SM) << 4)

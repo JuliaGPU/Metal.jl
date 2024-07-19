@@ -39,7 +39,7 @@ end
 
 `N`-dimensional Metal array with storage mode `S` and elements of type `T`.
 
-`S` can be `Private` (default), `Shared`, or `Managed`.
+`S` can be `Metal.PrivateStorage` (default), `Metal.SharedStorage`, or `Metal.ManagedStorage`.
 
 See the Array Programming section of the Metal.jl docs for more details.
 """
@@ -92,11 +92,11 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
         check_eltype(T)
         storagemode = data[].storageMode
         obj = if storagemode == MTL.MTLStorageModeShared
-            new{T,N,Shared}(copy(data), maxsize, offset, dims)
+            new{T,N,SharedStorage}(copy(data), maxsize, offset, dims)
         elseif storagemode == MTL.MTLStorageModeManaged
-            new{T,N,Managed}(copy(data), maxsize, offset, dims)
+            new{T,N,ManagedStorage}(copy(data), maxsize, offset, dims)
         elseif storagemode == MTL.MTLStorageModePrivate
-            new{T,N,Private}(copy(data), maxsize, offset, dims)
+            new{T,N,PrivateStorage}(copy(data), maxsize, offset, dims)
         elseif storagemode == MTL.MTLStorageModeMemoryless
             new{T,N,Memoryless}(copy(data), maxsize, offset, dims)
         end
@@ -127,29 +127,29 @@ storagemode(::Type{<:MtlArray{<:Any,<:Any,S}}) where {S} = S
 """
     is_shared(A::MtlArray) -> Bool
 
-Returns true if `A` has storage mode [`Shared`](@ref).
+Returns true if `A` has storage mode [`Metal.SharedStorage`](@ref).
 
 See also [`is_private`](@ref) and [`is_managed`](@ref).
 """
-is_shared(A::MtlArray) = storagemode(A) == Shared
+is_shared(A::MtlArray) = storagemode(A) == SharedStorage
 
 """
     is_managed(A::MtlArray) -> Bool
 
-Returns true if `A` has storage mode [`Managed`](@ref).
+Returns true if `A` has storage mode [`Metal.ManagedStorage`](@ref).
 
 See also [`is_shared`](@ref) and [`is_private`](@ref).
 """
-is_managed(A::MtlArray) = storagemode(A) == Managed
+is_managed(A::MtlArray) = storagemode(A) == ManagedStorage
 
 """
     is_private(A::MtlArray) -> Bool
 
-Returns true if `A` has storage mode [`Private`](@ref).
+Returns true if `A` has storage mode [`Metal.PrivateStorage`](@ref).
 
 See also [`is_shared`](@ref) and [`is_managed`](@ref).
 """
-is_private(A::MtlArray) = storagemode(A) == Private
+is_private(A::MtlArray) = storagemode(A) == PrivateStorage
 
 is_memoryless(A::MtlArray) = storagemode(A) == Memoryless
 
@@ -185,13 +185,13 @@ See also `VecOrMat`(@ref) for examples.
 const MtlVecOrMat{T,S} = Union{MtlVector{T,S},MtlMatrix{T,S}}
 
 # default to private memory
-const DefaultStorageMode = let str = @load_preference("default_storage", "Private")
-    if str == "Private"
-        Private
-    elseif str == "Shared"
-        Shared
-    elseif str == "Managed"
-        Managed
+const DefaultStorageMode = let str = @load_preference("default_storage", "PrivateStorage")
+    if str == "PrivateStorage"
+        PrivateStorage
+    elseif str == "SharedStorage"
+        SharedStorage
+    elseif str == "ManagedStorage"
+        ManagedStorage
     else
         error("unknown default storage mode: $default_storage")
     end
@@ -242,10 +242,10 @@ Base.elsize(::Type{<:MtlArray{T}}) where {T} = sizeof(T)
 Base.size(x::MtlArray) = x.dims
 Base.sizeof(x::MtlArray) = Base.elsize(x) * length(x)
 
-@inline function Base.pointer(x::MtlArray{T}, i::Integer=1; storage=Private) where {T}
-    PT = if storage == Private
+@inline function Base.pointer(x::MtlArray{T}, i::Integer=1; storage=PrivateStorage) where {T}
+    PT = if storage == PrivateStorage
         MtlPtr{T}
-    elseif storage == Shared || storage == Managed
+    elseif storage == SharedStorage || storage == ManagedStorage
         Ptr{T}
     else
         error("unknown memory type")
@@ -270,12 +270,12 @@ end
 
 
 ## indexing
-function Base.getindex(x::MtlArray{T,N,S}, I::Int) where {T,N,S<:Union{Shared,Managed}}
+function Base.getindex(x::MtlArray{T,N,S}, I::Int) where {T,N,S<:Union{SharedStorage,ManagedStorage}}
     @boundscheck checkbounds(x, I)
     unsafe_load(pointer(x, I; storage=S))
 end
 
-function Base.setindex!(x::MtlArray{T,N,S}, v, I::Int) where {T,N,S<:Union{Shared,Managed}}
+function Base.setindex!(x::MtlArray{T,N,S}, v, I::Int) where {T,N,S<:Union{SharedStorage,ManagedStorage}}
     @boundscheck checkbounds(x, I)
     unsafe_store!(pointer(x, I; storage=S), v)
 end
@@ -462,9 +462,9 @@ Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Comp
     isbits(xs) ? xs : MtlArray{ComplexF32,N,S}(xs)
 
 """
-    mtl(A; storage=Private)
+    mtl(A; storage=Metal.PrivateStorage)
 
-`storage` can be `Private` (default) or `Shared`.
+`storage` can be `Metal.PrivateStorage` (default), `Metal.SharedStorage`, or `Metal.ManagedStorage`.
 
 Opinionated GPU array adaptor, which may alter the element type `T` of arrays:
 * For `T<:AbstractFloat`, it makes a `MtlArray{Float32}` for performance and compatibility
@@ -480,18 +480,18 @@ Uses Adapt.jl to act inside some wrapper structs.
 
 ```jldoctests
 julia> mtl(ones(3)')
-1×3 adjoint(::MtlVector{Float32, Private}) with eltype Float32:
+1×3 adjoint(::MtlVector{Float32, Metal.MTL.PrivateStorage}) with eltype Float32:
  1.0  1.0  1.0
 
-julia> mtl(zeros(1,3); storage=Shared)
-1×3 MtlMatrix{Float32, Shared}:
+julia> mtl(zeros(1,3); storage=Metal.SharedStorage)
+1×3 MtlMatrix{Float32, Metal.MTL.SharedStorage}:
  0.0  0.0  0.0
 
 julia> mtl(1:3)
 1:3
 
 julia> MtlArray(1:3)
-3-element MtlVector{Int64, Private}:
+3-element MtlVector{Int64, Metal.MTL.PrivateStorage}:
  1
  2
  3
