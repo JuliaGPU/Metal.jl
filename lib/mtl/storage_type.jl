@@ -43,6 +43,11 @@ See also [`Metal.SharedStorage`](@ref) and [`Metal.ManagedStorage`](@ref).
 struct PrivateStorage     <: StorageMode end
 struct Memoryless  <: StorageMode end
 
+# Remove the ".MTL" when printing
+Base.show(io::IO, ::Type{<:PrivateStorage}) = print(io, "Metal.PrivateStorage")
+Base.show(io::IO, ::Type{<:SharedStorage}) = print(io, "Metal.SharedStorage")
+Base.show(io::IO, ::Type{<:ManagedStorage}) = print(io, "Metal.ManagedStorage")
+
 """
     CPUStorage
 

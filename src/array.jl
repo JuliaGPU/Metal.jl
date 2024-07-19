@@ -480,18 +480,18 @@ Uses Adapt.jl to act inside some wrapper structs.
 
 ```jldoctests
 julia> mtl(ones(3)')
-1×3 adjoint(::MtlVector{Float32, Metal.MTL.PrivateStorage}) with eltype Float32:
+1×3 adjoint(::MtlVector{Float32, Metal.PrivateStorage}) with eltype Float32:
  1.0  1.0  1.0
 
 julia> mtl(zeros(1,3); storage=Metal.SharedStorage)
-1×3 MtlMatrix{Float32, Metal.MTL.SharedStorage}:
+1×3 MtlMatrix{Float32, Metal.SharedStorage}:
  0.0  0.0  0.0
 
 julia> mtl(1:3)
 1:3
 
 julia> MtlArray(1:3)
-3-element MtlVector{Int64, Metal.MTL.PrivateStorage}:
+3-element MtlVector{Int64, Metal.PrivateStorage}:
  1
  2
  3
