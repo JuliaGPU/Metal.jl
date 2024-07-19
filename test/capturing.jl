@@ -1,6 +1,6 @@
-@testset "capturing" begin
-
 using .MTL
+
+@testset "capturing" begin
 
 mktempdir() do tmpdir
 cd(tmpdir) do
