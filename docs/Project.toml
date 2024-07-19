@@ -2,3 +2,7 @@
 Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
+
+[compat]
+Documenter = "1"
+Literate = "2"

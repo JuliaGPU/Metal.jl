@@ -21,7 +21,7 @@ function main()
             analytics = "", # TODO
         ),
         doctest = true,
-        #strict = true,
+        warnonly = true,
         modules = [Metal],
         pages = Any[
             "Home" => "index.md",
