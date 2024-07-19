@@ -5,7 +5,7 @@ DIR="$(dirname "$(cd "$(dirname "$0")" && pwd)")"
 exec julia --project="$DIR" "$0" "$@"
 =#
 
-using Metal
+using Metal, .MTL
 
 function main(args)
     # parse arguments
