@@ -167,7 +167,7 @@ end
 
 ## matrix multiplication
 
-export MPSMatrixMultiplication, matmul!
+export MPSMatrixMultiplication, encode!, matmul!
 
 @objcwrapper immutable=false MPSMatrixMultiplication <: MPSKernel
 
@@ -242,7 +242,7 @@ end
 
 ## topk
 
-export MPSMatrixFindTopK, topk, topk!
+export MPSMatrixFindTopK, encode!, topk, topk!
 
 @objcwrapper immutable=false MPSMatrixFindTopK <: MPSMatrixUnaryKernel
 
@@ -332,6 +332,8 @@ end
 
 
 ## softmax
+
+export MPSMatrixSoftMax, MPSMatrixLogSoftMax, encode!
 
 @objcwrapper immutable=false MPSMatrixSoftMax <: MPSMatrixUnaryKernel
 @objcwrapper immutable=false MPSMatrixLogSoftMax <: MPSMatrixSoftMax
