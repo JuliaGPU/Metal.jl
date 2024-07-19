@@ -1,27 +1,5 @@
 using LinearAlgebra
-using LinearAlgebra: MulAddMul
-
-if isdefined(LinearAlgebra, :wrap) # i.e., VERSION >= v"1.10.0-DEV.1365"
-    using LinearAlgebra: wrap
-else
-    function wrap(A::AbstractVecOrMat, tA::AbstractChar)
-        if tA == 'N'
-            return A
-        elseif tA == 'T'
-            return transpose(A)
-        elseif tA == 'C'
-            return adjoint(A)
-        elseif tA == 'H'
-            return Hermitian(A, :U)
-        elseif tA == 'h'
-            return Hermitian(A, :L)
-        elseif tA == 'S'
-            return Symmetric(A, :U)
-        else # tA == 's'
-            return Symmetric(A, :L)
-        end
-    end
-end
+using LinearAlgebra: MulAddMul, wrap
 
 # Valid combination of input (A and B matrices) and output (C) types
 const MPS_VALID_MATMUL_TYPES =
@@ -69,33 +47,6 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     end
 end
 
-if VERSION < v"1.10.0-DEV.1365"
-# catch other functions that are called by LinearAlgebra's mul!
-LinearAlgebra.gemm_wrapper!(C::MtlMatrix, tA::AbstractChar, tB::AbstractChar, A::MtlMatrix,
-                            B::MtlMatrix, _add::MulAddMul) =
-    LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add)
-LinearAlgebra.gemm_wrapper!(C::MtlMatrix{T}, tA::AbstractChar, tB::AbstractChar,
-                            A::MtlMatrix{T}, B::MtlMatrix{T},
-                            _add::MulAddMul) where {T<:LinearAlgebra.BlasFloat} =
-    LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add)
-function LinearAlgebra.syrk_wrapper!(C::MtlMatrix, tA::AbstractChar, A::MtlMatrix,
-                                     _add::MulAddMul = MulAddMul())
-    if tA == 'T'
-        LinearAlgebra.generic_matmatmul!(C, 'T', 'N', A, A, _add)
-    else # tA == 'N'
-        LinearAlgebra.generic_matmatmul!(C, 'N', 'T', A, A, _add)
-    end
-end
-function LinearAlgebra.herk_wrapper!(C::MtlMatrix, tA::AbstractChar, A::MtlMatrix,
-                                     _add::MulAddMul = MulAddMul())
-    if tA == 'C'
-        LinearAlgebra.generic_matmatmul!(C, 'C', 'N', A, A, _add)
-    else # tA == 'N'
-        LinearAlgebra.generic_matmatmul!(C, 'N', 'C', A, A, _add)
-    end
-end
-end
-
 const MPS_VALID_MATVECMUL_TYPES =
     [(Float16, Float16),
      (Float16, Float32),
@@ -139,17 +90,6 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
     end
 end
 
-if VERSION < v"1.10.0-DEV.1365"
-# catch other functions that are called by LinearAlgebra's mul!
-LinearAlgebra.gemv!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector,
-                    a::Number, b::Number) =
-    LinearAlgebra.generic_matvecmul!(C, tA, A, B, a, b)
-# disambiguation
-LinearAlgebra.gemv!(C::MtlVector{T}, tA::AbstractChar, A::MtlMatrix{T}, B::MtlVector{T},
-                    a::Number, b::Number) where {T<:LinearAlgebra.BlasFloat} =
-    LinearAlgebra.generic_matvecmul!(C, tA, A, B, a, b)
-end
-
 @inline checkpositivedefinite(status) =
     status == MPSMatrixDecompositionStatusNonPositiveDefinite || throw(PosDefException(status))
 @inline checknonsingular(status) =
@@ -162,10 +102,8 @@ function Base.getproperty(F::LU{T,<:MtlMatrix}, d::Symbol) where T
         L = tril!(getfield(F, :factors)[1:m, 1:min(m,n)])
         L[1:m+1:end] .= one(T)
         return L
-    elseif VERSION >= v"1.9.0-DEV.1775"
-        invoke(getproperty, Tuple{LU{T}, Symbol}, F, d)
     else
-        invoke(getproperty, Tuple{LU{T,<:StridedMatrix}, Symbol}, F, d)
+        invoke(getproperty, Tuple{LU{T}, Symbol}, F, d)
     end
 end
 

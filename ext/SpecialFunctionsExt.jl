@@ -1,7 +1,7 @@
 module SpecialFunctionsExt # Should be same name as the file (just like a normal package)
 
 using Metal
-isdefined(Base, :get_extension) ? (using SpecialFunctions) : (using ..SpecialFunctions)
+using SpecialFunctions
 
 # math functionality corresponding to SpecialFunctions.jl
 

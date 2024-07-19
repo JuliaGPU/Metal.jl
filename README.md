@@ -30,7 +30,7 @@ if you want to use it. PRs are very welcome!
 ## Requirements
 
 -  Mac device with M-series chip
--  Julia 1.8-1.10
+-  Julia 1.10-1.11
 -  macOS 13-15
 
 These requirements are fairly strict, and are due to our limited development
@@ -64,15 +64,15 @@ importing the package:
 julia> using Metal
 
 julia> Metal.versioninfo()
-macOS 13.5.0, Darwin 22.6.0
+macOS 14.5.0, Darwin 23.5.0
 
 Toolchain:
-- Julia: 1.9.3
-- LLVM: 14.0.6
+- Julia: 1.10.4
+- LLVM: 15.0.7
 
 Julia packages:
-- Metal.jl: 0.5.0
-- LLVMDowngrader_jll: 0.1.0+0
+- Metal.jl: 1.2.0
+- LLVMDowngrader_jll: 0.3.0+1
 
 1 device:
 - Apple M2 Max (64.000 KiB allocated)

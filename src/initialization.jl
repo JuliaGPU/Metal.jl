@@ -50,12 +50,6 @@ function __init__()
     if isdefined(Base, :active_repl_backend)
         push!(Base.active_repl_backend.ast_transforms, synchronize_metal_tasks)
     end
-
-    @static if !isdefined(Base, :get_extension)
-        @require SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b" begin
-            include("../ext/SpecialFunctionsExt.jl")
-        end
-    end
 end
 
 function synchronize_metal_tasks(ex)
