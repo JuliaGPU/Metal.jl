@@ -1,5 +1,3 @@
-using Metal, Test
-
 # XXX: Why 64-bit Integers broken? Same behaviour with Swift
 const IGNORE_UNION = Union{Complex, Int64, UInt64}
 

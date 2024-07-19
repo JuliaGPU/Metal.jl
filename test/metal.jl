@@ -1,6 +1,7 @@
-using Metal.MTL
-
 @testset "MTL" begin
+
+using .MTL
+
 @autoreleasepool begin
 
 @testset "devices" begin
@@ -465,4 +466,5 @@ end
 # TODO: continue adding tests
 
 end
+
 end

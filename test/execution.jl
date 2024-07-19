@@ -1,4 +1,3 @@
-
 dummy() = return
 
 @testset "@metal" begin
