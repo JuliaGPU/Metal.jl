@@ -453,7 +453,7 @@ end
 @device_override function Base.expm1(a::Float32)
   r = expm1f_scaled_unchecked(a, 1.0f0)
   # handle severe overflow and underflow
-  if abs(a - 1.0f0 > 88.0f0)
+  if abs(a - 1.0f0) > 88.0f0
     r = fma(r, r, -1.0f0)
   end
   return r
