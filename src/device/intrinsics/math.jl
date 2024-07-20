@@ -416,11 +416,11 @@ function expm1f_scaled_unchecked(a::Float32, b::Float32)
   # exp(a) = 2**i * exp(f); i = rintf (a / log(2))
   j = fma(1.442695f0, a, 12582912.f0)
   j = j - 12582912.0f0
-  i = reinterpret(Int32, j)
+  i = convert(Int32, j)
   f = fma(j, -6.93145752f-1, a)
 
   # approximate r = exp(f)-1 on interval [-log(2)/2, +log(2)/2]
-  s = f * f;
+  s = f * f
   if a == 0.0f0
     s = a # ensure -0 is passed through
   end
