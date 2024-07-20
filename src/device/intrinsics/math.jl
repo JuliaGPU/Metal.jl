@@ -412,7 +412,7 @@ end
 #  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-function expm1f_scaled_unchecked(a::Float32, b::Float32)
+@device_override function Base.expm1(a::Float32)
   # exp(a) = 2**i * exp(f); i = rintf (a / log(2))
   j = fma(1.442695f0, a, 12582912.f0)
   j = j - 12582912.0f0
@@ -433,7 +433,7 @@ function expm1f_scaled_unchecked(a::Float32, b::Float32)
   r = fma(r, f, 4.99999970f-1)
   u = (j == 1) ? (f + 0.5f0) : f
   v = fma(r, s, u)
-  s = 0.5f0 * b
+  s = 0.5f0
   t = ldexp(s, i)
   y = t - s
   x = (t - y) - s # double-float canonicalization of difference
@@ -447,14 +447,5 @@ function expm1f_scaled_unchecked(a::Float32, b::Float32)
     r = v + v
   end
 
-  return r
-end
-
-@device_override function Base.expm1(a::Float32)
-  r = expm1f_scaled_unchecked(a, 1.0f0)
-  # handle severe overflow and underflow
-  if abs(a - 1.0f0) > 88.0f0
-    r = fma(r, r, -1.0f0)
-  end
   return r
 end
