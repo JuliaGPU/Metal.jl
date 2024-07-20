@@ -385,6 +385,7 @@ else
     end
 end
 
+# From: https://forums.developer.nvidia.com/t/a-faster-and-more-accurate-implementation-of-expm1f/48085/2
 # Original license copied below:
 #  Copyright (c) 2015-2023 Norbert Juffa
 #  All rights reserved.
@@ -417,20 +418,24 @@ end
     j = fma(1.442695f0, a, 12582912.0f0)
     j = j - 12582912.0f0
     i = unsafe_trunc(Int32, j)
-    f = fma(j, -6.93145752f-1, a)
+    f = fma(j, -6.93145752f-1, a) # log_2_hi 
+    f = fma(j, -1.42860677f-6, f) # log_2_lo
 
     # approximate r = exp(f)-1 on interval [-log(2)/2, +log(2)/2]
     s = f * f
     if a == 0.0f0
         s = a # ensure -0 is passed through
     end
-    # err = 0.997458  ulp1 = 11081805
-    r = 1.97350979f-4
-    r = fma(r, f, 1.39309070f-3)
-    r = fma(r, f, 8.33343994f-3)
-    r = fma(r, f, 4.16668020f-2)
-    r = fma(r, f, 1.66666716f-1)
+
+    # err = 0.997458  ulp1 = 11094007
+    r = fma(1.98423862f-4, f, 1.39347673f-3)
+    t = fma(8.33342969f-3, f, 4.16667424f-2)
+    r = fma(r, s, t)
+    r = fma(r, f, 1.66666701f-1)
     r = fma(r, f, 4.99999970f-1)
+    # if i == 0, expm1(a) = z
+    # if i == 1, expm1(a) = 2*(r*(f*f)+f+0.5)
+    # if (i < 0) || (i > 1) expm1(a) = 2*((r*(f*f)+f)*t-0.5+t)
     u = (j == 1) ? (f + 0.5f0) : f
     v = fma(r, s, u)
     s = 0.5f0
@@ -439,12 +444,19 @@ end
     x = (t - y) - s # double-float canonicalization of difference
     r = fma(v, t, x) + y
     r = r + r
+
     if j == 0
         r = v
     end
 
     if j == 1
         r = v + v
+    end
+
+    # handle severe overflow and underflow
+    if abs(a - 1.0f0) > 88.0f0
+        r = 2^a
+        r = fma(r, r, -1.0f0)
     end
 
     return r
