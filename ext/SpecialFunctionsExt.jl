@@ -199,7 +199,7 @@ Metal.@device_override function SpecialFunctions.erfinv(a::Float32)
     t = log(t)
 
     if abs(t) > 6.125f0
-        p =  3.03697567f-10
+        p = 3.03697567f-10
         p = fma(p, t, 2.93243101f-8)
         p = fma(p, t, 1.22150334f-6)
         p = fma(p, t, 2.84108955f-5)
