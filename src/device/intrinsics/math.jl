@@ -413,39 +413,39 @@ end
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 @device_override function Base.expm1(a::Float32)
-  # exp(a) = 2**i * exp(f); i = rintf (a / log(2))
-  j = fma(1.442695f0, a, 12582912.f0)
-  j = j - 12582912.0f0
-  i = unsafe_trunc(Int32, j)
-  f = fma(j, -6.93145752f-1, a)
+    # exp(a) = 2**i * exp(f); i = rintf (a / log(2))
+    j = fma(1.442695f0, a, 12582912.0f0)
+    j = j - 12582912.0f0
+    i = unsafe_trunc(Int32, j)
+    f = fma(j, -6.93145752f-1, a)
 
-  # approximate r = exp(f)-1 on interval [-log(2)/2, +log(2)/2]
-  s = f * f
-  if a == 0.0f0
-    s = a # ensure -0 is passed through
-  end
-  # err = 0.997458  ulp1 = 11081805
-  r = 1.97350979f-4
-  r = fma(r, f, 1.39309070f-3)
-  r = fma(r, f, 8.33343994f-3)
-  r = fma(r, f, 4.16668020f-2)
-  r = fma(r, f, 1.66666716f-1)
-  r = fma(r, f, 4.99999970f-1)
-  u = (j == 1) ? (f + 0.5f0) : f
-  v = fma(r, s, u)
-  s = 0.5f0
-  t = ldexp(s, i)
-  y = t - s
-  x = (t - y) - s # double-float canonicalization of difference
-  r = fma(v, t, x) + y
-  r = r + r
-  if j == 0
-    r = v
-  end
+    # approximate r = exp(f)-1 on interval [-log(2)/2, +log(2)/2]
+    s = f * f
+    if a == 0.0f0
+        s = a # ensure -0 is passed through
+    end
+    # err = 0.997458  ulp1 = 11081805
+    r = 1.97350979f-4
+    r = fma(r, f, 1.39309070f-3)
+    r = fma(r, f, 8.33343994f-3)
+    r = fma(r, f, 4.16668020f-2)
+    r = fma(r, f, 1.66666716f-1)
+    r = fma(r, f, 4.99999970f-1)
+    u = (j == 1) ? (f + 0.5f0) : f
+    v = fma(r, s, u)
+    s = 0.5f0
+    t = ldexp(s, i)
+    y = t - s
+    x = (t - y) - s # double-float canonicalization of difference
+    r = fma(v, t, x) + y
+    r = r + r
+    if j == 0
+        r = v
+    end
 
-  if j == 1
-    r = v + v
-  end
+    if j == 1
+        r = v + v
+    end
 
-  return r
+    return r
 end
