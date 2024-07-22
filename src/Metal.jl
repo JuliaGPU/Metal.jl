@@ -1,6 +1,5 @@
 module Metal
 
-using Reexport
 using GPUArrays
 using Adapt
 using GPUCompiler
