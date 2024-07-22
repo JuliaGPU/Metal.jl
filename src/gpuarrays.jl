@@ -5,16 +5,16 @@ GPUArrays.device(x::MtlArray) = x.dev
 import KernelAbstractions
 import KernelAbstractions: Backend
 
-@inline function GPUArrays.launch_heuristic(::MetalBackend, f::F, args::Vararg{Any,N};
-                                             elements::Int, elements_per_thread::Int) where {F,N}
+@inline function GPUArrays.launch_heuristic(::MetalBackend, obj::O, args::Vararg{Any,N};
+                                             elements::Int, elements_per_thread::Int) where {O,N}
 
-    ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(obj, nothing,
+    ndrange = ceil(Int, elements / elements_per_thread)
+    ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(obj, ndrange,
                                                                   nothing)
 
-    # this might not be the final context, since we may tune the workgroupsize
     ctx = KA.mkcontext(obj, ndrange, iterspace)
 
-    kernel = @metal launch=false f(ctx, args...)
+    kernel = @metal launch=false obj.f(ctx, args...)
 
     # The pipeline state automatically computes occupancy stats
     threads = min(elements, kernel.pipeline.maxTotalThreadsPerThreadgroup)
