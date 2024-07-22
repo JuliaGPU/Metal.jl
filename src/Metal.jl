@@ -60,13 +60,13 @@ include("mapreduce.jl")
 include("accumulate.jl")
 include("indexing.jl")
 include("random.jl")
-include("gpuarrays.jl")
 
 # KernelAbstractions
 include("MetalKernels.jl")
 import .MetalKernels: MetalBackend
 export MetalBackend
 
+include("gpuarrays.jl")
 include("deprecated.jl")
 
 include("precompile.jl")

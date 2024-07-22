@@ -14,7 +14,7 @@ import KernelAbstractions: Backend
     # this might not be the final context, since we may tune the workgroupsize
     ctx = KA.mkcontext(obj, ndrange, iterspace)
 
-    kernel = @metal launch=false f(ctx(), args...)
+    kernel = @metal launch=false f(ctx, args...)
 
     # The pipeline state automatically computes occupancy stats
     threads = min(elements, kernel.pipeline.maxTotalThreadsPerThreadgroup)
