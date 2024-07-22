@@ -33,13 +33,6 @@ GPUArrays.griddim(ctx::mtlKernelContext)      = threadgroups_per_grid_1d()
 GPUArrays.global_index(ctx::mtlKernelContext) = thread_position_in_grid_1d()
 GPUArrays.global_size(ctx::mtlKernelContext)  = threads_per_grid_1d()
 
-# math
-
-@inline GPUArrays.cos(ctx::mtlKernelContext, x)  = cos(x)
-@inline GPUArrays.sin(ctx::mtlKernelContext, x)  = sin(x)
-@inline GPUArrays.sqrt(ctx::mtlKernelContext, x) = sqrt(x)
-@inline GPUArrays.log(ctx::mtlKernelContext, x)  = log(x)
-
 # memory
 
 @inline function GPUArrays.LocalMemory(::mtlKernelContext, ::Type{T}, ::Val{dims}, ::Val{id}
