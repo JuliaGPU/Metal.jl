@@ -59,8 +59,8 @@ randn(dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
     Random.randn!(mpsrand_rng(), MtlArray{Float32,length(dims) + 1,storage}(undef, dim1, dims...))
 
 # scalars
-rand(T::Type=Float32; storage=Shared) = rand(T, 4; storage)[1]
-randn(T::Type=Float32; storage=Shared) = randn(T, 4; storage)[1]
+rand(T::Type=Float32; storage=SharedStorage) = rand(T, 4; storage)[1]
+randn(T::Type=Float32; storage=SharedStorage) = randn(T, 4; storage)[1]
 
 # seeding
 function seed!(seed=Base.rand(UInt64))
