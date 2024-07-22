@@ -384,3 +384,80 @@ else
         ifelse(abs(b.divisor) == 1, a*b.divisor, (signbit(x) + (x >> b.shift)) % Int64)
     end
 end
+
+# From: https://forums.developer.nvidia.com/t/a-faster-and-more-accurate-implementation-of-expm1f/48085/2
+# Original license copied below:
+#  Copyright (c) 2015-2023 Norbert Juffa
+#  All rights reserved.
+#
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions
+#  are met:
+#
+#  1. Redistributions of source code must retain the above copyright
+#     notice, this list of conditions and the following disclaimer.
+#
+#  2. Redistributions in binary form must reproduce the above copyright
+#     notice, this list of conditions and the following disclaimer in the
+#     documentation and/or other materials provided with the distribution.
+#
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+#  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+#  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+#  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+#  HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+#  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+#  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+#  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+#  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+#  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+@device_override function Base.expm1(a::Float32)
+    # exp(a) = 2**i * exp(f); i = rintf (a / log(2))
+    j = fma(1.442695f0, a, 12582912.0f0)
+    j = j - 12582912.0f0
+    i = unsafe_trunc(Int32, j)
+    f = fma(j, -6.93145752f-1, a) # log_2_hi 
+    f = fma(j, -1.42860677f-6, f) # log_2_lo
+
+    # approximate r = exp(f)-1 on interval [-log(2)/2, +log(2)/2]
+    s = f * f
+    if a == 0.0f0
+        s = a # ensure -0 is passed through
+    end
+
+    # err = 0.997458  ulp1 = 11094007
+    r = fma(1.98423862f-4, f, 1.39347673f-3)
+    t = fma(8.33342969f-3, f, 4.16667424f-2)
+    r = fma(r, s, t)
+    r = fma(r, f, 1.66666701f-1)
+    r = fma(r, f, 4.99999970f-1)
+    # if i == 0, expm1(a) = z
+    # if i == 1, expm1(a) = 2*(r*(f*f)+f+0.5)
+    # if (i < 0) || (i > 1) expm1(a) = 2*((r*(f*f)+f)*t-0.5+t)
+    u = (j == 1) ? (f + 0.5f0) : f
+    v = fma(r, s, u)
+    s = 0.5f0
+    t = ldexp(s, i)
+    y = t - s
+    x = (t - y) - s # double-float canonicalization of difference
+    r = fma(v, t, x) + y
+    r = r + r
+
+    if j == 0
+        r = v
+    end
+
+    if j == 1
+        r = v + v
+    end
+
+    # handle severe overflow and underflow
+    if abs(a - 1.0f0) > 88.0f0
+        r = 2^a
+        r = fma(r, r, -1.0f0)
+    end
+
+    return r
+end
