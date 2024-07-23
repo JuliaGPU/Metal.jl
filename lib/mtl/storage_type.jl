@@ -1,4 +1,4 @@
-export SharedStorage, ManagedStorage, PrivateStorage, CPUStorage
+export SharedStorage, ManagedStorage, PrivateStorage
 export ReadUsage, WriteUsage, ReadWriteUsage
 
 # Metal Has 4 storage types
@@ -18,7 +18,7 @@ For more information on Metal storage modes, refer to the official Metal documen
 
 See also [`Metal.PrivateStorage`](@ref) and [`Metal.ManagedStorage`](@ref).
 """
-struct SharedStorage      <: StorageMode end
+struct SharedStorage  <: StorageMode end
 
 """
     struct Metal.ManagedStorage <: MTL.StorageMode
@@ -29,7 +29,7 @@ For more information on Metal storage modes, refer to the official Metal documen
 
 See also [`Metal.SharedStorage`](@ref) and [`Metal.PrivateStorage`](@ref).
 """
-struct ManagedStorage     <: StorageMode end
+struct ManagedStorage <: StorageMode end
 
 """
     struct Metal.PrivateStorage <: MTL.StorageMode
@@ -40,8 +40,8 @@ For more information on Metal storage modes, refer to the official Metal documen
 
 See also [`Metal.SharedStorage`](@ref) and [`Metal.ManagedStorage`](@ref).
 """
-struct PrivateStorage     <: StorageMode end
-struct Memoryless  <: StorageMode end
+struct PrivateStorage <: StorageMode end
+struct Memoryless     <: StorageMode end
 
 # Remove the ".MTL" when printing
 Base.show(io::IO, ::Type{<:PrivateStorage}) = print(io, "Metal.PrivateStorage")
@@ -49,13 +49,14 @@ Base.show(io::IO, ::Type{<:SharedStorage}) = print(io, "Metal.SharedStorage")
 Base.show(io::IO, ::Type{<:ManagedStorage}) = print(io, "Metal.ManagedStorage")
 
 """
-    CPUStorage
+    MTL.CPUStorage
 
 Union type of [`Metal.SharedStorage`](@ref) and [`Metal.ManagedStorage`](@ref) storage modes.
 
 Represents storage modes where the resource is accessible via the CPU.
 """
 const CPUStorage = Union{SharedStorage,ManagedStorage}
+
 Base.convert(::Type{MTLStorageMode}, ::Type{SharedStorage})     = MTLStorageModeShared
 Base.convert(::Type{MTLStorageMode}, ::Type{ManagedStorage})    = MTLStorageModeManaged
 Base.convert(::Type{MTLStorageMode}, ::Type{PrivateStorage})    = MTLStorageModePrivate

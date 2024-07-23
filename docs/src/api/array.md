@@ -21,7 +21,6 @@ The Metal API has various storage modes that dictate how a resource can be acces
 Metal.PrivateStorage
 Metal.SharedStorage
 Metal.ManagedStorage
-Metal.CPUStorage
 ```
 
 There also exist the following convenience functions to check if an MtlArray is using a specific storage mode:
