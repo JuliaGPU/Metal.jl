@@ -14,6 +14,7 @@ using Artifacts
 using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
 
 include("version.jl")
+import KernelAbstractions as KA
 
 # core library
 include("../lib/mtl/MTL.jl")
@@ -63,7 +64,7 @@ include("random.jl")
 
 # KernelAbstractions
 include("MetalKernels.jl")
-import .MetalKernels: MetalBackend
+import .MetalKernels: MetalBackend, KA.launch_config
 export MetalBackend
 
 include("gpuarrays.jl")
