@@ -34,7 +34,7 @@ end
     end
 
     # wait for all partial reductions
-    threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+    threadgroup_barrier(MemoryFlagThreadGroup)
 
     # read from shared memory only if that warp existed
     val = if thread_index_in_threadgroup() <= fld1(threads_per_threadgroup_1d(), 32)

@@ -34,7 +34,7 @@ end
 MTL.enqueue!(cmdbuf::MPSCommandBuffer) = @inline MTL.enqueue!(cmdbuf.commandBuffer)
 MTL.commit!(cmdbuf::MPSCommandBuffer) = @inline MTL.commit!(cmdbuf.commandBuffer)
 
-function MPS.commit!(f::Base.Callable, cmdbuf::MPSCommandBuffer)
+function MTL.commit!(f::Base.Callable, cmdbuf::MPSCommandBuffer)
     enqueue!(cmdbuf)
     ret = f(cmdbuf)
     commit!(cmdbuf)

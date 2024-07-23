@@ -42,7 +42,7 @@ for type in [UInt8,UInt16,UInt32,UInt64,Int8,Int16,Int32,Int64,Float16,Float32,C
     @eval Base.convert(::Type{MPSDataType}, ::Type{$type}) = $(Symbol(:MPSDataType, type))
     @eval jl_mps_to_typ[$(Symbol(:MPSDataType, type))] = $type
 end
-Base.sizeof(t::MPS.MPSDataType) = sizeof(jl_mps_to_typ[t])
+Base.sizeof(t::MPSDataType) = sizeof(jl_mps_to_typ[t])
 
 Base.convert(::Type{DataType}, mpstyp::MPSDataType) = jl_mps_to_typ[mpstyp]
 

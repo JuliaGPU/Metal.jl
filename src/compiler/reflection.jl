@@ -111,7 +111,7 @@ function extract_gpu_code(f, binary)
     metallib_section = findfirst(Sections(fat_handle[arch]), "__TEXT,__metallib")
     metallib_section === nothing && error("Could not find __metallib section in GPU binary")
     metallib_binary = read(metallib_section)
-    metallib = read(IOBuffer(metallib_binary), Metal.MetalLib)
+    metallib = read(IOBuffer(metallib_binary), MetalLib)
     # TODO: use this to implement a do-block device_code_air like CUDA.jl?
 
     # identify the kernel name

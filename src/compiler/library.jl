@@ -13,9 +13,9 @@
 
 using SHA: sha256
 using CEnum: @cenum
-using UUIDs: UUID, uuid1
+using UUIDs: UUID
 using Printf: @printf
-using CodecBzip2: transcode, Bzip2Compressor, Bzip2Decompressor
+using CodecBzip2: Bzip2Compressor, Bzip2Decompressor
 
 
 ## enums
