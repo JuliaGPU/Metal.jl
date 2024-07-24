@@ -1,7 +1,3 @@
-using Random
-using Metal
-using Metal: can_use_mpsrandom
-
 const RAND_TYPES = [Float16, Float32, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64,
                     UInt64]
 const RANDN_TYPES = [Float16, Float32]
@@ -31,7 +27,7 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
                 # specified MPS rng
                 if T != Float16
                     fill!(A, T(0))
-                    if can_use_mpsrandom(A)
+                    if Metal.can_use_mpsrandom(A)
                         f(rng, A)
                         @test !iszero(collect(A))
                     else
@@ -51,7 +47,7 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
                 # specified MPS rng
                 if T != Float16
                     fill!(A, T(0))
-                    if can_use_mpsrandom(A)
+                    if Metal.can_use_mpsrandom(A)
                         f(rng, A)
                         @test Array(A) == fill(1, 0)
                     else
@@ -139,7 +135,7 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
                 view_A = @view A[idx]
 
                 # Errors in Julia before crashing whole process
-                if can_use_mpsrandom(view_A)
+                if Metal.can_use_mpsrandom(view_A)
                     f(rng, view_A)
 
                     cpuA = collect(A)
@@ -153,7 +149,7 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
                 fill!(A, T(0))
                 idx = 1:51
                 view_A = @view A[idx]
-                if can_use_mpsrandom(view_A)
+                if Metal.can_use_mpsrandom(view_A)
                     f(rng, view_A)
 
                     cpuA = collect(A)
