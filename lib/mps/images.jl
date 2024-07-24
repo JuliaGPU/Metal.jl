@@ -73,9 +73,7 @@ function MPSImageBox(dev, kernelWidth, kernelHeight)
 end
 
 
-## high-level blurring functionality
-
-export blur, gaussianblur, boxblur
+## high-level blurring functionality. Interface subject to change
 
 function blur(image, kernel; pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
     res = copy(image)
