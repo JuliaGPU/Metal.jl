@@ -14,8 +14,8 @@ function main(args)
     force = false
     output = nothing
     downgrade = false
-    air_version = air_support()
-    metal_version = metal_support()
+    air_version = Metal.air_support()
+    metal_version = Metal.metal_support()
     usage = "metallib-as [-h] [-f] [-d] [-l] [-o output.metallib] inputs.(bc|ll)..."
     while !isempty(args)
         arg = popfirst!(args)

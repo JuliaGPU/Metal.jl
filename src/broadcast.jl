@@ -14,7 +14,7 @@ BroadcastStyle(W::Type{<:WrappedMtlArray{T,N}}) where {T,N} =
 # which one is better, so use shared memory
 BroadcastStyle(::MtlArrayStyle{N, S1},
                ::MtlArrayStyle{N, S2}) where {N,S1,S2} =
-    MtlArrayStyle{N, Shared}()
+    MtlArrayStyle{N, SharedStorage}()
 
 # allocation of output arrays
 Base.similar(bc::Broadcasted{MtlArrayStyle{N,S}}, ::Type{T}, dims) where {T,N,S} =

@@ -1,4 +1,7 @@
 @testset "MTL" begin
+
+using .MTL
+
 @autoreleasepool begin
 
 @testset "devices" begin
@@ -233,7 +236,7 @@ end
 
 dev = first(devices())
 
-buf = MTLBuffer(dev, 8; storage=Shared)
+buf = MTLBuffer(dev, 8; storage=SharedStorage)
 
 @test buf.length == 8
 @test sizeof(buf) == 8
@@ -463,4 +466,5 @@ end
 # TODO: continue adding tests
 
 end
+
 end

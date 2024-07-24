@@ -23,7 +23,7 @@ end
 ## allocation
 
 function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer;
-                   storage=Private, hazard_tracking=DefaultTracking,
+                   storage=PrivateStorage, hazard_tracking=DefaultTracking,
                    cache_mode=DefaultCPUCache)
     opts = convert(MTLResourceOptions, storage) | hazard_tracking | cache_mode
 
@@ -34,9 +34,9 @@ function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer;
 end
 
 function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
-                   nocopy=false, storage=Shared, hazard_tracking=DefaultTracking,
+                   nocopy=false, storage=SharedStorage, hazard_tracking=DefaultTracking,
                    cache_mode=DefaultCPUCache)
-    storage == Private && error("Cannot allocate-and-initialize a Private buffer")
+    storage == PrivateStorage && error("Cannot allocate-and-initialize a PrivateStorage buffer")
     opts =  convert(MTLResourceOptions, storage) | hazard_tracking | cache_mode
 
     @assert 0 < bytesize <= dev.maxBufferLength
@@ -92,7 +92,7 @@ alloc_buffer(dev::MTLHeap, bytesize, opts) =
 Notifies the GPU that the range of bytes specified by `range` have been modified on the CPU,
 and that they should be transferred to the device before executing any following command.
 
-Only valid for `Managed` buffers.
+Only valid for `ManagedStorage` buffers.
 """
 function DidModifyRange!(buf::MTLBuffer, range)
     @objc [buf::id{MTLBuffer} didModifyRange:range::NSRange]::Nothing

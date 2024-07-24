@@ -51,7 +51,7 @@ end
     Metal.code_typed(dummy, Tuple{})
     Metal.code_warntype(devnull, dummy, Tuple{})
     Metal.code_llvm(devnull, dummy, Tuple{})
-    if macos_version() >= v"13"
+    if Metal.macos_version() >= v"13"
         Metal.code_agx(devnull, dummy, Tuple{})
     end
 
@@ -59,7 +59,7 @@ end
     @device_code_typed @metal dummy()
     @device_code_warntype io=devnull @metal dummy()
     @device_code_llvm io=devnull @metal dummy()
-    if macos_version() >= v"13"
+    if Metal.macos_version() >= v"13"
         @device_code_agx io=devnull @metal dummy()
     end
 
@@ -72,7 +72,7 @@ end
     # make sure kernel name aliases are preserved in the generated code
     @test occursin("dummy", sprint(io->(@device_code_llvm io=io optimize=false @metal dummy())))
     @test occursin("dummy", sprint(io->(@device_code_llvm io=io @metal dummy())))
-    if macos_version() >= v"13"
+    if Metal.macos_version() >= v"13"
         @test occursin("dummy", sprint(io->(@device_code_agx io=io @metal dummy())))
     end
 
@@ -110,7 +110,7 @@ function tester(A)
 end
 
 bufferSize = 8
-bufferA = MtlArray{Int,1,Shared}(undef, tuple(bufferSize))
+bufferA = MtlArray{Int,1,Metal.SharedStorage}(undef, tuple(bufferSize))
 vecA = unsafe_wrap(Vector{Int}, pointer(bufferA), tuple(bufferSize))
 
 @testset "synchronization" begin
@@ -141,7 +141,7 @@ end
     vecA .= 0
 
     dev = device()
-    queue = MTLCommandQueue(dev)
+    queue = MTL.MTLCommandQueue(dev)
     @metal threads=(3) queue=queue tester(bufferA)
     synchronize(queue)
     @test all(vecA == Int.([5, 5, 5, 0, 0, 0, 0, 0]))

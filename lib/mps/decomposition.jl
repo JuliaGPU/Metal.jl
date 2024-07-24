@@ -8,7 +8,7 @@ end
 
 ## lu
 
-export MPSMatrixDecompositionLU
+export MPSMatrixDecompositionLU, encode!
 
 @objcwrapper immutable=false MPSMatrixDecompositionLU <: MPSMatrixUnaryKernel
 
@@ -33,7 +33,7 @@ end
 
 ## cholesky
 
-export MPSMatrixDecompositionCholesky
+export MPSMatrixDecompositionCholesky, encode!
 
 @objcwrapper immutable=false MPSMatrixDecompositionCholesky <: MPSMatrixUnaryKernel
 

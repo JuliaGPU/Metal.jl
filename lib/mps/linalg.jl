@@ -118,7 +118,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T =
     dev = device()
     queue = global_queue(dev)
 
-    At = MtlMatrix{T,Private}(undef, (N, M))
+    At = MtlMatrix{T,PrivateStorage}(undef, (N, M))
     mps_a = MPSMatrix(A)
     mps_at = MPSMatrix(At)
 
@@ -176,7 +176,7 @@ end
     dev = device()
     queue = global_queue(dev)
 
-    At = MtlMatrix{T,Private}(undef, (N, M))
+    At = MtlMatrix{T,PrivateStorage}(undef, (N, M))
     mps_a = MPSMatrix(A)
     mps_at = MPSMatrix(At)
 

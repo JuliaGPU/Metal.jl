@@ -1,4 +1,4 @@
-STORAGEMODES = [Private, Shared, Managed]
+STORAGEMODES = [Metal.PrivateStorage, Metal.SharedStorage, Metal.ManagedStorage]
 
 @testset "array" begin
 
@@ -51,8 +51,8 @@ end
     @test Adapt.adapt(MtlArray, [1 2;3 4]) isa MtlArray{Int, 2, Metal.DefaultStorageMode}
     @test Adapt.adapt(MtlArray{Float32}, [1 2;3 4]) isa MtlArray{Float32, 2, Metal.DefaultStorageMode}
     @test Adapt.adapt(MtlArray{Float32, 2}, [1 2;3 4]) isa MtlArray{Float32, 2, Metal.DefaultStorageMode}
-    @test Adapt.adapt(MtlArray{Float32, 2, Shared}, [1 2;3 4]) isa MtlArray{Float32, 2, Shared}
-    @test Adapt.adapt(MtlMatrix{ComplexF32, Shared}, [1 2;3 4]) isa MtlArray{ComplexF32, 2, Shared}
+    @test Adapt.adapt(MtlArray{Float32, 2, Metal.SharedStorage}, [1 2;3 4]) isa MtlArray{Float32, 2, Metal.SharedStorage}
+    @test Adapt.adapt(MtlMatrix{ComplexF32, Metal.SharedStorage}, [1 2;3 4]) isa MtlArray{ComplexF32, 2, Metal.SharedStorage}
     @test Adapt.adapt(MtlArray{Float16}, Float64[1]) isa MtlArray{Float16}
 
     # Test a few explicitly unsupported types
@@ -132,35 +132,35 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
     end
 
     # private storage errors.
-    if SM == Metal.Private
-        let arr_mtl = Metal.zeros(Float32, dim...; storage=Private)
+    if SM == Metal.PrivateStorage
+        let arr_mtl = Metal.zeros(Float32, dim...; storage=Metal.PrivateStorage)
             @test is_private(arr_mtl) && !is_shared(arr_mtl) && !is_managed(arr_mtl)
             @test_throws "Cannot access the contents of a private buffer" arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, dim)
         end
 
         let b = rand(Float32, 10)
-            arr_mtl = mtl(b; storage=Private)
+            arr_mtl = mtl(b; storage=Metal.PrivateStorage)
             @test_throws ErrorException arr_mtl[1]
             @test Metal.@allowscalar arr_mtl[1] == b[1]
         end
-    elseif SM == Metal.Shared
-        let arr_mtl = Metal.zeros(Float32, dim...; storage=Shared)
+    elseif SM == Metal.SharedStorage
+        let arr_mtl = Metal.zeros(Float32, dim...; storage=Metal.SharedStorage)
             @test !is_private(arr_mtl) && is_shared(arr_mtl) && !is_managed(arr_mtl)
             @test unsafe_wrap(Array{Float32}, arr_mtl) isa Array{Float32}
         end
 
         let b = rand(Float32, 10)
-            arr_mtl = mtl(b; storage=Shared)
+            arr_mtl = mtl(b; storage=Metal.SharedStorage)
             @test arr_mtl[1] == b[1]
         end
-    elseif SM == Metal.Managed
-        let arr_mtl = Metal.zeros(Float32, dim...; storage=Managed)
+    elseif SM == Metal.ManagedStorage
+        let arr_mtl = Metal.zeros(Float32, dim...; storage=Metal.ManagedStorage)
             @test !is_private(arr_mtl) && !is_shared(arr_mtl) && is_managed(arr_mtl)
             @test unsafe_wrap(Array{Float32}, arr_mtl) isa Array{Float32}
         end
 
         let b = rand(Float32, 10)
-            arr_mtl = mtl(b; storage=Managed)
+            arr_mtl = mtl(b; storage=Metal.ManagedStorage)
             @test arr_mtl[1] == b[1]
         end
     end
@@ -177,8 +177,8 @@ end
     n1   = length(dim1)
     dim2 = dim1[1:2]
     n2   = length(dim2)
-    sm1  = Shared
-    sm2  = Private
+    sm1  = Metal.SharedStorage
+    sm2  = Metal.PrivateStorage
 
     arr = MtlArray{typ1, n1, sm1}(undef, dim1)
 
@@ -283,18 +283,18 @@ end
 
 # https://github.com/JuliaGPU/CUDA.jl/issues/2191
 @testset "preserving storage mode" begin
-  a = mtl([1]; storage=Shared)
-  @test Metal.storagemode(a) == Shared
+  a = mtl([1]; storage=Metal.SharedStorage)
+  @test Metal.storagemode(a) == Metal.SharedStorage
 
   # storage mode should be preserved
   b = a .+ 1
-  @test Metal.storagemode(b) == Shared
+  @test Metal.storagemode(b) == Metal.SharedStorage
 
   # when there's a conflict, we should defer to shared memory
-  c = mtl([1]; storage=Private)
-  d = mtl([1]; storage=Shared)
+  c = mtl([1]; storage=Metal.PrivateStorage)
+  d = mtl([1]; storage=Metal.SharedStorage)
   e = c .+ d
-  @test Metal.storagemode(e) == Shared
+  @test Metal.storagemode(e) == Metal.SharedStorage
 end
 
 @testset "resizing" begin
@@ -348,7 +348,7 @@ end
     @test all(marr1 .== 2)
     @test all(arr1 .== 2)
 
-    marr2 = Metal.zeros(Float32, 18000; storage=Shared);
+    marr2 = Metal.zeros(Float32, 18000; storage=Metal.SharedStorage);
     arr2 = unsafe_wrap(Vector{Float32}, marr2);
 
     @test all(arr2 .== 0)

@@ -1,3 +1,5 @@
+## kernels
+
 @cenum MPSImageEdgeMode::NSUInteger begin
     MPSImageEdgeModeZero           = 0
     MPSImageEdgeModeClamp          = 1
@@ -37,6 +39,11 @@ end
     @autoproperty clipRect::MTLRegion
 end
 
+
+## gaussian blur
+
+export MPSImageGaussianBlur, encode!
+
 @objcwrapper immutable=false MPSImageGaussianBlur <: MPSUnaryImageKernel
 
 function MPSImageGaussianBlur(dev, sigma)
@@ -48,6 +55,10 @@ function MPSImageGaussianBlur(dev, sigma)
     return obj
 end
 
+
+## image box
+
+export MPSImageBox
 
 @objcwrapper immutable=false MPSImageBox <: MPSUnaryImageKernel
 
@@ -62,7 +73,9 @@ function MPSImageBox(dev, kernelWidth, kernelHeight)
 end
 
 
-# High-level functions for image blurring
+## high-level blurring functionality
+
+export blur, gaussianblur, boxblur
 
 function blur(image, kernel; pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
     res = copy(image)

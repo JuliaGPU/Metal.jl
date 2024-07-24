@@ -21,7 +21,7 @@ end
 
 ## kernel
 
-export MPSMatrixCopy
+export MPSMatrixCopy, encode!
 
 @objcwrapper immutable=false MPSMatrixCopy <: MPSKernel
 

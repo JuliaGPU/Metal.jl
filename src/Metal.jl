@@ -1,6 +1,5 @@
 module Metal
 
-using Reexport
 using GPUArrays
 using Adapt
 using GPUCompiler
@@ -14,9 +13,12 @@ using ExprTools: splitdef, combinedef
 using Artifacts
 using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
 
+include("version.jl")
+
 # core library
 include("../lib/mtl/MTL.jl")
-@reexport using .MTL
+using .MTL
+export MTL
 
 # essential stuff
 include("state.jl")

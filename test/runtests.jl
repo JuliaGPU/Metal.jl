@@ -75,7 +75,7 @@ for (rootpath, dirs, files) in walkdir(@__DIR__)
 end
 ## GPUArrays testsuite
 for name in keys(TestSuite.tests)
-    if Metal.DefaultStorageMode != Private && name == "indexing scalar"
+    if Metal.DefaultStorageMode != Metal.PrivateStorage && name == "indexing scalar"
         # GPUArrays' scalar indexing tests assume that indexing is not supported
         continue
     end

@@ -36,7 +36,7 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T}, src::Ptr{T}, N::Int
     if storage_type == MTL.MTLStorageModePrivate
         # stage through a shared buffer
         nocopy = MTL.can_alloc_nocopy(src, N*sizeof(T))
-        tmp_buf = alloc(dev, N*sizeof(T), src; storage=Shared, nocopy)
+        tmp_buf = alloc(dev, N*sizeof(T), src; storage=SharedStorage, nocopy)
 
         # copy to the private buffer
         unsafe_copyto!(dev, MtlPtr{T}(dst.buffer, dst.offset), MtlPtr{T}(tmp_buf, 0), N;
@@ -59,9 +59,9 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPtr{T}, N::Int
         # stage through a shared buffer
         nocopy = MTL.can_alloc_nocopy(dst, N*sizeof(T))
         tmp_buf = if nocopy
-            alloc(dev, N*sizeof(T), dst; storage=Shared, nocopy)
+            alloc(dev, N*sizeof(T), dst; storage=SharedStorage, nocopy)
         else
-            alloc(dev, N*sizeof(T); storage=Shared)
+            alloc(dev, N*sizeof(T); storage=SharedStorage)
         end
         unsafe_copyto!(dev, MtlPtr{T}(tmp_buf, 0), MtlPtr{T}(src.buffer, src.offset), N;
                        queue, async=(nocopy && async))

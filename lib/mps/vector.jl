@@ -85,7 +85,7 @@ end
 
 ## matrix vector multiplication
 
-export MPSMatrixVectorMultiplication, matvecmul!
+export MPSMatrixVectorMultiplication, encode!, matvecmul!
 
 @objcwrapper immutable=false MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
 
