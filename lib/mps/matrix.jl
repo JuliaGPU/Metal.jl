@@ -242,7 +242,7 @@ end
 
 ## topk
 
-export MPSMatrixFindTopK, encode!, topk, topk!
+export MPSMatrixFindTopK, encode!
 
 @objcwrapper immutable=false MPSMatrixFindTopK <: MPSMatrixUnaryKernel
 
@@ -270,7 +270,7 @@ function encode!(cmdbuf::MTLCommandBuffer, kernel::MPSMatrixFindTopK, inputMatri
 end
 
 """
-    topk!(A::MtlMatrix{T}, I::MtlMatrix{Int32}, V::MtlMatrix{T}, k)
+    MPS.topk!(A::MtlMatrix{T}, I::MtlMatrix{Int32}, V::MtlMatrix{T}, k)
                                                      where {T<:MtlFloat}
 
 Compute the top `k` values and their corresponding indices column-wise in a matrix `A`.
@@ -281,6 +281,9 @@ Return the indices in `I` and the values in `V`.
 Uses `MPSMatrixFindTopK`.
 
 See also: [`topk`](@ref).
+
+!!! warn
+    This interface is experimental, and might change without warning.
 """
 function topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
     size(I,1) >= k         || throw(ArgumentError("Matrix 'I' must be large enough for k rows"))
@@ -311,7 +314,7 @@ end
 end
 
 """
-    topk(A::MtlMatrix{T}, k) where {T<:MtlFloat}
+    MPS.topk(A::MtlMatrix{T}, k) where {T<:MtlFloat}
 
 Compute the top `k` values and their corresponding indices column-wise in a matrix `A`.
 Return the indices in `I` and the values in `V`.
@@ -321,6 +324,9 @@ Return the indices in `I` and the values in `V`.
 Uses `MPSMatrixFindTopK`.
 
 See also: [`topk!`](@ref).
+
+!!! warn
+    This interface is experimental, and might change without warning.
 """
 function topk(A::MtlMatrix{T,S}, k) where {T<:MtlFloat,S}
     s = (k,size(A,2))
