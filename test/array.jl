@@ -418,4 +418,13 @@ end
     end
 end
 
+@testset "broadcast" begin
+    testf(f, x) = Array(f(MtlArray(x))) ≈ f(x)
+    
+    @test testf(x->max.(x, zero(Float32)), randn(Float32, 1000))
+    @test testf(x->min.(x, one(Float32)), randn(Float32, 1000))
+    @test testf(x->min.(max.(x, zero(Float32)), one(Float32)), randn(Float32, 1000))
+    @test testf(x->max.(min.(x, one(Float32)), zero(Float32)), randn(Float32, 1000))
+end
+
 end
