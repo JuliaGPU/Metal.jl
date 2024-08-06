@@ -47,7 +47,7 @@ function __init__()
 
     # ensure that operations executed by the REPL back-end finish before returning,
     # because displaying values happens on a different task
-    if isdefined(Base, :active_repl_backend)
+    if isdefined(Base, :active_repl_backend) && !isnothing(Base.active_repl_backend)
         push!(Base.active_repl_backend.ast_transforms, synchronize_metal_tasks)
     end
 end
