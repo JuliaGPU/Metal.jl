@@ -33,6 +33,25 @@ end
     k(; threads=1)
 
     # TODO: kernel introspection
+    d_a = MtlArray([1.0f0, 2.0f0, 3.0f0, 4.0f0])
+    d_b = MtlArray([4.0f0, 3.0f0, 2.0f0, 1.0f0])
+    d_c = MtlArray([0.0f0, 0.0f0, 0.0f0, 0.0f0])
+
+    function vadd(a, b, c)
+        i = thread_position_in_grid_1d()
+        c[i] = a[i] + b[i]
+        return
+    end
+
+    kernel = @metal launch=false vadd(d_a, d_b, d_c)
+    kernel(d_a, d_b, d_c; threads=4)
+    @test all(d_c .== 5.0f0)
+
+    d_d = MtlArray([1.0f0, 2.0f0, 3.0f0, 4.0f0, 5.0f0])
+    d_e = MtlArray([5.0f0, 4.0f0, 3.0f0, 2.0f0, 1.0f0])
+    d_f = MtlArray([0.0f0, 0.0f0, 0.0f0, 0.0f0, 0.0f0])
+    kernel(d_d, d_e, d_f; threads=5)
+    @test all(d_f .== 6.0f0)
 end
 
 @testset "inference" begin
