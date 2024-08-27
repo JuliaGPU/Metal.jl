@@ -28,10 +28,12 @@ include("kernel.jl")
 include("images.jl")
 include("matrix.jl")
 include("vector.jl")
+include("matrixrandom.jl")
 include("decomposition.jl")
 include("copy.jl")
 
 # integrations
+include("random.jl")
 include("linalg.jl")
 
 end

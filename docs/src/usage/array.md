@@ -3,6 +3,12 @@
 ```@meta
 DocTestSetup = quote
     using Metal
+    using GPUArrays
+
+    import Random
+    Random.seed!(1)
+
+    Metal.seed!(1)
 end
 ```
 
@@ -106,3 +112,42 @@ julia> Base.mapreducedim!(identity, +, b, a)
 1×1 MtlMatrix{Float32, Metal.PrivateStorage}:
  6.0
 ```
+
+## Random numbers
+
+Base's convenience functions for generating random numbers are available in Metal as well:
+
+```jldoctest
+julia> Metal.rand(2)
+2-element MtlVector{Float32, Metal.PrivateStorage}:
+ 0.89025915
+ 0.8946847
+
+julia> Metal.randn(Float32, 2, 1)
+2×1 MtlMatrix{Float32, Metal.PrivateStorage}:
+ 1.2279074
+ 1.2518331
+```
+
+Behind the scenes, these random numbers come from two different generators: one backed by
+[Metal Performance Shaders](https://developer.apple.com/documentation/metalperformanceshaders/mpsmatrixrandom?language=objc),
+another by using the GPUArrays.jl random methods. Operations on these generators are implemented using methods from the Random
+standard library:
+
+```jldoctest
+julia> using Random, GPUArrays
+
+julia> a = Random.rand(MPS.default_rng(), Float32, 1)
+1-element MtlVector{Float32, Metal.PrivateStorage}:
+ 0.89025915
+
+julia> a = Random.rand!(GPUArrays.default_rng(MtlArray), a)
+1-element MtlVector{Float32, Metal.PrivateStorage}:
+ 0.0705002
+```
+
+!!! note
+    `MPSMatrixRandom` functionality requires Metal.jl >= v1.4
+
+!!! warning
+    `Random.rand!(::MPS.RNG, args...)` and `Random.randn!(::MPS.RNG, args...)` have a framework limitation that requires the byte offset and byte size of the destination array to be a multiple of 4.
