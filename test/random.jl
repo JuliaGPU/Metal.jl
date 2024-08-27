@@ -11,10 +11,6 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
     @testset "in-place" begin
         rng = Metal.MPS.RNG()
 
-        # Seed the default generators to work around value of 0 being
-        #  randomly generated in the size 1 Int8 Array test in 1.11
-        Metal.seed!(123)
-
         @testset "$f with $T" for (f, T) in INPLACE_TUPLES
             @testset "$d" for d in (1, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000))
                 A = MtlArray{T}(undef, d)
@@ -250,8 +246,8 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
             a = f(T, d)
             Metal.seed!(1)
             b = f(T, d)
-            # TODO: Remove once https://github.com/JuliaGPU/Metal.jl/issues/331 is fixed
-            @test iszero(collect(a) - collect(b)) broken = (T == Float16 && d == (1000,1000))
+            # TODO: Remove broken parameter once https://github.com/JuliaGPU/GPUArrays.jl/issues/530 is fixed
+            @test Array(a) == Array(b) broken = (T == Float16 && d == (1000,1000))
         end
     end
 end # testset
