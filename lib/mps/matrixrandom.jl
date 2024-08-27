@@ -106,7 +106,7 @@ for R in [:MPSMatrixRandomMTGP32, :MPSMatrixRandomPhilox]
     end
 end
 
-synchronizeStateOnCommandBuffer(kern::MPSMatrixRandomMTGP32, cmdbuf::MTLCommandBuffer) =
+synchronize_state(kern::MPSMatrixRandomMTGP32, cmdbuf::MTLCommandBuffer) =
     @objc [obj::id{MPSMatrixRandomMTGP32} synchronizeStateOnCommandBuffer:cmdbuf::id{MTLCommandBuffer}]::Nothing
 
 
