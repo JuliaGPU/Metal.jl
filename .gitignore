@@ -1,4 +1,4 @@
-Manifest.toml
+Manifest*.toml
 *.DS_Store
 *.gputrace
 *.trace
