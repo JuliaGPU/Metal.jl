@@ -87,4 +87,3 @@ Additional notes:
 ## Other Helpful Links
 
 [Metal Shading Language Specification](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf)
-[An Introduction to GPU Programming course from University of Illinois](https://wiki.illinois.edu/wiki/display/ECE408/Materials+from+prior+semesters) (primarily in CUDA, but the concepts are transferable)
