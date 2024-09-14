@@ -28,6 +28,7 @@ export MTLCommandBufferDescriptor
 @objcproperties MTLCommandBufferDescriptor begin
     @autoproperty retainedReferences::Bool setter=setRetainedReferences
     @autoproperty errorOptions::MTLCommandBufferErrorOption setter=setErrorOptions
+    @autoproperty logState::id{MTLLogState} setter=setLogState
 end
 
 function MTLCommandBufferDescriptor()
