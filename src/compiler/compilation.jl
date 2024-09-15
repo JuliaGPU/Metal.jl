@@ -80,7 +80,7 @@ end
 
     macos = macos_version()
     metal = metal_support()
-    # we support down to macOS 10.13, which support AIR 2.5
+    # we support down to macOS 13, which supports AIR 2.5
     # so always target that version for now
     air = v"2.5"
     @assert air <= air_support()
