@@ -25,5 +25,8 @@ steps:
       queue: "juliaecosystem"
       os: "macos"
       arch: "aarch64"
-    if: build.message !~ /\[skip docs\]/ && !build.pull_request.draft
+    if: |
+      build.message =~ /\[only docs\]/ ||
+      build.message !~ /\[only/ && !build.pull_request.draft &&
+        build.message !~ /\[skip docs\]/
     timeout_in_minutes: 30
