@@ -5,16 +5,16 @@ const n = 1000
 
 # generate some arrays
 cpu_mat = rand(rng, Float32, m, n)
-gpu_mat = CuArray{Float32}(undef, size(cpu_mat))
+gpu_mat = MtlArray{Float32}(undef, size(cpu_mat))
 gpu_vec = reshape(gpu_mat, length(gpu_mat))
 gpu_arr_3d = reshape(gpu_mat, (m, 40, 25))
 gpu_arr_4d = reshape(gpu_mat, (m, 10, 10, 10))
-gpu_mat_ints = CuArray(rand(rng, Int, m, n))
+gpu_mat_ints = MtlArray(rand(rng, Int, m, n))
 gpu_vec_ints = reshape(gpu_mat_ints, length(gpu_mat_ints))
-gpu_mat_bools = CuArray(rand(rng, Bool, m, n))
+gpu_mat_bools = MtlArray(rand(rng, Bool, m, n))
 gpu_vec_bools = reshape(gpu_mat_bools, length(gpu_mat_bools))
 
-group["construct"] = @benchmarkable CuArray{Int}(undef, 1)
+group["construct"] = @benchmarkable MtlArray{Int}(undef, 1)
 
 group["copy"] = @async_benchmarkable copy($gpu_mat)
 
@@ -26,7 +26,7 @@ let group = addgroup!(group, "copyto!")
 end
 
 let group = addgroup!(group, "iteration")
-    group["scalar"] = @benchmarkable CUDA.@allowscalar [$gpu_vec[i] for i in 1:10]
+    group["scalar"] = @benchmarkable Metal.@allowscalar [$gpu_vec[i] for i in 1:10]
 
     group["logical"] = @benchmarkable $gpu_vec[$gpu_vec_bools]
 
@@ -46,12 +46,12 @@ let group = addgroup!(group, "iteration")
     end
 end
 
-let group = addgroup!(group, "reverse")
-    group["1d"] = @async_benchmarkable reverse($gpu_vec)
-    group["2d"] = @async_benchmarkable reverse($gpu_mat; dims=1)
-    group["1d_inplace"] = @async_benchmarkable reverse!($gpu_vec)
-    group["2d_inplace"] = @async_benchmarkable reverse!($gpu_mat; dims=1)
-end
+# let group = addgroup!(group, "reverse")
+#     group["1d"] = @async_benchmarkable reverse($gpu_vec)
+#     group["2d"] = @async_benchmarkable reverse($gpu_mat; dims=1)
+#     group["1d_inplace"] = @async_benchmarkable reverse!($gpu_vec)
+#     group["2d_inplace"] = @async_benchmarkable reverse!($gpu_mat; dims=1)
+# end
 
 group["broadcast"] = @async_benchmarkable $gpu_mat .= 0f0
 
@@ -77,31 +77,31 @@ end
 
 let group = addgroup!(group, "random")
     let group = addgroup!(group, "rand")
-        group["Float32"] = @async_benchmarkable CUDA.rand(Float32, m*n)
-        group["Int64"] = @async_benchmarkable CUDA.rand(Int64, m*n)
+        group["Float32"] = @async_benchmarkable Metal.rand(Float32, m*n)
+        group["Int64"] = @async_benchmarkable Metal.rand(Int64, m*n)
     end
 
     let group = addgroup!(group, "rand!")
-        group["Float32"] = @async_benchmarkable CUDA.rand!($gpu_vec)
-        group["Int64"] = @async_benchmarkable CUDA.rand!($gpu_vec_ints)
+        group["Float32"] = @async_benchmarkable Metal.rand!($gpu_vec)
+        group["Int64"] = @async_benchmarkable Metal.rand!($gpu_vec_ints)
     end
 
     let group = addgroup!(group, "randn")
-        group["Float32"] = @async_benchmarkable CUDA.randn(Float32, m*n)
-        #group["Int64"] = @async_benchmarkable CUDA.randn(Int64, m*n)
+        group["Float32"] = @async_benchmarkable Metal.randn(Float32, m*n)
+        # group["Int64"] = @async_benchmarkable Metal.randn(Int64, m*n)
     end
 
     let group = addgroup!(group, "randn!")
-        group["Float32"] = @async_benchmarkable CUDA.randn!($gpu_vec)
-        #group["Int64"] = @async_benchmarkable CUDA.randn!($gpu_vec_ints)
+        group["Float32"] = @async_benchmarkable Metal.randn!($gpu_vec)
+        # group["Int64"] = @async_benchmarkable Metal.randn!($gpu_vec_ints)
     end
 end
 
-let group = addgroup!(group, "sorting")
-    group["1d"] = @async_benchmarkable sort($gpu_vec)
-    group["2d"] = @async_benchmarkable sort($gpu_mat; dims=1)
-    group["by"] = @async_benchmarkable sort($gpu_vec; by=sin)
-end
+# let group = addgroup!(group, "sorting")
+#     group["1d"] = @async_benchmarkable sort($gpu_vec)
+#     group["2d"] = @async_benchmarkable sort($gpu_mat; dims=1)
+#     group["by"] = @async_benchmarkable sort($gpu_vec; by=sin)
+# end
 
 let group = addgroup!(group, "permutedims")
     group["2d"] = @async_benchmarkable permutedims($gpu_mat, (2,1))

@@ -1,13 +1,12 @@
 module ByVal
 
-using CUDA, BenchmarkTools, Random
-using CUDA: i32
+using Metal, BenchmarkTools, Random
 
 const threads = 256
 
 # simple add matrixes kernel
 function kernel_add_mat(n, x1, x2, y)
-    i = (blockIdx().x-1i32) * blockDim().x + threadIdx().x
+    i = thread_position_in_grid_1d()
     if i <= n
         @inbounds y[i] = x1[i] + x2[i]
     end
@@ -20,8 +19,8 @@ end
 
 # add arrays of matrixes kernel
 function kernel_add_mat_z_slices(n, vararg...)
-    x1, x2, y = get_inputs3(blockIdx().y, vararg...)
-    i = (blockIdx().x-1i32) * blockDim().x + threadIdx().x
+    x1, x2, y = get_inputs3(threadgroup_position_in_grid_2d().y, vararg...)
+    i = thread_position_in_grid_1d()
     if i <= n
         @inbounds y[i] = x1[i] + x2[i]
     end
@@ -30,15 +29,15 @@ end
 
 function add_z_slices!(y, x1, x2)
     m1, n1 = size(x1[1]) #get size of first slice
-    blocks = (m1 * n1 + threads - 1) ÷ threads
-    # get length(x1) more blocks than needed to process 1 slice
-    @cuda blocks = blocks, length(x1) threads = threads kernel_add_mat_z_slices(m1 * n1, x1..., x2..., y...)
+    groups = (m1 * n1 + threads - 1) ÷ threads
+    # get length(x1) more groups than needed to process 1 slice
+    @metal groups = groups, length(x1) threads = threads kernel_add_mat_z_slices(m1 * n1, x1..., x2..., y...)
 end
 
 function add!(y, x1, x2)
     m1, n1 = size(x1)
-    blocks = (m1 * n1 + threads - 1) ÷ threads
-    @cuda blocks = blocks, 1          threads = threads kernel_add_mat(m1 * n1, x1, x2, y)
+    groups = (m1 * n1 + threads - 1) ÷ threads
+    @metal groups = (groups, 1)  threads = threads kernel_add_mat(m1 * n1, x1, x2, y)
 end
 
 function main()
@@ -54,22 +53,22 @@ function main()
     m, n = 3072, 1536    # 256 multiplier
     #m, n = 6007, 3001    # prime numbers to test memory access correctness
 
-    x1 = [cu(randn(Float32, (m, n)) .+ Float32(0.5)) for i = 1:num_z_slices]
-    x2 = [cu(randn(Float32, (m, n)) .+ Float32(0.5)) for i = 1:num_z_slices]
+    x1 = [mtl(randn(Float32, (m, n)) .+ Float32(0.5)) for i = 1:num_z_slices]
+    x2 = [mtl(randn(Float32, (m, n)) .+ Float32(0.5)) for i = 1:num_z_slices]
     y1 = [similar(x1[1]) for i = 1:num_z_slices]
 
     # reference down to bones add on GPU
-    results["reference"] = @benchmark CUDA.@sync blocking=true add!($y1[1], $x1[1], $x2[1])
+    results["reference"] = @benchmark Metal.@sync add!($y1[1], $x1[1], $x2[1])
 
     # adding arrays in an array
     for slices = 1:num_z_slices
-        results["slices=$slices"] = @benchmark CUDA.@sync blocking=true add_z_slices!($y1[1:$slices], $x1[1:$slices], $x2[1:$slices])
+        results["slices=$slices"] = @benchmark Metal.@sync add_z_slices!($y1[1:$slices], $x1[1:$slices], $x2[1:$slices])
     end
 
     # BenchmarkTools captures inputs, JuliaCI/BenchmarkTools.jl#127, so forcibly free them
-    CUDA.unsafe_free!.(x1)
-    CUDA.unsafe_free!.(x2)
-    CUDA.unsafe_free!.(y1)
+    Metal.unsafe_free!.(x1)
+    Metal.unsafe_free!.(x2)
+    Metal.unsafe_free!.(y1)
 
     return results
 end

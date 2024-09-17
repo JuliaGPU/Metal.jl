@@ -1,7 +1,7 @@
 module VolumeRHS
 
 using BenchmarkTools
-using CUDA
+using Metal
 using StableRNGs
 using StaticArrays
 
@@ -20,16 +20,16 @@ end
 
 # HACK: module-local versions of core arithmetic; needed to get FMA
 for (jlf, f) in zip((:+, :*, :-), (:add, :mul, :sub))
-    for (T, llvmT) in ((:Float32, "float"), (:Float64, "double"))
-        ir = """
-            %x = f$f contract nsz $llvmT %0, %1
-            ret $llvmT %x
-        """
-        @eval begin
-            # the @pure is necessary so that we can constant propagate.
-            @inline Base.@pure function $jlf(a::$T, b::$T)
-                Base.llvmcall($ir, $T, Tuple{$T, $T}, a, b)
-            end
+    T = :Float32
+    llvmT = "float"
+    ir = """
+        %x = f$f contract nsz $llvmT %0, %1
+        ret $llvmT %x
+    """
+    @eval begin
+        # the @pure is necessary so that we can constant propagate.
+        @inline Base.@pure function $jlf(a::$T, b::$T)
+            Base.llvmcall($ir, $T, Tuple{$T, $T}, a, b)
         end
     end
     @eval function $jlf(args...)
@@ -38,16 +38,16 @@ for (jlf, f) in zip((:+, :*, :-), (:add, :mul, :sub))
 end
 
 let (jlf, f) = (:div_arcp, :div)
-    for (T, llvmT) in ((:Float32, "float"), (:Float64, "double"))
-        ir = """
-            %x = f$f fast $llvmT %0, %1
-            ret $llvmT %x
-        """
-        @eval begin
-            # the @pure is necessary so that we can constant propagate.
-            @inline Base.@pure function $jlf(a::$T, b::$T)
-                Base.llvmcall($ir, $T, Tuple{$T, $T}, a, b)
-            end
+    T = :Float32
+    llvmT = "float"
+    ir = """
+        %x = f$f fast $llvmT %0, %1
+        ret $llvmT %x
+    """
+    @eval begin
+        # the @pure is necessary so that we can constant propagate.
+        @inline Base.@pure function $jlf(a::$T, b::$T)
+            Base.llvmcall($ir, $T, Tuple{$T, $T}, a, b)
         end
     end
     @eval function $jlf(args...)
@@ -77,8 +77,10 @@ const N = 4
 const nmoist = 0
 const ntrace = 0
 
-Base.@irrational grav 9.81 BigFloat(9.81)
-Base.@irrational gdm1 0.4 BigFloat(0.4)
+# Base.@irrational grav 9.81 BigFloat(9.81)
+const grav = 9.81f0
+# Base.@irrational gdm1 0.4 BigFloat(0.4)
+const gdm1 = 0.4f0
 
 function volumerhs!(rhs, Q, vgeo, gravity, D, nelem)
     Q = Base.Experimental.Const(Q)
@@ -99,9 +101,9 @@ function volumerhs!(rhs, Q, vgeo, gravity, D, nelem)
     r_rhsW = MArray{Tuple{Nq}, eltype(rhs)}(undef)
     r_rhsE = MArray{Tuple{Nq}, eltype(rhs)}(undef)
 
-    e = blockIdx().x
-    j = threadIdx().y
-    i = threadIdx().x
+    e = threadgroup_position_in_grid_2d().x
+    j = thread_position_in_threadgroup_2d().y
+    i = thread_position_in_threadgroup_2d().x
 
     @inbounds begin
         for k in 1:Nq
@@ -233,37 +235,37 @@ function main()
     Nq = N + 1
     nvar = _nstate + nmoist + ntrace
 
-    Q = 1 .+ CuArray(rand(rng, DFloat, Nq, Nq, Nq, nvar, nelem))
+    Q = 1 .+ MtlArray(rand(rng, DFloat, Nq, Nq, Nq, nvar, nelem))
     Q[:, :, :, _E, :] .+= 20
-    vgeo = CuArray(rand(rng, DFloat, Nq, Nq, Nq, _nvgeo, nelem))
+    vgeo = MtlArray(rand(rng, DFloat, Nq, Nq, Nq, _nvgeo, nelem))
 
     # make sure the entries of the mass matrix satisfy the inverse relation
     vgeo[:, :, :, _MJ, :] .+= 3
     vgeo[:, :, :, _MJI, :] .= 1 ./ vgeo[:, :, :, _MJ, :]
 
-    D = CuArray(rand(rng, DFloat, Nq, Nq))
+    D = MtlArray(rand(rng, DFloat, Nq, Nq))
 
-    rhs = CuArray(zeros(DFloat, Nq, Nq, Nq, nvar, nelem))
+    rhs = MtlArray(zeros(DFloat, Nq, Nq, Nq, nvar, nelem))
 
     threads=(N+1, N+1)
 
-    kernel = @cuda launch=false volumerhs!(rhs, Q, vgeo, DFloat(grav), D, nelem)
+    kernel = @metal launch=false volumerhs!(rhs, Q, vgeo, DFloat(grav), D, nelem)
     # XXX: should we print these for all kernels? maybe upload them to Codespeed?
-    @info """volumerhs! details:
-              - $(CUDA.registers(kernel)) registers, max $(CUDA.maxthreads(kernel)) threads
-              - $(Base.format_bytes(CUDA.memory(kernel).local)) local memory,
-                $(Base.format_bytes(CUDA.memory(kernel).shared)) shared memory,
-                $(Base.format_bytes(CUDA.memory(kernel).constant)) constant memory"""
+    # @info """volumerhs! details:
+    #           - $(Metal.registers(kernel)) registers, max $(Metal.maxthreads(kernel)) threads
+    #           - $(Base.format_bytes(Metal.memory(kernel).local)) local memory,
+    #             $(Base.format_bytes(Metal.memory(kernel).shared)) shared memory,
+    #             $(Base.format_bytes(Metal.memory(kernel).constant)) constant memory"""
     results = @benchmark begin
-        CUDA.@sync blocking=true $kernel($rhs, $Q, $vgeo, $(DFloat(grav)), $D, $nelem;
-                                         threads=$threads, blocks=$nelem)
+        Metal.@sync blocking=true $kernel($rhs, $Q, $vgeo, $(DFloat(grav)), $D, $nelem;
+                                         threads=$threads, groups=$nelem)
     end
 
     # BenchmarkTools captures inputs, JuliaCI/BenchmarkTools.jl#127, so forcibly free them
-    CUDA.unsafe_free!(rhs)
-    CUDA.unsafe_free!(Q)
-    CUDA.unsafe_free!(vgeo)
-    CUDA.unsafe_free!(D)
+    Metal.unsafe_free!(rhs)
+    Metal.unsafe_free!(Q)
+    Metal.unsafe_free!(vgeo)
+    Metal.unsafe_free!(D)
 
     results
 end

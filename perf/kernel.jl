@@ -1,33 +1,35 @@
-using CUDA: i32
+# using GPUArrays
 
 group = addgroup!(SUITE, "kernel")
 
-group["launch"] = @benchmarkable @cuda identity(nothing)
+group["launch"] = @benchmarkable @metal identity(nothing)
 
-group["occupancy"] = @benchmarkable begin
-    kernel = @cuda launch=false identity(nothing)
-    launch_configuration(kernel.fun)
-end
+# group["occupancy"] = @benchmarkable begin
+#     kernel = @metal launch=false identity(nothing)
+#     GPUArrays.launch_heuristic(Metal.mtlArrayBackend(), kernel.f; elements=1, elements_per_thread=1)
+#     return
+# end
 
-src = CUDA.rand(Float32, 512, 1000)
+src = Metal.rand(Float32, 512, 1000)
 dest = similar(src)
 function indexing_kernel(dest, src)
-    i = (blockIdx().x-1i32) * blockDim().x + threadIdx().x
+    i = thread_position_in_grid_1d()
     @inbounds dest[i] = src[i]
     return
 end
-group["indexing"] = @async_benchmarkable @cuda threads=size(src,1) blocks=size(src,2) $indexing_kernel($dest, $src)
+group["indexing"] = @async_benchmarkable @metal threads=size(src,1) groups=size(src,2) $indexing_kernel($dest, $src)
 
 function checked_indexing_kernel(dest, src)
-    i = (blockIdx().x-1i32) * blockDim().x + threadIdx().x
+    i = thread_position_in_grid_1d()
     dest[i] = src[i]
     return
 end
-group["indexing_checked"] = @async_benchmarkable @cuda threads=size(src,1) blocks=size(src,2) $checked_indexing_kernel($dest, $src)
+group["indexing_checked"] = @async_benchmarkable @metal threads=size(src,1) groups=size(src,2) $checked_indexing_kernel($dest, $src)
 
-function rand_kernel(dest::AbstractArray{T}) where {T}
-    i = (blockIdx().x-1i32) * blockDim().x + threadIdx().x
-    dest[i] = rand(T)
-    return
-end
-group["rand"] = @async_benchmarkable @cuda threads=size(src,1) blocks=size(src,2) $rand_kernel($dest)
+## DELETE
+# function rand_kernel(dest::AbstractArray{T}) where {T}
+#     i = thread_position_in_grid_1d()
+#     dest[i] = Metal.rand(T)
+#     return
+# end
+# group["rand"] = @async_benchmarkable @metal threads=size(src,1) groups=size(src,2) $rand_kernel($dest)
