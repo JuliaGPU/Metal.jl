@@ -1,6 +1,6 @@
 # benchmark suite execution and codespeed submission
 
-using CUDA
+using Metal
 
 using BenchmarkTools
 
@@ -8,7 +8,9 @@ using StableRNGs
 rng = StableRNG(123)
 
 # we only submit results when running on the master branch
-real_run = get(ENV, "CODESPEED_BRANCH", nothing) == "master"
+# real_run = get(ENV, "CODESPEED_BRANCH", nothing) == "master"
+# real_run = true
+real_run = false
 if real_run
     # to find untuned benchmarks
     BenchmarkTools.DEFAULT_PARAMETERS.evals = 0
@@ -17,7 +19,7 @@ end
 # convenience macro to create a benchmark that requires synchronizing the GPU
 macro async_benchmarkable(ex...)
     quote
-        @benchmarkable CUDA.@sync blocking=true $(ex...)
+        @benchmarkable Metal.@sync $(ex...)
     end
 end
 
@@ -30,7 +32,7 @@ SUITE = BenchmarkGroup()
 
 # NOTE: don't use spaces in benchmark names (tobami/codespeed#256)
 
-include("cuda.jl")
+include("metal.jl")
 include("kernel.jl")
 include("array.jl")
 
@@ -41,7 +43,8 @@ if real_run
 
     # reclaim memory that might have been used by the tuning process
     GC.gc(true)
-    CUDA.reclaim()
+    GC.gc(true)
+    GC.gc(true)
 end
 
 # benchmark groups that aren't part of the suite
@@ -53,9 +56,9 @@ results = run(SUITE, verbose=true)
 # integration tests (that do nasty things, so need to be run last)
 @info "Running integration benchmarks"
 integration_results = BenchmarkGroup()
-integration_results["volumerhs"] = include("volumerhs.jl")
+# integration_results["volumerhs"] = include("volumerhs.jl")
 integration_results["byval"] = include("byval.jl")
-integration_results["cudadevrt"] = include("cudadevrt.jl")
+integration_results["metaldevrt"] = include("metaldevrt.jl")
 
 results["latency"] = latency_results
 results["integration"] = integration_results
@@ -87,42 +90,42 @@ end
 
 using JSON, HTTP
 
-if real_run
-    @info "Submitting to Codespeed..."
+# if real_run
+#     @info "Submitting to Codespeed..."
 
-    basedata = Dict(
-        "branch"        => ENV["CODESPEED_BRANCH"],
-        "commitid"      => ENV["CODESPEED_COMMIT"],
-        "project"       => ENV["CODESPEED_PROJECT"],
-        "environment"   => ENV["CODESPEED_ENVIRONMENT"],
-        "executable"    => ENV["CODESPEED_EXECUTABLE"]
-    )
+#     basedata = Dict(
+#         "branch"        => ENV["CODESPEED_BRANCH"],
+#         "commitid"      => ENV["CODESPEED_COMMIT"],
+#         "project"       => ENV["CODESPEED_PROJECT"],
+#         "environment"   => ENV["CODESPEED_ENVIRONMENT"],
+#         "executable"    => ENV["CODESPEED_EXECUTABLE"]
+#     )
 
-    # convert nested groups of benchmark to flat dictionaries of results
-    flat_results = []
-    function flatten(results, prefix="")
-        for (key,value) in results
-            if value isa BenchmarkGroup
-                flatten(value, "$prefix$key/")
-            else
-                @assert value isa BenchmarkTools.Trial
+#     # convert nested groups of benchmark to flat dictionaries of results
+#     flat_results = []
+#     function flatten(results, prefix="")
+#         for (key,value) in results
+#             if value isa BenchmarkGroup
+#                 flatten(value, "$prefix$key/")
+#             else
+#                 @assert value isa BenchmarkTools.Trial
 
-                # codespeed reports maxima, but those are often very noisy.
-                # get rid of measurements that unnecessarily skew the distribution.
-                rmskew!(value)
+#                 # codespeed reports maxima, but those are often very noisy.
+#                 # get rid of measurements that unnecessarily skew the distribution.
+#                 rmskew!(value)
 
-                push!(flat_results,
-                    Dict(basedata...,
-                        "benchmark" => "$prefix$key",
-                        "result_value" => median(value).time / 1e9,
-                        "min" => minimum(value).time / 1e9,
-                        "max" => maximum(value).time / 1e9))
-            end
-        end
-    end
-    flatten(results)
+#                 push!(flat_results,
+#                     Dict(basedata...,
+#                         "benchmark" => "$prefix$key",
+#                         "result_value" => median(value).time / 1e9,
+#                         "min" => minimum(value).time / 1e9,
+#                         "max" => maximum(value).time / 1e9))
+#             end
+#         end
+#     end
+#     flatten(results)
 
-    HTTP.post("$(ENV["CODESPEED_SERVER"])/result/add/json/",
-                ["Content-Type" => "application/x-www-form-urlencoded"],
-                HTTP.URIs.escapeuri(Dict("json" => JSON.json(flat_results))))
-end
+#     HTTP.post("$(ENV["CODESPEED_SERVER"])/result/add/json/",
+#                 ["Content-Type" => "application/x-www-form-urlencoded"],
+#                 HTTP.URIs.escapeuri(Dict("json" => JSON.json(flat_results))))
+# end
