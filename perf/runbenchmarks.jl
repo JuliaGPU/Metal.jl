@@ -14,6 +14,9 @@ if real_run
     BenchmarkTools.DEFAULT_PARAMETERS.evals = 0
 end
 
+# print system information
+@info "System information:\n" * sprint(io->Metal.versioninfo(io))
+
 # convenience macro to create a benchmark that requires synchronizing the GPU
 macro async_benchmarkable(ex...)
     quote
@@ -66,7 +69,7 @@ println(results)
 ## comparison
 
 # write out the results
-BenchmarkTools.save(joinpath(@__DIR__, "results.json"), results)
+BenchmarkTools.save("benchmarkresults.json", results)
 
 # compare against previous results
 # TODO: store these results so that we can compare when benchmarking PRs
@@ -85,7 +88,7 @@ end
 
 ## submission
 
-using JSON, HTTP
+# using JSON, HTTP
 
 if real_run
     @info "Submitting to Codespeed..."
