@@ -1,5 +1,5 @@
 const MTLLOG_SUBSYSTEM = "com.juliagpu.metal.jl"
-const MTLLOG_CATEGRORY = "mtlprintf" 
+const MTLLOG_CATEGORY = "mtlprintf" 
 
 const __METAL_OS_LOG_TYPE_DEBUG__ = Int32(2)
 const __METAL_OS_LOG_TYPE_INFO__ = Int32(1)
