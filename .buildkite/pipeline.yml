@@ -150,37 +150,35 @@ steps:
           build.message !~ /\[only/ && !build.pull_request.draft &&
             build.message !~ /\[skip benchmarks\]/
         timeout_in_minutes: 30
+      # - label: "Benchmarks (dry run)"
+      #   plugins:
+      #     - JuliaCI/julia#v1:
+      #         version: "1.10"
+      #   command: |
+      #     julia --project -e '
+      #       using Pkg
 
+      #       println("--- :julia: Instantiating project")
+      #       Pkg.resolve()
+      #       Pkg.instantiate()
+      #       Pkg.activate("perf")
+      #       Pkg.resolve()
+      #       Pkg.instantiate()
+      #       push!(LOAD_PATH, @__DIR__)
 
-      - label: "Benchmarks (dry run)"
-        plugins:
-          - JuliaCI/julia#v1:
-              version: "1.10"
-        command: |
-          julia --project -e '
-            using Pkg
-
-            println("--- :julia: Instantiating project")
-            Pkg.resolve()
-            Pkg.instantiate()
-            Pkg.activate("perf")
-            Pkg.resolve()
-            Pkg.instantiate()
-            push!(LOAD_PATH, @__DIR__)
-
-            println("+++ :julia: Benchmarking")
-            include("perf/runbenchmarks.jl")'
-        artifact_paths:
-          - "results.json"
-        agents:
-          queue: "juliaecosystem"
-          os: "macos"
-          arch: "aarch64"
-        if: |
-          build.message =~ /\[only benchmarks\]/ ||
-          build.message !~ /\[only/ && !build.pull_request.draft &&
-            build.message !~ /\[skip benchmarks\]/
-        timeout_in_minutes: 30
+      #       println("+++ :julia: Benchmarking")
+      #       include("perf/runbenchmarks.jl")'
+      #   artifact_paths:
+      #     - "results.json"
+      #   agents:
+      #     queue: "juliaecosystem"
+      #     os: "macos"
+      #     arch: "aarch64"
+      #   if: |
+      #     build.message =~ /\[only benchmarks\]/ ||
+      #     build.message !~ /\[only/ && !build.pull_request.draft &&
+      #       build.message !~ /\[skip benchmarks\]/
+      #   timeout_in_minutes: 30
 
       # if we will submit results, use the benchmark queue so that we will
       # be running on the same system each time
