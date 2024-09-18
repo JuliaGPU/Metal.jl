@@ -123,9 +123,35 @@ steps:
     # continue_on_failure: true
 
   - group: ":racehorse: Benchmarks"
-    steps:
-      # benchmarks outside of the master branch don't submit their results,
-      # so they can run on any system in the juliagpu queue.
+      steps:
+      - label: "Metal: Run Benchmarks"
+        plugins:
+          - JuliaCI/julia#v1:
+              version: "1.10"
+        command: |
+            julia --project=perf -e '
+              using Pkg
+
+              println("--- :julia: Instantiating project")
+              Pkg.develop([PackageSpec(path=pwd())])
+              Pkg.instantiate()
+              push!(LOAD_PATH, @__DIR__)
+
+              println("+++ :julia: Benchmarking")
+              include("perf/runbenchmarks.jl")'
+        artifact_paths:
+          - "benchmarkresults.json"
+        agents:
+          queue: "juliaecosystem"
+          os: "macos"
+          arch: "aarch64"
+        if: |
+          build.message =~ /\[only benchmarks\]/ ||
+          build.message !~ /\[only/ && !build.pull_request.draft &&
+            build.message !~ /\[skip benchmarks\]/
+        timeout_in_minutes: 30
+
+
       - label: "Benchmarks (dry run)"
         plugins:
           - JuliaCI/julia#v1:

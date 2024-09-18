@@ -72,7 +72,7 @@ println(results)
 ## comparison
 
 # write out the results
-BenchmarkTools.save("results.json", results)
+BenchmarkTools.save("benchmarkresults.json", results)
 
 # compare against previous results
 # TODO: store these results so that we can compare when benchmarking PRs
