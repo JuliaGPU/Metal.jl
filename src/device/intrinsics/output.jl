@@ -108,7 +108,7 @@ end
 
             str = globalstring_ptr!(builder, String(fmt), addrspace=2)
             subsystem_str = globalstring_ptr!(builder, MTLLOG_SUBSYSTEM, addrspace=2)
-            category_str = globalstring_ptr!(builder, MTLLOG_CATEGRORY, addrspace=2)
+            category_str = globalstring_ptr!(builder, MTLLOG_CATEGORY, addrspace=2)
             log_type = LLVM.ConstantInt(T_int32, __METAL_OS_LOG_TYPE_DEBUG__)
 
             # compute argsize
