@@ -22,7 +22,7 @@ steps:
         if: |
           build.message =~ /\[only tests\]/ ||
           build.message =~ /\[only julia\]/ ||
-          build.message !~ /\[only/ && !build.pull_request.draft &&
+          build.message !~ /\[only/ &&
             build.message !~ /\[skip tests\]/ &&
             build.message !~ /\[skip julia\]/
         timeout_in_minutes: 60
