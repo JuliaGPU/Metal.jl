@@ -282,7 +282,7 @@ Uses `MPSMatrixFindTopK`.
 
 See also: [`topk`](@ref).
 
-!!! warn
+!!! warning
     This interface is experimental, and might change without warning.
 """
 function topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
@@ -325,7 +325,7 @@ Uses `MPSMatrixFindTopK`.
 
 See also: [`topk!`](@ref).
 
-!!! warn
+!!! warning
     This interface is experimental, and might change without warning.
 """
 function topk(A::MtlMatrix{T,S}, k) where {T<:MtlFloat,S}
