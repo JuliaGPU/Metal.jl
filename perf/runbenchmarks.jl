@@ -64,7 +64,7 @@ println(results)
 ## comparison
 
 # write out the results
-BenchmarkTools.save("benchmarkresults.json", results)
+BenchmarkTools.save("benchmarkresults.json", median(results))
 
 # compare against previous results
 # TODO: store these results so that we can compare when benchmarking PRs
