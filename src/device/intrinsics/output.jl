@@ -18,35 +18,10 @@ export @mtlprintf
 
     if arg == Cchar || arg == Cshort
         return :(Cint(arg))
+    elseif arg == Cfloat
+        return :(Cdouble(arg))
     else
         return :(arg)
-    end
-end
-
-@generated function tag_doubles(arg)
-    @dispose ctx=Context() begin
-        ret = arg == Cfloat ? Cdouble : arg
-        T_arg = convert(LLVMType, arg)
-        T_ret = convert(LLVMType, ret)
-
-        f, ft = create_function(T_ret, [T_arg])
-
-        @dispose builder=IRBuilder() begin
-            entry = BasicBlock(f, "entry")
-            position!(builder, entry)
-
-            p1 = parameters(f)[1]
-
-            if arg == Cfloat
-                res = fpext!(builder, p1, LLVM.DoubleType())
-                metadata(res)["ir_check_ignore"] = MDNode([])
-                ret!(builder, res) 
-            else
-                ret!(builder, p1) 
-            end
-        end
-
-        call_function(f, ret, Tuple{arg}, :arg)
     end
 end
 
@@ -76,7 +51,7 @@ macro mtlprintf(fmt::String, args...)
         if metal_version() < sv"3.2"
             @print_and_throw "@mtlprintf requires Metal 3.2 (macOS 15) or higher"
         else
-            _mtlprintf($fmt_val, $(map(arg -> :(tag_doubles(promote_c_argument($arg))), esc.(args))...))
+            _mtlprintf($fmt_val, $(map(arg -> :(promote_c_argument($arg)), esc.(args))...))
         end
     end
 end
@@ -148,8 +123,7 @@ end
             entry = BasicBlock(wrapper_f, "entry")
             position!(builder, entry)
             
-            call = call!(builder, llvm_ft, llvm_f, collect(parameters(wrapper_f)))
-            metadata(call)["ir_check_ignore"] = MDNode([])
+            call!(builder, llvm_ft, llvm_f, collect(parameters(wrapper_f)))
             
             ret!(builder)
         end
