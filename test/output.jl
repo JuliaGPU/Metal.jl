@@ -1,6 +1,12 @@
 @testset "output" begin
-    if Metal.macos_version() >= v"15"
-    @testset "formatted output" begin
+
+if Metal.macos_version() < v"15"
+
+@warn "Skipping output tests in macOS 14 and below"
+
+else
+
+@testset "formatted output" begin
         _, out = @grab_output @on_device @mtlprintf("")
         @test out == ""
     
