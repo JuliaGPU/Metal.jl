@@ -1,5 +1,5 @@
 @testset "output" begin
-
+    if Metal.macos_version() >= v"15"
     @testset "formatted output" begin
         _, out = @grab_output @on_device @mtlprintf("")
         @test out == ""
@@ -134,5 +134,6 @@
         _, out = @grab_output @on_device kernel()
         @test out == "seven_i32 = 7\nthree_f32 = 3.000000\n1.0f0 + 4.0f0 = 5.000000\n"
     end
+end
 end
     
