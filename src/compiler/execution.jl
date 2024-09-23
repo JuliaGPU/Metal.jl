@@ -283,7 +283,7 @@ end
 
         log_state_descriptor = MTLLogStateDescriptor()
         log_state_descriptor.level = MTL.MTLLogLevelDebug
-        log_state = MTLLogState(device(), log_state_descriptor)
+        log_state = MTLLogState(queue.device, log_state_descriptor)
 
         function log_handler(subSystem, category, logLevel, message)
             print(String(NSString(message)))
