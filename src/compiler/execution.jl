@@ -5,7 +5,7 @@ export @metal
 
 const MACRO_KWARGS = [:launch]
 const COMPILER_KWARGS = [:kernel, :name, :always_inline, :macos, :air, :metal]
-const LAUNCH_KWARGS = [:groups, :threads, :queue]
+const LAUNCH_KWARGS = [:groups, :threads, :queue, :scratch_space_size]
 
 """
     @metal threads=... groups=... [kwargs...] func(args...)
@@ -264,7 +264,8 @@ end
 end
 
 @autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
-                                               queue=global_queue(device()))
+                                               queue=global_queue(device()), 
+                                               scratch_space_size=64)
     groups = MTLSize(groups)
     threads = MTLSize(threads)
     (groups.width>0 && groups.height>0 && groups.depth>0) ||
@@ -275,12 +276,20 @@ end
     (threads.width * threads.height * threads.depth) > kernel.pipeline.maxTotalThreadsPerThreadgroup &&
         throw(ArgumentError("Number of threads in group ($(threads.width * threads.height * threads.depth)) should not exceed $(kernel.pipeline.maxTotalThreadsPerThreadgroup)"))
 
+    if scratch_space_size > 0
+        scratch_space = MTLBuffer(queue.device, scratch_space_size)
+    end
+
     cmdbuf = MTLCommandBuffer(queue)
     cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
     cce = MTLComputeCommandEncoder(cmdbuf)
     argument_buffers = try
         MTL.set_function!(cce, kernel.pipeline)
-        bufs = encode_arguments!(cce, kernel, kernel.f, args...)
+        if scratch_space_size > 0
+            bufs = encode_arguments!(cce, kernel, kernel.f, args..., scratch_space)
+        else
+            bufs = encode_arguments!(cce, kernel, kernel.f, args...)
+        end
         MTL.append_current_function!(cce, groups, threads)
         bufs
     finally
