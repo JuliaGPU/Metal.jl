@@ -100,3 +100,19 @@ end
     unsafe_store!(pointer(A), x, index, Val(align))
     return A
 end
+
+# Dynamic Global Memory Allocation and Operations (B.21)
+
+export malloc
+
+
+@inline function malloc(sz::Csize_t)
+    # TODO: bump allocator
+    ptr = ccall("extern julia.air.get_global.pi8", llvmcall, Ptr{Cvoid}, (Csize_t), sz)
+    convert(Int64, ptr)
+end
+
+
+@inline function free(ptr::Ptr{Cvoid})::Nothing
+    return
+end

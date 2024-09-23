@@ -6,7 +6,7 @@ const MetalCompilerJob = CompilerJob{MetalCompilerTarget, MetalCompilerParams}
 
 GPUCompiler.runtime_module(::MetalCompilerJob) = Metal
 
-GPUCompiler.method_table(::MetalCompilerJob) = method_table
+GPUCompiler.method_table(::MetalCompilerJob) = method_ftable
 
 
 function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
