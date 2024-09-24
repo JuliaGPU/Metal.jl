@@ -12,6 +12,7 @@ using ObjectFile
 using ExprTools: splitdef, combinedef
 using Artifacts
 using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
+import KernelAbstractions
 
 include("version.jl")
 
