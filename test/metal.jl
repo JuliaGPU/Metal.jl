@@ -463,6 +463,15 @@ end
     end
 end
 
+@testset "MTLSize convenience constructors" begin
+    mtlsize = MTLSize(0x1, 0x1, 0x1)
+    @test MTLSize((1,))          == mtlsize
+    @test MTLSize((1,1))         == mtlsize
+    @test MTLSize((1,1,1))       == mtlsize
+    @test MTLSize((1,Int8(1)))   == mtlsize
+    @test MTLSize((1,Int8(1),1)) == mtlsize
+end
+
 # TODO: continue adding tests
 
 end
