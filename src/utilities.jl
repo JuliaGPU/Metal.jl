@@ -23,19 +23,11 @@ function versioninfo(io::IO=stdout)
     println(io)
 
     println(io, "Julia packages: ")
-    ## get a hold of Pkg without adding a dependency on the package
-    Pkg = let
-        id = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-        Base.loaded_modules[id]
-    end
-    ## look at the Project.toml to determine our version
-    project = Pkg.Operations.read_project(Pkg.Types.projectfile_path(pkgdir(Metal)))
-    println(io, "- Metal.jl: $(project.version)")
-    ## dependencies
-    deps = Pkg.dependencies()
-    versions = Dict(map(uuid->deps[uuid].name => deps[uuid].version, collect(keys(deps))))
-    for dep in ["LLVMDowngrader_jll"]
-        println(io, "- $dep: $(versions[dep])")
+    println(io, "- Metal.jl: $(Base.pkgversion(Metal))")
+    for name in [:GPUArrays, :GPUCompiler, :KernelAbstractions, :ObjectiveC,
+                 :LLVM, :LLVMDowngrader_jll]
+        mod = getfield(Metal, name)
+        println(io, "- $(name): $(Base.pkgversion(mod))")
     end
     println(io)
 
