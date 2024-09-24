@@ -173,7 +173,7 @@ a callable kernel object. For a higher-level interface, use [`@metal`](@ref).
 
 The following keyword arguments are supported:
 - `macos`, `metal` and `air`: to override the macOS OS, Metal language and AIR bitcode
-   versions used during compilation.
+   versions used during compilation. Value should be a valid version number.
 
 The output of this function is automatically cached, i.e. you can simply call `mtlfunction`
 in a hot path without degrading performance. New code will be generated automatically when
