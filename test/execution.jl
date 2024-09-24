@@ -13,13 +13,17 @@ dummy() = return
     @metal threads dummy()
     @metal threads=1 dummy()
     @metal threads=(1,1) dummy()
+    @metal threads=(Int32(1),Int64(1)) dummy()
     @metal threads=(1,1,1) dummy()
+    @metal threads=(Int8(1),Int32(1),1) dummy()
 
     groups = 1
     @metal groups dummy()
     @metal groups=1 dummy()
     @metal groups=(1,1) dummy()
+    @metal groups=(Int32(1),Int64(1)) dummy()
     @metal groups=(1,1,1) dummy()
+    @metal groups=(Int8(1),Int32(1),1) dummy()
 
     @metal macos=Metal.macos_version() dummy()
     @metal metal=Metal.metal_support() dummy()
