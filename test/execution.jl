@@ -21,6 +21,10 @@ dummy() = return
     @metal groups=(1,1) dummy()
     @metal groups=(1,1,1) dummy()
 
+    @metal macos=Metal.macos_version() dummy()
+    @metal metal=Metal.metal_support() dummy()
+    @metal air=Metal.air_support() dummy()
+
     @test_throws InexactError @metal threads=(-2) dummy()
     @test_throws InexactError @metal groups=(-2) dummy()
     @test_throws ArgumentError @metal threads=(1025) dummy()
@@ -94,6 +98,21 @@ end
     @test occursin("mykernel", sprint(io->(@device_code_llvm io=io begin
         @metal name="mykernel" dummy()
     end)))
+
+    # set macOS, AIR, and Metal versions
+    let
+        @test occursin("""!{!"Metal", i32 3, i32 2, i32 1}""",
+                       sprint(io->Metal.code_llvm(io, dummy, Tuple{}; metal=v"3.2.1",
+                                                      dump_module=true, kernel=true)))
+
+        @test occursin("!{i32 3, i32 2, i32 1}",
+                       sprint(io->Metal.code_llvm(io, dummy, Tuple{}; air=v"3.2.1",
+                                                      dump_module=true, kernel=true)))
+
+        @test occursin("""!"SDK Version", [3 x i32] [i32 3, i32 2, i32 1]}""",
+                       sprint(io->Metal.code_llvm(io, dummy, Tuple{}; macos=v"3.2.1",
+                                                      dump_module=true, kernel=true)))
+    end
 
     @test Metal.return_type(identity, Tuple{Int}) === Int
     @test Metal.return_type(sin, Tuple{Float32}) === Float32
