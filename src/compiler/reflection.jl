@@ -27,7 +27,7 @@ signature to `io` which defaults to `stdout`.
 
 See also: [`@device_code_agx`](@ref)
 """
-function code_agx(io::IO, @nospecialize(func), @nospecialize(types),
+function code_agx(io::IO, @nospecialize(func::Base.Callable), @nospecialize(types),
                   kernel::Bool=true; kwargs...)
     compiler_kwargs, kwargs = split_kwargs_runtime(kwargs, COMPILER_KWARGS)
     source = methodinstance(typeof(func), Base.to_tuple_type(types))
@@ -170,7 +170,7 @@ function disassemble(path)
     return String(take!(io))
 end
 
-code_agx(@nospecialize(func), @nospecialize(types); kwargs...) =
+code_agx(@nospecialize(func::Base.Callable), @nospecialize(types); kwargs...) =
     code_agx(stdout, func, types; kwargs...)
 
 const code_native = code_agx

@@ -75,15 +75,22 @@ function compiler_config(dev; kwargs...)
     end
     return config
 end
-@noinline function _compiler_config(dev; kernel=true, name=nothing, always_inline=false, kwargs...)
-    # TODO: configure the compiler target based on the device
-
-    macos = macos_version()
-    metal = metal_support()
-    # we support down to macOS 13, which supports AIR 2.5
-    # so always target that version for now
-    air = v"2.5"
-    @assert air <= air_support()
+@noinline function _compiler_config(dev; kernel=true, name=nothing, always_inline=false,
+                                         macos=nothing, air=nothing, metal=nothing,
+                                         kwargs...)
+    # determine the versions of things to target
+    if macos === nothing
+        macos = macos_version()
+    end
+    if metal === nothing
+        metal = metal_support()
+    end
+    if air === nothing
+        # we support down to macOS 13, which supports AIR 2.5
+        # so always target that version for now
+        air = v"2.5"
+        @assert air <= air_support()
+    end
 
     # create GPUCompiler objects
     target = MetalCompilerTarget(; macos, air, metal, kwargs...)

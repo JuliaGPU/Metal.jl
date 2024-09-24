@@ -4,7 +4,7 @@ export @metal
 ## high-level @metal interface
 
 const MACRO_KWARGS = [:launch]
-const COMPILER_KWARGS = [:kernel, :name, :always_inline]
+const COMPILER_KWARGS = [:kernel, :name, :always_inline, :macos, :air, :metal]
 const LAUNCH_KWARGS = [:groups, :threads, :queue]
 
 """
@@ -170,6 +170,10 @@ const mtlfunction_lock = ReentrantLock()
 
 Low-level interface to compile a function invocation for the currently-active GPU, returning
 a callable kernel object. For a higher-level interface, use [`@metal`](@ref).
+
+The following keyword arguments are supported:
+- `macos`, `metal` and `air`: to override the macOS OS, Metal language and AIR bitcode
+   versions used during compilation.
 
 The output of this function is automatically cached, i.e. you can simply call `mtlfunction`
 in a hot path without degrading performance. New code will be generated automatically when
