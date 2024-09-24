@@ -142,7 +142,7 @@ steps:
         artifact_paths:
           - "benchmarkresults.json"
         agents:
-          queue: "julia"
+          queue: "juliaecosystem"
           os: "macos"
           arch: "aarch64"
           macos_version: "15.0"
