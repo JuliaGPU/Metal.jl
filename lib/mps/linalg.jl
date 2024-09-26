@@ -129,7 +129,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{T,S}, maxi::Integer) where {T,S<:MTL.CPUSto
     end
 
     P = similar(A, UInt32, 1, min(N, M))
-    status = MtlArray{MPSMatrixDecompositionStatus,0,Shared}(undef)
+    status = MtlArray{MPSMatrixDecompositionStatus,0,SharedStorage}(undef)
 
     commitAndContinue!(cmdbuf) do cbuf
         mps_p = MPSMatrix(P)
@@ -187,7 +187,7 @@ end
     end
 
     P = similar(A, UInt32, 1, min(N, M))
-    status = MtlArray{MPSMatrixDecompositionStatus,0,Shared}(undef)
+    status = MtlArray{MPSMatrixDecompositionStatus,0,SharedStorage}(undef)
 
     commitAndContinue!(cmdbuf) do cbuf
         mps_p = MPSMatrix(P)
