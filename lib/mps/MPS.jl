@@ -16,6 +16,8 @@ using ObjectiveC, .Foundation
 
 import GPUArrays
 
+using BFloat16s
+
 const MtlFloat = Union{Float32, Float16}
 
 is_supported(dev::MTLDevice) = ccall(:MPSSupportsMTLDevice, Bool, (id{MTLDevice},), dev)
