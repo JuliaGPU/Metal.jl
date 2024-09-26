@@ -373,10 +373,13 @@ end
 
             tg_a = MtlThreadGroupArray(T, (8, 8))
             tg_a[pos.x, pos.y] = a[pos.x, pos.y]
-            sg_a = simdgroup_load(tg_a)
+            threadgroup_barrier(Metal.MemoryFlagThreadGroup)
 
+            sg_a = simdgroup_load(tg_a)
             tg_b = MtlThreadGroupArray(T, (8, 8))
             simdgroup_store(sg_a, tg_b)
+
+            threadgroup_barrier(Metal.MemoryFlagThreadGroup)
             b[pos.x, pos.y] = tg_b[pos.x, pos.y]
 
             return
