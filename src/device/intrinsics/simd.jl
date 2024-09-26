@@ -18,7 +18,7 @@ end
 # dims = (epr, 8), strides = (1, epr) and an unswapped origin. when targeting older AIR
 # versions, `finish_ir!` rewrites these calls to the legacy elements-per-row + transpose
 # flag signature (keep in sync with the downgrade rule in src/compiler/compilation.jl).
-for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"))
+for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"), (:BFloat16, "bf16"))
     for as in (AS.Device, AS.ThreadGroup)
         @eval begin
             @device_function simdgroup_load(
@@ -83,7 +83,7 @@ end
     simdgroup_load(data::MtlDeviceArray{T}, matrix_origin=(1, 1), Val(transpose)=Val(true))
 
 Loads data from device or threadgroup memory into an 8x8 SIMD-group matrix
-and returns it. `T` must be either `Float16` or `Float32`.
+and returns it. `T` must be either `Float16`, `Float32`, or `BFloat16`.
 
 # Arguments
 - `matrix_origin::NTuple{2, Int64}=(1, 1)`: origin in the source memory to load from.
@@ -96,7 +96,7 @@ and returns it. `T` must be either `Float16` or `Float32`.
     simdgroup_store(src, dest::MtlDeviceArray{T}, matrix_origin=(1, 1), Val(transpose)=Val(true))
 
 Stores data from an 8x8 SIMD-group matrix into device or threadgroup memory.
-`T` must be either `Float16` or `Float32`.
+`T` must be either `Float16`, `Float32`, or `BFloat16`.
 
 # Arguments
 - `matrix_origin::NTuple{2, Int64}=(1, 1)`: origin in the destination memory to store to.
@@ -192,6 +192,7 @@ end
 
 simd_shuffle_map = ((Float32, "f32"),
                     (Float16, "f16"),
+                    (BFloat16,"bf16"),
                     (Int32,   "s.i32"),
                     (UInt32,  "u.i32"),
                     (Int16,   "s.i16"),
@@ -274,7 +275,7 @@ Return `data` from the thread whose SIMD lane ID is `simd_lane_id`. The `simd_la
 needs to be a valid SIMD lane ID but doesn't have to be the same for all threads in the
 SIMD-group
 
-T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+T must be one of the following: Float32, Float16, BFloat16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
 """
 simd_shuffle
 
@@ -287,7 +288,7 @@ The value for `delta` must be the same for all threads in the SIMD-group. This f
 doesn't modify the upper `delta` lanes of `data` because it doesn't wrap values around
 the SIMD-group.
 
-T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+T must be one of the following: Float32, Float16, BFloat16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
 """
 simd_shuffle_down
 
@@ -300,7 +301,7 @@ lane ID minus `delta`.
 The value of `delta` must be the same for all threads in a SIMD-group. This function doesn't
 modify the lower `delta` lanes of `data` because it doesn't wrap values around the SIMD-group.
 
-T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+T must be one of the following: Float32, Float16, BFloat16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
 """
 simd_shuffle_up
 
@@ -318,7 +319,7 @@ The value of `delta` needs to be the same for all threads in a SIMD-group.
 The `modulo` parameter defines the vector width that splits the SIMD-group into separate vectors
  and must be 2, 4, 8, 16, or 32.
 
-T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+T must be one of the following: Float32, Float16, BFloat16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
 """
 simd_shuffle_and_fill_down
 
@@ -336,7 +337,7 @@ The value of `delta` needs to be the same for all threads in a SIMD-group.
 The `modulo` parameter defines the vector width that splits the SIMD-group into separate vectors
  and must be 2, 4, 8, 16, or 32.
 
-T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+T must be one of the following: Float32, Float16, BFloat16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
 """
 simd_shuffle_and_fill_up
 
