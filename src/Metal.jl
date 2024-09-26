@@ -13,6 +13,7 @@ using ExprTools: splitdef, combinedef
 using Artifacts
 using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
 import KernelAbstractions
+using BFloat16s
 
 include("version.jl")
 
