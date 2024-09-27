@@ -118,7 +118,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T =
     dev = device()
     queue = global_queue(dev)
 
-    At = MtlMatrix{T,PrivateStorage}(undef, (N, M))
+    At = similar(A, (N, M))
     mps_a = MPSMatrix(A)
     mps_at = MPSMatrix(At)
 
@@ -137,7 +137,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T =
         encode!(cbuf, kernel, mps_at, mps_at, mps_p, status)
     end
 
-    B = MtlMatrix{T}(undef, M, N)
+    B = similar(A, M, N)
 
     commit!(cmdbuf) do cbuf
         mps_b = MPSMatrix(B)
@@ -176,7 +176,7 @@ end
     dev = device()
     queue = global_queue(dev)
 
-    At = MtlMatrix{T,PrivateStorage}(undef, (N, M))
+    At = similar(A, (N, M))
     mps_a = MPSMatrix(A)
     mps_at = MPSMatrix(At)
 
