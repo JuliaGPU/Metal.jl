@@ -191,22 +191,29 @@ end
 end
 
 @testset "decompositions" begin
+    testreturntype(_,_) = false
+    testreturntype(luobj::LU{<:Any,<:MtlArray{<:Any,<:Any,S},<:MtlArray{<:Any,<:Any,S}},::MtlArray{<:Any,<:Any,S}) where S = true
+
     A = MtlMatrix(rand(Float32, 1024, 1024))
     lua = lu(A)
+    @test testreturntype(lua,A)
     @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A
 
     A = MtlMatrix(rand(Float32, 1024, 512))
     lua = lu(A)
+    @test testreturntype(lua,A)
     @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A
 
     A = MtlMatrix(rand(Float32, 512, 1024))
     lua = lu(A)
+    @test testreturntype(lua,A)
     @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A
 
     a = rand(Float32, 1024, 1024)
     A = MtlMatrix(a)
     B = MtlMatrix(a)
     lua = lu!(A)
+    @test testreturntype(lua,A)
     @test lua.L * lua.U ≈ MtlMatrix(lua.P) * B
 
     A = MtlMatrix{Float32}([1 2; 0 0])
