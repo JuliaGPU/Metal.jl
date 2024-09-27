@@ -11,6 +11,7 @@ on:
       - main
     paths:
       - "src/**/*"
+      - "lib/**/*"
       - "ext/**/*"
       - "perf/**/*"
       - ".buildkite/**/*"
@@ -21,8 +22,9 @@ on:
       - main
     paths:
       - "src/**/*"
+      - "lib/**/*"
       - "ext/**/*"
-      - "benchmarks/**/*"
+      - "perf/**/*"
       - ".buildkite/**/*"
       - "Project.toml"
       - ".github/workflows/Benchmark.yml"

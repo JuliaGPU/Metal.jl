@@ -118,9 +118,7 @@ steps:
             build.message !~ /\[skip special\]/
         timeout_in_minutes: 60
 
-  # we want to benchmark every commit on the master branch, even if it failed CI
   - wait: ~
-    # continue_on_failure: true
 
   - group: ":racehorse: Benchmarks"
     steps:
