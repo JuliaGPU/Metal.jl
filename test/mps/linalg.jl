@@ -194,28 +194,31 @@ using Metal: storagemode
 @testset "decompositions" begin
     A = MtlMatrix(rand(Float32, 1024, 1024))
     lua = lu(A)
-    @test storagemode(lua.factors) == storagemode(lua.ipiv) == storagemode(A)
     @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A
 
     A = MtlMatrix(rand(Float32, 1024, 512))
     lua = lu(A)
-    @test storagemode(lua.factors) == storagemode(lua.ipiv) == storagemode(A)
     @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A
 
     A = MtlMatrix(rand(Float32, 512, 1024))
     lua = lu(A)
-    @test storagemode(lua.factors) == storagemode(lua.ipiv) == storagemode(A)
     @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A
 
     a = rand(Float32, 1024, 1024)
     A = MtlMatrix(a)
     B = MtlMatrix(a)
     lua = lu!(A)
-    @test storagemode(lua.factors) == storagemode(lua.ipiv) == storagemode(A)
     @test lua.L * lua.U ≈ MtlMatrix(lua.P) * B
 
     A = MtlMatrix{Float32}([1 2; 0 0])
     @test_throws SingularException lu(A)
+
+    altStorage = Metal.DefaultStorageMode != Metal.PrivateStorage ? Metal.PrivateStorage : Metal.SharedStorage
+    A = MtlMatrix{Float32,altStorage}(rand(Float32, 1024, 1024))
+    lua = lu(A)
+    @test storagemode(lua.factors) == storagemode(lua.ipiv) == storagemode(A)
+    lua = lu!(A)
+    @test storagemode(lua.factors) == storagemode(lua.ipiv) == storagemode(A)
 end
 
 using .MPS: MPSMatrixSoftMax, MPSMatrixLogSoftMax
