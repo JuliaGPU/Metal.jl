@@ -171,7 +171,7 @@ function compile(@nospecialize(job::CompilerJob))
 end
 
 # link into an executable kernel
-@autoreleasepool function link(@nospecialize(job::CompilerJob), compiled;
+function link(@nospecialize(job::CompilerJob), compiled;
                                return_function=false)
     @signpost_event log=log_compiler() "Link" "Job=$job"
 

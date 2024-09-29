@@ -1,6 +1,6 @@
 export MTLLibrary, MTLLibraryFromFile, MTLLibraryFromData
 
-@objcwrapper immutable=false MTLLibrary <: NSObject
+@objcwrapper MTLLibrary <: NSObject
 
 @objcproperties MTLLibrary begin
     @autoproperty device::id{MTLDevice}
@@ -17,7 +17,6 @@ function MTLLibrary(dev::MTLDevice, src::String,
     err[] == nil || throw(NSError(err[]))
 
     obj = MTLLibrary(handle)
-    finalizer(release, obj)
     return obj
 end
 
@@ -34,7 +33,6 @@ function MTLLibraryFromFile(dev::MTLDevice, path::String)
     err[] == nil || throw(NSError(err[]))
 
     obj = MTLLibrary(handle)
-    finalizer(release, obj)
     return obj
 end
 
@@ -48,6 +46,5 @@ function MTLLibraryFromData(dev::MTLDevice, input_data)
     err[] == nil || throw(NSError(err[]))
 
     obj = MTLLibrary(handle)
-    finalizer(release, obj)
     return obj
 end

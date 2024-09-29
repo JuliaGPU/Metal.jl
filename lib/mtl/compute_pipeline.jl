@@ -4,12 +4,11 @@
 
 export MTLComputePipelineDescriptor
 
-@objcwrapper immutable=false MTLComputePipelineDescriptor <: NSObject
+@objcwrapper MTLComputePipelineDescriptor <: NSObject
 
 function MTLComputePipelineDescriptor()
     handle = @objc [MTLComputePipelineDescriptor new]::id{MTLComputePipelineDescriptor}
     obj = MTLComputePipelineDescriptor(handle)
-    finalizer(release, obj)
     return obj
 end
 
@@ -37,7 +36,7 @@ end
 
 export MTLComputePipelineState
 
-@objcwrapper immutable=false MTLComputePipelineState <: NSObject
+@objcwrapper MTLComputePipelineState <: NSObject
 
 @objcproperties MTLComputePipelineState begin
     # Identifying Properties
@@ -60,7 +59,6 @@ function MTLComputePipelineState(dev::MTLDevice, fun::MTLFunction)
     err[] == nil || throw(NSError(err[]))
 
     obj = MTLComputePipelineState(handle)
-    finalizer(release, obj)
     return obj
 end
 

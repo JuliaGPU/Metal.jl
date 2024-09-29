@@ -11,7 +11,7 @@ const MPS_VALID_MATMUL_TYPES =
 
 LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
     LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
-@autoreleasepool function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB,
+function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB,
                                                            A::MtlMatrix, B::MtlMatrix,
                                                            alpha::Number, beta::Number)
     mA, nA = LinearAlgebra.lapack_size(tA, A)
@@ -54,7 +54,7 @@ const MPS_VALID_MATVECMUL_TYPES =
 
 LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, _add::MulAddMul) =
     LinearAlgebra.generic_matvecmul!(C, tA, A, B, _add.alpha, _add.beta)
-@autoreleasepool function LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar,
+function LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar,
                                                            A::MtlMatrix, B::MtlVector,
                                                            alpha::Number, beta::Number)
     mA, nA = LinearAlgebra.lapack_size(tA, A)
@@ -112,7 +112,7 @@ end
 LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T =
     LinearAlgebra.ipiv2perm(Array(v), maxi)
 
-@autoreleasepool function LinearAlgebra.lu(A::MtlMatrix{T};
+function LinearAlgebra.lu(A::MtlMatrix{T};
                                            check::Bool=true) where {T<:MtlFloat}
     M,N = size(A)
     dev = device()
@@ -169,7 +169,7 @@ function _check_lu_success(info, allowsingular)
 end
 
 # TODO: dispatch on pivot strategy
-@autoreleasepool function LinearAlgebra.lu!(A::MtlMatrix{T};
+function LinearAlgebra.lu!(A::MtlMatrix{T};
                                             check::Bool=true,
                                             allowsingular::Bool=false) where {T<:MtlFloat}
     M,N = size(A)
@@ -211,7 +211,7 @@ end
     return LinearAlgebra.LU(A, p, status)
 end
 
-@autoreleasepool function LinearAlgebra.transpose!(B::MtlMatrix{T},
+function LinearAlgebra.transpose!(B::MtlMatrix{T},
                                                    A::MtlMatrix{T}) where {T}
     axes(B,2) == axes(A,1) && axes(B,1) == axes(A,2) || throw(DimensionMismatch("transpose"))
 

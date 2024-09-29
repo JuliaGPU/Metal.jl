@@ -23,14 +23,14 @@ function RNG(device::MTLDevice, seed::Integer)
         MPSMatrixRandomPhilox(device, Float32, seed, MPSMatrixRandomUniformDistributionDescriptor(0, 1)),
         MPSMatrixRandomPhilox(device, Float32, seed, MPSMatrixRandomNormalDistributionDescriptor(0, 1)),)
 end
-@autoreleasepool RNG(seed::Integer) = RNG(device(), seed)
+RNG(seed::Integer) = RNG(device(), seed)
 RNG(device::MTLDevice) = RNG(device, make_seed())
 
-@autoreleasepool RNG() = RNG(device(), make_seed())
+RNG() = RNG(device(), make_seed())
 
 Base.copy(rng::RNG) = RNG(copy(rng.device), copy(rng.uniformInteger), copy(rng.uniformFloat32), copy(rng.normalFloat32))
 
-@autoreleasepool function Random.seed!(rng::RNG, seed::Integer)
+function Random.seed!(rng::RNG, seed::Integer)
     rng.uniformInteger = MPSMatrixRandomPhilox(rng.device, UInt32, seed, MPSMatrixRandomDefaultDistributionDescriptor())
     rng.uniformFloat32 = MPSMatrixRandomPhilox(rng.device, Float32, seed, MPSMatrixRandomUniformDistributionDescriptor(0, 1))
     rng.normalFloat32  = MPSMatrixRandomPhilox(rng.device, Float32, seed, MPSMatrixRandomNormalDistributionDescriptor(0, 1))
@@ -40,7 +40,7 @@ end
 Random.seed!(rng::RNG) = Random.seed!(rng, make_seed())
 
 const GLOBAL_RNGs = Dict{MTLDevice,MPS.RNG}()
-@autoreleasepool function default_rng()
+function default_rng()
     dev = device()
     get!(GLOBAL_RNGs, dev) do
         RNG(dev)
@@ -50,13 +50,13 @@ end
 const UniformTypes = [Float32,UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64]
 const UniformType = Union{[Type{T} for T in UniformTypes]...}
 const UniformArray = MtlArray{<:Union{Float32,UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64}}
-@autoreleasepool function Random.rand!(rng::RNG, A::MtlArray{T}) where {T<:Union{UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64}}
+function Random.rand!(rng::RNG, A::MtlArray{T}) where {T<:Union{UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64}}
     isempty(A) && return A
     _mpsmat_rand!(rng.uniformInteger, A, UInt32)
     return A
 end
 
-@autoreleasepool function Random.rand!(rng::RNG, A::MtlArray{Float32})
+function Random.rand!(rng::RNG, A::MtlArray{Float32})
     isempty(A) && return A
     _mpsmat_rand!(rng.uniformFloat32, A, Float32)
     return A
@@ -64,7 +64,7 @@ end
 
 const NormalType = Type{Float32}
 const NormalArray = MtlArray{<:Float32}
-@autoreleasepool function Random.randn!(rng::RNG, A::MtlArray{Float32})
+function Random.randn!(rng::RNG, A::MtlArray{Float32})
     isempty(A) && return A
     _mpsmat_rand!(rng.normalFloat32, A, Float32)
     return A

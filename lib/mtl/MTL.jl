@@ -17,7 +17,7 @@ using ..Metal
 # In most cases, we handle this in the code calling into the MTL module,
 # however, finalizers are out of the caller's control, so we need to
 # ensure here already that they are running under an autorelease pool.
-release(obj) = @autoreleasepool unsafe=true Foundation.release(obj)
+release(obj) = Foundation.release(obj)
 
 
 ## source code includes

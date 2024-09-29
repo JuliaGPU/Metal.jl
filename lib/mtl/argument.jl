@@ -181,9 +181,9 @@ Possible (undocumented) values for this enum can be iterated using the MTLTypeIn
 ```julia
 load_framework("Metal")
 
-@objcwrapper immutable=false MTLType <: NSObject
+@objcwrapper MTLType <: NSObject
 
-@objcwrapper immutable=false MTLTypeInternal <: MTLType
+@objcwrapper MTLTypeInternal <: MTLType
 
 @objcproperties MTLTypeInternal begin
     @autoproperty dataType::UInt64
@@ -192,7 +192,6 @@ end
 
 function MTLTypeInternal(dataType::Integer)
     obj = MTLTypeInternal(@objc [MTLTypeInternal alloc]::id{MTLTypeInternal})
-    finalizer(dealloc, obj)
     @objc [obj::id{MTLTypeInternal} initWithDataType:dataType::UInt64]::id{MTLTypeInternal}
     return obj
 end

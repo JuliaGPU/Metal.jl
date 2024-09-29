@@ -55,7 +55,7 @@ function alloc(dev::Union{MTLDevice,MTLHeap}, sz::Integer, args...; kwargs...)
     @signpost_event log=log_array() "Allocate" "Size=$(Base.format_bytes(sz))"
 
     time = Base.@elapsed begin
-        buf = @autoreleasepool MTLBuffer(dev, sz, args...; kwargs...)
+        buf = MTLBuffer(dev, sz, args...; kwargs...)
     end
 
     Base.@atomic alloc_stats.alloc_count + 1
@@ -76,7 +76,7 @@ function free(buf::MTLBuffer)
     @signpost_event log=log_array() "Free" "Size=$(Base.format_bytes(sz))"
 
     time = Base.@elapsed begin
-        @autoreleasepool unsafe=true release(buf)
+        release(buf)
     end
 
     Base.@atomic alloc_stats.free_count + 1

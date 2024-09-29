@@ -14,7 +14,7 @@ end
 
 export MTLHeapDescriptor
 
-@objcwrapper immutable=false MTLHeapDescriptor <: NSObject
+@objcwrapper MTLHeapDescriptor <: NSObject
 
 @objcproperties MTLHeapDescriptor begin
     # Configuring a Heap
@@ -29,7 +29,6 @@ end
 function MTLHeapDescriptor()
     handle = @objc [MTLHeapDescriptor new]::id{MTLHeapDescriptor}
     obj = MTLHeapDescriptor(handle)
-    finalizer(release, obj)
     return obj
 end
 
@@ -40,7 +39,7 @@ end
 
 export MTLHeap
 
-@objcwrapper immutable=false MTLHeap <: NSObject
+@objcwrapper MTLHeap <: NSObject
 
 @objcproperties MTLHeap begin
     # Identifying the Heap
@@ -61,6 +60,5 @@ end
 function MTLHeap(dev::MTLDevice, desc::MTLHeapDescriptor)
     handle = @objc [dev::id{MTLDevice} newHeapWithDescriptor:desc::id{MTLHeapDescriptor}]::id{MTLHeap}
     obj = MTLHeap(handle)
-    finalizer(release, obj)
     return obj
 end

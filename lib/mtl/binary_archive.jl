@@ -4,7 +4,7 @@
 
 export MTLBinaryArchiveDescriptor
 
-@objcwrapper immutable=false MTLBinaryArchiveDescriptor <: NSObject
+@objcwrapper MTLBinaryArchiveDescriptor <: NSObject
 
 @objcproperties MTLBinaryArchiveDescriptor begin
     # Choosing an Archive File
@@ -14,7 +14,6 @@ end
 function MTLBinaryArchiveDescriptor()
     handle = @objc [MTLBinaryArchiveDescriptor new]::id{MTLBinaryArchiveDescriptor}
     obj = MTLBinaryArchiveDescriptor(handle)
-    finalizer(release, obj)
     return obj
 end
 
@@ -25,7 +24,7 @@ end
 
 export MTLBinaryArchive, add_functions!
 
-@objcwrapper immutable=false MTLBinaryArchive <: NSObject
+@objcwrapper MTLBinaryArchive <: NSObject
 
 @objcproperties MTLBinaryArchive begin
     # Identifying the Archive
@@ -40,7 +39,6 @@ function MTLBinaryArchive(dev::MTLDevice, desc::MTLBinaryArchiveDescriptor)
     err[] == nil || throw(NSError(err[]))
 
     obj = MTLBinaryArchive(handle)
-    finalizer(release, obj)
     return obj
 end
 

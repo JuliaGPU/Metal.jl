@@ -10,7 +10,7 @@ end
 
 export MPSMatrixRandomDistributionDescriptor
 
-@objcwrapper immutable=false MPSMatrixRandomDistributionDescriptor <: NSObject
+@objcwrapper MPSMatrixRandomDistributionDescriptor <: NSObject
 
 @objcproperties MPSMatrixRandomDistributionDescriptor begin
     @autoproperty distributionType::MPSMatrixRandomDistribution
@@ -54,7 +54,7 @@ function MPSMatrixRandomUniformDistributionDescriptor(minimum, maximum)
 end
 
 
-@objcwrapper immutable=false MPSMatrixRandom <: MPSKernel
+@objcwrapper MPSMatrixRandom <: MPSKernel
 
 @objcproperties MPSMatrixRandom begin
     @autoproperty batchSize::NSUInteger
@@ -72,22 +72,20 @@ function encode!(cmdbuf::MTLCommandBuffer, kernel::K, destinationVector::MPSVect
                          destinationVector:destinationVector::id{MPSVector}]::Nothing
 end
 
-@objcwrapper immutable=false MPSMatrixRandomMTGP32 <: MPSMatrixRandom
-@objcwrapper immutable=false MPSMatrixRandomPhilox <: MPSMatrixRandom
+@objcwrapper MPSMatrixRandomMTGP32 <: MPSMatrixRandom
+@objcwrapper MPSMatrixRandomPhilox <: MPSMatrixRandom
 
 for R in [:MPSMatrixRandomMTGP32, :MPSMatrixRandomPhilox]
     @eval begin
         function $R(device)
             kernel = @objc [$R alloc]::id{$R}
             obj = $R(kernel)
-            finalizer(release, obj)
             @objc [obj::id{$R} initWithDevice:device::id{MTLDevice}]::id{$R}
             return obj
         end
         function $R(device, destinationDataType, seed)
             kernel = @objc [$R alloc]::id{$R}
             obj = $R(kernel)
-            finalizer(release, obj)
             @objc [obj::id{$R} initWithDevice:device::id{MTLDevice}
                                 destinationDataType:destinationDataType::MPSDataType
                                 seed:seed::NSUInteger]::id{$R}
@@ -96,7 +94,6 @@ for R in [:MPSMatrixRandomMTGP32, :MPSMatrixRandomPhilox]
         function $R(device, destinationDataType, seed, distributionDescriptor)
             kernel = @objc [$R alloc]::id{$R}
             obj = $R(kernel)
-            finalizer(release, obj)
             @objc [obj::id{$R} initWithDevice:device::id{MTLDevice}
                                 destinationDataType:destinationDataType::MPSDataType
                                 seed:seed::NSUInteger

@@ -85,7 +85,7 @@ end
 
 export MPSMatrix
 
-@objcwrapper immutable=false MPSMatrix <: NSObject
+@objcwrapper MPSMatrix <: NSObject
 
 @objcproperties MPSMatrix begin
     @autoproperty device::id{MTLDevice}
@@ -102,7 +102,6 @@ end
 function MPSMatrix(buf, descriptor::MPSMatrixDescriptor, offset::Integer=0)
     mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
     obj = MPSMatrix(mat)
-    finalizer(release, obj)
     @objc [obj::id{MPSMatrix} initWithBuffer:buf::id{MTLBuffer}
                               offset:offset::NSUInteger
                               descriptor:descriptor::id{MPSMatrixDescriptor}]::id{MPSMatrix}
@@ -112,7 +111,6 @@ end
 function MPSMatrix(dev::MTLDevice, descriptor::MPSMatrixDescriptor)
     mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
     obj = MPSMatrix(mat)
-    finalizer(release, obj)
     @objc [obj::id{MPSMatrix} initWithDevice:dev::id{MTLDevice}
                               descriptor:descriptor::id{MPSMatrixDescriptor}]::id{MPSMatrix}
     return obj
@@ -169,7 +167,7 @@ end
 
 export MPSMatrixMultiplication, encode!, matmul!
 
-@objcwrapper immutable=false MPSMatrixMultiplication <: MPSKernel
+@objcwrapper MPSMatrixMultiplication <: MPSKernel
 
 @objcproperties MPSMatrixMultiplication begin
     @autoproperty leftMatrixOrigin::MTLOrigin setter=setLeftMatrixOrigin
@@ -183,7 +181,6 @@ function MPSMatrixMultiplication(dev, transposeLeft, transposeRight, resultRows,
                                  resultColumns, interiorColumns, alpha, beta)
     kernel = @objc [MPSMatrixMultiplication alloc]::id{MPSMatrixMultiplication}
     obj = MPSMatrixMultiplication(kernel)
-    finalizer(release, obj)
     @objc [obj::id{MPSMatrixMultiplication} initWithDevice:dev::id{MTLDevice}
                                             transposeLeft:transposeLeft::Bool
                                             transposeRight:transposeRight::Bool
@@ -244,7 +241,7 @@ end
 
 export MPSMatrixFindTopK, encode!
 
-@objcwrapper immutable=false MPSMatrixFindTopK <: MPSMatrixUnaryKernel
+@objcwrapper MPSMatrixFindTopK <: MPSMatrixUnaryKernel
 
 @objcproperties MPSMatrixFindTopK begin
     @autoproperty indexOffset::NSInteger setter=setIndexOffset
@@ -256,7 +253,6 @@ end
 function MPSMatrixFindTopK(dev, numberOfTopKValues)
     kernel = @objc [MPSMatrixFindTopK alloc]::id{MPSMatrixFindTopK}
     obj = MPSMatrixFindTopK(kernel)
-    finalizer(release, obj)
     @objc [obj::id{MPSMatrixFindTopK} initWithDevice:dev::id{MTLDevice}
                                                    numberOfTopKValues:numberOfTopKValues::NSUInteger]::id{MPSMatrixFindTopK}
     return obj
@@ -341,8 +337,8 @@ end
 
 export MPSMatrixSoftMax, MPSMatrixLogSoftMax, encode!
 
-@objcwrapper immutable=false MPSMatrixSoftMax <: MPSMatrixUnaryKernel
-@objcwrapper immutable=false MPSMatrixLogSoftMax <: MPSMatrixSoftMax
+@objcwrapper MPSMatrixSoftMax <: MPSMatrixUnaryKernel
+@objcwrapper MPSMatrixLogSoftMax <: MPSMatrixSoftMax
 
 @objcproperties MPSMatrixSoftMax begin
     @autoproperty sourceRows::NSInteger setter=setSourceRows
@@ -354,7 +350,6 @@ for f in (:MPSMatrixSoftMax, :MPSMatrixLogSoftMax)
         function $(f)(dev)
             kernel = @objc [$(f) alloc]::id{$(f)}
             obj = $(f)(kernel)
-            finalizer(release, obj)
             @objc [obj::id{$(f)} initWithDevice:dev::id{MTLDevice}]::id{$(f)}
             return obj
         end

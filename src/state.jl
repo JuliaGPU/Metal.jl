@@ -44,7 +44,7 @@ Return the Metal command queue associated with the current Julia thread.
 """
 function global_queue(dev::MTLDevice)
     get!(task_local_storage(), (:MTLCommandQueue, dev)) do
-        @autoreleasepool begin
+        begin
             # NOTE: MTLCommandQueue itself is manually reference-counted,
             #       the release pool is for resources used during its construction.
             queue = MTLCommandQueue(dev)
@@ -65,7 +65,7 @@ Create a new MTLCommandBuffer from the global command queue, commit it to the qu
 and simply wait for it to be completed. Since command buffers *should* execute in a
 First-In-First-Out manner, this synchronizes the GPU.
 """
-@autoreleasepool function synchronize(queue::MTLCommandQueue=global_queue(device()))
+function synchronize(queue::MTLCommandQueue=global_queue(device()))
     cmdbuf = MTLCommandBuffer(queue)
     commit!(cmdbuf)
     wait_completed(cmdbuf)

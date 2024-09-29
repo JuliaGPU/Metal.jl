@@ -80,7 +80,7 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPtr{T}, N::Int
 end
 
 # GPU -> GPU
-@autoreleasepool function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
+function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
                                               src::MtlPtr{T}, N::Integer;
                                               queue::MTLCommandQueue=global_queue(dev),
                                               async::Bool=false) where T
@@ -92,7 +92,7 @@ end
     async || wait_completed(cmdbuf)
 end
 
-@autoreleasepool function unsafe_fill!(dev::MTLDevice, ptr::MtlPtr{T},
+function unsafe_fill!(dev::MTLDevice, ptr::MtlPtr{T},
                                        value::Union{UInt8,Int8}, N::Integer) where T
     cmdbuf = MTLCommandBuffer(global_queue(dev))
     MTLBlitCommandEncoder(cmdbuf) do enc

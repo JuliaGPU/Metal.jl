@@ -7,7 +7,7 @@ export append_current_function!
     MTLDispatchTypeConcurrent = 1
 end
 
-@objcwrapper immutable=false MTLComputeCommandEncoder <: MTLCommandEncoder
+@objcwrapper MTLComputeCommandEncoder <: MTLCommandEncoder
 
 function MTLComputeCommandEncoder(cmdbuf::MTLCommandBuffer;
                                   dispatch_type::Union{Nothing,MTLDispatchType} = nothing)
@@ -63,3 +63,6 @@ function use!(cce::MTLComputeCommandEncoder, buf::Vector{MTLBuffer}, mode::MTLRe
                                              count:length(buf)::Csize_t
                                              usage:mode::MTLResourceUsage]::Nothing
 end
+
+endEncoding!(ce::MTLComputeCommandEncoder) = @objc [ce::id{MTLComputeCommandEncoder} endEncoding]::Nothing
+Base.close(ce::MTLComputeCommandEncoder) = endEncoding!(ce)

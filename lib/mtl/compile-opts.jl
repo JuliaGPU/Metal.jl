@@ -49,7 +49,7 @@ end
 
 export MTLCompileOptions
 
-@objcwrapper immutable=false MTLCompileOptions <: NSObject
+@objcwrapper MTLCompileOptions <: NSObject
 
 @objcproperties MTLCompileOptions begin
     @autoproperty fastMathEnabled::Bool setter=setFastMathEnabled
@@ -60,6 +60,5 @@ end
 function MTLCompileOptions()
     handle = @objc [MTLCompileOptions new]::id{MTLCompileOptions}
     obj = MTLCompileOptions(handle)
-    finalizer(release, obj)
     return obj
 end

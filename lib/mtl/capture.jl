@@ -78,7 +78,7 @@ Create a GPU frame capture descriptor to alter the parameters of a profiling ses
 """
 MTLCaptureDescriptor
 
-@objcwrapper immutable=false MTLCaptureDescriptor <: NSObject
+@objcwrapper MTLCaptureDescriptor <: NSObject
 
 @objcproperties MTLCaptureDescriptor begin
     # Identifying the Capture Scope
@@ -90,7 +90,6 @@ end
 function MTLCaptureDescriptor()
     handle = @objc [MTLCaptureDescriptor new]::id{MTLCaptureDescriptor}
     obj = MTLCaptureDescriptor(handle)
-    finalizer(release, obj)
     return obj
 end
 

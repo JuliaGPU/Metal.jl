@@ -36,7 +36,7 @@ function code_agx(io::IO, @nospecialize(func::Base.Callable), @nospecialize(type
     code_agx(io, job)
 end
 
-@autoreleasepool function code_agx(io::IO, job::MetalCompilerJob)
+function code_agx(io::IO, job::MetalCompilerJob)
     if !job.config.kernel
         error("Can only generate AGX code for kernel functions")
     end

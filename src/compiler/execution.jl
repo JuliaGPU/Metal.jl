@@ -263,7 +263,7 @@ end
     return argument_buffer
 end
 
-@autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
+function (kernel::HostKernel)(args...; groups=1, threads=1,
                                                queue=global_queue(device()))
     groups = MTLSize(groups)
     threads = MTLSize(threads)

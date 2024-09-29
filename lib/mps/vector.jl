@@ -32,7 +32,7 @@ end
 
 export MPSVector
 
-@objcwrapper immutable=false MPSVector <: NSObject
+@objcwrapper MPSVector <: NSObject
 
 @objcproperties MPSVector begin
     @autoproperty device::id{MTLDevice}
@@ -47,7 +47,6 @@ end
 function MPSVector(buf, descriptor::MPSVectorDescriptor, offset::Integer=0)
     vec = @objc [MPSVector alloc]::id{MPSVector}
     obj = MPSVector(vec)
-    finalizer(release, obj)
     @objc [obj::id{MPSVector} initWithBuffer:buf::id{MTLBuffer}
                               offset:offset::NSUInteger
                               descriptor:descriptor::id{MPSVectorDescriptor}]::id{MPSVector}
@@ -57,7 +56,6 @@ end
 function MPSVector(dev::MTLDevice, descriptor::MPSVectorDescriptor)
     vec = @objc [MPSVector alloc]::id{MPSVector}
     obj = MPSVector(vec)
-    finalizer(release, obj)
     @objc [obj::id{MPSVector} initWithDevice:dev::id{MTLDevice}
                               descriptor:descriptor::id{MPSVectorDescriptor}]::id{MPSVector}
     return obj
@@ -74,7 +72,7 @@ function MPSVector(arr::MtlVector{T}) where T
     return MPSVector(arr, desc, offset)
 end
 
-@objcwrapper immutable=false MPSTemporaryVector <: MPSVector
+@objcwrapper MPSTemporaryVector <: MPSVector
 
 function MPSTemporaryVector(commandBuffer::MTLCommandBuffer, descriptor::MPSVectorDescriptor)
     obj = @objc [MPSTemporaryVector temporaryVectorWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}
@@ -87,12 +85,11 @@ end
 
 export MPSMatrixVectorMultiplication, encode!, matvecmul!
 
-@objcwrapper immutable=false MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
+@objcwrapper MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
 
 function MPSMatrixVectorMultiplication(dev, transpose, rows, columns, alpha, beta)
     kernel = @objc [MPSMatrixVectorMultiplication alloc]::id{MPSMatrixVectorMultiplication}
     obj = MPSMatrixVectorMultiplication(kernel)
-    finalizer(release, obj)
     @objc [obj::id{MPSMatrixVectorMultiplication} initWithDevice:dev::id{MTLDevice}
                                                   transpose:transpose::Bool
                                                   rows:rows::NSUInteger

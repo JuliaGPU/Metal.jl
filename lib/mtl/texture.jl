@@ -212,7 +212,7 @@ end
 ## bitwise operations lose type information, so allow conversions
 Base.convert(::Type{MTLTextureUsage}, x::Integer) = MTLTextureUsage(x)
 
-@objcwrapper immutable=false MTLTextureDescriptor <: NSObject
+@objcwrapper MTLTextureDescriptor <: NSObject
 
 @objcproperties MTLTextureDescriptor begin
     # Configuring an MTLTextureDescriptor
@@ -230,19 +230,17 @@ function MTLTextureDescriptor(pixelFormat, width, height, mipmapped=false)
                                           height:height::NSUInteger
                                           mipmapped:mipmapped::Bool]::id{MTLTextureDescriptor}
     obj = MTLTextureDescriptor(desc)
-    finalizer(release, obj)
 
     return obj
 end
 
-@objcwrapper immutable=false MTLTexture <: NSObject
+@objcwrapper MTLTexture <: NSObject
 
 function MTLTexture(buffer, descriptor, offset, bytesPerRow)
     texture = @objc [buffer::id{MTLBuffer} newTextureWithDescriptor:descriptor::id{MTLTextureDescriptor}
                                           offset:offset::NSUInteger
                                           bytesPerRow:bytesPerRow::NSUInteger]::id{MTLTexture}
     obj = MTLTexture(texture)
-    finalizer(release, obj)
 
     return obj
 end
@@ -250,7 +248,6 @@ end
 function MTLTexture(dev, descriptor)
     texture = @objc [dev::id{MTLDevice} newTextureWithDescriptor:descriptor::id{MTLTextureDescriptor}]::id{MTLTexture}
     obj = MTLTexture(texture)
-    finalizer(release, obj)
 
     return obj
 end

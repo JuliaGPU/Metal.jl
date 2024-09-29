@@ -23,7 +23,7 @@ end
 
 export MPSMatrixCopy, encode!
 
-@objcwrapper immutable=false MPSMatrixCopy <: MPSKernel
+@objcwrapper MPSMatrixCopy <: MPSKernel
 
 @objcproperties MPSMatrixCopy begin
     @autoproperty copyRows::NSUInteger
@@ -35,7 +35,6 @@ end
 function MPSMatrixCopy(dev, copyRows, copyColumns, sourcesAreTransposed, destinationsAreTransposed)
     kernel = @objc [MPSMatrixCopy alloc]::id{MPSMatrixCopy}
     obj = MPSMatrixCopy(kernel)
-    finalizer(release, obj)
     @objc [obj::id{MPSMatrixCopy} initWithDevice:dev::id{MTLDevice}
                                   copyRows:copyRows::NSUInteger
                                   copyColumns:copyColumns::NSUInteger

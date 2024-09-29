@@ -23,7 +23,7 @@ end
 
 export MTLCommandBufferDescriptor
 
-@objcwrapper immutable=false MTLCommandBufferDescriptor <: NSObject
+@objcwrapper MTLCommandBufferDescriptor <: NSObject
 
 @objcproperties MTLCommandBufferDescriptor begin
     @autoproperty retainedReferences::Bool setter=setRetainedReferences
@@ -33,7 +33,6 @@ end
 function MTLCommandBufferDescriptor()
     handle = @objc [MTLCommandBufferDescriptor new]::id{MTLCommandBufferDescriptor}
     obj = MTLCommandBufferDescriptor(handle)
-    finalizer(release, obj)
     return obj
 end
 
@@ -74,8 +73,12 @@ export MTLCommandBuffer, enqueue!, wait_scheduled, wait_completed, encode_signal
     @autoproperty retainedReferences::Bool
 end
 
-function MTLCommandBuffer(queue::MTLCommandQueue,
-                          desc::MTLCommandBufferDescriptor=MTLCommandBufferDescriptor())
+function MTLCommandBuffer(queue::MTLCommandQueue)
+    handle = @objc [queue::id{MTLCommandQueue} commandBuffer]::id{MTLCommandBuffer}
+    MTLCommandBuffer(handle)
+end
+
+function MTLCommandBuffer(queue::MTLCommandQueue, desc::MTLCommandBufferDescriptor)
     handle = @objc [queue::id{MTLCommandQueue} commandBufferWithDescriptor:desc::id{MTLCommandBufferDescriptor}]::id{MTLCommandBuffer}
     MTLCommandBuffer(handle)
 end

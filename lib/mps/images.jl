@@ -8,7 +8,7 @@
     MPSImageEdgeModeConstant       = 4
 end
 
-@objcwrapper immutable=false MPSUnaryImageKernel <: MPSKernel
+@objcwrapper MPSUnaryImageKernel <: MPSKernel
 
 @objcproperties MPSUnaryImageKernel begin
     @autoproperty offset::MPSOffset
@@ -29,7 +29,7 @@ end
 #                                      fallbackCopyAllocator:copyAllocator::MPSCopyAllocator]::Bool
 # end
 
-@objcwrapper immutable=false MPSBinaryImageKernel <: MPSKernel
+@objcwrapper  MPSBinaryImageKernel <: MPSKernel
 
 @objcproperties MPSBinaryImageKernel begin
     @autoproperty primaryOffset::MPSOffset
@@ -44,12 +44,11 @@ end
 
 export MPSImageGaussianBlur, encode!
 
-@objcwrapper immutable=false MPSImageGaussianBlur <: MPSUnaryImageKernel
+@objcwrapper MPSImageGaussianBlur <: MPSUnaryImageKernel
 
 function MPSImageGaussianBlur(dev, sigma)
     kernel = @objc [MPSImageGaussianBlur alloc]::id{MPSImageGaussianBlur}
     obj = MPSImageGaussianBlur(kernel)
-    finalizer(release, obj)
     @objc [obj::id{MPSImageGaussianBlur} initWithDevice:dev::id{MTLDevice}
                                   sigma:sigma::Float32]::id{MPSImageGaussianBlur}
     return obj
@@ -60,12 +59,11 @@ end
 
 export MPSImageBox
 
-@objcwrapper immutable=false MPSImageBox <: MPSUnaryImageKernel
+@objcwrapper MPSImageBox <: MPSUnaryImageKernel
 
 function MPSImageBox(dev, kernelWidth, kernelHeight)
     kernel = @objc [MPSImageBox alloc]::id{MPSImageBox}
     obj = MPSImageBox(kernel)
-    finalizer(release, obj)
     @objc [obj::id{MPSImageBox} initWithDevice:dev::id{MTLDevice}
                                 kernelWidth:kernelWidth::Int
                                 kernelHeight:kernelHeight::Int]::id{MPSImageBox}

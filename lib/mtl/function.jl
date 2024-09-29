@@ -15,7 +15,7 @@ end
 
 export MTLFunctionDescriptor
 
-@objcwrapper immutable=false MTLFunctionDescriptor <: NSObject
+@objcwrapper MTLFunctionDescriptor <: NSObject
 
 @objcproperties MTLFunctionDescriptor begin
     @autoproperty name::id{NSString} setter=setName
@@ -25,7 +25,6 @@ end
 function MTLFunctionDescriptor()
     handle = @objc [MTLFunctionDescriptor new]::id{MTLFunctionDescriptor}
     obj = MTLFunctionDescriptor(handle)
-    finalizer(release, obj)
     return obj
 end
 
@@ -37,7 +36,7 @@ end
 
 export MTLFunction
 
-@objcwrapper immutable=false MTLFunction <: NSObject
+@objcwrapper MTLFunction <: NSObject
 
 @objcproperties MTLFunction begin
     @autoproperty device::id{MTLDevice}
@@ -51,6 +50,5 @@ function MTLFunction(lib::MTLLibrary, name)
     handle = @objc [lib::id{MTLLibrary} newFunctionWithName:name::id{NSString}]::id{MTLFunction}
     handle == nil && throw(KeyError(name))
     obj = MTLFunction(handle)
-    finalizer(release, obj)
     return obj
 end

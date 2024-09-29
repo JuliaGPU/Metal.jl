@@ -20,12 +20,12 @@ end
     @autoproperty options::MPSKernelOptions setter=setOptions
 end
 
-@autoreleasepool function Base.copy(kernel::K) where {K <: MPSKernel}
+function Base.copy(kernel::K) where {K <: MPSKernel}
     obj = @objc [kernel::MPSKernel copy]::id{MPSKernel}
     K(reinterpret(id{K}, obj))
 end
 
-@objcwrapper immutable=false MPSMatrixUnaryKernel <: MPSKernel
+@objcwrapper MPSMatrixUnaryKernel <: MPSKernel
 
 @objcproperties MPSMatrixUnaryKernel begin
     @autoproperty sourceMatrixOrigin::id{MTLOrigin} setter=setSourceMatrixOrigin
@@ -35,7 +35,7 @@ end
 end
 
 
-@objcwrapper immutable=false MPSMatrixBinaryKernel <: MPSKernel
+@objcwrapper MPSMatrixBinaryKernel <: MPSKernel
 
 @objcproperties MPSMatrixBinaryKernel begin
     @autoproperty primarySourceMatrixOrigin::id{MTLOrigin} setter=setPrimarySourceMatrixOrigin

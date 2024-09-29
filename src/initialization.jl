@@ -35,15 +35,15 @@ function __init__()
         end
     end
 
-    @autoreleasepool try
-        load_framework("CoreGraphics")
-        ver = MTL.MTLCompileOptions().languageVersion
-        @debug "Successfully loaded Metal; targeting v$ver."
-        _functional[] = true
-    catch err
-        @error "Failed to load Metal" exception=(err,catch_backtrace())
-        return
-    end
+    # try
+    #     load_framework("CoreGraphics")
+    #     ver = MTL.MTLCompileOptions().languageVersion
+    #     @debug "Successfully loaded Metal; targeting v$ver."
+    #     _functional[] = true
+    # catch err
+    #     @error "Failed to load Metal" exception=(err,catch_backtrace())
+    #     return
+    # end
 
     # ensure that operations executed by the REPL back-end finish before returning,
     # because displaying values happens on a different task
