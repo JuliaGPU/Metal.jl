@@ -279,7 +279,7 @@ try
                     push!(results, (test, resp))
 
                     # act on the results
-                    if resp[1] isa Exception
+                    if resp[1] isa Test.AbstractTestSet
                         print_testworker_errored(test, wrkr)
                         do_quickfail && Base.throwto(t, InterruptException())
 

@@ -21,6 +21,38 @@ const shader_validation  = get(ENV, "MTL_SHADER_VALIDATION", "0") != "0"
 
 using Random
 
+function Test.finish(ts::Test.DefaultTestSet; print_results::Bool=Test.TESTSET_PRINT_ENABLE[])
+    ts.time_end = time()
+    # If we are a nested test set, do not print a full summary
+    # now - let the parent test set do the printing
+    if Test.get_testset_depth() != 0
+        # Attach this test set to the parent test set
+        parent_ts = Test.get_testset()
+        Test.record(parent_ts, ts)
+        return ts
+    end
+
+    # passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration = get_test_counts(ts)
+    # total_pass   = passes + c_passes
+    # total_fail   = fails  + c_fails
+    # total_error  = errors + c_errors
+    # total_broken = broken + c_broken
+    # total = total_pass + total_fail + total_error + total_broken
+
+    # if print_results
+    #     print_test_results(ts)
+    # end
+
+    # # Finally throw an error as we are the outermost test set
+    # if total != total_pass + total_broken
+    #     # Get all the error/failures and bring them along for the ride
+    #     efs = filter_errors(ts)
+    #     throw(TestSetException(total_pass, total_fail, total_error, total_broken, efs))
+    # end
+
+    # # return the testset so it is returned from the @testset macro
+    ts
+end
 
 ## entry point
 
