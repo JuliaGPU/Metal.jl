@@ -128,7 +128,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T =
         encode!(cbuf, kernel, descriptor)
     end
 
-    P = MtlMatrix{UInt32}(undef, 1, min(N, M))
+    P = similar(A, UInt32, 1, min(N, M))
     status = MtlArray{MPSMatrixDecompositionStatus}(undef)
 
     commitAndContinue!(cmdbuf) do cbuf
@@ -137,7 +137,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{T}, maxi::Integer) where T =
         encode!(cbuf, kernel, mps_at, mps_at, mps_p, status)
     end
 
-    B = MtlMatrix{T}(undef, M, N)
+    B = similar(A, M, N)
 
     commit!(cmdbuf) do cbuf
         mps_b = MPSMatrix(B)
@@ -186,7 +186,7 @@ end
         encode!(cbuf, kernel, descriptor)
     end
 
-    P = MtlMatrix{UInt32}(undef, 1, min(N, M))
+    P = similar(A, UInt32, 1, min(N, M))
     status = MtlArray{MPSMatrixDecompositionStatus}(undef)
 
     commitAndContinue!(cmdbuf) do cbuf
