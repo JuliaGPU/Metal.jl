@@ -210,28 +210,34 @@ end
 
     # Dims in tuple
     let A = Metal.fill(b, (10, 10, 10, 1000))
-        @test all(Array(A) .== b)
+        B = fill(b, (10, 10, 10, 1000))
+        @test Array(A) == B
     end
 
-    let M = Metal.fill(b, (10, 10))
-        @test all(Array(M) .== b)
+    let M = Metal.fill(b, (10, 10, 10, 1000))
+        B = fill(b, (10, 10, 10, 1000))
+        @test Array(M) == B
     end
 
     let V = Metal.fill(b, (10,))
-        @test all(Array(V) .== b)
+        B = fill(b, (10,))
+        @test Array(V) == B
     end
 
     #Dims already unpacked
     let A = Metal.fill(b, 10, 10, 10, 1000)
-        @test all(Array(A) .== b)
+        B = fill(b, 10, 10, 10, 1000)
+        @test Array(A) == B
     end
 
     let M = Metal.fill(b, 10, 10)
-        @test all(Array(M) .== b)
+        B = fill(b, 10, 10)
+        @test Array(M) == B
     end
 
     let V = Metal.fill(b, 10)
-        @test all(Array(V) .== b)
+        B = fill(b, 10)
+        @test Array(V) == B
     end
 end
 
@@ -420,7 +426,7 @@ end
 
 @testset "broadcast" begin
     testf(f, x) = Array(f(MtlArray(x))) ≈ f(x)
-    
+
     @test testf(x->max.(x, zero(Float32)), randn(Float32, 1000))
     @test testf(x->min.(x, one(Float32)), randn(Float32, 1000))
     @test testf(x->min.(max.(x, zero(Float32)), one(Float32)), randn(Float32, 1000))
