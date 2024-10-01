@@ -41,6 +41,7 @@ _, jobs = extract_flag!(ARGS, "--jobs", Sys.CPU_THREADS)
 do_quickfail, _ = extract_flag!(ARGS, "--quickfail")
 
 include("setup.jl")     # make sure everything is precompiled
+using ..NTTS
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
 @info "Running $jobs tests in parallel. If this is too many, specify the `--jobs` argument to the tests, or set the JULIA_CPU_THREADS environment variable."
 
@@ -51,7 +52,7 @@ const test_runners = Dict()
 for (rootpath, dirs, files) in walkdir(@__DIR__)
   # find Julia files
   filter!(files) do file
-    endswith(file, ".jl") && file !== "setup.jl" && file !== "runtests.jl"
+    endswith(file, ".jl") && file !== "setup.jl" && file !== "runtests.jl" && file !== "nothrowtestset.jl"
   end
   isempty(files) && continue
 
@@ -105,6 +106,9 @@ if !isempty(ARGS)
     any(arg->startswith(test, arg), ARGS)
   end
 end
+
+# empty!(tests)
+# push!(tests, "mps/copyy")
 
 # add workers
 const test_exeflags = Base.julia_cmd()
@@ -278,8 +282,10 @@ try
                     delete!(running_tests, test)
                     push!(results, (test, resp))
 
+                   @info resp
+
                     # act on the results
-                    if resp[1] isa Test.AbstractTestSet
+                    if resp[1] isa Test.AbstractTestSet || resp[1] isa Exception
                         print_testworker_errored(test, wrkr)
                         do_quickfail && Base.throwto(t, InterruptException())
 
@@ -349,9 +355,16 @@ Test.push_testset(o_ts)
 completed_tests = Set{String}()
 for (testname, (resp,)) in results
     push!(completed_tests, testname)
-    if isa(resp, Test.DefaultTestSet)
+    @info testname
+    if isa(resp, NoThrowTestSet)
+        @info testname
+        @info o_ts.results |> length
+        @info o_ts.results
         Test.push_testset(resp)
+
         Test.record(o_ts, resp)
+        @info o_ts.results |> length
+        @info o_ts
         Test.pop_testset()
     elseif isa(resp, Tuple{Int,Int})
         fake = Test.DefaultTestSet(testname)
