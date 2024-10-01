@@ -279,12 +279,13 @@ end
     kernel_state = KernelState(Random.rand(UInt32))
 
     cmdbuf = if kernel.loggingEnabled
+        # TODO: make this a dynamic error, i.e., from the kernel (JuliaGPU/Metal.jl#433)
         if macos_version() < v"15"
-            @error "Logging is only supported on macOS 15 or higher"
+            error("Logging is only supported on macOS 15 or higher")
         end
 
         if MTLCaptureManager().isCapturing
-            @error "Logging is not supported while GPU frame capturing"
+            error("Logging is not supported while GPU frame capturing")
         end
 
         log_state_descriptor = MTLLogStateDescriptor()
