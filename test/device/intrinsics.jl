@@ -276,6 +276,7 @@ end
 
 @testset "parametrically typed" begin
     typs = [Int32, Int64, Float32]
+    metal_support() >= v"3.1" && push!(types, BFloat16)
     @testset for typ in typs
         function kernel(d::MtlDeviceArray{T}, n) where {T}
             t = thread_position_in_threadgroup_1d()
