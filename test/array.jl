@@ -1,5 +1,9 @@
 STORAGEMODES = [Metal.PrivateStorage, Metal.SharedStorage, Metal.ManagedStorage]
 
+const FILL_TYPES = [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
+                    Float16, Float32]
+Metal.metal_support() >= v"3.1" && push!(FILL_TYPES, BFloat16)
+
 @testset "array" begin
 
 let arr = MtlVector{Int}(undef, 1)
@@ -27,8 +31,7 @@ end
     @test mtl(1:3) === 1:3
 
 
-    # Page 22 of https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
-    # Only bfloat missing
+    # Section 2.1 of https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
     supported_number_types = [Float16  => Float16,
                               Float32  => Float32,
                               Float64  => Float32,
@@ -41,6 +44,8 @@ end
                               UInt32   => UInt32,
                               UInt64   => UInt64,
                               UInt8    => UInt8]
+    Metal.metal_support() >= v"3.1" && push!(supported_number_types, BFloat16 => BFloat16)
+
     # Test supported types and ensure only Float64 get converted to Float32
     for (SrcType, TargType) in supported_number_types
         @test mtl(SrcType[1]) isa MtlArray{TargType}
@@ -227,8 +232,7 @@ end
 
 end
 
-@testset "fill($T)" for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
-                              Float16, Float32]
+@testset "fill($T)" for T in FILL_TYPES
     broken466a = T ∉ [Int8,UInt8]
     broken466b = (Base.JLOptions().check_bounds != 1 || shader_validation)
 
@@ -267,8 +271,7 @@ end
     end
 end
 
-@testset "fill!($T)" for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
-                               Float16, Float32]
+@testset "fill!($T)" for T in FILL_TYPES
     broken466a = T ∉ [Int8,UInt8]
     broken466b = (Base.JLOptions().check_bounds != 1 || shader_validation)
 
