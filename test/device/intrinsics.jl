@@ -275,9 +275,9 @@ end
 end
 
 @testset "parametrically typed" begin
-    typs = [Int32, Int64, Float32]
+    types = [Int32, Int64, Float32]
     metal_support() >= v"3.1" && push!(types, BFloat16)
-    @testset for typ in typs
+    @testset for typ in types
         function kernel(d::MtlDeviceArray{T}, n) where {T}
             t = thread_position_in_threadgroup_1d()
             tr = n-t+1
@@ -405,8 +405,9 @@ end
             return
         end
 
-        a = MtlArray(rand(typ, 8, 8))
-        b = MtlArray(rand(typ, 8, 8))
+        #Use `ones` for figuring out issues
+        a = MtlArray(ones(typ, 8, 8))
+        b = MtlArray(ones(typ, 8, 8))
         c = MtlArray(zeros(typ, 8, 8))
         @metal threads=(8, 8) kernel(a, b, c)
         @test Array(a) * Array(b) ≈ Array(c)

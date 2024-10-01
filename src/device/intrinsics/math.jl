@@ -418,7 +418,7 @@ end
     j = fma(1.442695f0, a, 12582912.0f0)
     j = j - 12582912.0f0
     i = unsafe_trunc(Int32, j)
-    f = fma(j, -6.93145752f-1, a) # log_2_hi 
+    f = fma(j, -6.93145752f-1, a) # log_2_hi
     f = fma(j, -1.42860677f-6, f) # log_2_lo
 
     # approximate r = exp(f)-1 on interval [-log(2)/2, +log(2)/2]
