@@ -1,4 +1,5 @@
 using Distributed, Test, Metal, Adapt, ObjectiveC, ObjectiveC.Foundation
+include("nothrowtestset.jl")
 
 Metal.functional() || error("Metal.jl is not functional on this system")
 
@@ -21,38 +22,18 @@ const shader_validation  = get(ENV, "MTL_SHADER_VALIDATION", "0") != "0"
 
 using Random
 
-function Test.finish(ts::Test.DefaultTestSet; print_results::Bool=Test.TESTSET_PRINT_ENABLE[])
-    ts.time_end = time()
-    # If we are a nested test set, do not print a full summary
-    # now - let the parent test set do the printing
-    if Test.get_testset_depth() != 0
-        # Attach this test set to the parent test set
-        parent_ts = Test.get_testset()
-        Test.record(parent_ts, ts)
-        return ts
-    end
-
-    # passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration = get_test_counts(ts)
-    # total_pass   = passes + c_passes
-    # total_fail   = fails  + c_fails
-    # total_error  = errors + c_errors
-    # total_broken = broken + c_broken
-    # total = total_pass + total_fail + total_error + total_broken
-
-    # if print_results
-    #     print_test_results(ts)
-    # end
-
-    # # Finally throw an error as we are the outermost test set
-    # if total != total_pass + total_broken
-    #     # Get all the error/failures and bring them along for the ride
-    #     efs = filter_errors(ts)
-    #     throw(TestSetException(total_pass, total_fail, total_error, total_broken, efs))
-    # end
-
-    # # return the testset so it is returned from the @testset macro
-    ts
-end
+# function Test.finish(ts::Test.DefaultTestSet; print_results::Bool=Test.TESTSET_PRINT_ENABLE[])
+#     ts.time_end = time()
+#     # If we are a nested test set, do not print a full summary
+#     # now - let the parent test set do the printing
+#     if Test.get_testset_depth() != 0
+#         # Attach this test set to the parent test set
+#         parent_ts = Test.get_testset()
+#         Test.record(parent_ts, ts)
+#     end
+#     # return the testset so it is returned from the @testset macro
+#     return ts
+# end
 
 ## entry point
 
@@ -64,7 +45,7 @@ function runtests(f, name)
         # generate a temporary module to execute the tests in
         mod_name = Symbol("Test", rand(1:100), "Main_", replace(name, '/' => '_'))
         mod = @eval(Main, module $mod_name end)
-        @eval(mod, using Test, Random, Metal)
+        @eval(mod, using Test, Random, Metal, ..NTTS)
 
         let id = myid()
             wait(@spawnat 1 print_testworker_started(name, id))
@@ -75,12 +56,14 @@ function runtests(f, name)
             Random.seed!(1)
             Metal.allowscalar(false)
 
-            @timed @testset $"$name" begin
+            @timed @testset $:NoThrowTestSet $"$name" begin
                 $f()
             end
         end
         data = Core.eval(mod, ex)
         #data[1] is the testset
+
+        # @info data
 
         # process results
         cpu_rss = Sys.maxrss()
