@@ -30,22 +30,19 @@ end
 
 @testset "MPSMatrixCopy" begin
     Ts = collect(values(MPS.jl_mps_to_typ))
-    Ts = Ts[.!(Ts .<: IGNORE_UNION)]
-    @testset "$T" for T in Ts
-        for dim in ((16,16), (10,500), (500,10), (256,512))
-            srcMat = MtlArray(rand(T, dim))
+    @testset "$T: $dim" for T in Ts, dim in ((16,16), (10,500), (500,10), (256,512))
+        srcMat = MtlArray(rand(T, dim))
 
-            dstMat = copytest(srcMat, false, false)
-            @test dstMat == srcMat
+        dstMat = copytest(srcMat, false, false)
+        @test dstMat == srcMat broken=(T <: IGNORE_UNION)
 
-            dstMat = copytest(srcMat, true, false)
-            @test dstMat == srcMat'
+        dstMat = copytest(srcMat, true, false)
+        @test dstMat == srcMat' broken=(T <: IGNORE_UNION)
 
-            dstMat = copytest(srcMat, false, true)
-            @test dstMat == srcMat'
+        dstMat = copytest(srcMat, false, true)
+        @test dstMat == srcMat' broken=(T <: IGNORE_UNION)
 
-            dstMat = copytest(srcMat, true, true)
-            @test dstMat == srcMat
-        end
+        dstMat = copytest(srcMat, true, true)
+        @test dstMat == srcMat broken=(T <: IGNORE_UNION)
     end
 end
