@@ -53,25 +53,30 @@ pkg> add Metal
 
 Or, equivalently, via the `Pkg` API:
 
-```julia
+```julia-repl
 julia> import Pkg; Pkg.add("Metal")
 ```
 
 For an overview of the toolchain in use, you can run the following command after
 importing the package:
 
-```julia
+```julia-repl
 julia> using Metal
 
 julia> Metal.versioninfo()
-macOS 14.5.0, Darwin 23.5.0
+macOS 15.0.0, Darwin 24.0.0
 
 Toolchain:
-- Julia: 1.10.4
-- LLVM: 15.0.7
+- Julia: 1.11.0
+- LLVM: 16.0.6
 
 Julia packages:
-- Metal.jl: 1.2.0
+- Metal.jl: 1.4.0
+- GPUArrays: 10.3.1
+- GPUCompiler: 0.27.8
+- KernelAbstractions: 0.9.27
+- ObjectiveC: 3.1.0
+- LLVM: 9.1.2
 - LLVMDowngrader_jll: 0.3.0+1
 
 1 device:
@@ -86,7 +91,7 @@ The `MtlArray` type is both meant to be a convenient container for device
 memory, as well as provide a data-parallel abstraction for using the GPU
 without writing your own kernels:
 
-```julia
+```julia-repl
 julia> a = MtlArray([1])
 1-element MtlArray{Int64, 1}:
  1
@@ -105,7 +110,7 @@ GPU back-ends, and with that deviate from how kernels are implemented in Metal C
 (i.e., indexing intrinsics are functions not arguments, arbitrary aggregate arguments
 are supported, etc):
 
-```julia
+```julia-repl
 julia> function vadd(a, b, c)
            i = thread_position_in_grid_1d()
            c[i] = a[i] + b[i]
@@ -133,7 +138,7 @@ libraries through [ObjectiveC.jl](https://github.com/JuliaInterop/ObjectiveC.jl)
 low-level API wrappers, along with some slightly higher-level Julia wrappers, are available
 in the `MTL` submodule exported by Metal.jl:
 
-```julia
+```julia-repl
 julia> dev = MTLDevice(1)
 <AGXG13XDevice: 0x14c17f200>
     name = Apple M1 Pro
