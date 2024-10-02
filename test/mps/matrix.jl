@@ -170,3 +170,10 @@ using .MPS: MPSMatrixFindTopK
     @test topk.sourceColumns == cols
     @test topk.sourceRows == rows
 end
+
+# Ensure that the function does not error
+@testset "MPSMatrixRandom sync state" begin
+    cmdbuf = MTL.MTLCommandBuffer(global_queue(device()))
+    rng = MPS.MPSMatrixRandomMTGP32(device())
+    @test isnothing(MPS.synchronize_state(rng, cmdbuf))
+end
