@@ -143,7 +143,6 @@ steps:
           queue: "juliaecosystem"
           os: "macos"
           arch: "aarch64"
-          macos_version: "15.0"
         if: |
           build.message =~ /\[only benchmarks\]/ ||
           build.message !~ /\[only/ && !build.pull_request.draft &&
