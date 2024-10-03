@@ -514,8 +514,10 @@ fill(v::T, dims...; storage=DefaultStorageMode) where T = fill!(MtlArray{T,lengt
 
 # optimized implementation of `fill!` for types that are directly supported by fillbuffer
 function Base.fill!(A::MtlArray{T}, val) where T <: Union{UInt8,Int8}
-    B = convert(T, val)
-    unsafe_fill!(device(A), pointer(A), B, length(A))
+    if length(A) > 0
+        B = convert(T, val)
+        unsafe_fill!(device(A), pointer(A), B, length(A))
+    end
     A
 end
 
