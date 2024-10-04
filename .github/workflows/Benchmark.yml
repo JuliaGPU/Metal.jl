@@ -58,7 +58,7 @@ jobs:
           output-file-path: ${{ steps.locate.outputs.path }}
           benchmark-data-dir-path: ""
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          comment-always: true
+          comment-always: ${{ github.event_name == 'pull_request' }}
           summary-always: true
           alert-threshold: "150%"
           fail-on-alert: false
