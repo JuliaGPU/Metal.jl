@@ -55,7 +55,7 @@ end
     simdgroup_load(data::MtlDeviceArray{T}, matrix_origin=(1, 1))
 
 Loads data from device or threadgroup memory into an 8x8 SIMD-group matrix
-and returns it. `T` must be either `Float16` or `Float32`.
+and returns it. `T` must be either `Float16`, `Float32`, or `BFloat16`.
 
 # Arguments
 - `matrix_origin::NTuple{2, Int64}=(1, 1)`: origin in the source memory to load from.
@@ -65,7 +65,7 @@ and returns it. `T` must be either `Float16` or `Float32`.
     simdgroup_store(src, dest::MtlDeviceArray{T}, matrix_origin=(1, 1))
 
 Stores data from an 8x8 SIMD-group matrix into device or threadgroup memory.
-`T` must be either `Float16` or `Float32`.
+`T` must be either `Float16`, `Float32`, `BFloat16`.
 
 # Arguments
 - `matrix_origin::NTuple{2, Int64}=(1, 1)`: origin in the destination memory to store to.
@@ -119,7 +119,7 @@ The value for delta must be the same for all threads in the SIMD-group. This fun
 doesn’t modify the upper delta lanes of data because it doesn’t wrap values around
 the SIMD-group.
 
-T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+T must be one of the following: Float32, Float16, BFloat16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
 """
 simd_shuffle_down
 
@@ -132,6 +132,6 @@ lane ID minus delta.
 The value of delta must be the same for all threads in a SIMD-group. This function doesn’t
 modify the lower delta lanes of data because it doesn’t wrap values around the SIMD-group.
 
-T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+T must be one of the following: Float32, Float16, BFloat16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
 """
 simd_shuffle_up
