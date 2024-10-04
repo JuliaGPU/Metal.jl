@@ -370,6 +370,15 @@ end
     arr2 .+= 1;
     @test all(arr2 .== 2)
     @test all(marr2 .== 2)
+
+    @testset "Issue #451" begin
+        a = mtl(reshape(Float32.(1:60), 5,4,3);storage=Metal.SharedStorage)
+        view_a = @view a[:,1:4,2]
+        b = copy(unsafe_wrap(Array, view_a))
+        c = Array(view_a)
+
+        @test b == c
+    end
 end
 
 @testset "ReshapedArray" begin
