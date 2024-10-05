@@ -401,6 +401,12 @@ function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::Arra
     end
     return dest
 end
+function Base.unsafe_copyto!(::MTLDevice, dest::MtlArray{T,<:Any,Metal.SharedStorage}, doffs, src::Array{T}, soffs, n) where T
+    # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
+    synchronize()
+    GC.@preserve src dest unsafe_copyto!(pointer(unsafe_wrap(Array,dest), doffs), pointer(src, soffs), n)
+    return dest
+end
 
 # GPU -> CPU
 function Base.unsafe_copyto!(dev::MTLDevice, dest::Array{T}, doffs, src::MtlArray{T}, soffs, n) where T
@@ -414,6 +420,12 @@ function Base.unsafe_copyto!(dev::MTLDevice, dest::Array{T}, doffs, src::MtlArra
     end
     return dest
 end
+function Base.unsafe_copyto!(::MTLDevice, dest::Array{T}, doffs, src::MtlArray{T,<:Any,Metal.SharedStorage}, soffs, n) where T
+    # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
+    synchronize()
+    GC.@preserve src dest unsafe_copyto!(pointer(dest, doffs), pointer(unsafe_wrap(Array,src), soffs), n)
+    return dest
+end
 
 # GPU -> GPU
 function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::MtlArray{T}, soffs, n) where T
@@ -425,6 +437,12 @@ function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::MtlA
         # copy selector bytes
         error("Not implemented")
     end
+    return dest
+end
+function Base.unsafe_copyto!(::MTLDevice, dest::MtlArray{T,<:Any,Metal.SharedStorage}, doffs, src::MtlArray{T,<:Any,Metal.SharedStorage}, soffs, n) where T
+    # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
+    synchronize()
+    GC.@preserve src dest unsafe_copyto!(pointer(unsafe_wrap(Array,dest), doffs), pointer(unsafe_wrap(Array,src), soffs), n)
     return dest
 end
 
