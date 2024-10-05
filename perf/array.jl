@@ -2,7 +2,7 @@ const m = 512
 const n = 1000
 
 for (S, smname) in [(Metal.PrivateStorage,"private"), (Metal.SharedStorage,"shared")]
-    group = addgroup!(SUITE, "$smname array")
+    local group = addgroup!(SUITE, "$smname array")
 
     # generate some arrays
     cpu_mat = rand(rng, Float32, m, n)
