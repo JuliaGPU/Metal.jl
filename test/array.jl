@@ -69,27 +69,28 @@ end
     @test collect(Metal.fill(1, 2, 2)) == ones(Float32, 2, 2)
 end
 
-@testset "copyto!: $T, $S" for S in [Metal.PrivateStorage, Metal.SharedStorage], T in [Float16, Float32, Bool, Int16, Int32, Int64, Int8, UInt16, UInt32, UInt64, UInt8]
-    function testcopyto!(out, in)
-        copyto!(out,in)
-        return Array(in) == Array(out)
+@testset "copyto!" begin
+    @testset "$T, $S" for S in [Metal.PrivateStorage, Metal.SharedStorage],
+                          T in [Float16, Float32, Bool, Int16, Int32, Int64, Int8, UInt16, UInt32, UInt64, UInt8]
+        dim = (1000,17,10)
+        A = rand(T,dim)
+        mtlA = mtl(A;storage=S)
+
+        #cpu -> gpu
+        res = Metal.zeros(T,dim;storage=S)
+        copyto!(res,A)
+        @test Array(res) == Array(A)
+
+        #gpu -> cpu
+        res = zeros(T,dim)
+        copyto!(res,mtlA)
+        @test Array(res) == Array(mtlA)
+
+        #gpu -> gpu
+        res = Metal.zeros(T,dim;storage=S)
+        copyto!(res,mtlA)
+        @test Array(res) == Array(mtlA)
     end
-
-    dim = (1000,17,10)
-    A = rand(T,dim)
-    mtlA = mtl(A;storage=S)
-
-    #cpu -> gpu
-    res = Metal.zeros(T,dim;storage=S)
-    @test testcopyto!(res,A)
-
-    #gpu -> cpu
-    res = zeros(T,dim)
-    @test testcopyto!(res,mtlA)
-
-    #gpu -> gpu
-    res = Metal.zeros(T,dim;storage=S)
-    @test testcopyto!(res,mtlA)
 end
 
 check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
