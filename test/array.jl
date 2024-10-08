@@ -69,6 +69,30 @@ end
     @test collect(Metal.fill(1, 2, 2)) == ones(Float32, 2, 2)
 end
 
+@testset "copyto!" begin
+    @testset "$T, $S" for S in [Metal.PrivateStorage, Metal.SharedStorage],
+                          T in [Float16, Float32, Bool, Int16, Int32, Int64, Int8, UInt16, UInt32, UInt64, UInt8]
+        dim = (1000,17,10)
+        A = rand(T,dim)
+        mtlA = mtl(A;storage=S)
+
+        #cpu -> gpu
+        res = Metal.zeros(T,dim;storage=S)
+        copyto!(res,A)
+        @test Array(res) == Array(A)
+
+        #gpu -> cpu
+        res = zeros(T,dim)
+        copyto!(res,mtlA)
+        @test Array(res) == Array(mtlA)
+
+        #gpu -> gpu
+        res = Metal.zeros(T,dim;storage=S)
+        copyto!(res,mtlA)
+        @test Array(res) == Array(mtlA)
+    end
+end
+
 check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
 
 # There is some repetition to the GPUArrays tests to test for different storagemodes
