@@ -15,6 +15,7 @@ using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
 import KernelAbstractions
 
 include("version.jl")
+import KernelAbstractions as KA
 
 # core library
 include("../lib/mtl/MTL.jl")
@@ -61,13 +62,13 @@ include("mapreduce.jl")
 include("accumulate.jl")
 include("indexing.jl")
 include("random.jl")
-include("gpuarrays.jl")
 
 # KernelAbstractions
 include("MetalKernels.jl")
-import .MetalKernels: MetalBackend
+import .MetalKernels: MetalBackend, KA.launch_config
 export MetalBackend
 
+include("gpuarrays.jl")
 include("deprecated.jl")
 
 include("precompile.jl")
