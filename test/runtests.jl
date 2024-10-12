@@ -73,14 +73,33 @@ for (rootpath, dirs, files) in walkdir(@__DIR__)
     test_runners[file] = ()->include("$(@__DIR__)/$file.jl")
   end
 end
+
 ## GPUArrays testsuite
+const gpuarr_eltypes = [Int16, Int32, Int64,
+                        Complex{Int16}, Complex{Int32}, Complex{Int64},
+                        Float16, Float32,
+                        ComplexF16, ComplexF32]
+const gpuarr_eltypes_nobf16 = copy(gpuarr_eltypes)
+
+# don't test BFloat16 for unsupported operations
+nobf16_tests = ["random", "reductions/reducedim!",
+        "reductions/mapreducedim!_large", "reductions/mapreduce",
+        "reductions/== isequal", "reductions/minimum maximum extrema",
+        "reductions/sum prod", "reductions/mapreducedim!", "reductions/reduce"]
+
+# Add BFloat16 for tests that use it
+Metal.metal_support() >= v"3.1" && push!(gpuarr_eltypes, BFloat16)
+
 for name in keys(TestSuite.tests)
     if Metal.DefaultStorageMode != Metal.PrivateStorage && name == "indexing scalar"
         # GPUArrays' scalar indexing tests assume that indexing is not supported
         continue
     end
+
+    tmp_eltypes = name in nobf16_tests ? gpuarr_eltypes_nobf16 : gpuarr_eltypes
+
     push!(tests, "gpuarrays$(Base.Filesystem.path_separator)$name")
-    test_runners["gpuarrays$(Base.Filesystem.path_separator)$name"] = ()->TestSuite.tests[name](MtlArray)
+    test_runners["gpuarrays$(Base.Filesystem.path_separator)$name"] = ()->TestSuite.tests[name](MtlArray;eltypes=tmp_eltypes)
 end
 unique!(tests)
 
