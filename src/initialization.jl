@@ -1,5 +1,16 @@
-const _functional = Ref{Bool}(false)
-functional() = _functional[]
+# Starts at `nothing`. Only false when it's determined
+const _functional = Ref{Union{Nothing,Bool}}(false)
+
+function functional()
+    if isnothing(_functional[])
+        dev = device()
+
+        _functional[] =
+            supports_family(dev, MTL.MTLGPUFamilyApple7) &&
+            supports_family(dev, MTL.MTLGPUFamilyMetal3)
+    end
+    _functional[]
+end
 
 function __init__()
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
@@ -39,7 +50,10 @@ function __init__()
         load_framework("CoreGraphics")
         ver = MTL.MTLCompileOptions().languageVersion
         @debug "Successfully loaded Metal; targeting v$ver."
-        _functional[] = true
+
+        # Successful loading of CoreGraphics means there's a
+        # chance the graphics device is supported
+        _functional[] = nothing
     catch err
         @error "Failed to load Metal" exception=(err,catch_backtrace())
         return

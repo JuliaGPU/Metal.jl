@@ -49,16 +49,23 @@ function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
     return MTLBuffer(ptr)
 end
 
-const PAGESIZE = ccall(:getpagesize, Cint, ())
+const _page_size::Ref{Int} = Ref{Int}(0)
+function page_size()
+    if _page_size[] == 0
+        _page_size[] = Int(ccall(:getpagesize, Cint, ()))
+    end
+    _page_size[]
+end
+
 function can_alloc_nocopy(ptr::Ptr, bytesize::Integer)
     # newBufferWithBytesNoCopy has several restrictions:
     ## the pointer has to be page-aligned
-    if Int64(ptr) % PAGESIZE != 0
+    if Int(ptr) % page_size() != 0
         return false
     end
     ## the new buffer needs to be page-aligned
     ## XXX: on macOS 14, this doesn't seem required; is this a documentation issue?
-    if bytesize % PAGESIZE != 0
+    if bytesize % page_size() != 0
         return false
     end
     return true
