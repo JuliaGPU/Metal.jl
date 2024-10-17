@@ -17,7 +17,7 @@ const eltypes = [Int16, Int32, Int64,
 TestSuite.supported_eltypes(::Type{<:MtlArray}) = eltypes
 
 const runtime_validation = get(ENV, "MTL_DEBUG_LAYER", "0") != "0"
-const shader_validation  = get(ENV, "MTL_DEBUG_LAYER", "0") != "0"
+const shader_validation  = get(ENV, "MTL_SHADER_VALIDATION", "0") != "0"
 
 using Random
 
