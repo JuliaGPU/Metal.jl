@@ -96,7 +96,7 @@ function extract_gpu_code(f, binary)
     arch = findfirst(fat_handle) do arch
         arch.header isa MachO.MachOHeader64 && GPUMachineType(arch.header.cputype) == AppleGPU
     end
-    arch == nothing && error("Could not find GPU architecture in universal binary")
+    arch === nothing && error("Could not find GPU architecture in universal binary")
 
     # the GPU binary contains several sections...
     ## ... extract the compute section, which is another Mach-O binary
