@@ -40,9 +40,6 @@ end
     if !job.config.kernel
         error("Can only generate AGX code for kernel functions")
     end
-    if macos_version() < v"13"
-        error("Native code reflection is only supported on OSX 13 or higher")
-    end
 
     # compile the kernel
     compiled = compile(job)

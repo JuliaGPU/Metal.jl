@@ -5,32 +5,12 @@ export MtlThreadGroupArray
 
 Create an array local to each threadgroup launched during kernel execution.
 """
-MtlThreadGroupArray
-
-@static if Sys.isapple() && macos_version() >= v"13.0"
-    @inline function MtlThreadGroupArray(::Type{T}, dims) where {T}
-        len = prod(dims)
-        # NOTE: this relies on const-prop to forward the literal length to the generator.
-        #       maybe we should include the size in the type, like StaticArrays does?
-        ptr = emit_threadgroup_memory(T, Val(len))
-        MtlDeviceArray(dims, ptr)
-    end
-else
-    # on older macOS, shared memory with small types results in miscompilation (Metal.jl#26),
-    # so we use an array wrapper extending the element size to the minimum known to work.
-    # this was fixed in macOS 13 beta 4 (22A5311f).
-
-    @inline function MtlThreadGroupArray(::Type{T}, dims) where {T}
-        len = prod(dims)
-        if sizeof(T) >= 4
-            ptr = emit_threadgroup_memory(T, Val(len))
-            MtlDeviceArray(dims, ptr)
-        else
-            ptr = emit_threadgroup_memory(UInt32, Val(len))
-            arr = MtlDeviceArray(dims, ptr)
-            MtlLargerDeviceArray{T,ndims(arr),AS.ThreadGroup}(arr)
-        end
-    end
+@inline function MtlThreadGroupArray(::Type{T}, dims) where {T}
+    len = prod(dims)
+    # NOTE: this relies on const-prop to forward the literal length to the generator.
+    #       maybe we should include the size in the type, like StaticArrays does?
+    ptr = emit_threadgroup_memory(T, Val(len))
+    MtlDeviceArray(dims, ptr)
 end
 
 # get a pointer to threadgroup memory, with known (static) or zero length (dynamic)
