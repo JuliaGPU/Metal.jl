@@ -1,5 +1,9 @@
 using .MTL
 
+if shader_validation
+    @warn "Skipping capturing tests; capturing is not supported with Metal Shader Validation enabled"
+else
+
 @testset "capturing" begin
 
 mktempdir() do tmpdir
@@ -82,4 +86,5 @@ end
 end
 end
 
+end
 end
