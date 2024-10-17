@@ -84,22 +84,30 @@ end
                                               src::MtlPtr{T}, N::Integer;
                                               queue::MTLCommandQueue=global_queue(dev),
                                               async::Bool=false) where T
-    cmdbuf = MTLCommandBuffer(queue)
-    MTLBlitCommandEncoder(cmdbuf) do enc
-        MTL.append_copy!(enc, dst.buffer, dst.offset, src.buffer, src.offset, N * sizeof(T))
+    if N > 0
+        cmdbuf = MTLCommandBuffer(queue)
+        MTLBlitCommandEncoder(cmdbuf) do enc
+            MTL.append_copy!(enc, dst.buffer, dst.offset, src.buffer, src.offset, N * sizeof(T))
+        end
+        commit!(cmdbuf)
+        async || wait_completed(cmdbuf)
     end
-    commit!(cmdbuf)
-    async || wait_completed(cmdbuf)
+    return dst
 end
 
-@autoreleasepool function unsafe_fill!(dev::MTLDevice, ptr::MtlPtr{T},
-                                       value::Union{UInt8,Int8}, N::Integer) where T
-    cmdbuf = MTLCommandBuffer(global_queue(dev))
-    MTLBlitCommandEncoder(cmdbuf) do enc
-        MTL.append_fillbuffer!(enc, ptr.buffer, value, N * sizeof(T), ptr.offset)
+@autoreleasepool function unsafe_fill!(dev::MTLDevice, dst::MtlPtr{T},
+                                       value::Union{UInt8,Int8}, N::Integer;
+                                       queue::MTLCommandQueue=global_queue(dev),
+                                       async::Bool=false) where T
+    if N > 0
+        cmdbuf = MTLCommandBuffer(queue)
+        MTLBlitCommandEncoder(cmdbuf) do enc
+            MTL.append_fillbuffer!(enc, dst.buffer, value, N * sizeof(T), dst.offset)
+        end
+        commit!(cmdbuf)
+        async || wait_completed(cmdbuf)
     end
-    commit!(cmdbuf)
-    wait_completed(cmdbuf)
+    return dst
 end
 
 # TODO: Implement generic fill since mtBlitCommandEncoderFillBuffer is limiting
