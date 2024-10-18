@@ -147,33 +147,36 @@ function cpu_topk(x::Matrix{T}, k; rev=true, dims=1) where {T}
 end
 
 @testset "topk & topk!" begin
-    for ftype in (Float16, Float32)
+    ftypes = [Float16, Float32]
+
+    @testset "$ftype" for ftype in ftypes
         # Normal operation
-        @testset "$ftype" begin
-            for (shp,k) in [((3,1), 2), ((20,30), 5)]
-                cpu_a = rand(ftype, shp...)
+        @testset "$shp, k=$k" for (shp,k) in [((3,1), 2), ((20,30), 5)]
+            cpu_a = rand(ftype, shp...)
 
-                #topk
-                cpu_i, cpu_v = cpu_topk(cpu_a, k)
+            #topk
+            cpu_i, cpu_v = cpu_topk(cpu_a, k)
 
-                a = MtlMatrix(cpu_a)
-                i, v = MPS.topk(a, k)
+            a = MtlMatrix(cpu_a)
+            i, v = MPS.topk(a, k)
 
-                @test Array(i) == cpu_i
-                @test Array(v) == cpu_v
+            @test Array(i) == cpu_i
+            @test Array(v) == cpu_v
 
-                #topk!
-                i = MtlMatrix{UInt32}(undef, (k, shp[2]))
-                v = MtlMatrix{ftype}(undef, (k, shp[2]))
+            #topk!
+            i = MtlMatrix{UInt32}(undef, (k, shp[2]))
+            v = MtlMatrix{ftype}(undef, (k, shp[2]))
 
-                i, v = MPS.topk!(a, i, v, k)
+            i, v = MPS.topk!(a, i, v, k)
 
-                @test Array(i) == cpu_i
-                @test Array(v) == cpu_v
-            end
-            shp = (20,30)
-            k = 17
+            @test Array(i) == cpu_i
+            @test Array(v) == cpu_v
+        end
 
+        # test too big `k`
+        shp = (20,30)
+        k = 17
+        @testset "$shp, k=$k" begin
             cpu_a = rand(ftype, shp...)
             cpu_i, cpu_v = cpu_topk(cpu_a, k)
 
@@ -185,7 +188,6 @@ end
             v = MtlMatrix{ftype}(undef, (k, shp[2]))
 
             @test_throws "MPSMatrixFindTopK does not support values of k > 16" i, v = MPS.topk!(a, i, v, k)
-
         end
     end
 end
