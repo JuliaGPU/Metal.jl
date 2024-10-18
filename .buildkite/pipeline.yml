@@ -93,9 +93,11 @@ steps:
           macos_version: "15.0"
         if: |
           build.message =~ /\[only tests\]/ ||
+          build.message =~ /\[only validation\]/ ||
           build.message =~ /\[only special\]/ ||
           build.message !~ /\[only/ && !build.pull_request.draft &&
             build.message !~ /\[skip tests\]/ &&
+            build.message !~ /\[skip validation\]/ &&
             build.message !~ /\[skip special\]/
         timeout_in_minutes: 60
       - label: "Opaque pointers"
