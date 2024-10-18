@@ -38,7 +38,7 @@ steps:
           #     soft_fail: true
 
   # special tests
-  - group: "::floppy_disk:: Storage Modes"
+  - group: ":floppy_disk: Storage Modes"
     depends_on: "julia"
     steps:
       - label: "{{matrix.storage}} array storage"
