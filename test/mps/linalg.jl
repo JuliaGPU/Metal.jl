@@ -223,8 +223,8 @@ end
 
 using .MPS: MPSMatrixSoftMax, MPSMatrixLogSoftMax
 @testset "MPSMatrixSoftMax" begin
-    cols = rand(UInt)
-    rows = rand(UInt)
+    cols = rand(Int)
+    rows = rand(Int)
 
     skern = MPSMatrixSoftMax(device())
     skern.sourceColumns = cols
