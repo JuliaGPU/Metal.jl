@@ -41,6 +41,24 @@ steps:
   - group: ":eyes: Special"
     depends_on: "julia"
     steps:
+      - label: "macOS 15"
+        plugins:
+          - JuliaCI/julia#v1:
+              version: "1.10"
+          - JuliaCI/julia-test#v1:
+              test_args: "--quickfail"
+        agents:
+          queue: "juliaecosystem"
+          os: "macos"
+          arch: "aarch64"
+          macos_version: "15.0"
+        if: |
+          build.message =~ /\[only tests\]/ ||
+          build.message =~ /\[only special\]/ ||
+          build.message !~ /\[only/ && !build.pull_request.draft &&
+            build.message !~ /\[skip tests\]/ &&
+            build.message !~ /\[skip special\]/
+        timeout_in_minutes: 60
       - label: "{{matrix.storage}} array storage"
         plugins:
           - JuliaCI/julia#v1:
@@ -64,7 +82,7 @@ steps:
               - "shared"
               - "managed"
         commands: |
-          echo -e "[Metal]\ndefault_storage = \"{{matrix.storage}}\"" >LocalPreferences.toml
+          echo -e "[Metal]\ndefault_storage = \"{{matrix.storage}}\"" > LocalPreferences.toml
       - label: "API validation"
         plugins:
           - JuliaCI/julia#v1:
