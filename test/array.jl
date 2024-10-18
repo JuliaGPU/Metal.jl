@@ -238,8 +238,8 @@ end
         @test Array(A) == B
     end
 
-    let M = Metal.fill(b, (10, 10, 10, 1000))
-        B = fill(b, (10, 10, 10, 1000))
+    let M = Metal.fill(b, (10, 10))
+        B = fill(b, (10, 10))
         @test Array(M) == B
     end
 
@@ -249,8 +249,8 @@ end
     end
 
     #Dims already unpacked
-    let A = Metal.fill(b, 10, 10, 10, 1000)
-        B = fill(b, 10, 10, 10, 1000)
+    let A = Metal.fill(b, 10, 1000, 1000)
+        B = fill(b, 10, 1000, 1000)
         @test Array(A) == B
     end
 
@@ -271,7 +271,7 @@ end
     b = rand(T)
 
     # Dims in tuple
-    let A = MtlArray{T,3}(undef, (10, 10, 10))
+    let A = MtlArray{T,3}(undef, (10, 1000, 1000))
         fill!(A, b)
         @test all(Array(A) .== b)
     end
@@ -287,7 +287,7 @@ end
     end
 
     # Dims already unpacked
-    let A = MtlArray{T,3}(undef, 10, 10, 10)
+    let A = MtlArray{T,4}(undef, 10, 10, 10, 1000)
         fill!(A, b)
         @test all(Array(A) .== b)
     end

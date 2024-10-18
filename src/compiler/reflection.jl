@@ -40,9 +40,6 @@ end
     if !job.config.kernel
         error("Can only generate AGX code for kernel functions")
     end
-    if macos_version() < v"13"
-        error("Native code reflection is only supported on OSX 13 or higher")
-    end
 
     # compile the kernel
     compiled = compile(job)
@@ -99,7 +96,7 @@ function extract_gpu_code(f, binary)
     arch = findfirst(fat_handle) do arch
         arch.header isa MachO.MachOHeader64 && GPUMachineType(arch.header.cputype) == AppleGPU
     end
-    arch == nothing && error("Could not find GPU architecture in universal binary")
+    arch === nothing && error("Could not find GPU architecture in universal binary")
 
     # the GPU binary contains several sections...
     ## ... extract the compute section, which is another Mach-O binary
