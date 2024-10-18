@@ -38,7 +38,7 @@ steps:
           #     soft_fail: true
 
   # special tests
-  - group: ":eyes: Special"
+  - group: "::floppy_disk:: Storage Modes"
     depends_on: "julia"
     steps:
       - label: "{{matrix.storage}} array storage"
@@ -53,10 +53,10 @@ steps:
           arch: "aarch64"
         if: |
           build.message =~ /\[only tests\]/ ||
-          build.message =~ /\[only special\]/ ||
+          build.message =~ /\[only storage\]/ ||
           build.message !~ /\[only/ && !build.pull_request.draft &&
             build.message !~ /\[skip tests\]/ &&
-            build.message !~ /\[skip special\]/
+            build.message !~ /\[skip storage\]/
         timeout_in_minutes: 60
         matrix:
           setup:
@@ -65,6 +65,11 @@ steps:
               - "managed"
         commands: |
           echo -e "[Metal]\ndefault_storage = \"{{matrix.storage}}\"" >LocalPreferences.toml
+
+  # special tests
+  - group: ":eyes: Special"
+    depends_on: "julia"
+    steps:
       - label: "API validation"
         plugins:
           - JuliaCI/julia#v1:
