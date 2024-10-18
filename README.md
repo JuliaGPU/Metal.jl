@@ -139,7 +139,7 @@ low-level API wrappers, along with some slightly higher-level Julia wrappers, ar
 in the `MTL` submodule exported by Metal.jl:
 
 ```julia-repl
-julia> dev = MTLDevice(1)
+julia> dev = Metal.MTL.devices()[1]
 <AGXG13XDevice: 0x14c17f200>
     name = Apple M1 Pro
 
