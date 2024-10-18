@@ -31,11 +31,11 @@ steps:
             julia:
               - "1.10"
               - "1.11"
-          #     - "nightly"
-          # adjustments:
-          #   - with:
-          #       julia: "nightly"
-          #     soft_fail: true
+              - "nightly"
+          adjustments:
+            - with:
+                julia: "nightly"
+              soft_fail: true
 
   # special tests
   - group: ":eyes: Special"
@@ -44,7 +44,7 @@ steps:
       - label: "{{matrix.storage}} array storage"
         plugins:
           - JuliaCI/julia#v1:
-              version: "1.10"
+              version: "1.11"
           - JuliaCI/julia-test#v1:
               test_args: "--quickfail"
         agents:
@@ -68,7 +68,7 @@ steps:
       - label: "API validation"
         plugins:
           - JuliaCI/julia#v1:
-              version: "1.10"
+              version: "1.11"
           - JuliaCI/julia-test#v1:
               test_args: "--quickfail"
               # only enabled for select tests due to JuliaGPU/Metal.jl#34
@@ -96,7 +96,7 @@ steps:
       - label: "Opaque pointers"
         plugins:
           - JuliaCI/julia#v1:
-              version: "1.10"
+              version: "1.11"
           - JuliaCI/julia-test#v1:
               test_args: "--quickfail"
           - JuliaCI/julia-coverage#v1:
@@ -126,7 +126,7 @@ steps:
       - label: "Benchmarks"
         plugins:
           - JuliaCI/julia#v1:
-              version: "1.10"
+              version: "1.11"
         command: |
           julia --project=perf -e '
             using Pkg
