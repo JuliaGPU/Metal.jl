@@ -40,10 +40,8 @@ function __init__()
         ENV["MTL_DEBUG_LAYER_ERROR_MODE"] = "nslog"
         ENV["MTL_DEBUG_LAYER_WARNING_MODE"] = "nslog"
 
-        if macos_version() >= v"13"
-            # enable Metal shader validation
-            ENV["MTL_SHADER_VALIDATION"] = "4"
-        end
+        # enable Metal shader validation
+        ENV["MTL_SHADER_VALIDATION"] = "4"
     end
 
     @autoreleasepool try

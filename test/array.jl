@@ -229,17 +229,19 @@ end
 
 @testset "fill($T)" for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
                               Float16, Float32]
+    broken466a = T ∉ [Int8,UInt8]
+    broken466b = (Base.JLOptions().check_bounds != 1 || shader_validation)
 
     b = rand(T)
 
     # Dims in tuple
     let A = Metal.fill(b, (10, 10, 10, 1000))
         B = fill(b, (10, 10, 10, 1000))
-        @test Array(A) == B
+        @test Array(A) == B broken=(broken466a && broken466b)
     end
 
-    let M = Metal.fill(b, (10, 10, 10, 1000))
-        B = fill(b, (10, 10, 10, 1000))
+    let M = Metal.fill(b, (10, 10))
+        B = fill(b, (10, 10))
         @test Array(M) == B
     end
 
@@ -249,9 +251,9 @@ end
     end
 
     #Dims already unpacked
-    let A = Metal.fill(b, 10, 10, 10, 1000)
-        B = fill(b, 10, 10, 10, 1000)
-        @test Array(A) == B
+    let A = Metal.fill(b, 10, 1000, 1000)
+        B = fill(b, 10, 1000, 1000)
+        @test Array(A) == B broken=broken466a
     end
 
     let M = Metal.fill(b, 10, 10)
@@ -267,13 +269,15 @@ end
 
 @testset "fill!($T)" for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
                                Float16, Float32]
+    broken466a = T ∉ [Int8,UInt8]
+    broken466b = (Base.JLOptions().check_bounds != 1 || shader_validation)
 
     b = rand(T)
 
     # Dims in tuple
-    let A = MtlArray{T,3}(undef, (10, 10, 10))
+    let A = MtlArray{T,3}(undef, (10, 1000, 1000))
         fill!(A, b)
-        @test all(Array(A) .== b)
+        @test all(Array(A) .== b) broken=broken466a
     end
 
     let M = MtlMatrix{T}(undef, (10, 10))
@@ -287,9 +291,9 @@ end
     end
 
     # Dims already unpacked
-    let A = MtlArray{T,3}(undef, 10, 10, 10)
+    let A = MtlArray{T,4}(undef, 10, 10, 10, 1000)
         fill!(A, b)
-        @test all(Array(A) .== b)
+        @test all(Array(A) .== b) broken=(broken466a && broken466b)
     end
 
     let M = MtlMatrix{T}(undef, 10, 10)

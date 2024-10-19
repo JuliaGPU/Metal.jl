@@ -26,7 +26,7 @@ manager = MTLCaptureManager()
 # Capture Descriptor
 desc = MTLCaptureDescriptor()
 # Capture Object
-@test desc.captureObject == nothing
+@test desc.captureObject === nothing
 cmdq = global_queue(device())
 desc.captureObject = cmdq
 @test desc.captureObject == cmdq
@@ -40,7 +40,7 @@ desc.destination = MTL.MTLCaptureDestinationGPUTraceDocument
 @test desc.destination == MTL.MTLCaptureDestinationGPUTraceDocument
 
 # Output URL
-@test desc.outputURL == nothing
+@test desc.outputURL === nothing
 path = joinpath(tmpdir, "test.gputrace")
 desc.outputURL = NSFileURL(path)
 @test desc.outputURL == NSFileURL(path)
@@ -48,11 +48,11 @@ desc.outputURL = NSFileURL(path)
 # Capture Scope
 queue = MTLCommandQueue(device())
 default_scope = manager.defaultCaptureScope
-@test default_scope == nothing
+@test default_scope === nothing
 new_scope = MTLCaptureScope(@objc [manager::id{MTLCaptureManager} newCaptureScopeWithCommandQueue:queue::id{MTLCommandQueue}]::id{MTLCaptureScope})
 @test new_scope.commandQueue == queue
 @test new_scope.device == device()
-@test new_scope.label == nothing
+@test new_scope.label === nothing
 new_label = "Metal.jl capturing test"
 new_scope.label = new_label
 @test new_scope.label == new_label
