@@ -6,9 +6,8 @@ steps:
           core_pattern: "*.core"
           compressor: "zstd"
           create_bundle: "true"
-          gdb_commands:
-            - "thread apply all bt"
-            - "info file"
+          lldb_commands:
+            - "thread backtrace all"
     commands: |
       julia -e 'ccall(:abort, Nothing, ())'
     agents:
