@@ -2,7 +2,7 @@ steps:
   - label: ":julia: Run segfaulting tests"
     plugins:
       - JuliaCI/julia#43d54223e61fcb856c3b480a95b1a709a99744b8: ~
-      - JuliaCI/coreupload#v1:
+      - JuliaCI/coreupload#e30aff9e7af17760b9e3b4cff3ae22da2a57bb33:
           core_pattern: "*.core"
           compressor: "zstd"
           create_bundle: "true"
