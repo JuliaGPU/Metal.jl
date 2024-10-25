@@ -5,7 +5,7 @@ steps:
     steps:
       - label: "Julia {{matrix.julia}}"
         plugins:
-          - JuliaCI/julia#v1:
+          - JuliaCI/julia#79a2a3969e881e82cb94d195a18304bd4a1df46c:
               version: "{{matrix.julia}}"
           - JuliaCI/julia-test#v1:
               test_args: "--quickfail"
@@ -43,7 +43,7 @@ steps:
     steps:
       - label: "{{matrix.storage}} array storage"
         plugins:
-          - JuliaCI/julia#v1:
+          - JuliaCI/julia#79a2a3969e881e82cb94d195a18304bd4a1df46c:
               version: "1.11"
           - JuliaCI/julia-test#v1:
               test_args: "--quickfail"
@@ -73,7 +73,7 @@ steps:
       - label: "API validation"
         soft_fail: true
         plugins:
-          - JuliaCI/julia#v1:
+          - JuliaCI/julia#79a2a3969e881e82cb94d195a18304bd4a1df46c:
               version: "1.11"
           - JuliaCI/julia-test#v1:
               # test_args: "--quickfail"
@@ -104,7 +104,7 @@ steps:
         timeout_in_minutes: 60
       - label: "Opaque pointers"
         plugins:
-          - JuliaCI/julia#v1:
+          - JuliaCI/julia#79a2a3969e881e82cb94d195a18304bd4a1df46c:
               version: "1.11"
           - JuliaCI/julia-test#v1:
               test_args: "--quickfail"
@@ -134,7 +134,7 @@ steps:
     steps:
       - label: "Benchmarks"
         plugins:
-          - JuliaCI/julia#v1:
+          - JuliaCI/julia#79a2a3969e881e82cb94d195a18304bd4a1df46c:
               version: "1.11"
         command: |
           julia --project=perf -e '
