@@ -112,7 +112,7 @@ function MtlArray{T,N}(buf::B, dims::Dims{N}; kwargs...) where {B<:MTLBuffer,T,N
     return MtlArray{T,N}(data, dims; kwargs...)
 end
 
-unsafe_free!(a::MtlArray) = GPUArrays.unsafe_free!(a.data)
+GPUArrays.storage(a::MtlArray) = a.data
 
 """
     device(<:MtlArray)
