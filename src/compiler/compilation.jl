@@ -133,13 +133,13 @@ function compile(@nospecialize(job::CompilerJob))
                 wait(proc)
                 success(proc) || error(fetch(logger))
             catch err
-                file = tempname(cleanup=false) * ".ll"
-                write(file, ir)
+                ir_file = tempname(cleanup=false) * ".ll"
+                write(ir_file, ir)
                 if parse(Bool, get(ENV, "BUILDKITE", "false"))
-                    run(`buildkite-agent artifact upload $(file)`)
+                    run(`buildkite-agent artifact upload $(ir_file)`)
                 end
                 error("""Compilation to AIR failed; see above for details.
-                         If you think this is a bug, please file an issue and attach $(file)""")
+                         If you think this is a bug, please file an issue and attach $(ir_file)""")
             end
 
             fetch(reader)
@@ -147,27 +147,32 @@ function compile(@nospecialize(job::CompilerJob))
     end
 
     @signpost_interval log=log_compiler() "Create Metal library" begin
-        image = try
-            metallib_fun = MetalLibFunction(; name=entry, air_module=air,
-                                            air_version=job.config.target.air,
-                                            metal_version=job.config.target.metal)
-            metallib = MetalLib(; functions = [metallib_fun])
+        metallib = try
+            fun = MetalLibFunction(; name=entry, air_module=air,
+                                     air_version=job.config.target.air,
+                                     metal_version=job.config.target.metal)
+            lib = MetalLib(; functions = [fun])
 
-            image_stream = IOBuffer()
-            write(image_stream, metallib)
-            take!(image_stream)
+            io = IOBuffer()
+            write(io, lib)
+            take!(io)
         catch err
-            file = tempname(cleanup=false) * ".air"
-            write(file, air)
+            ir_file = tempname(cleanup=false) * ".ll"
+            write(ir_file, ir)
+            air_file = tempname(cleanup=false) * ".air"
+            write(air_file, air)
             if parse(Bool, get(ENV, "BUILDKITE", "false"))
-                run(`buildkite-agent artifact upload $(file)`)
+                run(`buildkite-agent artifact upload $(ir_file)`)
+                run(`buildkite-agent artifact upload $(air_file)`)
             end
             error("""Compilation to Metal library failed; see below for details.
-                    If you think this is a bug, please file an issue and attach $(file)""")
+                     If you think this is a bug, please file an issue and attach the following files:
+                     - $(ir_file)
+                     - $(air_file)""")
         end
     end
 
-    return (; image, entry)
+    return (; ir, air, metallib, entry)
 end
 
 # link into an executable kernel
@@ -177,7 +182,7 @@ end
 
     @signpost_interval log=log_compiler() "Instantiate compute pipeline" begin
         dev = device()
-        lib = MTLLibraryFromData(dev, compiled.image)
+        lib = MTLLibraryFromData(dev, compiled.metallib)
         fun = MTLFunction(lib, compiled.entry)
         pipeline_state = try
             MTLComputePipelineState(dev, fun)
@@ -187,13 +192,22 @@ end
 
             # the back-end compiler likely failed
             # XXX: check more accurately? the error domain doesn't help much here
-            file = tempname(cleanup=false) * ".metallib"
-            write(file, compiled.image)
+            ir_file = tempname(cleanup=false) * ".ll"
+            write(ir_file, compiled.ir)
+            air_file = tempname(cleanup=false) * ".air"
+            write(air_file, compiled.air)
+            metallib_file = tempname(cleanup=false) * ".metallib"
+            write(metallib_file, compiled.metallib)
             if parse(Bool, get(ENV, "BUILDKITE", "false"))
-                run(`buildkite-agent artifact upload $(file)`)
+                run(`buildkite-agent artifact upload $(ir_file)`)
+                run(`buildkite-agent artifact upload $(air_file)`)
+                run(`buildkite-agent artifact upload $(metallib_file)`)
             end
             error("""Compilation to native code failed; see below for details.
-                    If you think this is a bug, please file an issue and attach $(file)""")
+                     If you think this is a bug, please file an issue and attach the following files:
+                     - $(ir_file)
+                     - $(air_file)
+                     - $(metallib_file)""")
         end
     end
 
