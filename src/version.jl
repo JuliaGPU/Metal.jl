@@ -15,35 +15,46 @@
     parse(VersionNumber, verstr)
 end
 
-const _darwin_version = Ref{VersionNumber}()
-"""
+@static if isdefined(Base, :OncePerProcess) # VERSION >= v"1.12.0-DEV.1421"
+    const darwin_version = OncePerProcess{VersionNumber}() do
+        _syscall_version("kern.osrelease")
+    end
+    const macos_version = OncePerProcess{VersionNumber}() do
+        _syscall_version("kern.osproductversion")
+    end
+else
+    const _darwin_version = Ref{VersionNumber}()
+    function darwin_version()
+        if !isassigned(_darwin_version)
+            _darwin_version[] = _syscall_version("kern.osrelease")
+        end
+        _darwin_version[]
+    end
+
+    const _macos_version = Ref{VersionNumber}()
+    function macos_version()
+        if !isassigned(_macos_version)
+            _macos_version[] = _syscall_version("kern.osproductversion")
+        end
+        _macos_version[]
+    end
+end
+
+@doc """
     Metal.darwin_version() -> VersionNumber
 
 Returns the host Darwin kernel version.
 
 See also [`Metal.macos_version`](@ref).
-"""
-function darwin_version()
-    if !isassigned(_darwin_version)
-        _darwin_version[] = _syscall_version("kern.osrelease")
-    end
-    _darwin_version[]
-end
+""" darwin_version
 
-const _macos_version = Ref{VersionNumber}()
-"""
+@doc """
     Metal.macos_version() -> VersionNumber
 
 Returns the host macOS version.
 
 See also [`Metal.darwin_version`](@ref).
-"""
-function macos_version()
-    if !isassigned(_macos_version)
-        _macos_version[] = _syscall_version("kern.osproductversion")
-    end
-    _macos_version[]
-end
+""" macos_version
 
 
 ## support queries

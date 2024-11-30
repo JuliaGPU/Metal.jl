@@ -49,12 +49,18 @@ function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
     return MTLBuffer(ptr)
 end
 
-const _page_size::Ref{Int} = Ref{Int}(0)
-function page_size()
-    if _page_size[] == 0
-        _page_size[] = Int(ccall(:getpagesize, Cint, ()))
+@static if isdefined(Base, :OncePerProcess) # VERSION >= v"1.12.0-DEV.1421"
+    const page_size = OncePerProcess{Int}() do
+        Int(ccall(:getpagesize, Cint, ()))
     end
-    _page_size[]
+else
+    const _page_size::Ref{Int} = Ref{Int}(0)
+    function page_size()
+        if _page_size[] == 0
+            _page_size[] = Int(ccall(:getpagesize, Cint, ()))
+        end
+        _page_size[]
+    end
 end
 
 function can_alloc_nocopy(ptr::Ptr, bytesize::Integer)
