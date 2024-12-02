@@ -1,15 +1,27 @@
-# Starts at `nothing`. Only false when it's determined
-const _functional = Ref{Union{Nothing,Bool}}(false)
-
-function functional()
-    if isnothing(_functional[])
-        dev = device()
-
-        _functional[] =
-            supports_family(dev, MTL.MTLGPUFamilyApple7) &&
+@static if isdefined(Base, :OncePerProcess) # VERSION >= v"1.12.0-DEV.1421"
+    const functional = OncePerProcess{Bool}() do
+        try
+            dev = device()
+            return supports_family(dev, MTL.MTLGPUFamilyApple7) &&
             supports_family(dev, MTL.MTLGPUFamilyMetal3)
+        catch
+            return false
+        end
     end
-    _functional[]
+else
+    # Becomes `nothing` once it has been determined that the device is on macOS
+    const _functional = Ref{Union{Nothing,Bool}}(false)
+
+    function functional()
+        if isnothing(_functional[])
+            dev = device()
+
+            _functional[] =
+                supports_family(dev, MTL.MTLGPUFamilyApple7) &&
+                supports_family(dev, MTL.MTLGPUFamilyMetal3)
+        end
+        _functional[]
+    end
 end
 
 function __init__()
@@ -51,7 +63,9 @@ function __init__()
 
         # Successful loading of CoreGraphics means there's a
         # chance the graphics device is supported
-        _functional[] = nothing
+        if @isdefined _functional
+            _functional[] = nothing  # VERSION <= v"1.12.0-DEV.1421"
+        end
     catch err
         @error "Failed to load Metal" exception=(err,catch_backtrace())
         return
