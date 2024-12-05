@@ -142,6 +142,7 @@ steps:
 
             println("--- :julia: Instantiating project")
             Pkg.develop([PackageSpec(path=pwd())])
+            Pkg.add(url="https://github.com/christiangnrd/ObjectiveC.jl", rev="autoreleasepool")
             Pkg.instantiate()
             push!(LOAD_PATH, @__DIR__)
 

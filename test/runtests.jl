@@ -40,6 +40,11 @@ end
 _, jobs = extract_flag!(ARGS, "--jobs", Sys.CPU_THREADS)
 do_quickfail, _ = extract_flag!(ARGS, "--quickfail")
 
+using Pkg
+Pkg.add(url="https://github.com/christiangnrd/ObjectiveC.jl", rev="autoreleasepool")
+# Pkg.add("ObjectiveC")
+Pkg.instantiate()
+
 include("setup.jl")     # make sure everything is precompiled
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
 @info "Running $jobs tests in parallel. If this is too many, specify the `--jobs` argument to the tests, or set the JULIA_CPU_THREADS environment variable."
