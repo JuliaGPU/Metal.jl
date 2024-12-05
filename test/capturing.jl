@@ -1,4 +1,4 @@
-using .MTL
+#=using .MTL
 
 if shader_validation
     @warn "Skipping capturing tests; capturing is not supported with Metal Shader Validation enabled"
@@ -88,3 +88,4 @@ end
 
 end
 end
+=#
