@@ -38,7 +38,7 @@ Base.convert(::Type{MPSDataType}, x::Integer) = MPSDataType(x)
 
 # Conversions for MPSDataTypes with Julia equivalents
 const jl_mps_to_typ = Dict{MPSDataType, DataType}()
-for type in [UInt8,UInt16,UInt32,UInt64,Int8,Int16,Int32,Int64,Float16,Float32,ComplexF16,ComplexF32,Bool]
+for type in [:UInt8,:UInt16,:UInt32,:UInt64,:Int8,:Int16,:Int32,:Int64,:Float16,:BFloat16,:Float32,:ComplexF16,:ComplexF32,:Bool]
     @eval Base.convert(::Type{MPSDataType}, ::Type{$type}) = $(Symbol(:MPSDataType, type))
     @eval jl_mps_to_typ[$(Symbol(:MPSDataType, type))] = $type
 end
