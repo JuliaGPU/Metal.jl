@@ -1,7 +1,7 @@
 [general]
 library_name = "libmps"
-output_file_path = "lib/mps/libmps.jl"
-prologue_file_path = "res/wrap/libmps_prologue.jl"
+output_file_path = "../../lib/mps/libmps.jl"
+prologue_file_path = "libmps_prologue.jl"
 #no_audit = true
 
 printer_blacklist = [
