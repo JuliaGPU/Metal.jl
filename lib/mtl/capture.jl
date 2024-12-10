@@ -116,7 +116,7 @@ end
 export MTLCaptureManager, startCapture, stopCapture, supports_destination
 
 """
-    struct MTLCaptureManager
+    MTLCaptureManager <: NSObject
 
 Metal-managed object that handles GPU frame capture support and usage.
 Note: There is only one (shared) capture manager per process.
