@@ -198,18 +198,20 @@ function create_objc_context(headers::Vector, args::Vector=String[], options::Di
 end
 
 function rewriter!(ctx, options)
-    for node in get_nodes(ctx.dag)
-        if typeof(node) <: Generators.ExprNode{<:Generators.AbstractStructNodeType}
-            expr = node.exprs[1]
-            structName = String(expr.args[2])
+    if haskey(options, "api")
+        for node in get_nodes(ctx.dag)
+            if typeof(node) <: Generators.ExprNode{<:Generators.AbstractStructNodeType}
+                expr = node.exprs[1]
+                structName = String(expr.args[2])
 
-            if haskey(options["api"], structName)
-                # Add default constructer to some structs
-                if haskey(options["api"][structName], "constructor")
-                    expr = node.exprs[1]
-                    con = options["api"][structName]["constructor"] |> Meta.parse
+                if haskey(options["api"], structName)
+                    # Add default constructer to some structs
+                    if haskey(options["api"][structName], "constructor")
+                        expr = node.exprs[1]
+                        con = options["api"][structName]["constructor"] |> Meta.parse
 
-                    push!(expr.args[3].args, con)
+                        push!(expr.args[3].args, con)
+                    end
                 end
             end
         end
