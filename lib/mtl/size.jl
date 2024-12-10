@@ -37,5 +37,5 @@ struct MTLRegion
     origin::MTLOrigin # The top-left corner of the region
     size::MTLSize # The size of the region
 
-    MTLRegion(x=0, y=0, z=0) = new(x, y, z)
+    MTLRegion(origin=MTLOrigin(), size=MTLSize()) = new(origin, size)
 end

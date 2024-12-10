@@ -2,7 +2,7 @@
 # heap enums
 #
 
-@cenum MTLHeapType::NSUInteger begin
+@cenum MTLHeapType::NSInteger begin
     MTLHeapTypeAutomatic = 0
     MTLHeapTypePlacement = 1
 end
