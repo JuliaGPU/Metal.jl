@@ -1,11 +1,3 @@
-# @cenum MPSMatrixDecompositionStatus::Cint begin
-#     MPSMatrixDecompositionStatusSuccess =  0
-#     MPSMatrixDecompositionStatusFailure = -1
-#     MPSMatrixDecompositionStatusSingular = -2
-#     MPSMatrixDecompositionStatusNonPositiveDefinite = -3
-# end
-
-
 ## lu
 
 export MPSMatrixDecompositionLU, encode!

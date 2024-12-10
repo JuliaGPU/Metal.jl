@@ -2,13 +2,6 @@
 
 export MPSMatrixCopyDescriptor
 
-# struct MPSMatrixCopyOffsets
-#     sourceRowOffset::Cuint
-#     sourceColumnOffset::Cuint
-#     destinationRowOffset::Cuint
-#     destinationColumnOffset::Cuint
-# end
-
 @objcwrapper MPSMatrixCopyDescriptor <: NSObject
 
 function MPSMatrixCopyDescriptor(sourceMatrix, destinationMatrix, offsets = MPSMatrixCopyOffsets(Cuint(0), Cuint(0), Cuint(0), Cuint(0)))

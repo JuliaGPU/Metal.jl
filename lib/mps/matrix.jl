@@ -1,41 +1,5 @@
-## enums
+## Some extra definitions for MPSDataType defined in libmps.jl
 
-# @cenum MPSDataTypeBits::UInt32 begin
-#     MPSDataTypeFloatBit = UInt32(0x10000000)
-#     MPSDataTypeComplexBit = UInt32(0x01000000)
-#     MPSDataTypeSignedBit = UInt32(0x20000000)
-#     MPSDataTypeIntBit = UInt32(0x20000000)
-#     MPSDataTypeAlternateEncodingBit = UInt32(0x80000000)
-#     MPSDataTypeNormalizedBit = UInt32(0x40000000)
-# end
-
-# @cenum MPSDataType::UInt32 begin
-#     MPSDataTypeInvalid        = UInt32(0)
-
-#     MPSDataTypeFloat32        = MPSDataTypeFloatBit | UInt32(32)
-#     MPSDataTypeFloat16        = MPSDataTypeFloatBit | UInt32(16)
-
-#     MPSDataTypeComplexFloat32 = MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(64)
-#     MPSDataTypeComplexFloat16 = MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(32)
-
-#     MPSDataTypeInt4           = MPSDataTypeSignedBit | UInt32(4)
-#     MPSDataTypeInt8           = MPSDataTypeSignedBit | UInt32(8)
-#     MPSDataTypeInt16          = MPSDataTypeSignedBit | UInt32(16)
-#     MPSDataTypeInt32          = MPSDataTypeSignedBit | UInt32(32)
-#     MPSDataTypeInt64          = MPSDataTypeSignedBit | UInt32(64)
-
-#     MPSDataTypeUInt4          = UInt32(4)
-#     MPSDataTypeUInt8          = UInt32(8)
-#     MPSDataTypeUInt16         = UInt32(16)
-#     MPSDataTypeUInt32         = UInt32(32)
-#     MPSDataTypeUInt64         = UInt32(64)
-
-#     MPSDataTypeBool           = MPSDataTypeAlternateEncodingBit | UInt32(8)
-#     MPSDataTypeBFloat16       = MPSDataTypeAlternateEncodingBit | MPSDataTypeFloatBit | UInt32(16)
-
-#     MPSDataTypeUnorm1         = MPSDataTypeNormalizedBit | UInt32(1)
-#     MPSDataTypeUnorm8         = MPSDataTypeNormalizedBit | UInt32(8)
-# end
 ## bitwise operations lose type information, so allow conversions
 Base.convert(::Type{MPSDataType}, x::Integer) = MPSDataType(x)
 

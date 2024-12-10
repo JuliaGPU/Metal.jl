@@ -1,9 +1,3 @@
-# @cenum MPSMatrixRandomDistribution::UInt begin
-#     MPSMatrixRandomDistributionDefault = 1
-#     MPSMatrixRandomDistributionUniform = 2
-#     MPSMatrixRandomDistributionNormal  = 3
-# end
-
 #
 # matrix random descriptor
 #
