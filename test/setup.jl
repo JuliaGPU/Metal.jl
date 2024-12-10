@@ -1,4 +1,4 @@
-using Distributed, Test, Metal, Adapt, ObjectiveC, ObjectiveC.Foundation
+using Distributed, Test, Metal, BFloat16s, Adapt, ObjectiveC, ObjectiveC.Foundation
 
 Metal.functional() || error("Metal.jl is not functional on this system")
 
@@ -9,12 +9,6 @@ gpuarrays = pathof(GPUArrays)
 gpuarrays_root = dirname(dirname(gpuarrays))
 include(joinpath(gpuarrays_root, "test", "testsuite.jl"))
 testf(f, xs...; kwargs...) = TestSuite.compare(f, MtlArray, xs...; kwargs...)
-
-const eltypes = [Int16, Int32, Int64,
-                 Complex{Int16}, Complex{Int32}, Complex{Int64},
-                 Float16, Float32,
-                 ComplexF16, ComplexF32]
-TestSuite.supported_eltypes(::Type{<:MtlArray}) = eltypes
 
 const runtime_validation = get(ENV, "MTL_DEBUG_LAYER", "0") != "0"
 const shader_validation  = get(ENV, "MTL_SHADER_VALIDATION", "0") != "0"
@@ -32,7 +26,7 @@ function runtests(f, name)
         # generate a temporary module to execute the tests in
         mod_name = Symbol("Test", rand(1:100), "Main_", replace(name, '/' => '_'))
         mod = @eval(Main, module $mod_name end)
-        @eval(mod, using Test, Random, Metal)
+        @eval(mod, using Test, Random, Metal, BFloat16s)
 
         let id = myid()
             wait(@spawnat 1 print_testworker_started(name, id))
