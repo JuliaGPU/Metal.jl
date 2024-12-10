@@ -1,5 +1,5 @@
 # XXX: Why 64-bit Integers broken? Same behaviour with Swift
-const IGNORE_UNION = Union{Complex, Int64, UInt64}
+const IGNORE_UNION = Union{ComplexF32, Int64, UInt64}
 
 function copytest(src, srctrans, dsttrans)
     dev = device()
@@ -37,10 +37,10 @@ end
         @test dstMat == srcMat broken=(T <: IGNORE_UNION)
 
         dstMat = copytest(srcMat, true, false)
-        @test dstMat == srcMat' broken=(T <: IGNORE_UNION)
+        @test dstMat == transpose(srcMat) broken=(T <: IGNORE_UNION)
 
         dstMat = copytest(srcMat, false, true)
-        @test dstMat == srcMat' broken=(T <: IGNORE_UNION)
+        @test dstMat == transpose(srcMat) broken=(T <: IGNORE_UNION)
 
         dstMat = copytest(srcMat, true, true)
         @test dstMat == srcMat broken=(T <: IGNORE_UNION)
