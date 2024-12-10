@@ -2,10 +2,10 @@
 # heap enums
 #
 
-@cenum MTLHeapType::NSInteger begin
-    MTLHeapTypeAutomatic = 0
-    MTLHeapTypePlacement = 1
-end
+# @cenum MTLHeapType::NSInteger begin
+#     MTLHeapTypeAutomatic = 0
+#     MTLHeapTypePlacement = 1
+# end
 
 
 #

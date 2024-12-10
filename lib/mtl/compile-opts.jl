@@ -2,19 +2,19 @@
 # enums
 #
 
-@cenum MTLLanguageVersion::NSUInteger begin
-    MTLLanguageVersion1_0 = (1 << 16)
-    MTLLanguageVersion1_1 = (1 << 16) + 1
-    MTLLanguageVersion1_2 = (1 << 16) + 2
-    MTLLanguageVersion2_0 = (2 << 16)
-    MTLLanguageVersion2_1 = (2 << 16) + 1
-    MTLLanguageVersion2_2 = (2 << 16) + 2
-    MTLLanguageVersion2_3 = (2 << 16) + 3
-    MTLLanguageVersion2_4 = (2 << 16) + 4
-    MTLLanguageVersion3_0 = (3 << 16) + 0
-    MTLLanguageVersion3_1 = (3 << 16) + 1
-    MTLLanguageVersion3_2 = (3 << 16) + 2
-end
+# @cenum MTLLanguageVersion::NSUInteger begin
+#     MTLLanguageVersion1_0 = (1 << 16)
+#     MTLLanguageVersion1_1 = (1 << 16) + 1
+#     MTLLanguageVersion1_2 = (1 << 16) + 2
+#     MTLLanguageVersion2_0 = (2 << 16)
+#     MTLLanguageVersion2_1 = (2 << 16) + 1
+#     MTLLanguageVersion2_2 = (2 << 16) + 2
+#     MTLLanguageVersion2_3 = (2 << 16) + 3
+#     MTLLanguageVersion2_4 = (2 << 16) + 4
+#     MTLLanguageVersion3_0 = (3 << 16) + 0
+#     MTLLanguageVersion3_1 = (3 << 16) + 1
+#     MTLLanguageVersion3_2 = (3 << 16) + 2
+# end
 
 const language_versions = Dict(
     MTLLanguageVersion1_0 => v"1.0",

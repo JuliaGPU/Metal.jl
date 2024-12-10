@@ -2,19 +2,19 @@
 # commannd buffer enums
 #
 
-@cenum MTLCommandBufferErrorOption::NSUInteger begin
-    MTLCommandBufferErrorOptionNone = 0
-    MTLCommandBufferErrorOptionEncoderExecutionStatus = 1
-end
+# @cenum MTLCommandBufferErrorOption::NSUInteger begin
+#     MTLCommandBufferErrorOptionNone = 0
+#     MTLCommandBufferErrorOptionEncoderExecutionStatus = 1
+# end
 
-@cenum MTLCommandBufferStatus::NSUInteger begin
-    MTLCommandBufferStatusNotEnqueued = 0
-    MTLCommandBufferStatusEnqueued = 1
-    MTLCommandBufferStatusCommitted = 2
-    MTLCommandBufferStatusScheduled = 3
-    MTLCommandBufferStatusCompleted = 4
-    MTLCommandBufferStatusError = 5
-end
+# @cenum MTLCommandBufferStatus::NSUInteger begin
+#     MTLCommandBufferStatusNotEnqueued = 0
+#     MTLCommandBufferStatusEnqueued = 1
+#     MTLCommandBufferStatusCommitted = 2
+#     MTLCommandBufferStatusScheduled = 3
+#     MTLCommandBufferStatusCompleted = 4
+#     MTLCommandBufferStatusError = 5
+# end
 
 
 #
