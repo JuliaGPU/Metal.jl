@@ -15,8 +15,8 @@ end
     MPSDataTypeFloat32        = MPSDataTypeFloatBit | UInt32(32)
     MPSDataTypeFloat16        = MPSDataTypeFloatBit | UInt32(16)
 
-    MPSDataTypeComplexFloat32 = MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(32)
-    MPSDataTypeComplexFloat16 = MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(16)
+    MPSDataTypeComplexFloat32 = MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(64)
+    MPSDataTypeComplexFloat16 = MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(32)
 
     MPSDataTypeInt4           = MPSDataTypeSignedBit | UInt32(4)
     MPSDataTypeInt8           = MPSDataTypeSignedBit | UInt32(8)
