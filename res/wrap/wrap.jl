@@ -146,66 +146,67 @@ function create_objc_context(headers::Vector, args::Vector=String[], options::Di
     @info "Parsing headers..."
     parse_headers!(ctx, headers, args)
 
+    Generators.add_default_passes!(ctx, options, system_dirs, dependent_headers)
 
-    push!(ctx.passes, CollectTopLevelNode(ctx.trans_units, dependent_headers, system_dirs))
-    push!(ctx.passes, LinkTypedefToAnonymousTagType())
-    push!(ctx.passes, LinkTypedefToAnonymousTagType(is_system=true))
-    push!(ctx.passes, IndexDefinition())
-    push!(ctx.passes, CollectDependentSystemNode())
-    push!(ctx.passes, IndexDefinition())
-    push!(ctx.passes, CollectNestedRecord())
-    push!(ctx.passes, FindOpaques())
-    push!(ctx.passes, ResolveDependency(info=false))
-    push!(ctx.passes, RemoveCircularReference())
-    push!(ctx.passes, TopologicalSort())
-    push!(ctx.passes, IndexDefinition())
-    push!(ctx.passes, ResolveDependency())
-    push!(ctx.passes, CatchDuplicatedAnonymousTags())
-    push!(ctx.passes, CodegenPreprocessing())
+    # push!(ctx.passes, CollectTopLevelNode(ctx.trans_units, dependent_headers, system_dirs))
+    # push!(ctx.passes, LinkTypedefToAnonymousTagType())
+    # push!(ctx.passes, LinkTypedefToAnonymousTagType(is_system=true))
+    # push!(ctx.passes, IndexDefinition())
+    # push!(ctx.passes, CollectDependentSystemNode())
+    # push!(ctx.passes, IndexDefinition())
+    # push!(ctx.passes, CollectNestedRecord())
+    # push!(ctx.passes, FindOpaques())
+    # push!(ctx.passes, ResolveDependency(info=false))
+    # push!(ctx.passes, RemoveCircularReference())
+    # push!(ctx.passes, TopologicalSort())
+    # push!(ctx.passes, IndexDefinition())
+    # push!(ctx.passes, ResolveDependency())
+    # push!(ctx.passes, CatchDuplicatedAnonymousTags())
+    # push!(ctx.passes, CodegenPreprocessing())
 
-    general_options = get(options, "general", Dict())
-    if get(general_options, "smart_de_anonymize", true)
-        push!(ctx.passes, DeAnonymize())
-    end
-    if get(general_options, "no_audit", false)
-        @error "The generator is running in `no_audit` mode. It could generate invalid Julia code. You can remove the `no_audit` entry in the `.toml` file to exit this mode."
-        get(general_options, "link_enum_alias", true) && push!(ctx.passes, LinkEnumAlias())
-    else
-        push!(ctx.passes, Audit())
-    end
-    push!(ctx.passes, Codegen())
-    push!(ctx.passes, CodegenMacro())
+    # general_options = get(options, "general", Dict())
+    # if get(general_options, "smart_de_anonymize", true)
+    #     push!(ctx.passes, DeAnonymize())
+    # end
+    # if get(general_options, "no_audit", false)
+    #     @error "The generator is running in `no_audit` mode. It could generate invalid Julia code. You can remove the `no_audit` entry in the `.toml` file to exit this mode."
+    #     get(general_options, "link_enum_alias", true) && push!(ctx.passes, LinkEnumAlias())
+    # else
+    #     push!(ctx.passes, Audit())
+    # end
+    # push!(ctx.passes, Codegen())
+    # push!(ctx.passes, CodegenMacro())
 
-    if get(general_options, "add_fptr_methods", false)
-        push!(ctx.passes, AddFPtrMethods())
-    end
-    if get(general_options, "auto_mutability", false)
-        push!(ctx.passes, TweakMutability())
-    end
+    # if get(general_options, "add_fptr_methods", false)
+    #     push!(ctx.passes, AddFPtrMethods())
+    # end
+    # if get(general_options, "auto_mutability", false)
+    #     push!(ctx.passes, TweakMutability())
+    # end
 
-    # support old behavior
-    api_file = get(general_options, "output_api_file_path", "")
-    common_file = get(general_options, "output_common_file_path", "")
+    # # support old behavior
+    # api_file = get(general_options, "output_api_file_path", "")
+    # common_file = get(general_options, "output_common_file_path", "")
 
-    output_file_path = get(general_options, "output_file_path", "")
+    # output_file_path = get(general_options, "output_file_path", "")
 
-    if isempty(api_file) && isempty(common_file)
-        if !isempty(output_file_path)
-            push!(ctx.passes, ProloguePrinter(output_file_path))
-            push!(ctx.passes, GeneralPrinter(output_file_path))
-            push!(ctx.passes, EpiloguePrinter(output_file_path))
-        else
-            # print to stdout if there is no `output_file_path`
-            # this is handy when playing in REPL
-            push!(ctx.passes, StdPrinter())
-        end
-    else
-        # let the user handle prologue and epilogue on their own
-        push!(ctx.passes, FunctionPrinter(api_file))
-        push!(ctx.passes, CommonPrinter(common_file))
-    end
+    # if isempty(api_file) && isempty(common_file)
+    #     if !isempty(output_file_path)
+    #         push!(ctx.passes, ProloguePrinter(output_file_path))
+    #         push!(ctx.passes, GeneralPrinter(output_file_path))
+    #         push!(ctx.passes, EpiloguePrinter(output_file_path))
+    #     else
+    #         # print to stdout if there is no `output_file_path`
+    #         # this is handy when playing in REPL
+    #         push!(ctx.passes, StdPrinter())
+    #     end
+    # else
+    #     # let the user handle prologue and epilogue on their own
+    #     push!(ctx.passes, FunctionPrinter(api_file))
+    #     push!(ctx.passes, CommonPrinter(common_file))
+    # end
 
-    return ctx
+    # return ctx
 end
 
 function rewriter!(ctx, options)
