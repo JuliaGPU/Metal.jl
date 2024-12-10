@@ -2,11 +2,11 @@
 # function enums
 #
 
-@cenum MTLFunctionType::NSUInteger begin
-    MTLFunctionTypeVertex = 1
-    MTLFunctionTypeFragment = 2
-    MTLFunctionTypeKernel = 3
-end
+# @cenum MTLFunctionType::NSUInteger begin
+#     MTLFunctionTypeVertex = 1
+#     MTLFunctionTypeFragment = 2
+#     MTLFunctionTypeKernel = 3
+# end
 
 
 #
