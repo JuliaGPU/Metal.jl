@@ -1,5 +1,5 @@
 # XXX: Why 64-bit Integers broken? Same behaviour with Swift
-const IGNORE_UNION = Union{ComplexF32, Int64, UInt64}
+const IGNORE_UNION = Union{Complex, Int64, UInt64}
 
 function copytest(src, srctrans, dsttrans)
     dev = device()
@@ -7,7 +7,7 @@ function copytest(src, srctrans, dsttrans)
     dst = if srctrans == dsttrans
         similar(src)
     else
-        similar(src')
+        similar(transpose(src))
     end
 
     if dsttrans
