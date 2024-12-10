@@ -1,26 +1,4 @@
 #
-# capture enums
-#
-
-# @cenum MTLCaptureError::NSUInteger begin
-#     MTLCaptureErrorNotSupported = 1
-#     MTLCaptureErrorAlreadyCapturing = 2
-#     MTLCaptureErrorInvalidDescriptor = 3
-# end
-
-# @cenum MTLCaptureDestination::NSUInteger begin
-#     MTLCaptureDestinationDeveloperTools = 1
-#     MTLCaptureDestinationGPUTraceDocument = 2
-# end
-
-# @cenum MTLCaptureDescriptorCaptureObjectType::NSUInteger begin
-#     MTLCaptureDescriptorCaptureObjectTypeNull = 0
-#     MTLCaptureDescriptorCaptureObjectTypeDevice = 1
-#     MTLCaptureDescriptorCaptureObjectTypeQueue = 2
-#     MTLCaptureDescriptorCaptureObjectTypeScope = 3
-# end
-
-#
 # capture scope
 #
 
