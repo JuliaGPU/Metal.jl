@@ -93,7 +93,7 @@ MTLDevice(i::Integer) = devices()[i]
 
 export supports_family, is_m3, is_m2, is_m1
 
-@cenum MTLGPUFamily::NSUInteger begin
+@cenum MTLGPUFamily::NSInteger begin
     MTLGPUFamilyMetal3 = 5001 # Metal 3 support
 
     MTLGPUFamilyApple9 = 1009 # M3, M4 & A17
