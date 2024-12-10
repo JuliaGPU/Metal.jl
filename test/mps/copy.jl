@@ -1,5 +1,5 @@
 # XXX: Why 64-bit Integers broken? Same behaviour with Swift
-const IGNORE_UNION = Union{Complex, Int64, UInt64}
+copy_is_broken(T) = sizeof(T) >= 8
 
 function copytest(src, srctrans, dsttrans)
     dev = device()
@@ -7,7 +7,7 @@ function copytest(src, srctrans, dsttrans)
     dst = if srctrans == dsttrans
         similar(src)
     else
-        similar(src')
+        similar(transpose(src))
     end
 
     if dsttrans
@@ -34,15 +34,15 @@ end
         srcMat = MtlArray(rand(T, dim))
 
         dstMat = copytest(srcMat, false, false)
-        @test dstMat == srcMat broken=(T <: IGNORE_UNION)
+        @test dstMat == srcMat broken=copy_is_broken(T)
 
         dstMat = copytest(srcMat, true, false)
-        @test dstMat == srcMat' broken=(T <: IGNORE_UNION)
+        @test dstMat == transpose(srcMat) broken=copy_is_broken(T)
 
         dstMat = copytest(srcMat, false, true)
-        @test dstMat == srcMat' broken=(T <: IGNORE_UNION)
+        @test dstMat == transpose(srcMat) broken=copy_is_broken(T)
 
         dstMat = copytest(srcMat, true, true)
-        @test dstMat == srcMat broken=(T <: IGNORE_UNION)
+        @test dstMat == srcMat broken=copy_is_broken(T)
     end
 end

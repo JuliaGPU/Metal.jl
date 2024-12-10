@@ -1,46 +1,54 @@
 ## enums
 
 @cenum MPSDataTypeBits::UInt32 begin
-    MPSDataTypeComplexBit = UInt32(0x01000000)
     MPSDataTypeFloatBit = UInt32(0x10000000)
+    MPSDataTypeComplexBit = UInt32(0x01000000)
     MPSDataTypeSignedBit = UInt32(0x20000000)
-    MPSDataTypeNormalizedBit = UInt32(0x40000000)
+    MPSDataTypeIntBit = UInt32(0x20000000)
     MPSDataTypeAlternateEncodingBit = UInt32(0x80000000)
+    MPSDataTypeNormalizedBit = UInt32(0x40000000)
 end
 
-@enum MPSDataType::UInt32 begin
-    MPSDataTypeInvalid    = UInt32(0)
+@cenum MPSDataType::UInt32 begin
+    MPSDataTypeInvalid        = UInt32(0)
 
-    MPSDataTypeUInt8      = UInt32(8)
-    MPSDataTypeUInt16     = UInt32(16)
-    MPSDataTypeUInt32     = UInt32(32)
-    MPSDataTypeUInt64     = UInt32(64)
+    MPSDataTypeFloat32        = MPSDataTypeFloatBit | UInt32(32)
+    MPSDataTypeFloat16        = MPSDataTypeFloatBit | UInt32(16)
 
-    MPSDataTypeInt8       = MPSDataTypeSignedBit | UInt32(8)
-    MPSDataTypeInt16      = MPSDataTypeSignedBit | UInt32(16)
-    MPSDataTypeInt32      = MPSDataTypeSignedBit | UInt32(32)
-    MPSDataTypeInt64      = MPSDataTypeSignedBit | UInt32(64)
+    MPSDataTypeComplexFloat32 = MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(64)
+    MPSDataTypeComplexFloat16 = MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(32)
 
-    MPSDataTypeFloat16    = MPSDataTypeFloatBit | UInt32(16)
-    MPSDataTypeFloat32    = MPSDataTypeFloatBit | UInt32(32)
+    MPSDataTypeInt4           = MPSDataTypeSignedBit | UInt32(4)
+    MPSDataTypeInt8           = MPSDataTypeSignedBit | UInt32(8)
+    MPSDataTypeInt16          = MPSDataTypeSignedBit | UInt32(16)
+    MPSDataTypeInt32          = MPSDataTypeSignedBit | UInt32(32)
+    MPSDataTypeInt64          = MPSDataTypeSignedBit | UInt32(64)
 
-    MPSDataTypeComplexF16 = MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(16)
-    MPSDataTypeComplexF32 = MPSDataTypeFloatBit | MPSDataTypeComplexBit | UInt32(32)
+    MPSDataTypeUInt4          = UInt32(4)
+    MPSDataTypeUInt8          = UInt32(8)
+    MPSDataTypeUInt16         = UInt32(16)
+    MPSDataTypeUInt32         = UInt32(32)
+    MPSDataTypeUInt64         = UInt32(64)
 
-    MPSDataTypeUnorm1     = MPSDataTypeNormalizedBit | UInt32(1)
-    MPSDataTypeUnorm8     = MPSDataTypeNormalizedBit | UInt32(8)
+    MPSDataTypeBool           = MPSDataTypeAlternateEncodingBit | UInt32(8)
+    MPSDataTypeBFloat16       = MPSDataTypeAlternateEncodingBit | MPSDataTypeFloatBit | UInt32(16)
 
-    MPSDataTypeBool       = MPSDataTypeAlternateEncodingBit | UInt32(8)
-    MPSDataTypeBFloat16   = MPSDataTypeAlternateEncodingBit | MPSDataTypeFloatBit | UInt32(16)
+    MPSDataTypeUnorm1         = MPSDataTypeNormalizedBit | UInt32(1)
+    MPSDataTypeUnorm8         = MPSDataTypeNormalizedBit | UInt32(8)
 end
 ## bitwise operations lose type information, so allow conversions
 Base.convert(::Type{MPSDataType}, x::Integer) = MPSDataType(x)
 
 # Conversions for MPSDataTypes with Julia equivalents
 const jl_mps_to_typ = Dict{MPSDataType, DataType}()
-for type in [UInt8,UInt16,UInt32,UInt64,Int8,Int16,Int32,Int64,Float16,Float32,ComplexF16,ComplexF32,Bool]
-    @eval Base.convert(::Type{MPSDataType}, ::Type{$type}) = $(Symbol(:MPSDataType, type))
-    @eval jl_mps_to_typ[$(Symbol(:MPSDataType, type))] = $type
+for type in [UInt8,UInt16,UInt32,UInt64,Int8,Int16,Int32,Int64,Float16,Float32,(ComplexF16,:MPSDataTypeComplexFloat16),(ComplexF32,:MPSDataTypeComplexFloat32),Bool]
+    jltype, mpstype = if type isa Type
+        type, Symbol(:MPSDataType, type)
+    else
+        type
+    end
+    @eval Base.convert(::Type{MPSDataType}, ::Type{$jltype}) = $(mpstype)
+    @eval jl_mps_to_typ[$(mpstype)] = $jltype
 end
 Base.sizeof(t::MPSDataType) = sizeof(jl_mps_to_typ[t])
 
