@@ -140,9 +140,11 @@ end
             return perm, y
         end
     end
-    @testset "$ftype" for ftype in (Float16, Float32)
+    @testset "$ftype" ftypes = [Float16, Float32]
+
+    @testset "$ftype" for ftype in ftypes
         # Normal operation
-        for (shp,k) in [((3,1), 2), ((20,30), 5)]
+        @testset "$shp, k=$k" for (shp,k) in [((3,1), 2), ((20,30), 5)]
             cpu_a = rand(ftype, shp...)
 
             #topk
@@ -163,11 +165,13 @@ end
             @test Array(i) == cpu_i
             @test Array(v) == cpu_v
         end
+
+        # test too big `k`
         shp = (20,30)
         k = 17
-
-        cpu_a = rand(ftype, shp...)
-        cpu_i, cpu_v = cpu_topk(cpu_a, k)
+        @testset "$shp, k=$k" begin
+            cpu_a = rand(ftype, shp...)
+            cpu_i, cpu_v = cpu_topk(cpu_a, k)
 
         a = MtlMatrix(cpu_a)
         @test_throws "MPSMatrixFindTopK does not support values of k > 16" i, v = MPS.topk(a, k)
@@ -176,7 +180,8 @@ end
         i = MtlMatrix{UInt32}(undef, (k, shp[2]))
         v = MtlMatrix{ftype}(undef, (k, shp[2]))
 
-        @test_throws "MPSMatrixFindTopK does not support values of k > 16" i, v = MPS.topk!(a, i, v, k)
+            @test_throws "MPSMatrixFindTopK does not support values of k > 16" i, v = MPS.topk!(a, i, v, k)
+        end
     end
 end
 
