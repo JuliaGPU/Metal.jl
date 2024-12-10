@@ -20,6 +20,9 @@ const MtlFloat = Union{Float32, Float16}
 
 is_supported(dev::MTLDevice) = ccall(:MPSSupportsMTLDevice, Bool, (id{MTLDevice},), dev)
 
+# Load in generated enums and structs
+include("libmps.jl")
+
 include("size.jl")
 
 # high-level wrappers

@@ -1,12 +1,12 @@
 ## kernels
 
-@cenum MPSImageEdgeMode::NSUInteger begin
-    MPSImageEdgeModeZero           = 0
-    MPSImageEdgeModeClamp          = 1
-    MPSImageEdgeModeMirror         = 2
-    MPSImageEdgeModeMirrorWithEdge = 3
-    MPSImageEdgeModeConstant       = 4
-end
+# @cenum MPSImageEdgeMode::NSUInteger begin
+#     MPSImageEdgeModeZero           = 0
+#     MPSImageEdgeModeClamp          = 1
+#     MPSImageEdgeModeMirror         = 2
+#     MPSImageEdgeModeMirrorWithEdge = 3
+#     MPSImageEdgeModeConstant       = 4
+# end
 
 @objcwrapper immutable=false MPSUnaryImageKernel <: MPSKernel
 
