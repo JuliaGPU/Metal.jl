@@ -38,6 +38,10 @@ skip the first two steps.
 2. Create high-level Julia structures and functionality
 3. Create tests for added functionality
 
+`struct`s and `enums` for Objective-C interfaces are automatically generated (see res/wrap/),
+so you should not have to define them. If using a struct for the first time in a higher-level
+interface, remember to add tests! You may need to define more functions around the structs.
+
 ## Mapping to Metal Intrinsics
 
 Some Metal functions map directly to Apple intermediate representation intrinsics. In this
