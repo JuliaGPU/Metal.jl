@@ -27,8 +27,6 @@ latency_results = include("latency.jl")
 
 SUITE = BenchmarkGroup()
 
-# NOTE: don't use spaces in benchmark names (tobami/codespeed#256)
-
 include("metal.jl")
 include("kernel.jl")
 include("array.jl")
@@ -58,24 +56,5 @@ integration_results["metaldevrt"] = include("metaldevrt.jl")
 results["latency"] = latency_results
 results["integration"] = integration_results
 
-println(results)
-
-
-## comparison
-
 # write out the results
 BenchmarkTools.save("benchmarkresults.json", median(results))
-
-# compare against previous results
-# TODO: store these results so that we can compare when benchmarking PRs
-reference_path = joinpath(@__DIR__, "reference.json")
-if ispath(reference_path)
-    reference = BenchmarkTools.load(reference_path)[1]
-    comparison = judge(minimum(results), minimum(reference))
-
-    println("Improvements:")
-    println(improvements(comparison))
-
-    println("Regressions:")
-    println(regressions(comparison))
-end
