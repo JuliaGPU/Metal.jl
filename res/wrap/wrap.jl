@@ -6,6 +6,7 @@ using Clang.Generators
 using Clang.Generators: LinkEnumAlias
 using Clang
 using Glob
+using JLD2
 using JuliaFormatter
 using Logging
 
@@ -131,14 +132,22 @@ function create_objc_context(headers::Vector, args::Vector=String[], options::Di
     # Since the framework we're wrapping is a system header,
     # find all dependent headers, then remove all but the relevant ones
     # also temporarily disable logging
+    dep_headers_fname = if haskey(options, "general") && haskey(options["general"], "library_name")
+        options["general"]["library_name"]*".JLD2"
+    else
+        nothing
+    end
     Base.CoreLogging._min_enabled_level[] = Logging.Info+1
-    dependent_headers = let
+    dependent_headers = if !isnothing(dep_headers_fname) && isfile(dep_headers_fname)
+        JLD2.load(dep_headers_fname, "dep_headers")
+    else
         all_headers = find_dependent_headers(headers,args,[])
         dep_headers = Vector{eltype(all_headers)}(undef, 0)
         for header in headers
             target_framework = "/"*joinpath(Sys.splitpath(header)[end-2:end-1])
             dep_headers = append!(dep_headers, filter(s -> occursin(target_framework, s), all_headers))
         end
+        JLD2.@save dep_headers_fname dep_headers
         dep_headers
     end
     Base.CoreLogging._min_enabled_level[] = Logging.Debug
