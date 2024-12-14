@@ -122,3 +122,4 @@ is_m1(dev::MTLDevice) = supports_family(dev, MTLGPUFamilyApple7) &&
 is_m2(dev::MTLDevice) = supports_family(dev, MTLGPUFamilyApple8) &&
                         !supports_family(dev, MTLGPUFamilyApple9)
 is_m3(dev::MTLDevice) = supports_family(dev, MTLGPUFamilyApple9)
+is_m4(dev::MTLDevice) = supports_family(dev, MTLGPUFamilyApple9)
