@@ -211,7 +211,7 @@ function encode!(cmdbuf::MTLCommandBuffer, matmul::MPSMatrixMultiplication, left
 end
 
 """
-    matMulMPS(a::MtlMatrix, b::MtlMatrix, c::MtlMatrix, alpha=1, beta=1,
+    matmul!(a::MtlMatrix, b::MtlMatrix, c::MtlMatrix, alpha=1, beta=1,
               transpose_left=false, transpose_right=false)
 A `MPSMatrixMultiplication` kernel thay computes:
 `c = alpha * op(a) * beta * op(b) + beta * C`
