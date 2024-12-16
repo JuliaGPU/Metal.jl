@@ -140,7 +140,9 @@ end
 end
 
 @device_override @inline function KA.__index_Global_Linear(ctx)
-    return thread_position_in_grid_1d()
+    I =  @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid_1d(), thread_position_in_threadgroup_1d())
+    # TODO: This is unfortunate, can we get the linear index cheaper
+    @inbounds LinearIndices(KA.__ndrange(ctx))[I]
 end
 
 @device_override @inline function KA.__index_Local_Cartesian(ctx)
