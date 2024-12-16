@@ -2,7 +2,7 @@
 
 *Metal programming in Julia*
 
-[![][doi-img]][doi-url] [![][docs-stable-img]][docs-stable-url] [![][docs-dev-img]][docs-dev-url] [![][buildkite-img]][buildkite-url] [![][codecov-img]][codecov-url]
+[![][doi-img]][doi-url] [![][docs-stable-img]][docs-stable-url] [![][docs-dev-img]][docs-dev-url] [![][buildkite-img]][buildkite-url] [![][codecov-img]][codecov-url] [![][benchmark-img]][benchmark-url]
 
 [doi-img]: https://zenodo.org/badge/262279120.svg
 [doi-url]: https://zenodo.org/badge/latestdoi/262279120
@@ -18,6 +18,9 @@
 
 [codecov-img]: https://codecov.io/gh/JuliaGPU/Metal.jl/branch/main/graph/badge.svg
 [codecov-url]: https://codecov.io/gh/JuliaGPU/Metal.jl
+
+[benchmark-img]: https://img.shields.io/badge/benchmarks-Chart-yellowgreen
+[benchmark-url]: https://metal.juliagpu.org/bench/
 
 With Metal.jl it's possible to program GPUs on macOS using the Metal programming
 framework.
