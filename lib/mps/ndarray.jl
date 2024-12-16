@@ -9,8 +9,9 @@ export MPSNDArrayDescriptor
 @objcproperties MPSNDArrayDescriptor begin
     @autoproperty dataType::MPSDataType setter=setDataType
     @autoproperty numberOfDimensions::NSUInteger setter=setNumberOfDimensions
-    @autoproperty preferPackedRows::Bool setter=setPreferPackedRows # macOS 15+
 
+    # Both are officially available starting macOS 15, but they work in macOS 13/14
+    @autoproperty preferPackedRows::Bool setter=setPreferPackedRows # macOS 15+
     @autoproperty getShape::id{NSArray} # macOS 15+
 end
 
@@ -49,18 +50,29 @@ export MPSNDArray
 
 @objcwrapper immutable=false MPSNDArray <: NSObject
 
-@objcproperties MPSNDArray begin
-    @autoproperty dataType::MPSDataType
-    @autoproperty dataTypeSize::Csize_t
-    @autoproperty device::id{MTLDevice}
-    @autoproperty label::id{NSString} setter=setLabel
-    @autoproperty numberOfDimensions::NSUInteger
-    @autoproperty parent::id{MPSNDArray}
+@static if Metal.macos_version() >= v"15"
+    @objcproperties MPSNDArray begin
+        @autoproperty dataType::MPSDataType
+        @autoproperty dataTypeSize::Csize_t
+        @autoproperty device::id{MTLDevice}
+        @autoproperty label::id{NSString} setter=setLabel
+        @autoproperty numberOfDimensions::NSUInteger
+        @autoproperty parent::id{MPSNDArray}
 
-    #Instance methods that act like properties
-    @autoproperty descriptor::id{MPSNDArrayDescriptor}
-    @autoproperty resourceSize::NSUInteger
-    @autoproperty userBuffer::id{MTLBuffer}
+        #Instance methods that act like properties
+        @autoproperty descriptor::id{MPSNDArrayDescriptor}
+        @autoproperty resourceSize::NSUInteger
+        @autoproperty userBuffer::id{MTLBuffer}
+    end
+else
+    @objcproperties MPSNDArray begin
+        @autoproperty dataType::MPSDataType
+        @autoproperty dataTypeSize::Csize_t
+        @autoproperty device::id{MTLDevice}
+        @autoproperty label::id{NSString} setter=setLabel
+        @autoproperty numberOfDimensions::NSUInteger
+        @autoproperty parent::id{MPSNDArray}
+    end
 end
 
 @objcwrapper immutable=false MPSTemporaryNDArray <: MPSNDArray
@@ -100,15 +112,20 @@ function MPSNDArray(device::MTLDevice, scalar)
     return obj
 end
 
-# macOS 15+
-function MPSNDArray(buffer::MTLBuffer, offset::UInt, descriptor::MPSNDArrayDescriptor)
-    arrayaddr = @objc [MPSNDArray alloc]::id{MPSNDArray}
-    obj = MPSNDArray(arrayaddr)
-    finalizer(release, obj)
-    @objc [obj::MPSNDArray initWithBuffer:buffer::id{MTLBuffer}
-                            offset:offset::NSUInteger
-                            descriptor:descriptor::id{MPSNDArrayDescriptor}]::id{MPSNDArray}
-    return obj
+@static if Metal.macos_version() >= v"15"
+    function MPSNDArray(buffer::MTLBuffer, offset::UInt, descriptor::MPSNDArrayDescriptor)
+        arrayaddr = @objc [MPSNDArray alloc]::id{MPSNDArray}
+        obj = MPSNDArray(arrayaddr)
+        finalizer(release, obj)
+        @objc [obj::MPSNDArray initWithBuffer:buffer::id{MTLBuffer}
+                                offset:offset::NSUInteger
+                                descriptor:descriptor::id{MPSNDArrayDescriptor}]::id{MPSNDArray}
+        return obj
+    end
+else
+    function MPSNDArray(buffer::MTLBuffer, offset::UInt, descriptor::MPSNDArrayDescriptor)
+        @assert false "Creating an MPSNDArray that shares data with user-provided MTLBuffer is only supported in macOS v15+"
+    end
 end
 
 function MPSNDArray(arr::MtlArray{T,N}) where {T,N}

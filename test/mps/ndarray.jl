@@ -6,10 +6,6 @@ using .MPS: MPSNDArrayDescriptor, MPSDataType, lengthOfDimension
 @testset "MPSNDArrayDescriptor" begin
     T = Float32
     DT = convert(MPSDataType, T)
-    rows = 2
-    cols = 3
-    rowBytes = sizeof(T) * cols
-    mats = 4
 
     desc1 = MPSNDArrayDescriptor(T, 5,4,3,2,1)
     @test desc1 isa MPSNDArrayDescriptor
@@ -55,9 +51,6 @@ using .MPS: MPSNDArray
     @test ndarr1.label == "Test1"
     @test ndarr1.numberOfDimensions == 5
     @test ndarr1.parent === nothing
-    @test ndarr1.descriptor isa MPSNDArrayDescriptor
-    @test ndarr1.resourceSize isa UInt
-    @test ndarr1.userBuffer === nothing
 
     ndarr2 = MPSNDArray(dev, 4)
     @test ndarr2 isa MPSNDArray
@@ -68,19 +61,29 @@ using .MPS: MPSNDArray
     @test ndarr2.label == "Test2"
     @test ndarr2.numberOfDimensions == 1
     @test ndarr2.parent === nothing
-    @test ndarr2.descriptor isa MPSNDArrayDescriptor
-    @test ndarr2.resourceSize isa UInt
-    @test ndarr2.userBuffer === nothing
 
-    arr3 = MtlArray(ones(Float16, 2,3,8))
-    ndarr3 = MPSNDArray(arr3)
+    arr3 = MtlArray(ones(Float16, 2,3,4))
+    @test_throws "Final dimension of arr must have a byte size divisible by 16" MPSNDArray(arr3)
 
-    arr4 = MtlArray(arr3)
-    @test arr3 == arr4
+    arr4 = MtlArray(ones(Float16, 2,3,8))
 
-    arr5 = MtlArray(ones(Float16, 2,3,4))
-    @test_throws AssertionError MPSNDArray(arr5)
+    @static if Metal.macos_version() >= v"15"
+        @test ndarr1.descriptor isa MPSNDArrayDescriptor
+        @test ndarr1.resourceSize isa UInt
+        @test ndarr1.userBuffer === nothing
 
+        @test ndarr2.descriptor isa MPSNDArrayDescriptor
+        @test ndarr2.resourceSize isa UInt
+        @test ndarr2.userBuffer === nothing
+
+        ndarr4 = MPSNDArray(arr4)
+
+        arr5 = MtlArray(arr4)
+        @test arr4 == arr5
+
+    else
+        @test_throws "Creating an MPSNDArray that shares data with user-provided MTLBuffer is only supported in macOS v15+" MPSNDArray(arr4)
+    end
 end
 
 
