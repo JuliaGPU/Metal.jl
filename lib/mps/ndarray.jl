@@ -210,6 +210,7 @@ function encode!(cmdbuf::MTLCommandBuffer, kernel::K, sourceArrays, destinationA
                                      sourceArrays:sourceArrays::id{NSArray}
                                      destinationArray:destinationArray::id{MPSNDArray}]::Nothing
 end
+# TODO: MPSState is not implemented yet, so these don't work
 # function encode!(cmdbuf::MTLCommandBuffer, kernel::K, sourceArrays, resultState, destinationArray) where {K<:MPSNDArrayMultiaryKernel}
 #     @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
 #                                      sourceArrays:sourceArrays::id{NSArray}
@@ -244,6 +245,7 @@ function encode!(cmdbuf::MTLCommandBuffer, kernel::K, sourceArray, destinationAr
                                      sourceArray:sourceArray::id{MPSNDArray}
                                      destinationArray:destinationArray::id{MPSNDArray}]::Nothing
 end
+# TODO: MPSState is not implemented yet, so these don't work
 # function encode!(cmdbuf::MTLCommandBuffer, kernel::K, sourceArray, resultState, destinationArray) where {K<:MPSNDArrayUnaryKernel}
 #     @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
 #                                      sourceArray:sourceArray::id{MPSNDArray}
@@ -280,6 +282,7 @@ function encode!(cmdbuf::MTLCommandBuffer, kernel::K, primarySourceArray, second
                                      secondarySourceArray:secondarySourceArray::id{MPSNDArray}
                                      destinationArray:destinationArray::id{MPSNDArray}]::Nothing
 end
+# TODO: MPSState is not implemented yet, so these don't work
 # function encode!(cmdbuf::MTLCommandBuffer, kernel::K, primarySourceArray, secondarySourceArray, resultState, destinationArray) where {K<:MPSNDArrayBinaryKernel}
 #     @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
 #                                      primarySourceArray:primarySourceArray::id{MPSNDArray}
