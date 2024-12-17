@@ -213,7 +213,7 @@ end
 """
     matmul!(a::MtlMatrix, b::MtlMatrix, c::MtlMatrix, alpha=1, beta=1,
               transpose_left=false, transpose_right=false)
-A `MPSMatrixMultiplication` kernel thay computes:
+A `MPSMatrixMultiplication` kernel that computes:
 `c = alpha * op(a) * beta * op(b) + beta * C`
 
 This function should not typically be used. Rather, use the normal `LinearAlgebra` interface
