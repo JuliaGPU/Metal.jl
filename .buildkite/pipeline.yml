@@ -153,8 +153,7 @@ steps:
       os: "macos"
       arch: "aarch64"
     if: |
-      !build.pull_request.repository.fork &&
-      (build.message =~ /\[only benchmarks\]/ ||
-       build.message !~ /\[only/ && !build.pull_request.draft &&
-         build.message !~ /\[skip benchmarks\]/)
+      build.message =~ /\[only benchmarks\]/ ||
+      build.message !~ /\[only/ && !build.pull_request.draft &&
+        build.message !~ /\[skip benchmarks\]/
     timeout_in_minutes: 30
