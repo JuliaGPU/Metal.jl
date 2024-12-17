@@ -141,8 +141,6 @@ steps:
 
         println("--- :julia: Instantiating project")
         Pkg.develop([PackageSpec(path=pwd())])
-        Pkg.instantiate()
-        push!(LOAD_PATH, @__DIR__)
 
         println("+++ :julia: Benchmarking")
         include("perf/runbenchmarks.jl")'
