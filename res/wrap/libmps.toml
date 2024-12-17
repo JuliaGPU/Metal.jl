@@ -2,7 +2,6 @@
 library_name = "libmps"
 output_file_path = "../../lib/mps/libmps.jl"
 prologue_file_path = "libmps_prologue.jl"
-#no_audit = true
 
 printer_blacklist = [
     "mt_macCatalyst",
