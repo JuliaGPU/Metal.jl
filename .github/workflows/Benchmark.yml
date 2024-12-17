@@ -16,7 +16,6 @@ on:
       - "perf/**/*"
       - ".buildkite/**/*"
       - "Project.toml"
-      - ".github/workflows/Benchmark.yml"
   push:
     branches:
       - main
@@ -27,7 +26,6 @@ on:
       - "perf/**/*"
       - ".buildkite/**/*"
       - "Project.toml"
-      - ".github/workflows/Benchmark.yml"
 
 jobs:
   benchmark:
