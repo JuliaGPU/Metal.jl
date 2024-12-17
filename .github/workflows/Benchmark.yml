@@ -66,6 +66,6 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           comment-always: ${{ github.event_name == 'pull_request' }}
           summary-always: true
-          alert-threshold: "150%"
+          alert-threshold: "125%"
           fail-on-alert: false
           auto-push: ${{ github.event_name != 'pull_request' }}
