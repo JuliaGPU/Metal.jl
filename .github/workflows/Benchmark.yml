@@ -1,9 +1,9 @@
 name: Benchmarks
 permissions:
-  contents: write # contents permission to update benchmark contents in gh-pages branch
-  statuses: read
-  deployments: write # deployments permission to deploy GitHub pages website
-  pull-requests: write
+  statuses: read        # find Buildkite URL from PR status
+  contents: write       # update benchmark contents in gh-pages branch
+  pull-requests: write  # comment on PR with benchmark results
+  deployments: write    # deploy GitHub pages website
 
 on:
   pull_request_target:
