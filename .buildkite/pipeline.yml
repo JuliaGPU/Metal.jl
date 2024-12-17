@@ -130,32 +130,30 @@ steps:
 
   - wait: ~
 
-  - group: ":racehorse: Benchmarks"
-    steps:
-      - label: "Benchmarks"
-        plugins:
-          - JuliaCI/julia#v1:
-              version: "1.11"
-        command: |
-          julia --project=perf -e '
-            using Pkg
+  - label: ":racehorse: Benchmarks"
+    plugins:
+      - JuliaCI/julia#v1:
+          version: "1.11"
+    command: |
+      julia --project=perf -e '
+        using Pkg
 
-            println("--- :julia: Instantiating project")
-            Pkg.develop([PackageSpec(path=pwd())])
-            Pkg.instantiate()
-            push!(LOAD_PATH, @__DIR__)
+        println("--- :julia: Instantiating project")
+        Pkg.develop([PackageSpec(path=pwd())])
+        Pkg.instantiate()
+        push!(LOAD_PATH, @__DIR__)
 
-            println("+++ :julia: Benchmarking")
-            include("perf/runbenchmarks.jl")'
-        artifact_paths:
-          - "benchmarkresults.json"
-        agents:
-          queue: "juliaecosystem"
-          os: "macos"
-          arch: "aarch64"
-        if: |
-          !build.pull_request.repository.fork &&
-          (build.message =~ /\[only benchmarks\]/ ||
-           build.message !~ /\[only/ && !build.pull_request.draft &&
-             build.message !~ /\[skip benchmarks\]/)
-        timeout_in_minutes: 30
+        println("+++ :julia: Benchmarking")
+        include("perf/runbenchmarks.jl")'
+    artifact_paths:
+      - "benchmarkresults.json"
+    agents:
+      queue: "juliaecosystem"
+      os: "macos"
+      arch: "aarch64"
+    if: |
+      !build.pull_request.repository.fork &&
+      (build.message =~ /\[only benchmarks\]/ ||
+       build.message !~ /\[only/ && !build.pull_request.draft &&
+         build.message !~ /\[skip benchmarks\]/)
+    timeout_in_minutes: 30
