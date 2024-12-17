@@ -129,6 +129,7 @@ steps:
         timeout_in_minutes: 60
 
   - wait: ~
+    continue_on_failure: true
 
   - label: ":racehorse: Benchmarks"
     plugins:
