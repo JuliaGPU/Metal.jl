@@ -82,7 +82,7 @@ end
 end
 
 function MPSTemporaryNDArray(cmdbuf::MTLCommandBuffer, descriptor::MPSNDArrayDescriptor)
-    @objc [MPSNDTemporaryNDArray temporaryNDArrayWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+    @objc [MPSTemporaryNDArray temporaryNDArrayWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                  descriptor:descriptor::id{MPSNDArrayDescriptor}]::id{MPSTemporaryNDArray}
     return obj
 end
@@ -123,7 +123,7 @@ end
         return obj
     end
 else
-    function MPSNDArray(buffer::MTLBuffer, offset::UInt, descriptor::MPSNDArrayDescriptor)
+    function MPSNDArray(_::MTLBuffer, _::UInt, _::MPSNDArrayDescriptor)
         @assert false "Creating an MPSNDArray that shares data with user-provided MTLBuffer is only supported in macOS v15+"
     end
 end
@@ -135,20 +135,18 @@ function MPSNDArray(arr::MtlArray{T,N}) where {T,N}
     return MPSNDArray(arr.data[], UInt(arr.offset), desc)
 end
 
-function Metal.MtlArray(ndarr::MPSNDArray; storage = Metal.DefaultStorageMode)
+function Metal.MtlArray(ndarr::MPSNDArray; storage = Metal.DefaultStorageMode, async = false)
     ndims = Int(ndarr.numberOfDimensions)
     arrsize = [lengthOfDimension(ndarr,i) for i in 0:ndims-1]
     T = convert(DataType, ndarr.dataType)
     arr = MtlArray{T,ndims,storage}(undef, reverse(arrsize)...)
     dev = device(arr)
 
-    cmdBuf = MTLCommandBuffer(global_queue(dev))
+    cmdBuf = MTLCommandBuffer(global_queue(dev)) do cmdBuf
+        exportDataWithCommandBuffer(ndarr, cmdBuf, arr.data[], T, 0, collect(sizeof(T) .* reverse(strides(arr))))
+    end
 
-    exportDataWithCommandBuffer(ndarr, cmdBuf, arr.data[], T, 0, collect(sizeof(T) .* reverse(strides(arr))))
-
-    commit!(cmdBuf)
-    wait_completed(cmdBuf)
-
+    async || wait_completed(cmdBuf)
     return arr
 end
 

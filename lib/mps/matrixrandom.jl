@@ -16,7 +16,7 @@ export MPSMatrixRandomDistributionDescriptor
     @autoproperty distributionType::MPSMatrixRandomDistribution
     @autoproperty maximum::Float32 setter=setMaximum
     @autoproperty mean::Float32 setter=setMean
-    @autoproperty minimum::Float32 setter=setMimimum
+    @autoproperty minimum::Float32 setter=setMinimum
     @autoproperty standardDeviation::Float32 setter=setStandardDeviation
 end
 
