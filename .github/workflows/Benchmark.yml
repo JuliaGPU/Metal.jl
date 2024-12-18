@@ -9,28 +9,16 @@ on:
   pull_request_target:
     branches:
       - main
-    paths:
-      - "src/**/*"
-      - "lib/**/*"
-      - "ext/**/*"
-      - "perf/**/*"
-      - ".buildkite/**/*"
-      - "Project.toml"
   push:
     branches:
       - main
-    paths:
-      - "src/**/*"
-      - "lib/**/*"
-      - "ext/**/*"
-      - "perf/**/*"
-      - ".buildkite/**/*"
-      - "Project.toml"
 
 jobs:
   benchmark:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download Buildkite Artifacts
         id: download
         uses: EnricoMi/download-buildkite-artifact-action@v1
@@ -54,8 +42,8 @@ jobs:
           output-file-path: ${{ steps.locate.outputs.path }}
           benchmark-data-dir-path: "bench"
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          comment-always: ${{ github.event_name == 'pull_request' }}
+          comment-always: ${{ github.event_name == 'pull_request_target' }}
           summary-always: true
           alert-threshold: "125%"
           fail-on-alert: false
-          auto-push: ${{ github.event_name != 'pull_request' }}
+          auto-push: ${{ github.event_name != 'pull_request_target' }}
