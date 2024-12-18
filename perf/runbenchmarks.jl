@@ -7,9 +7,6 @@ using BenchmarkTools
 using StableRNGs
 rng = StableRNG(123)
 
-# to find untuned benchmarks
-BenchmarkTools.DEFAULT_PARAMETERS.evals = 0
-
 # print system information
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
 

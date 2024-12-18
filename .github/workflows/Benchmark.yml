@@ -1,12 +1,12 @@
 name: Benchmarks
 permissions:
-  contents: write # contents permission to update benchmark contents in gh-pages branch
-  statuses: read
-  deployments: write # deployments permission to deploy GitHub pages website
-  pull-requests: write
+  statuses: read        # find Buildkite URL from PR status
+  contents: write       # update benchmark contents in gh-pages branch
+  pull-requests: write  # comment on PR with benchmark results
+  deployments: write    # deploy GitHub pages website
 
 on:
-  pull_request:
+  pull_request_target:
     branches:
       - main
     paths:
@@ -16,7 +16,6 @@ on:
       - "perf/**/*"
       - ".buildkite/**/*"
       - "Project.toml"
-      - ".github/workflows/Benchmark.yml"
   push:
     branches:
       - main
@@ -27,26 +26,17 @@ on:
       - "perf/**/*"
       - ".buildkite/**/*"
       - "Project.toml"
-      - ".github/workflows/Benchmark.yml"
 
 jobs:
   benchmark:
-    if: |
-      (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository) &&
-      (contains(github.event.head_commit.message, '[only benchmarks]') ||
-       !contains(github.event.head_commit.message, '[only') &&
-       !contains(github.event.head_commit.message, '[skip benchmarks]') &&
-       github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - name: Download Buildkite Artifacts
         id: download
         uses: EnricoMi/download-buildkite-artifact-action@v1
         with:
           buildkite_token: ${{ secrets.BUILDKITE_TOKEN }}
-          ignore_build_states: blocked,canceled,skipped,not_run,failed
+          ignore_build_states: blocked,canceled,skipped,not_run
           ignore_job_states: timed_out,failed
           output_path: artifacts
 
@@ -66,6 +56,6 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           comment-always: ${{ github.event_name == 'pull_request' }}
           summary-always: true
-          alert-threshold: "150%"
+          alert-threshold: "125%"
           fail-on-alert: false
           auto-push: ${{ github.event_name != 'pull_request' }}
