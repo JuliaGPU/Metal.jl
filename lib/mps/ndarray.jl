@@ -24,10 +24,9 @@ function MPSNDArrayDescriptor(dataType::DataType, dimensionCount, dimensionSizes
 end
 
 function MPSNDArrayDescriptor(dataType::DataType, shape::DenseVector{T}) where {T<:Union{Int,UInt}}
-    revshape = collect(reverse(shape))
-    obj = GC.@preserve revshape begin
-        shapeptr = pointer(revshape)
-        MPSNDArrayDescriptor(dataType, length(revshape), shapeptr)
+    obj = GC.@preserve shape begin
+        shapeptr = pointer(shape)
+        MPSNDArrayDescriptor(dataType, length(shape), shapeptr)
     end
     return obj
 end
@@ -73,6 +72,11 @@ else
         @autoproperty numberOfDimensions::NSUInteger
         @autoproperty parent::id{MPSNDArray}
     end
+end
+
+function Base.size(ndarr::MPSNDArray)
+    ndims = Int(ndarr.numberOfDimensions)
+    Tuple([Int(lengthOfDimension(ndarr,i)) for i in 0:ndims-1])
 end
 
 @objcwrapper immutable=false MPSTemporaryNDArray <: MPSNDArray
@@ -130,20 +134,23 @@ end
 
 function MPSNDArray(arr::MtlArray{T,N}) where {T,N}
     arrsize = size(arr)
-    @assert arrsize[end]*sizeof(T) % 16 == 0 "Final dimension of arr must have a byte size divisible by 16"
+    @assert arrsize[1]*sizeof(T) % 16 == 0 "First dimension of arr must have a byte size divisible by 16"
     desc = MPSNDArrayDescriptor(T, arrsize)
     return MPSNDArray(arr.data[], UInt(arr.offset), desc)
 end
 
 function Metal.MtlArray(ndarr::MPSNDArray; storage = Metal.DefaultStorageMode, async = false)
-    ndims = Int(ndarr.numberOfDimensions)
-    arrsize = [lengthOfDimension(ndarr,i) for i in 0:ndims-1]
+    arrsize = size(ndarr)
     T = convert(DataType, ndarr.dataType)
-    arr = MtlArray{T,ndims,storage}(undef, reverse(arrsize)...)
+    arr = MtlArray{T,length(arrsize),storage}(undef, (arrsize)...)
+    return exportToMtlArray!(arr, ndarr; async)
+end
+
+function exportToMtlArray!(arr::MtlArray{T}, ndarr::MPSNDArray; async=false) where T
     dev = device(arr)
 
     cmdBuf = MTLCommandBuffer(global_queue(dev)) do cmdBuf
-        exportDataWithCommandBuffer(ndarr, cmdBuf, arr.data[], T, 0, collect(sizeof(T) .* reverse(strides(arr))))
+        exportDataWithCommandBuffer(ndarr, cmdBuf, arr.data[], T, arr.offset)
     end
 
     async || wait_completed(cmdBuf)
@@ -157,6 +164,12 @@ exportDataWithCommandBuffer(ndarr::MPSNDArray, cmdbuf::MTLCommandBuffer, toBuffe
                              destinationDataType:destinationDataType::MPSDataType
                              offset:offset::NSUInteger
                              rowStrides:pointer(rowStrides)::Ptr{NSInteger}]::Nothing
+exportDataWithCommandBuffer(ndarr::MPSNDArray, cmdbuf::MTLCommandBuffer, toBuffer, destinationDataType, offset) =
+    @objc [ndarr::MPSNDArray exportDataWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+                             toBuffer:toBuffer::id{MTLBuffer}
+                             destinationDataType:destinationDataType::MPSDataType
+                             offset:offset::NSUInteger
+                             rowStrides:nil::id{ObjectiveC.Object}]::Nothing
 
 # rowStrides in Bytes
 importDataWithCommandBuffer!(ndarr::MPSNDArray, cmdbuf::MTLCommandBuffer, fromBuffer, sourceDataType, offset, rowStrides) =
@@ -165,6 +178,12 @@ importDataWithCommandBuffer!(ndarr::MPSNDArray, cmdbuf::MTLCommandBuffer, fromBu
                              sourceDataType:sourceDataType::MPSDataType
                              offset:offset::NSUInteger
                              rowStrides:pointer(rowStrides)::Ptr{NSInteger}]::Nothing
+importDataWithCommandBuffer!(ndarr::MPSNDArray, cmdbuf::MTLCommandBuffer, fromBuffer, sourceDataType, offset) =
+     @objc [ndarr::MPSNDArray importDataWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+                             fromBuffer:fromBuffer::id{MTLBuffer}
+                             sourceDataType:sourceDataType::MPSDataType
+                             offset:offset::NSUInteger
+                             rowStrides:nil::id{ObjectiveC.Object}]::Nothing
 
 # TODO
 # exportDataWithCommandBuffer(toImages, offset)
