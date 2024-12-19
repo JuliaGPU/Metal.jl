@@ -3,7 +3,6 @@ using Clang_jll
 Clang_jll.libclang = "/Applications/Xcode.app/Contents/Frameworks/libclang.dylib"
 
 using Clang.Generators
-using Clang.Generators: LinkEnumAlias
 using Clang
 using Glob
 using JLD2
@@ -13,11 +12,8 @@ using Logging
 # Use system SDK
 SDK_PATH = `xcrun --show-sdk-path` |> open |> readchomp |> String
 
-# Hack to prevent printing of functions for now
-Generators.skip_check(dag::Generators.ExprDAG, node::Generators.ExprNode{Generators.FunctionProto}) = true
-
 main(name::AbstractString; kwargs...) = main([name]; kwargs...)
-function main(names=["all"]; sdk_path=SDK_PATH)
+function main(names::AbstractVector=["all"]; sdk_path=SDK_PATH)
     path_to_framework(framework) = joinpath(sdk_path, "System/Library/Frameworks/",framework*".framework","Headers")
     path_to_mps_framework(framework) = joinpath(sdk_path, "System/Library/Frameworks/","MetalPerformanceShaders.framework","Frameworks",framework*".framework","Headers")
 
@@ -43,16 +39,6 @@ function main(names=["all"]; sdk_path=SDK_PATH)
         push!(ctxs, tctx)
     end
 
-    # if "all" in names || "libfoundation" in names || "foundation" in names
-    #     fwpath = path_to_framework("Foundation")
-    #     tctx = wrap("libfoundation", joinpath(foundation, "Foundation.h");, defines=["__builtin_va_list"])
-    #     push!(ctxs, tctx)
-    # end
-    # if "all" in names || "libcf" in names || "cf" in names
-    #     fwpath = path_to_framework("CoreFoundation")
-    #     tctx = wrap("libfoundation", joinpath(fwpath, "CoreFoundation.h");, defines=["__builtin_va_list"])
-    #     push!(ctxs, tctx)
-    # end
     return ctxs
 end
 
@@ -119,16 +105,22 @@ function create_objc_context(headers::Vector, args::Vector=String[], options::Di
                     "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain"
                   ]
 
+    regen = if haskey(options, "general") && haskey(options["general"], "regenerate_dependent_headers")
+        options["general"]["regenerate_dependent_headers"]
+    else
+        false
+    end
+
     # Since the framework we're wrapping is a system header,
     # find all dependent headers, then remove all but the relevant ones
     # also temporarily disable logging
     dep_headers_fname = if haskey(options, "general") && haskey(options["general"], "library_name")
-        options["general"]["library_name"]*".JLD2"
+        splitext(splitpath(options["general"]["output_file_path"])[end])[1]*".JLD2"
     else
         nothing
     end
     Base.CoreLogging._min_enabled_level[] = Logging.Info+1
-    dependent_headers = if !isnothing(dep_headers_fname) && isfile(dep_headers_fname)
+    dependent_headers = if !regen && !isnothing(dep_headers_fname) && isfile(dep_headers_fname)
         JLD2.load(dep_headers_fname, "dep_headers")
     else
         all_headers = find_dependent_headers(headers,args,[])
@@ -137,7 +129,10 @@ function create_objc_context(headers::Vector, args::Vector=String[], options::Di
             target_framework = "/"*joinpath(Sys.splitpath(header)[end-2:end-1])
             dep_headers = append!(dep_headers, filter(s -> occursin(target_framework, s), all_headers))
         end
-        JLD2.@save dep_headers_fname dep_headers
+        if haskey(options, "general") && haskey(options["general"], "extra_target_headers")
+            append!(dep_headers, options["general"]["extra_target_headers"])
+        end
+        regen || JLD2.@save dep_headers_fname dep_headers
         dep_headers
     end
     Base.CoreLogging._min_enabled_level[] = Logging.Debug
