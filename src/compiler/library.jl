@@ -15,7 +15,7 @@ using SHA: sha256
 using CEnum: @cenum
 using UUIDs: UUID
 using Printf: @printf
-using CodecBzip2: Bzip2Compressor, Bzip2Decompressor
+using CodecBzip2: Bzip2Compressor, Bzip2Decompressor, Bzip2DecompressorStream
 
 
 ## enums
@@ -338,48 +338,16 @@ tag_value_io["DEPF"] = (
 tag_value_io["SARC"] = (
     # Source archive; an identifier (null-terminated ASCII) and BZip2-compressed tarball
     @NamedTuple{id::String, archive::Vector{UInt8}},
-    (io, nb)  -> begin
+    (io, nb) -> begin
         id = String(readuntil(io, UInt8(0)))
         compressed = read(io, nb - sizeof(id) - 1)
 
-        # Bzip2Decompressor doesn't support padding (JuliaIO/CodecBzip2.jl#31),
-        # so find the end marker and truncate the archive (in a naive way,
-        # but these source code archives are expected to be small)
-        compressed[1:2] == [0x42, 0x5a] || error("Not a BZip2 archive")
-        trailing_bytes = 10 # end marker + checksum
-        end_marker = 0x177245385090
-        i = 1
-        while i < length(compressed) - trailing_bytes
-            # aligned match
-            current_value = UInt64(compressed[i]) << 40 |
-                            UInt64(compressed[i+1]) << 32 |
-                            UInt64(compressed[i+2]) << 24 |
-                            UInt64(compressed[i+3]) << 16 |
-                            UInt64(compressed[i+4]) << 8 |
-                            UInt64(compressed[i+5])
-            if current_value == end_marker
-                break
-            end
-
-            # misaligned match
-            current_value = UInt64(current_value) << 8 | compressed[i+6]
-            if end_marker in ((current_value >> 1) & 0xffffffffffff,
-                              (current_value >> 2) & 0xffffffffffff,
-                              (current_value >> 3) & 0xffffffffffff,
-                              (current_value >> 4) & 0xffffffffffff,
-                              (current_value >> 5) & 0xffffffffffff,
-                              (current_value >> 6) & 0xffffffffffff,
-                              (current_value >> 7) & 0xffffffffffff)
-                i += 1
-                break
-            end
-
-            i += 1
-        end
-        compressed = compressed[1:i+trailing_bytes-1]
-
         # decompress the archive
-        archive = transcode(Bzip2Decompressor, compressed)
+        #archive = transcode(Bzip2Decompressor, compressed)
+        # special handling is required to set `stop_on_end=true`,
+        # as these archives are padded to multiples of 16KB.
+        stream = Bzip2DecompressorStream(IOBuffer(compressed); stop_on_end=true)
+        archive = read(stream, typemax(Int))
 
         (; id, archive)
     end,
