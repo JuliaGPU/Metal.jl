@@ -1,0 +1,36 @@
+[general]
+library_name = "libmps"
+output_file_path = "../../lib/mps/libmps.jl"
+prologue_file_path = "libmps_prologue.jl"
+
+printer_blacklist = [
+    "mt_macCatalyst",
+    "mt_ios",
+    "mt_macos",
+    "CF.*",
+    "MTL.*",
+    "NS.*",
+    "BOOL"
+]
+
+[codegen]
+use_ccall_macro = true
+always_NUL_terminated_string = true
+
+[codegen.macro]
+# it's highly recommended to set this entry to "basic".
+# if you'd like to skip all of the macros, please set this entry to "disable".
+# if you'd like to translate function-like macros to Julia, please set this entry to "aggressive".
+macro_mode = "disable"
+
+[api.MPSSize]
+constructor = "MPSSize(w=1.0, h=1.0, d=1.0) = new(w, h, d)"
+
+[api.MPSRegion]
+constructor = "MPSRegion(origin=MPSOrigin(), size=MPSSize()) = new(origin, size)"
+
+[api.MPSOrigin]
+constructor = "MPSOrigin(x=0.0, y=0.0, z=0.0) = new(x, y, z)"
+
+[api.MPSOffset]
+constructor = "MPSOffset(x=0, y=0, z=0) = new(x, y, z)"
