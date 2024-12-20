@@ -2,11 +2,6 @@ export MTLComputeCommandEncoder
 export set_function!, set_buffer!, dispatchThreadgroups!, endEncoding!
 export append_current_function!
 
-@cenum MTLDispatchType::NSUInteger begin
-    MTLDispatchTypeSerial = 0
-    MTLDispatchTypeConcurrent = 1
-end
-
 @objcwrapper immutable=false MTLComputeCommandEncoder <: MTLCommandEncoder
 
 function MTLComputeCommandEncoder(cmdbuf::MTLCommandBuffer;

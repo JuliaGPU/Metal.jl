@@ -23,6 +23,9 @@ Base.convert(::Type{MPSShape}, tuple::Union{Vector{N},NTuple{N, <:Integer}}) whe
 
 is_supported(dev::MTLDevice) = ccall(:MPSSupportsMTLDevice, Bool, (id{MTLDevice},), dev)
 
+# Load in generated enums and structs
+include("libmps.jl")
+
 include("size.jl")
 
 # high-level wrappers

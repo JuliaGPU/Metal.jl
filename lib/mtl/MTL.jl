@@ -22,6 +22,7 @@ release(obj) = @autoreleasepool unsafe=true Foundation.release(obj)
 
 ## source code includes
 
+include("libmtl.jl")
 include("size.jl")
 include("device.jl")
 include("resource.jl")
@@ -29,7 +30,6 @@ include("storage_type.jl")
 include("compile-opts.jl")
 include("library.jl")
 include("function.jl")
-include("argument.jl")
 include("events.jl")
 include("fences.jl")
 include("heap.jl")

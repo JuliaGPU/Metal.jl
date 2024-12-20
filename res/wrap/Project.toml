@@ -1,0 +1,9 @@
+[deps]
+Clang = "40e3b903-d033-50b4-a0cc-940c62c95e31"
+Clang_jll = "0ee61d77-7f21-5576-8119-9fcc46b10100"
+Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+JuliaFormatter = "98e50ef6-434e-11e9-1051-2b60c6c9e899"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+Tokenize = "0796e94c-ce3b-5d07-9a54-7f471281c624"
