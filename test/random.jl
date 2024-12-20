@@ -12,7 +12,8 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
         rng = Metal.MPS.RNG()
 
         @testset "$f with $T" for (f, T) in INPLACE_TUPLES
-            @testset "$d" for d in (1, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000))
+            # d == 2 and d == 3 are to hit the test cases where sizeof(A) <= 4
+            @testset "$d" for d in (2, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000))
                 A = MtlArray{T}(undef, d)
 
                 # default_rng
@@ -224,7 +225,8 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
         end
         rng = Metal.MPS.RNG()
         @testset "$f with $T" for (f, T) in mps_tuples
-            @testset "$d" for d in (1, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000))
+            # d == 2 and d == 3 are to hit the test cases where sizeof(A) <= 4
+            @testset "$d" for d in (2, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000))
                 A = zeros(T, d)
                 if (prod(d) * sizeof(T)) % 4 == 0
                     f(rng, A)
