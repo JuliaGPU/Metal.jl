@@ -1,4 +1,4 @@
-# res/wrap/
+# Automated wrapper generation
 
 This directory contains scripts to generate Julia wrappers for Metal and MetalPerformanceShaders.
 
