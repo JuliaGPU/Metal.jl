@@ -6,18 +6,6 @@ const INPLACE_TUPLES = [[(rand!, T) for T in RAND_TYPES];
 const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
                         [(Metal.randn, rand, T) for T in RANDN_TYPES]]
 
-# `f` must return a bool
-function retry_on_failure(f::Function, arr::AbstractArray{T}; n_tries=2) where T
-    i = n_tries
-    pass = false
-    while !pass && i > 0
-        i != n_tries && @info "Retrying test with array size $(size(arr)) and type $T"
-        i -= 1
-        pass = f(arr)
-    end
-    return pass
-end
-
 @testset "random" begin
     # in-place
     @testset "in-place" begin
@@ -28,22 +16,17 @@ end
                 A = MtlArray{T}(undef, d)
 
                 # default_rng
-                @test retry_on_failure(A) do arr
-                    fill!(arr, T(0))
-                    f(arr)
-                    !iszero(collect(arr))
-                end
+                fill!(A, T(0))
+                f(A)
+                @test !iszero(collect(A))
 
                 # specified MPS rng
                 if T != Float16
+                    fill!(A, T(0))
                     if Metal.can_use_mpsrandom(A)
-                        @test retry_on_failure(A) do arr
-                            fill!(arr, T(0))
-                            f(rng, arr)
-                            !iszero(collect(arr))
-                        end
+                        f(rng, A)
+                        @test !iszero(collect(A))
                     else
-                        fill!(A, T(0))
                         @test_throws "Destination buffer" f(rng, A)
                     end
                 end
@@ -242,14 +225,11 @@ end
         rng = Metal.MPS.RNG()
         @testset "$f with $T" for (f, T) in mps_tuples
             @testset "$d" for d in (1, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000))
+                A = zeros(T, d)
                 if (prod(d) * sizeof(T)) % 4 == 0
-                    A = zeros(T, d)
-                    @test retry_on_failure(A) do arr
-                        f(rng, arr)
-                        !iszero(collect(arr))
-                    end
+                    f(rng, A)
+                    @test !iszero(collect(A))
                 else
-                    A = zeros(T, d)
                     @test_throws "Destination buffer" f(rng, A)
                 end
             end
