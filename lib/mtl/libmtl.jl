@@ -19,11 +19,24 @@ struct MTLTextureSwizzleChannels
     alpha::MTLTextureSwizzle
 end
 
+function MTLTextureSwizzleChannelsMake(r, g, b, a)
+    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLTextureSwizzleChannelsMake(r::MTLTextureSwizzle,
+                                                                                                                                    g::MTLTextureSwizzle,
+                                                                                                                                    b::MTLTextureSwizzle,
+                                                                                                                                    a::MTLTextureSwizzle)::MTLTextureSwizzleChannels
+end
+
 struct MTLOrigin
     x::NSUInteger
     y::NSUInteger
     z::NSUInteger
     MTLOrigin(x=0, y=0, z=0) = new(x, y, z)
+end
+
+function MTLOriginMake(x, y, z)
+    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLOriginMake(x::NSUInteger,
+                                                                                                                    y::NSUInteger,
+                                                                                                                    z::NSUInteger)::MTLOrigin
 end
 
 struct MTLSize
@@ -33,10 +46,37 @@ struct MTLSize
     MTLSize(w=1, h=1, d=1) = new(w, h, d)
 end
 
+function MTLSizeMake(width, height, depth)
+    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLSizeMake(width::NSUInteger,
+                                                                                                                  height::NSUInteger,
+                                                                                                                  depth::NSUInteger)::MTLSize
+end
+
 struct MTLRegion
     origin::MTLOrigin
     size::MTLSize
     MTLRegion(origin=MTLOrigin(), size=MTLSize()) = new(origin, size)
+end
+
+function MTLRegionMake1D(x, width)
+    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake1D(x::NSUInteger,
+                                                                                                                      width::NSUInteger)::MTLRegion
+end
+
+function MTLRegionMake2D(x, y, width, height)
+    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake2D(x::NSUInteger,
+                                                                                                                      y::NSUInteger,
+                                                                                                                      width::NSUInteger,
+                                                                                                                      height::NSUInteger)::MTLRegion
+end
+
+function MTLRegionMake3D(x, y, z, width, height, depth)
+    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake3D(x::NSUInteger,
+                                                                                                                      y::NSUInteger,
+                                                                                                                      z::NSUInteger,
+                                                                                                                      width::NSUInteger,
+                                                                                                                      height::NSUInteger,
+                                                                                                                      depth::NSUInteger)::MTLRegion
 end
 
 struct MTLSamplePosition
@@ -44,7 +84,17 @@ struct MTLSamplePosition
     y::Cfloat
 end
 
+function MTLSamplePositionMake(x, y)
+    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLSamplePositionMake(x::Cfloat,
+                                                                                                                            y::Cfloat)::MTLSamplePosition
+end
+
 const MTLCoordinate2D = MTLSamplePosition
+
+function MTLCoordinate2DMake(x, y)
+    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLCoordinate2DMake(x::Cfloat,
+                                                                                                                          y::Cfloat)::MTLCoordinate2D
+end
 
 struct MTLResourceID
     _impl::UInt64
@@ -654,6 +704,13 @@ struct MTLClearColor
     alpha::Cdouble
 end
 
+function MTLClearColorMake(red, green, blue, alpha)
+    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLClearColorMake(red::Cdouble,
+                                                                                                                        green::Cdouble,
+                                                                                                                        blue::Cdouble,
+                                                                                                                        alpha::Cdouble)::MTLClearColor
+end
+
 @cenum MTLLoadAction::UInt64 begin
     MTLLoadActionDontCare = 0x0000000000000000
     MTLLoadActionLoad = 0x0000000000000001
@@ -1137,11 +1194,24 @@ end
 
 const MTLPackedFloat3 = _MTLPackedFloat3
 
+function MTLPackedFloat3Make(x, y, z)
+    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLPackedFloat3Make(x::Cfloat,
+                                                                                                                          y::Cfloat,
+                                                                                                                          z::Cfloat)::MTLPackedFloat3
+end
+
 struct MTLPackedFloatQuaternion
     x::Cfloat
     y::Cfloat
     z::Cfloat
     w::Cfloat
+end
+
+function MTLPackedFloatQuaternionMake(x, y, z, w)
+    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLPackedFloatQuaternionMake(x::Cfloat,
+                                                                                                                                   y::Cfloat,
+                                                                                                                                   z::Cfloat,
+                                                                                                                                   w::Cfloat)::MTLPackedFloatQuaternion
 end
 
 struct _MTLPackedFloat4x3
@@ -1308,6 +1378,11 @@ struct MTLIndirectCommandBufferExecutionRange
     length::UInt32
 end
 
+function MTLIndirectCommandBufferExecutionRangeMake(location, length)
+    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIndirectCommandBufferExecutionRangeMake(location::UInt32,
+                                                                                                                                                 length::UInt32)::MTLIndirectCommandBufferExecutionRange
+end
+
 @cenum MTLFunctionLogType::UInt64 begin
     MTLFunctionLogTypeValidation = 0x0000000000000000
 end
@@ -1395,3 +1470,23 @@ end
 end
 
 const MTLIOCompressionContext = Ptr{Cvoid}
+
+function MTLIOCompressionContextDefaultChunkSize()
+    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOCompressionContextDefaultChunkSize()::Csize_t
+end
+
+function MTLIOCreateCompressionContext(path, type, chunkSize)
+    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOCreateCompressionContext(path::Cstring,
+                                                                                                                                    type::MTLIOCompressionMethod,
+                                                                                                                                    chunkSize::Csize_t)::MTLIOCompressionContext
+end
+
+function MTLIOCompressionContextAppendData(context, data, size)
+    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOCompressionContextAppendData(context::MTLIOCompressionContext,
+                                                                                                                                        data::Ptr{Cvoid},
+                                                                                                                                        size::Csize_t)::Cvoid
+end
+
+function MTLIOFlushAndDestroyCompressionContext(context)
+    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOFlushAndDestroyCompressionContext(context::MTLIOCompressionContext)::MTLIOCompressionStatus
+end
