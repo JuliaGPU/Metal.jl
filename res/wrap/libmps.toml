@@ -10,7 +10,16 @@ printer_blacklist = [
     "CF.*",
     "MTL.*",
     "NS.*",
-    "BOOL"
+    "BOOL",
+    # Not sure how to access the MPS functions so don't wrap for now
+    "MPSDataTypeBitsCount",
+    "MPSSizeofMPSDataType",
+    "MPSSizeofMPSDataType",
+    "MPSFindIntegerDivisionParams",
+    "MPSGetCustomKernelMaxBatchSize",
+    "MPSGetCustomKernelBatchedDestinationIndex",
+    "MPSGetCustomKernelBatchedSourceIndex",
+    "MPSGetCustomKernelBroadcastSourceIndex",
 ]
 
 [codegen]
