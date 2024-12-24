@@ -1,7 +1,8 @@
 using Distributed
 using Dates
-import REPL
 using Printf: @sprintf
+import REPL
+using Test
 
 # parse some command-line arguments
 function extract_flag!(args, flag, default=nothing)

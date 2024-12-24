@@ -1,5 +1,11 @@
 using Distributed, Test, Metal, Adapt, ObjectiveC, ObjectiveC.Foundation
 
+# Quit without erroring if Metal loaded without issues on unsupported platforms
+if Sys.isapple() && !startswith(read(`xcrun metal-arch`, String), "applegpu") || !Sys.isapple()
+    @info "Metal.jl succesfully loaded on unsupported system."
+    Sys.exit()
+end
+
 Metal.functional() || error("Metal.jl is not functional on this system")
 
 # GPUArrays has a testsuite that isn't part of the main package.
