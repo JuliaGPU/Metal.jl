@@ -26,10 +26,9 @@ the InteractiveUtils standard library:
 @device_code_typed
 @device_code_warntype
 @device_code_llvm
+@device_code_air
 @device_code_native
-@device_code_agx
 @device_code
 ```
 
-For more information, please consult the GPUCompiler.jl documentation. `code_agx` is
-actually `code_native`:
+For more information, please consult the GPUCompiler.jl documentation.

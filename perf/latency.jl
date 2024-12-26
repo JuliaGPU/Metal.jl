@@ -28,7 +28,7 @@ function main()
     ttfp_cmd =
         `$base_cmd -e "using Metal
                        kernel() = return
-                       Metal.code_agx(devnull, kernel, Tuple{}; kernel=true)"`
+                       Metal.code_native(devnull, kernel, Tuple{}; kernel=true)"`
     results["ttfp"] = @benchmark run($ttfp_cmd) evals=1 seconds=60
 
     results
