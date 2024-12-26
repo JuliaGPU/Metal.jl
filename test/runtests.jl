@@ -1,8 +1,30 @@
 using Distributed
 using Dates
+using Metal
 using Printf: @sprintf
 import REPL
 using Test
+
+# Quit without erroring if Metal loaded without issues on unsupported platforms
+if !Sys.isapple()
+    @info """Metal.jl succesfully loaded on non-macOS system.
+             Skipping tests."""
+    Sys.exit()
+else # if Sys.isapple()
+    archchecker = occursin(read(`xcrun metal-arch --name`, String))
+    if archchecker("Paravirtual") # Virtualized graphics (probably Github Actions runners)
+        @info """Metal.jl succesfully loaded on macOS system with unsupported Paravirtual graphics.
+                 Skipping tests."""
+        Sys.exit()
+    elseif !archchecker("applegpu") # Every other unsupported system (Intel or AMD graphics)
+        @info """Metal.jl succesfully loaded on macOS system with unsupported graphics.
+                 Skipping tests."""
+        Sys.exit()
+    end
+end
+
+# If we ever error here, fix above
+Metal.functional() || error("Metal.jl is not functional on this system")
 
 # parse some command-line arguments
 function extract_flag!(args, flag, default=nothing)
