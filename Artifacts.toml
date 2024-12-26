@@ -1,6 +1,0 @@
-[applegpu]
-git-tree-sha1 = "9e2e82877742d2e826d80e832bc957189c3910b6"
-
-    [[applegpu.download]]
-    sha256 = "473fa9146380574a781ba8a40138e3354d397364ccce5a8ec01ea31773c85595"
-    url = "https://github.com/dougallj/applegpu/tarball/0e3a4a2d471b489026684f506c83386581ddb112"

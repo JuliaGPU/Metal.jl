@@ -7,10 +7,7 @@ using LLVM
 using LLVM.Interop
 import LLVMDowngrader_jll
 using Preferences: @load_preference, load_preference
-using Python_jll
-using ObjectFile
 using ExprTools: splitdef, combinedef
-using Artifacts
 using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
 import KernelAbstractions
 

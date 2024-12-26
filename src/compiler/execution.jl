@@ -186,7 +186,7 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
         cache = compiler_cache(dev)
         source = methodinstance(F, tt)
         config = compiler_config(dev; name, kwargs...)::MetalCompilerConfig
-        pipeline, _ = GPUCompiler.cached_compilation(cache, source, config, compile, link)
+        pipeline = GPUCompiler.cached_compilation(cache, source, config, compile, link)
 
         # create a callable object that captures the function instance. we don't need to think
         # about world age here, as GPUCompiler already does and will return a different object
