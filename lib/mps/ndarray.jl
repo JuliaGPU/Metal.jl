@@ -49,7 +49,7 @@ export MPSNDArray
 
 @objcwrapper immutable=false MPSNDArray <: NSObject
 
-@static if Sys.isapple() && Metal.macos_version() >= v"15"
+@static if Metal._safe_minversion(v"15")
     @objcproperties MPSNDArray begin
         @autoproperty dataType::MPSDataType
         @autoproperty dataTypeSize::Csize_t
@@ -116,7 +116,7 @@ function MPSNDArray(device::MTLDevice, scalar)
     return obj
 end
 
-@static if Sys.isapple() && Metal.macos_version() >= v"15"
+@static if Metal._safe_minversion(v"15")
     function MPSNDArray(buffer::MTLBuffer, offset::UInt, descriptor::MPSNDArrayDescriptor)
         arrayaddr = @objc [MPSNDArray alloc]::id{MPSNDArray}
         obj = MPSNDArray(arrayaddr)
