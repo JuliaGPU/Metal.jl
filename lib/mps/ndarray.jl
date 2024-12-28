@@ -49,29 +49,18 @@ export MPSNDArray
 
 @objcwrapper immutable=false MPSNDArray <: NSObject
 
-@static if Metal.is_macos(v"15")
-    @objcproperties MPSNDArray begin
-        @autoproperty dataType::MPSDataType
-        @autoproperty dataTypeSize::Csize_t
-        @autoproperty device::id{MTLDevice}
-        @autoproperty label::id{NSString} setter=setLabel
-        @autoproperty numberOfDimensions::NSUInteger
-        @autoproperty parent::id{MPSNDArray}
+@objcproperties MPSNDArray begin
+    @autoproperty dataType::MPSDataType
+    @autoproperty dataTypeSize::Csize_t
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString} setter=setLabel
+    @autoproperty numberOfDimensions::NSUInteger
+    @autoproperty parent::id{MPSNDArray}
 
-        #Instance methods that act like properties
-        @autoproperty descriptor::id{MPSNDArrayDescriptor}
-        @autoproperty resourceSize::NSUInteger
-        @autoproperty userBuffer::id{MTLBuffer}
-    end
-else
-    @objcproperties MPSNDArray begin
-        @autoproperty dataType::MPSDataType
-        @autoproperty dataTypeSize::Csize_t
-        @autoproperty device::id{MTLDevice}
-        @autoproperty label::id{NSString} setter=setLabel
-        @autoproperty numberOfDimensions::NSUInteger
-        @autoproperty parent::id{MPSNDArray}
-    end
+    #Instance methods that act like properties
+    @autoproperty descriptor::id{MPSNDArrayDescriptor} minver="15"
+    @autoproperty resourceSize::NSUInteger minver="15"
+    @autoproperty userBuffer::id{MTLBuffer} minver="15"
 end
 
 function Base.size(ndarr::MPSNDArray)
