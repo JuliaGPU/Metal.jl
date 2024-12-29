@@ -1,7 +1,5 @@
 using Distributed, Test, Metal, Adapt, ObjectiveC, ObjectiveC.Foundation
 
-Metal.functional() || error("Metal.jl is not functional on this system")
-
 # GPUArrays has a testsuite that isn't part of the main package.
 # Include it directly.
 import GPUArrays

@@ -4,6 +4,14 @@
 
 export MTLDevice, MTLCreateSystemDefaultDevice, devices
 
+@static if Metal._safe_minversion(v"14")
+    @objcwrapper MTLArchitecture <: NSObject
+
+    @objcproperties MTLArchitecture begin
+        @autoproperty architecture::id{NSString}
+    end
+end
+
 @objcwrapper MTLDevice <: NSObject
 
 @objcproperties MTLDevice begin

@@ -56,6 +56,8 @@ Returns the host macOS version.
 See also [`Metal.darwin_version`](@ref).
 """ macos_version
 
+# macOS version lower bound that doesn't error on non-macOS
+_safe_minversion(ver) = Sys.isapple() && macos_version() >= ver
 
 ## support queries
 
