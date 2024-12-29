@@ -112,7 +112,7 @@ end
     MTLBarrierScopeRenderTargets = 0x0000000000000004
 end
 
-@objcwrapper immutable = false MTLCommandEncoder <: NSObject
+@objcwrapper immutable = true MTLCommandEncoder <: NSObject
 
 @objcwrapper immutable = false MTLAllocation <: NSObject
 

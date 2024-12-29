@@ -2,7 +2,7 @@
 
 export MPSVectorDescriptor
 
-@objcwrapper MPSVectorDescriptor <: NSObject
+# @objcwrapper MPSVectorDescriptor <: NSObject
 
 @objcproperties MPSVectorDescriptor begin
     @autoproperty length::NSUInteger setter=setLength
@@ -32,7 +32,7 @@ end
 
 export MPSVector
 
-@objcwrapper immutable=false MPSVector <: NSObject
+# @objcwrapper immutable=false MPSVector <: NSObject
 
 @objcproperties MPSVector begin
     @autoproperty device::id{MTLDevice}
@@ -74,7 +74,7 @@ function MPSVector(arr::MtlVector{T}) where T
     return MPSVector(arr, desc, offset)
 end
 
-@objcwrapper immutable=false MPSTemporaryVector <: MPSVector
+# @objcwrapper immutable=false MPSTemporaryVector <: MPSVector
 
 function MPSTemporaryVector(commandBuffer::MTLCommandBuffer, descriptor::MPSVectorDescriptor)
     obj = @objc [MPSTemporaryVector temporaryVectorWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}
@@ -87,7 +87,7 @@ end
 
 export MPSMatrixVectorMultiplication, encode!, matvecmul!
 
-@objcwrapper immutable=false MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
+# @objcwrapper immutable=false MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
 
 function MPSMatrixVectorMultiplication(dev, transpose, rows, columns, alpha, beta)
     kernel = @objc [MPSMatrixVectorMultiplication alloc]::id{MPSMatrixVectorMultiplication}

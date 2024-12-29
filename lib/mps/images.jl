@@ -1,6 +1,6 @@
 ## kernels
 
-@objcwrapper immutable=false MPSUnaryImageKernel <: MPSKernel
+# @objcwrapper immutable=false MPSUnaryImageKernel <: MPSKernel
 
 @objcproperties MPSUnaryImageKernel begin
     @autoproperty offset::MPSOffset
@@ -21,7 +21,7 @@ end
 #                                      fallbackCopyAllocator:copyAllocator::MPSCopyAllocator]::Bool
 # end
 
-@objcwrapper immutable=false MPSBinaryImageKernel <: MPSKernel
+# @objcwrapper immutable=false MPSBinaryImageKernel <: MPSKernel
 
 @objcproperties MPSBinaryImageKernel begin
     @autoproperty primaryOffset::MPSOffset
@@ -36,7 +36,7 @@ end
 
 export MPSImageGaussianBlur, encode!
 
-@objcwrapper immutable=false MPSImageGaussianBlur <: MPSUnaryImageKernel
+# @objcwrapper immutable=false MPSImageGaussianBlur <: MPSUnaryImageKernel
 
 function MPSImageGaussianBlur(dev, sigma)
     kernel = @objc [MPSImageGaussianBlur alloc]::id{MPSImageGaussianBlur}
@@ -52,7 +52,7 @@ end
 
 export MPSImageBox
 
-@objcwrapper immutable=false MPSImageBox <: MPSUnaryImageKernel
+# @objcwrapper immutable=false MPSImageBox <: MPSUnaryImageKernel
 
 function MPSImageBox(dev, kernelWidth, kernelHeight)
     kernel = @objc [MPSImageBox alloc]::id{MPSImageBox}

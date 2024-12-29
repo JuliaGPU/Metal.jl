@@ -2,7 +2,7 @@
 
 export MPSMatrixDecompositionLU, encode!
 
-@objcwrapper immutable=false MPSMatrixDecompositionLU <: MPSMatrixUnaryKernel
+# @objcwrapper immutable=false MPSMatrixDecompositionLU <: MPSMatrixUnaryKernel
 
 function MPSMatrixDecompositionLU(dev, rows, columns)
     kernel = @objc [MPSMatrixDecompositionLU alloc]::id{MPSMatrixDecompositionLU}
@@ -27,7 +27,7 @@ end
 
 export MPSMatrixDecompositionCholesky, encode!
 
-@objcwrapper immutable=false MPSMatrixDecompositionCholesky <: MPSMatrixUnaryKernel
+# @objcwrapper immutable=false MPSMatrixDecompositionCholesky <: MPSMatrixUnaryKernel
 
 function MPSMatrixDecompositionCholesky(dev, lower, order)
     kernel = @objc [MPSMatrixDecompositionCholesky alloc]::id{MPSMatrixDecompositionCholesky}

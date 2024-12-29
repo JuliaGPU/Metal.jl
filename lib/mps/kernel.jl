@@ -2,7 +2,7 @@
 # kernels
 #
 
-@objcwrapper MPSKernel <: NSObject
+# @objcwrapper MPSKernel <: NSObject
 
 @objcproperties MPSKernel begin
     @autoproperty options::MPSKernelOptions setter=setOptions
@@ -15,7 +15,7 @@ end
     K(reinterpret(id{K}, obj))
 end
 
-@objcwrapper immutable=false MPSMatrixUnaryKernel <: MPSKernel
+# @objcwrapper immutable=false MPSMatrixUnaryKernel <: MPSKernel
 
 @objcproperties MPSMatrixUnaryKernel begin
     @autoproperty sourceMatrixOrigin::id{MTLOrigin} setter=setSourceMatrixOrigin
@@ -24,8 +24,7 @@ end
     @autoproperty batchSize::NSUInteger setter=setBatchSize
 end
 
-
-@objcwrapper immutable=false MPSMatrixBinaryKernel <: MPSKernel
+# @objcwrapper immutable=false MPSMatrixBinaryKernel <: MPSKernel
 
 @objcproperties MPSMatrixBinaryKernel begin
     @autoproperty primarySourceMatrixOrigin::id{MTLOrigin} setter=setPrimarySourceMatrixOrigin

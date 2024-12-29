@@ -20,6 +20,11 @@ printer_blacklist = [
     "MPSGetCustomKernelBatchedDestinationIndex",
     "MPSGetCustomKernelBatchedSourceIndex",
     "MPSGetCustomKernelBroadcastSourceIndex",
+    # NSKeyedUnarchiver not defined
+    "MPSKeyedUnarchiver",
+    "MPSHandle",
+    "MPSCNNConvolutionDataSource",
+    "MPSImageTransformProvider",
 ]
 
 [codegen]
@@ -31,6 +36,93 @@ always_NUL_terminated_string = true
 # if you'd like to skip all of the macros, please set this entry to "disable".
 # if you'd like to translate function-like macros to Julia, please set this entry to "aggressive".
 macro_mode = "disable"
+
+[api.MPSMatrixCopy]
+immutable = false
+
+[api.MPSMatrixDecompositionLU]
+immutable = false
+
+[api.MPSMatrixDecompositionCholesky]
+immutable = false
+
+[api.MPSUnaryImageKernel]
+immutable = false
+
+[api.MPSBinaryImageKernel]
+immutable = false
+
+[api.MPSImageGaussianBlur]
+immutable = false
+
+[api.MPSImageBox]
+immutable = false
+
+[api.MPSMatrixUnaryKernel]
+immutable = false
+
+[api.MPSMatrixBinaryKernel]
+immutable = false
+
+[api.MPSMatrix]
+immutable = false
+
+[api.MPSMatrixMultiplication]
+immutable = false
+
+[api.MPSMatrixFindTopK]
+immutable = false
+
+[api.MPSMatrixSoftMax]
+immutable = false
+
+[api.MPSMatrixLogSoftMax]
+immutable = false
+
+[api.MPSMatrixRandomDistributionDescriptor]
+immutable = false
+
+[api.MPSMatrixRandom]
+immutable = false
+
+[api.MPSMatrixRandomMTGP32]
+immutable = false
+
+[api.MPSMatrixRandomPhilox]
+immutable = false
+
+[api.MPSNDArrayDescriptor]
+immutable = false
+
+[api.MPSNDArray]
+immutable = false
+
+[api.MPSTemporaryNDArray]
+immutable = false
+
+[api.MPSNDArrayMultiaryBase]
+immutable = false
+
+[api.MPSNDArrayMultiaryKernel]
+immutable = false
+
+[api.MPSNDArrayUnaryKernel]
+immutable = false
+
+[api.MPSNDArrayBinaryKernel]
+immutable = false
+
+[api.MPSNDArrayMatrixMultiplication]
+immutable = false
+
+[api.MPSVector]
+immutable = false
+
+[api.MPSTemporaryVector]
+immutable = false
+
+[api.MPSMatrixVectorMultiplication]
+immutable = false
 
 [api.MPSSize]
 constructor = "MPSSize(w=1.0, h=1.0, d=1.0) = new(w, h, d)"

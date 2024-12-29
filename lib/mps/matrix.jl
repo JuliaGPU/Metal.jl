@@ -23,7 +23,7 @@ Base.convert(::Type{DataType}, mpstyp::MPSDataType) = jl_mps_to_typ[mpstyp]
 
 export MPSMatrixDescriptor
 
-@objcwrapper MPSMatrixDescriptor <: NSObject
+# @objcwrapper MPSMatrixDescriptor <: NSObject
 
 @objcproperties MPSMatrixDescriptor begin
     @autoproperty rows::NSUInteger setter=setRows
@@ -57,7 +57,7 @@ end
 
 export MPSMatrix
 
-@objcwrapper immutable=false MPSMatrix <: NSObject
+# @objcwrapper immutable=false MPSMatrix <: NSObject
 
 @objcproperties MPSMatrix begin
     @autoproperty device::id{MTLDevice}
@@ -141,7 +141,7 @@ end
 
 export MPSMatrixMultiplication, encode!, matmul!
 
-@objcwrapper immutable=false MPSMatrixMultiplication <: MPSKernel
+# @objcwrapper immutable=false MPSMatrixMultiplication <: MPSKernel
 
 @objcproperties MPSMatrixMultiplication begin
     @autoproperty leftMatrixOrigin::MTLOrigin setter=setLeftMatrixOrigin
@@ -216,7 +216,7 @@ end
 
 export MPSMatrixFindTopK, encode!
 
-@objcwrapper immutable=false MPSMatrixFindTopK <: MPSMatrixUnaryKernel
+# @objcwrapper immutable=false MPSMatrixFindTopK <: MPSMatrixUnaryKernel
 
 @objcproperties MPSMatrixFindTopK begin
     @autoproperty indexOffset::NSInteger setter=setIndexOffset
@@ -313,8 +313,8 @@ end
 
 export MPSMatrixSoftMax, MPSMatrixLogSoftMax, encode!
 
-@objcwrapper immutable=false MPSMatrixSoftMax <: MPSMatrixUnaryKernel
-@objcwrapper immutable=false MPSMatrixLogSoftMax <: MPSMatrixSoftMax
+# @objcwrapper immutable=false MPSMatrixSoftMax <: MPSMatrixUnaryKernel
+# @objcwrapper immutable=false MPSMatrixLogSoftMax <: MPSMatrixSoftMax
 
 @objcproperties MPSMatrixSoftMax begin
     @autoproperty sourceRows::NSInteger setter=setSourceRows

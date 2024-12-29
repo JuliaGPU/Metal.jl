@@ -132,6 +132,12 @@ struct MPSImageRegion
     size::MPSImageCoordinate
 end
 
+@objcwrapper immutable = false MPSDeviceProvider <: NSObject
+
+@objcwrapper immutable = false MPSImageDescriptor <: NSObject
+
+@objcwrapper immutable = false MPSImageAllocator <: NSObject
+
 @cenum MPSPurgeableState::UInt64 begin
     MPSPurgeableStateAllocationDeferred = 0x0000000000000000
     MPSPurgeableStateKeepCurrent = 0x0000000000000001
@@ -150,6 +156,32 @@ struct MPSImageReadWriteParams
     numberOfFeatureChannelsToReadWrite::NSUInteger
 end
 
+@objcwrapper immutable = false MPSImage <: NSObject
+
+@objcwrapper immutable = false MPSTemporaryImage <: MPSImage
+
+@objcwrapper immutable = false MPSPredicate <: NSObject
+
+@objcwrapper immutable = false MPSHeapProvider <: NSObject
+
+@objcwrapper immutable = true MPSCommandBuffer <: NSObject
+
+@objcwrapper immutable = true MPSKernel <: NSObject
+
+@objcwrapper immutable = true MPSMatrixDescriptor <: NSObject
+
+@objcwrapper immutable = false MPSVectorDescriptor <: NSObject
+
+@objcwrapper immutable = false MPSMatrix <: NSObject
+
+@objcwrapper immutable = false MPSVector <: NSObject
+
+@objcwrapper immutable = false MPSTemporaryMatrix <: MPSMatrix
+
+@objcwrapper immutable = false MPSTemporaryVector <: MPSVector
+
+@objcwrapper immutable = false MPSStateResourceList <: NSObject
+
 struct MPSStateTextureInfo
     width::NSUInteger
     height::NSUInteger
@@ -166,6 +198,8 @@ end
     MPSStateResourceTypeBuffer = 0x0000000000000001
     MPSStateResourceTypeTexture = 0x0000000000000002
 end
+
+@objcwrapper immutable = false MPSState <: NSObject
 
 @cenum MPSDeviceCapsValues::UInt32 begin
     MPSDeviceCapsNull = 0x0000000000000000
@@ -242,11 +276,63 @@ struct MPSCustomKernelArgumentCount
     broadcastTextureCount::Culong
 end
 
+@objcwrapper immutable = false MPSNDArrayDescriptor <: NSObject
+
+@objcwrapper immutable = false MPSNDArrayAllocator <: NSObject
+
+@objcwrapper immutable = false MPSNDArray <: NSObject
+
+@objcwrapper immutable = false MPSTemporaryNDArray <: MPSNDArray
+
 @cenum MPSAlphaType::UInt64 begin
     MPSAlphaTypeNonPremultiplied = 0x0000000000000000
     MPSAlphaTypeAlphaIsOne = 0x0000000000000001
     MPSAlphaTypePremultiplied = 0x0000000000000002
 end
+
+@objcwrapper immutable = false MPSUnaryImageKernel <: MPSKernel
+
+@objcwrapper immutable = false MPSBinaryImageKernel <: MPSKernel
+
+@objcwrapper immutable = false MPSImageConversion <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageConvolution <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageLaplacian <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageBox <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageTent <: MPSImageBox
+
+@objcwrapper immutable = false MPSImageGaussianBlur <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageSobel <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageCanny <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImagePyramid <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageGaussianPyramid <: MPSImagePyramid
+
+@objcwrapper immutable = false MPSImageLaplacianPyramid <: MPSImagePyramid
+
+@objcwrapper immutable = false MPSImageLaplacianPyramidSubtract <: MPSImageLaplacianPyramid
+
+@objcwrapper immutable = false MPSImageLaplacianPyramidAdd <: MPSImageLaplacianPyramid
+
+@objcwrapper immutable = false MPSMatrixUnaryKernel <: MPSKernel
+
+@objcwrapper immutable = false MPSMatrixBinaryKernel <: MPSKernel
+
+@objcwrapper immutable = false MPSMatrixMultiplication <: MPSKernel
+
+@objcwrapper immutable = false MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
+
+@objcwrapper immutable = false MPSMatrixSolveTriangular <: MPSMatrixBinaryKernel
+
+@objcwrapper immutable = false MPSMatrixSolveLU <: MPSMatrixBinaryKernel
+
+@objcwrapper immutable = false MPSMatrixSolveCholesky <: MPSMatrixBinaryKernel
 
 @cenum MPSMatrixDecompositionStatus::Int32 begin
     MPSMatrixDecompositionStatusSuccess = 0
@@ -255,6 +341,10 @@ end
     MPSMatrixDecompositionStatusNonPositiveDefinite = -3
 end
 
+@objcwrapper immutable = false MPSMatrixDecompositionLU <: MPSMatrixUnaryKernel
+
+@objcwrapper immutable = false MPSMatrixDecompositionCholesky <: MPSMatrixUnaryKernel
+
 struct MPSMatrixCopyOffsets
     sourceRowOffset::UInt32
     sourceColumnOffset::UInt32
@@ -262,16 +352,124 @@ struct MPSMatrixCopyOffsets
     destinationColumnOffset::UInt32
 end
 
+@objcwrapper immutable = true MPSMatrixCopyDescriptor <: NSObject
+
+@objcwrapper immutable = false MPSMatrixCopy <: MPSKernel
+
+@objcwrapper immutable = false MPSMatrixSoftMax <: MPSMatrixUnaryKernel
+
+@objcwrapper immutable = false MPSMatrixLogSoftMax <: MPSMatrixSoftMax
+
+@objcwrapper immutable = false MPSMatrixSoftMaxGradient <: MPSMatrixBinaryKernel
+
+@objcwrapper immutable = false MPSMatrixLogSoftMaxGradient <: MPSMatrixSoftMaxGradient
+
+@objcwrapper immutable = false MPSMatrixFindTopK <: MPSMatrixUnaryKernel
+
 @cenum MPSMatrixRandomDistribution::UInt64 begin
     MPSMatrixRandomDistributionDefault = 0x0000000000000001
     MPSMatrixRandomDistributionUniform = 0x0000000000000002
     MPSMatrixRandomDistributionNormal = 0x0000000000000003
 end
 
+@objcwrapper immutable = false MPSMatrixRandomDistributionDescriptor <: NSObject
+
+@objcwrapper immutable = false MPSMatrixRandom <: MPSKernel
+
+@objcwrapper immutable = false MPSMatrixRandomMTGP32 <: MPSMatrixRandom
+
+@objcwrapper immutable = false MPSMatrixRandomPhilox <: MPSMatrixRandom
+
+@objcwrapper immutable = false MPSImageCopyToMatrix <: MPSKernel
+
+@objcwrapper immutable = false MPSMatrixCopyToImage <: MPSKernel
+
+@objcwrapper immutable = false MPSImageEuclideanDistanceTransform <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageEDLines <: MPSKernel
+
+@objcwrapper immutable = false MPSImageGuidedFilter <: MPSKernel
+
 struct MPSImageKeypointRangeInfo
     maximumKeypoints::NSUInteger
     minimumThresholdValue::Cfloat
 end
+
+@objcwrapper immutable = false MPSImageFindKeypoints <: MPSKernel
+
+@objcwrapper immutable = false MPSImageHistogram <: MPSKernel
+
+@objcwrapper immutable = false MPSImageNormalizedHistogram <: MPSKernel
+
+@objcwrapper immutable = false MPSImageHistogramEqualization <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageHistogramSpecification <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageIntegral <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageIntegralOfSquares <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageArithmetic <: MPSBinaryImageKernel
+
+@objcwrapper immutable = false MPSImageAdd <: MPSImageArithmetic
+
+@objcwrapper immutable = false MPSImageSubtract <: MPSImageArithmetic
+
+@objcwrapper immutable = false MPSImageMultiply <: MPSImageArithmetic
+
+@objcwrapper immutable = false MPSImageDivide <: MPSImageArithmetic
+
+@objcwrapper immutable = false MPSImageMedian <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageAreaMax <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageAreaMin <: MPSImageAreaMax
+
+@objcwrapper immutable = false MPSImageDilate <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageErode <: MPSImageDilate
+
+@objcwrapper immutable = false MPSImageReduceUnary <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageReduceRowMin <: MPSImageReduceUnary
+
+@objcwrapper immutable = false MPSImageReduceColumnMin <: MPSImageReduceUnary
+
+@objcwrapper immutable = false MPSImageReduceRowMax <: MPSImageReduceUnary
+
+@objcwrapper immutable = false MPSImageReduceColumnMax <: MPSImageReduceUnary
+
+@objcwrapper immutable = false MPSImageReduceRowMean <: MPSImageReduceUnary
+
+@objcwrapper immutable = false MPSImageReduceColumnMean <: MPSImageReduceUnary
+
+@objcwrapper immutable = false MPSImageReduceRowSum <: MPSImageReduceUnary
+
+@objcwrapper immutable = false MPSImageReduceColumnSum <: MPSImageReduceUnary
+
+@objcwrapper immutable = false MPSImageScale <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageLanczosScale <: MPSImageScale
+
+@objcwrapper immutable = false MPSImageBilinearScale <: MPSImageScale
+
+@objcwrapper immutable = false MPSImageStatisticsMinAndMax <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageStatisticsMeanAndVariance <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageStatisticsMean <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageThresholdBinary <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageThresholdBinaryInverse <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageThresholdTruncate <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageThresholdToZero <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageThresholdToZeroInverse <: MPSUnaryImageKernel
+
+@objcwrapper immutable = false MPSImageTranspose <: MPSUnaryImageKernel
 
 @cenum MPSCNNConvolutionFlags::UInt64 begin
     MPSCNNConvolutionFlagsNone = 0x0000000000000000
@@ -329,6 +527,40 @@ end
     MPSNNPaddingMethodExcludeEdges = 0x0000000000008000
 end
 
+@objcwrapper immutable = false MPSNNPadding <: NSObject
+
+@objcwrapper immutable = false MPSNNDefaultPadding <: NSObject
+
+@objcwrapper immutable = false MPSImageSizeEncodingState <: NSObject
+
+@objcwrapper immutable = false MPSNNGradientState <: MPSState
+
+@objcwrapper immutable = false MPSNNBinaryGradientState <: MPSState
+
+@objcwrapper immutable = false MPSNNMultiaryGradientState <: MPSState
+
+@objcwrapper immutable = false MPSCNNKernel <: MPSKernel
+
+@objcwrapper immutable = false MPSCNNBinaryKernel <: MPSKernel
+
+@objcwrapper immutable = false MPSCNNGradientKernel <: MPSCNNBinaryKernel
+
+@objcwrapper immutable = false MPSCNNMultiaryKernel <: MPSKernel
+
+@objcwrapper immutable = false MPSCNNSpatialNormalization <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNSpatialNormalizationGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSCNNLocalContrastNormalization <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNLocalContrastNormalizationGradient <:
+                               MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSCNNCrossChannelNormalization <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNCrossChannelNormalizationGradient <:
+                               MPSCNNGradientKernel
+
 @cenum MPSCNNNeuronType::Int32 begin
     MPSCNNNeuronTypeNone = 0
     MPSCNNNeuronTypeReLU = 1
@@ -349,6 +581,48 @@ end
     MPSCNNNeuronTypeCount = 16
 end
 
+@objcwrapper immutable = false MPSNNNeuronDescriptor <: NSObject
+
+@objcwrapper immutable = false MPSCNNNeuron <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNNeuronGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSCNNNeuronLinear <: MPSCNNNeuron
+
+@objcwrapper immutable = false MPSCNNNeuronReLU <: MPSCNNNeuron
+
+@objcwrapper immutable = false MPSCNNNeuronPReLU <: MPSCNNNeuron
+
+@objcwrapper immutable = false MPSCNNNeuronSigmoid <: MPSCNNNeuron
+
+@objcwrapper immutable = false MPSCNNNeuronHardSigmoid <: MPSCNNNeuron
+
+@objcwrapper immutable = false MPSCNNNeuronTanH <: MPSCNNNeuron
+
+@objcwrapper immutable = false MPSCNNNeuronAbsolute <: MPSCNNNeuron
+
+@objcwrapper immutable = false MPSCNNNeuronSoftPlus <: MPSCNNNeuron
+
+@objcwrapper immutable = false MPSCNNNeuronSoftSign <: MPSCNNNeuron
+
+@objcwrapper immutable = false MPSCNNNeuronELU <: MPSCNNNeuron
+
+@objcwrapper immutable = false MPSCNNNeuronReLUN <: MPSCNNNeuron
+
+@objcwrapper immutable = false MPSCNNNeuronPower <: MPSCNNNeuron
+
+@objcwrapper immutable = false MPSCNNNeuronExponential <: MPSCNNNeuron
+
+@objcwrapper immutable = false MPSCNNNeuronLogarithm <: MPSCNNNeuron
+
+@objcwrapper immutable = false MPSCNNConvolutionDescriptor <: NSObject
+
+@objcwrapper immutable = false MPSCNNSubPixelConvolutionDescriptor <:
+                               MPSCNNConvolutionDescriptor
+
+@objcwrapper immutable = false MPSCNNDepthWiseConvolutionDescriptor <:
+                               MPSCNNConvolutionDescriptor
+
 @cenum MPSCNNConvolutionWeightsLayout::UInt32 begin
     MPSCNNConvolutionWeightsLayoutOHWI = 0x0000000000000000
 end
@@ -359,11 +633,58 @@ end
     MPSCNNWeightsQuantizationTypeLookupTable = 0x0000000000000002
 end
 
+@objcwrapper immutable = false MPSCNNConvolutionGradientState <: MPSNNGradientState
+
+@objcwrapper immutable = false MPSCNNConvolutionTransposeGradientState <:
+                               MPSCNNConvolutionGradientState
+
+@objcwrapper immutable = false MPSCNNConvolutionWeightsAndBiasesState <: MPSState
+
+@objcwrapper immutable = false MPSCNNConvolution <: MPSCNNKernel
+
 @cenum MPSCNNConvolutionGradientOption::UInt64 begin
     MPSCNNConvolutionGradientOptionGradientWithData = 0x0000000000000001
     MPSCNNConvolutionGradientOptionGradientWithWeightsAndBias = 0x0000000000000002
     MPSCNNConvolutionGradientOptionAll = 0x0000000000000003
 end
+
+@objcwrapper immutable = false MPSCNNConvolutionGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSCNNFullyConnected <: MPSCNNConvolution
+
+@objcwrapper immutable = false MPSCNNFullyConnectedGradient <: MPSCNNConvolutionGradient
+
+@objcwrapper immutable = false MPSCNNConvolutionTranspose <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNConvolutionTransposeGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSCNNBinaryConvolution <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNBinaryFullyConnected <: MPSCNNBinaryConvolution
+
+@objcwrapper immutable = false MPSNNGramMatrixCalculation <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSNNGramMatrixCalculationGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSCNNPooling <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNPoolingMax <: MPSCNNPooling
+
+@objcwrapper immutable = false MPSCNNPoolingAverage <: MPSCNNPooling
+
+@objcwrapper immutable = false MPSCNNPoolingL2Norm <: MPSCNNPooling
+
+@objcwrapper immutable = false MPSCNNDilatedPoolingMax <: MPSCNNPooling
+
+@objcwrapper immutable = false MPSCNNPoolingGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSCNNPoolingAverageGradient <: MPSCNNPoolingGradient
+
+@objcwrapper immutable = false MPSCNNPoolingMaxGradient <: MPSCNNPoolingGradient
+
+@objcwrapper immutable = false MPSCNNPoolingL2NormGradient <: MPSCNNPoolingGradient
+
+@objcwrapper immutable = false MPSCNNDilatedPoolingMaxGradient <: MPSCNNPoolingGradient
 
 @cenum MPSCNNLossType::UInt32 begin
     MPSCNNLossTypeMeanAbsoluteError = 0x0000000000000000
@@ -387,6 +708,36 @@ end
     MPSCNNReductionTypeCount = 4
 end
 
+@objcwrapper immutable = false MPSCNNLossDataDescriptor <: NSObject
+
+@objcwrapper immutable = false MPSCNNLossLabels <: MPSState
+
+@objcwrapper immutable = false MPSCNNLossDescriptor <: NSObject
+
+@objcwrapper immutable = false MPSCNNLoss <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNYOLOLossDescriptor <: NSObject
+
+@objcwrapper immutable = false MPSCNNYOLOLoss <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSNNForwardLoss <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSNNLossGradient <: MPSCNNBinaryKernel
+
+@objcwrapper immutable = false MPSNNInitialGradient <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNArithmeticGradientState <: MPSNNBinaryGradientState
+
+@objcwrapper immutable = false MPSCNNArithmetic <: MPSCNNBinaryKernel
+
+@objcwrapper immutable = false MPSCNNAdd <: MPSCNNArithmetic
+
+@objcwrapper immutable = false MPSCNNSubtract <: MPSCNNArithmetic
+
+@objcwrapper immutable = false MPSCNNMultiply <: MPSCNNArithmetic
+
+@objcwrapper immutable = false MPSCNNDivide <: MPSCNNArithmetic
+
 @cenum MPSNNComparisonType::UInt64 begin
     MPSNNComparisonTypeEqual = 0x0000000000000000
     MPSNNComparisonTypeNotEqual = 0x0000000000000001
@@ -395,6 +746,76 @@ end
     MPSNNComparisonTypeGreater = 0x0000000000000004
     MPSNNComparisonTypeGreaterOrEqual = 0x0000000000000005
 end
+
+@objcwrapper immutable = false MPSNNCompare <: MPSCNNArithmetic
+
+@objcwrapper immutable = false MPSCNNArithmeticGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSCNNAddGradient <: MPSCNNArithmeticGradient
+
+@objcwrapper immutable = false MPSCNNSubtractGradient <: MPSCNNArithmeticGradient
+
+@objcwrapper immutable = false MPSCNNMultiplyGradient <: MPSCNNArithmeticGradient
+
+@objcwrapper immutable = false MPSCNNSoftMax <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNSoftMaxGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSCNNLogSoftMax <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNLogSoftMaxGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSCNNUpsampling <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNUpsamplingNearest <: MPSCNNUpsampling
+
+@objcwrapper immutable = false MPSCNNUpsamplingBilinear <: MPSCNNUpsampling
+
+@objcwrapper immutable = false MPSCNNUpsamplingGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSCNNUpsamplingNearestGradient <: MPSCNNUpsamplingGradient
+
+@objcwrapper immutable = false MPSCNNUpsamplingBilinearGradient <: MPSCNNUpsamplingGradient
+
+@objcwrapper immutable = false MPSCNNNormalizationGammaAndBetaState <: MPSState
+
+@objcwrapper immutable = false MPSCNNBatchNormalizationState <: MPSNNGradientState
+
+@objcwrapper immutable = false MPSCNNNormalizationMeanAndVarianceState <: MPSState
+
+@objcwrapper immutable = false MPSCNNBatchNormalizationDataSource <: NSObject
+
+@objcwrapper immutable = false MPSCNNBatchNormalization <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNBatchNormalizationStatistics <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNBatchNormalizationGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSCNNBatchNormalizationStatisticsGradient <:
+                               MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSCNNInstanceNormalizationGradientState <:
+                               MPSNNGradientState
+
+@objcwrapper immutable = false MPSCNNInstanceNormalizationDataSource <: NSObject
+
+@objcwrapper immutable = false MPSCNNInstanceNormalization <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNInstanceNormalizationGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSCNNGroupNormalizationGradientState <: MPSNNGradientState
+
+@objcwrapper immutable = false MPSCNNGroupNormalizationDataSource <: NSObject
+
+@objcwrapper immutable = false MPSCNNGroupNormalization <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNGroupNormalizationGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSCNNDropoutGradientState <: MPSNNGradientState
+
+@objcwrapper immutable = false MPSCNNDropout <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSCNNDropoutGradient <: MPSCNNGradientKernel
 
 @cenum MPSRNNSequenceDirection::UInt64 begin
     MPSRNNSequenceDirectionForward = 0x0000000000000000
@@ -406,6 +827,24 @@ end
     MPSRNNBidirectionalCombineModeAdd = 0x0000000000000001
     MPSRNNBidirectionalCombineModeConcatenate = 0x0000000000000002
 end
+
+@objcwrapper immutable = false MPSRNNDescriptor <: NSObject
+
+@objcwrapper immutable = false MPSRNNSingleGateDescriptor <: MPSRNNDescriptor
+
+@objcwrapper immutable = false MPSGRUDescriptor <: MPSRNNDescriptor
+
+@objcwrapper immutable = false MPSLSTMDescriptor <: MPSRNNDescriptor
+
+@objcwrapper immutable = false MPSRNNRecurrentImageState <: MPSState
+
+@objcwrapper immutable = false MPSRNNImageInferenceLayer <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSRNNRecurrentMatrixState <: MPSState
+
+@objcwrapper immutable = false MPSRNNMatrixInferenceLayer <: MPSKernel
+
+@objcwrapper immutable = false MPSRNNMatrixTrainingState <: MPSState
 
 @cenum MPSRNNMatrixId::UInt64 begin
     MPSRNNMatrixIdSingleGateInputWeights = 0x0000000000000000
@@ -440,11 +879,347 @@ end
     MPSRNNMatrixId_count = 0x000000000000001d
 end
 
+@objcwrapper immutable = false MPSRNNMatrixTrainingLayer <: MPSKernel
+
+@objcwrapper immutable = false MPSMatrixNeuron <: MPSMatrixUnaryKernel
+
+@objcwrapper immutable = false MPSMatrixNeuronGradient <: MPSMatrixBinaryKernel
+
+@objcwrapper immutable = false MPSMatrixFullyConnected <: MPSMatrixBinaryKernel
+
+@objcwrapper immutable = false MPSMatrixFullyConnectedGradient <: MPSMatrixBinaryKernel
+
+@objcwrapper immutable = false MPSMatrixSum <: MPSKernel
+
+@objcwrapper immutable = false MPSMatrixBatchNormalization <: MPSMatrixUnaryKernel
+
+@objcwrapper immutable = false MPSMatrixBatchNormalizationGradient <: MPSMatrixBinaryKernel
+
+@objcwrapper immutable = false MPSNNGridSample <: MPSCNNBinaryKernel
+
 @cenum MPSNNRegularizationType::UInt64 begin
     MPSNNRegularizationTypeNone = 0x0000000000000000
     MPSNNRegularizationTypeL1 = 0x0000000000000001
     MPSNNRegularizationTypeL2 = 0x0000000000000002
 end
+
+@objcwrapper immutable = false MPSNNOptimizerDescriptor <: NSObject
+
+@objcwrapper immutable = false MPSNNOptimizer <: MPSKernel
+
+@objcwrapper immutable = false MPSNNOptimizerStochasticGradientDescent <: MPSNNOptimizer
+
+@objcwrapper immutable = false MPSNNOptimizerRMSProp <: MPSNNOptimizer
+
+@objcwrapper immutable = false MPSNNOptimizerAdam <: MPSNNOptimizer
+
+@objcwrapper immutable = false MPSNNReduceUnary <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSNNReduceRowMin <: MPSNNReduceUnary
+
+@objcwrapper immutable = false MPSNNReduceColumnMin <: MPSNNReduceUnary
+
+@objcwrapper immutable = false MPSNNReduceFeatureChannelsMin <: MPSNNReduceUnary
+
+@objcwrapper immutable = false MPSNNReduceFeatureChannelsArgumentMin <: MPSNNReduceUnary
+
+@objcwrapper immutable = false MPSNNReduceRowMax <: MPSNNReduceUnary
+
+@objcwrapper immutable = false MPSNNReduceColumnMax <: MPSNNReduceUnary
+
+@objcwrapper immutable = false MPSNNReduceFeatureChannelsMax <: MPSNNReduceUnary
+
+@objcwrapper immutable = false MPSNNReduceFeatureChannelsArgumentMax <: MPSNNReduceUnary
+
+@objcwrapper immutable = false MPSNNReduceRowMean <: MPSNNReduceUnary
+
+@objcwrapper immutable = false MPSNNReduceColumnMean <: MPSNNReduceUnary
+
+@objcwrapper immutable = false MPSNNReduceFeatureChannelsMean <: MPSNNReduceUnary
+
+@objcwrapper immutable = false MPSNNReduceRowSum <: MPSNNReduceUnary
+
+@objcwrapper immutable = false MPSNNReduceColumnSum <: MPSNNReduceUnary
+
+@objcwrapper immutable = false MPSNNReduceFeatureChannelsSum <: MPSNNReduceUnary
+
+@objcwrapper immutable = false MPSNNReduceBinary <: MPSCNNBinaryKernel
+
+@objcwrapper immutable = false MPSNNReduceFeatureChannelsAndWeightsMean <: MPSNNReduceBinary
+
+@objcwrapper immutable = false MPSNNReduceFeatureChannelsAndWeightsSum <: MPSNNReduceBinary
+
+@objcwrapper immutable = false MPSNNLocalCorrelation <: MPSNNReduceBinary
+
+@objcwrapper immutable = false MPSNNReshape <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSNNReshapeGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSNNPad <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSNNPadGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = false MPSNNResizeBilinear <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSNNCropAndResizeBilinear <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSNNSlice <: MPSCNNKernel
+
+@objcwrapper immutable = false MPSNNTrainableNode <: NSObject
+
+@objcwrapper immutable = false MPSNNImageNode <: NSObject
+
+@objcwrapper immutable = false MPSNNStateNode <: NSObject
+
+@objcwrapper immutable = false MPSNNGradientStateNode <: MPSNNStateNode
+
+@objcwrapper immutable = false MPSCNNConvolutionGradientStateNode <: MPSNNGradientStateNode
+
+@objcwrapper immutable = false MPSCNNConvolutionTransposeGradientStateNode <:
+                               MPSCNNConvolutionGradientStateNode
+
+@objcwrapper immutable = false MPSNNBinaryGradientStateNode <: MPSNNStateNode
+
+@objcwrapper immutable = false MPSNNMultiaryGradientStateNode <: MPSNNStateNode
+
+@objcwrapper immutable = false MPSNNArithmeticGradientStateNode <:
+                               MPSNNBinaryGradientStateNode
+
+@objcwrapper immutable = false MPSNNFilterNode <: NSObject
+
+@objcwrapper immutable = false MPSNNGradientFilterNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSCNNConvolutionNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSCNNFullyConnectedNode <: MPSCNNConvolutionNode
+
+@objcwrapper immutable = false MPSCNNBinaryConvolutionNode <: MPSCNNConvolutionNode
+
+@objcwrapper immutable = false MPSCNNBinaryFullyConnectedNode <: MPSCNNBinaryConvolutionNode
+
+@objcwrapper immutable = false MPSCNNConvolutionTransposeNode <: MPSCNNConvolutionNode
+
+@objcwrapper immutable = false MPSCNNConvolutionGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSCNNFullyConnectedGradientNode <:
+                               MPSCNNConvolutionGradientNode
+
+@objcwrapper immutable = false MPSCNNConvolutionTransposeGradientNode <:
+                               MPSCNNConvolutionGradientNode
+
+@objcwrapper immutable = false MPSCNNNeuronNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSCNNNeuronAbsoluteNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = false MPSCNNNeuronELUNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = false MPSCNNNeuronReLUNNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = false MPSCNNNeuronLinearNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = false MPSCNNNeuronReLUNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = false MPSCNNNeuronSigmoidNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = false MPSCNNNeuronHardSigmoidNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = false MPSCNNNeuronSoftPlusNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = false MPSCNNNeuronSoftSignNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = false MPSCNNNeuronTanHNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = false MPSCNNNeuronPReLUNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = false MPSCNNNeuronPowerNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = false MPSCNNNeuronExponentialNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = false MPSCNNNeuronLogarithmNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = false MPSCNNNeuronGeLUNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = false MPSCNNNeuronGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSNNUnaryReductionNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSNNReductionRowMinNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = false MPSNNReductionColumnMinNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = false MPSNNReductionFeatureChannelsMinNode <:
+                               MPSNNUnaryReductionNode
+
+@objcwrapper immutable = false MPSNNReductionFeatureChannelsArgumentMinNode <:
+                               MPSNNUnaryReductionNode
+
+@objcwrapper immutable = false MPSNNReductionRowMaxNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = false MPSNNReductionColumnMaxNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = false MPSNNReductionFeatureChannelsMaxNode <:
+                               MPSNNUnaryReductionNode
+
+@objcwrapper immutable = false MPSNNReductionFeatureChannelsArgumentMaxNode <:
+                               MPSNNUnaryReductionNode
+
+@objcwrapper immutable = false MPSNNReductionRowMeanNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = false MPSNNReductionColumnMeanNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = false MPSNNReductionFeatureChannelsMeanNode <:
+                               MPSNNUnaryReductionNode
+
+@objcwrapper immutable = false MPSNNReductionSpatialMeanNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = false MPSNNReductionRowSumNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = false MPSNNReductionColumnSumNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = false MPSNNReductionFeatureChannelsSumNode <:
+                               MPSNNUnaryReductionNode
+
+@objcwrapper immutable = false MPSCNNPoolingNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSCNNPoolingAverageNode <: MPSCNNPoolingNode
+
+@objcwrapper immutable = false MPSCNNPoolingL2NormNode <: MPSCNNPoolingNode
+
+@objcwrapper immutable = false MPSCNNPoolingMaxNode <: MPSCNNPoolingNode
+
+@objcwrapper immutable = false MPSCNNDilatedPoolingMaxNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSCNNPoolingGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSCNNPoolingMaxGradientNode <: MPSCNNPoolingGradientNode
+
+@objcwrapper immutable = false MPSCNNPoolingAverageGradientNode <: MPSCNNPoolingGradientNode
+
+@objcwrapper immutable = false MPSCNNPoolingL2NormGradientNode <: MPSCNNPoolingGradientNode
+
+@objcwrapper immutable = false MPSCNNDilatedPoolingMaxGradientNode <:
+                               MPSCNNPoolingGradientNode
+
+@objcwrapper immutable = false MPSCNNNormalizationNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSCNNSpatialNormalizationNode <: MPSCNNNormalizationNode
+
+@objcwrapper immutable = false MPSCNNSpatialNormalizationGradientNode <:
+                               MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSCNNLocalContrastNormalizationNode <:
+                               MPSCNNNormalizationNode
+
+@objcwrapper immutable = false MPSCNNLocalContrastNormalizationGradientNode <:
+                               MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSCNNCrossChannelNormalizationNode <:
+                               MPSCNNNormalizationNode
+
+@objcwrapper immutable = false MPSCNNCrossChannelNormalizationGradientNode <:
+                               MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSCNNInstanceNormalizationNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSCNNInstanceNormalizationGradientNode <:
+                               MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSCNNGroupNormalizationNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSCNNGroupNormalizationGradientNode <:
+                               MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSCNNBatchNormalizationNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSCNNBatchNormalizationGradientNode <:
+                               MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSNNScaleNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSNNBilinearScaleNode <: MPSNNScaleNode
+
+@objcwrapper immutable = false MPSNNLanczosScaleNode <: MPSNNScaleNode
+
+@objcwrapper immutable = false MPSNNBinaryArithmeticNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSNNAdditionNode <: MPSNNBinaryArithmeticNode
+
+@objcwrapper immutable = false MPSNNSubtractionNode <: MPSNNBinaryArithmeticNode
+
+@objcwrapper immutable = false MPSNNMultiplicationNode <: MPSNNBinaryArithmeticNode
+
+@objcwrapper immutable = false MPSNNDivisionNode <: MPSNNBinaryArithmeticNode
+
+@objcwrapper immutable = false MPSNNComparisonNode <: MPSNNBinaryArithmeticNode
+
+@objcwrapper immutable = false MPSNNArithmeticGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSNNAdditionGradientNode <: MPSNNArithmeticGradientNode
+
+@objcwrapper immutable = false MPSNNSubtractionGradientNode <: MPSNNArithmeticGradientNode
+
+@objcwrapper immutable = false MPSNNMultiplicationGradientNode <:
+                               MPSNNArithmeticGradientNode
+
+@objcwrapper immutable = false MPSCNNDropoutNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSCNNDropoutGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSNNLabelsNode <: MPSNNStateNode
+
+@objcwrapper immutable = false MPSCNNLossNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSCNNYOLOLossNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSNNConcatenationNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSNNConcatenationGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSNNReshapeNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSNNReshapeGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSNNReductionSpatialMeanGradientNode <:
+                               MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSNNPadNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSNNPadGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSCNNSoftMaxNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSCNNSoftMaxGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSCNNLogSoftMaxNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSCNNLogSoftMaxGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSCNNUpsamplingNearestNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSCNNUpsamplingBilinearNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSCNNUpsamplingNearestGradientNode <:
+                               MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSCNNUpsamplingBilinearGradientNode <:
+                               MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSNNGramMatrixCallback <: NSObject
+
+@objcwrapper immutable = false MPSNNGramMatrixCalculationNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSNNGramMatrixCalculationGradientNode <:
+                               MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSNNLossCallback <: NSObject
+
+@objcwrapper immutable = false MPSNNForwardLossNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSNNLossGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = false MPSNNInitialGradientNode <: MPSNNFilterNode
+
+@objcwrapper immutable = false MPSNNGraph <: MPSKernel
 
 struct MPSNDArrayOffsets
     dimensions::NTuple{16,NSInteger}
@@ -454,11 +1229,67 @@ struct MPSNDArraySizes
     dimensions::NTuple{16,NSUInteger}
 end
 
+@objcwrapper immutable = false MPSNDArrayMultiaryBase <: MPSKernel
+
+@objcwrapper immutable = false MPSNDArrayMultiaryKernel <: MPSNDArrayMultiaryBase
+
+@objcwrapper immutable = false MPSNDArrayMultiaryGradientKernel <: MPSNDArrayMultiaryBase
+
+@objcwrapper immutable = false MPSNDArrayUnaryKernel <: MPSNDArrayMultiaryKernel
+
+@objcwrapper immutable = false MPSNDArrayUnaryGradientKernel <:
+                               MPSNDArrayMultiaryGradientKernel
+
+@objcwrapper immutable = false MPSNDArrayBinaryKernel <: MPSNDArrayMultiaryKernel
+
+@objcwrapper immutable = false MPSNDArrayBinaryPrimaryGradientKernel <:
+                               MPSNDArrayMultiaryGradientKernel
+
+@objcwrapper immutable = false MPSNDArrayBinarySecondaryGradientKernel <:
+                               MPSNDArrayMultiaryGradientKernel
+
+@objcwrapper immutable = false MPSNDArrayGradientState <: MPSState
+
+@objcwrapper immutable = false MPSNDArrayMatrixMultiplication <: MPSNDArrayMultiaryKernel
+
+@objcwrapper immutable = false MPSNDArrayStridedSlice <: MPSNDArrayUnaryKernel
+
+@objcwrapper immutable = false MPSNDArrayStridedSliceGradient <:
+                               MPSNDArrayUnaryGradientKernel
+
+@objcwrapper immutable = false MPSNDArrayGatherGradientState <: MPSNDArrayGradientState
+
+@objcwrapper immutable = false MPSNDArrayGather <: MPSNDArrayBinaryKernel
+
+@objcwrapper immutable = false MPSNDArrayGatherGradient <:
+                               MPSNDArrayBinaryPrimaryGradientKernel
+
+@objcwrapper immutable = false MPSNDArrayIdentity <: MPSNDArrayUnaryKernel
+
 @cenum MPSNDArrayQuantizationScheme::UInt64 begin
     MPSNDArrayQuantizationTypeNone = 0x0000000000000000
     MPSNDArrayQuantizationTypeAffine = 0x0000000000000001
     MPSNDArrayQuantizationTypeLUT = 0x0000000000000002
 end
+
+@objcwrapper immutable = false MPSNDArrayQuantizationDescriptor <: NSObject
+
+@objcwrapper immutable = false MPSNDArrayAffineQuantizationDescriptor <:
+                               MPSNDArrayQuantizationDescriptor
+
+@objcwrapper immutable = false MPSNDArrayLUTQuantizationDescriptor <:
+                               MPSNDArrayQuantizationDescriptor
+
+@objcwrapper immutable = false MPSNDArrayQuantizedMatrixMultiplication <:
+                               MPSNDArrayMatrixMultiplication
+
+@objcwrapper immutable = false MPSNDArrayLUTDequantize <: MPSNDArrayMultiaryKernel
+
+@objcwrapper immutable = false MPSNDArrayVectorLUTDequantize <: MPSNDArrayMultiaryKernel
+
+@objcwrapper immutable = false MPSNDArrayAffineInt4Dequantize <: MPSNDArrayMultiaryKernel
+
+@objcwrapper immutable = false MPSAccelerationStructureGroup <: NSObject
 
 struct _MPSPackedFloat3
     data::NTuple{12,UInt8}
@@ -545,20 +1376,44 @@ end
     MPSAccelerationStructureStatusBuilt = 0x0000000000000001
 end
 
+@objcwrapper immutable = false MPSAccelerationStructure <: MPSKernel
+
+@objcwrapper immutable = false MPSPolygonBuffer <: NSObject
+
 @cenum MPSPolygonType::UInt64 begin
     MPSPolygonTypeTriangle = 0x0000000000000000
     MPSPolygonTypeQuadrilateral = 0x0000000000000001
 end
+
+@objcwrapper immutable = false MPSPolygonAccelerationStructure <: MPSAccelerationStructure
+
+@objcwrapper immutable = false MPSTriangleAccelerationStructure <:
+                               MPSPolygonAccelerationStructure
+
+@objcwrapper immutable = false MPSQuadrilateralAccelerationStructure <:
+                               MPSPolygonAccelerationStructure
 
 @cenum MPSTransformType::UInt64 begin
     MPSTransformTypeFloat4x4 = 0x0000000000000000
     MPSTransformTypeIdentity = 0x0000000000000001
 end
 
+@objcwrapper immutable = false MPSInstanceAccelerationStructure <: MPSAccelerationStructure
+
 @cenum MPSTemporalWeighting::UInt64 begin
     MPSTemporalWeightingAverage = 0x0000000000000000
     MPSTemporalWeightingExponentialMovingAverage = 0x0000000000000001
 end
+
+@objcwrapper immutable = false MPSSVGF <: MPSKernel
+
+@objcwrapper immutable = false MPSSVGFTextureAllocator <: NSObject
+
+@objcwrapper immutable = false MPSSVGFDefaultTextureAllocator <: NSObject
+
+@objcwrapper immutable = false MPSSVGFDenoiser <: NSObject
+
+@objcwrapper immutable = false MPSTemporalAA <: MPSKernel
 
 @cenum MPSDeviceOptions::UInt64 begin
     MPSDeviceOptionsDefault = 0x0000000000000000
@@ -621,3 +1476,5 @@ end
     MPSRayMaskOperatorEqual = 0x000000000000000a
     MPSRayMaskOperatorNotEqual = 0x000000000000000b
 end
+
+@objcwrapper immutable = false MPSRayIntersector <: MPSKernel

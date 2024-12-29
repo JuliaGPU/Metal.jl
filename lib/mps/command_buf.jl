@@ -4,8 +4,7 @@
 #   - intermediate commits during encoding of MPS work using `commitAndContinue`
 #
 
-# XXX: Not actually inheritance but MPSCommandBuffer conforms to MTLCommandBuffer protocol
-@objcwrapper MPSCommandBuffer <: MTLCommandBuffer
+# @objcwrapper MPSCommandBuffer <: MTLCommandBuffer
 
 @objcproperties MPSCommandBuffer begin
     # Identifying the Command Buffer
