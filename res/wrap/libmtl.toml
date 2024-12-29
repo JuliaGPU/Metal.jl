@@ -1,6 +1,9 @@
 [general]
 library_name = "Symbol(\"/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib\")"
 output_file_path = "../../lib/mtl/libmtl.jl"
+prologue_file_path = "libmtl_prologue.jl"
+
+minimum_macos_supported = "13"
 
 generate_isystem_symbols = false
 
@@ -8,12 +11,20 @@ printer_blacklist = [
     "mt_macCatalyst",
     "mt_ios",
     "mt_macos",
-    "CF*"
+    "CF*",
+
+    # Temporarily disable MTLFunctionLog because
+    # "function" property breaks formatter
+    "MTLFunctionLog",
+    # Don't print because dispatch_queue_t ??
+    "MTLSharedEventListener",
 ]
 
 [codegen]
 use_ccall_macro = true
 always_NUL_terminated_string = true
+
+version_function = "Metal.macos_version()"
 
 [codegen.macro]
 # it's highly recommended to set this entry to "basic".
@@ -21,29 +32,63 @@ always_NUL_terminated_string = true
 # if you'd like to translate function-like macros to Julia, please set this entry to "aggressive".
 macro_mode = "disable"
 
-[api.MTLBuffer]
-immutable = true
+[api.MTLTextureDescriptor]
+immutable=false
 
-[api.MTLCaptureScope]
-immutable = true
+[api.MTLLibrary]
+immutable=false
 
-[api.MTLCaptureManager]
-immutable = true
+[api.MTLHeap]
+immutable=false
 
-[api.MTLCommandBuffer]
-immutable = true
+[api.MTLHeapDescriptor]
+immutable=false
 
-[api.MTLDevice]
-immutable = true
+[api.MTLFunction]
+immutable=false
 
-[api.MTLSharedEventHandle]
-immutable = true
+[api.MTLFunctionDescriptor]
+immutable=false
 
-[api.MTLResource]
-immutable = true
+[api.MTLFence]
+immutable=false
 
-[api.MTLBlitCommandEncoder]
-immutable = true
+[api.MTLEvent]
+immutable=false
+
+[api.MTLSharedEvent]
+immutable=false
+
+[api.MTLComputePipelineDescriptor]
+immutable=false
+
+[api.MTLComputePipelineState]
+immutable=false
+
+[api.MTLCompileOptions]
+immutable=false
+
+[api.MTLCommandQueue]
+immutable=false
+
+[api.MTLCommandBufferDescriptor]
+immutable=false
+
+[api.MTLBinaryArchive]
+immutable=false
+
+[api.MTLBinaryArchiveDescriptor]
+immutable=false
+
+[api.MTLCaptureDescriptor]
+immutable=false
+
+[api.MTLComputeCommandEncoder]
+immutable=false
+
+[api.MTLTexture]
+immutable=false
+
 
 [api.MTLSize]
 constructor = "MTLSize(w=1, h=1, d=1) = new(w, h, d)"

@@ -3,6 +3,8 @@ library_name = "libmps"
 output_file_path = "../../lib/mps/libmps.jl"
 prologue_file_path = "libmps_prologue.jl"
 
+minimum_macos_supported = "13"
+
 printer_blacklist = [
     "mt_macCatalyst",
     "mt_ios",
@@ -31,6 +33,8 @@ printer_blacklist = [
 use_ccall_macro = true
 always_NUL_terminated_string = true
 
+version_function = "Metal.macos_version()"
+
 [codegen.macro]
 # it's highly recommended to set this entry to "basic".
 # if you'd like to skip all of the macros, please set this entry to "disable".
@@ -38,91 +42,91 @@ always_NUL_terminated_string = true
 macro_mode = "disable"
 
 [api.MPSMatrixCopy]
-immutable = false
+immutable=false
 
 [api.MPSMatrixDecompositionLU]
-immutable = false
+immutable=false
 
 [api.MPSMatrixDecompositionCholesky]
-immutable = false
+immutable=false
 
 [api.MPSUnaryImageKernel]
-immutable = false
+immutable=false
 
 [api.MPSBinaryImageKernel]
-immutable = false
+immutable=false
 
 [api.MPSImageGaussianBlur]
-immutable = false
+immutable=false
 
 [api.MPSImageBox]
-immutable = false
+immutable=false
 
 [api.MPSMatrixUnaryKernel]
-immutable = false
+immutable=false
 
 [api.MPSMatrixBinaryKernel]
-immutable = false
+immutable=false
 
 [api.MPSMatrix]
-immutable = false
+immutable=false
 
 [api.MPSMatrixMultiplication]
-immutable = false
+immutable=false
 
 [api.MPSMatrixFindTopK]
-immutable = false
+immutable=false
 
 [api.MPSMatrixSoftMax]
-immutable = false
+immutable=false
 
 [api.MPSMatrixLogSoftMax]
-immutable = false
+immutable=false
 
 [api.MPSMatrixRandomDistributionDescriptor]
-immutable = false
+immutable=false
 
 [api.MPSMatrixRandom]
-immutable = false
+immutable=false
 
 [api.MPSMatrixRandomMTGP32]
-immutable = false
+immutable=false
 
 [api.MPSMatrixRandomPhilox]
-immutable = false
+immutable=false
 
 [api.MPSNDArrayDescriptor]
-immutable = false
+immutable=false
 
 [api.MPSNDArray]
-immutable = false
+immutable=false
 
 [api.MPSTemporaryNDArray]
-immutable = false
+immutable=false
 
 [api.MPSNDArrayMultiaryBase]
-immutable = false
+immutable=false
 
 [api.MPSNDArrayMultiaryKernel]
-immutable = false
+immutable=false
 
 [api.MPSNDArrayUnaryKernel]
-immutable = false
+immutable=false
 
 [api.MPSNDArrayBinaryKernel]
-immutable = false
+immutable=false
 
 [api.MPSNDArrayMatrixMultiplication]
-immutable = false
+immutable=false
 
 [api.MPSVector]
-immutable = false
+immutable=false
 
 [api.MPSTemporaryVector]
-immutable = false
+immutable=false
 
 [api.MPSMatrixVectorMultiplication]
-immutable = false
+immutable=false
 
 [api.MPSSize]
 constructor = "MPSSize(w=1.0, h=1.0, d=1.0) = new(w, h, d)"
