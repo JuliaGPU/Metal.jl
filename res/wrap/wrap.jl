@@ -146,24 +146,32 @@ function create_objc_context(headers::Vector, args::Vector=String[], options::Di
 end
 
 function rewriter!(ctx, options)
-    if haskey(options, "api")
-        for node in get_nodes(ctx.dag)
-            if typeof(node) <: Generators.ExprNode{<:Generators.AbstractStructNodeType}
+    for node in get_nodes(ctx.dag)
+        if haskey(options, "api")
+            nodetype = typeof(node)
+            if nodetype <: Generators.ExprNode{<:Generators.AbstractStructNodeType}
                 expr = node.exprs[1]
-                structName = String(expr.args[2])
+                structName = string(node.id)
 
-                if haskey(options["api"], structName)
-                    # Add default constructer to some structs
-                    if haskey(options["api"][structName], "constructor")
-                        expr = node.exprs[1]
-                        con = options["api"][structName]["constructor"] |> Meta.parse
+                if haskey(options["api"], structName) && haskey(options["api"][structName], "constructor")
+                    expr = node.exprs[1]
+                    con = options["api"][structName]["constructor"] |> Meta.parse
 
-                        if con.head == :(=) && con.args[2] isa Expr && con.args[2].head == :block &&
-                            con.args[2].args[1] isa LineNumberNode && con.args[2].args[2].head == :call
-                            con.args[2] = con.args[2].args[2]
-                        end
-                        push!(expr.args[3].args, con)
+                    if con.head == :(=) && con.args[2] isa Expr && con.args[2].head == :block &&
+                        con.args[2].args[1] isa LineNumberNode && con.args[2].args[2].head == :call
+                        con.args[2] = con.args[2].args[2]
                     end
+                    push!(expr.args[3].args, con)
+                end
+            elseif nodetype <: Generators.ExprNode{<:Generators.AbstractObjCObjNodeType}
+                expr = node.exprs[1]
+                className = string(node.id)
+
+                if haskey(options["api"], className) && haskey(options["api"][className], "immutable")
+                    expr = node.exprs[1]
+                    con = options["api"][className]["immutable"]
+
+                    expr.args[3].args[2] = con
                 end
             end
         end
