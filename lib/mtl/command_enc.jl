@@ -1,6 +1,6 @@
 export endEncoding!
 
-@objcwrapper MTLCommandEncoder <: NSObject
+# @objcwrapper immutable=false MTLCommandEncoder <: NSObject
 
 @objcproperties MTLCommandEncoder begin
     @autoproperty device::id{MTLDevice}

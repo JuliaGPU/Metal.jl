@@ -112,6 +112,10 @@ end
     MTLBarrierScopeRenderTargets = 0x0000000000000004
 end
 
+@objcwrapper immutable = false MTLCommandEncoder <: NSObject
+
+@objcwrapper immutable = false MTLAllocation <: NSObject
+
 @cenum MTLPurgeableState::UInt64 begin
     MTLPurgeableStateKeepCurrent = 0x0000000000000001
     MTLPurgeableStateNonVolatile = 0x0000000000000002
@@ -150,6 +154,8 @@ end
     MTLResourceOptionCPUCacheModeDefault = 0x0000000000000000
     MTLResourceOptionCPUCacheModeWriteCombined = 0x0000000000000001
 end
+
+@objcwrapper immutable = true MTLResource <: MTLAllocation
 
 @cenum MTLPixelFormat::UInt64 begin
     MTLPixelFormatInvalid = 0x0000000000000000
@@ -293,6 +299,8 @@ end
     MTLPixelFormatX24_Stencil8 = 0x0000000000000106
 end
 
+@objcwrapper immutable = true MTLBuffer <: MTLResource
+
 @cenum MTLTextureType::UInt64 begin
     MTLTextureType1D = 0x0000000000000000
     MTLTextureType1DArray = 0x0000000000000001
@@ -305,6 +313,8 @@ end
     MTLTextureType2DMultisampleArray = 0x0000000000000008
     MTLTextureTypeTextureBuffer = 0x0000000000000009
 end
+
+@objcwrapper immutable = false MTLSharedTextureHandle <: NSObject
 
 @cenum MTLTextureUsage::UInt64 begin
     MTLTextureUsageUnknown = 0x0000000000000000
@@ -319,6 +329,10 @@ end
     MTLTextureCompressionTypeLossless = 0
     MTLTextureCompressionTypeLossy = 1
 end
+
+@objcwrapper immutable = false MTLTextureDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLTexture <: MTLResource
 
 @cenum MTLDataType::UInt64 begin
     MTLDataTypeNone = 0x0000000000000000
@@ -456,6 +470,32 @@ end
 
 const MTLArgumentAccess = MTLBindingAccess
 
+@objcwrapper immutable = false MTLType <: NSObject
+
+@objcwrapper immutable = false MTLStructMember <: NSObject
+
+@objcwrapper immutable = false MTLStructType <: MTLType
+
+@objcwrapper immutable = false MTLArrayType <: MTLType
+
+@objcwrapper immutable = false MTLPointerType <: MTLType
+
+@objcwrapper immutable = false MTLTextureReferenceType <: MTLType
+
+@objcwrapper immutable = false MTLArgument <: NSObject
+
+@objcwrapper immutable = false MTLBinding <: NSObject
+
+@objcwrapper immutable = false MTLBufferBinding <: MTLBinding
+
+@objcwrapper immutable = false MTLThreadgroupBinding <: MTLBinding
+
+@objcwrapper immutable = false MTLTextureBinding <: MTLBinding
+
+@objcwrapper immutable = false MTLObjectPayloadBinding <: MTLBinding
+
+@objcwrapper immutable = false MTLFunctionConstantValues <: NSObject
+
 @cenum MTLFunctionOptions::UInt64 begin
     MTLFunctionOptionNone = 0x0000000000000000
     MTLFunctionOptionCompileToBinary = 0x0000000000000001
@@ -464,11 +504,19 @@ const MTLArgumentAccess = MTLBindingAccess
     MTLFunctionOptionFailOnBinaryArchiveMiss = 0x0000000000000004
 end
 
+@objcwrapper immutable = false MTLFunctionDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLIntersectionFunctionDescriptor <: MTLFunctionDescriptor
+
 @cenum MTLPatchType::UInt64 begin
     MTLPatchTypeNone = 0x0000000000000000
     MTLPatchTypeTriangle = 0x0000000000000001
     MTLPatchTypeQuad = 0x0000000000000002
 end
+
+@objcwrapper immutable = false MTLVertexAttribute <: NSObject
+
+@objcwrapper immutable = false MTLAttribute <: NSObject
 
 @cenum MTLFunctionType::UInt64 begin
     MTLFunctionTypeVertex = 0x0000000000000001
@@ -479,6 +527,10 @@ end
     MTLFunctionTypeMesh = 0x0000000000000007
     MTLFunctionTypeObject = 0x0000000000000008
 end
+
+@objcwrapper immutable = false MTLFunctionConstant <: NSObject
+
+@objcwrapper immutable = false MTLFunction <: NSObject
 
 @cenum MTLLanguageVersion::UInt64 begin
     MTLLanguageVersion1_0 = 0x0000000000010000
@@ -520,6 +572,8 @@ end
     MTLMathFloatingPointFunctionsPrecise = 1
 end
 
+@objcwrapper immutable = false MTLCompileOptions <: NSObject
+
 @cenum MTLLibraryError::UInt64 begin
     MTLLibraryErrorUnsupported = 0x0000000000000001
     MTLLibraryErrorInternal = 0x0000000000000002
@@ -528,6 +582,8 @@ end
     MTLLibraryErrorFunctionNotFound = 0x0000000000000005
     MTLLibraryErrorFileNotFound = 0x0000000000000006
 end
+
+@objcwrapper immutable = false MTLLibrary <: NSObject
 
 struct MTLCounterResultTimestamp
     timestamp::UInt64
@@ -552,6 +608,14 @@ struct MTLCounterResultStatistic
     fragmentsPassed::UInt64
     computeKernelInvocations::UInt64
 end
+
+@objcwrapper immutable = false MTLCounter <: NSObject
+
+@objcwrapper immutable = false MTLCounterSet <: NSObject
+
+@objcwrapper immutable = false MTLCounterSampleBufferDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLCounterSampleBuffer <: NSObject
 
 @cenum MTLCounterSampleBufferError::Int64 begin
     MTLCounterSampleBufferErrorOutOfMemory = 0
@@ -679,7 +743,23 @@ struct MTLSizeAndAlign
     align::NSUInteger
 end
 
+@objcwrapper immutable = false MTLArgumentDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLArchitecture <: NSObject
+
+@objcwrapper immutable = true MTLDevice <: NSObject
+
 const MTLTimestamp = UInt64
+
+@objcwrapper immutable = false MTLFence <: NSObject
+
+@objcwrapper immutable = false MTLResourceStatePassSampleBufferAttachmentDescriptor <:
+                               NSObject
+
+@objcwrapper immutable = false MTLResourceStatePassSampleBufferAttachmentDescriptorArray <:
+                               NSObject
+
+@objcwrapper immutable = false MTLResourceStatePassDescriptor <: NSObject
 
 @cenum MTLSparseTextureMappingMode::UInt64 begin
     MTLSparseTextureMappingModeMap = 0x0000000000000000
@@ -696,6 +776,8 @@ struct MTLMapIndirectArguments
     mipMapLevel::UInt32
     sliceId::UInt32
 end
+
+@objcwrapper immutable = false MTLResourceStateCommandEncoder <: MTLCommandEncoder
 
 struct MTLClearColor
     red::Cdouble
@@ -731,16 +813,42 @@ end
     MTLStoreActionOptionCustomSamplePositions = 0x0000000000000001
 end
 
+@objcwrapper immutable = false MTLRenderPassAttachmentDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLRenderPassColorAttachmentDescriptor <:
+                               MTLRenderPassAttachmentDescriptor
+
 @cenum MTLMultisampleDepthResolveFilter::UInt64 begin
     MTLMultisampleDepthResolveFilterSample0 = 0x0000000000000000
     MTLMultisampleDepthResolveFilterMin = 0x0000000000000001
     MTLMultisampleDepthResolveFilterMax = 0x0000000000000002
 end
 
+@objcwrapper immutable = false MTLRenderPassDepthAttachmentDescriptor <:
+                               MTLRenderPassAttachmentDescriptor
+
 @cenum MTLMultisampleStencilResolveFilter::UInt64 begin
     MTLMultisampleStencilResolveFilterSample0 = 0x0000000000000000
     MTLMultisampleStencilResolveFilterDepthResolvedSample = 0x0000000000000001
 end
+
+@objcwrapper immutable = false MTLRenderPassStencilAttachmentDescriptor <:
+                               MTLRenderPassAttachmentDescriptor
+
+@objcwrapper immutable = false MTLRenderPassColorAttachmentDescriptorArray <: NSObject
+
+@objcwrapper immutable = false MTLRenderPassSampleBufferAttachmentDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLRenderPassSampleBufferAttachmentDescriptorArray <:
+                               NSObject
+
+@objcwrapper immutable = false MTLRenderPassDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLBlitPassSampleBufferAttachmentDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLBlitPassSampleBufferAttachmentDescriptorArray <: NSObject
+
+@objcwrapper immutable = false MTLBlitPassDescriptor <: NSObject
 
 @cenum MTLBlitOption::UInt64 begin
     MTLBlitOptionNone = 0x0000000000000000
@@ -748,6 +856,8 @@ end
     MTLBlitOptionStencilFromDepthStencil = 0x0000000000000002
     MTLBlitOptionRowLinearPVRTC = 0x0000000000000004
 end
+
+@objcwrapper immutable = true MTLBlitCommandEncoder <: MTLCommandEncoder
 
 @cenum MTLCommandBufferStatus::UInt64 begin
     MTLCommandBufferStatusNotEnqueued = 0x0000000000000000
@@ -786,10 +896,23 @@ end
     MTLCommandEncoderErrorStateFaulted = 4
 end
 
+@objcwrapper immutable = false MTLCommandBufferDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLCommandBufferEncoderInfo <: NSObject
+
 @cenum MTLDispatchType::UInt64 begin
     MTLDispatchTypeSerial = 0x0000000000000000
     MTLDispatchTypeConcurrent = 0x0000000000000001
 end
+
+@objcwrapper immutable = true MTLCommandBuffer <: NSObject
+
+@objcwrapper immutable = false MTLComputePassSampleBufferAttachmentDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLComputePassSampleBufferAttachmentDescriptorArray <:
+                               NSObject
+
+@objcwrapper immutable = false MTLComputePassDescriptor <: NSObject
 
 struct MTLDispatchThreadgroupsIndirectArguments
     threadgroupsPerGrid::NTuple{3,UInt32}
@@ -799,6 +922,12 @@ struct MTLStageInRegionIndirectArguments
     stageInOrigin::NTuple{3,UInt32}
     stageInSize::NTuple{3,UInt32}
 end
+
+@objcwrapper immutable = false MTLComputeCommandEncoder <: MTLCommandEncoder
+
+@objcwrapper immutable = false MTLCommandQueue <: NSObject
+
+@objcwrapper immutable = false MTLCommandQueueDescriptor <: NSObject
 
 const NSDeviceCertification = NSInteger
 
@@ -825,6 +954,14 @@ end
     MTLStencilOperationIncrementWrap = 0x0000000000000006
     MTLStencilOperationDecrementWrap = 0x0000000000000007
 end
+
+@objcwrapper immutable = false MTLStencilDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLDepthStencilDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLDepthStencilState <: NSObject
+
+@objcwrapper immutable = false MTLDrawable <: NSObject
 
 @cenum MTLVertexFormat::UInt64 begin
     MTLVertexFormatInvalid = 0x0000000000000000
@@ -890,6 +1027,16 @@ end
     MTLVertexStepFunctionPerPatch = 0x0000000000000003
     MTLVertexStepFunctionPerPatchControlPoint = 0x0000000000000004
 end
+
+@objcwrapper immutable = false MTLVertexBufferLayoutDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLVertexBufferLayoutDescriptorArray <: NSObject
+
+@objcwrapper immutable = false MTLVertexAttributeDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLVertexAttributeDescriptorArray <: NSObject
+
+@objcwrapper immutable = false MTLVertexDescriptor <: NSObject
 
 @cenum MTLAttributeFormat::UInt64 begin
     MTLAttributeFormatInvalid = 0x0000000000000000
@@ -965,6 +1112,16 @@ end
     MTLStepFunctionThreadPositionInGridYIndexed = 0x0000000000000008
 end
 
+@objcwrapper immutable = false MTLBufferLayoutDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLBufferLayoutDescriptorArray <: NSObject
+
+@objcwrapper immutable = false MTLAttributeDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLAttributeDescriptorArray <: NSObject
+
+@objcwrapper immutable = false MTLStageInputOutputDescriptor <: NSObject
+
 @cenum MTLMutability::UInt64 begin
     MTLMutabilityDefault = 0x0000000000000000
     MTLMutabilityMutable = 0x0000000000000001
@@ -976,6 +1133,18 @@ end
     MTLShaderValidationEnabled = 1
     MTLShaderValidationDisabled = 2
 end
+
+@objcwrapper immutable = false MTLPipelineBufferDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLPipelineBufferDescriptorArray <: NSObject
+
+@objcwrapper immutable = false MTLLinkedFunctions <: NSObject
+
+@objcwrapper immutable = false MTLComputePipelineReflection <: NSObject
+
+@objcwrapper immutable = false MTLComputePipelineDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLComputePipelineState <: NSObject
 
 @cenum MTLPrimitiveType::UInt64 begin
     MTLPrimitiveTypePoint = 0x0000000000000000
@@ -1073,6 +1242,14 @@ end
     MTLRenderStageMesh = 0x0000000000000010
 end
 
+@objcwrapper immutable = false MTLRenderCommandEncoder <: MTLCommandEncoder
+
+@objcwrapper immutable = false MTLFunctionHandle <: NSObject
+
+@objcwrapper immutable = false MTLVisibleFunctionTableDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLVisibleFunctionTable <: MTLResource
+
 @cenum MTLBlendFactor::UInt64 begin
     MTLBlendFactorZero = 0x0000000000000000
     MTLBlendFactorOne = 0x0000000000000001
@@ -1143,6 +1320,29 @@ end
     MTLTessellationControlPointIndexTypeUInt32 = 0x0000000000000002
 end
 
+@objcwrapper immutable = false MTLRenderPipelineColorAttachmentDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLRenderPipelineReflection <: NSObject
+
+@objcwrapper immutable = false MTLRenderPipelineDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLRenderPipelineFunctionsDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLRenderPipelineState <: NSObject
+
+@objcwrapper immutable = false MTLRenderPipelineColorAttachmentDescriptorArray <: NSObject
+
+@objcwrapper immutable = false MTLTileRenderPipelineColorAttachmentDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLTileRenderPipelineColorAttachmentDescriptorArray <:
+                               NSObject
+
+@objcwrapper immutable = false MTLTileRenderPipelineDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLMeshRenderPipelineDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLParallelRenderCommandEncoder <: MTLCommandEncoder
+
 @cenum MTLSamplerMinMagFilter::UInt64 begin
     MTLSamplerMinMagFilterNearest = 0x0000000000000000
     MTLSamplerMinMagFilterLinear = 0x0000000000000001
@@ -1168,6 +1368,10 @@ end
     MTLSamplerBorderColorOpaqueBlack = 0x0000000000000001
     MTLSamplerBorderColorOpaqueWhite = 0x0000000000000002
 end
+
+@objcwrapper immutable = false MTLSamplerDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLSamplerState <: NSObject
 
 struct _MTLPackedFloat3
     data::NTuple{12,UInt8}
@@ -1255,10 +1459,31 @@ end
     MTLMatrixLayoutRowMajor = 1
 end
 
+@objcwrapper immutable = false MTLAccelerationStructureDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLAccelerationStructureGeometryDescriptor <: NSObject
+
 @cenum MTLMotionBorderMode::UInt32 begin
     MTLMotionBorderModeClamp = 0x0000000000000000
     MTLMotionBorderModeVanish = 0x0000000000000001
 end
+
+@objcwrapper immutable = false MTLPrimitiveAccelerationStructureDescriptor <:
+                               MTLAccelerationStructureDescriptor
+
+@objcwrapper immutable = false MTLAccelerationStructureTriangleGeometryDescriptor <:
+                               MTLAccelerationStructureGeometryDescriptor
+
+@objcwrapper immutable = false MTLAccelerationStructureBoundingBoxGeometryDescriptor <:
+                               MTLAccelerationStructureGeometryDescriptor
+
+@objcwrapper immutable = false MTLMotionKeyframeData <: NSObject
+
+@objcwrapper immutable = false MTLAccelerationStructureMotionTriangleGeometryDescriptor <:
+                               MTLAccelerationStructureGeometryDescriptor
+
+@objcwrapper immutable = false MTLAccelerationStructureMotionBoundingBoxGeometryDescriptor <:
+                               MTLAccelerationStructureGeometryDescriptor
 
 @cenum MTLCurveType::Int64 begin
     MTLCurveTypeRound = 0
@@ -1277,6 +1502,12 @@ end
     MTLCurveEndCapsDisk = 1
     MTLCurveEndCapsSphere = 2
 end
+
+@objcwrapper immutable = false MTLAccelerationStructureCurveGeometryDescriptor <:
+                               MTLAccelerationStructureGeometryDescriptor
+
+@objcwrapper immutable = false MTLAccelerationStructureMotionCurveGeometryDescriptor <:
+                               MTLAccelerationStructureGeometryDescriptor
 
 struct MTLAccelerationStructureInstanceDescriptor
     transformationMatrix::MTLPackedFloat4x3
@@ -1345,11 +1576,25 @@ end
     MTLTransformTypeComponent = 1
 end
 
+@objcwrapper immutable = false MTLInstanceAccelerationStructureDescriptor <:
+                               MTLAccelerationStructureDescriptor
+
+@objcwrapper immutable = false MTLIndirectInstanceAccelerationStructureDescriptor <:
+                               MTLAccelerationStructureDescriptor
+
+@objcwrapper immutable = false MTLAccelerationStructure <: MTLResource
+
 @cenum MTLHeapType::Int64 begin
     MTLHeapTypeAutomatic = 0
     MTLHeapTypePlacement = 1
     MTLHeapTypeSparse = 2
 end
+
+@objcwrapper immutable = false MTLHeapDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLHeap <: MTLAllocation
+
+@objcwrapper immutable = false MTLArgumentEncoder <: NSObject
 
 @cenum MTLCaptureError::Int64 begin
     MTLCaptureErrorNotSupported = 1
@@ -1361,6 +1606,16 @@ end
     MTLCaptureDestinationDeveloperTools = 1
     MTLCaptureDestinationGPUTraceDocument = 2
 end
+
+@objcwrapper immutable = false MTLCaptureDescriptor <: NSObject
+
+@objcwrapper immutable = true MTLCaptureManager <: NSObject
+
+@objcwrapper immutable = true MTLCaptureScope <: NSObject
+
+@objcwrapper immutable = false MTLIndirectRenderCommand <: NSObject
+
+@objcwrapper immutable = false MTLIndirectComputeCommand <: NSObject
 
 @cenum MTLIndirectCommandType::UInt64 begin
     MTLIndirectCommandTypeDraw = 0x0000000000000001
@@ -1383,14 +1638,52 @@ function MTLIndirectCommandBufferExecutionRangeMake(location, length)
                                                                                                                                                  length::UInt32)::MTLIndirectCommandBufferExecutionRange
 end
 
+@objcwrapper immutable = false MTLIndirectCommandBufferDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLIndirectCommandBuffer <: MTLResource
+
+@objcwrapper immutable = false MTLEvent <: NSObject
+
+@objcwrapper immutable = false MTLSharedEventListener <: NSObject
+
+@objcwrapper immutable = false MTLSharedEvent <: MTLEvent
+
+@objcwrapper immutable = true MTLSharedEventHandle <: NSObject
+
 @cenum MTLFunctionLogType::UInt64 begin
     MTLFunctionLogTypeValidation = 0x0000000000000000
 end
+
+@objcwrapper immutable = false MTLLogContainer <: NSObject
+
+@objcwrapper immutable = false MTLFunctionLogDebugLocation <: NSObject
+
+@objcwrapper immutable = false MTLFunctionLog <: NSObject
 
 @cenum MTLAccelerationStructureRefitOptions::UInt64 begin
     MTLAccelerationStructureRefitOptionVertexData = 0x0000000000000001
     MTLAccelerationStructureRefitOptionPerPrimitiveData = 0x0000000000000002
 end
+
+@objcwrapper immutable = false MTLAccelerationStructureCommandEncoder <: MTLCommandEncoder
+
+@objcwrapper immutable = false MTLAccelerationStructurePassSampleBufferAttachmentDescriptor <:
+                               NSObject
+
+@objcwrapper immutable = false MTLAccelerationStructurePassSampleBufferAttachmentDescriptorArray <:
+                               NSObject
+
+@objcwrapper immutable = false MTLAccelerationStructurePassDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLRasterizationRateSampleArray <: NSObject
+
+@objcwrapper immutable = false MTLRasterizationRateLayerDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLRasterizationRateLayerArray <: NSObject
+
+@objcwrapper immutable = false MTLRasterizationRateMapDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLRasterizationRateMap <: NSObject
 
 @cenum MTLDynamicLibraryError::UInt64 begin
     MTLDynamicLibraryErrorNone = 0x0000000000000000
@@ -1401,6 +1694,8 @@ end
     MTLDynamicLibraryErrorUnsupported = 0x0000000000000005
 end
 
+@objcwrapper immutable = false MTLDynamicLibrary <: NSObject
+
 @cenum MTLLogLevel::Int64 begin
     MTLLogLevelUndefined = 0
     MTLLogLevelDebug = 1
@@ -1409,6 +1704,10 @@ end
     MTLLogLevelError = 4
     MTLLogLevelFault = 5
 end
+
+@objcwrapper immutable = false MTLLogState <: NSObject
+
+@objcwrapper immutable = false MTLLogStateDescriptor <: NSObject
 
 @cenum MTLLogStateError::UInt64 begin
     MTLLogStateErrorInvalidSize = 0x0000000000000001
@@ -1423,6 +1722,10 @@ end
     MTLBinaryArchiveErrorInternalError = 0x0000000000000004
 end
 
+@objcwrapper immutable = false MTLBinaryArchiveDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLBinaryArchive <: NSObject
+
 @cenum MTLIntersectionFunctionSignature::UInt64 begin
     MTLIntersectionFunctionSignatureNone = 0x0000000000000000
     MTLIntersectionFunctionSignatureInstancing = 0x0000000000000001
@@ -1435,11 +1738,29 @@ end
     MTLIntersectionFunctionSignatureCurveData = 0x0000000000000080
 end
 
+@objcwrapper immutable = false MTLIntersectionFunctionTableDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLIntersectionFunctionTable <: MTLResource
+
 @cenum MTLStitchedLibraryOptions::UInt64 begin
     MTLStitchedLibraryOptionNone = 0x0000000000000000
     MTLStitchedLibraryOptionFailOnBinaryArchiveMiss = 0x0000000000000001
     MTLStitchedLibraryOptionStoreLibraryInMetalPipelinesScript = 0x0000000000000002
 end
+
+@objcwrapper immutable = false MTLFunctionStitchingAttribute <: NSObject
+
+@objcwrapper immutable = false MTLFunctionStitchingAttributeAlwaysInline <: NSObject
+
+@objcwrapper immutable = false MTLFunctionStitchingNode <: NSObject
+
+@objcwrapper immutable = false MTLFunctionStitchingInputNode <: NSObject
+
+@objcwrapper immutable = false MTLFunctionStitchingFunctionNode <: NSObject
+
+@objcwrapper immutable = false MTLFunctionStitchingGraph <: NSObject
+
+@objcwrapper immutable = false MTLStitchedLibraryDescriptor <: NSObject
 
 @cenum MTLIOPriority::Int64 begin
     MTLIOPriorityHigh = 0
@@ -1457,12 +1778,24 @@ end
     MTLIOErrorInternal = 2
 end
 
+@objcwrapper immutable = false MTLIOCommandQueue <: NSObject
+
+@objcwrapper immutable = false MTLIOScratchBuffer <: NSObject
+
+@objcwrapper immutable = false MTLIOScratchBufferAllocator <: NSObject
+
+@objcwrapper immutable = false MTLIOCommandQueueDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLIOFileHandle <: NSObject
+
 @cenum MTLIOStatus::Int64 begin
     MTLIOStatusPending = 0
     MTLIOStatusCancelled = 1
     MTLIOStatusError = 2
     MTLIOStatusComplete = 3
 end
+
+@objcwrapper immutable = false MTLIOCommandBuffer <: NSObject
 
 @cenum MTLIOCompressionStatus::Int64 begin
     MTLIOCompressionStatusComplete = 0
@@ -1490,3 +1823,7 @@ end
 function MTLIOFlushAndDestroyCompressionContext(context)
     @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOFlushAndDestroyCompressionContext(context::MTLIOCompressionContext)::MTLIOCompressionStatus
 end
+
+@objcwrapper immutable = false MTLResidencySetDescriptor <: NSObject
+
+@objcwrapper immutable = false MTLResidencySet <: NSObject

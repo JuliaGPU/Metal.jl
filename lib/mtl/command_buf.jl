@@ -4,7 +4,7 @@
 
 export MTLCommandBufferDescriptor
 
-@objcwrapper immutable=false MTLCommandBufferDescriptor <: NSObject
+# @objcwrapper immutable=false MTLCommandBufferDescriptor <: NSObject
 
 @objcproperties MTLCommandBufferDescriptor begin
     @autoproperty retainedReferences::Bool setter=setRetainedReferences
@@ -27,7 +27,7 @@ end
 export MTLCommandBuffer, enqueue!, wait_scheduled, wait_completed, encode_signal!,
        encode_wait!, commit!, on_scheduled, on_completed
 
-@objcwrapper MTLCommandBuffer <: NSObject
+# @objcwrapper MTLCommandBuffer <: NSObject
 
 @objcproperties MTLCommandBuffer begin
     # Identifying the Command Buffer

@@ -8,7 +8,7 @@ Base.convert(::Type{MTLResourceOptions}, x::Integer) = MTLResourceOptions(x)
 
 export MTLResource
 
-@objcwrapper MTLResource <: NSObject
+# @objcwrapper MTLResource <: MTLAllocation
 
 @objcproperties MTLResource begin
     @autoproperty device::id{MTLDevice}

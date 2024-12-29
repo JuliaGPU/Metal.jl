@@ -12,7 +12,7 @@ Use [`beginScope()`](@ref) and [`endScope()`](@ref) to set the boundaries for a 
 """
 MTLCaptureScope
 
-@objcwrapper MTLCaptureScope <: NSObject
+# @objcwrapper MTLCaptureScope <: NSObject
 
 @objcproperties MTLCaptureScope begin
     # Identifying the Capture Scope
@@ -56,7 +56,7 @@ Create a GPU frame capture descriptor to alter the parameters of a profiling ses
 """
 MTLCaptureDescriptor
 
-@objcwrapper immutable=false MTLCaptureDescriptor <: NSObject
+# @objcwrapper immutable=false MTLCaptureDescriptor <: NSObject
 
 @objcproperties MTLCaptureDescriptor begin
     # Identifying the Capture Scope
@@ -101,7 +101,7 @@ Note: There is only one (shared) capture manager per process.
 """
 MTLCaptureManager
 
-@objcwrapper MTLCaptureManager <: NSObject
+# @objcwrapper MTLCaptureManager <: NSObject
 
 @objcproperties MTLCaptureManager begin
     # Creating a Capture Scope

@@ -35,7 +35,7 @@ end
 
 export MTLCompileOptions
 
-@objcwrapper immutable=false MTLCompileOptions <: NSObject
+# @objcwrapper immutable=false MTLCompileOptions <: NSObject
 
 @objcproperties MTLCompileOptions begin
     @autoproperty fastMathEnabled::Bool setter=setFastMathEnabled

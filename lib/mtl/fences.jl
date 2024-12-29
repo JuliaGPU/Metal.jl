@@ -1,6 +1,6 @@
 export MTLFence
 
-@objcwrapper immutable=false MTLFence <: NSObject
+# @objcwrapper immutable=false MTLFence <: NSObject
 
 @objcproperties MTLFence begin
     @autoproperty device::id{MTLDevice}

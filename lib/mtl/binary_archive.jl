@@ -4,7 +4,7 @@
 
 export MTLBinaryArchiveDescriptor
 
-@objcwrapper immutable=false MTLBinaryArchiveDescriptor <: NSObject
+# @objcwrapper immutable=false MTLBinaryArchiveDescriptor <: NSObject
 
 @objcproperties MTLBinaryArchiveDescriptor begin
     # Choosing an Archive File
@@ -25,7 +25,7 @@ end
 
 export MTLBinaryArchive, add_functions!
 
-@objcwrapper immutable=false MTLBinaryArchive <: NSObject
+# @objcwrapper immutable=false MTLBinaryArchive <: NSObject
 
 @objcproperties MTLBinaryArchive begin
     # Identifying the Archive

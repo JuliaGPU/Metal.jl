@@ -4,7 +4,7 @@
 
 export MTLHeapDescriptor
 
-@objcwrapper immutable=false MTLHeapDescriptor <: NSObject
+# @objcwrapper immutable=false MTLHeapDescriptor <: NSObject
 
 @objcproperties MTLHeapDescriptor begin
     # Configuring a Heap
@@ -30,7 +30,7 @@ end
 
 export MTLHeap
 
-@objcwrapper immutable=false MTLHeap <: NSObject
+# @objcwrapper immutable=false MTLHeap <: MTLAllocation
 
 @objcproperties MTLHeap begin
     # Identifying the Heap

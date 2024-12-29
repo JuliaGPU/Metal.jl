@@ -21,6 +21,30 @@ always_NUL_terminated_string = true
 # if you'd like to translate function-like macros to Julia, please set this entry to "aggressive".
 macro_mode = "disable"
 
+[api.MTLBuffer]
+immutable = true
+
+[api.MTLCaptureScope]
+immutable = true
+
+[api.MTLCaptureManager]
+immutable = true
+
+[api.MTLCommandBuffer]
+immutable = true
+
+[api.MTLDevice]
+immutable = true
+
+[api.MTLSharedEventHandle]
+immutable = true
+
+[api.MTLResource]
+immutable = true
+
+[api.MTLBlitCommandEncoder]
+immutable = true
+
 [api.MTLSize]
 constructor = "MTLSize(w=1, h=1, d=1) = new(w, h, d)"
 

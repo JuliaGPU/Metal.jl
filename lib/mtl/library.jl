@@ -1,6 +1,6 @@
 export MTLLibrary, MTLLibraryFromFile, MTLLibraryFromData
 
-@objcwrapper immutable=false MTLLibrary <: NSObject
+# @objcwrapper immutable=false MTLLibrary <: NSObject
 
 @objcproperties MTLLibrary begin
     @autoproperty device::id{MTLDevice}

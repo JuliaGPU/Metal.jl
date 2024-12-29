@@ -12,7 +12,15 @@ export MTLDevice, MTLCreateSystemDefaultDevice, devices
     end
 end
 
-@objcwrapper MTLDevice <: NSObject
+@static if Metal.is_macos(v"14")
+    # @objcwrapper MTLArchitecture <: NSObject
+
+    @objcproperties MTLArchitecture begin
+        @autoproperty name::id{NSString}
+    end
+end
+
+# @objcwrapper MTLDevice <: NSObject
 
 @objcproperties MTLDevice begin
     ## device inspection

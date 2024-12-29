@@ -1,6 +1,6 @@
 export MTLCommandQueue
 
-@objcwrapper immutable=false MTLCommandQueue <: NSObject
+# @objcwrapper immutable=false MTLCommandQueue <: NSObject
 
 @objcproperties MTLCommandQueue begin
     @autoproperty device::id{MTLDevice}

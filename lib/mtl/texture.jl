@@ -10,7 +10,7 @@ end
 ## bitwise operations lose type information, so allow conversions
 Base.convert(::Type{MTLTextureUsage}, x::Integer) = MTLTextureUsage(x)
 
-@objcwrapper immutable=false MTLTextureDescriptor <: NSObject
+# @objcwrapper immutable=false MTLTextureDescriptor <: NSObject
 
 @objcproperties MTLTextureDescriptor begin
     # Configuring an MTLTextureDescriptor
@@ -33,7 +33,7 @@ function MTLTextureDescriptor(pixelFormat, width, height, mipmapped=false)
     return obj
 end
 
-@objcwrapper immutable=false MTLTexture <: NSObject
+# @objcwrapper immutable=false MTLTexture <: NSObject
 
 function MTLTexture(buffer, descriptor, offset, bytesPerRow)
     texture = @objc [buffer::id{MTLBuffer} newTextureWithDescriptor:descriptor::id{MTLTextureDescriptor}

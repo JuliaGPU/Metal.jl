@@ -4,7 +4,7 @@
 
 export MTLFunctionDescriptor
 
-@objcwrapper immutable=false MTLFunctionDescriptor <: NSObject
+# @objcwrapper immutable=false MTLFunctionDescriptor <: NSObject
 
 @objcproperties MTLFunctionDescriptor begin
     @autoproperty name::id{NSString} setter=setName
@@ -26,7 +26,7 @@ end
 
 export MTLFunction
 
-@objcwrapper immutable=false MTLFunction <: NSObject
+# @objcwrapper immutable=false MTLFunction <: NSObject
 
 @objcproperties MTLFunction begin
     @autoproperty device::id{MTLDevice}
