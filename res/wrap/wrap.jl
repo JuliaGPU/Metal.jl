@@ -166,12 +166,23 @@ function rewriter!(ctx, options)
             elseif nodetype <: Generators.ExprNode{<:Generators.AbstractObjCObjNodeType}
                 expr = node.exprs[1]
                 className = string(node.id)
+                if haskey(options["api"], className)
+                    if haskey(options["api"][className], "immutable")
+                        expr = node.exprs[1]
+                        con = options["api"][className]["immutable"]
 
-                if haskey(options["api"], className) && haskey(options["api"][className], "immutable")
-                    expr = node.exprs[1]
-                    con = options["api"][className]["immutable"]
+                        expr.args[3].args[2] = con
+                    end
+                    if haskey(options["api"][className], "override_supertype")
+                        expr2 = if expr.head == :macrocall && first(expr.args) == Symbol("@static")
+                            expr.args[3].args[2].args[1].args[4]
+                        else
+                            expr.args[4]
+                        end
+                        typ = options["api"][className]["override_supertype"] |> Meta.parse
 
-                    expr.args[3].args[2] = con
+                        expr2.args[2] = typ
+                    end
                 end
             end
         end

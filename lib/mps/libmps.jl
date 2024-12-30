@@ -164,7 +164,7 @@ end
 
 @objcwrapper immutable = true MPSHeapProvider <: NSObject
 
-@objcwrapper immutable = true MPSCommandBuffer <: NSObject
+@objcwrapper immutable = true MPSCommandBuffer <: MTLCommandBuffer
 
 @objcwrapper immutable = true MPSKernel <: NSObject
 
