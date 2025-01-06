@@ -161,7 +161,7 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
     # out-of-place
     @testset "out-of-place" begin
         @testset "$fr with implicit type" for (fm, fr, T) in
-                                             ((Metal.rand, rand, Float32), (Metal.randn, rand, Float32))
+                                             ((Metal.rand, rand, Float32), (Metal.randn, randn, Float32))
             rng = Metal.MPS.RNG()
             @testset "args" for args in ((0,), (1,), (3,), (3, 3), (16,), (16, 16), (1000,), (1000,1000))
                 # default_rng
