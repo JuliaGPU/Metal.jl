@@ -7,24 +7,27 @@ using Test
 
 # Quit without erroring if Metal loaded without issues on unsupported platforms
 if !Sys.isapple()
-    @info """Metal.jl succesfully loaded on non-macOS system.
+    @warn """Metal.jl succesfully loaded on non-macOS system.
+             This system is unsupported but should still load.
              Skipping tests."""
     Sys.exit()
 else # if Sys.isapple()
     archchecker = occursin(read(`xcrun metal-arch --name`, String))
     if archchecker("Paravirtual") # Virtualized graphics (probably Github Actions runners)
-        @info """Metal.jl succesfully loaded on macOS system with unsupported Paravirtual graphics.
+        @warn """Metal.jl succesfully loaded on macOS system with unsupported Paravirtual graphics.
+                 This system is unsupported but should still load.
                  Skipping tests."""
         Sys.exit()
     elseif !archchecker("applegpu") # Every other unsupported system (Intel or AMD graphics)
-        @info """Metal.jl succesfully loaded on macOS system with unsupported graphics.
+        @warn """Metal.jl succesfully loaded on macOS system with unsupported graphics.
+                 This system is unsupported but should still load.
                  Skipping tests."""
         Sys.exit()
     end
 end
 
 # If we ever error here, fix above
-Metal.functional() || error("Metal.jl is not functional on this system")
+Metal.functional() || error("Metal.jl is not functional on this system. This is unexpected; please file an issue.")
 
 # parse some command-line arguments
 function extract_flag!(args, flag, default=nothing)

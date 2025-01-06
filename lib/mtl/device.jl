@@ -4,7 +4,7 @@
 
 export MTLDevice, MTLCreateSystemDefaultDevice, devices
 
-@static if Metal._safe_minversion(v"14")
+@static if Metal.is_macos(v"14")
     @objcwrapper MTLArchitecture <: NSObject
 
     @objcproperties MTLArchitecture begin
