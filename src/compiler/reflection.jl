@@ -19,161 +19,8 @@ function split_kwargs_runtime(kwargs, wanted::Vector{Symbol})
     return extracted, remaining
 end
 
-"""
-    code_agx([io], f, types, cap::VersionNumber)
-
-Prints the AGX code generated for the method matching the given generic function and type
-signature to `io` which defaults to `stdout`.
-
-See also: [`@device_code_agx`](@ref)
-"""
-function code_agx(io::IO, @nospecialize(func::Base.Callable), @nospecialize(types),
-                  kernel::Bool=true; kwargs...)
-    compiler_kwargs, kwargs = split_kwargs_runtime(kwargs, COMPILER_KWARGS)
-    source = methodinstance(typeof(func), Base.to_tuple_type(types))
-    config = compiler_config(device(); kernel, compiler_kwargs...)
-    job = CompilerJob(source, config)
-    code_agx(io, job)
-end
-
-@autoreleasepool function code_agx(io::IO, job::MetalCompilerJob)
-    if !job.config.kernel
-        error("Can only generate AGX code for kernel functions")
-    end
-
-    # compile the kernel
-    compiled = compile(job)
-    pipeline, fun = link(job, compiled; return_function=true)
-    # XXX: can we re-use this pipeline?
-
-    # register it with a pipeline descriptor
-    pipeline_desc = MTLComputePipelineDescriptor()
-    pipeline_desc.computeFunction = fun
-
-    # create a binary archive
-    bin_desc = MTLBinaryArchiveDescriptor()
-    bin = MTLBinaryArchive(device(), bin_desc)
-    add_functions!(bin, pipeline_desc)
-
-    mktempdir() do dir
-        # serialize the archive to a file
-        binary = joinpath(dir, "kernel.macho")
-        write(binary, bin)
-
-        # disassemble the main function
-        first = true
-        i = 0
-        extract_gpu_code(binary) do name, code
-            # skip all-zero functions
-            all(code .== 0) && return
-
-            i += 1
-            file = joinpath(dir, "function$(i).bin")
-            write(file, code)
-
-            # disassemble the function
-            first || println(io)
-            println(io, "$name:")
-            print(io, disassemble(file))
-
-            first = false
-        end
-    end
-end
-
-@enum GPUMachineType::UInt32 begin
-    AppleGPU = 0x1000013
-    AMDGPU   = 0x1000014
-    IntelGPU = 0x1000015
-    AIR64    = 0x1000017
-end
-
-function extract_gpu_code(f, binary)
-    fat_handle = readmeta(open(binary))
-    fat_handle isa FatMachOHandle || error("Expected a universal binary, got a $(typeof(fat_handle))")
-
-    # the universal binary contains several architectures; extract the GPU one
-    arch = findfirst(fat_handle) do arch
-        arch.header isa MachO.MachOHeader64 && GPUMachineType(arch.header.cputype) == AppleGPU
-    end
-    arch === nothing && error("Could not find GPU architecture in universal binary")
-
-    # the GPU binary contains several sections...
-    ## ... extract the compute section, which is another Mach-O binary
-    compute_section = findfirst(Sections(fat_handle[arch]), "__TEXT,__compute")
-    compute_section === nothing && error("Could not find __compute section in GPU binary")
-    compute_binary = read(compute_section)
-    native_handle = only(readmeta(IOBuffer(compute_binary)))
-    ## ... extract the metallib section, which is a Metal library
-    metallib_section = findfirst(Sections(fat_handle[arch]), "__TEXT,__metallib")
-    metallib_section === nothing && error("Could not find __metallib section in GPU binary")
-    metallib_binary = read(metallib_section)
-    metallib = read(IOBuffer(metallib_binary), MetalLib)
-    # TODO: use this to implement a do-block device_code_air like CUDA.jl?
-
-    # identify the kernel name
-    kernel_name = "unknown_kernel"
-    # XXX: does it happen that these metallibs contain multiple functions?
-    if length(metallib.functions) == 1
-        kernel_name = metallib.functions[1].name
-    end
-    # XXX: we used to be able to identify the kernel by looking at symbols in
-    #      the fat binary, one of which aliased with the start of the compute
-    #      section. these symbols have disappeared on macOS 15.
-    #compute_symbol = nothing
-    #for symbol in Symbols(fat_handle[arch])
-    #    symbol_value(symbol) == section_offset(compute_section) || continue
-    #    endswith(symbol_name(symbol), "_begin") || continue
-    #    compute_symbol = symbol
-    #end
-    #compute_symbol === nothing && error("Could not find symbol for __compute section")
-    #kernel_name = symbol_name(compute_symbol)[1:end-6]
-
-    # within the native GPU binary, isolate the section containing code
-    section = findfirst(Sections(native_handle), "__TEXT,__text")
-    isnothing(section) && error("Could not find __TEXT,__text section")
-
-    # get all symbols, and sort them by address
-    symbols = sort(collect(Symbols(native_handle)), by=symbol_value)
-
-    # extract relevant functions
-    code = read(section)
-    function extract_function(fn)
-        # find the symbol
-        symbol = findfirst(isequal(fn) , symbols)
-        symbol ===  nothing && return nothing
-        offset = symbol_value(symbols[symbol])
-
-        # extract the function
-        size = if symbol < length(symbols)
-            # up until the next symbol
-            symbol_value(symbols[symbol + 1])
-        else
-            # up until the end of the section
-            section_size(section)
-        end - offset
-        return code[offset + 1 : offset + size]
-    end
-    for sym in symbols
-        f("$kernel_name.$(symbol_name(sym))", extract_function(sym))
-    end
-    return
-end
-
-function disassemble(path)
-    io = IOBuffer()
-    disassembler = joinpath(only(readdir(artifact"applegpu"; join=true)), "disassemble.py")
-    run(pipeline(`$(python()) $disassembler $path`, stdout=io))
-    return String(take!(io))
-end
-
-code_agx(@nospecialize(func::Base.Callable), @nospecialize(types); kwargs...) =
-    code_agx(stdout, func, types; kwargs...)
-
-const code_native = code_agx
-
 # forward the rest to GPUCompiler with an appropriate CompilerJob
-for method in (:code_typed, :code_warntype, :code_llvm)
+for method in (:code_typed, :code_warntype, :code_llvm, :code_native)
     # only code_typed doesn't take a io argument
     args = method === :code_typed ? (:job,) : (:io, :job)
 
@@ -191,37 +38,19 @@ for method in (:code_typed, :code_warntype, :code_llvm)
     end
 end
 
-
 #
 # @device_code_* functions
 #
 
 export @device_code_lowered, @device_code_typed, @device_code_warntype,
-       @device_code_llvm, @device_code_native, @device_code_agx, @device_code
-
-"""
-    @device_code_agx [io::IO=stdout, ...] ex
-
-Evaluates the expression `ex` and prints the result of [`Metal.code_agx`](@ref) to
-`io` for every compiled Metal kernel. For other supported keywords, see
-[`Metal.code_agx`](@ref).
-"""
-macro device_code_agx(ex...)
-    function hook(job::MetalCompilerJob; io::IO=stdout, kwargs...)
-        println(io, "; $job")
-        println(io)
-        code_agx(io, job; kwargs...)
-    end
-    GPUCompiler.emit_hooked_compilation(hook, ex...)
-end
-
-const var"@device_code_native" = var"@device_code_agx"
+       @device_code_llvm, @device_code_metal, @device_code
 
 # forward to GPUCompiler
 @eval $(Symbol("@device_code_lowered")) = $(getfield(GPUCompiler, Symbol("@device_code_lowered")))
 @eval $(Symbol("@device_code_typed")) = $(getfield(GPUCompiler, Symbol("@device_code_typed")))
 @eval $(Symbol("@device_code_warntype")) = $(getfield(GPUCompiler, Symbol("@device_code_warntype")))
 @eval $(Symbol("@device_code_llvm")) = $(getfield(GPUCompiler, Symbol("@device_code_llvm")))
+@eval $(Symbol("@device_code_metal")) = $(getfield(GPUCompiler, Symbol("@device_code_native")))
 @eval $(Symbol("@device_code")) = $(getfield(GPUCompiler, Symbol("@device_code")))
 
 

@@ -176,8 +176,7 @@ function compile(@nospecialize(job::CompilerJob))
 end
 
 # link into an executable kernel
-@autoreleasepool function link(@nospecialize(job::CompilerJob), compiled;
-                               return_function=false)
+@autoreleasepool function link(@nospecialize(job::CompilerJob), compiled)
     @signpost_event log=log_compiler() "Link" "Job=$job"
 
     @signpost_interval log=log_compiler() "Instantiate compute pipeline" begin
@@ -211,7 +210,5 @@ end
         end
     end
 
-    # most of the time, we don't need the function object,
-    # so don't keep it alive unconditionally in GPUCompiler's caches
-    pipeline_state, return_function ? fun : nothing
+    pipeline_state
 end
