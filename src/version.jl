@@ -56,6 +56,23 @@ Returns the host macOS version.
 See also [`Metal.darwin_version`](@ref).
 """ macos_version
 
+"""
+    Metal.is_macos([ver::VersionNumber]) -> Bool
+
+Returns whether the OS is macOS with version `ver` or newer.
+
+See also [`Metal.macos_version`](@ref).
+"""
+function is_macos(ver=nothing)
+    if !Sys.isapple()
+        false
+    elseif ver === nothing
+        true
+    else
+        macos_version() >= ver
+    end
+end
+
 
 ## support queries
 
