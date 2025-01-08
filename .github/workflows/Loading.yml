@@ -2,22 +2,23 @@ name: Loading
 
 on:
   pull_request:
-    branches:
-      - main
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches:
       - main
     tags: '*'
 
-# needed for julia-actions/cache to delete old caches
 permissions:
-  actions: write
   contents: read
+
+  # needed for julia-actions/cache to delete old caches
+  actions: write
 
 jobs:
   test:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
+    if: github.event.pull_request.draft == false
     strategy:
       fail-fast: false
       matrix:
