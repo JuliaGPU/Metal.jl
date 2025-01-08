@@ -8,7 +8,7 @@ export MTLDevice, MTLCreateSystemDefaultDevice, devices
     @objcwrapper MTLArchitecture <: NSObject
 
     @objcproperties MTLArchitecture begin
-        @autoproperty architecture::id{NSString}
+        @autoproperty name::id{NSString}
     end
 end
 
@@ -55,6 +55,10 @@ end
     @autoproperty peerGroupID::UInt64
     @autoproperty peerCount::UInt64
     @autoproperty peerIndex::UInt64
+
+    @static if Metal.is_macos(v"14")
+        @autoproperty architecture::id{MTLArchitecture}
+    end
 
     ## resource creation
     # creating buffers
