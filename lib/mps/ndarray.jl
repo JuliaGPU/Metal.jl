@@ -58,9 +58,9 @@ export MPSNDArray
     @autoproperty parent::id{MPSNDArray}
 
     #Instance methods that act like properties
-    @autoproperty descriptor::id{MPSNDArrayDescriptor} minver="15"
-    @autoproperty resourceSize::NSUInteger minver="15"
-    @autoproperty userBuffer::id{MTLBuffer} minver="15"
+    @autoproperty descriptor::id{MPSNDArrayDescriptor}# minver="15"
+    @autoproperty resourceSize::NSUInteger# minver="15"
+    @autoproperty userBuffer::id{MTLBuffer}# minver="15"
 end
 
 function Base.size(ndarr::MPSNDArray)
