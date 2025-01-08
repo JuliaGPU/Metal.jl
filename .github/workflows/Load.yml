@@ -1,4 +1,4 @@
-name: Loading
+name: Load
 
 on:
   pull_request:
