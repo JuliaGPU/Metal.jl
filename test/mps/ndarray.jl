@@ -64,7 +64,7 @@ using .MPS: MPSNDArray
     @test ndarr2.parent === nothing
 
     arr3 = MtlArray(ones(Float16, 2,3,4))
-    @test_throws "First dimension of arr must have a byte size divisible by 16" MPSNDArray(arr3)
+    @test_throws "First dimension of input MtlArray must have a byte size divisible by 16" MPSNDArray(arr3)
 
     arr4 = MtlArray(ones(Float16, 8,3,2))
 

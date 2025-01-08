@@ -58,7 +58,7 @@ export MPSNDArray
     @autoproperty parent::id{MPSNDArray}
 
     #Instance methods that act like properties
-    @static if is_macos(v"15")
+    @static if Metal.is_macos(v"15")
         @autoproperty descriptor::id{MPSNDArrayDescriptor}
         @autoproperty resourceSize::NSUInteger
         @autoproperty userBuffer::id{MTLBuffer}
@@ -125,7 +125,7 @@ end
 
 function MPSNDArray(arr::MtlArray{T,N}) where {T,N}
     arrsize = size(arr)
-    @assert arrsize[1]*sizeof(T) % 16 == 0 "First dimension of arr must have a byte size divisible by 16"
+    @assert arrsize[1]*sizeof(T) % 16 == 0 "First dimension of input MtlArray must have a byte size divisible by 16"
     desc = MPSNDArrayDescriptor(T, arrsize)
     return MPSNDArray(arr.data[], UInt(arr.offset), desc)
 end
