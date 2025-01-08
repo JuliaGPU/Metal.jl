@@ -49,28 +49,19 @@ export MPSNDArray
 
 @objcwrapper immutable=false MPSNDArray <: NSObject
 
-@static if Metal.is_macos(v"15")
-    @objcproperties MPSNDArray begin
-        @autoproperty dataType::MPSDataType
-        @autoproperty dataTypeSize::Csize_t
-        @autoproperty device::id{MTLDevice}
-        @autoproperty label::id{NSString} setter=setLabel
-        @autoproperty numberOfDimensions::NSUInteger
-        @autoproperty parent::id{MPSNDArray}
+@objcproperties MPSNDArray begin
+    @autoproperty dataType::MPSDataType
+    @autoproperty dataTypeSize::Csize_t
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty numberOfDimensions::NSUInteger
+    @autoproperty parent::id{MPSNDArray}
 
-        #Instance methods that act like properties
+    #Instance methods that act like properties
+    @static if Metal.is_macos(v"15")
         @autoproperty descriptor::id{MPSNDArrayDescriptor}
         @autoproperty resourceSize::NSUInteger
         @autoproperty userBuffer::id{MTLBuffer}
-    end
-else
-    @objcproperties MPSNDArray begin
-        @autoproperty dataType::MPSDataType
-        @autoproperty dataTypeSize::Csize_t
-        @autoproperty device::id{MTLDevice}
-        @autoproperty label::id{NSString} setter=setLabel
-        @autoproperty numberOfDimensions::NSUInteger
-        @autoproperty parent::id{MPSNDArray}
     end
 end
 
@@ -134,7 +125,7 @@ end
 
 function MPSNDArray(arr::MtlArray{T,N}) where {T,N}
     arrsize = size(arr)
-    @assert arrsize[1]*sizeof(T) % 16 == 0 "First dimension of arr must have a byte size divisible by 16"
+    @assert arrsize[1] * sizeof(T) % 16 == 0 "First dimension of input MtlArray must have a byte size divisible by 16"
     desc = MPSNDArrayDescriptor(T, arrsize)
     return MPSNDArray(arr.data[], UInt(arr.offset), desc)
 end
