@@ -53,7 +53,7 @@ export MPSNDArray
     @autoproperty dataType::MPSDataType
     @autoproperty dataTypeSize::Csize_t
     @autoproperty device::id{MTLDevice}
-    @autoproperty label::id{NSString} setter=setLabel
+    @autoproperty label::id{NSString} setter = setLabel
     @autoproperty numberOfDimensions::NSUInteger
     @autoproperty parent::id{MPSNDArray}
 
@@ -125,7 +125,7 @@ end
 
 function MPSNDArray(arr::MtlArray{T,N}) where {T,N}
     arrsize = size(arr)
-    @assert arrsize[1]*sizeof(T) % 16 == 0 "First dimension of input MtlArray must have a byte size divisible by 16"
+    @assert arrsize[1] * sizeof(T) % 16 == 0 "First dimension of input MtlArray must have a byte size divisible by 16"
     desc = MPSNDArrayDescriptor(T, arrsize)
     return MPSNDArray(arr.data[], UInt(arr.offset), desc)
 end
