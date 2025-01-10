@@ -27,6 +27,7 @@ jobs:
           ignore_build_states: blocked,canceled,skipped,not_run
           ignore_job_states: timed_out,failed
           output_path: artifacts
+          poll_interval: 60 # Poll less often to reduce chance of hitting org-wide buildkite limit of 200 requests/sec
 
       - name: Locate Benchmarks Artifact
         id: locate
