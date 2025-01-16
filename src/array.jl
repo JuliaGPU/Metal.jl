@@ -68,7 +68,7 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
             bufsize = 1
         end
         data = GPUArrays.cached_alloc((MtlArray, dev, bufsize, S)) do
-            buf = alloc(dev, bufsize; storage=S)
+            buf = alloc(dev, bufsize; storage = S)
             DataRef(buf) do buf
                 free(buf)
             end
