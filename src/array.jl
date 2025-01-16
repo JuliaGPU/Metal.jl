@@ -67,11 +67,13 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
             # a pointer, query the buffer's properties, etc), we use a 1-byte buffer instead.
             bufsize = 1
         end
-        buf = alloc(dev, bufsize; storage=S)
-        buf.label = "MtlArray{$(T),$(N),$(S)}(dims=$dims)"
-        data = DataRef(buf) do buf
-            free(buf)
+        data = GPUArrays.cached_alloc((MtlArray, dev, bufsize, S)) do
+            buf = alloc(dev, bufsize; storage = S)
+            DataRef(buf) do buf
+                free(buf)
+            end
         end
+        data[].label = "MtlArray{$(T),$(N),$(S)}(dims=$dims)"
 
         obj = new{T,N,S}(data, maxsize, 0, dims)
         finalizer(unsafe_free!, obj)
