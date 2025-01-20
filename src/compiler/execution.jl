@@ -304,12 +304,10 @@ end
         if buf.status == MTL.MTLCommandBufferStatusError
             err = buf.error
             if err !== nothing
-                # Get error details
                 code = err.code  # MTLCommandBufferError enum value
                 description = err.localizedDescription
-                
-                # Log the error
-                @error "GPU kernel execution failed" exception=(err, catch_backtrace()) kernel=nameof(kernel.f) error_code=code description=description
+
+		@error "GPU kernel execution failed" exception = (err, catch_backtrace()) kernel = nameof(kernel.f) error_code = code description = description
             end
         end
     end
