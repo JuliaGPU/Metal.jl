@@ -300,8 +300,18 @@ end
         empty!(roots)
         foreach(free, argument_buffers)
 
-        # TODO: access logs here to check for errors
-        #       https://developer.apple.com/videos/play/wwdc2020/10616/
+        # Check for errors
+        if buf.status == MTL.MTLCommandBufferStatusError
+            err = buf.error
+            if err !== nothing
+                # Get error details
+                code = err.code  # MTLCommandBufferError enum value
+                description = err.localizedDescription
+                
+                # Log the error
+                @error "GPU kernel execution failed" exception=(err, catch_backtrace()) kernel=nameof(kernel.f) error_code=code description=description
+            end
+        end
     end
 
     commit!(cmdbuf)
