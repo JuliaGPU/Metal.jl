@@ -405,16 +405,13 @@ desc.url = NSFileURL("/tmp/foo")
 
 pipeline_desc = MTLComputePipelineDescriptor()
 pipeline_desc.computeFunction = fun
-if !runtime_validation
-    # XXX: for some reason, this crashes under the validator
-    add_functions!(bin, pipeline_desc)
 
-    mktempdir() do dir
-        path = joinpath(dir, "kernel.bin")
-        write(path, bin)
-        @test isfile(path)
-        @test filesize(path) > 0
-    end
+add_functions!(bin, pipeline_desc)
+mktempdir() do dir
+    path = joinpath(dir, "kernel.bin")
+    write(path, bin)
+    @test isfile(path)
+    @test filesize(path) > 0
 end
 
 end
