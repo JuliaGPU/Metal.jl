@@ -260,3 +260,12 @@ end
         @test Array(a)[] == 1
     end
 end
+
+@testset "error handling" begin
+    function failing_kernel()
+        x = unsafe_load(Ptr{Int}(0))
+        return nothing
+    end
+
+    @test_logs (:error, r"GPU kernel execution failed") @metal failing_kernel()
+end
