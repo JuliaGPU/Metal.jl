@@ -23,6 +23,7 @@ printer_blacklist = [
 [codegen]
 use_ccall_macro = true
 always_NUL_terminated_string = true
+opaque_as_mutable_struct = true
 
 version_function = "Metal.macos_version()"
 
@@ -32,69 +33,29 @@ version_function = "Metal.macos_version()"
 # if you'd like to translate function-like macros to Julia, please set this entry to "aggressive".
 macro_mode = "disable"
 
-[api.MTLTextureDescriptor]
-immutable=false
-
-[api.MTLLibrary]
-immutable=false
-
-[api.MTLHeap]
-immutable=false
-
-[api.MTLHeapDescriptor]
-immutable=false
-
-[api.MTLFunction]
-immutable=false
-
-[api.MTLFunctionDescriptor]
-immutable=false
-
-[api.MTLFence]
-immutable=false
-
-[api.MTLEvent]
-immutable=false
-
-[api.MTLSharedEvent]
-immutable=false
-
-[api.MTLComputePipelineDescriptor]
-immutable=false
-
-[api.MTLComputePipelineState]
-immutable=false
-
-[api.MTLCompileOptions]
-immutable=false
-
-[api.MTLCommandQueue]
-immutable=false
-
-[api.MTLCommandBufferDescriptor]
-immutable=false
-
-[api.MTLBinaryArchive]
-immutable=false
-
-[api.MTLBinaryArchiveDescriptor]
-immutable=false
-
-[api.MTLCaptureDescriptor]
-immutable=false
-
-[api.MTLComputeCommandEncoder]
-immutable=false
-
-[api.MTLTexture]
-immutable=false
+[api.immutable]
+MTLTextureDescriptor=false
+MTLLibrary=false
+MTLHeap=false
+MTLHeapDescriptor=false
+MTLFunction=false
+MTLFunctionDescriptor=false
+MTLFence=false
+MTLEvent=false
+MTLSharedEvent=false
+MTLComputePipelineDescriptor=false
+MTLComputePipelineState=false
+MTLCompileOptions=false
+MTLCommandQueue=false
+MTLCommandBufferDescriptor=false
+MTLBinaryArchive=false
+MTLBinaryArchiveDescriptor=false
+MTLCaptureDescriptor=false
+MTLComputeCommandEncoder=false
+MTLTexture=false
 
 
-[api.MTLSize]
-constructor = "MTLSize(w=1, h=1, d=1) = new(w, h, d)"
-
-[api.MTLRegion]
-constructor = "MTLRegion(origin=MTLOrigin(), size=MTLSize()) = new(origin, size)"
-
-[api.MTLOrigin]
-constructor = "MTLOrigin(x=0, y=0, z=0) = new(x, y, z)"
+[api.constructor]
+MTLRegion = "MTLRegion(origin=MTLOrigin(), size=MTLSize()) = new(origin, size)"
+MTLSize = "MTLSize(w=1, h=1, d=1) = new(w, h, d)"
+MTLOrigin = "MTLOrigin(x=0, y=0, z=0) = new(x, y, z)"

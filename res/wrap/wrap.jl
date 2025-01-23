@@ -148,15 +148,27 @@ end
 function rewriter!(ctx, options)
     haskey(options, "api") || return
 
+    function stripStatic(expr)
+        if expr.head == :macrocall && first(expr.args) == Symbol("@static")
+            return expr.args[3].args[2].args[1]
+        else
+            return expr
+        end
+    end
+
+    constructorsDict = get(options["api"], "constructor", Dict())
+    immutableDict = get(options["api"], "immutable", Dict())
+    supertypeDict = get(options["api"], "override_supertype", Dict())
+
     for node in get_nodes(ctx.dag)
         nodetype = typeof(node)
         if nodetype <: Generators.ExprNode{<:Generators.AbstractStructNodeType}
             expr = node.exprs[1]
             structName = string(node.id)
 
-            if haskey(options["api"], structName) && haskey(options["api"][structName], "constructor")
+            if haskey(constructorsDict, structName)
                 expr = node.exprs[1]
-                con = options["api"][structName]["constructor"] |> Meta.parse
+                con = constructorsDict[structName] |> Meta.parse
 
                 if con.head == :(=) && con.args[2] isa Expr && con.args[2].head == :block &&
                     con.args[2].args[1] isa LineNumberNode && con.args[2].args[2].head == :call
@@ -165,25 +177,19 @@ function rewriter!(ctx, options)
                 push!(expr.args[3].args, con)
             end
         elseif nodetype <: Generators.ExprNode{<:Generators.AbstractObjCObjNodeType}
-            expr = node.exprs[1]
+            declexpr = node.exprs[1]
             className = string(node.id)
-            if haskey(options["api"], className)
-                if haskey(options["api"][className], "immutable")
-                    expr = node.exprs[1]
-                    con = options["api"][className]["immutable"]
+            if haskey(immutableDict, className)
+                declexpr = node.exprs[1]
+                con = immutableDict[className]
 
-                    expr.args[3].args[2] = con
-                end
-                if haskey(options["api"][className], "override_supertype")
-                    expr2 = if expr.head == :macrocall && first(expr.args) == Symbol("@static")
-                        expr.args[3].args[2].args[1].args[4]
-                    else
-                        expr.args[4]
-                    end
-                    typ = options["api"][className]["override_supertype"] |> Meta.parse
+                declexpr.args[3].args[2] = con
+            end
+            if haskey(supertypeDict, className)
+                expr2 = stripStatic(declexpr).args[4]
+                typ = supertypeDict[className] |> Meta.parse
 
-                    expr2.args[2] = typ
-                end
+                expr2.args[2] = typ
             end
         end
     end

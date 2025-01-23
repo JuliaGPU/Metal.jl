@@ -24,14 +24,16 @@ printer_blacklist = [
     "MPSGetCustomKernelBroadcastSourceIndex",
     # NSKeyedUnarchiver not defined
     "MPSKeyedUnarchiver",
-    "MPSHandle",
-    "MPSCNNConvolutionDataSource",
+    "MPS.*AccelerationStructure.*", # All deprecated
+    # "MPSHandle",
+    #"MPSCNNConvolutionDataSource",
     "MPSImageTransformProvider",
 ]
 
 [codegen]
 use_ccall_macro = true
 always_NUL_terminated_string = true
+opaque_as_mutable_struct = true
 
 version_function = "Metal.macos_version()"
 
@@ -41,104 +43,43 @@ version_function = "Metal.macos_version()"
 # if you'd like to translate function-like macros to Julia, please set this entry to "aggressive".
 macro_mode = "disable"
 
-[api.MPSMatrixCopy]
-immutable=false
+[api.immutable]
+MPSMatrixCopy=false
+MPSMatrixDecompositionLU=false
+MPSMatrixDecompositionCholesky=false
+MPSUnaryImageKernel=false
+MPSBinaryImageKernel=false
+MPSImageGaussianBlur=false
+MPSImageBox=false
+MPSMatrixUnaryKernel=false
+MPSMatrixBinaryKernel=false
+MPSMatrix=false
+MPSMatrixMultiplication=false
+MPSMatrixFindTopK=false
+MPSMatrixSoftMax=false
+MPSMatrixLogSoftMax=false
+MPSMatrixRandomDistributionDescriptor=false
+MPSMatrixRandom=false
+MPSMatrixRandomMTGP32=false
+MPSMatrixRandomPhilox=false
+MPSNDArrayDescriptor=false
+MPSNDArray=false
+MPSTemporaryNDArray=false
+MPSNDArrayMultiaryBase=false
+MPSNDArrayMultiaryKernel=false
+MPSNDArrayUnaryKernel=false
+MPSNDArrayBinaryKernel=false
+MPSNDArrayMatrixMultiplication=false
+MPSVector=false
+MPSTemporaryVector=false
+MPSMatrixVectorMultiplication=false
 
-[api.MPSMatrixDecompositionLU]
-immutable=false
+[api.override_supertype]
+MPSCommandBuffer="MTLCommandBuffer"
+MPSHandle="NSObject"
 
-[api.MPSMatrixDecompositionCholesky]
-immutable=false
-
-[api.MPSUnaryImageKernel]
-immutable=false
-
-[api.MPSBinaryImageKernel]
-immutable=false
-
-[api.MPSImageGaussianBlur]
-immutable=false
-
-[api.MPSImageBox]
-immutable=false
-
-[api.MPSMatrixUnaryKernel]
-immutable=false
-
-[api.MPSMatrixBinaryKernel]
-immutable=false
-
-[api.MPSMatrix]
-immutable=false
-
-[api.MPSMatrixMultiplication]
-immutable=false
-
-[api.MPSMatrixFindTopK]
-immutable=false
-
-[api.MPSMatrixSoftMax]
-immutable=false
-
-[api.MPSMatrixLogSoftMax]
-immutable=false
-
-[api.MPSMatrixRandomDistributionDescriptor]
-immutable=false
-
-[api.MPSMatrixRandom]
-immutable=false
-
-[api.MPSMatrixRandomMTGP32]
-immutable=false
-
-[api.MPSMatrixRandomPhilox]
-immutable=false
-
-[api.MPSNDArrayDescriptor]
-immutable=false
-
-[api.MPSNDArray]
-immutable=false
-
-[api.MPSTemporaryNDArray]
-immutable=false
-
-[api.MPSNDArrayMultiaryBase]
-immutable=false
-
-[api.MPSNDArrayMultiaryKernel]
-immutable=false
-
-[api.MPSNDArrayUnaryKernel]
-immutable=false
-
-[api.MPSNDArrayBinaryKernel]
-immutable=false
-
-[api.MPSNDArrayMatrixMultiplication]
-immutable=false
-
-[api.MPSVector]
-immutable=false
-
-[api.MPSTemporaryVector]
-immutable=false
-
-[api.MPSCommandBuffer]
-override_supertype="MTLCommandBuffer"
-
-[api.MPSMatrixVectorMultiplication]
-immutable=false
-
-[api.MPSSize]
-constructor = "MPSSize(w=1.0, h=1.0, d=1.0) = new(w, h, d)"
-
-[api.MPSRegion]
-constructor = "MPSRegion(origin=MPSOrigin(), size=MPSSize()) = new(origin, size)"
-
-[api.MPSOrigin]
-constructor = "MPSOrigin(x=0.0, y=0.0, z=0.0) = new(x, y, z)"
-
-[api.MPSOffset]
-constructor = "MPSOffset(x=0, y=0, z=0) = new(x, y, z)"
+[api.constructor]
+MPSRegion = "MPSRegion(origin=MPSOrigin(), size=MPSSize()) = new(origin, size)"
+MPSOrigin = "MPSOrigin(x=0.0, y=0.0, z=0.0) = new(x, y, z)"
+MPSOffset = "MPSOffset(x=0, y=0, z=0) = new(x, y, z)"
+MPSSize = "MPSSize(w=1.0, h=1.0, d=1.0) = new(w, h, d)"
