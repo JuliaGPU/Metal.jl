@@ -10,11 +10,11 @@ export MTLResource
 
 # @objcwrapper MTLResource <: MTLAllocation
 
-@objcproperties MTLResource begin
-    @autoproperty device::id{MTLDevice}
-    @autoproperty label::id{NSString} setter=setLabel
-    @autoproperty cpuCacheMode::MTLCPUCacheMode
-    @autoproperty storageMode::MTLStorageMode
-    @autoproperty hazardTrackingMode::MTLHazardTrackingMode
-    @autoproperty resourceOptions::MTLResourceOptions
-end
+# @objcproperties MTLResource begin
+#     @autoproperty device::id{MTLDevice}
+#     @autoproperty label::id{NSString} setter=setLabel
+#     @autoproperty cpuCacheMode::MTLCPUCacheMode
+#     @autoproperty storageMode::MTLStorageMode
+#     @autoproperty hazardTrackingMode::MTLHazardTrackingMode
+#     @autoproperty resourceOptions::MTLResourceOptions
+# end

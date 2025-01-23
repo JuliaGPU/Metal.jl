@@ -5,13 +5,13 @@ export MTLBuffer
 
 # @objcwrapper MTLBuffer <: MTLResource
 
-@objcproperties MTLBuffer begin
-    @autoproperty length::NSUInteger # In bytes
-    @autoproperty device::id{MTLDevice}
-    @autoproperty contents::Ptr{Cvoid}
-    @autoproperty remoteStorageBuffer::id{MTLBuffer}
-    @autoproperty gpuAddress::UInt64 type=Ptr{Cvoid}
-end
+# @objcproperties MTLBuffer begin
+#     @autoproperty length::NSUInteger # In bytes
+#     @autoproperty device::id{MTLDevice}
+#     @autoproperty contents::Ptr{Cvoid}
+#     @autoproperty remoteStorageBuffer::id{MTLBuffer}
+#     @autoproperty gpuAddress::UInt64 type=Ptr{Cvoid}
+# end
 
 Base.sizeof(buf::MTLBuffer) = Int(buf.length)
 

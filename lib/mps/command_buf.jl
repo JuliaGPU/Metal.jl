@@ -6,13 +6,13 @@
 
 # @objcwrapper MPSCommandBuffer <: MTLCommandBuffer
 
-@objcproperties MPSCommandBuffer begin
-    # Identifying the Command Buffer
-    @autoproperty commandBuffer::id{MTLCommandBuffer}
-    # @autoproperty heapProvider::id{MPSHeapProvider}
-    # @autoproperty predicate::id{MPSPredicate}
-    @autoproperty rootCommandBuffer::id{MTLCommandBuffer}
-end
+# @objcproperties MPSCommandBuffer begin
+#     # Identifying the Command Buffer
+#     @autoproperty commandBuffer::id{MTLCommandBuffer}
+#     # @autoproperty heapProvider::id{MPSHeapProvider}
+#     # @autoproperty predicate::id{MPSPredicate}
+#     @autoproperty rootCommandBuffer::id{MTLCommandBuffer}
+# end
 
 function MPSCommandBuffer(commandBuffer::MTLCommandBuffer)
     handle = @objc [MPSCommandBuffer commandBufferWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}]::id{MPSCommandBuffer}

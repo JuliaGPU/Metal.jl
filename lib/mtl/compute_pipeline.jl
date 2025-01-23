@@ -16,19 +16,19 @@ end
 
 ## properties
 
-@objcproperties MTLComputePipelineDescriptor begin
-    # Specifying the Compute Function and Associated Data
-    @autoproperty computeFunction::id{MTLFunction} setter=setComputeFunction
-    @autoproperty threadGroupSizeIsMultipleOfThreadExecutionWidth::Bool setter=setThreadGroupSizeIsMultipleOfThreadExecutionWidth
-    @autoproperty maxTotalThreadsPerThreadgroup::NSUInteger setter=setMaxTotalThreadsPerThreadgroup
-    @autoproperty maxCallStackDepth::NSUInteger setter=setMaxCallStackDepth
+# @objcproperties MTLComputePipelineDescriptor begin
+#     # Specifying the Compute Function and Associated Data
+#     @autoproperty computeFunction::id{MTLFunction} setter=setComputeFunction
+#     @autoproperty threadGroupSizeIsMultipleOfThreadExecutionWidth::Bool setter=setThreadGroupSizeIsMultipleOfThreadExecutionWidth
+#     @autoproperty maxTotalThreadsPerThreadgroup::NSUInteger setter=setMaxTotalThreadsPerThreadgroup
+#     @autoproperty maxCallStackDepth::NSUInteger setter=setMaxCallStackDepth
 
-    # Identifying the Pipeline State Object
-    @autoproperty label::id{NSString} setter=setLabel
+#     # Identifying the Pipeline State Object
+#     @autoproperty label::id{NSString} setter=setLabel
 
-    # Setting Indirect Command Buffer Support
-    @autoproperty supportIndirectCommandBuffers::Bool
-end
+#     # Setting Indirect Command Buffer Support
+#     @autoproperty supportIndirectCommandBuffers::Bool
+# end
 
 
 #
@@ -39,19 +39,19 @@ export MTLComputePipelineState
 
 # @objcwrapper immutable=false MTLComputePipelineState <: NSObject
 
-@objcproperties MTLComputePipelineState begin
-    # Identifying Properties
-    @autoproperty device::id{MTLDevice}
-    @autoproperty label::id{NSString} setter=setLabel
+# @objcproperties MTLComputePipelineState begin
+#     # Identifying Properties
+#     @autoproperty device::id{MTLDevice}
+#     @autoproperty label::id{NSString} setter=setLabel
 
-    # Querying Threadgroup Attributes
-    @autoproperty maxTotalThreadsPerThreadgroup::NSUInteger
-    @autoproperty threadExecutionWidth::NSUInteger
-    @autoproperty staticThreadgroupMemoryLength::NSUInteger
+#     # Querying Threadgroup Attributes
+#     @autoproperty maxTotalThreadsPerThreadgroup::NSUInteger
+#     @autoproperty threadExecutionWidth::NSUInteger
+#     @autoproperty staticThreadgroupMemoryLength::NSUInteger
 
-    # Querying Indirect Command Buffer Support
-    @autoproperty supportIndirectCommandBuffers::Bool
-end
+#     # Querying Indirect Command Buffer Support
+#     @autoproperty supportIndirectCommandBuffers::Bool
+# end
 
 function MTLComputePipelineState(dev::MTLDevice, fun::MTLFunction)
     err = Ref{id{NSError}}(nil)

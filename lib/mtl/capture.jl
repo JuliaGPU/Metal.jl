@@ -14,12 +14,12 @@ MTLCaptureScope
 
 # @objcwrapper MTLCaptureScope <: NSObject
 
-@objcproperties MTLCaptureScope begin
-    # Identifying the Capture Scope
-    @autoproperty label::id{NSString} setter=setLabel
-    @autoproperty device::id{MTLDevice}
-    @autoproperty commandQueue::id{MTLCommandQueue}
-end
+# @objcproperties MTLCaptureScope begin
+#     # Identifying the Capture Scope
+#     @autoproperty label::id{NSString} setter=setLabel
+#     @autoproperty device::id{MTLDevice}
+#     @autoproperty commandQueue::id{MTLCommandQueue}
+# end
 
 """
     beginScope(scope::MTLCaptureScope)
@@ -58,12 +58,12 @@ MTLCaptureDescriptor
 
 # @objcwrapper immutable=false MTLCaptureDescriptor <: NSObject
 
-@objcproperties MTLCaptureDescriptor begin
-    # Identifying the Capture Scope
-    @autoproperty captureObject::id{NSObject} setter=setCaptureObject
-    @autoproperty destination::MTLCaptureDestination setter=setDestination
-    @autoproperty outputURL::id{NSURL} setter=setOutputURL
-end
+# @objcproperties MTLCaptureDescriptor begin
+#     # Identifying the Capture Scope
+#     @autoproperty captureObject::id{NSObject} setter=setCaptureObject
+#     @autoproperty destination::MTLCaptureDestination setter=setDestination
+#     @autoproperty outputURL::id{NSURL} setter=setOutputURL
+# end
 
 function MTLCaptureDescriptor()
     handle = @objc [MTLCaptureDescriptor new]::id{MTLCaptureDescriptor}
@@ -103,13 +103,13 @@ MTLCaptureManager
 
 # @objcwrapper MTLCaptureManager <: NSObject
 
-@objcproperties MTLCaptureManager begin
-    # Creating a Capture Scope
-    @autoproperty defaultCaptureScope::id{MTLCaptureScope} setter=setDefaultCaptureScope
+# @objcproperties MTLCaptureManager begin
+#     # Creating a Capture Scope
+#     @autoproperty defaultCaptureScope::id{MTLCaptureScope} setter=setDefaultCaptureScope
 
-    # Monitoring Capture
-    @autoproperty isCapturing::Bool
-end
+#     # Monitoring Capture
+#     @autoproperty isCapturing::Bool
+# end
 
 """
     MTLCaptureManager()

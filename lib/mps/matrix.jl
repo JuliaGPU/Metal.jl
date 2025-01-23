@@ -25,14 +25,14 @@ export MPSMatrixDescriptor
 
 # @objcwrapper MPSMatrixDescriptor <: NSObject
 
-@objcproperties MPSMatrixDescriptor begin
-    @autoproperty rows::NSUInteger setter=setRows
-    @autoproperty columns::NSUInteger setter=setColumns
-    @autoproperty matrices::NSUInteger
-    @autoproperty dataType::MPSDataType setter=setDataType
-    @autoproperty rowBytes::NSUInteger setter=setRowBytes
-    @autoproperty matrixBytes::NSUInteger
-end
+# @objcproperties MPSMatrixDescriptor begin
+#     @autoproperty rows::NSUInteger setter=setRows
+#     @autoproperty columns::NSUInteger setter=setColumns
+#     @autoproperty matrices::NSUInteger
+#     @autoproperty dataType::MPSDataType setter=setDataType
+#     @autoproperty rowBytes::NSUInteger setter=setRowBytes
+#     @autoproperty matrixBytes::NSUInteger
+# end
 
 function MPSMatrixDescriptor(rows, columns, rowBytes, dataType)
     desc = @objc [MPSMatrixDescriptor matrixDescriptorWithRows:rows::NSUInteger
@@ -59,17 +59,17 @@ export MPSMatrix
 
 # @objcwrapper immutable=false MPSMatrix <: NSObject
 
-@objcproperties MPSMatrix begin
-    @autoproperty device::id{MTLDevice}
-    @autoproperty rows::NSUInteger
-    @autoproperty columns::NSUInteger
-    @autoproperty matrices::NSUInteger
-    @autoproperty dataType::MPSDataType
-    @autoproperty rowBytes::NSUInteger
-    @autoproperty matrixBytes::NSUInteger
-    @autoproperty offset::NSUInteger
-    @autoproperty data::id{MTLBuffer}
-end
+# @objcproperties MPSMatrix begin
+#     @autoproperty device::id{MTLDevice}
+#     @autoproperty rows::NSUInteger
+#     @autoproperty columns::NSUInteger
+#     @autoproperty matrices::NSUInteger
+#     @autoproperty dataType::MPSDataType
+#     @autoproperty rowBytes::NSUInteger
+#     @autoproperty matrixBytes::NSUInteger
+#     @autoproperty offset::NSUInteger
+#     @autoproperty data::id{MTLBuffer}
+# end
 
 function MPSMatrix(buf, descriptor::MPSMatrixDescriptor, offset::Integer=0)
     mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
@@ -143,13 +143,13 @@ export MPSMatrixMultiplication, encode!, matmul!
 
 # @objcwrapper immutable=false MPSMatrixMultiplication <: MPSKernel
 
-@objcproperties MPSMatrixMultiplication begin
-    @autoproperty leftMatrixOrigin::MTLOrigin setter=setLeftMatrixOrigin
-    @autoproperty rightMatrixOrigin::MTLOrigin setter=setRightMatrixOrigin
-    @autoproperty resultMatrixOrigin::MTLOrigin setter=setResultMatrixOrigin
-    @autoproperty batchSize::NSUInteger setter=setBatchSize
-    @autoproperty batchStart::NSUInteger setter=setBatchStart
-end
+# @objcproperties MPSMatrixMultiplication begin
+#     @autoproperty leftMatrixOrigin::MTLOrigin setter=setLeftMatrixOrigin
+#     @autoproperty rightMatrixOrigin::MTLOrigin setter=setRightMatrixOrigin
+#     @autoproperty resultMatrixOrigin::MTLOrigin setter=setResultMatrixOrigin
+#     @autoproperty batchSize::NSUInteger setter=setBatchSize
+#     @autoproperty batchStart::NSUInteger setter=setBatchStart
+# end
 
 function MPSMatrixMultiplication(dev, transposeLeft, transposeRight, resultRows,
                                  resultColumns, interiorColumns, alpha, beta)
@@ -218,12 +218,12 @@ export MPSMatrixFindTopK, encode!
 
 # @objcwrapper immutable=false MPSMatrixFindTopK <: MPSMatrixUnaryKernel
 
-@objcproperties MPSMatrixFindTopK begin
-    @autoproperty indexOffset::NSInteger setter=setIndexOffset
-    @autoproperty numberOfTopKValues::NSInteger
-    @autoproperty sourceColumns::NSInteger setter=setSourceColumns
-    @autoproperty sourceRows::NSInteger setter=setSourceRows
-end
+# @objcproperties MPSMatrixFindTopK begin
+#     @autoproperty indexOffset::NSInteger setter=setIndexOffset
+#     @autoproperty numberOfTopKValues::NSInteger
+#     @autoproperty sourceColumns::NSInteger setter=setSourceColumns
+#     @autoproperty sourceRows::NSInteger setter=setSourceRows
+# end
 
 function MPSMatrixFindTopK(dev, numberOfTopKValues)
     kernel = @objc [MPSMatrixFindTopK alloc]::id{MPSMatrixFindTopK}
@@ -316,10 +316,10 @@ export MPSMatrixSoftMax, MPSMatrixLogSoftMax, encode!
 # @objcwrapper immutable=false MPSMatrixSoftMax <: MPSMatrixUnaryKernel
 # @objcwrapper immutable=false MPSMatrixLogSoftMax <: MPSMatrixSoftMax
 
-@objcproperties MPSMatrixSoftMax begin
-    @autoproperty sourceRows::NSInteger setter=setSourceRows
-    @autoproperty sourceColumns::NSInteger setter=setSourceColumns
-end
+# @objcproperties MPSMatrixSoftMax begin
+#     @autoproperty sourceRows::NSInteger setter=setSourceRows
+#     @autoproperty sourceColumns::NSInteger setter=setSourceColumns
+# end
 
 for f in (:MPSMatrixSoftMax, :MPSMatrixLogSoftMax)
     @eval begin

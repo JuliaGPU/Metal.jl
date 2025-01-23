@@ -6,10 +6,10 @@ export MTLBinaryArchiveDescriptor
 
 # @objcwrapper immutable=false MTLBinaryArchiveDescriptor <: NSObject
 
-@objcproperties MTLBinaryArchiveDescriptor begin
-    # Choosing an Archive File
-    @autoproperty url::id{NSURL} setter=setUrl
-end
+# @objcproperties MTLBinaryArchiveDescriptor begin
+#     # Choosing an Archive File
+#     @autoproperty url::id{NSURL} setter=setUrl
+# end
 
 function MTLBinaryArchiveDescriptor()
     handle = @objc [MTLBinaryArchiveDescriptor new]::id{MTLBinaryArchiveDescriptor}
@@ -27,11 +27,11 @@ export MTLBinaryArchive, add_functions!
 
 # @objcwrapper immutable=false MTLBinaryArchive <: NSObject
 
-@objcproperties MTLBinaryArchive begin
-    # Identifying the Archive
-    @autoproperty label::id{NSString} setter=setLabel
-    @autoproperty device::id{MTLDevice}
-end
+# @objcproperties MTLBinaryArchive begin
+#     # Identifying the Archive
+#     @autoproperty label::id{NSString} setter=setLabel
+#     @autoproperty device::id{MTLDevice}
+# end
 
 function MTLBinaryArchive(dev::MTLDevice, desc::MTLBinaryArchiveDescriptor)
     err = Ref{id{NSError}}(nil)

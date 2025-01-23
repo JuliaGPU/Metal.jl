@@ -4,12 +4,12 @@ export MPSVectorDescriptor
 
 # @objcwrapper MPSVectorDescriptor <: NSObject
 
-@objcproperties MPSVectorDescriptor begin
-    @autoproperty length::NSUInteger setter=setLength
-    @autoproperty vectors::NSUInteger
-    @autoproperty dataType::MPSDataType setter=setDataType
-    @autoproperty vectorBytes::NSUInteger
-end
+# @objcproperties MPSVectorDescriptor begin
+#     @autoproperty length::NSUInteger setter=setLength
+#     @autoproperty vectors::NSUInteger
+#     @autoproperty dataType::MPSDataType setter=setDataType
+#     @autoproperty vectorBytes::NSUInteger
+# end
 
 
 function MPSVectorDescriptor(length::Integer, dataType::Union{DataType,MPSDataType})
@@ -34,15 +34,15 @@ export MPSVector
 
 # @objcwrapper immutable=false MPSVector <: NSObject
 
-@objcproperties MPSVector begin
-    @autoproperty device::id{MTLDevice}
-    @autoproperty length::NSUInteger
-    @autoproperty vectors::NSUInteger
-    @autoproperty dataType::MPSDataType
-    @autoproperty vectorBytes::NSUInteger
-    @autoproperty offset::NSUInteger
-    @autoproperty data::id{MTLBuffer}
-end
+# @objcproperties MPSVector begin
+#     @autoproperty device::id{MTLDevice}
+#     @autoproperty length::NSUInteger
+#     @autoproperty vectors::NSUInteger
+#     @autoproperty dataType::MPSDataType
+#     @autoproperty vectorBytes::NSUInteger
+#     @autoproperty offset::NSUInteger
+#     @autoproperty data::id{MTLBuffer}
+# end
 
 function MPSVector(buf, descriptor::MPSVectorDescriptor, offset::Integer=0)
     vec = @objc [MPSVector alloc]::id{MPSVector}
