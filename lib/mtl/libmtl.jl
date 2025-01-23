@@ -116,10 +116,109 @@ end
     MTLBarrierScopeRenderTargets = 0x0000000000000004
 end
 
+@static if Metal.macos_version() >= v"14.0.0"
+    @objcwrapper immutable = true MTLArchitecture <: NSObject
+    @objcproperties MTLArchitecture begin
+        @autoproperty name::id{NSString}
+    end
+end
+
+@cenum MTLDeviceLocation::UInt64 begin
+    MTLDeviceLocationBuiltIn = 0x0000000000000000
+    MTLDeviceLocationSlot = 0x0000000000000001
+    MTLDeviceLocationExternal = 0x0000000000000002
+    MTLDeviceLocationUnspecified = 0xffffffffffffffff
+end
+
+@cenum MTLReadWriteTextureTier::UInt64 begin
+    MTLReadWriteTextureTierNone = 0x0000000000000000
+    MTLReadWriteTextureTier1 = 0x0000000000000001
+    MTLReadWriteTextureTier2 = 0x0000000000000002
+end
+
+@cenum MTLArgumentBuffersTier::UInt64 begin
+    MTLArgumentBuffersTier1 = 0x0000000000000000
+    MTLArgumentBuffersTier2 = 0x0000000000000001
+end
+
+@objcwrapper immutable = true MTLCounter <: NSObject
+
+@objcproperties MTLCounter begin
+    @autoproperty name::id{NSString}
+end
+
+@objcwrapper immutable = true MTLCounterSet <: NSObject
+
+@objcproperties MTLCounterSet begin
+    @autoproperty name::id{NSString}
+    @autoproperty counters::id{NSArray} type = Vector{MTLCounter}
+end
+
+@objcwrapper immutable = true MTLDevice <: NSObject
+
+@objcproperties MTLDevice begin
+    @autoproperty name::id{NSString}
+    @autoproperty registryID::UInt64
+    @static if Metal.macos_version() >= v"14.0.0"
+        @autoproperty architecture::id{MTLArchitecture}
+    end
+    @autoproperty maxThreadsPerThreadgroup::MTLSize
+    @autoproperty lowPower::Bool getter = isLowPower
+    @autoproperty headless::Bool getter = isHeadless
+    @autoproperty removable::Bool getter = isRemovable
+    @autoproperty hasUnifiedMemory::Bool
+    @autoproperty recommendedMaxWorkingSetSize::UInt64
+    @autoproperty location::MTLDeviceLocation
+    @autoproperty locationNumber::UInt64
+    @autoproperty maxTransferRate::UInt64
+    @autoproperty depth24Stencil8PixelFormatSupported::Bool getter = isDepth24Stencil8PixelFormatSupported
+    @autoproperty readWriteTextureSupport::MTLReadWriteTextureTier
+    @autoproperty argumentBuffersSupport::MTLArgumentBuffersTier
+    @autoproperty rasterOrderGroupsSupported::Bool getter = areRasterOrderGroupsSupported
+    @autoproperty supports32BitFloatFiltering::Bool
+    @autoproperty supports32BitMSAA::Bool
+    @autoproperty supportsQueryTextureLOD::Bool
+    @autoproperty supportsBCTextureCompression::Bool
+    @autoproperty supportsPullModelInterpolation::Bool
+    @autoproperty barycentricCoordsSupported::Bool getter = areBarycentricCoordsSupported
+    @autoproperty supportsShaderBarycentricCoordinates::Bool
+    @autoproperty currentAllocatedSize::UInt64
+    @autoproperty maxThreadgroupMemoryLength::UInt64
+    @autoproperty maxArgumentBufferSamplerCount::UInt64
+    @autoproperty programmableSamplePositionsSupported::Bool getter = areProgrammableSamplePositionsSupported
+    @autoproperty peerGroupID::UInt64
+    @autoproperty peerIndex::UInt32
+    @autoproperty peerCount::UInt32
+    @autoproperty sparseTileSizeInBytes::UInt64
+    @autoproperty maxBufferLength::UInt64
+    @autoproperty counterSets::id{NSArray} type = Vector{MTLCounterSet}
+    @autoproperty supportsDynamicLibraries::Bool
+    @autoproperty supportsRenderDynamicLibraries::Bool
+    @autoproperty supportsRaytracing::Bool
+    @autoproperty supportsFunctionPointers::Bool
+    @autoproperty supportsFunctionPointersFromRender::Bool
+    @autoproperty supportsRaytracingFromRender::Bool
+    @autoproperty supportsPrimitiveMotionBlur::Bool
+    @static if Metal.macos_version() >= v"13.3.0"
+        @autoproperty shouldMaximizeConcurrentCompilation::Bool setter = setShouldMaximizeConcurrentCompilation
+    end
+    @static if Metal.macos_version() >= v"13.3.0"
+        @autoproperty maximumConcurrentCompilationTaskCount::UInt64
+    end
+end
+
 @objcwrapper immutable = true MTLCommandEncoder <: NSObject
+
+@objcproperties MTLCommandEncoder begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString} setter = setLabel
+end
 
 @static if Metal.macos_version() >= v"15.0.0"
     @objcwrapper immutable = true MTLAllocation <: NSObject
+    @objcproperties MTLAllocation begin
+        @autoproperty allocatedSize::UInt64
+    end
 end
 
 @cenum MTLPurgeableState::UInt64 begin
@@ -161,7 +260,40 @@ end
     MTLResourceOptionCPUCacheModeWriteCombined = 0x0000000000000001
 end
 
+@cenum MTLHeapType::Int64 begin
+    MTLHeapTypeAutomatic = 0
+    MTLHeapTypePlacement = 1
+    MTLHeapTypeSparse = 2
+end
+
+@objcwrapper immutable = false MTLHeap <: MTLAllocation
+
+@objcproperties MTLHeap begin
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty device::id{MTLDevice}
+    @autoproperty storageMode::MTLStorageMode
+    @autoproperty cpuCacheMode::MTLCPUCacheMode
+    @autoproperty hazardTrackingMode::MTLHazardTrackingMode
+    @autoproperty resourceOptions::MTLResourceOptions
+    @autoproperty size::UInt64
+    @autoproperty usedSize::UInt64
+    @autoproperty currentAllocatedSize::UInt64
+    @autoproperty type::MTLHeapType
+end
+
 @objcwrapper immutable = true MTLResource <: MTLAllocation
+
+@objcproperties MTLResource begin
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty device::id{MTLDevice}
+    @autoproperty cpuCacheMode::MTLCPUCacheMode
+    @autoproperty storageMode::MTLStorageMode
+    @autoproperty hazardTrackingMode::MTLHazardTrackingMode
+    @autoproperty resourceOptions::MTLResourceOptions
+    @autoproperty heap::id{MTLHeap}
+    @autoproperty heapOffset::UInt64
+    @autoproperty allocatedSize::UInt64
+end
 
 @cenum MTLPixelFormat::UInt64 begin
     MTLPixelFormatInvalid = 0x0000000000000000
@@ -307,6 +439,12 @@ end
 
 @objcwrapper immutable = true MTLBuffer <: MTLResource
 
+@objcproperties MTLBuffer begin
+    @autoproperty length::UInt64
+    @autoproperty remoteStorageBuffer::id{MTLBuffer}
+    @autoproperty gpuAddress::UInt64 type = Ptr{Cvoid}
+end
+
 @cenum MTLTextureType::UInt64 begin
     MTLTextureType1D = 0x0000000000000000
     MTLTextureType1DArray = 0x0000000000000001
@@ -321,6 +459,11 @@ end
 end
 
 @objcwrapper immutable = true MTLSharedTextureHandle <: NSObject
+
+@objcproperties MTLSharedTextureHandle begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString}
+end
 
 @cenum MTLTextureUsage::UInt64 begin
     MTLTextureUsageUnknown = 0x0000000000000000
@@ -338,7 +481,57 @@ end
 
 @objcwrapper immutable = false MTLTextureDescriptor <: NSObject
 
+@objcproperties MTLTextureDescriptor begin
+    @autoproperty textureType::MTLTextureType setter = setTextureType
+    @autoproperty pixelFormat::MTLPixelFormat setter = setPixelFormat
+    @autoproperty width::UInt64 setter = setWidth
+    @autoproperty height::UInt64 setter = setHeight
+    @autoproperty depth::UInt64 setter = setDepth
+    @autoproperty mipmapLevelCount::UInt64 setter = setMipmapLevelCount
+    @autoproperty sampleCount::UInt64 setter = setSampleCount
+    @autoproperty arrayLength::UInt64 setter = setArrayLength
+    @autoproperty resourceOptions::MTLResourceOptions setter = setResourceOptions
+    @autoproperty cpuCacheMode::MTLCPUCacheMode setter = setCpuCacheMode
+    @autoproperty storageMode::MTLStorageMode setter = setStorageMode
+    @autoproperty hazardTrackingMode::MTLHazardTrackingMode setter = setHazardTrackingMode
+    @autoproperty usage::MTLTextureUsage setter = setUsage
+    @autoproperty allowGPUOptimizedContents::Bool setter = setAllowGPUOptimizedContents
+    @autoproperty compressionType::MTLTextureCompressionType setter = setCompressionType
+    @autoproperty swizzle::MTLTextureSwizzleChannels setter = setSwizzle
+end
+
 @objcwrapper immutable = false MTLTexture <: MTLResource
+
+@objcproperties MTLTexture begin
+    @autoproperty rootResource::id{MTLResource}
+    @autoproperty parentTexture::id{MTLTexture}
+    @autoproperty parentRelativeLevel::UInt64
+    @autoproperty parentRelativeSlice::UInt64
+    @autoproperty buffer::id{MTLBuffer}
+    @autoproperty bufferOffset::UInt64
+    @autoproperty bufferBytesPerRow::UInt64
+    @autoproperty iosurface::Ptr{Cvoid}
+    @autoproperty iosurfacePlane::UInt64
+    @autoproperty textureType::MTLTextureType
+    @autoproperty pixelFormat::MTLPixelFormat
+    @autoproperty width::UInt64
+    @autoproperty height::UInt64
+    @autoproperty depth::UInt64
+    @autoproperty mipmapLevelCount::UInt64
+    @autoproperty sampleCount::UInt64
+    @autoproperty arrayLength::UInt64
+    @autoproperty usage::MTLTextureUsage
+    @autoproperty shareable::Bool getter = isShareable
+    @autoproperty framebufferOnly::Bool getter = isFramebufferOnly
+    @autoproperty firstMipmapInTail::UInt64
+    @autoproperty tailSizeInBytes::UInt64
+    @autoproperty isSparse::Bool
+    @autoproperty allowGPUOptimizedContents::Bool
+    @autoproperty compressionType::MTLTextureCompressionType
+    @autoproperty gpuResourceID::MTLResourceID
+    @autoproperty remoteStorageTexture::id{MTLTexture}
+    @autoproperty swizzle::MTLTextureSwizzleChannels
+end
 
 @cenum MTLDataType::UInt64 begin
     MTLDataTypeNone = 0x0000000000000000
@@ -478,27 +671,117 @@ const MTLArgumentAccess = MTLBindingAccess
 
 @objcwrapper immutable = true MTLType <: NSObject
 
+@objcproperties MTLType begin
+    @autoproperty dataType::MTLDataType
+end
+
 @objcwrapper immutable = true MTLStructMember <: NSObject
+
+@objcproperties MTLStructMember begin
+    @autoproperty name::id{NSString}
+    @autoproperty offset::UInt64
+    @autoproperty dataType::MTLDataType
+    @autoproperty argumentIndex::UInt64
+end
 
 @objcwrapper immutable = true MTLStructType <: MTLType
 
+@objcproperties MTLStructType begin
+    @autoproperty members::id{NSArray} type = Vector{MTLStructMember}
+end
+
 @objcwrapper immutable = true MTLArrayType <: MTLType
+
+@objcproperties MTLArrayType begin
+    @autoproperty elementType::MTLDataType
+    @autoproperty arrayLength::UInt64
+    @autoproperty stride::UInt64
+    @autoproperty argumentIndexStride::UInt64
+end
 
 @objcwrapper immutable = true MTLPointerType <: MTLType
 
+@objcproperties MTLPointerType begin
+    @autoproperty elementType::MTLDataType
+    @autoproperty access::MTLBindingAccess
+    @autoproperty alignment::UInt64
+    @autoproperty dataSize::UInt64
+    @autoproperty elementIsArgumentBuffer::Bool
+end
+
 @objcwrapper immutable = true MTLTextureReferenceType <: MTLType
+
+@objcproperties MTLTextureReferenceType begin
+    @autoproperty textureDataType::MTLDataType
+    @autoproperty textureType::MTLTextureType
+    @autoproperty access::MTLBindingAccess
+    @autoproperty isDepthTexture::Bool
+end
 
 @objcwrapper immutable = true MTLArgument <: NSObject
 
+@objcproperties MTLArgument begin
+    @autoproperty name::id{NSString}
+    @autoproperty type::MTLArgumentType
+    @autoproperty access::MTLBindingAccess
+    @autoproperty index::UInt64
+    @autoproperty active::Bool getter = isActive
+    @autoproperty bufferAlignment::UInt64
+    @autoproperty bufferDataSize::UInt64
+    @autoproperty bufferDataType::MTLDataType
+    @autoproperty bufferStructType::id{MTLStructType}
+    @autoproperty bufferPointerType::id{MTLPointerType}
+    @autoproperty threadgroupMemoryAlignment::UInt64
+    @autoproperty threadgroupMemoryDataSize::UInt64
+    @autoproperty textureType::MTLTextureType
+    @autoproperty textureDataType::MTLDataType
+    @autoproperty isDepthTexture::Bool
+    @autoproperty arrayLength::UInt64
+end
+
 @objcwrapper immutable = true MTLBinding <: NSObject
+
+@objcproperties MTLBinding begin
+    @autoproperty name::id{NSString}
+    @autoproperty type::MTLBindingType
+    @autoproperty access::MTLBindingAccess
+    @autoproperty index::UInt64
+    @autoproperty used::Bool getter = isUsed
+    @autoproperty argument::Bool getter = isArgument
+end
 
 @objcwrapper immutable = true MTLBufferBinding <: MTLBinding
 
+@objcproperties MTLBufferBinding begin
+    @autoproperty bufferAlignment::UInt64
+    @autoproperty bufferDataSize::UInt64
+    @autoproperty bufferDataType::MTLDataType
+    @autoproperty bufferStructType::id{MTLStructType}
+    @autoproperty bufferPointerType::id{MTLPointerType}
+end
+
 @objcwrapper immutable = true MTLThreadgroupBinding <: MTLBinding
+
+@objcproperties MTLThreadgroupBinding begin
+    @autoproperty threadgroupMemoryAlignment::UInt64
+    @autoproperty threadgroupMemoryDataSize::UInt64
+end
 
 @objcwrapper immutable = true MTLTextureBinding <: MTLBinding
 
+@objcproperties MTLTextureBinding begin
+    @autoproperty textureType::MTLTextureType
+    @autoproperty textureDataType::MTLDataType
+    @autoproperty depthTexture::Bool getter = isDepthTexture
+    @autoproperty arrayLength::UInt64
+end
+
 @objcwrapper immutable = true MTLObjectPayloadBinding <: MTLBinding
+
+@objcproperties MTLObjectPayloadBinding begin
+    @autoproperty objectPayloadAlignment::UInt64
+    @autoproperty objectPayloadDataSize::UInt64
+end
 
 @objcwrapper immutable = true MTLFunctionConstantValues <: NSObject
 
@@ -510,7 +793,22 @@ const MTLArgumentAccess = MTLBindingAccess
     MTLFunctionOptionFailOnBinaryArchiveMiss = 0x0000000000000004
 end
 
+@objcwrapper immutable = false MTLBinaryArchive <: NSObject
+
+@objcproperties MTLBinaryArchive begin
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty device::id{MTLDevice}
+end
+
 @objcwrapper immutable = false MTLFunctionDescriptor <: NSObject
+
+@objcproperties MTLFunctionDescriptor begin
+    @autoproperty name::id{NSString} setter = setName
+    @autoproperty specializedName::id{NSString} setter = setSpecializedName
+    @autoproperty constantValues::id{MTLFunctionConstantValues} setter = setConstantValues
+    @autoproperty options::MTLFunctionOptions setter = setOptions
+    @autoproperty binaryArchives::id{NSArray} type = Vector{MTLBinaryArchive} setter = setBinaryArchives
+end
 
 @objcwrapper immutable = true MTLIntersectionFunctionDescriptor <: MTLFunctionDescriptor
 
@@ -522,7 +820,25 @@ end
 
 @objcwrapper immutable = true MTLVertexAttribute <: NSObject
 
+@objcproperties MTLVertexAttribute begin
+    @autoproperty name::id{NSString}
+    @autoproperty attributeIndex::UInt64
+    @autoproperty attributeType::MTLDataType
+    @autoproperty active::Bool getter = isActive
+    @autoproperty patchData::Bool getter = isPatchData
+    @autoproperty patchControlPointData::Bool getter = isPatchControlPointData
+end
+
 @objcwrapper immutable = true MTLAttribute <: NSObject
+
+@objcproperties MTLAttribute begin
+    @autoproperty name::id{NSString}
+    @autoproperty attributeIndex::UInt64
+    @autoproperty attributeType::MTLDataType
+    @autoproperty active::Bool getter = isActive
+    @autoproperty patchData::Bool getter = isPatchData
+    @autoproperty patchControlPointData::Bool getter = isPatchControlPointData
+end
 
 @cenum MTLFunctionType::UInt64 begin
     MTLFunctionTypeVertex = 0x0000000000000001
@@ -536,7 +852,27 @@ end
 
 @objcwrapper immutable = true MTLFunctionConstant <: NSObject
 
+@objcproperties MTLFunctionConstant begin
+    @autoproperty name::id{NSString}
+    @autoproperty type::MTLDataType
+    @autoproperty index::UInt64
+    @autoproperty required::Bool
+end
+
 @objcwrapper immutable = false MTLFunction <: NSObject
+
+@objcproperties MTLFunction begin
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty device::id{MTLDevice}
+    @autoproperty functionType::MTLFunctionType
+    @autoproperty patchType::MTLPatchType
+    @autoproperty patchControlPointCount::Int64
+    @autoproperty vertexAttributes::id{NSArray} type = Vector{MTLVertexAttribute}
+    @autoproperty stageInputAttributes::id{NSArray} type = Vector{MTLAttribute}
+    @autoproperty name::id{NSString}
+    @autoproperty functionConstantsDictionary::id{NSDictionary}
+    @autoproperty options::MTLFunctionOptions
+end
 
 @cenum MTLLanguageVersion::UInt64 begin
     MTLLanguageVersion1_0 = 0x0000000000010000
@@ -578,7 +914,44 @@ end
     MTLMathFloatingPointFunctionsPrecise = 1
 end
 
+@objcwrapper immutable = true MTLDynamicLibrary <: NSObject
+
+@objcproperties MTLDynamicLibrary begin
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty device::id{MTLDevice}
+    @autoproperty installName::id{NSString}
+end
+
 @objcwrapper immutable = false MTLCompileOptions <: NSObject
+
+@objcproperties MTLCompileOptions begin
+    @autoproperty preprocessorMacros::id{NSDictionary} setter = setPreprocessorMacros
+    @autoproperty fastMathEnabled::Bool setter = setFastMathEnabled
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty mathMode::MTLMathMode setter = setMathMode
+    end
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty mathFloatingPointFunctions::MTLMathFloatingPointFunctions setter = setMathFloatingPointFunctions
+    end
+    @autoproperty languageVersion::MTLLanguageVersion type = VersionNumber setter = setLanguageVersion
+    @autoproperty libraryType::MTLLibraryType setter = setLibraryType
+    @autoproperty installName::id{NSString} setter = setInstallName
+    @autoproperty libraries::id{NSArray} type = Vector{MTLDynamicLibrary} setter = setLibraries
+    @autoproperty preserveInvariance::Bool setter = setPreserveInvariance
+    @autoproperty optimizationLevel::MTLLibraryOptimizationLevel setter = setOptimizationLevel
+    @static if Metal.macos_version() >= v"13.3.0"
+        @autoproperty compileSymbolVisibility::MTLCompileSymbolVisibility setter = setCompileSymbolVisibility
+    end
+    @static if Metal.macos_version() >= v"13.3.0"
+        @autoproperty allowReferencingUndefinedSymbols::Bool setter = setAllowReferencingUndefinedSymbols
+    end
+    @static if Metal.macos_version() >= v"13.3.0"
+        @autoproperty maxTotalThreadsPerThreadgroup::UInt64 setter = setMaxTotalThreadsPerThreadgroup
+    end
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty enableLogging::Bool setter = setEnableLogging
+    end
+end
 
 @cenum MTLLibraryError::UInt64 begin
     MTLLibraryErrorUnsupported = 0x0000000000000001
@@ -590,6 +963,14 @@ end
 end
 
 @objcwrapper immutable = false MTLLibrary <: NSObject
+
+@objcproperties MTLLibrary begin
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty device::id{MTLDevice}
+    @autoproperty functionNames::id{NSArray} type = Vector{NSString}
+    @autoproperty type::MTLLibraryType
+    @autoproperty installName::id{NSString}
+end
 
 struct MTLCounterResultTimestamp
     timestamp::UInt64
@@ -615,13 +996,22 @@ struct MTLCounterResultStatistic
     computeKernelInvocations::UInt64
 end
 
-@objcwrapper immutable = true MTLCounter <: NSObject
-
-@objcwrapper immutable = true MTLCounterSet <: NSObject
-
 @objcwrapper immutable = true MTLCounterSampleBufferDescriptor <: NSObject
 
+@objcproperties MTLCounterSampleBufferDescriptor begin
+    @autoproperty counterSet::id{MTLCounterSet} setter = setCounterSet
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty storageMode::MTLStorageMode setter = setStorageMode
+    @autoproperty sampleCount::UInt64 setter = setSampleCount
+end
+
 @objcwrapper immutable = true MTLCounterSampleBuffer <: NSObject
+
+@objcproperties MTLCounterSampleBuffer begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString}
+    @autoproperty sampleCount::UInt64
+end
 
 @cenum MTLCounterSampleBufferError::Int64 begin
     MTLCounterSampleBufferErrorOutOfMemory = 0
@@ -693,30 +1083,12 @@ end
     MTLGPUFamilyMetal3 = 5001
 end
 
-@cenum MTLDeviceLocation::UInt64 begin
-    MTLDeviceLocationBuiltIn = 0x0000000000000000
-    MTLDeviceLocationSlot = 0x0000000000000001
-    MTLDeviceLocationExternal = 0x0000000000000002
-    MTLDeviceLocationUnspecified = 0xffffffffffffffff
-end
-
 @cenum MTLPipelineOption::UInt64 begin
     MTLPipelineOptionNone = 0x0000000000000000
     MTLPipelineOptionArgumentInfo = 0x0000000000000001
     MTLPipelineOptionBindingInfo = 0x0000000000000001
     MTLPipelineOptionBufferTypeInfo = 0x0000000000000002
     MTLPipelineOptionFailOnBinaryArchiveMiss = 0x0000000000000004
-end
-
-@cenum MTLReadWriteTextureTier::UInt64 begin
-    MTLReadWriteTextureTierNone = 0x0000000000000000
-    MTLReadWriteTextureTier1 = 0x0000000000000001
-    MTLReadWriteTextureTier2 = 0x0000000000000002
-end
-
-@cenum MTLArgumentBuffersTier::UInt64 begin
-    MTLArgumentBuffersTier1 = 0x0000000000000000
-    MTLArgumentBuffersTier2 = 0x0000000000000001
 end
 
 @cenum MTLSparseTextureRegionAlignmentMode::UInt64 begin
@@ -751,23 +1123,41 @@ end
 
 @objcwrapper immutable = true MTLArgumentDescriptor <: NSObject
 
-@static if Metal.macos_version() >= v"14.0.0"
-    @objcwrapper immutable = true MTLArchitecture <: NSObject
+@objcproperties MTLArgumentDescriptor begin
+    @autoproperty dataType::MTLDataType setter = setDataType
+    @autoproperty index::UInt64 setter = setIndex
+    @autoproperty arrayLength::UInt64 setter = setArrayLength
+    @autoproperty access::MTLBindingAccess setter = setAccess
+    @autoproperty textureType::MTLTextureType setter = setTextureType
+    @autoproperty constantBlockAlignment::UInt64 setter = setConstantBlockAlignment
 end
-
-@objcwrapper immutable = true MTLDevice <: NSObject
 
 const MTLTimestamp = UInt64
 
 @objcwrapper immutable = false MTLFence <: NSObject
 
+@objcproperties MTLFence begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString} setter = setLabel
+end
+
 @objcwrapper immutable = true MTLResourceStatePassSampleBufferAttachmentDescriptor <:
                               NSObject
+
+@objcproperties MTLResourceStatePassSampleBufferAttachmentDescriptor begin
+    @autoproperty sampleBuffer::id{MTLCounterSampleBuffer} setter = setSampleBuffer
+    @autoproperty startOfEncoderSampleIndex::UInt64 setter = setStartOfEncoderSampleIndex
+    @autoproperty endOfEncoderSampleIndex::UInt64 setter = setEndOfEncoderSampleIndex
+end
 
 @objcwrapper immutable = true MTLResourceStatePassSampleBufferAttachmentDescriptorArray <:
                               NSObject
 
 @objcwrapper immutable = true MTLResourceStatePassDescriptor <: NSObject
+
+@objcproperties MTLResourceStatePassDescriptor begin
+    @autoproperty sampleBufferAttachments::id{MTLResourceStatePassSampleBufferAttachmentDescriptorArray}
+end
 
 @cenum MTLSparseTextureMappingMode::UInt64 begin
     MTLSparseTextureMappingModeMap = 0x0000000000000000
@@ -823,8 +1213,26 @@ end
 
 @objcwrapper immutable = true MTLRenderPassAttachmentDescriptor <: NSObject
 
+@objcproperties MTLRenderPassAttachmentDescriptor begin
+    @autoproperty texture::id{MTLTexture} setter = setTexture
+    @autoproperty level::UInt64 setter = setLevel
+    @autoproperty slice::UInt64 setter = setSlice
+    @autoproperty depthPlane::UInt64 setter = setDepthPlane
+    @autoproperty resolveTexture::id{MTLTexture} setter = setResolveTexture
+    @autoproperty resolveLevel::UInt64 setter = setResolveLevel
+    @autoproperty resolveSlice::UInt64 setter = setResolveSlice
+    @autoproperty resolveDepthPlane::UInt64 setter = setResolveDepthPlane
+    @autoproperty loadAction::MTLLoadAction setter = setLoadAction
+    @autoproperty storeAction::MTLStoreAction setter = setStoreAction
+    @autoproperty storeActionOptions::MTLStoreActionOptions setter = setStoreActionOptions
+end
+
 @objcwrapper immutable = true MTLRenderPassColorAttachmentDescriptor <:
                               MTLRenderPassAttachmentDescriptor
+
+@objcproperties MTLRenderPassColorAttachmentDescriptor begin
+    @autoproperty clearColor::MTLClearColor setter = setClearColor
+end
 
 @cenum MTLMultisampleDepthResolveFilter::UInt64 begin
     MTLMultisampleDepthResolveFilterSample0 = 0x0000000000000000
@@ -835,6 +1243,11 @@ end
 @objcwrapper immutable = true MTLRenderPassDepthAttachmentDescriptor <:
                               MTLRenderPassAttachmentDescriptor
 
+@objcproperties MTLRenderPassDepthAttachmentDescriptor begin
+    @autoproperty clearDepth::Cdouble setter = setClearDepth
+    @autoproperty depthResolveFilter::MTLMultisampleDepthResolveFilter setter = setDepthResolveFilter
+end
+
 @cenum MTLMultisampleStencilResolveFilter::UInt64 begin
     MTLMultisampleStencilResolveFilterSample0 = 0x0000000000000000
     MTLMultisampleStencilResolveFilterDepthResolvedSample = 0x0000000000000001
@@ -843,19 +1256,70 @@ end
 @objcwrapper immutable = true MTLRenderPassStencilAttachmentDescriptor <:
                               MTLRenderPassAttachmentDescriptor
 
+@objcproperties MTLRenderPassStencilAttachmentDescriptor begin
+    @autoproperty clearStencil::UInt32 setter = setClearStencil
+    @autoproperty stencilResolveFilter::MTLMultisampleStencilResolveFilter setter = setStencilResolveFilter
+end
+
 @objcwrapper immutable = true MTLRenderPassColorAttachmentDescriptorArray <: NSObject
 
 @objcwrapper immutable = true MTLRenderPassSampleBufferAttachmentDescriptor <: NSObject
 
+@objcproperties MTLRenderPassSampleBufferAttachmentDescriptor begin
+    @autoproperty sampleBuffer::id{MTLCounterSampleBuffer} setter = setSampleBuffer
+    @autoproperty startOfVertexSampleIndex::UInt64 setter = setStartOfVertexSampleIndex
+    @autoproperty endOfVertexSampleIndex::UInt64 setter = setEndOfVertexSampleIndex
+    @autoproperty startOfFragmentSampleIndex::UInt64 setter = setStartOfFragmentSampleIndex
+    @autoproperty endOfFragmentSampleIndex::UInt64 setter = setEndOfFragmentSampleIndex
+end
+
 @objcwrapper immutable = true MTLRenderPassSampleBufferAttachmentDescriptorArray <: NSObject
+
+@objcwrapper immutable = true MTLRasterizationRateMap <: NSObject
+
+@objcproperties MTLRasterizationRateMap begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString}
+    @autoproperty screenSize::MTLSize
+    @autoproperty physicalGranularity::MTLSize
+    @autoproperty layerCount::UInt64
+    @autoproperty parameterBufferSizeAndAlign::MTLSizeAndAlign
+end
 
 @objcwrapper immutable = true MTLRenderPassDescriptor <: NSObject
 
+@objcproperties MTLRenderPassDescriptor begin
+    @autoproperty colorAttachments::id{MTLRenderPassColorAttachmentDescriptorArray}
+    @autoproperty depthAttachment::id{MTLRenderPassDepthAttachmentDescriptor} setter = setDepthAttachment
+    @autoproperty stencilAttachment::id{MTLRenderPassStencilAttachmentDescriptor} setter = setStencilAttachment
+    @autoproperty visibilityResultBuffer::id{MTLBuffer} setter = setVisibilityResultBuffer
+    @autoproperty renderTargetArrayLength::UInt64 setter = setRenderTargetArrayLength
+    @autoproperty imageblockSampleLength::UInt64 setter = setImageblockSampleLength
+    @autoproperty threadgroupMemoryLength::UInt64 setter = setThreadgroupMemoryLength
+    @autoproperty tileWidth::UInt64 setter = setTileWidth
+    @autoproperty tileHeight::UInt64 setter = setTileHeight
+    @autoproperty defaultRasterSampleCount::UInt64 setter = setDefaultRasterSampleCount
+    @autoproperty renderTargetWidth::UInt64 setter = setRenderTargetWidth
+    @autoproperty renderTargetHeight::UInt64 setter = setRenderTargetHeight
+    @autoproperty rasterizationRateMap::id{MTLRasterizationRateMap} setter = setRasterizationRateMap
+    @autoproperty sampleBufferAttachments::id{MTLRenderPassSampleBufferAttachmentDescriptorArray}
+end
+
 @objcwrapper immutable = true MTLBlitPassSampleBufferAttachmentDescriptor <: NSObject
+
+@objcproperties MTLBlitPassSampleBufferAttachmentDescriptor begin
+    @autoproperty sampleBuffer::id{MTLCounterSampleBuffer} setter = setSampleBuffer
+    @autoproperty startOfEncoderSampleIndex::UInt64 setter = setStartOfEncoderSampleIndex
+    @autoproperty endOfEncoderSampleIndex::UInt64 setter = setEndOfEncoderSampleIndex
+end
 
 @objcwrapper immutable = true MTLBlitPassSampleBufferAttachmentDescriptorArray <: NSObject
 
 @objcwrapper immutable = true MTLBlitPassDescriptor <: NSObject
+
+@objcproperties MTLBlitPassDescriptor begin
+    @autoproperty sampleBufferAttachments::id{MTLBlitPassSampleBufferAttachmentDescriptorArray}
+end
 
 @cenum MTLBlitOption::UInt64 begin
     MTLBlitOptionNone = 0x0000000000000000
@@ -903,23 +1367,76 @@ end
     MTLCommandEncoderErrorStateFaulted = 4
 end
 
+@static if Metal.macos_version() >= v"15.0.0"
+    @objcwrapper immutable = true MTLLogState <: NSObject
+end
+
 @objcwrapper immutable = false MTLCommandBufferDescriptor <: NSObject
 
+@objcproperties MTLCommandBufferDescriptor begin
+    @autoproperty retainedReferences::Bool setter = setRetainedReferences
+    @autoproperty errorOptions::MTLCommandBufferErrorOption setter = setErrorOptions
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty logState::id{MTLLogState} setter = setLogState
+    end
+end
+
 @objcwrapper immutable = true MTLCommandBufferEncoderInfo <: NSObject
+
+@objcproperties MTLCommandBufferEncoderInfo begin
+    @autoproperty label::id{NSString}
+    @autoproperty debugSignposts::id{NSArray} type = Vector{NSString}
+    @autoproperty errorState::MTLCommandEncoderErrorState
+end
 
 @cenum MTLDispatchType::UInt64 begin
     MTLDispatchTypeSerial = 0x0000000000000000
     MTLDispatchTypeConcurrent = 0x0000000000000001
 end
 
+@objcwrapper immutable = false MTLCommandQueue <: NSObject
+
+@objcproperties MTLCommandQueue begin
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty device::id{MTLDevice}
+end
+
+@objcwrapper immutable = true MTLLogContainer <: NSObject
+
 @objcwrapper immutable = true MTLCommandBuffer <: NSObject
 
+@objcproperties MTLCommandBuffer begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty commandQueue::id{MTLCommandQueue}
+    @autoproperty retainedReferences::Bool
+    @autoproperty errorOptions::MTLCommandBufferErrorOption
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty kernelStartTime::Cdouble
+    @autoproperty kernelEndTime::Cdouble
+    @autoproperty logs::id{MTLLogContainer}
+    @autoproperty GPUStartTime::Cdouble
+    @autoproperty GPUEndTime::Cdouble
+    @autoproperty status::MTLCommandBufferStatus
+    @autoproperty error::id{NSError}
+end
+
 @objcwrapper immutable = true MTLComputePassSampleBufferAttachmentDescriptor <: NSObject
+
+@objcproperties MTLComputePassSampleBufferAttachmentDescriptor begin
+    @autoproperty sampleBuffer::id{MTLCounterSampleBuffer} setter = setSampleBuffer
+    @autoproperty startOfEncoderSampleIndex::UInt64 setter = setStartOfEncoderSampleIndex
+    @autoproperty endOfEncoderSampleIndex::UInt64 setter = setEndOfEncoderSampleIndex
+end
 
 @objcwrapper immutable = true MTLComputePassSampleBufferAttachmentDescriptorArray <:
                               NSObject
 
 @objcwrapper immutable = true MTLComputePassDescriptor <: NSObject
+
+@objcproperties MTLComputePassDescriptor begin
+    @autoproperty dispatchType::MTLDispatchType setter = setDispatchType
+    @autoproperty sampleBufferAttachments::id{MTLComputePassSampleBufferAttachmentDescriptorArray}
+end
 
 struct MTLDispatchThreadgroupsIndirectArguments
     threadgroupsPerGrid::NTuple{3,UInt32}
@@ -932,10 +1449,16 @@ end
 
 @objcwrapper immutable = false MTLComputeCommandEncoder <: MTLCommandEncoder
 
-@objcwrapper immutable = false MTLCommandQueue <: NSObject
+@objcproperties MTLComputeCommandEncoder begin
+    @autoproperty dispatchType::MTLDispatchType
+end
 
 @static if Metal.macos_version() >= v"15.0.0"
     @objcwrapper immutable = true MTLCommandQueueDescriptor <: NSObject
+    @objcproperties MTLCommandQueueDescriptor begin
+        @autoproperty maxCommandBufferCount::UInt64 setter = setMaxCommandBufferCount
+        @autoproperty logState::id{MTLLogState} setter = setLogState
+    end
 end
 
 const NSDeviceCertification = NSInteger
@@ -966,11 +1489,38 @@ end
 
 @objcwrapper immutable = true MTLStencilDescriptor <: NSObject
 
+@objcproperties MTLStencilDescriptor begin
+    @autoproperty stencilCompareFunction::MTLCompareFunction setter = setStencilCompareFunction
+    @autoproperty stencilFailureOperation::MTLStencilOperation setter = setStencilFailureOperation
+    @autoproperty depthFailureOperation::MTLStencilOperation setter = setDepthFailureOperation
+    @autoproperty depthStencilPassOperation::MTLStencilOperation setter = setDepthStencilPassOperation
+    @autoproperty readMask::UInt32 setter = setReadMask
+    @autoproperty writeMask::UInt32 setter = setWriteMask
+end
+
 @objcwrapper immutable = true MTLDepthStencilDescriptor <: NSObject
+
+@objcproperties MTLDepthStencilDescriptor begin
+    @autoproperty depthCompareFunction::MTLCompareFunction setter = setDepthCompareFunction
+    @autoproperty depthWriteEnabled::Bool getter = isDepthWriteEnabled setter = setDepthWriteEnabled
+    @autoproperty frontFaceStencil::id{MTLStencilDescriptor} setter = setFrontFaceStencil
+    @autoproperty backFaceStencil::id{MTLStencilDescriptor} setter = setBackFaceStencil
+    @autoproperty label::id{NSString} setter = setLabel
+end
 
 @objcwrapper immutable = true MTLDepthStencilState <: NSObject
 
+@objcproperties MTLDepthStencilState begin
+    @autoproperty label::id{NSString}
+    @autoproperty device::id{MTLDevice}
+end
+
 @objcwrapper immutable = true MTLDrawable <: NSObject
+
+@objcproperties MTLDrawable begin
+    @autoproperty presentedTime::Cdouble
+    @autoproperty drawableID::UInt64
+end
 
 @cenum MTLVertexFormat::UInt64 begin
     MTLVertexFormatInvalid = 0x0000000000000000
@@ -1039,13 +1589,30 @@ end
 
 @objcwrapper immutable = true MTLVertexBufferLayoutDescriptor <: NSObject
 
+@objcproperties MTLVertexBufferLayoutDescriptor begin
+    @autoproperty stride::UInt64 setter = setStride
+    @autoproperty stepFunction::MTLVertexStepFunction setter = setStepFunction
+    @autoproperty stepRate::UInt64 setter = setStepRate
+end
+
 @objcwrapper immutable = true MTLVertexBufferLayoutDescriptorArray <: NSObject
 
 @objcwrapper immutable = true MTLVertexAttributeDescriptor <: NSObject
 
+@objcproperties MTLVertexAttributeDescriptor begin
+    @autoproperty format::MTLVertexFormat setter = setFormat
+    @autoproperty offset::UInt64 setter = setOffset
+    @autoproperty bufferIndex::UInt64 setter = setBufferIndex
+end
+
 @objcwrapper immutable = true MTLVertexAttributeDescriptorArray <: NSObject
 
 @objcwrapper immutable = true MTLVertexDescriptor <: NSObject
+
+@objcproperties MTLVertexDescriptor begin
+    @autoproperty layouts::id{MTLVertexBufferLayoutDescriptorArray}
+    @autoproperty attributes::id{MTLVertexAttributeDescriptorArray}
+end
 
 @cenum MTLAttributeFormat::UInt64 begin
     MTLAttributeFormatInvalid = 0x0000000000000000
@@ -1123,13 +1690,32 @@ end
 
 @objcwrapper immutable = true MTLBufferLayoutDescriptor <: NSObject
 
+@objcproperties MTLBufferLayoutDescriptor begin
+    @autoproperty stride::UInt64 setter = setStride
+    @autoproperty stepFunction::MTLStepFunction setter = setStepFunction
+    @autoproperty stepRate::UInt64 setter = setStepRate
+end
+
 @objcwrapper immutable = true MTLBufferLayoutDescriptorArray <: NSObject
 
 @objcwrapper immutable = true MTLAttributeDescriptor <: NSObject
 
+@objcproperties MTLAttributeDescriptor begin
+    @autoproperty format::MTLAttributeFormat setter = setFormat
+    @autoproperty offset::UInt64 setter = setOffset
+    @autoproperty bufferIndex::UInt64 setter = setBufferIndex
+end
+
 @objcwrapper immutable = true MTLAttributeDescriptorArray <: NSObject
 
 @objcwrapper immutable = true MTLStageInputOutputDescriptor <: NSObject
+
+@objcproperties MTLStageInputOutputDescriptor begin
+    @autoproperty layouts::id{MTLBufferLayoutDescriptorArray}
+    @autoproperty attributes::id{MTLAttributeDescriptorArray}
+    @autoproperty indexType::MTLIndexType setter = setIndexType
+    @autoproperty indexBufferIndex::UInt64 setter = setIndexBufferIndex
+end
 
 @cenum MTLMutability::UInt64 begin
     MTLMutabilityDefault = 0x0000000000000000
@@ -1145,15 +1731,63 @@ end
 
 @objcwrapper immutable = true MTLPipelineBufferDescriptor <: NSObject
 
+@objcproperties MTLPipelineBufferDescriptor begin
+    @autoproperty mutability::MTLMutability setter = setMutability
+end
+
 @objcwrapper immutable = true MTLPipelineBufferDescriptorArray <: NSObject
 
 @objcwrapper immutable = true MTLLinkedFunctions <: NSObject
 
+@objcproperties MTLLinkedFunctions begin
+    @autoproperty functions::id{NSArray} type = Vector{MTLFunction} setter = setFunctions
+    @autoproperty binaryFunctions::id{NSArray} type = Vector{MTLFunction} setter = setBinaryFunctions
+    @autoproperty groups::id{NSDictionary} setter = setGroups
+    @autoproperty privateFunctions::id{NSArray} type = Vector{MTLFunction} setter = setPrivateFunctions
+end
+
 @objcwrapper immutable = true MTLComputePipelineReflection <: NSObject
+
+@objcproperties MTLComputePipelineReflection begin
+    @autoproperty bindings::id{NSArray} type = Vector{MTLBinding}
+    @autoproperty arguments::id{NSArray} type = Vector{MTLArgument}
+end
 
 @objcwrapper immutable = false MTLComputePipelineDescriptor <: NSObject
 
+@objcproperties MTLComputePipelineDescriptor begin
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty computeFunction::id{MTLFunction} setter = setComputeFunction
+    @autoproperty threadGroupSizeIsMultipleOfThreadExecutionWidth::Bool setter = setThreadGroupSizeIsMultipleOfThreadExecutionWidth
+    @autoproperty maxTotalThreadsPerThreadgroup::UInt64 setter = setMaxTotalThreadsPerThreadgroup
+    @autoproperty stageInputDescriptor::id{MTLStageInputOutputDescriptor} setter = setStageInputDescriptor
+    @autoproperty buffers::id{MTLPipelineBufferDescriptorArray}
+    @autoproperty supportIndirectCommandBuffers::Bool setter = setSupportIndirectCommandBuffers
+    @autoproperty insertLibraries::id{NSArray} type = Vector{MTLDynamicLibrary} setter = setInsertLibraries
+    @autoproperty preloadedLibraries::id{NSArray} type = Vector{MTLDynamicLibrary} setter = setPreloadedLibraries
+    @autoproperty binaryArchives::id{NSArray} type = Vector{MTLBinaryArchive} setter = setBinaryArchives
+    @autoproperty linkedFunctions::id{MTLLinkedFunctions} setter = setLinkedFunctions
+    @autoproperty supportAddingBinaryFunctions::Bool setter = setSupportAddingBinaryFunctions
+    @autoproperty maxCallStackDepth::UInt64 setter = setMaxCallStackDepth
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation
+    end
+end
+
 @objcwrapper immutable = false MTLComputePipelineState <: NSObject
+
+@objcproperties MTLComputePipelineState begin
+    @autoproperty label::id{NSString}
+    @autoproperty device::id{MTLDevice}
+    @autoproperty maxTotalThreadsPerThreadgroup::UInt64
+    @autoproperty threadExecutionWidth::UInt64
+    @autoproperty staticThreadgroupMemoryLength::UInt64
+    @autoproperty supportIndirectCommandBuffers::Bool
+    @autoproperty gpuResourceID::MTLResourceID
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty shaderValidation::MTLShaderValidation
+    end
+end
 
 @cenum MTLPrimitiveType::UInt64 begin
     MTLPrimitiveTypePoint = 0x0000000000000000
@@ -1253,11 +1887,30 @@ end
 
 @objcwrapper immutable = true MTLRenderCommandEncoder <: MTLCommandEncoder
 
+@objcproperties MTLRenderCommandEncoder begin
+    @autoproperty tileWidth::UInt64
+    @autoproperty tileHeight::UInt64
+end
+
 @objcwrapper immutable = true MTLFunctionHandle <: NSObject
+
+@objcproperties MTLFunctionHandle begin
+    @autoproperty functionType::MTLFunctionType
+    @autoproperty name::id{NSString}
+    @autoproperty device::id{MTLDevice}
+end
 
 @objcwrapper immutable = true MTLVisibleFunctionTableDescriptor <: NSObject
 
+@objcproperties MTLVisibleFunctionTableDescriptor begin
+    @autoproperty functionCount::UInt64 setter = setFunctionCount
+end
+
 @objcwrapper immutable = true MTLVisibleFunctionTable <: MTLResource
+
+@objcproperties MTLVisibleFunctionTable begin
+    @autoproperty gpuResourceID::MTLResourceID
+end
 
 @cenum MTLBlendFactor::UInt64 begin
     MTLBlendFactorZero = 0x0000000000000000
@@ -1331,24 +1984,174 @@ end
 
 @objcwrapper immutable = true MTLRenderPipelineColorAttachmentDescriptor <: NSObject
 
+@objcproperties MTLRenderPipelineColorAttachmentDescriptor begin
+    @autoproperty pixelFormat::MTLPixelFormat setter = setPixelFormat
+    @autoproperty blendingEnabled::Bool getter = isBlendingEnabled setter = setBlendingEnabled
+    @autoproperty sourceRGBBlendFactor::MTLBlendFactor setter = setSourceRGBBlendFactor
+    @autoproperty destinationRGBBlendFactor::MTLBlendFactor setter = setDestinationRGBBlendFactor
+    @autoproperty rgbBlendOperation::MTLBlendOperation setter = setRgbBlendOperation
+    @autoproperty sourceAlphaBlendFactor::MTLBlendFactor setter = setSourceAlphaBlendFactor
+    @autoproperty destinationAlphaBlendFactor::MTLBlendFactor setter = setDestinationAlphaBlendFactor
+    @autoproperty alphaBlendOperation::MTLBlendOperation setter = setAlphaBlendOperation
+    @autoproperty writeMask::MTLColorWriteMask setter = setWriteMask
+end
+
 @objcwrapper immutable = true MTLRenderPipelineReflection <: NSObject
 
-@objcwrapper immutable = true MTLRenderPipelineDescriptor <: NSObject
-
-@objcwrapper immutable = true MTLRenderPipelineFunctionsDescriptor <: NSObject
-
-@objcwrapper immutable = true MTLRenderPipelineState <: NSObject
+@objcproperties MTLRenderPipelineReflection begin
+    @autoproperty vertexBindings::id{NSArray} type = Vector{MTLBinding}
+    @autoproperty fragmentBindings::id{NSArray} type = Vector{MTLBinding}
+    @autoproperty tileBindings::id{NSArray} type = Vector{MTLBinding}
+    @autoproperty objectBindings::id{NSArray} type = Vector{MTLBinding}
+    @autoproperty meshBindings::id{NSArray} type = Vector{MTLBinding}
+    @autoproperty vertexArguments::id{NSArray} type = Vector{MTLArgument}
+    @autoproperty fragmentArguments::id{NSArray} type = Vector{MTLArgument}
+    @autoproperty tileArguments::id{NSArray} type = Vector{MTLArgument}
+end
 
 @objcwrapper immutable = true MTLRenderPipelineColorAttachmentDescriptorArray <: NSObject
 
+@objcwrapper immutable = true MTLRenderPipelineDescriptor <: NSObject
+
+@objcproperties MTLRenderPipelineDescriptor begin
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty vertexFunction::id{MTLFunction} setter = setVertexFunction
+    @autoproperty fragmentFunction::id{MTLFunction} setter = setFragmentFunction
+    @autoproperty vertexDescriptor::id{MTLVertexDescriptor} setter = setVertexDescriptor
+    @autoproperty sampleCount::UInt64 setter = setSampleCount
+    @autoproperty rasterSampleCount::UInt64 setter = setRasterSampleCount
+    @autoproperty alphaToCoverageEnabled::Bool getter = isAlphaToCoverageEnabled setter = setAlphaToCoverageEnabled
+    @autoproperty alphaToOneEnabled::Bool getter = isAlphaToOneEnabled setter = setAlphaToOneEnabled
+    @autoproperty rasterizationEnabled::Bool getter = isRasterizationEnabled setter = setRasterizationEnabled
+    @autoproperty maxVertexAmplificationCount::UInt64 setter = setMaxVertexAmplificationCount
+    @autoproperty colorAttachments::id{MTLRenderPipelineColorAttachmentDescriptorArray}
+    @autoproperty depthAttachmentPixelFormat::MTLPixelFormat setter = setDepthAttachmentPixelFormat
+    @autoproperty stencilAttachmentPixelFormat::MTLPixelFormat setter = setStencilAttachmentPixelFormat
+    @autoproperty inputPrimitiveTopology::MTLPrimitiveTopologyClass setter = setInputPrimitiveTopology
+    @autoproperty tessellationPartitionMode::MTLTessellationPartitionMode setter = setTessellationPartitionMode
+    @autoproperty maxTessellationFactor::UInt64 setter = setMaxTessellationFactor
+    @autoproperty tessellationFactorScaleEnabled::Bool getter = isTessellationFactorScaleEnabled setter = setTessellationFactorScaleEnabled
+    @autoproperty tessellationFactorFormat::MTLTessellationFactorFormat setter = setTessellationFactorFormat
+    @autoproperty tessellationControlPointIndexType::MTLTessellationControlPointIndexType setter = setTessellationControlPointIndexType
+    @autoproperty tessellationFactorStepFunction::MTLTessellationFactorStepFunction setter = setTessellationFactorStepFunction
+    @autoproperty tessellationOutputWindingOrder::MTLWinding setter = setTessellationOutputWindingOrder
+    @autoproperty vertexBuffers::id{MTLPipelineBufferDescriptorArray}
+    @autoproperty fragmentBuffers::id{MTLPipelineBufferDescriptorArray}
+    @autoproperty supportIndirectCommandBuffers::Bool setter = setSupportIndirectCommandBuffers
+    @autoproperty binaryArchives::id{NSArray} type = Vector{MTLBinaryArchive} setter = setBinaryArchives
+    @autoproperty vertexPreloadedLibraries::id{NSArray} type = Vector{MTLDynamicLibrary} setter = setVertexPreloadedLibraries
+    @autoproperty fragmentPreloadedLibraries::id{NSArray} type = Vector{MTLDynamicLibrary} setter = setFragmentPreloadedLibraries
+    @autoproperty vertexLinkedFunctions::id{MTLLinkedFunctions} setter = setVertexLinkedFunctions
+    @autoproperty fragmentLinkedFunctions::id{MTLLinkedFunctions} setter = setFragmentLinkedFunctions
+    @autoproperty supportAddingVertexBinaryFunctions::Bool setter = setSupportAddingVertexBinaryFunctions
+    @autoproperty supportAddingFragmentBinaryFunctions::Bool setter = setSupportAddingFragmentBinaryFunctions
+    @autoproperty maxVertexCallStackDepth::UInt64 setter = setMaxVertexCallStackDepth
+    @autoproperty maxFragmentCallStackDepth::UInt64 setter = setMaxFragmentCallStackDepth
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation
+    end
+end
+
+@objcwrapper immutable = true MTLRenderPipelineFunctionsDescriptor <: NSObject
+
+@objcproperties MTLRenderPipelineFunctionsDescriptor begin
+    @autoproperty vertexAdditionalBinaryFunctions::id{NSArray} type = Vector{MTLFunction} setter = setVertexAdditionalBinaryFunctions
+    @autoproperty fragmentAdditionalBinaryFunctions::id{NSArray} type = Vector{MTLFunction} setter = setFragmentAdditionalBinaryFunctions
+    @autoproperty tileAdditionalBinaryFunctions::id{NSArray} type = Vector{MTLFunction} setter = setTileAdditionalBinaryFunctions
+end
+
+@objcwrapper immutable = true MTLRenderPipelineState <: NSObject
+
+@objcproperties MTLRenderPipelineState begin
+    @autoproperty label::id{NSString}
+    @autoproperty device::id{MTLDevice}
+    @autoproperty maxTotalThreadsPerThreadgroup::UInt64
+    @autoproperty threadgroupSizeMatchesTileSize::Bool
+    @autoproperty imageblockSampleLength::UInt64
+    @autoproperty supportIndirectCommandBuffers::Bool
+    @autoproperty maxTotalThreadsPerObjectThreadgroup::UInt64
+    @autoproperty maxTotalThreadsPerMeshThreadgroup::UInt64
+    @autoproperty objectThreadExecutionWidth::UInt64
+    @autoproperty meshThreadExecutionWidth::UInt64
+    @autoproperty maxTotalThreadgroupsPerMeshGrid::UInt64
+    @autoproperty gpuResourceID::MTLResourceID
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty shaderValidation::MTLShaderValidation
+    end
+end
+
 @objcwrapper immutable = true MTLTileRenderPipelineColorAttachmentDescriptor <: NSObject
+
+@objcproperties MTLTileRenderPipelineColorAttachmentDescriptor begin
+    @autoproperty pixelFormat::MTLPixelFormat setter = setPixelFormat
+end
 
 @objcwrapper immutable = true MTLTileRenderPipelineColorAttachmentDescriptorArray <:
                               NSObject
 
 @objcwrapper immutable = true MTLTileRenderPipelineDescriptor <: NSObject
 
+@objcproperties MTLTileRenderPipelineDescriptor begin
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty tileFunction::id{MTLFunction} setter = setTileFunction
+    @autoproperty rasterSampleCount::UInt64 setter = setRasterSampleCount
+    @autoproperty colorAttachments::id{MTLTileRenderPipelineColorAttachmentDescriptorArray}
+    @autoproperty threadgroupSizeMatchesTileSize::Bool setter = setThreadgroupSizeMatchesTileSize
+    @autoproperty tileBuffers::id{MTLPipelineBufferDescriptorArray}
+    @autoproperty maxTotalThreadsPerThreadgroup::UInt64 setter = setMaxTotalThreadsPerThreadgroup
+    @autoproperty binaryArchives::id{NSArray} type = Vector{MTLBinaryArchive} setter = setBinaryArchives
+    @autoproperty preloadedLibraries::id{NSArray} type = Vector{MTLDynamicLibrary} setter = setPreloadedLibraries
+    @autoproperty linkedFunctions::id{MTLLinkedFunctions} setter = setLinkedFunctions
+    @autoproperty supportAddingBinaryFunctions::Bool setter = setSupportAddingBinaryFunctions
+    @autoproperty maxCallStackDepth::UInt64 setter = setMaxCallStackDepth
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation
+    end
+end
+
 @objcwrapper immutable = true MTLMeshRenderPipelineDescriptor <: NSObject
+
+@objcproperties MTLMeshRenderPipelineDescriptor begin
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty objectFunction::id{MTLFunction} setter = setObjectFunction
+    @autoproperty meshFunction::id{MTLFunction} setter = setMeshFunction
+    @autoproperty fragmentFunction::id{MTLFunction} setter = setFragmentFunction
+    @autoproperty maxTotalThreadsPerObjectThreadgroup::UInt64 setter = setMaxTotalThreadsPerObjectThreadgroup
+    @autoproperty maxTotalThreadsPerMeshThreadgroup::UInt64 setter = setMaxTotalThreadsPerMeshThreadgroup
+    @autoproperty objectThreadgroupSizeIsMultipleOfThreadExecutionWidth::Bool setter = setObjectThreadgroupSizeIsMultipleOfThreadExecutionWidth
+    @autoproperty meshThreadgroupSizeIsMultipleOfThreadExecutionWidth::Bool setter = setMeshThreadgroupSizeIsMultipleOfThreadExecutionWidth
+    @autoproperty payloadMemoryLength::UInt64 setter = setPayloadMemoryLength
+    @autoproperty maxTotalThreadgroupsPerMeshGrid::UInt64 setter = setMaxTotalThreadgroupsPerMeshGrid
+    @autoproperty objectBuffers::id{MTLPipelineBufferDescriptorArray}
+    @autoproperty meshBuffers::id{MTLPipelineBufferDescriptorArray}
+    @autoproperty fragmentBuffers::id{MTLPipelineBufferDescriptorArray}
+    @autoproperty rasterSampleCount::UInt64 setter = setRasterSampleCount
+    @autoproperty alphaToCoverageEnabled::Bool getter = isAlphaToCoverageEnabled setter = setAlphaToCoverageEnabled
+    @autoproperty alphaToOneEnabled::Bool getter = isAlphaToOneEnabled setter = setAlphaToOneEnabled
+    @autoproperty rasterizationEnabled::Bool getter = isRasterizationEnabled setter = setRasterizationEnabled
+    @autoproperty maxVertexAmplificationCount::UInt64 setter = setMaxVertexAmplificationCount
+    @autoproperty colorAttachments::id{MTLRenderPipelineColorAttachmentDescriptorArray}
+    @autoproperty depthAttachmentPixelFormat::MTLPixelFormat setter = setDepthAttachmentPixelFormat
+    @autoproperty stencilAttachmentPixelFormat::MTLPixelFormat setter = setStencilAttachmentPixelFormat
+    @static if Metal.macos_version() >= v"14.0.0"
+        @autoproperty supportIndirectCommandBuffers::Bool setter = setSupportIndirectCommandBuffers
+    end
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty binaryArchives::id{NSArray} type = Vector{MTLBinaryArchive} setter = setBinaryArchives
+    end
+    @static if Metal.macos_version() >= v"14.0.0"
+        @autoproperty objectLinkedFunctions::id{MTLLinkedFunctions} setter = setObjectLinkedFunctions
+    end
+    @static if Metal.macos_version() >= v"14.0.0"
+        @autoproperty meshLinkedFunctions::id{MTLLinkedFunctions} setter = setMeshLinkedFunctions
+    end
+    @static if Metal.macos_version() >= v"14.0.0"
+        @autoproperty fragmentLinkedFunctions::id{MTLLinkedFunctions} setter = setFragmentLinkedFunctions
+    end
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation
+    end
+end
 
 @objcwrapper immutable = true MTLParallelRenderCommandEncoder <: MTLCommandEncoder
 
@@ -1380,7 +2183,31 @@ end
 
 @objcwrapper immutable = true MTLSamplerDescriptor <: NSObject
 
+@objcproperties MTLSamplerDescriptor begin
+    @autoproperty minFilter::MTLSamplerMinMagFilter setter = setMinFilter
+    @autoproperty magFilter::MTLSamplerMinMagFilter setter = setMagFilter
+    @autoproperty mipFilter::MTLSamplerMipFilter setter = setMipFilter
+    @autoproperty maxAnisotropy::UInt64 setter = setMaxAnisotropy
+    @autoproperty sAddressMode::MTLSamplerAddressMode setter = setSAddressMode
+    @autoproperty tAddressMode::MTLSamplerAddressMode setter = setTAddressMode
+    @autoproperty rAddressMode::MTLSamplerAddressMode setter = setRAddressMode
+    @autoproperty borderColor::MTLSamplerBorderColor setter = setBorderColor
+    @autoproperty normalizedCoordinates::Bool setter = setNormalizedCoordinates
+    @autoproperty lodMinClamp::Cfloat setter = setLodMinClamp
+    @autoproperty lodMaxClamp::Cfloat setter = setLodMaxClamp
+    @autoproperty lodAverage::Bool setter = setLodAverage
+    @autoproperty compareFunction::MTLCompareFunction setter = setCompareFunction
+    @autoproperty supportArgumentBuffers::Bool setter = setSupportArgumentBuffers
+    @autoproperty label::id{NSString} setter = setLabel
+end
+
 @objcwrapper immutable = true MTLSamplerState <: NSObject
+
+@objcproperties MTLSamplerState begin
+    @autoproperty label::id{NSString}
+    @autoproperty device::id{MTLDevice}
+    @autoproperty gpuResourceID::MTLResourceID
+end
 
 struct _MTLPackedFloat3
     data::NTuple{12,UInt8}
@@ -1470,7 +2297,22 @@ end
 
 @objcwrapper immutable = true MTLAccelerationStructureDescriptor <: NSObject
 
+@objcproperties MTLAccelerationStructureDescriptor begin
+    @autoproperty usage::MTLAccelerationStructureUsage setter = setUsage
+end
+
 @objcwrapper immutable = true MTLAccelerationStructureGeometryDescriptor <: NSObject
+
+@objcproperties MTLAccelerationStructureGeometryDescriptor begin
+    @autoproperty intersectionFunctionTableOffset::UInt64 setter = setIntersectionFunctionTableOffset
+    @autoproperty opaque::Bool setter = setOpaque
+    @autoproperty allowDuplicateIntersectionFunctionInvocation::Bool setter = setAllowDuplicateIntersectionFunctionInvocation
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty primitiveDataBuffer::id{MTLBuffer} setter = setPrimitiveDataBuffer
+    @autoproperty primitiveDataBufferOffset::UInt64 setter = setPrimitiveDataBufferOffset
+    @autoproperty primitiveDataStride::UInt64 setter = setPrimitiveDataStride
+    @autoproperty primitiveDataElementSize::UInt64 setter = setPrimitiveDataElementSize
+end
 
 @cenum MTLMotionBorderMode::UInt32 begin
     MTLMotionBorderModeClamp = 0x0000000000000000
@@ -1480,19 +2322,77 @@ end
 @objcwrapper immutable = true MTLPrimitiveAccelerationStructureDescriptor <:
                               MTLAccelerationStructureDescriptor
 
+@objcproperties MTLPrimitiveAccelerationStructureDescriptor begin
+    @autoproperty geometryDescriptors::id{NSArray} type = Vector{MTLAccelerationStructureGeometryDescriptor} setter = setGeometryDescriptors
+    @autoproperty motionStartBorderMode::MTLMotionBorderMode setter = setMotionStartBorderMode
+    @autoproperty motionEndBorderMode::MTLMotionBorderMode setter = setMotionEndBorderMode
+    @autoproperty motionStartTime::Cfloat setter = setMotionStartTime
+    @autoproperty motionEndTime::Cfloat setter = setMotionEndTime
+    @autoproperty motionKeyframeCount::UInt64 setter = setMotionKeyframeCount
+end
+
 @objcwrapper immutable = true MTLAccelerationStructureTriangleGeometryDescriptor <:
                               MTLAccelerationStructureGeometryDescriptor
+
+@objcproperties MTLAccelerationStructureTriangleGeometryDescriptor begin
+    @autoproperty vertexBuffer::id{MTLBuffer} setter = setVertexBuffer
+    @autoproperty vertexBufferOffset::UInt64 setter = setVertexBufferOffset
+    @autoproperty vertexFormat::MTLAttributeFormat setter = setVertexFormat
+    @autoproperty vertexStride::UInt64 setter = setVertexStride
+    @autoproperty indexBuffer::id{MTLBuffer} setter = setIndexBuffer
+    @autoproperty indexBufferOffset::UInt64 setter = setIndexBufferOffset
+    @autoproperty indexType::MTLIndexType setter = setIndexType
+    @autoproperty triangleCount::UInt64 setter = setTriangleCount
+    @autoproperty transformationMatrixBuffer::id{MTLBuffer} setter = setTransformationMatrixBuffer
+    @autoproperty transformationMatrixBufferOffset::UInt64 setter = setTransformationMatrixBufferOffset
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty transformationMatrixLayout::MTLMatrixLayout setter = setTransformationMatrixLayout
+    end
+end
 
 @objcwrapper immutable = true MTLAccelerationStructureBoundingBoxGeometryDescriptor <:
                               MTLAccelerationStructureGeometryDescriptor
 
+@objcproperties MTLAccelerationStructureBoundingBoxGeometryDescriptor begin
+    @autoproperty boundingBoxBuffer::id{MTLBuffer} setter = setBoundingBoxBuffer
+    @autoproperty boundingBoxBufferOffset::UInt64 setter = setBoundingBoxBufferOffset
+    @autoproperty boundingBoxStride::UInt64 setter = setBoundingBoxStride
+    @autoproperty boundingBoxCount::UInt64 setter = setBoundingBoxCount
+end
+
 @objcwrapper immutable = true MTLMotionKeyframeData <: NSObject
+
+@objcproperties MTLMotionKeyframeData begin
+    @autoproperty buffer::id{MTLBuffer} setter = setBuffer
+    @autoproperty offset::UInt64 setter = setOffset
+end
 
 @objcwrapper immutable = true MTLAccelerationStructureMotionTriangleGeometryDescriptor <:
                               MTLAccelerationStructureGeometryDescriptor
 
+@objcproperties MTLAccelerationStructureMotionTriangleGeometryDescriptor begin
+    @autoproperty vertexBuffers::id{NSArray} type = Vector{MTLMotionKeyframeData} setter = setVertexBuffers
+    @autoproperty vertexFormat::MTLAttributeFormat setter = setVertexFormat
+    @autoproperty vertexStride::UInt64 setter = setVertexStride
+    @autoproperty indexBuffer::id{MTLBuffer} setter = setIndexBuffer
+    @autoproperty indexBufferOffset::UInt64 setter = setIndexBufferOffset
+    @autoproperty indexType::MTLIndexType setter = setIndexType
+    @autoproperty triangleCount::UInt64 setter = setTriangleCount
+    @autoproperty transformationMatrixBuffer::id{MTLBuffer} setter = setTransformationMatrixBuffer
+    @autoproperty transformationMatrixBufferOffset::UInt64 setter = setTransformationMatrixBufferOffset
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty transformationMatrixLayout::MTLMatrixLayout setter = setTransformationMatrixLayout
+    end
+end
+
 @objcwrapper immutable = true MTLAccelerationStructureMotionBoundingBoxGeometryDescriptor <:
                               MTLAccelerationStructureGeometryDescriptor
+
+@objcproperties MTLAccelerationStructureMotionBoundingBoxGeometryDescriptor begin
+    @autoproperty boundingBoxBuffers::id{NSArray} type = Vector{MTLMotionKeyframeData} setter = setBoundingBoxBuffers
+    @autoproperty boundingBoxStride::UInt64 setter = setBoundingBoxStride
+    @autoproperty boundingBoxCount::UInt64 setter = setBoundingBoxCount
+end
 
 @cenum MTLCurveType::Int64 begin
     MTLCurveTypeRound = 0
@@ -1515,11 +2415,47 @@ end
 @static if Metal.macos_version() >= v"14.0.0"
     @objcwrapper immutable = true MTLAccelerationStructureCurveGeometryDescriptor <:
                                   MTLAccelerationStructureGeometryDescriptor
+    @objcproperties MTLAccelerationStructureCurveGeometryDescriptor begin
+        @autoproperty controlPointBuffer::id{MTLBuffer} setter = setControlPointBuffer
+        @autoproperty controlPointBufferOffset::UInt64 setter = setControlPointBufferOffset
+        @autoproperty controlPointCount::UInt64 setter = setControlPointCount
+        @autoproperty controlPointStride::UInt64 setter = setControlPointStride
+        @autoproperty controlPointFormat::MTLAttributeFormat setter = setControlPointFormat
+        @autoproperty radiusBuffer::id{MTLBuffer} setter = setRadiusBuffer
+        @autoproperty radiusBufferOffset::UInt64 setter = setRadiusBufferOffset
+        @autoproperty radiusFormat::MTLAttributeFormat setter = setRadiusFormat
+        @autoproperty radiusStride::UInt64 setter = setRadiusStride
+        @autoproperty indexBuffer::id{MTLBuffer} setter = setIndexBuffer
+        @autoproperty indexBufferOffset::UInt64 setter = setIndexBufferOffset
+        @autoproperty indexType::MTLIndexType setter = setIndexType
+        @autoproperty segmentCount::UInt64 setter = setSegmentCount
+        @autoproperty segmentControlPointCount::UInt64 setter = setSegmentControlPointCount
+        @autoproperty curveType::MTLCurveType setter = setCurveType
+        @autoproperty curveBasis::MTLCurveBasis setter = setCurveBasis
+        @autoproperty curveEndCaps::MTLCurveEndCaps setter = setCurveEndCaps
+    end
 end
 
 @static if Metal.macos_version() >= v"14.0.0"
     @objcwrapper immutable = true MTLAccelerationStructureMotionCurveGeometryDescriptor <:
                                   MTLAccelerationStructureGeometryDescriptor
+    @objcproperties MTLAccelerationStructureMotionCurveGeometryDescriptor begin
+        @autoproperty controlPointBuffers::id{NSArray} type = Vector{MTLMotionKeyframeData} setter = setControlPointBuffers
+        @autoproperty controlPointCount::UInt64 setter = setControlPointCount
+        @autoproperty controlPointStride::UInt64 setter = setControlPointStride
+        @autoproperty controlPointFormat::MTLAttributeFormat setter = setControlPointFormat
+        @autoproperty radiusBuffers::id{NSArray} type = Vector{MTLMotionKeyframeData} setter = setRadiusBuffers
+        @autoproperty radiusFormat::MTLAttributeFormat setter = setRadiusFormat
+        @autoproperty radiusStride::UInt64 setter = setRadiusStride
+        @autoproperty indexBuffer::id{MTLBuffer} setter = setIndexBuffer
+        @autoproperty indexBufferOffset::UInt64 setter = setIndexBufferOffset
+        @autoproperty indexType::MTLIndexType setter = setIndexType
+        @autoproperty segmentCount::UInt64 setter = setSegmentCount
+        @autoproperty segmentControlPointCount::UInt64 setter = setSegmentControlPointCount
+        @autoproperty curveType::MTLCurveType setter = setCurveType
+        @autoproperty curveBasis::MTLCurveBasis setter = setCurveBasis
+        @autoproperty curveEndCaps::MTLCurveEndCaps setter = setCurveEndCaps
+    end
 end
 
 struct MTLAccelerationStructureInstanceDescriptor
@@ -1589,27 +2525,85 @@ end
     MTLTransformTypeComponent = 1
 end
 
+@objcwrapper immutable = true MTLAccelerationStructure <: MTLResource
+
+@objcproperties MTLAccelerationStructure begin
+    @autoproperty size::UInt64
+    @autoproperty gpuResourceID::MTLResourceID
+end
+
 @objcwrapper immutable = true MTLInstanceAccelerationStructureDescriptor <:
                               MTLAccelerationStructureDescriptor
+
+@objcproperties MTLInstanceAccelerationStructureDescriptor begin
+    @autoproperty instanceDescriptorBuffer::id{MTLBuffer} setter = setInstanceDescriptorBuffer
+    @autoproperty instanceDescriptorBufferOffset::UInt64 setter = setInstanceDescriptorBufferOffset
+    @autoproperty instanceDescriptorStride::UInt64 setter = setInstanceDescriptorStride
+    @autoproperty instanceCount::UInt64 setter = setInstanceCount
+    @autoproperty instancedAccelerationStructures::id{NSArray} type = Vector{MTLAccelerationStructure} setter = setInstancedAccelerationStructures
+    @autoproperty instanceDescriptorType::MTLAccelerationStructureInstanceDescriptorType setter = setInstanceDescriptorType
+    @autoproperty motionTransformBuffer::id{MTLBuffer} setter = setMotionTransformBuffer
+    @autoproperty motionTransformBufferOffset::UInt64 setter = setMotionTransformBufferOffset
+    @autoproperty motionTransformCount::UInt64 setter = setMotionTransformCount
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty instanceTransformationMatrixLayout::MTLMatrixLayout setter = setInstanceTransformationMatrixLayout
+    end
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty motionTransformType::MTLTransformType setter = setMotionTransformType
+    end
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty motionTransformStride::UInt64 setter = setMotionTransformStride
+    end
+end
 
 @static if Metal.macos_version() >= v"14.0.0"
     @objcwrapper immutable = true MTLIndirectInstanceAccelerationStructureDescriptor <:
                                   MTLAccelerationStructureDescriptor
-end
-
-@objcwrapper immutable = true MTLAccelerationStructure <: MTLResource
-
-@cenum MTLHeapType::Int64 begin
-    MTLHeapTypeAutomatic = 0
-    MTLHeapTypePlacement = 1
-    MTLHeapTypeSparse = 2
+    @objcproperties MTLIndirectInstanceAccelerationStructureDescriptor begin
+        @autoproperty instanceDescriptorBuffer::id{MTLBuffer} setter = setInstanceDescriptorBuffer
+        @autoproperty instanceDescriptorBufferOffset::UInt64 setter = setInstanceDescriptorBufferOffset
+        @autoproperty instanceDescriptorStride::UInt64 setter = setInstanceDescriptorStride
+        @autoproperty maxInstanceCount::UInt64 setter = setMaxInstanceCount
+        @autoproperty instanceCountBuffer::id{MTLBuffer} setter = setInstanceCountBuffer
+        @autoproperty instanceCountBufferOffset::UInt64 setter = setInstanceCountBufferOffset
+        @autoproperty instanceDescriptorType::MTLAccelerationStructureInstanceDescriptorType setter = setInstanceDescriptorType
+        @autoproperty motionTransformBuffer::id{MTLBuffer} setter = setMotionTransformBuffer
+        @autoproperty motionTransformBufferOffset::UInt64 setter = setMotionTransformBufferOffset
+        @autoproperty maxMotionTransformCount::UInt64 setter = setMaxMotionTransformCount
+        @autoproperty motionTransformCountBuffer::id{MTLBuffer} setter = setMotionTransformCountBuffer
+        @autoproperty motionTransformCountBufferOffset::UInt64 setter = setMotionTransformCountBufferOffset
+        @static if Metal.macos_version() >= v"15.0.0"
+            @autoproperty instanceTransformationMatrixLayout::MTLMatrixLayout setter = setInstanceTransformationMatrixLayout
+        end
+        @static if Metal.macos_version() >= v"15.0.0"
+            @autoproperty motionTransformType::MTLTransformType setter = setMotionTransformType
+        end
+        @static if Metal.macos_version() >= v"15.0.0"
+            @autoproperty motionTransformStride::UInt64 setter = setMotionTransformStride
+        end
+    end
 end
 
 @objcwrapper immutable = false MTLHeapDescriptor <: NSObject
 
-@objcwrapper immutable = false MTLHeap <: MTLAllocation
+@objcproperties MTLHeapDescriptor begin
+    @autoproperty size::UInt64 setter = setSize
+    @autoproperty storageMode::MTLStorageMode setter = setStorageMode
+    @autoproperty cpuCacheMode::MTLCPUCacheMode setter = setCpuCacheMode
+    @autoproperty sparsePageSize::MTLSparsePageSize setter = setSparsePageSize
+    @autoproperty hazardTrackingMode::MTLHazardTrackingMode setter = setHazardTrackingMode
+    @autoproperty resourceOptions::MTLResourceOptions setter = setResourceOptions
+    @autoproperty type::MTLHeapType setter = setType
+end
 
 @objcwrapper immutable = true MTLArgumentEncoder <: NSObject
+
+@objcproperties MTLArgumentEncoder begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty encodedLength::UInt64
+    @autoproperty alignment::UInt64
+end
 
 @cenum MTLCaptureError::Int64 begin
     MTLCaptureErrorNotSupported = 1
@@ -1624,9 +2618,26 @@ end
 
 @objcwrapper immutable = false MTLCaptureDescriptor <: NSObject
 
-@objcwrapper immutable = true MTLCaptureManager <: NSObject
+@objcproperties MTLCaptureDescriptor begin
+    @autoproperty captureObject::id{NSObject} setter = setCaptureObject
+    @autoproperty destination::MTLCaptureDestination setter = setDestination
+    @autoproperty outputURL::id{NSURL} setter = setOutputURL
+end
 
 @objcwrapper immutable = true MTLCaptureScope <: NSObject
+
+@objcproperties MTLCaptureScope begin
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty device::id{MTLDevice}
+    @autoproperty commandQueue::id{MTLCommandQueue}
+end
+
+@objcwrapper immutable = true MTLCaptureManager <: NSObject
+
+@objcproperties MTLCaptureManager begin
+    @autoproperty defaultCaptureScope::id{MTLCaptureScope} setter = setDefaultCaptureScope
+    @autoproperty isCapturing::Bool
+end
 
 @objcwrapper immutable = true MTLIndirectRenderCommand <: NSObject
 
@@ -1655,21 +2666,69 @@ end
 
 @objcwrapper immutable = true MTLIndirectCommandBufferDescriptor <: NSObject
 
+@objcproperties MTLIndirectCommandBufferDescriptor begin
+    @autoproperty commandTypes::MTLIndirectCommandType setter = setCommandTypes
+    @autoproperty inheritPipelineState::Bool setter = setInheritPipelineState
+    @autoproperty inheritBuffers::Bool setter = setInheritBuffers
+    @autoproperty maxVertexBufferBindCount::UInt64 setter = setMaxVertexBufferBindCount
+    @autoproperty maxFragmentBufferBindCount::UInt64 setter = setMaxFragmentBufferBindCount
+    @autoproperty maxKernelBufferBindCount::UInt64 setter = setMaxKernelBufferBindCount
+    @static if Metal.macos_version() >= v"14.0.0"
+        @autoproperty maxKernelThreadgroupMemoryBindCount::UInt64 setter = setMaxKernelThreadgroupMemoryBindCount
+    end
+    @static if Metal.macos_version() >= v"14.0.0"
+        @autoproperty maxObjectBufferBindCount::UInt64 setter = setMaxObjectBufferBindCount
+    end
+    @static if Metal.macos_version() >= v"14.0.0"
+        @autoproperty maxMeshBufferBindCount::UInt64 setter = setMaxMeshBufferBindCount
+    end
+    @static if Metal.macos_version() >= v"14.0.0"
+        @autoproperty maxObjectThreadgroupMemoryBindCount::UInt64 setter = setMaxObjectThreadgroupMemoryBindCount
+    end
+    @autoproperty supportRayTracing::Bool setter = setSupportRayTracing
+    @static if Metal.macos_version() >= v"14.0.0"
+        @autoproperty supportDynamicAttributeStride::Bool setter = setSupportDynamicAttributeStride
+    end
+end
+
 @objcwrapper immutable = true MTLIndirectCommandBuffer <: MTLResource
+
+@objcproperties MTLIndirectCommandBuffer begin
+    @autoproperty size::UInt64
+    @autoproperty gpuResourceID::MTLResourceID
+end
 
 @objcwrapper immutable = false MTLEvent <: NSObject
 
+@objcproperties MTLEvent begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString} setter = setLabel
+end
+
 @objcwrapper immutable = false MTLSharedEvent <: MTLEvent
 
+@objcproperties MTLSharedEvent begin
+    @autoproperty signaledValue::UInt64 setter = setSignaledValue
+end
+
 @objcwrapper immutable = true MTLSharedEventHandle <: NSObject
+
+@objcproperties MTLSharedEventHandle begin
+    @autoproperty label::id{NSString}
+end
 
 @cenum MTLFunctionLogType::UInt64 begin
     MTLFunctionLogTypeValidation = 0x0000000000000000
 end
 
-@objcwrapper immutable = true MTLLogContainer <: NSObject
-
 @objcwrapper immutable = true MTLFunctionLogDebugLocation <: NSObject
+
+@objcproperties MTLFunctionLogDebugLocation begin
+    @autoproperty functionName::id{NSString}
+    @autoproperty URL::id{NSURL}
+    @autoproperty line::UInt64
+    @autoproperty column::UInt64
+end
 
 @cenum MTLAccelerationStructureRefitOptions::UInt64 begin
     MTLAccelerationStructureRefitOptionVertexData = 0x0000000000000001
@@ -1681,20 +2740,44 @@ end
 @objcwrapper immutable = true MTLAccelerationStructurePassSampleBufferAttachmentDescriptor <:
                               NSObject
 
+@objcproperties MTLAccelerationStructurePassSampleBufferAttachmentDescriptor begin
+    @autoproperty sampleBuffer::id{MTLCounterSampleBuffer} setter = setSampleBuffer
+    @autoproperty startOfEncoderSampleIndex::UInt64 setter = setStartOfEncoderSampleIndex
+    @autoproperty endOfEncoderSampleIndex::UInt64 setter = setEndOfEncoderSampleIndex
+end
+
 @objcwrapper immutable = true MTLAccelerationStructurePassSampleBufferAttachmentDescriptorArray <:
                               NSObject
 
 @objcwrapper immutable = true MTLAccelerationStructurePassDescriptor <: NSObject
 
+@objcproperties MTLAccelerationStructurePassDescriptor begin
+    @autoproperty sampleBufferAttachments::id{MTLAccelerationStructurePassSampleBufferAttachmentDescriptorArray}
+end
+
 @objcwrapper immutable = true MTLRasterizationRateSampleArray <: NSObject
 
 @objcwrapper immutable = true MTLRasterizationRateLayerDescriptor <: NSObject
+
+@objcproperties MTLRasterizationRateLayerDescriptor begin
+    @autoproperty sampleCount::MTLSize
+    @autoproperty maxSampleCount::MTLSize
+    @autoproperty horizontalSampleStorage::Ptr{Cfloat}
+    @autoproperty verticalSampleStorage::Ptr{Cfloat}
+    @autoproperty horizontal::id{MTLRasterizationRateSampleArray}
+    @autoproperty vertical::id{MTLRasterizationRateSampleArray}
+end
 
 @objcwrapper immutable = true MTLRasterizationRateLayerArray <: NSObject
 
 @objcwrapper immutable = true MTLRasterizationRateMapDescriptor <: NSObject
 
-@objcwrapper immutable = true MTLRasterizationRateMap <: NSObject
+@objcproperties MTLRasterizationRateMapDescriptor begin
+    @autoproperty layers::id{MTLRasterizationRateLayerArray}
+    @autoproperty screenSize::MTLSize setter = setScreenSize
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty layerCount::UInt64
+end
 
 @cenum MTLDynamicLibraryError::UInt64 begin
     MTLDynamicLibraryErrorNone = 0x0000000000000000
@@ -1704,8 +2787,6 @@ end
     MTLDynamicLibraryErrorDependencyLoadFailure = 0x0000000000000004
     MTLDynamicLibraryErrorUnsupported = 0x0000000000000005
 end
-
-@objcwrapper immutable = true MTLDynamicLibrary <: NSObject
 
 @cenum MTLLogLevel::Int64 begin
     MTLLogLevelUndefined = 0
@@ -1717,11 +2798,11 @@ end
 end
 
 @static if Metal.macos_version() >= v"15.0.0"
-    @objcwrapper immutable = true MTLLogState <: NSObject
-end
-
-@static if Metal.macos_version() >= v"15.0.0"
     @objcwrapper immutable = true MTLLogStateDescriptor <: NSObject
+    @objcproperties MTLLogStateDescriptor begin
+        @autoproperty level::MTLLogLevel setter = setLevel
+        @autoproperty bufferSize::Int64 setter = setBufferSize
+    end
 end
 
 @cenum MTLLogStateError::UInt64 begin
@@ -1739,7 +2820,9 @@ end
 
 @objcwrapper immutable = false MTLBinaryArchiveDescriptor <: NSObject
 
-@objcwrapper immutable = false MTLBinaryArchive <: NSObject
+@objcproperties MTLBinaryArchiveDescriptor begin
+    @autoproperty url::id{NSURL} setter = setUrl
+end
 
 @cenum MTLIntersectionFunctionSignature::UInt64 begin
     MTLIntersectionFunctionSignatureNone = 0x0000000000000000
@@ -1755,7 +2838,15 @@ end
 
 @objcwrapper immutable = true MTLIntersectionFunctionTableDescriptor <: NSObject
 
+@objcproperties MTLIntersectionFunctionTableDescriptor begin
+    @autoproperty functionCount::UInt64 setter = setFunctionCount
+end
+
 @objcwrapper immutable = true MTLIntersectionFunctionTable <: MTLResource
+
+@objcproperties MTLIntersectionFunctionTable begin
+    @autoproperty gpuResourceID::MTLResourceID
+end
 
 @cenum MTLStitchedLibraryOptions::UInt64 begin
     MTLStitchedLibraryOptionNone = 0x0000000000000000
@@ -1771,11 +2862,39 @@ end
 
 @objcwrapper immutable = true MTLFunctionStitchingInputNode <: NSObject
 
+@objcproperties MTLFunctionStitchingInputNode begin
+    @autoproperty argumentIndex::UInt64 setter = setArgumentIndex
+end
+
 @objcwrapper immutable = true MTLFunctionStitchingFunctionNode <: NSObject
+
+@objcproperties MTLFunctionStitchingFunctionNode begin
+    @autoproperty name::id{NSString} setter = setName
+    @autoproperty arguments::id{NSArray} type = Vector{MTLFunctionStitchingNode} setter = setArguments
+    @autoproperty controlDependencies::id{NSArray} type = Vector{MTLFunctionStitchingFunctionNode} setter = setControlDependencies
+end
 
 @objcwrapper immutable = true MTLFunctionStitchingGraph <: NSObject
 
+@objcproperties MTLFunctionStitchingGraph begin
+    @autoproperty functionName::id{NSString} setter = setFunctionName
+    @autoproperty nodes::id{NSArray} type = Vector{MTLFunctionStitchingFunctionNode} setter = setNodes
+    @autoproperty outputNode::id{MTLFunctionStitchingFunctionNode} setter = setOutputNode
+    @autoproperty attributes::id{NSArray} type = Vector{MTLFunctionStitchingAttribute} setter = setAttributes
+end
+
 @objcwrapper immutable = true MTLStitchedLibraryDescriptor <: NSObject
+
+@objcproperties MTLStitchedLibraryDescriptor begin
+    @autoproperty functionGraphs::id{NSArray} type = Vector{MTLFunctionStitchingGraph} setter = setFunctionGraphs
+    @autoproperty functions::id{NSArray} type = Vector{MTLFunction} setter = setFunctions
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty binaryArchives::id{NSArray} type = Vector{MTLBinaryArchive} setter = setBinaryArchives
+    end
+    @static if Metal.macos_version() >= v"15.0.0"
+        @autoproperty options::MTLStitchedLibraryOptions setter = setOptions
+    end
+end
 
 @cenum MTLIOPriority::Int64 begin
     MTLIOPriorityHigh = 0
@@ -1795,13 +2914,33 @@ end
 
 @objcwrapper immutable = true MTLIOCommandQueue <: NSObject
 
+@objcproperties MTLIOCommandQueue begin
+    @autoproperty label::id{NSString} setter = setLabel
+end
+
 @objcwrapper immutable = true MTLIOScratchBuffer <: NSObject
+
+@objcproperties MTLIOScratchBuffer begin
+    @autoproperty buffer::id{MTLBuffer}
+end
 
 @objcwrapper immutable = true MTLIOScratchBufferAllocator <: NSObject
 
 @objcwrapper immutable = true MTLIOCommandQueueDescriptor <: NSObject
 
+@objcproperties MTLIOCommandQueueDescriptor begin
+    @autoproperty maxCommandBufferCount::UInt64 setter = setMaxCommandBufferCount
+    @autoproperty priority::MTLIOPriority setter = setPriority
+    @autoproperty type::MTLIOCommandQueueType setter = setType
+    @autoproperty maxCommandsInFlight::UInt64 setter = setMaxCommandsInFlight
+    @autoproperty scratchBufferAllocator::id{MTLIOScratchBufferAllocator} setter = setScratchBufferAllocator
+end
+
 @objcwrapper immutable = true MTLIOFileHandle <: NSObject
+
+@objcproperties MTLIOFileHandle begin
+    @autoproperty label::id{NSString} setter = setLabel
+end
 
 @cenum MTLIOStatus::Int64 begin
     MTLIOStatusPending = 0
@@ -1811,6 +2950,12 @@ end
 end
 
 @objcwrapper immutable = true MTLIOCommandBuffer <: NSObject
+
+@objcproperties MTLIOCommandBuffer begin
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty status::MTLIOStatus
+    @autoproperty error::id{NSError}
+end
 
 @cenum MTLIOCompressionStatus::Int64 begin
     MTLIOCompressionStatusComplete = 0
@@ -1841,8 +2986,23 @@ end
 
 @static if Metal.macos_version() >= v"15.0.0"
     @objcwrapper immutable = true MTLResidencySetDescriptor <: NSObject
+    @objcproperties MTLResidencySetDescriptor begin
+        @autoproperty label::id{NSString} setter = setLabel
+        @autoproperty initialCapacity::UInt64 setter = setInitialCapacity
+    end
 end
 
 @static if Metal.macos_version() >= v"15.0.0"
     @objcwrapper immutable = true MTLResidencySet <: NSObject
+    @objcproperties MTLResidencySet begin
+        @autoproperty device::id{MTLDevice}
+        @autoproperty label::id{NSString}
+        @autoproperty allocatedSize::UInt64
+        @autoproperty allAllocations::id{NSArray} type = Vector{MTLAllocation}
+        @autoproperty allocationCount::UInt64
+    end
 end
+
+mutable struct MTLSharedEventHandlePrivate end
+
+mutable struct MTLSharedTextureHandlePrivate end
