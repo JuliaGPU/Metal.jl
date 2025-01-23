@@ -1,4 +1,4 @@
-export MTLBuffer
+export MTLBuffer, contents
 
 # From docs: "MSL implements a buffer as a pointer to a built-in or user defined data type described in the
 # device, constant, or threadgroup address space.
@@ -15,9 +15,11 @@ export MTLBuffer
 
 Base.sizeof(buf::MTLBuffer) = Int(buf.length)
 
+contents(buf::MTLBuffer) = @objc [buf::id{MTLBuffer} contents]::Ptr{Cvoid}
+
 function Base.convert(::Type{Ptr{T}}, buf::MTLBuffer) where {T}
     buf.storageMode == MTLStorageModePrivate && error("Cannot access the contents of a private buffer")
-    convert(Ptr{T}, buf.contents)
+    convert(Ptr{T}, contents(buf))
 end
 
 

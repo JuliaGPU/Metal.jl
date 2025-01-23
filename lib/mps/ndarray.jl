@@ -65,6 +65,19 @@ export MPSNDArray
 #     end
 # end
 
+@static if Metal.is_macos(v"15")
+    function userBuffer(ndarr::MPSNDArray)::Union{Nothing, MTLBuffer}
+        res = @objc [ndarr::id{MPSNDArray} userBuffer]::id{MTLBuffer}
+        return res == nil ? nothing : MTLBuffer(res)
+    end
+    function resourceSize(ndarr::MPSNDArray)
+        return @objc [ndarr::id{MPSNDArray} resourceSize]::NSUInteger
+    end
+    function descriptor(ndarr::MPSNDArray)::MPSNDArrayDescriptor
+        res = @objc [ndarr::id{MPSNDArray} descriptor]::id{MPSNDArrayDescriptor}
+        return res == nil ? nothing : MPSNDArrayDescriptor(res)
+    end
+end
 
 function Base.size(ndarr::MPSNDArray)
     ndims = Int(ndarr.numberOfDimensions)
