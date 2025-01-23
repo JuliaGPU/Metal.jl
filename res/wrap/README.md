@@ -4,7 +4,7 @@ This directory contains scripts to generate Julia wrappers for Metal and MetalPe
 
 Currently, only `enums` and `structs` are able to be generated. Don't forget to update the wrappers section in the contributing docs if this changes!
 
-The scripts are meant to be run from this directory, and at the moment, [this Clang.jl branch](https://github.com/christiangnrd/Clang.jl/tree/objectiveC) must be used.
+The scripts are meant to be run from this directory, and at the moment, Clang.jl master branch must be used.
 
 --------
 
