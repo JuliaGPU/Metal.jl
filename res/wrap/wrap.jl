@@ -146,43 +146,43 @@ function create_objc_context(headers::Vector, args::Vector=String[], options::Di
 end
 
 function rewriter!(ctx, options)
+    haskey(options, "api") || return
+
     for node in get_nodes(ctx.dag)
-        if haskey(options, "api")
-            nodetype = typeof(node)
-            if nodetype <: Generators.ExprNode{<:Generators.AbstractStructNodeType}
+        nodetype = typeof(node)
+        if nodetype <: Generators.ExprNode{<:Generators.AbstractStructNodeType}
+            expr = node.exprs[1]
+            structName = string(node.id)
+
+            if haskey(options["api"], structName) && haskey(options["api"][structName], "constructor")
                 expr = node.exprs[1]
-                structName = string(node.id)
+                con = options["api"][structName]["constructor"] |> Meta.parse
 
-                if haskey(options["api"], structName) && haskey(options["api"][structName], "constructor")
-                    expr = node.exprs[1]
-                    con = options["api"][structName]["constructor"] |> Meta.parse
-
-                    if con.head == :(=) && con.args[2] isa Expr && con.args[2].head == :block &&
-                        con.args[2].args[1] isa LineNumberNode && con.args[2].args[2].head == :call
-                        con.args[2] = con.args[2].args[2]
-                    end
-                    push!(expr.args[3].args, con)
+                if con.head == :(=) && con.args[2] isa Expr && con.args[2].head == :block &&
+                    con.args[2].args[1] isa LineNumberNode && con.args[2].args[2].head == :call
+                    con.args[2] = con.args[2].args[2]
                 end
-            elseif nodetype <: Generators.ExprNode{<:Generators.AbstractObjCObjNodeType}
-                expr = node.exprs[1]
-                className = string(node.id)
-                if haskey(options["api"], className)
-                    if haskey(options["api"][className], "immutable")
-                        expr = node.exprs[1]
-                        con = options["api"][className]["immutable"]
+                push!(expr.args[3].args, con)
+            end
+        elseif nodetype <: Generators.ExprNode{<:Generators.AbstractObjCObjNodeType}
+            expr = node.exprs[1]
+            className = string(node.id)
+            if haskey(options["api"], className)
+                if haskey(options["api"][className], "immutable")
+                    expr = node.exprs[1]
+                    con = options["api"][className]["immutable"]
 
-                        expr.args[3].args[2] = con
+                    expr.args[3].args[2] = con
+                end
+                if haskey(options["api"][className], "override_supertype")
+                    expr2 = if expr.head == :macrocall && first(expr.args) == Symbol("@static")
+                        expr.args[3].args[2].args[1].args[4]
+                    else
+                        expr.args[4]
                     end
-                    if haskey(options["api"][className], "override_supertype")
-                        expr2 = if expr.head == :macrocall && first(expr.args) == Symbol("@static")
-                            expr.args[3].args[2].args[1].args[4]
-                        else
-                            expr.args[4]
-                        end
-                        typ = options["api"][className]["override_supertype"] |> Meta.parse
+                    typ = options["api"][className]["override_supertype"] |> Meta.parse
 
-                        expr2.args[2] = typ
-                    end
+                    expr2.args[2] = typ
                 end
             end
         end
