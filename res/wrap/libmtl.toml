@@ -54,8 +54,13 @@ MTLCaptureDescriptor=false
 MTLComputeCommandEncoder=false
 MTLTexture=false
 
-
 [api.constructor]
 MTLRegion = "MTLRegion(origin=MTLOrigin(), size=MTLSize()) = new(origin, size)"
 MTLSize = "MTLSize(w=1, h=1, d=1) = new(w, h, d)"
 MTLOrigin = "MTLOrigin(x=0, y=0, z=0) = new(x, y, z)"
+
+[api.propertytype.MTLCompileOptions]
+languageVersion="VersionNumber"
+
+[api.propertytype.MTLBuffer]
+gpuAddress="Ptr{Cvoid}"

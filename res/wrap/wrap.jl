@@ -159,6 +159,7 @@ function rewriter!(ctx, options)
     constructorsDict = get(options["api"], "constructor", Dict())
     immutableDict = get(options["api"], "immutable", Dict())
     supertypeDict = get(options["api"], "override_supertype", Dict())
+    propertytypeDict = get(options["api"], "propertytype", Dict())
 
     for node in get_nodes(ctx.dag)
         nodetype = typeof(node)
@@ -190,6 +191,27 @@ function rewriter!(ctx, options)
                 typ = supertypeDict[className] |> Meta.parse
 
                 expr2.args[2] = typ
+            end
+            if haskey(propertytypeDict, className)
+                propertyexprs = node.exprs[2].args[4].args
+                for pro in propertyexprs
+                    strippedpro = stripStatic(pro)
+                    propname = strippedpro.args[3].args[1]
+                    if haskey(propertytypeDict[className], string(propname))
+                        newtype = propertytypeDict[className][string(propname)] |> Meta.parse
+
+                        # There might already be a `type` expression
+                        typeexpridx = findfirst(strippedpro.args) do expr
+                            expr isa Expr && expr.args[1] == :type
+                        end
+                        # Add or replace type expression
+                        if isnothing(typeexpridx)
+                            insert!(strippedpro.args, 4, Expr(:(=), :type, newtype))
+                        else
+                            strippedpro.args[typeexpridx].args[2] = newtype
+                        end
+                    end
+                end
             end
         end
     end
