@@ -145,16 +145,16 @@ function create_objc_context(headers::Vector, args::Vector=String[], options::Di
     Generators.add_default_passes!(ctx, options, system_dirs, dependent_headers)
 end
 
+function stripStatic(expr::Expr)
+    if expr.head == :macrocall && first(expr.args) == Symbol("@static")
+        return expr.args[3].args[2].args[1]
+    else
+        return expr
+    end
+end
+
 function rewriter!(ctx, options)
     haskey(options, "api") || return
-
-    function stripStatic(expr)
-        if expr.head == :macrocall && first(expr.args) == Symbol("@static")
-            return expr.args[3].args[2].args[1]
-        else
-            return expr
-        end
-    end
 
     constructorsDict = get(options["api"], "constructor", Dict())
     immutableDict = get(options["api"], "immutable", Dict())
@@ -195,6 +195,7 @@ function rewriter!(ctx, options)
             if haskey(propertytypeDict, className)
                 propertyexprs = node.exprs[2].args[4].args
                 for pro in propertyexprs
+                    isnothing(pro) && continue
                     strippedpro = stripStatic(pro)
                     propname = strippedpro.args[3].args[1]
                     if haskey(propertytypeDict[className], string(propname))
