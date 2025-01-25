@@ -388,7 +388,7 @@ end
 @objcproperties MPSNDArrayDescriptor begin
     @autoproperty dataType::MPSDataType setter = setDataType
     @autoproperty numberOfDimensions::UInt64 setter = setNumberOfDimensions
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty preferPackedRows::Bool setter = setPreferPackedRows
     end
 end
@@ -2545,7 +2545,7 @@ end
 
 @objcwrapper immutable = true MPSNDArrayGatherGradient <: MPSNDArrayBinaryPrimaryGradientKernel
 
-@static if Metal.macos_version() >= v"15.0.0"
+@static if Metal.is_macos(v"15.0.0")
     @objcwrapper immutable = true MPSNDArrayIdentity <: MPSNDArrayUnaryKernel
 end
 
@@ -2555,7 +2555,7 @@ end
     MPSNDArrayQuantizationTypeLUT = 0x0000000000000002
 end
 
-@static if Metal.macos_version() >= v"15.0.0"
+@static if Metal.is_macos(v"15.0.0")
     @objcwrapper immutable = true MPSNDArrayQuantizationDescriptor <: NSObject
     @objcproperties MPSNDArrayQuantizationDescriptor begin
         @autoproperty quantizationDataType::MPSDataType
@@ -2563,7 +2563,7 @@ end
     end
 end
 
-@static if Metal.macos_version() >= v"15.0.0"
+@static if Metal.is_macos(v"15.0.0")
     @objcwrapper immutable = true MPSNDArrayAffineQuantizationDescriptor <: MPSNDArrayQuantizationDescriptor
     @objcproperties MPSNDArrayAffineQuantizationDescriptor begin
         @autoproperty hasZeroPoint::Bool setter = setHasZeroPoint
@@ -2572,26 +2572,26 @@ end
     end
 end
 
-@static if Metal.macos_version() >= v"15.0.0"
+@static if Metal.is_macos(v"15.0.0")
     @objcwrapper immutable = true MPSNDArrayLUTQuantizationDescriptor <: MPSNDArrayQuantizationDescriptor
 end
 
-@static if Metal.macos_version() >= v"15.0.0"
+@static if Metal.is_macos(v"15.0.0")
     @objcwrapper immutable = true MPSNDArrayQuantizedMatrixMultiplication <: MPSNDArrayMatrixMultiplication
 end
 
-@static if Metal.macos_version() >= v"15.0.0"
+@static if Metal.is_macos(v"15.0.0")
     @objcwrapper immutable = true MPSNDArrayLUTDequantize <: MPSNDArrayMultiaryKernel
 end
 
-@static if Metal.macos_version() >= v"15.0.0"
+@static if Metal.is_macos(v"15.0.0")
     @objcwrapper immutable = true MPSNDArrayVectorLUTDequantize <: MPSNDArrayMultiaryKernel
     @objcproperties MPSNDArrayVectorLUTDequantize begin
         @autoproperty vectorAxis::UInt64 setter = setVectorAxis
     end
 end
 
-@static if Metal.macos_version() >= v"15.0.0"
+@static if Metal.is_macos(v"15.0.0")
     @objcwrapper immutable = true MPSNDArrayAffineInt4Dequantize <: MPSNDArrayMultiaryKernel
 end
 

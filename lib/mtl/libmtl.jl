@@ -3,9 +3,12 @@
 
 using CEnum: CEnum, @cenum
 
-@static if Metal.macos_version() < v"15"
+@static if Sys.isapple() && Metal.macos_version() < v"15"
     const MTLAllocation = NSObject
+elseif !Sys.isapple()
+    abstract type MTLAllocation end
 end
+
 
 @cenum MTLTextureSwizzle::UInt8 begin
     MTLTextureSwizzleZero = 0x0000000000000000
@@ -24,12 +27,7 @@ struct MTLTextureSwizzleChannels
 end
 
 function MTLTextureSwizzleChannelsMake(r, g, b, a)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLTextureSwizzleChannelsMake(
-        r::MTLTextureSwizzle,
-        g::MTLTextureSwizzle,
-        b::MTLTextureSwizzle,
-        a::MTLTextureSwizzle
-    )::MTLTextureSwizzleChannels
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLTextureSwizzleChannelsMake(r::MTLTextureSwizzle, g::MTLTextureSwizzle, b::MTLTextureSwizzle, a::MTLTextureSwizzle)::MTLTextureSwizzleChannels
 end
 
 struct MTLOrigin
@@ -40,11 +38,7 @@ struct MTLOrigin
 end
 
 function MTLOriginMake(x, y, z)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLOriginMake(
-        x::NSUInteger,
-        y::NSUInteger,
-        z::NSUInteger
-    )::MTLOrigin
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLOriginMake(x::NSUInteger, y::NSUInteger, z::NSUInteger)::MTLOrigin
 end
 
 struct MTLSize
@@ -55,11 +49,7 @@ struct MTLSize
 end
 
 function MTLSizeMake(width, height, depth)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLSizeMake(
-        width::NSUInteger,
-        height::NSUInteger,
-        depth::NSUInteger
-    )::MTLSize
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLSizeMake(width::NSUInteger, height::NSUInteger, depth::NSUInteger)::MTLSize
 end
 
 struct MTLRegion
@@ -69,30 +59,15 @@ struct MTLRegion
 end
 
 function MTLRegionMake1D(x, width)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake1D(
-        x::NSUInteger,
-        width::NSUInteger
-    )::MTLRegion
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake1D(x::NSUInteger, width::NSUInteger)::MTLRegion
 end
 
 function MTLRegionMake2D(x, y, width, height)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake2D(
-        x::NSUInteger,
-        y::NSUInteger,
-        width::NSUInteger,
-        height::NSUInteger
-    )::MTLRegion
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake2D(x::NSUInteger, y::NSUInteger, width::NSUInteger, height::NSUInteger)::MTLRegion
 end
 
 function MTLRegionMake3D(x, y, z, width, height, depth)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake3D(
-        x::NSUInteger,
-        y::NSUInteger,
-        z::NSUInteger,
-        width::NSUInteger,
-        height::NSUInteger,
-        depth::NSUInteger
-    )::MTLRegion
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake3D(x::NSUInteger, y::NSUInteger, z::NSUInteger, width::NSUInteger, height::NSUInteger, depth::NSUInteger)::MTLRegion
 end
 
 struct MTLSamplePosition
@@ -101,19 +76,13 @@ struct MTLSamplePosition
 end
 
 function MTLSamplePositionMake(x, y)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLSamplePositionMake(
-        x::Cfloat,
-        y::Cfloat
-    )::MTLSamplePosition
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLSamplePositionMake(x::Cfloat, y::Cfloat)::MTLSamplePosition
 end
 
 const MTLCoordinate2D = MTLSamplePosition
 
 function MTLCoordinate2DMake(x, y)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLCoordinate2DMake(
-        x::Cfloat,
-        y::Cfloat
-    )::MTLCoordinate2D
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLCoordinate2DMake(x::Cfloat, y::Cfloat)::MTLCoordinate2D
 end
 
 struct MTLResourceID
@@ -132,7 +101,7 @@ end
     MTLBarrierScopeRenderTargets = 0x0000000000000004
 end
 
-@static if Metal.macos_version() >= v"14.0.0"
+@static if Metal.is_macos(v"14.0.0")
     @objcwrapper immutable = true MTLArchitecture <: NSObject
     @objcproperties MTLArchitecture begin
         @autoproperty name::id{NSString}
@@ -175,7 +144,7 @@ end
 @objcproperties MTLDevice begin
     @autoproperty name::id{NSString}
     @autoproperty registryID::UInt64
-    @static if Metal.macos_version() >= v"14.0.0"
+    @static if Metal.is_macos(v"14.0.0")
         @autoproperty architecture::id{MTLArchitecture}
     end
     @autoproperty maxThreadsPerThreadgroup::MTLSize
@@ -215,10 +184,10 @@ end
     @autoproperty supportsFunctionPointersFromRender::Bool
     @autoproperty supportsRaytracingFromRender::Bool
     @autoproperty supportsPrimitiveMotionBlur::Bool
-    @static if Metal.macos_version() >= v"13.3.0"
+    @static if Metal.is_macos(v"13.3.0")
         @autoproperty shouldMaximizeConcurrentCompilation::Bool setter = setShouldMaximizeConcurrentCompilation
     end
-    @static if Metal.macos_version() >= v"13.3.0"
+    @static if Metal.is_macos(v"13.3.0")
         @autoproperty maximumConcurrentCompilationTaskCount::UInt64
     end
 end
@@ -230,7 +199,7 @@ end
     @autoproperty label::id{NSString} setter = setLabel
 end
 
-@static if Metal.macos_version() >= v"15.0.0"
+@static if Metal.is_macos(v"15.0.0")
     @objcwrapper immutable = true MTLAllocation <: NSObject
     @objcproperties MTLAllocation begin
         @autoproperty allocatedSize::UInt64
@@ -943,10 +912,10 @@ end
 @objcproperties MTLCompileOptions begin
     @autoproperty preprocessorMacros::id{NSDictionary} setter = setPreprocessorMacros
     @autoproperty fastMathEnabled::Bool setter = setFastMathEnabled
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty mathMode::MTLMathMode setter = setMathMode
     end
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty mathFloatingPointFunctions::MTLMathFloatingPointFunctions setter = setMathFloatingPointFunctions
     end
     @autoproperty languageVersion::MTLLanguageVersion type = VersionNumber setter = setLanguageVersion
@@ -955,16 +924,16 @@ end
     @autoproperty libraries::id{NSArray} type = Vector{MTLDynamicLibrary} setter = setLibraries
     @autoproperty preserveInvariance::Bool setter = setPreserveInvariance
     @autoproperty optimizationLevel::MTLLibraryOptimizationLevel setter = setOptimizationLevel
-    @static if Metal.macos_version() >= v"13.3.0"
+    @static if Metal.is_macos(v"13.3.0")
         @autoproperty compileSymbolVisibility::MTLCompileSymbolVisibility setter = setCompileSymbolVisibility
     end
-    @static if Metal.macos_version() >= v"13.3.0"
+    @static if Metal.is_macos(v"13.3.0")
         @autoproperty allowReferencingUndefinedSymbols::Bool setter = setAllowReferencingUndefinedSymbols
     end
-    @static if Metal.macos_version() >= v"13.3.0"
+    @static if Metal.is_macos(v"13.3.0")
         @autoproperty maxTotalThreadsPerThreadgroup::UInt64 setter = setMaxTotalThreadsPerThreadgroup
     end
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty enableLogging::Bool setter = setEnableLogging
     end
 end
@@ -1157,8 +1126,7 @@ const MTLTimestamp = UInt64
     @autoproperty label::id{NSString} setter = setLabel
 end
 
-@objcwrapper immutable = true MTLResourceStatePassSampleBufferAttachmentDescriptor <:
-NSObject
+@objcwrapper immutable = true MTLResourceStatePassSampleBufferAttachmentDescriptor <: NSObject
 
 @objcproperties MTLResourceStatePassSampleBufferAttachmentDescriptor begin
     @autoproperty sampleBuffer::id{MTLCounterSampleBuffer} setter = setSampleBuffer
@@ -1166,8 +1134,7 @@ NSObject
     @autoproperty endOfEncoderSampleIndex::UInt64 setter = setEndOfEncoderSampleIndex
 end
 
-@objcwrapper immutable = true MTLResourceStatePassSampleBufferAttachmentDescriptorArray <:
-NSObject
+@objcwrapper immutable = true MTLResourceStatePassSampleBufferAttachmentDescriptorArray <: NSObject
 
 @objcwrapper immutable = true MTLResourceStatePassDescriptor <: NSObject
 
@@ -1201,12 +1168,7 @@ struct MTLClearColor
 end
 
 function MTLClearColorMake(red, green, blue, alpha)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLClearColorMake(
-        red::Cdouble,
-        green::Cdouble,
-        blue::Cdouble,
-        alpha::Cdouble
-    )::MTLClearColor
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLClearColorMake(red::Cdouble, green::Cdouble, blue::Cdouble, alpha::Cdouble)::MTLClearColor
 end
 
 @cenum MTLLoadAction::UInt64 begin
@@ -1245,8 +1207,7 @@ end
     @autoproperty storeActionOptions::MTLStoreActionOptions setter = setStoreActionOptions
 end
 
-@objcwrapper immutable = true MTLRenderPassColorAttachmentDescriptor <:
-MTLRenderPassAttachmentDescriptor
+@objcwrapper immutable = true MTLRenderPassColorAttachmentDescriptor <: MTLRenderPassAttachmentDescriptor
 
 @objcproperties MTLRenderPassColorAttachmentDescriptor begin
     @autoproperty clearColor::MTLClearColor setter = setClearColor
@@ -1258,8 +1219,7 @@ end
     MTLMultisampleDepthResolveFilterMax = 0x0000000000000002
 end
 
-@objcwrapper immutable = true MTLRenderPassDepthAttachmentDescriptor <:
-MTLRenderPassAttachmentDescriptor
+@objcwrapper immutable = true MTLRenderPassDepthAttachmentDescriptor <: MTLRenderPassAttachmentDescriptor
 
 @objcproperties MTLRenderPassDepthAttachmentDescriptor begin
     @autoproperty clearDepth::Cdouble setter = setClearDepth
@@ -1271,8 +1231,7 @@ end
     MTLMultisampleStencilResolveFilterDepthResolvedSample = 0x0000000000000001
 end
 
-@objcwrapper immutable = true MTLRenderPassStencilAttachmentDescriptor <:
-MTLRenderPassAttachmentDescriptor
+@objcwrapper immutable = true MTLRenderPassStencilAttachmentDescriptor <: MTLRenderPassAttachmentDescriptor
 
 @objcproperties MTLRenderPassStencilAttachmentDescriptor begin
     @autoproperty clearStencil::UInt32 setter = setClearStencil
@@ -1385,7 +1344,7 @@ end
     MTLCommandEncoderErrorStateFaulted = 4
 end
 
-@static if Metal.macos_version() >= v"15.0.0"
+@static if Metal.is_macos(v"15.0.0")
     @objcwrapper immutable = true MTLLogState <: NSObject
 end
 
@@ -1394,7 +1353,7 @@ end
 @objcproperties MTLCommandBufferDescriptor begin
     @autoproperty retainedReferences::Bool setter = setRetainedReferences
     @autoproperty errorOptions::MTLCommandBufferErrorOption setter = setErrorOptions
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty logState::id{MTLLogState} setter = setLogState
     end
 end
@@ -1446,8 +1405,7 @@ end
     @autoproperty endOfEncoderSampleIndex::UInt64 setter = setEndOfEncoderSampleIndex
 end
 
-@objcwrapper immutable = true MTLComputePassSampleBufferAttachmentDescriptorArray <:
-NSObject
+@objcwrapper immutable = true MTLComputePassSampleBufferAttachmentDescriptorArray <: NSObject
 
 @objcwrapper immutable = true MTLComputePassDescriptor <: NSObject
 
@@ -1471,7 +1429,7 @@ end
     @autoproperty dispatchType::MTLDispatchType
 end
 
-@static if Metal.macos_version() >= v"15.0.0"
+@static if Metal.is_macos(v"15.0.0")
     @objcwrapper immutable = true MTLCommandQueueDescriptor <: NSObject
     @objcproperties MTLCommandQueueDescriptor begin
         @autoproperty maxCommandBufferCount::UInt64 setter = setMaxCommandBufferCount
@@ -1787,7 +1745,7 @@ end
     @autoproperty linkedFunctions::id{MTLLinkedFunctions} setter = setLinkedFunctions
     @autoproperty supportAddingBinaryFunctions::Bool setter = setSupportAddingBinaryFunctions
     @autoproperty maxCallStackDepth::UInt64 setter = setMaxCallStackDepth
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation
     end
 end
@@ -1802,7 +1760,7 @@ end
     @autoproperty staticThreadgroupMemoryLength::UInt64
     @autoproperty supportIndirectCommandBuffers::Bool
     @autoproperty gpuResourceID::MTLResourceID
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty shaderValidation::MTLShaderValidation
     end
 end
@@ -2065,7 +2023,7 @@ end
     @autoproperty supportAddingFragmentBinaryFunctions::Bool setter = setSupportAddingFragmentBinaryFunctions
     @autoproperty maxVertexCallStackDepth::UInt64 setter = setMaxVertexCallStackDepth
     @autoproperty maxFragmentCallStackDepth::UInt64 setter = setMaxFragmentCallStackDepth
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation
     end
 end
@@ -2093,7 +2051,7 @@ end
     @autoproperty meshThreadExecutionWidth::UInt64
     @autoproperty maxTotalThreadgroupsPerMeshGrid::UInt64
     @autoproperty gpuResourceID::MTLResourceID
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty shaderValidation::MTLShaderValidation
     end
 end
@@ -2104,8 +2062,7 @@ end
     @autoproperty pixelFormat::MTLPixelFormat setter = setPixelFormat
 end
 
-@objcwrapper immutable = true MTLTileRenderPipelineColorAttachmentDescriptorArray <:
-NSObject
+@objcwrapper immutable = true MTLTileRenderPipelineColorAttachmentDescriptorArray <: NSObject
 
 @objcwrapper immutable = true MTLTileRenderPipelineDescriptor <: NSObject
 
@@ -2122,7 +2079,7 @@ NSObject
     @autoproperty linkedFunctions::id{MTLLinkedFunctions} setter = setLinkedFunctions
     @autoproperty supportAddingBinaryFunctions::Bool setter = setSupportAddingBinaryFunctions
     @autoproperty maxCallStackDepth::UInt64 setter = setMaxCallStackDepth
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation
     end
 end
@@ -2151,22 +2108,22 @@ end
     @autoproperty colorAttachments::id{MTLRenderPipelineColorAttachmentDescriptorArray}
     @autoproperty depthAttachmentPixelFormat::MTLPixelFormat setter = setDepthAttachmentPixelFormat
     @autoproperty stencilAttachmentPixelFormat::MTLPixelFormat setter = setStencilAttachmentPixelFormat
-    @static if Metal.macos_version() >= v"14.0.0"
+    @static if Metal.is_macos(v"14.0.0")
         @autoproperty supportIndirectCommandBuffers::Bool setter = setSupportIndirectCommandBuffers
     end
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty binaryArchives::id{NSArray} type = Vector{MTLBinaryArchive} setter = setBinaryArchives
     end
-    @static if Metal.macos_version() >= v"14.0.0"
+    @static if Metal.is_macos(v"14.0.0")
         @autoproperty objectLinkedFunctions::id{MTLLinkedFunctions} setter = setObjectLinkedFunctions
     end
-    @static if Metal.macos_version() >= v"14.0.0"
+    @static if Metal.is_macos(v"14.0.0")
         @autoproperty meshLinkedFunctions::id{MTLLinkedFunctions} setter = setMeshLinkedFunctions
     end
-    @static if Metal.macos_version() >= v"14.0.0"
+    @static if Metal.is_macos(v"14.0.0")
         @autoproperty fragmentLinkedFunctions::id{MTLLinkedFunctions} setter = setFragmentLinkedFunctions
     end
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation
     end
 end
@@ -2253,11 +2210,7 @@ end
 const MTLPackedFloat3 = _MTLPackedFloat3
 
 function MTLPackedFloat3Make(x, y, z)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLPackedFloat3Make(
-        x::Cfloat,
-        y::Cfloat,
-        z::Cfloat
-    )::MTLPackedFloat3
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLPackedFloat3Make(x::Cfloat, y::Cfloat, z::Cfloat)::MTLPackedFloat3
 end
 
 struct MTLPackedFloatQuaternion
@@ -2268,12 +2221,7 @@ struct MTLPackedFloatQuaternion
 end
 
 function MTLPackedFloatQuaternionMake(x, y, z, w)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLPackedFloatQuaternionMake(
-        x::Cfloat,
-        y::Cfloat,
-        z::Cfloat,
-        w::Cfloat
-    )::MTLPackedFloatQuaternion
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLPackedFloatQuaternionMake(x::Cfloat, y::Cfloat, z::Cfloat, w::Cfloat)::MTLPackedFloatQuaternion
 end
 
 struct _MTLPackedFloat4x3
@@ -2341,8 +2289,7 @@ end
     MTLMotionBorderModeVanish = 0x0000000000000001
 end
 
-@objcwrapper immutable = true MTLPrimitiveAccelerationStructureDescriptor <:
-MTLAccelerationStructureDescriptor
+@objcwrapper immutable = true MTLPrimitiveAccelerationStructureDescriptor <: MTLAccelerationStructureDescriptor
 
 @objcproperties MTLPrimitiveAccelerationStructureDescriptor begin
     @autoproperty geometryDescriptors::id{NSArray} type = Vector{MTLAccelerationStructureGeometryDescriptor} setter = setGeometryDescriptors
@@ -2353,8 +2300,7 @@ MTLAccelerationStructureDescriptor
     @autoproperty motionKeyframeCount::UInt64 setter = setMotionKeyframeCount
 end
 
-@objcwrapper immutable = true MTLAccelerationStructureTriangleGeometryDescriptor <:
-MTLAccelerationStructureGeometryDescriptor
+@objcwrapper immutable = true MTLAccelerationStructureTriangleGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
 
 @objcproperties MTLAccelerationStructureTriangleGeometryDescriptor begin
     @autoproperty vertexBuffer::id{MTLBuffer} setter = setVertexBuffer
@@ -2367,13 +2313,12 @@ MTLAccelerationStructureGeometryDescriptor
     @autoproperty triangleCount::UInt64 setter = setTriangleCount
     @autoproperty transformationMatrixBuffer::id{MTLBuffer} setter = setTransformationMatrixBuffer
     @autoproperty transformationMatrixBufferOffset::UInt64 setter = setTransformationMatrixBufferOffset
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty transformationMatrixLayout::MTLMatrixLayout setter = setTransformationMatrixLayout
     end
 end
 
-@objcwrapper immutable = true MTLAccelerationStructureBoundingBoxGeometryDescriptor <:
-MTLAccelerationStructureGeometryDescriptor
+@objcwrapper immutable = true MTLAccelerationStructureBoundingBoxGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
 
 @objcproperties MTLAccelerationStructureBoundingBoxGeometryDescriptor begin
     @autoproperty boundingBoxBuffer::id{MTLBuffer} setter = setBoundingBoxBuffer
@@ -2389,8 +2334,7 @@ end
     @autoproperty offset::UInt64 setter = setOffset
 end
 
-@objcwrapper immutable = true MTLAccelerationStructureMotionTriangleGeometryDescriptor <:
-MTLAccelerationStructureGeometryDescriptor
+@objcwrapper immutable = true MTLAccelerationStructureMotionTriangleGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
 
 @objcproperties MTLAccelerationStructureMotionTriangleGeometryDescriptor begin
     @autoproperty vertexBuffers::id{NSArray} type = Vector{MTLMotionKeyframeData} setter = setVertexBuffers
@@ -2402,13 +2346,12 @@ MTLAccelerationStructureGeometryDescriptor
     @autoproperty triangleCount::UInt64 setter = setTriangleCount
     @autoproperty transformationMatrixBuffer::id{MTLBuffer} setter = setTransformationMatrixBuffer
     @autoproperty transformationMatrixBufferOffset::UInt64 setter = setTransformationMatrixBufferOffset
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty transformationMatrixLayout::MTLMatrixLayout setter = setTransformationMatrixLayout
     end
 end
 
-@objcwrapper immutable = true MTLAccelerationStructureMotionBoundingBoxGeometryDescriptor <:
-MTLAccelerationStructureGeometryDescriptor
+@objcwrapper immutable = true MTLAccelerationStructureMotionBoundingBoxGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
 
 @objcproperties MTLAccelerationStructureMotionBoundingBoxGeometryDescriptor begin
     @autoproperty boundingBoxBuffers::id{NSArray} type = Vector{MTLMotionKeyframeData} setter = setBoundingBoxBuffers
@@ -2434,9 +2377,8 @@ end
     MTLCurveEndCapsSphere = 2
 end
 
-@static if Metal.macos_version() >= v"14.0.0"
-    @objcwrapper immutable = true MTLAccelerationStructureCurveGeometryDescriptor <:
-    MTLAccelerationStructureGeometryDescriptor
+@static if Metal.is_macos(v"14.0.0")
+    @objcwrapper immutable = true MTLAccelerationStructureCurveGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
     @objcproperties MTLAccelerationStructureCurveGeometryDescriptor begin
         @autoproperty controlPointBuffer::id{MTLBuffer} setter = setControlPointBuffer
         @autoproperty controlPointBufferOffset::UInt64 setter = setControlPointBufferOffset
@@ -2458,9 +2400,8 @@ end
     end
 end
 
-@static if Metal.macos_version() >= v"14.0.0"
-    @objcwrapper immutable = true MTLAccelerationStructureMotionCurveGeometryDescriptor <:
-    MTLAccelerationStructureGeometryDescriptor
+@static if Metal.is_macos(v"14.0.0")
+    @objcwrapper immutable = true MTLAccelerationStructureMotionCurveGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
     @objcproperties MTLAccelerationStructureMotionCurveGeometryDescriptor begin
         @autoproperty controlPointBuffers::id{NSArray} type = Vector{MTLMotionKeyframeData} setter = setControlPointBuffers
         @autoproperty controlPointCount::UInt64 setter = setControlPointCount
@@ -2554,8 +2495,7 @@ end
     @autoproperty gpuResourceID::MTLResourceID
 end
 
-@objcwrapper immutable = true MTLInstanceAccelerationStructureDescriptor <:
-MTLAccelerationStructureDescriptor
+@objcwrapper immutable = true MTLInstanceAccelerationStructureDescriptor <: MTLAccelerationStructureDescriptor
 
 @objcproperties MTLInstanceAccelerationStructureDescriptor begin
     @autoproperty instanceDescriptorBuffer::id{MTLBuffer} setter = setInstanceDescriptorBuffer
@@ -2567,20 +2507,19 @@ MTLAccelerationStructureDescriptor
     @autoproperty motionTransformBuffer::id{MTLBuffer} setter = setMotionTransformBuffer
     @autoproperty motionTransformBufferOffset::UInt64 setter = setMotionTransformBufferOffset
     @autoproperty motionTransformCount::UInt64 setter = setMotionTransformCount
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty instanceTransformationMatrixLayout::MTLMatrixLayout setter = setInstanceTransformationMatrixLayout
     end
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty motionTransformType::MTLTransformType setter = setMotionTransformType
     end
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty motionTransformStride::UInt64 setter = setMotionTransformStride
     end
 end
 
-@static if Metal.macos_version() >= v"14.0.0"
-    @objcwrapper immutable = true MTLIndirectInstanceAccelerationStructureDescriptor <:
-    MTLAccelerationStructureDescriptor
+@static if Metal.is_macos(v"14.0.0")
+    @objcwrapper immutable = true MTLIndirectInstanceAccelerationStructureDescriptor <: MTLAccelerationStructureDescriptor
     @objcproperties MTLIndirectInstanceAccelerationStructureDescriptor begin
         @autoproperty instanceDescriptorBuffer::id{MTLBuffer} setter = setInstanceDescriptorBuffer
         @autoproperty instanceDescriptorBufferOffset::UInt64 setter = setInstanceDescriptorBufferOffset
@@ -2594,13 +2533,13 @@ end
         @autoproperty maxMotionTransformCount::UInt64 setter = setMaxMotionTransformCount
         @autoproperty motionTransformCountBuffer::id{MTLBuffer} setter = setMotionTransformCountBuffer
         @autoproperty motionTransformCountBufferOffset::UInt64 setter = setMotionTransformCountBufferOffset
-        @static if Metal.macos_version() >= v"15.0.0"
+        @static if Metal.is_macos(v"15.0.0")
             @autoproperty instanceTransformationMatrixLayout::MTLMatrixLayout setter = setInstanceTransformationMatrixLayout
         end
-        @static if Metal.macos_version() >= v"15.0.0"
+        @static if Metal.is_macos(v"15.0.0")
             @autoproperty motionTransformType::MTLTransformType setter = setMotionTransformType
         end
-        @static if Metal.macos_version() >= v"15.0.0"
+        @static if Metal.is_macos(v"15.0.0")
             @autoproperty motionTransformStride::UInt64 setter = setMotionTransformStride
         end
     end
@@ -2682,10 +2621,7 @@ struct MTLIndirectCommandBufferExecutionRange
 end
 
 function MTLIndirectCommandBufferExecutionRangeMake(location, length)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIndirectCommandBufferExecutionRangeMake(
-        location::UInt32,
-        length::UInt32
-    )::MTLIndirectCommandBufferExecutionRange
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIndirectCommandBufferExecutionRangeMake(location::UInt32, length::UInt32)::MTLIndirectCommandBufferExecutionRange
 end
 
 @objcwrapper immutable = true MTLIndirectCommandBufferDescriptor <: NSObject
@@ -2697,20 +2633,20 @@ end
     @autoproperty maxVertexBufferBindCount::UInt64 setter = setMaxVertexBufferBindCount
     @autoproperty maxFragmentBufferBindCount::UInt64 setter = setMaxFragmentBufferBindCount
     @autoproperty maxKernelBufferBindCount::UInt64 setter = setMaxKernelBufferBindCount
-    @static if Metal.macos_version() >= v"14.0.0"
+    @static if Metal.is_macos(v"14.0.0")
         @autoproperty maxKernelThreadgroupMemoryBindCount::UInt64 setter = setMaxKernelThreadgroupMemoryBindCount
     end
-    @static if Metal.macos_version() >= v"14.0.0"
+    @static if Metal.is_macos(v"14.0.0")
         @autoproperty maxObjectBufferBindCount::UInt64 setter = setMaxObjectBufferBindCount
     end
-    @static if Metal.macos_version() >= v"14.0.0"
+    @static if Metal.is_macos(v"14.0.0")
         @autoproperty maxMeshBufferBindCount::UInt64 setter = setMaxMeshBufferBindCount
     end
-    @static if Metal.macos_version() >= v"14.0.0"
+    @static if Metal.is_macos(v"14.0.0")
         @autoproperty maxObjectThreadgroupMemoryBindCount::UInt64 setter = setMaxObjectThreadgroupMemoryBindCount
     end
     @autoproperty supportRayTracing::Bool setter = setSupportRayTracing
-    @static if Metal.macos_version() >= v"14.0.0"
+    @static if Metal.is_macos(v"14.0.0")
         @autoproperty supportDynamicAttributeStride::Bool setter = setSupportDynamicAttributeStride
     end
 end
@@ -2761,8 +2697,7 @@ end
 
 @objcwrapper immutable = true MTLAccelerationStructureCommandEncoder <: MTLCommandEncoder
 
-@objcwrapper immutable = true MTLAccelerationStructurePassSampleBufferAttachmentDescriptor <:
-NSObject
+@objcwrapper immutable = true MTLAccelerationStructurePassSampleBufferAttachmentDescriptor <: NSObject
 
 @objcproperties MTLAccelerationStructurePassSampleBufferAttachmentDescriptor begin
     @autoproperty sampleBuffer::id{MTLCounterSampleBuffer} setter = setSampleBuffer
@@ -2770,8 +2705,7 @@ NSObject
     @autoproperty endOfEncoderSampleIndex::UInt64 setter = setEndOfEncoderSampleIndex
 end
 
-@objcwrapper immutable = true MTLAccelerationStructurePassSampleBufferAttachmentDescriptorArray <:
-NSObject
+@objcwrapper immutable = true MTLAccelerationStructurePassSampleBufferAttachmentDescriptorArray <: NSObject
 
 @objcwrapper immutable = true MTLAccelerationStructurePassDescriptor <: NSObject
 
@@ -2821,7 +2755,7 @@ end
     MTLLogLevelFault = 5
 end
 
-@static if Metal.macos_version() >= v"15.0.0"
+@static if Metal.is_macos(v"15.0.0")
     @objcwrapper immutable = true MTLLogStateDescriptor <: NSObject
     @objcproperties MTLLogStateDescriptor begin
         @autoproperty level::MTLLogLevel setter = setLevel
@@ -2912,10 +2846,10 @@ end
 @objcproperties MTLStitchedLibraryDescriptor begin
     @autoproperty functionGraphs::id{NSArray} type = Vector{MTLFunctionStitchingGraph} setter = setFunctionGraphs
     @autoproperty functions::id{NSArray} type = Vector{MTLFunction} setter = setFunctions
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty binaryArchives::id{NSArray} type = Vector{MTLBinaryArchive} setter = setBinaryArchives
     end
-    @static if Metal.macos_version() >= v"15.0.0"
+    @static if Metal.is_macos(v"15.0.0")
         @autoproperty options::MTLStitchedLibraryOptions setter = setOptions
     end
 end
@@ -2993,26 +2927,18 @@ function MTLIOCompressionContextDefaultChunkSize()
 end
 
 function MTLIOCreateCompressionContext(path, type, chunkSize)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOCreateCompressionContext(
-        path::Cstring,
-        type::MTLIOCompressionMethod,
-        chunkSize::Csize_t
-    )::MTLIOCompressionContext
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOCreateCompressionContext(path::Cstring, type::MTLIOCompressionMethod, chunkSize::Csize_t)::MTLIOCompressionContext
 end
 
 function MTLIOCompressionContextAppendData(context, data, size)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOCompressionContextAppendData(
-        context::MTLIOCompressionContext,
-        data::Ptr{Cvoid},
-        size::Csize_t
-    )::Cvoid
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOCompressionContextAppendData(context::MTLIOCompressionContext, data::Ptr{Cvoid}, size::Csize_t)::Cvoid
 end
 
 function MTLIOFlushAndDestroyCompressionContext(context)
     return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOFlushAndDestroyCompressionContext(context::MTLIOCompressionContext)::MTLIOCompressionStatus
 end
 
-@static if Metal.macos_version() >= v"15.0.0"
+@static if Metal.is_macos(v"15.0.0")
     @objcwrapper immutable = true MTLResidencySetDescriptor <: NSObject
     @objcproperties MTLResidencySetDescriptor begin
         @autoproperty label::id{NSString} setter = setLabel
@@ -3020,7 +2946,7 @@ end
     end
 end
 
-@static if Metal.macos_version() >= v"15.0.0"
+@static if Metal.is_macos(v"15.0.0")
     @objcwrapper immutable = true MTLResidencySet <: NSObject
     @objcproperties MTLResidencySet begin
         @autoproperty device::id{MTLDevice}
