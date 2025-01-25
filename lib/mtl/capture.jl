@@ -79,7 +79,7 @@ function MTLCaptureDescriptor(obj::Union{MTLDevice,MTLCommandQueue, MTLCaptureSc
     desc = MTLCaptureDescriptor()
     desc.destination = destination
     desc.captureObject = obj
-    if folder != nothing
+    if folder !== nothing
         desc.outputURL = NSFileURL(folder)
     end
     return desc
