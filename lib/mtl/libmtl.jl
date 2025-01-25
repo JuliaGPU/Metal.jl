@@ -24,63 +24,75 @@ struct MTLTextureSwizzleChannels
 end
 
 function MTLTextureSwizzleChannelsMake(r, g, b, a)
-    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLTextureSwizzleChannelsMake(r::MTLTextureSwizzle,
-                                                                                                                                    g::MTLTextureSwizzle,
-                                                                                                                                    b::MTLTextureSwizzle,
-                                                                                                                                    a::MTLTextureSwizzle)::MTLTextureSwizzleChannels
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLTextureSwizzleChannelsMake(
+        r::MTLTextureSwizzle,
+        g::MTLTextureSwizzle,
+        b::MTLTextureSwizzle,
+        a::MTLTextureSwizzle
+    )::MTLTextureSwizzleChannels
 end
 
 struct MTLOrigin
     x::NSUInteger
     y::NSUInteger
     z::NSUInteger
-    MTLOrigin(x=0, y=0, z=0) = new(x, y, z)
+    MTLOrigin(x = 0, y = 0, z = 0) = new(x, y, z)
 end
 
 function MTLOriginMake(x, y, z)
-    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLOriginMake(x::NSUInteger,
-                                                                                                                    y::NSUInteger,
-                                                                                                                    z::NSUInteger)::MTLOrigin
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLOriginMake(
+        x::NSUInteger,
+        y::NSUInteger,
+        z::NSUInteger
+    )::MTLOrigin
 end
 
 struct MTLSize
     width::NSUInteger
     height::NSUInteger
     depth::NSUInteger
-    MTLSize(w=1, h=1, d=1) = new(w, h, d)
+    MTLSize(w = 1, h = 1, d = 1) = new(w, h, d)
 end
 
 function MTLSizeMake(width, height, depth)
-    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLSizeMake(width::NSUInteger,
-                                                                                                                  height::NSUInteger,
-                                                                                                                  depth::NSUInteger)::MTLSize
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLSizeMake(
+        width::NSUInteger,
+        height::NSUInteger,
+        depth::NSUInteger
+    )::MTLSize
 end
 
 struct MTLRegion
     origin::MTLOrigin
     size::MTLSize
-    MTLRegion(origin=MTLOrigin(), size=MTLSize()) = new(origin, size)
+    MTLRegion(origin = MTLOrigin(), size = MTLSize()) = new(origin, size)
 end
 
 function MTLRegionMake1D(x, width)
-    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake1D(x::NSUInteger,
-                                                                                                                      width::NSUInteger)::MTLRegion
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake1D(
+        x::NSUInteger,
+        width::NSUInteger
+    )::MTLRegion
 end
 
 function MTLRegionMake2D(x, y, width, height)
-    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake2D(x::NSUInteger,
-                                                                                                                      y::NSUInteger,
-                                                                                                                      width::NSUInteger,
-                                                                                                                      height::NSUInteger)::MTLRegion
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake2D(
+        x::NSUInteger,
+        y::NSUInteger,
+        width::NSUInteger,
+        height::NSUInteger
+    )::MTLRegion
 end
 
 function MTLRegionMake3D(x, y, z, width, height, depth)
-    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake3D(x::NSUInteger,
-                                                                                                                      y::NSUInteger,
-                                                                                                                      z::NSUInteger,
-                                                                                                                      width::NSUInteger,
-                                                                                                                      height::NSUInteger,
-                                                                                                                      depth::NSUInteger)::MTLRegion
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake3D(
+        x::NSUInteger,
+        y::NSUInteger,
+        z::NSUInteger,
+        width::NSUInteger,
+        height::NSUInteger,
+        depth::NSUInteger
+    )::MTLRegion
 end
 
 struct MTLSamplePosition
@@ -89,15 +101,19 @@ struct MTLSamplePosition
 end
 
 function MTLSamplePositionMake(x, y)
-    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLSamplePositionMake(x::Cfloat,
-                                                                                                                            y::Cfloat)::MTLSamplePosition
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLSamplePositionMake(
+        x::Cfloat,
+        y::Cfloat
+    )::MTLSamplePosition
 end
 
 const MTLCoordinate2D = MTLSamplePosition
 
 function MTLCoordinate2DMake(x, y)
-    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLCoordinate2DMake(x::Cfloat,
-                                                                                                                          y::Cfloat)::MTLCoordinate2D
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLCoordinate2DMake(
+        x::Cfloat,
+        y::Cfloat
+    )::MTLCoordinate2D
 end
 
 struct MTLResourceID
@@ -1142,7 +1158,7 @@ const MTLTimestamp = UInt64
 end
 
 @objcwrapper immutable = true MTLResourceStatePassSampleBufferAttachmentDescriptor <:
-                              NSObject
+NSObject
 
 @objcproperties MTLResourceStatePassSampleBufferAttachmentDescriptor begin
     @autoproperty sampleBuffer::id{MTLCounterSampleBuffer} setter = setSampleBuffer
@@ -1151,7 +1167,7 @@ end
 end
 
 @objcwrapper immutable = true MTLResourceStatePassSampleBufferAttachmentDescriptorArray <:
-                              NSObject
+NSObject
 
 @objcwrapper immutable = true MTLResourceStatePassDescriptor <: NSObject
 
@@ -1185,10 +1201,12 @@ struct MTLClearColor
 end
 
 function MTLClearColorMake(red, green, blue, alpha)
-    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLClearColorMake(red::Cdouble,
-                                                                                                                        green::Cdouble,
-                                                                                                                        blue::Cdouble,
-                                                                                                                        alpha::Cdouble)::MTLClearColor
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLClearColorMake(
+        red::Cdouble,
+        green::Cdouble,
+        blue::Cdouble,
+        alpha::Cdouble
+    )::MTLClearColor
 end
 
 @cenum MTLLoadAction::UInt64 begin
@@ -1228,7 +1246,7 @@ end
 end
 
 @objcwrapper immutable = true MTLRenderPassColorAttachmentDescriptor <:
-                              MTLRenderPassAttachmentDescriptor
+MTLRenderPassAttachmentDescriptor
 
 @objcproperties MTLRenderPassColorAttachmentDescriptor begin
     @autoproperty clearColor::MTLClearColor setter = setClearColor
@@ -1241,7 +1259,7 @@ end
 end
 
 @objcwrapper immutable = true MTLRenderPassDepthAttachmentDescriptor <:
-                              MTLRenderPassAttachmentDescriptor
+MTLRenderPassAttachmentDescriptor
 
 @objcproperties MTLRenderPassDepthAttachmentDescriptor begin
     @autoproperty clearDepth::Cdouble setter = setClearDepth
@@ -1254,7 +1272,7 @@ end
 end
 
 @objcwrapper immutable = true MTLRenderPassStencilAttachmentDescriptor <:
-                              MTLRenderPassAttachmentDescriptor
+MTLRenderPassAttachmentDescriptor
 
 @objcproperties MTLRenderPassStencilAttachmentDescriptor begin
     @autoproperty clearStencil::UInt32 setter = setClearStencil
@@ -1429,7 +1447,7 @@ end
 end
 
 @objcwrapper immutable = true MTLComputePassSampleBufferAttachmentDescriptorArray <:
-                              NSObject
+NSObject
 
 @objcwrapper immutable = true MTLComputePassDescriptor <: NSObject
 
@@ -1439,12 +1457,12 @@ end
 end
 
 struct MTLDispatchThreadgroupsIndirectArguments
-    threadgroupsPerGrid::NTuple{3,UInt32}
+    threadgroupsPerGrid::NTuple{3, UInt32}
 end
 
 struct MTLStageInRegionIndirectArguments
-    stageInOrigin::NTuple{3,UInt32}
-    stageInSize::NTuple{3,UInt32}
+    stageInOrigin::NTuple{3, UInt32}
+    stageInSize::NTuple{3, UInt32}
 end
 
 @objcwrapper immutable = false MTLComputeCommandEncoder <: MTLCommandEncoder
@@ -1868,12 +1886,12 @@ struct MTLDrawPatchIndirectArguments
 end
 
 struct MTLQuadTessellationFactorsHalf
-    edgeTessellationFactor::NTuple{4,UInt16}
-    insideTessellationFactor::NTuple{2,UInt16}
+    edgeTessellationFactor::NTuple{4, UInt16}
+    insideTessellationFactor::NTuple{2, UInt16}
 end
 
 struct MTLTriangleTessellationFactorsHalf
-    edgeTessellationFactor::NTuple{3,UInt16}
+    edgeTessellationFactor::NTuple{3, UInt16}
     insideTessellationFactor::UInt16
 end
 
@@ -2087,7 +2105,7 @@ end
 end
 
 @objcwrapper immutable = true MTLTileRenderPipelineColorAttachmentDescriptorArray <:
-                              NSObject
+NSObject
 
 @objcwrapper immutable = true MTLTileRenderPipelineDescriptor <: NSObject
 
@@ -2210,14 +2228,14 @@ end
 end
 
 struct _MTLPackedFloat3
-    data::NTuple{12,UInt8}
+    data::NTuple{12, UInt8}
 end
 
 function Base.getproperty(x::Ptr{_MTLPackedFloat3}, f::Symbol)
     f === :x && return Ptr{Cfloat}(x + 0)
     f === :y && return Ptr{Cfloat}(x + 4)
     f === :z && return Ptr{Cfloat}(x + 8)
-    f === :elements && return Ptr{NTuple{3,Cfloat}}(x + 0)
+    f === :elements && return Ptr{NTuple{3, Cfloat}}(x + 0)
     return getfield(x, f)
 end
 
@@ -2225,7 +2243,7 @@ function Base.getproperty(x::_MTLPackedFloat3, f::Symbol)
     r = Ref{_MTLPackedFloat3}(x)
     ptr = Base.unsafe_convert(Ptr{_MTLPackedFloat3}, r)
     fptr = getproperty(ptr, f)
-    GC.@preserve r unsafe_load(fptr)
+    return GC.@preserve r unsafe_load(fptr)
 end
 
 function Base.setproperty!(x::Ptr{_MTLPackedFloat3}, f::Symbol, v)
@@ -2235,9 +2253,11 @@ end
 const MTLPackedFloat3 = _MTLPackedFloat3
 
 function MTLPackedFloat3Make(x, y, z)
-    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLPackedFloat3Make(x::Cfloat,
-                                                                                                                          y::Cfloat,
-                                                                                                                          z::Cfloat)::MTLPackedFloat3
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLPackedFloat3Make(
+        x::Cfloat,
+        y::Cfloat,
+        z::Cfloat
+    )::MTLPackedFloat3
 end
 
 struct MTLPackedFloatQuaternion
@@ -2248,14 +2268,16 @@ struct MTLPackedFloatQuaternion
 end
 
 function MTLPackedFloatQuaternionMake(x, y, z, w)
-    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLPackedFloatQuaternionMake(x::Cfloat,
-                                                                                                                                   y::Cfloat,
-                                                                                                                                   z::Cfloat,
-                                                                                                                                   w::Cfloat)::MTLPackedFloatQuaternion
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLPackedFloatQuaternionMake(
+        x::Cfloat,
+        y::Cfloat,
+        z::Cfloat,
+        w::Cfloat
+    )::MTLPackedFloatQuaternion
 end
 
 struct _MTLPackedFloat4x3
-    columns::NTuple{4,MTLPackedFloat3}
+    columns::NTuple{4, MTLPackedFloat3}
 end
 
 const MTLPackedFloat4x3 = _MTLPackedFloat4x3
@@ -2320,7 +2342,7 @@ end
 end
 
 @objcwrapper immutable = true MTLPrimitiveAccelerationStructureDescriptor <:
-                              MTLAccelerationStructureDescriptor
+MTLAccelerationStructureDescriptor
 
 @objcproperties MTLPrimitiveAccelerationStructureDescriptor begin
     @autoproperty geometryDescriptors::id{NSArray} type = Vector{MTLAccelerationStructureGeometryDescriptor} setter = setGeometryDescriptors
@@ -2332,7 +2354,7 @@ end
 end
 
 @objcwrapper immutable = true MTLAccelerationStructureTriangleGeometryDescriptor <:
-                              MTLAccelerationStructureGeometryDescriptor
+MTLAccelerationStructureGeometryDescriptor
 
 @objcproperties MTLAccelerationStructureTriangleGeometryDescriptor begin
     @autoproperty vertexBuffer::id{MTLBuffer} setter = setVertexBuffer
@@ -2351,7 +2373,7 @@ end
 end
 
 @objcwrapper immutable = true MTLAccelerationStructureBoundingBoxGeometryDescriptor <:
-                              MTLAccelerationStructureGeometryDescriptor
+MTLAccelerationStructureGeometryDescriptor
 
 @objcproperties MTLAccelerationStructureBoundingBoxGeometryDescriptor begin
     @autoproperty boundingBoxBuffer::id{MTLBuffer} setter = setBoundingBoxBuffer
@@ -2368,7 +2390,7 @@ end
 end
 
 @objcwrapper immutable = true MTLAccelerationStructureMotionTriangleGeometryDescriptor <:
-                              MTLAccelerationStructureGeometryDescriptor
+MTLAccelerationStructureGeometryDescriptor
 
 @objcproperties MTLAccelerationStructureMotionTriangleGeometryDescriptor begin
     @autoproperty vertexBuffers::id{NSArray} type = Vector{MTLMotionKeyframeData} setter = setVertexBuffers
@@ -2386,7 +2408,7 @@ end
 end
 
 @objcwrapper immutable = true MTLAccelerationStructureMotionBoundingBoxGeometryDescriptor <:
-                              MTLAccelerationStructureGeometryDescriptor
+MTLAccelerationStructureGeometryDescriptor
 
 @objcproperties MTLAccelerationStructureMotionBoundingBoxGeometryDescriptor begin
     @autoproperty boundingBoxBuffers::id{NSArray} type = Vector{MTLMotionKeyframeData} setter = setBoundingBoxBuffers
@@ -2414,7 +2436,7 @@ end
 
 @static if Metal.macos_version() >= v"14.0.0"
     @objcwrapper immutable = true MTLAccelerationStructureCurveGeometryDescriptor <:
-                                  MTLAccelerationStructureGeometryDescriptor
+    MTLAccelerationStructureGeometryDescriptor
     @objcproperties MTLAccelerationStructureCurveGeometryDescriptor begin
         @autoproperty controlPointBuffer::id{MTLBuffer} setter = setControlPointBuffer
         @autoproperty controlPointBufferOffset::UInt64 setter = setControlPointBufferOffset
@@ -2438,7 +2460,7 @@ end
 
 @static if Metal.macos_version() >= v"14.0.0"
     @objcwrapper immutable = true MTLAccelerationStructureMotionCurveGeometryDescriptor <:
-                                  MTLAccelerationStructureGeometryDescriptor
+    MTLAccelerationStructureGeometryDescriptor
     @objcproperties MTLAccelerationStructureMotionCurveGeometryDescriptor begin
         @autoproperty controlPointBuffers::id{NSArray} type = Vector{MTLMotionKeyframeData} setter = setControlPointBuffers
         @autoproperty controlPointCount::UInt64 setter = setControlPointCount
@@ -2533,7 +2555,7 @@ end
 end
 
 @objcwrapper immutable = true MTLInstanceAccelerationStructureDescriptor <:
-                              MTLAccelerationStructureDescriptor
+MTLAccelerationStructureDescriptor
 
 @objcproperties MTLInstanceAccelerationStructureDescriptor begin
     @autoproperty instanceDescriptorBuffer::id{MTLBuffer} setter = setInstanceDescriptorBuffer
@@ -2558,7 +2580,7 @@ end
 
 @static if Metal.macos_version() >= v"14.0.0"
     @objcwrapper immutable = true MTLIndirectInstanceAccelerationStructureDescriptor <:
-                                  MTLAccelerationStructureDescriptor
+    MTLAccelerationStructureDescriptor
     @objcproperties MTLIndirectInstanceAccelerationStructureDescriptor begin
         @autoproperty instanceDescriptorBuffer::id{MTLBuffer} setter = setInstanceDescriptorBuffer
         @autoproperty instanceDescriptorBufferOffset::UInt64 setter = setInstanceDescriptorBufferOffset
@@ -2660,8 +2682,10 @@ struct MTLIndirectCommandBufferExecutionRange
 end
 
 function MTLIndirectCommandBufferExecutionRangeMake(location, length)
-    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIndirectCommandBufferExecutionRangeMake(location::UInt32,
-                                                                                                                                                 length::UInt32)::MTLIndirectCommandBufferExecutionRange
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIndirectCommandBufferExecutionRangeMake(
+        location::UInt32,
+        length::UInt32
+    )::MTLIndirectCommandBufferExecutionRange
 end
 
 @objcwrapper immutable = true MTLIndirectCommandBufferDescriptor <: NSObject
@@ -2738,7 +2762,7 @@ end
 @objcwrapper immutable = true MTLAccelerationStructureCommandEncoder <: MTLCommandEncoder
 
 @objcwrapper immutable = true MTLAccelerationStructurePassSampleBufferAttachmentDescriptor <:
-                              NSObject
+NSObject
 
 @objcproperties MTLAccelerationStructurePassSampleBufferAttachmentDescriptor begin
     @autoproperty sampleBuffer::id{MTLCounterSampleBuffer} setter = setSampleBuffer
@@ -2747,7 +2771,7 @@ end
 end
 
 @objcwrapper immutable = true MTLAccelerationStructurePassSampleBufferAttachmentDescriptorArray <:
-                              NSObject
+NSObject
 
 @objcwrapper immutable = true MTLAccelerationStructurePassDescriptor <: NSObject
 
@@ -2965,23 +2989,27 @@ end
 const MTLIOCompressionContext = Ptr{Cvoid}
 
 function MTLIOCompressionContextDefaultChunkSize()
-    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOCompressionContextDefaultChunkSize()::Csize_t
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOCompressionContextDefaultChunkSize()::Csize_t
 end
 
 function MTLIOCreateCompressionContext(path, type, chunkSize)
-    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOCreateCompressionContext(path::Cstring,
-                                                                                                                                    type::MTLIOCompressionMethod,
-                                                                                                                                    chunkSize::Csize_t)::MTLIOCompressionContext
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOCreateCompressionContext(
+        path::Cstring,
+        type::MTLIOCompressionMethod,
+        chunkSize::Csize_t
+    )::MTLIOCompressionContext
 end
 
 function MTLIOCompressionContextAppendData(context, data, size)
-    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOCompressionContextAppendData(context::MTLIOCompressionContext,
-                                                                                                                                        data::Ptr{Cvoid},
-                                                                                                                                        size::Csize_t)::Cvoid
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOCompressionContextAppendData(
+        context::MTLIOCompressionContext,
+        data::Ptr{Cvoid},
+        size::Csize_t
+    )::Cvoid
 end
 
 function MTLIOFlushAndDestroyCompressionContext(context)
-    @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOFlushAndDestroyCompressionContext(context::MTLIOCompressionContext)::MTLIOCompressionStatus
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOFlushAndDestroyCompressionContext(context::MTLIOCompressionContext)::MTLIOCompressionStatus
 end
 
 @static if Metal.macos_version() >= v"15.0.0"

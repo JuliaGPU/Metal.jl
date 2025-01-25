@@ -4,7 +4,8 @@
 using CEnum: CEnum, @cenum
 
 using .MTL: MTLPixelFormat, MTLTextureType, MTLTextureUsage, MTLRegion, MTLCPUCacheMode,
-            MTLStorageMode, MTLOrigin, MTLSize, MTLCullMode, MTLWinding
+    MTLStorageMode, MTLOrigin, MTLSize, MTLCullMode, MTLWinding
+
 
 @cenum MPSKernelOptions::UInt64 begin
     MPSKernelOptionsNone = 0x0000000000000000
@@ -87,21 +88,21 @@ struct MPSOffset
     x::NSInteger
     y::NSInteger
     z::NSInteger
-    MPSOffset(x=0, y=0, z=0) = new(x, y, z)
+    MPSOffset(x = 0, y = 0, z = 0) = new(x, y, z)
 end
 
 struct MPSOrigin
     x::Cdouble
     y::Cdouble
     z::Cdouble
-    MPSOrigin(x=0.0, y=0.0, z=0.0) = new(x, y, z)
+    MPSOrigin(x = 0.0, y = 0.0, z = 0.0) = new(x, y, z)
 end
 
 struct MPSSize
     width::Cdouble
     height::Cdouble
     depth::Cdouble
-    MPSSize(w=1.0, h=1.0, d=1.0) = new(w, h, d)
+    MPSSize(w = 1.0, h = 1.0, d = 1.0) = new(w, h, d)
 end
 
 struct MPSDimensionSlice
@@ -112,7 +113,7 @@ end
 struct MPSRegion
     origin::MPSOrigin
     size::MPSSize
-    MPSRegion(origin=MPSOrigin(), size=MPSSize()) = new(origin, size)
+    MPSRegion(origin = MPSOrigin(), size = MPSSize()) = new(origin, size)
 end
 
 struct MPSScaleTransform
@@ -288,7 +289,7 @@ struct MPSStateTextureInfo
     pixelFormat::MTLPixelFormat
     textureType::MTLTextureType
     usage::MTLTextureUsage
-    _reserved::NTuple{4,NSUInteger}
+    _reserved::NTuple{4, NSUInteger}
 end
 
 @cenum MPSStateResourceType::UInt64 begin
@@ -992,8 +993,7 @@ end
     @autoproperty ps::Cfloat setter = setPs
 end
 
-@objcwrapper immutable = true MPSCNNLocalContrastNormalizationGradient <:
-                              MPSCNNGradientKernel
+@objcwrapper immutable = true MPSCNNLocalContrastNormalizationGradient <: MPSCNNGradientKernel
 
 @objcproperties MPSCNNLocalContrastNormalizationGradient begin
     @autoproperty alpha::Cfloat setter = setAlpha
@@ -1013,8 +1013,7 @@ end
     @autoproperty kernelSize::UInt64
 end
 
-@objcwrapper immutable = true MPSCNNCrossChannelNormalizationGradient <:
-                              MPSCNNGradientKernel
+@objcwrapper immutable = true MPSCNNCrossChannelNormalizationGradient <: MPSCNNGradientKernel
 
 @objcproperties MPSCNNCrossChannelNormalizationGradient begin
     @autoproperty alpha::Cfloat setter = setAlpha
@@ -1118,15 +1117,13 @@ end
     @autoproperty supportsSecureCoding::Bool
 end
 
-@objcwrapper immutable = true MPSCNNSubPixelConvolutionDescriptor <:
-                              MPSCNNConvolutionDescriptor
+@objcwrapper immutable = true MPSCNNSubPixelConvolutionDescriptor <: MPSCNNConvolutionDescriptor
 
 @objcproperties MPSCNNSubPixelConvolutionDescriptor begin
     @autoproperty subPixelScaleFactor::UInt64 setter = setSubPixelScaleFactor
 end
 
-@objcwrapper immutable = true MPSCNNDepthWiseConvolutionDescriptor <:
-                              MPSCNNConvolutionDescriptor
+@objcwrapper immutable = true MPSCNNDepthWiseConvolutionDescriptor <: MPSCNNConvolutionDescriptor
 
 @objcproperties MPSCNNDepthWiseConvolutionDescriptor begin
     @autoproperty channelMultiplier::UInt64
@@ -1183,8 +1180,7 @@ end
     @autoproperty dataSource::id{MPSCNNConvolutionDataSource}
 end
 
-@objcwrapper immutable = true MPSCNNConvolutionTransposeGradientState <:
-                              MPSCNNConvolutionGradientState
+@objcwrapper immutable = true MPSCNNConvolutionTransposeGradientState <: MPSCNNConvolutionGradientState
 
 @objcproperties MPSCNNConvolutionTransposeGradientState begin
     @autoproperty convolutionTranspose::id{MPSCNNConvolutionTranspose}
@@ -1545,8 +1541,7 @@ end
 
 @objcwrapper immutable = true MPSCNNBatchNormalizationGradient <: MPSCNNGradientKernel
 
-@objcwrapper immutable = true MPSCNNBatchNormalizationStatisticsGradient <:
-                              MPSCNNGradientKernel
+@objcwrapper immutable = true MPSCNNBatchNormalizationStatisticsGradient <: MPSCNNGradientKernel
 
 @objcwrapper immutable = true MPSCNNInstanceNormalizationDataSource <: NSObject
 
@@ -2008,15 +2003,13 @@ end
 
 @objcwrapper immutable = true MPSCNNConvolutionGradientStateNode <: MPSNNGradientStateNode
 
-@objcwrapper immutable = true MPSCNNConvolutionTransposeGradientStateNode <:
-                              MPSCNNConvolutionGradientStateNode
+@objcwrapper immutable = true MPSCNNConvolutionTransposeGradientStateNode <: MPSCNNConvolutionGradientStateNode
 
 @objcwrapper immutable = true MPSNNBinaryGradientStateNode <: MPSNNStateNode
 
 @objcwrapper immutable = true MPSNNMultiaryGradientStateNode <: MPSNNStateNode
 
-@objcwrapper immutable = true MPSNNArithmeticGradientStateNode <:
-                              MPSNNBinaryGradientStateNode
+@objcwrapper immutable = true MPSNNArithmeticGradientStateNode <: MPSNNBinaryGradientStateNode
 
 @objcwrapper immutable = true MPSNNFilterNode <: NSObject
 
@@ -2056,11 +2049,9 @@ end
 
 @objcwrapper immutable = true MPSCNNConvolutionGradientNode <: MPSNNGradientFilterNode
 
-@objcwrapper immutable = true MPSCNNFullyConnectedGradientNode <:
-                              MPSCNNConvolutionGradientNode
+@objcwrapper immutable = true MPSCNNFullyConnectedGradientNode <: MPSCNNConvolutionGradientNode
 
-@objcwrapper immutable = true MPSCNNConvolutionTransposeGradientNode <:
-                              MPSCNNConvolutionGradientNode
+@objcwrapper immutable = true MPSCNNConvolutionTransposeGradientNode <: MPSCNNConvolutionGradientNode
 
 @objcwrapper immutable = true MPSCNNNeuronNode <: MPSNNFilterNode
 
@@ -2116,28 +2107,23 @@ end
 
 @objcwrapper immutable = true MPSNNReductionColumnMinNode <: MPSNNUnaryReductionNode
 
-@objcwrapper immutable = true MPSNNReductionFeatureChannelsMinNode <:
-                              MPSNNUnaryReductionNode
+@objcwrapper immutable = true MPSNNReductionFeatureChannelsMinNode <: MPSNNUnaryReductionNode
 
-@objcwrapper immutable = true MPSNNReductionFeatureChannelsArgumentMinNode <:
-                              MPSNNUnaryReductionNode
+@objcwrapper immutable = true MPSNNReductionFeatureChannelsArgumentMinNode <: MPSNNUnaryReductionNode
 
 @objcwrapper immutable = true MPSNNReductionRowMaxNode <: MPSNNUnaryReductionNode
 
 @objcwrapper immutable = true MPSNNReductionColumnMaxNode <: MPSNNUnaryReductionNode
 
-@objcwrapper immutable = true MPSNNReductionFeatureChannelsMaxNode <:
-                              MPSNNUnaryReductionNode
+@objcwrapper immutable = true MPSNNReductionFeatureChannelsMaxNode <: MPSNNUnaryReductionNode
 
-@objcwrapper immutable = true MPSNNReductionFeatureChannelsArgumentMaxNode <:
-                              MPSNNUnaryReductionNode
+@objcwrapper immutable = true MPSNNReductionFeatureChannelsArgumentMaxNode <: MPSNNUnaryReductionNode
 
 @objcwrapper immutable = true MPSNNReductionRowMeanNode <: MPSNNUnaryReductionNode
 
 @objcwrapper immutable = true MPSNNReductionColumnMeanNode <: MPSNNUnaryReductionNode
 
-@objcwrapper immutable = true MPSNNReductionFeatureChannelsMeanNode <:
-                              MPSNNUnaryReductionNode
+@objcwrapper immutable = true MPSNNReductionFeatureChannelsMeanNode <: MPSNNUnaryReductionNode
 
 @objcwrapper immutable = true MPSNNReductionSpatialMeanNode <: MPSNNUnaryReductionNode
 
@@ -2145,8 +2131,7 @@ end
 
 @objcwrapper immutable = true MPSNNReductionColumnSumNode <: MPSNNUnaryReductionNode
 
-@objcwrapper immutable = true MPSNNReductionFeatureChannelsSumNode <:
-                              MPSNNUnaryReductionNode
+@objcwrapper immutable = true MPSNNReductionFeatureChannelsSumNode <: MPSNNUnaryReductionNode
 
 @objcproperties MPSNNReductionFeatureChannelsSumNode begin
     @autoproperty weight::Cfloat setter = setWeight
@@ -2189,8 +2174,7 @@ end
 
 @objcwrapper immutable = true MPSCNNPoolingL2NormGradientNode <: MPSCNNPoolingGradientNode
 
-@objcwrapper immutable = true MPSCNNDilatedPoolingMaxGradientNode <:
-                              MPSCNNPoolingGradientNode
+@objcwrapper immutable = true MPSCNNDilatedPoolingMaxGradientNode <: MPSCNNPoolingGradientNode
 
 @objcproperties MPSCNNDilatedPoolingMaxGradientNode begin
     @autoproperty dilationRateX::UInt64
@@ -2212,8 +2196,7 @@ end
     @autoproperty kernelHeight::UInt64 setter = setKernelHeight
 end
 
-@objcwrapper immutable = true MPSCNNSpatialNormalizationGradientNode <:
-                              MPSNNGradientFilterNode
+@objcwrapper immutable = true MPSCNNSpatialNormalizationGradientNode <: MPSNNGradientFilterNode
 
 @objcproperties MPSCNNSpatialNormalizationGradientNode begin
     @autoproperty kernelWidth::UInt64 setter = setKernelWidth
@@ -2223,8 +2206,7 @@ end
     @autoproperty delta::Cfloat setter = setDelta
 end
 
-@objcwrapper immutable = true MPSCNNLocalContrastNormalizationNode <:
-                              MPSCNNNormalizationNode
+@objcwrapper immutable = true MPSCNNLocalContrastNormalizationNode <: MPSCNNNormalizationNode
 
 @objcproperties MPSCNNLocalContrastNormalizationNode begin
     @autoproperty pm::Cfloat setter = setPm
@@ -2234,8 +2216,7 @@ end
     @autoproperty kernelHeight::UInt64 setter = setKernelHeight
 end
 
-@objcwrapper immutable = true MPSCNNLocalContrastNormalizationGradientNode <:
-                              MPSNNGradientFilterNode
+@objcwrapper immutable = true MPSCNNLocalContrastNormalizationGradientNode <: MPSNNGradientFilterNode
 
 @objcproperties MPSCNNLocalContrastNormalizationGradientNode begin
     @autoproperty alpha::Cfloat setter = setAlpha
@@ -2254,8 +2235,7 @@ end
     @autoproperty kernelSizeInFeatureChannels::UInt64 setter = setKernelSizeInFeatureChannels
 end
 
-@objcwrapper immutable = true MPSCNNCrossChannelNormalizationGradientNode <:
-                              MPSNNGradientFilterNode
+@objcwrapper immutable = true MPSCNNCrossChannelNormalizationGradientNode <: MPSNNGradientFilterNode
 
 @objcproperties MPSCNNCrossChannelNormalizationGradientNode begin
     @autoproperty kernelSize::UInt64
@@ -2267,8 +2247,7 @@ end
     @autoproperty trainingStyle::MPSNNTrainingStyle setter = setTrainingStyle
 end
 
-@objcwrapper immutable = true MPSCNNInstanceNormalizationGradientNode <:
-                              MPSNNGradientFilterNode
+@objcwrapper immutable = true MPSCNNInstanceNormalizationGradientNode <: MPSNNGradientFilterNode
 
 @objcwrapper immutable = true MPSCNNGroupNormalizationNode <: MPSNNFilterNode
 
@@ -2276,8 +2255,7 @@ end
     @autoproperty trainingStyle::MPSNNTrainingStyle setter = setTrainingStyle
 end
 
-@objcwrapper immutable = true MPSCNNGroupNormalizationGradientNode <:
-                              MPSNNGradientFilterNode
+@objcwrapper immutable = true MPSCNNGroupNormalizationGradientNode <: MPSNNGradientFilterNode
 
 @objcwrapper immutable = true MPSCNNBatchNormalizationNode <: MPSNNFilterNode
 
@@ -2286,8 +2264,7 @@ end
     @autoproperty trainingStyle::MPSNNTrainingStyle setter = setTrainingStyle
 end
 
-@objcwrapper immutable = true MPSCNNBatchNormalizationGradientNode <:
-                              MPSNNGradientFilterNode
+@objcwrapper immutable = true MPSCNNBatchNormalizationGradientNode <: MPSNNGradientFilterNode
 
 @objcwrapper immutable = true MPSNNScaleNode <: MPSNNFilterNode
 
@@ -2383,8 +2360,7 @@ end
 
 @objcwrapper immutable = true MPSNNReshapeGradientNode <: MPSNNGradientFilterNode
 
-@objcwrapper immutable = true MPSNNReductionSpatialMeanGradientNode <:
-                              MPSNNGradientFilterNode
+@objcwrapper immutable = true MPSNNReductionSpatialMeanGradientNode <: MPSNNGradientFilterNode
 
 @objcwrapper immutable = true MPSNNPadNode <: MPSNNFilterNode
 
@@ -2424,8 +2400,7 @@ end
     @autoproperty scaleFactorY::Cdouble
 end
 
-@objcwrapper immutable = true MPSCNNUpsamplingBilinearGradientNode <:
-                              MPSNNGradientFilterNode
+@objcwrapper immutable = true MPSCNNUpsamplingBilinearGradientNode <: MPSNNGradientFilterNode
 
 @objcproperties MPSCNNUpsamplingBilinearGradientNode begin
     @autoproperty scaleFactorX::Cdouble
@@ -2441,8 +2416,7 @@ end
     @autoproperty propertyCallBack::id{MPSNNGramMatrixCallback} setter = setPropertyCallBack
 end
 
-@objcwrapper immutable = true MPSNNGramMatrixCalculationGradientNode <:
-                              MPSNNGradientFilterNode
+@objcwrapper immutable = true MPSNNGramMatrixCalculationGradientNode <: MPSNNGradientFilterNode
 
 @objcproperties MPSNNGramMatrixCalculationGradientNode begin
     @autoproperty alpha::Cfloat
@@ -2496,11 +2470,11 @@ end
 end
 
 struct MPSNDArrayOffsets
-    dimensions::NTuple{16,NSInteger}
+    dimensions::NTuple{16, NSInteger}
 end
 
 struct MPSNDArraySizes
-    dimensions::NTuple{16,NSUInteger}
+    dimensions::NTuple{16, NSUInteger}
 end
 
 @objcwrapper immutable = false MPSNDArrayMultiaryBase <: MPSKernel
@@ -2523,8 +2497,7 @@ end
     @autoproperty dilationRates::MPSNDArraySizes
 end
 
-@objcwrapper immutable = true MPSNDArrayUnaryGradientKernel <:
-                              MPSNDArrayMultiaryGradientKernel
+@objcwrapper immutable = true MPSNDArrayUnaryGradientKernel <: MPSNDArrayMultiaryGradientKernel
 
 @objcwrapper immutable = false MPSNDArrayBinaryKernel <: MPSNDArrayMultiaryKernel
 
@@ -2541,11 +2514,9 @@ end
     @autoproperty secondaryDilationRates::MPSNDArraySizes
 end
 
-@objcwrapper immutable = true MPSNDArrayBinaryPrimaryGradientKernel <:
-                              MPSNDArrayMultiaryGradientKernel
+@objcwrapper immutable = true MPSNDArrayBinaryPrimaryGradientKernel <: MPSNDArrayMultiaryGradientKernel
 
-@objcwrapper immutable = true MPSNDArrayBinarySecondaryGradientKernel <:
-                              MPSNDArrayMultiaryGradientKernel
+@objcwrapper immutable = true MPSNDArrayBinarySecondaryGradientKernel <: MPSNDArrayMultiaryGradientKernel
 
 @objcwrapper immutable = true MPSNDArrayGradientState <: MPSState
 
@@ -2562,8 +2533,7 @@ end
     @autoproperty strides::MPSNDArrayOffsets setter = setStrides
 end
 
-@objcwrapper immutable = true MPSNDArrayStridedSliceGradient <:
-                              MPSNDArrayUnaryGradientKernel
+@objcwrapper immutable = true MPSNDArrayStridedSliceGradient <: MPSNDArrayUnaryGradientKernel
 
 @objcwrapper immutable = true MPSNDArrayGatherGradientState <: MPSNDArrayGradientState
 
@@ -2573,8 +2543,7 @@ end
     @autoproperty axis::UInt64 setter = setAxis
 end
 
-@objcwrapper immutable = true MPSNDArrayGatherGradient <:
-                              MPSNDArrayBinaryPrimaryGradientKernel
+@objcwrapper immutable = true MPSNDArrayGatherGradient <: MPSNDArrayBinaryPrimaryGradientKernel
 
 @static if Metal.macos_version() >= v"15.0.0"
     @objcwrapper immutable = true MPSNDArrayIdentity <: MPSNDArrayUnaryKernel
@@ -2595,8 +2564,7 @@ end
 end
 
 @static if Metal.macos_version() >= v"15.0.0"
-    @objcwrapper immutable = true MPSNDArrayAffineQuantizationDescriptor <:
-                                  MPSNDArrayQuantizationDescriptor
+    @objcwrapper immutable = true MPSNDArrayAffineQuantizationDescriptor <: MPSNDArrayQuantizationDescriptor
     @objcproperties MPSNDArrayAffineQuantizationDescriptor begin
         @autoproperty hasZeroPoint::Bool setter = setHasZeroPoint
         @autoproperty hasMinValue::Bool setter = setHasMinValue
@@ -2605,13 +2573,11 @@ end
 end
 
 @static if Metal.macos_version() >= v"15.0.0"
-    @objcwrapper immutable = true MPSNDArrayLUTQuantizationDescriptor <:
-                                  MPSNDArrayQuantizationDescriptor
+    @objcwrapper immutable = true MPSNDArrayLUTQuantizationDescriptor <: MPSNDArrayQuantizationDescriptor
 end
 
 @static if Metal.macos_version() >= v"15.0.0"
-    @objcwrapper immutable = true MPSNDArrayQuantizedMatrixMultiplication <:
-                                  MPSNDArrayMatrixMultiplication
+    @objcwrapper immutable = true MPSNDArrayQuantizedMatrixMultiplication <: MPSNDArrayMatrixMultiplication
 end
 
 @static if Metal.macos_version() >= v"15.0.0"
@@ -2630,14 +2596,14 @@ end
 end
 
 struct _MPSPackedFloat3
-    data::NTuple{12,UInt8}
+    data::NTuple{12, UInt8}
 end
 
 function Base.getproperty(x::Ptr{_MPSPackedFloat3}, f::Symbol)
     f === :x && return Ptr{Cfloat}(x + 0)
     f === :y && return Ptr{Cfloat}(x + 4)
     f === :z && return Ptr{Cfloat}(x + 8)
-    f === :elements && return Ptr{NTuple{3,Cfloat}}(x + 0)
+    f === :elements && return Ptr{NTuple{3, Cfloat}}(x + 0)
     return getfield(x, f)
 end
 
@@ -2645,7 +2611,7 @@ function Base.getproperty(x::_MPSPackedFloat3, f::Symbol)
     r = Ref{_MPSPackedFloat3}(x)
     ptr = Base.unsafe_convert(Ptr{_MPSPackedFloat3}, r)
     fptr = getproperty(ptr, f)
-    GC.@preserve r unsafe_load(fptr)
+    return GC.@preserve r unsafe_load(fptr)
 end
 
 function Base.setproperty!(x::Ptr{_MPSPackedFloat3}, f::Symbol, v)

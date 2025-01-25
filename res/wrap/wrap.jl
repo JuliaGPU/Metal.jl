@@ -6,7 +6,7 @@ using Clang.Generators
 using Clang
 using Glob
 using JLD2
-using JuliaFormatter
+using Runic
 using Logging
 
 # Use system SDK
@@ -92,7 +92,7 @@ function wrap(name, headers; defines=[])
         print(io, output_data)
     end
 
-    format_file(output_file, YASStyle())
+    Runic.main(["--inplace", output_file])
 
     return ctx
 end
@@ -172,7 +172,7 @@ function rewriter!(ctx, options)
                 con = constructorsDict[structName] |> Meta.parse
 
                 if con.head == :(=) && con.args[2] isa Expr && con.args[2].head == :block &&
-                    con.args[2].args[1] isa LineNumberNode && con.args[2].args[2].head == :call
+                        con.args[2].args[1] isa LineNumberNode && con.args[2].args[2].head == :call
                     con.args[2] = con.args[2].args[2]
                 end
                 push!(expr.args[3].args, con)

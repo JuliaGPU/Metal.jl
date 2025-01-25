@@ -19,7 +19,7 @@ contents(buf::MTLBuffer) = @objc [buf::id{MTLBuffer} contents]::Ptr{Cvoid}
 
 function Base.convert(::Type{Ptr{T}}, buf::MTLBuffer) where {T}
     buf.storageMode == MTLStorageModePrivate && error("Cannot access the contents of a private buffer")
-    convert(Ptr{T}, contents(buf))
+    return convert(Ptr{T}, contents(buf))
 end
 
 
