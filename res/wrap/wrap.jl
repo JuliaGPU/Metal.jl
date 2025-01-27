@@ -153,24 +153,34 @@ function stripStatic(expr::Expr)
     end
 end
 
+"""
+    rewriter!(ctx, options)
+
+Changes various expression nodes from `ctx` based on the contents of `options`
+
+Currently supported options:
+
+    [api.<symbol>]
+        - immutable::Bool     # Set the mutability of the Obj-C object.
+        - supertype::String   # Set the supertype of the Obj-C object.
+        - constructor::String # Define an inner constructor of the struct.
+
+    [api.<symbol>.proptype]
+        - <property>::String  # Adds a `type` definition to <property> in the Obj-C `@objcproperties` definition
+"""
 function rewriter!(ctx, options)
     haskey(options, "api") || return
 
-    constructorsDict = get(options["api"], "constructor", Dict())
-    immutableDict = get(options["api"], "immutable", Dict())
-    supertypeDict = get(options["api"], "override_supertype", Dict())
-
     for node in get_nodes(ctx.dag)
-        nodetype = typeof(node)
-        nodedict = get(options["api"], string(node.id), Dict())
+        nodename = string(node.id)
+        nodedict = get(options["api"], nodename, Dict())
 
+        nodetype = typeof(node)
         if nodetype <: Generators.ExprNode{<:Generators.AbstractStructNodeType}
             expr = node.exprs[1]
-            structName = string(node.id)
-
-            if haskey(constructorsDict, structName)
+            if haskey(nodedict, "constructor")
                 expr = node.exprs[1]
-                con = constructorsDict[structName] |> Meta.parse
+                con = nodedict["constructor"] |> Meta.parse
 
                 if con.head == :(=) && con.args[2] isa Expr && con.args[2].head == :block &&
                         con.args[2].args[1] isa LineNumberNode && con.args[2].args[2].head == :call
@@ -180,28 +190,27 @@ function rewriter!(ctx, options)
             end
         elseif nodetype <: Generators.ExprNode{<:Generators.AbstractObjCObjNodeType}
             declexpr = node.exprs[1]
-            className = string(node.id)
-            if haskey(immutableDict, className)
+            if haskey(nodedict, "immutable")
                 declexpr = node.exprs[1]
-                con = immutableDict[className]
+                con = nodedict["immutable"]
 
                 declexpr.args[3].args[2] = con
             end
-            if haskey(supertypeDict, className)
+            if haskey(nodedict, "supertype")
                 expr2 = stripStatic(declexpr).args[4]
-                typ = supertypeDict[className] |> Meta.parse
+                typ = nodedict["supertype"] |> Meta.parse
 
                 expr2.args[2] = typ
             end
             if haskey(nodedict, "proptype")
-                propertytypeDict = nodedict["proptype"]
+                proptypedict = nodedict["proptype"]
                 propertyexprs = node.exprs[2].args[4].args
                 for pro in propertyexprs
                     isnothing(pro) && continue
                     strippedpro = stripStatic(pro)
                     propname = strippedpro.args[3].args[1]
-                    if haskey(propertytypeDict, string(propname))
-                        newtype = propertytypeDict[string(propname)] |> Meta.parse
+                    if haskey(proptypedict, string(propname))
+                        newtype = proptypedict[string(propname)] |> Meta.parse
 
                         # There might already be a `type` expression
                         typeexpridx = findfirst(strippedpro.args) do expr
