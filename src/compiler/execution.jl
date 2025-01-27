@@ -301,15 +301,17 @@ end
         foreach(free, argument_buffers)
 
         # Check for errors
+        Core.println(buf.status)
         if buf.status == MTL.MTLCommandBufferStatusError
             err = buf.error
             if err !== nothing
                 code = err.code  # MTLCommandBufferError enum value
                 description = err.localizedDescription
 
-		@error "GPU kernel execution failed" exception = (err, catch_backtrace()) kernel = nameof(kernel.f) error_code = code description = description
+		        @error "GPU kernel execution failed" exception = (err, catch_backtrace()) kernel = nameof(kernel.f) error_code = code description = description
             end
         end
+
     end
 
     commit!(cmdbuf)
