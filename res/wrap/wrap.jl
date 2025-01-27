@@ -159,10 +159,11 @@ function rewriter!(ctx, options)
     constructorsDict = get(options["api"], "constructor", Dict())
     immutableDict = get(options["api"], "immutable", Dict())
     supertypeDict = get(options["api"], "override_supertype", Dict())
-    propertytypeDict = get(options["api"], "propertytype", Dict())
 
     for node in get_nodes(ctx.dag)
         nodetype = typeof(node)
+        nodedict = get(options["api"], string(node.id), Dict())
+
         if nodetype <: Generators.ExprNode{<:Generators.AbstractStructNodeType}
             expr = node.exprs[1]
             structName = string(node.id)
@@ -192,14 +193,15 @@ function rewriter!(ctx, options)
 
                 expr2.args[2] = typ
             end
-            if haskey(propertytypeDict, className)
+            if haskey(nodedict, "proptype")
+                propertytypeDict = nodedict["proptype"]
                 propertyexprs = node.exprs[2].args[4].args
                 for pro in propertyexprs
                     isnothing(pro) && continue
                     strippedpro = stripStatic(pro)
                     propname = strippedpro.args[3].args[1]
-                    if haskey(propertytypeDict[className], string(propname))
-                        newtype = propertytypeDict[className][string(propname)] |> Meta.parse
+                    if haskey(propertytypeDict, string(propname))
+                        newtype = propertytypeDict[string(propname)] |> Meta.parse
 
                         # There might already be a `type` expression
                         typeexpridx = findfirst(strippedpro.args) do expr
