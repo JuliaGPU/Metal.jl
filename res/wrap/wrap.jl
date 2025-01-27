@@ -163,7 +163,6 @@ Currently supported options:
     [api.<symbol>]
         - immutable::Bool     # Set the mutability of the Obj-C object.
         - supertype::String   # Set the supertype of the Obj-C object.
-        - constructor::String # Define an inner constructor of the struct.
 
     [api.<symbol>.proptype]
         - <property>::String  # Adds a `type` definition to <property> in the Obj-C `@objcproperties` definition
@@ -176,19 +175,7 @@ function rewriter!(ctx, options)
         nodedict = get(options["api"], nodename, Dict())
 
         nodetype = typeof(node)
-        if nodetype <: Generators.ExprNode{<:Generators.AbstractStructNodeType}
-            expr = node.exprs[1]
-            if haskey(nodedict, "constructor")
-                expr = node.exprs[1]
-                con = nodedict["constructor"] |> Meta.parse
-
-                if con.head == :(=) && con.args[2] isa Expr && con.args[2].head == :block &&
-                        con.args[2].args[1] isa LineNumberNode && con.args[2].args[2].head == :call
-                    con.args[2] = con.args[2].args[2]
-                end
-                push!(expr.args[3].args, con)
-            end
-        elseif nodetype <: Generators.ExprNode{<:Generators.AbstractObjCObjNodeType}
+        if nodetype <: Generators.ExprNode{<:Generators.AbstractObjCObjNodeType}
             declexpr = node.exprs[1]
             if haskey(nodedict, "immutable")
                 declexpr = node.exprs[1]

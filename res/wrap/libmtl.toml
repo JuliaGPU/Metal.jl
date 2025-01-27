@@ -90,17 +90,8 @@ immutable=false
 [api.MTLLibrary]
 immutable=false
 
-[api.MTLOrigin]
-constructor = "MTLOrigin(x=0, y=0, z=0) = new(x, y, z)"
-
-[api.MTLRegion]
-constructor = "MTLRegion(origin=MTLOrigin(), size=MTLSize()) = new(origin, size)"
-
 [api.MTLSharedEvent]
 immutable=false
-
-[api.MTLSize]
-constructor = "MTLSize(w=1, h=1, d=1) = new(w, h, d)"
 
 [api.MTLTexture]
 immutable=false

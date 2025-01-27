@@ -129,18 +129,6 @@ immutable=false
 [api.MPSNDArrayUnaryKernel]
 immutable=false
 
-[api.MPSOffset]
-constructor = "MPSOffset(x=0, y=0, z=0) = new(x, y, z)"
-
-[api.MPSOrigin]
-constructor = "MPSOrigin(x=0.0, y=0.0, z=0.0) = new(x, y, z)"
-
-[api.MPSRegion]
-constructor = "MPSRegion(origin=MPSOrigin(), size=MPSSize()) = new(origin, size)"
-
-[api.MPSSize]
-constructor = "MPSSize(w=1.0, h=1.0, d=1.0) = new(w, h, d)"
-
 [api.MPSTemporaryNDArray]
 immutable=false
 

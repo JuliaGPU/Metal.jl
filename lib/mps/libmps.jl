@@ -88,21 +88,18 @@ struct MPSOffset
     x::NSInteger
     y::NSInteger
     z::NSInteger
-    MPSOffset(x = 0, y = 0, z = 0) = new(x, y, z)
 end
 
 struct MPSOrigin
     x::Cdouble
     y::Cdouble
     z::Cdouble
-    MPSOrigin(x = 0.0, y = 0.0, z = 0.0) = new(x, y, z)
 end
 
 struct MPSSize
     width::Cdouble
     height::Cdouble
     depth::Cdouble
-    MPSSize(w = 1.0, h = 1.0, d = 1.0) = new(w, h, d)
 end
 
 struct MPSDimensionSlice
@@ -113,7 +110,6 @@ end
 struct MPSRegion
     origin::MPSOrigin
     size::MPSSize
-    MPSRegion(origin = MPSOrigin(), size = MPSSize()) = new(origin, size)
 end
 
 struct MPSScaleTransform

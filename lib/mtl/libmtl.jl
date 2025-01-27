@@ -34,7 +34,6 @@ struct MTLOrigin
     x::NSUInteger
     y::NSUInteger
     z::NSUInteger
-    MTLOrigin(x = 0, y = 0, z = 0) = new(x, y, z)
 end
 
 function MTLOriginMake(x, y, z)
@@ -45,7 +44,6 @@ struct MTLSize
     width::NSUInteger
     height::NSUInteger
     depth::NSUInteger
-    MTLSize(w = 1, h = 1, d = 1) = new(w, h, d)
 end
 
 function MTLSizeMake(width, height, depth)
@@ -55,7 +53,6 @@ end
 struct MTLRegion
     origin::MTLOrigin
     size::MTLSize
-    MTLRegion(origin = MTLOrigin(), size = MTLSize()) = new(origin, size)
 end
 
 function MTLRegionMake1D(x, width)
