@@ -1,22 +1,17 @@
-export MTLBuffer
+export MTLBuffer, contents
 
 # From docs: "MSL implements a buffer as a pointer to a built-in or user defined data type described in the
 # device, constant, or threadgroup address space.
-@objcwrapper MTLBuffer <: MTLResource
 
-@objcproperties MTLBuffer begin
-    @autoproperty length::NSUInteger # In bytes
-    @autoproperty device::id{MTLDevice}
-    @autoproperty contents::Ptr{Cvoid}
-    @autoproperty remoteStorageBuffer::id{MTLBuffer}
-    @autoproperty gpuAddress::UInt64 type=Ptr{Cvoid}
-end
+# @objcwrapper MTLBuffer <: MTLResource
 
 Base.sizeof(buf::MTLBuffer) = Int(buf.length)
 
+contents(buf::MTLBuffer) = @objc [buf::id{MTLBuffer} contents]::Ptr{Cvoid}
+
 function Base.convert(::Type{Ptr{T}}, buf::MTLBuffer) where {T}
     buf.storageMode == MTLStorageModePrivate && error("Cannot access the contents of a private buffer")
-    convert(Ptr{T}, buf.contents)
+    return convert(Ptr{T}, contents(buf))
 end
 
 

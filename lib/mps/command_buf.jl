@@ -4,16 +4,7 @@
 #   - intermediate commits during encoding of MPS work using `commitAndContinue`
 #
 
-# XXX: Not actually inheritance but MPSCommandBuffer conforms to MTLCommandBuffer protocol
-@objcwrapper MPSCommandBuffer <: MTLCommandBuffer
-
-@objcproperties MPSCommandBuffer begin
-    # Identifying the Command Buffer
-    @autoproperty commandBuffer::id{MTLCommandBuffer}
-    # @autoproperty heapProvider::id{MPSHeapProvider}
-    # @autoproperty predicate::id{MPSPredicate}
-    @autoproperty rootCommandBuffer::id{MTLCommandBuffer}
-end
+# @objcwrapper MPSCommandBuffer <: MTLCommandBuffer
 
 function MPSCommandBuffer(commandBuffer::MTLCommandBuffer)
     handle = @objc [MPSCommandBuffer commandBufferWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}]::id{MPSCommandBuffer}

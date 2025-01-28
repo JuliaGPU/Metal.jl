@@ -2,7 +2,7 @@
 
 export MPSMatrixCopyDescriptor
 
-@objcwrapper MPSMatrixCopyDescriptor <: NSObject
+# @objcwrapper MPSMatrixCopyDescriptor <: NSObject
 
 function MPSMatrixCopyDescriptor(sourceMatrix, destinationMatrix, offsets = MPSMatrixCopyOffsets(Cuint(0), Cuint(0), Cuint(0), Cuint(0)))
     desc = @objc [MPSMatrixCopyDescriptor descriptorWithSourceMatrix:sourceMatrix::id{MPSMatrix}
@@ -16,14 +16,7 @@ end
 
 export MPSMatrixCopy, encode!
 
-@objcwrapper immutable=false MPSMatrixCopy <: MPSKernel
-
-@objcproperties MPSMatrixCopy begin
-    @autoproperty copyRows::NSUInteger
-    @autoproperty copyColumns::NSUInteger
-    @autoproperty sourcesAreTransposed::Bool
-    @autoproperty destinationsAreTransposed::Bool
-end
+# @objcwrapper immutable=false MPSMatrixCopy <: MPSKernel
 
 function MPSMatrixCopy(dev, copyRows, copyColumns, sourcesAreTransposed, destinationsAreTransposed)
     kernel = @objc [MPSMatrixCopy alloc]::id{MPSMatrixCopy}

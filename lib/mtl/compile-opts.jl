@@ -35,13 +35,7 @@ end
 
 export MTLCompileOptions
 
-@objcwrapper immutable=false MTLCompileOptions <: NSObject
-
-@objcproperties MTLCompileOptions begin
-    @autoproperty fastMathEnabled::Bool setter=setFastMathEnabled
-    @autoproperty preserveInvariance::Bool setter=setPreserveInvariance
-    @autoproperty languageVersion::MTLLanguageVersion type=VersionNumber setter=setLanguageVersion
-end
+# @objcwrapper immutable=false MTLCompileOptions <: NSObject
 
 function MTLCompileOptions()
     handle = @objc [MTLCompileOptions new]::id{MTLCompileOptions}

@@ -4,12 +4,7 @@
 
 export MTLEvent
 
-@objcwrapper immutable=false MTLEvent <: NSObject
-
-@objcproperties MTLEvent begin
-    @autoproperty device::id{MTLDevice}
-    @autoproperty label::id{NSString} setter=setLabel
-end
+# @objcwrapper immutable=false MTLEvent <: NSObject
 
 function MTLEvent(dev::MTLDevice)
     ptr = @objc [dev::id{MTLDevice} newEvent]::id{MTLEvent}
@@ -25,11 +20,7 @@ end
 
 export MTLSharedEvent, MTLSharedEventHandle
 
-@objcwrapper immutable=false MTLSharedEvent <: MTLEvent
-
-@objcproperties MTLSharedEvent begin
-    @autoproperty signaledValue::UInt64
-end
+# @objcwrapper immutable=false MTLSharedEvent <: MTLEvent
 
 function MTLSharedEvent(dev::MTLDevice)
     ptr = @objc [dev::id{MTLDevice} newSharedEvent]::id{MTLSharedEvent}
@@ -41,7 +32,7 @@ end
 
 ## shared event handle
 
-@objcwrapper MTLSharedEventHandle <: NSObject
+# @objcwrapper MTLSharedEventHandle <: MTLEvent
 
 function MTLSharedEventHandle(ev::MTLSharedEvent)
     ptr = @objc [ev::id{MTLSharedEvent} newSharedEventHandle]::id{MTLSharedEventHandle}

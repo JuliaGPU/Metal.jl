@@ -1,1 +1,2 @@
-using .MTL: MTLPixelFormat, MTLTextureType, MTLTextureUsage
+using .MTL: MTLPixelFormat, MTLTextureType, MTLTextureUsage, MTLRegion, MTLCPUCacheMode,
+    MTLStorageMode, MTLOrigin, MTLSize, MTLCullMode, MTLWinding

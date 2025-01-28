@@ -1,12 +1,6 @@
 ## kernels
 
-@objcwrapper immutable=false MPSUnaryImageKernel <: MPSKernel
-
-@objcproperties MPSUnaryImageKernel begin
-    @autoproperty offset::MPSOffset
-    @autoproperty clipRect::MTLRegion
-    @autoproperty edgeMode::MPSImageEdgeMode setter=setEdgeMode
-end
+# @objcwrapper immutable=false MPSUnaryImageKernel <: MPSKernel
 
 function encode!(cmdbuf::MTLCommandBuffer, kernel::K, sourceTexture::MTLTexture, destinationTexture::MTLTexture) where {K<:MPSUnaryImageKernel}
     @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
@@ -21,22 +15,13 @@ end
 #                                      fallbackCopyAllocator:copyAllocator::MPSCopyAllocator]::Bool
 # end
 
-@objcwrapper immutable=false MPSBinaryImageKernel <: MPSKernel
-
-@objcproperties MPSBinaryImageKernel begin
-    @autoproperty primaryOffset::MPSOffset
-    @autoproperty secondaryOffset::MPSOffset
-    @autoproperty primaryEdgeMode::MPSImageEdgeMode
-    @autoproperty secondaryEdgeMode::MPSImageEdgeMode
-    @autoproperty clipRect::MTLRegion
-end
-
+# @objcwrapper immutable=false MPSBinaryImageKernel <: MPSKernel
 
 ## gaussian blur
 
 export MPSImageGaussianBlur, encode!
 
-@objcwrapper immutable=false MPSImageGaussianBlur <: MPSUnaryImageKernel
+# @objcwrapper immutable=false MPSImageGaussianBlur <: MPSUnaryImageKernel
 
 function MPSImageGaussianBlur(dev, sigma)
     kernel = @objc [MPSImageGaussianBlur alloc]::id{MPSImageGaussianBlur}
@@ -52,7 +37,7 @@ end
 
 export MPSImageBox
 
-@objcwrapper immutable=false MPSImageBox <: MPSUnaryImageKernel
+# @objcwrapper immutable=false MPSImageBox <: MPSUnaryImageKernel
 
 function MPSImageBox(dev, kernelWidth, kernelHeight)
     kernel = @objc [MPSImageBox alloc]::id{MPSImageBox}

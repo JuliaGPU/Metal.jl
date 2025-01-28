@@ -3,7 +3,9 @@
 
 using CEnum: CEnum, @cenum
 
-using .MTL: MTLPixelFormat, MTLTextureType, MTLTextureUsage
+using .MTL: MTLPixelFormat, MTLTextureType, MTLTextureUsage, MTLRegion, MTLCPUCacheMode,
+    MTLStorageMode, MTLOrigin, MTLSize, MTLCullMode, MTLWinding
+
 
 @cenum MPSKernelOptions::UInt64 begin
     MPSKernelOptionsNone = 0x0000000000000000
@@ -86,21 +88,18 @@ struct MPSOffset
     x::NSInteger
     y::NSInteger
     z::NSInteger
-    MPSOffset(x=0, y=0, z=0) = new(x, y, z)
 end
 
 struct MPSOrigin
     x::Cdouble
     y::Cdouble
     z::Cdouble
-    MPSOrigin(x=0.0, y=0.0, z=0.0) = new(x, y, z)
 end
 
 struct MPSSize
     width::Cdouble
     height::Cdouble
     depth::Cdouble
-    MPSSize(w=1.0, h=1.0, d=1.0) = new(w, h, d)
 end
 
 struct MPSDimensionSlice
@@ -111,7 +110,6 @@ end
 struct MPSRegion
     origin::MPSOrigin
     size::MPSSize
-    MPSRegion(origin=MPSOrigin(), size=MPSSize()) = new(origin, size)
 end
 
 struct MPSScaleTransform
@@ -132,6 +130,24 @@ struct MPSImageRegion
     size::MPSImageCoordinate
 end
 
+@objcwrapper immutable = true MPSDeviceProvider <: NSObject
+
+@objcwrapper immutable = true MPSImageDescriptor <: NSObject
+
+@objcproperties MPSImageDescriptor begin
+    @autoproperty width::UInt64 setter = setWidth
+    @autoproperty height::UInt64 setter = setHeight
+    @autoproperty featureChannels::UInt64 setter = setFeatureChannels
+    @autoproperty numberOfImages::UInt64 setter = setNumberOfImages
+    @autoproperty pixelFormat::MTLPixelFormat
+    @autoproperty channelFormat::MPSImageFeatureChannelFormat setter = setChannelFormat
+    @autoproperty cpuCacheMode::MTLCPUCacheMode setter = setCpuCacheMode
+    @autoproperty storageMode::MTLStorageMode setter = setStorageMode
+    @autoproperty usage::MTLTextureUsage setter = setUsage
+end
+
+@objcwrapper immutable = true MPSImageAllocator <: NSObject
+
 @cenum MPSPurgeableState::UInt64 begin
     MPSPurgeableStateAllocationDeferred = 0x0000000000000000
     MPSPurgeableStateKeepCurrent = 0x0000000000000001
@@ -150,6 +166,117 @@ struct MPSImageReadWriteParams
     numberOfFeatureChannelsToReadWrite::NSUInteger
 end
 
+@objcwrapper immutable = true MPSImage <: NSObject
+
+@objcproperties MPSImage begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty width::UInt64
+    @autoproperty height::UInt64
+    @autoproperty featureChannels::UInt64
+    @autoproperty numberOfImages::UInt64
+    @autoproperty textureType::MTLTextureType
+    @autoproperty pixelFormat::MTLPixelFormat
+    @autoproperty precision::UInt64
+    @autoproperty usage::MTLTextureUsage
+    @autoproperty featureChannelFormat::MPSImageFeatureChannelFormat
+    @autoproperty pixelSize::UInt64
+    @autoproperty texture::id{MTLTexture}
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty parent::id{MPSImage}
+end
+
+@objcwrapper immutable = true MPSTemporaryImage <: MPSImage
+
+@objcproperties MPSTemporaryImage begin
+    @autoproperty readCount::UInt64 setter = setReadCount
+end
+
+@objcwrapper immutable = true MPSPredicate <: NSObject
+
+@objcproperties MPSPredicate begin
+    @autoproperty predicateBuffer::id{MTLBuffer}
+    @autoproperty predicateOffset::UInt64
+end
+
+@objcwrapper immutable = true MPSHeapProvider <: NSObject
+
+@objcwrapper immutable = true MPSCommandBuffer <: MTLCommandBuffer
+
+@objcproperties MPSCommandBuffer begin
+    @autoproperty commandBuffer::id{MTLCommandBuffer}
+    @autoproperty rootCommandBuffer::id{MTLCommandBuffer}
+    @autoproperty predicate::id{MPSPredicate} setter = setPredicate
+    @autoproperty heapProvider::id{MPSHeapProvider} setter = setHeapProvider
+end
+
+@objcwrapper immutable = true MPSKernel <: NSObject
+
+@objcproperties MPSKernel begin
+    @autoproperty options::MPSKernelOptions setter = setOptions
+    @autoproperty device::id{MTLDevice}
+    @autoproperty label::id{NSString} setter = setLabel
+end
+
+@objcwrapper immutable = true MPSMatrixDescriptor <: NSObject
+
+@objcproperties MPSMatrixDescriptor begin
+    @autoproperty rows::UInt64 setter = setRows
+    @autoproperty columns::UInt64 setter = setColumns
+    @autoproperty matrices::UInt64
+    @autoproperty dataType::MPSDataType setter = setDataType
+    @autoproperty rowBytes::UInt64 setter = setRowBytes
+    @autoproperty matrixBytes::UInt64
+end
+
+@objcwrapper immutable = true MPSVectorDescriptor <: NSObject
+
+@objcproperties MPSVectorDescriptor begin
+    @autoproperty length::UInt64 setter = setLength
+    @autoproperty vectors::UInt64
+    @autoproperty dataType::MPSDataType setter = setDataType
+    @autoproperty vectorBytes::UInt64
+end
+
+@objcwrapper immutable = false MPSMatrix <: NSObject
+
+@objcproperties MPSMatrix begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty rows::UInt64
+    @autoproperty columns::UInt64
+    @autoproperty matrices::UInt64
+    @autoproperty dataType::MPSDataType
+    @autoproperty rowBytes::UInt64
+    @autoproperty matrixBytes::UInt64
+    @autoproperty offset::UInt64
+    @autoproperty data::id{MTLBuffer}
+end
+
+@objcwrapper immutable = false MPSVector <: NSObject
+
+@objcproperties MPSVector begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty length::UInt64
+    @autoproperty vectors::UInt64
+    @autoproperty dataType::MPSDataType
+    @autoproperty vectorBytes::UInt64
+    @autoproperty offset::UInt64
+    @autoproperty data::id{MTLBuffer}
+end
+
+@objcwrapper immutable = true MPSTemporaryMatrix <: MPSMatrix
+
+@objcproperties MPSTemporaryMatrix begin
+    @autoproperty readCount::UInt64 setter = setReadCount
+end
+
+@objcwrapper immutable = false MPSTemporaryVector <: MPSVector
+
+@objcproperties MPSTemporaryVector begin
+    @autoproperty readCount::UInt64 setter = setReadCount
+end
+
+@objcwrapper immutable = true MPSStateResourceList <: NSObject
+
 struct MPSStateTextureInfo
     width::NSUInteger
     height::NSUInteger
@@ -158,13 +285,23 @@ struct MPSStateTextureInfo
     pixelFormat::MTLPixelFormat
     textureType::MTLTextureType
     usage::MTLTextureUsage
-    _reserved::NTuple{4,NSUInteger}
+    _reserved::NTuple{4, NSUInteger}
 end
 
 @cenum MPSStateResourceType::UInt64 begin
     MPSStateResourceTypeNone = 0x0000000000000000
     MPSStateResourceTypeBuffer = 0x0000000000000001
     MPSStateResourceTypeTexture = 0x0000000000000002
+end
+
+@objcwrapper immutable = true MPSState <: NSObject
+
+@objcproperties MPSState begin
+    @autoproperty resourceCount::UInt64
+    @autoproperty readCount::UInt64 setter = setReadCount
+    @autoproperty isTemporary::Bool
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty resource::id{MTLResource}
 end
 
 @cenum MPSDeviceCapsValues::UInt32 begin
@@ -242,11 +379,167 @@ struct MPSCustomKernelArgumentCount
     broadcastTextureCount::Culong
 end
 
+@objcwrapper immutable = false MPSNDArrayDescriptor <: NSObject
+
+@objcproperties MPSNDArrayDescriptor begin
+    @autoproperty dataType::MPSDataType setter = setDataType
+    @autoproperty numberOfDimensions::UInt64 setter = setNumberOfDimensions
+    @static if Metal.is_macos(v"15.0.0")
+        @autoproperty preferPackedRows::Bool setter = setPreferPackedRows
+    end
+end
+
+@objcwrapper immutable = true MPSNDArrayAllocator <: NSObject
+
+@objcwrapper immutable = false MPSNDArray <: NSObject
+
+@objcproperties MPSNDArray begin
+    @autoproperty label::id{NSString} setter = setLabel
+    @autoproperty dataType::MPSDataType
+    @autoproperty dataTypeSize::UInt64
+    @autoproperty numberOfDimensions::UInt64
+    @autoproperty device::id{MTLDevice}
+    @autoproperty parent::id{MPSNDArray}
+end
+
+@objcwrapper immutable = false MPSTemporaryNDArray <: MPSNDArray
+
+@objcproperties MPSTemporaryNDArray begin
+    @autoproperty readCount::UInt64 setter = setReadCount
+end
+
 @cenum MPSAlphaType::UInt64 begin
     MPSAlphaTypeNonPremultiplied = 0x0000000000000000
     MPSAlphaTypeAlphaIsOne = 0x0000000000000001
     MPSAlphaTypePremultiplied = 0x0000000000000002
 end
+
+@objcwrapper immutable = false MPSUnaryImageKernel <: MPSKernel
+
+@objcproperties MPSUnaryImageKernel begin
+    @autoproperty offset::MPSOffset setter = setOffset
+    @autoproperty clipRect::MTLRegion setter = setClipRect
+    @autoproperty edgeMode::MPSImageEdgeMode setter = setEdgeMode
+end
+
+@objcwrapper immutable = false MPSBinaryImageKernel <: MPSKernel
+
+@objcproperties MPSBinaryImageKernel begin
+    @autoproperty primaryOffset::MPSOffset setter = setPrimaryOffset
+    @autoproperty secondaryOffset::MPSOffset setter = setSecondaryOffset
+    @autoproperty primaryEdgeMode::MPSImageEdgeMode setter = setPrimaryEdgeMode
+    @autoproperty secondaryEdgeMode::MPSImageEdgeMode setter = setSecondaryEdgeMode
+    @autoproperty clipRect::MTLRegion setter = setClipRect
+end
+
+@objcwrapper immutable = true MPSImageConversion <: MPSUnaryImageKernel
+
+@objcproperties MPSImageConversion begin
+    @autoproperty sourceAlpha::MPSAlphaType
+    @autoproperty destinationAlpha::MPSAlphaType
+end
+
+@objcwrapper immutable = true MPSImageConvolution <: MPSUnaryImageKernel
+
+@objcproperties MPSImageConvolution begin
+    @autoproperty kernelHeight::UInt64
+    @autoproperty kernelWidth::UInt64
+    @autoproperty bias::Cfloat setter = setBias
+end
+
+@objcwrapper immutable = true MPSImageLaplacian <: MPSUnaryImageKernel
+
+@objcproperties MPSImageLaplacian begin
+    @autoproperty bias::Cfloat setter = setBias
+end
+
+@objcwrapper immutable = false MPSImageBox <: MPSUnaryImageKernel
+
+@objcproperties MPSImageBox begin
+    @autoproperty kernelHeight::UInt64
+    @autoproperty kernelWidth::UInt64
+end
+
+@objcwrapper immutable = true MPSImageTent <: MPSImageBox
+
+@objcwrapper immutable = false MPSImageGaussianBlur <: MPSUnaryImageKernel
+
+@objcproperties MPSImageGaussianBlur begin
+    @autoproperty sigma::Cfloat
+end
+
+@objcwrapper immutable = true MPSImageSobel <: MPSUnaryImageKernel
+
+@objcproperties MPSImageSobel begin
+    @autoproperty colorTransform::Ptr{Cfloat}
+end
+
+@objcwrapper immutable = true MPSImageCanny <: MPSUnaryImageKernel
+
+@objcproperties MPSImageCanny begin
+    @autoproperty colorTransform::Ptr{Cfloat}
+    @autoproperty sigma::Cfloat
+    @autoproperty highThreshold::Cfloat setter = setHighThreshold
+    @autoproperty lowThreshold::Cfloat setter = setLowThreshold
+    @autoproperty useFastMode::Bool setter = setUseFastMode
+end
+
+@objcwrapper immutable = true MPSImagePyramid <: MPSUnaryImageKernel
+
+@objcproperties MPSImagePyramid begin
+    @autoproperty kernelHeight::UInt64
+    @autoproperty kernelWidth::UInt64
+end
+
+@objcwrapper immutable = true MPSImageGaussianPyramid <: MPSImagePyramid
+
+@objcwrapper immutable = true MPSImageLaplacianPyramid <: MPSImagePyramid
+
+@objcproperties MPSImageLaplacianPyramid begin
+    @autoproperty laplacianBias::Cfloat getter = getLaplacianBias setter = setLaplacianBias
+    @autoproperty laplacianScale::Cfloat getter = getLaplacianScale setter = setLaplacianScale
+end
+
+@objcwrapper immutable = true MPSImageLaplacianPyramidSubtract <: MPSImageLaplacianPyramid
+
+@objcwrapper immutable = true MPSImageLaplacianPyramidAdd <: MPSImageLaplacianPyramid
+
+@objcwrapper immutable = false MPSMatrixUnaryKernel <: MPSKernel
+
+@objcproperties MPSMatrixUnaryKernel begin
+    @autoproperty sourceMatrixOrigin::MTLOrigin setter = setSourceMatrixOrigin
+    @autoproperty resultMatrixOrigin::MTLOrigin setter = setResultMatrixOrigin
+    @autoproperty batchStart::UInt64 setter = setBatchStart
+    @autoproperty batchSize::UInt64 setter = setBatchSize
+end
+
+@objcwrapper immutable = false MPSMatrixBinaryKernel <: MPSKernel
+
+@objcproperties MPSMatrixBinaryKernel begin
+    @autoproperty primarySourceMatrixOrigin::MTLOrigin setter = setPrimarySourceMatrixOrigin
+    @autoproperty secondarySourceMatrixOrigin::MTLOrigin setter = setSecondarySourceMatrixOrigin
+    @autoproperty resultMatrixOrigin::MTLOrigin setter = setResultMatrixOrigin
+    @autoproperty batchStart::UInt64 setter = setBatchStart
+    @autoproperty batchSize::UInt64 setter = setBatchSize
+end
+
+@objcwrapper immutable = false MPSMatrixMultiplication <: MPSKernel
+
+@objcproperties MPSMatrixMultiplication begin
+    @autoproperty resultMatrixOrigin::MTLOrigin setter = setResultMatrixOrigin
+    @autoproperty leftMatrixOrigin::MTLOrigin setter = setLeftMatrixOrigin
+    @autoproperty rightMatrixOrigin::MTLOrigin setter = setRightMatrixOrigin
+    @autoproperty batchStart::UInt64 setter = setBatchStart
+    @autoproperty batchSize::UInt64 setter = setBatchSize
+end
+
+@objcwrapper immutable = false MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
+
+@objcwrapper immutable = true MPSMatrixSolveTriangular <: MPSMatrixBinaryKernel
+
+@objcwrapper immutable = true MPSMatrixSolveLU <: MPSMatrixBinaryKernel
+
+@objcwrapper immutable = true MPSMatrixSolveCholesky <: MPSMatrixBinaryKernel
 
 @cenum MPSMatrixDecompositionStatus::Int32 begin
     MPSMatrixDecompositionStatusSuccess = 0
@@ -255,11 +548,53 @@ end
     MPSMatrixDecompositionStatusNonPositiveDefinite = -3
 end
 
+@objcwrapper immutable = false MPSMatrixDecompositionLU <: MPSMatrixUnaryKernel
+
+@objcwrapper immutable = false MPSMatrixDecompositionCholesky <: MPSMatrixUnaryKernel
+
 struct MPSMatrixCopyOffsets
     sourceRowOffset::UInt32
     sourceColumnOffset::UInt32
     destinationRowOffset::UInt32
     destinationColumnOffset::UInt32
+end
+
+@objcwrapper immutable = true MPSMatrixCopyDescriptor <: NSObject
+
+@objcwrapper immutable = false MPSMatrixCopy <: MPSKernel
+
+@objcproperties MPSMatrixCopy begin
+    @autoproperty copyRows::UInt64
+    @autoproperty copyColumns::UInt64
+    @autoproperty sourcesAreTransposed::Bool
+    @autoproperty destinationsAreTransposed::Bool
+end
+
+@objcwrapper immutable = false MPSMatrixSoftMax <: MPSMatrixUnaryKernel
+
+@objcproperties MPSMatrixSoftMax begin
+    @autoproperty sourceRows::UInt64 setter = setSourceRows
+    @autoproperty sourceColumns::UInt64 setter = setSourceColumns
+end
+
+@objcwrapper immutable = false MPSMatrixLogSoftMax <: MPSMatrixSoftMax
+
+@objcwrapper immutable = true MPSMatrixSoftMaxGradient <: MPSMatrixBinaryKernel
+
+@objcproperties MPSMatrixSoftMaxGradient begin
+    @autoproperty sourceRows::UInt64 setter = setSourceRows
+    @autoproperty sourceColumns::UInt64 setter = setSourceColumns
+end
+
+@objcwrapper immutable = true MPSMatrixLogSoftMaxGradient <: MPSMatrixSoftMaxGradient
+
+@objcwrapper immutable = false MPSMatrixFindTopK <: MPSMatrixUnaryKernel
+
+@objcproperties MPSMatrixFindTopK begin
+    @autoproperty sourceRows::UInt64 setter = setSourceRows
+    @autoproperty sourceColumns::UInt64 setter = setSourceColumns
+    @autoproperty indexOffset::UInt64 setter = setIndexOffset
+    @autoproperty numberOfTopKValues::UInt64 setter = setNumberOfTopKValues
 end
 
 @cenum MPSMatrixRandomDistribution::UInt64 begin
@@ -268,10 +603,220 @@ end
     MPSMatrixRandomDistributionNormal = 0x0000000000000003
 end
 
+@objcwrapper immutable = false MPSMatrixRandomDistributionDescriptor <: NSObject
+
+@objcproperties MPSMatrixRandomDistributionDescriptor begin
+    @autoproperty distributionType::MPSMatrixRandomDistribution setter = setDistributionType
+    @autoproperty minimum::Cfloat setter = setMinimum
+    @autoproperty maximum::Cfloat setter = setMaximum
+    @autoproperty mean::Cfloat setter = setMean
+    @autoproperty standardDeviation::Cfloat setter = setStandardDeviation
+end
+
+@objcwrapper immutable = false MPSMatrixRandom <: MPSKernel
+
+@objcproperties MPSMatrixRandom begin
+    @autoproperty destinationDataType::MPSDataType
+    @autoproperty distributionType::MPSMatrixRandomDistribution
+    @autoproperty batchStart::UInt64 setter = setBatchStart
+    @autoproperty batchSize::UInt64 setter = setBatchSize
+end
+
+@objcwrapper immutable = false MPSMatrixRandomMTGP32 <: MPSMatrixRandom
+
+@objcwrapper immutable = false MPSMatrixRandomPhilox <: MPSMatrixRandom
+
+@objcwrapper immutable = true MPSImageCopyToMatrix <: MPSKernel
+
+@objcproperties MPSImageCopyToMatrix begin
+    @autoproperty destinationMatrixOrigin::MTLOrigin setter = setDestinationMatrixOrigin
+    @autoproperty destinationMatrixBatchIndex::UInt64 setter = setDestinationMatrixBatchIndex
+    @autoproperty dataLayout::MPSDataLayout
+end
+
+@objcwrapper immutable = true MPSMatrixCopyToImage <: MPSKernel
+
+@objcproperties MPSMatrixCopyToImage begin
+    @autoproperty sourceMatrixOrigin::MTLOrigin setter = setSourceMatrixOrigin
+    @autoproperty sourceMatrixBatchIndex::UInt64 setter = setSourceMatrixBatchIndex
+    @autoproperty dataLayout::MPSDataLayout
+end
+
+@objcwrapper immutable = true MPSImageEuclideanDistanceTransform <: MPSUnaryImageKernel
+
+@objcproperties MPSImageEuclideanDistanceTransform begin
+    @autoproperty searchLimitRadius::Cfloat setter = setSearchLimitRadius
+end
+
+@objcwrapper immutable = true MPSImageEDLines <: MPSKernel
+
+@objcproperties MPSImageEDLines begin
+    @autoproperty clipRectSource::MTLRegion setter = setClipRectSource
+    @autoproperty gaussianSigma::Cfloat
+    @autoproperty minLineLength::UInt16 setter = setMinLineLength
+    @autoproperty maxLines::UInt64 setter = setMaxLines
+    @autoproperty detailRatio::UInt16 setter = setDetailRatio
+    @autoproperty gradientThreshold::Cfloat setter = setGradientThreshold
+    @autoproperty lineErrorThreshold::Cfloat setter = setLineErrorThreshold
+    @autoproperty mergeLocalityThreshold::Cfloat setter = setMergeLocalityThreshold
+end
+
+@objcwrapper immutable = true MPSImageGuidedFilter <: MPSKernel
+
+@objcproperties MPSImageGuidedFilter begin
+    @autoproperty kernelDiameter::UInt64
+    @autoproperty epsilon::Cfloat setter = setEpsilon
+    @autoproperty reconstructScale::Cfloat setter = setReconstructScale
+    @autoproperty reconstructOffset::Cfloat setter = setReconstructOffset
+end
+
 struct MPSImageKeypointRangeInfo
     maximumKeypoints::NSUInteger
     minimumThresholdValue::Cfloat
 end
+
+@objcwrapper immutable = true MPSImageFindKeypoints <: MPSKernel
+
+@objcproperties MPSImageFindKeypoints begin
+    @autoproperty keypointRangeInfo::MPSImageKeypointRangeInfo
+end
+
+@objcwrapper immutable = true MPSImageIntegral <: MPSUnaryImageKernel
+
+@objcwrapper immutable = true MPSImageIntegralOfSquares <: MPSUnaryImageKernel
+
+@objcwrapper immutable = true MPSImageArithmetic <: MPSBinaryImageKernel
+
+@objcproperties MPSImageArithmetic begin
+    @autoproperty primaryScale::Cfloat setter = setPrimaryScale
+    @autoproperty secondaryScale::Cfloat setter = setSecondaryScale
+    @autoproperty bias::Cfloat setter = setBias
+    @autoproperty primaryStrideInPixels::MTLSize setter = setPrimaryStrideInPixels
+    @autoproperty secondaryStrideInPixels::MTLSize setter = setSecondaryStrideInPixels
+    @autoproperty minimumValue::Cfloat setter = setMinimumValue
+    @autoproperty maximumValue::Cfloat setter = setMaximumValue
+end
+
+@objcwrapper immutable = true MPSImageAdd <: MPSImageArithmetic
+
+@objcwrapper immutable = true MPSImageSubtract <: MPSImageArithmetic
+
+@objcwrapper immutable = true MPSImageMultiply <: MPSImageArithmetic
+
+@objcwrapper immutable = true MPSImageDivide <: MPSImageArithmetic
+
+@objcwrapper immutable = true MPSImageMedian <: MPSUnaryImageKernel
+
+@objcproperties MPSImageMedian begin
+    @autoproperty kernelDiameter::UInt64
+end
+
+@objcwrapper immutable = true MPSImageAreaMax <: MPSUnaryImageKernel
+
+@objcproperties MPSImageAreaMax begin
+    @autoproperty kernelHeight::UInt64
+    @autoproperty kernelWidth::UInt64
+end
+
+@objcwrapper immutable = true MPSImageAreaMin <: MPSImageAreaMax
+
+@objcwrapper immutable = true MPSImageDilate <: MPSUnaryImageKernel
+
+@objcproperties MPSImageDilate begin
+    @autoproperty kernelHeight::UInt64
+    @autoproperty kernelWidth::UInt64
+end
+
+@objcwrapper immutable = true MPSImageErode <: MPSImageDilate
+
+@objcwrapper immutable = true MPSImageReduceUnary <: MPSUnaryImageKernel
+
+@objcproperties MPSImageReduceUnary begin
+    @autoproperty clipRectSource::MTLRegion setter = setClipRectSource
+end
+
+@objcwrapper immutable = true MPSImageReduceRowMin <: MPSImageReduceUnary
+
+@objcwrapper immutable = true MPSImageReduceColumnMin <: MPSImageReduceUnary
+
+@objcwrapper immutable = true MPSImageReduceRowMax <: MPSImageReduceUnary
+
+@objcwrapper immutable = true MPSImageReduceColumnMax <: MPSImageReduceUnary
+
+@objcwrapper immutable = true MPSImageReduceRowMean <: MPSImageReduceUnary
+
+@objcwrapper immutable = true MPSImageReduceColumnMean <: MPSImageReduceUnary
+
+@objcwrapper immutable = true MPSImageReduceRowSum <: MPSImageReduceUnary
+
+@objcwrapper immutable = true MPSImageReduceColumnSum <: MPSImageReduceUnary
+
+@objcwrapper immutable = true MPSImageScale <: MPSUnaryImageKernel
+
+@objcproperties MPSImageScale begin
+    @autoproperty scaleTransform::Ptr{MPSScaleTransform} setter = setScaleTransform
+end
+
+@objcwrapper immutable = true MPSImageLanczosScale <: MPSImageScale
+
+@objcwrapper immutable = true MPSImageBilinearScale <: MPSImageScale
+
+@objcwrapper immutable = true MPSImageStatisticsMinAndMax <: MPSUnaryImageKernel
+
+@objcproperties MPSImageStatisticsMinAndMax begin
+    @autoproperty clipRectSource::MTLRegion setter = setClipRectSource
+end
+
+@objcwrapper immutable = true MPSImageStatisticsMeanAndVariance <: MPSUnaryImageKernel
+
+@objcproperties MPSImageStatisticsMeanAndVariance begin
+    @autoproperty clipRectSource::MTLRegion setter = setClipRectSource
+end
+
+@objcwrapper immutable = true MPSImageStatisticsMean <: MPSUnaryImageKernel
+
+@objcproperties MPSImageStatisticsMean begin
+    @autoproperty clipRectSource::MTLRegion setter = setClipRectSource
+end
+
+@objcwrapper immutable = true MPSImageThresholdBinary <: MPSUnaryImageKernel
+
+@objcproperties MPSImageThresholdBinary begin
+    @autoproperty thresholdValue::Cfloat
+    @autoproperty maximumValue::Cfloat
+    @autoproperty transform::Ptr{Cfloat}
+end
+
+@objcwrapper immutable = true MPSImageThresholdBinaryInverse <: MPSUnaryImageKernel
+
+@objcproperties MPSImageThresholdBinaryInverse begin
+    @autoproperty thresholdValue::Cfloat
+    @autoproperty maximumValue::Cfloat
+    @autoproperty transform::Ptr{Cfloat}
+end
+
+@objcwrapper immutable = true MPSImageThresholdTruncate <: MPSUnaryImageKernel
+
+@objcproperties MPSImageThresholdTruncate begin
+    @autoproperty thresholdValue::Cfloat
+    @autoproperty transform::Ptr{Cfloat}
+end
+
+@objcwrapper immutable = true MPSImageThresholdToZero <: MPSUnaryImageKernel
+
+@objcproperties MPSImageThresholdToZero begin
+    @autoproperty thresholdValue::Cfloat
+    @autoproperty transform::Ptr{Cfloat}
+end
+
+@objcwrapper immutable = true MPSImageThresholdToZeroInverse <: MPSUnaryImageKernel
+
+@objcproperties MPSImageThresholdToZeroInverse begin
+    @autoproperty thresholdValue::Cfloat
+    @autoproperty transform::Ptr{Cfloat}
+end
+
+@objcwrapper immutable = true MPSImageTranspose <: MPSUnaryImageKernel
 
 @cenum MPSCNNConvolutionFlags::UInt64 begin
     MPSCNNConvolutionFlagsNone = 0x0000000000000000
@@ -329,6 +874,150 @@ end
     MPSNNPaddingMethodExcludeEdges = 0x0000000000008000
 end
 
+@objcwrapper immutable = true MPSNNPadding <: NSObject
+
+@objcwrapper immutable = true MPSNNDefaultPadding <: NSObject
+
+@objcwrapper immutable = true MPSImageSizeEncodingState <: NSObject
+
+@objcproperties MPSImageSizeEncodingState begin
+    @autoproperty sourceWidth::UInt64
+    @autoproperty sourceHeight::UInt64
+end
+
+@objcwrapper immutable = true MPSNNGradientState <: MPSState
+
+@objcwrapper immutable = true MPSNNBinaryGradientState <: MPSState
+
+@objcwrapper immutable = true MPSNNMultiaryGradientState <: MPSState
+
+@objcwrapper immutable = true MPSCNNKernel <: MPSKernel
+
+@objcproperties MPSCNNKernel begin
+    @autoproperty offset::MPSOffset setter = setOffset
+    @autoproperty clipRect::MTLRegion setter = setClipRect
+    @autoproperty destinationFeatureChannelOffset::UInt64 setter = setDestinationFeatureChannelOffset
+    @autoproperty sourceFeatureChannelOffset::UInt64 setter = setSourceFeatureChannelOffset
+    @autoproperty sourceFeatureChannelMaxCount::UInt64 setter = setSourceFeatureChannelMaxCount
+    @autoproperty edgeMode::MPSImageEdgeMode setter = setEdgeMode
+    @autoproperty kernelWidth::UInt64
+    @autoproperty kernelHeight::UInt64
+    @autoproperty strideInPixelsX::UInt64
+    @autoproperty strideInPixelsY::UInt64
+    @autoproperty dilationRateX::UInt64
+    @autoproperty dilationRateY::UInt64
+    @autoproperty isBackwards::Bool
+    @autoproperty isStateModified::Bool
+    @autoproperty padding::id{MPSNNPadding} setter = setPadding
+    @autoproperty destinationImageAllocator::id{MPSImageAllocator} setter = setDestinationImageAllocator
+end
+
+@objcwrapper immutable = true MPSCNNBinaryKernel <: MPSKernel
+
+@objcproperties MPSCNNBinaryKernel begin
+    @autoproperty primaryOffset::MPSOffset setter = setPrimaryOffset
+    @autoproperty secondaryOffset::MPSOffset setter = setSecondaryOffset
+    @autoproperty clipRect::MTLRegion setter = setClipRect
+    @autoproperty destinationFeatureChannelOffset::UInt64 setter = setDestinationFeatureChannelOffset
+    @autoproperty primarySourceFeatureChannelOffset::UInt64 setter = setPrimarySourceFeatureChannelOffset
+    @autoproperty secondarySourceFeatureChannelOffset::UInt64 setter = setSecondarySourceFeatureChannelOffset
+    @autoproperty primarySourceFeatureChannelMaxCount::UInt64 setter = setPrimarySourceFeatureChannelMaxCount
+    @autoproperty secondarySourceFeatureChannelMaxCount::UInt64 setter = setSecondarySourceFeatureChannelMaxCount
+    @autoproperty primaryEdgeMode::MPSImageEdgeMode setter = setPrimaryEdgeMode
+    @autoproperty secondaryEdgeMode::MPSImageEdgeMode setter = setSecondaryEdgeMode
+    @autoproperty primaryKernelWidth::UInt64
+    @autoproperty primaryKernelHeight::UInt64
+    @autoproperty secondaryKernelWidth::UInt64
+    @autoproperty secondaryKernelHeight::UInt64
+    @autoproperty primaryStrideInPixelsX::UInt64 setter = setPrimaryStrideInPixelsX
+    @autoproperty primaryStrideInPixelsY::UInt64 setter = setPrimaryStrideInPixelsY
+    @autoproperty secondaryStrideInPixelsX::UInt64 setter = setSecondaryStrideInPixelsX
+    @autoproperty secondaryStrideInPixelsY::UInt64 setter = setSecondaryStrideInPixelsY
+    @autoproperty primaryDilationRateX::UInt64
+    @autoproperty primaryDilationRateY::UInt64
+    @autoproperty secondaryDilationRateX::UInt64
+    @autoproperty secondaryDilationRateY::UInt64
+    @autoproperty isBackwards::Bool
+    @autoproperty isStateModified::Bool
+    @autoproperty padding::id{MPSNNPadding} setter = setPadding
+    @autoproperty destinationImageAllocator::id{MPSImageAllocator} setter = setDestinationImageAllocator
+end
+
+@objcwrapper immutable = true MPSCNNGradientKernel <: MPSCNNBinaryKernel
+
+@objcproperties MPSCNNGradientKernel begin
+    @autoproperty kernelOffsetX::Int64 setter = setKernelOffsetX
+    @autoproperty kernelOffsetY::Int64 setter = setKernelOffsetY
+end
+
+@objcwrapper immutable = true MPSCNNMultiaryKernel <: MPSKernel
+
+@objcproperties MPSCNNMultiaryKernel begin
+    @autoproperty sourceCount::UInt64
+    @autoproperty clipRect::MTLRegion setter = setClipRect
+    @autoproperty destinationFeatureChannelOffset::UInt64 setter = setDestinationFeatureChannelOffset
+    @autoproperty isBackwards::Bool
+    @autoproperty isStateModified::Bool
+    @autoproperty padding::id{MPSNNPadding} setter = setPadding
+    @autoproperty destinationImageAllocator::id{MPSImageAllocator} setter = setDestinationImageAllocator
+end
+
+@objcwrapper immutable = true MPSCNNSpatialNormalization <: MPSCNNKernel
+
+@objcproperties MPSCNNSpatialNormalization begin
+    @autoproperty alpha::Cfloat setter = setAlpha
+    @autoproperty beta::Cfloat setter = setBeta
+    @autoproperty delta::Cfloat setter = setDelta
+end
+
+@objcwrapper immutable = true MPSCNNSpatialNormalizationGradient <: MPSCNNGradientKernel
+
+@objcproperties MPSCNNSpatialNormalizationGradient begin
+    @autoproperty alpha::Cfloat setter = setAlpha
+    @autoproperty beta::Cfloat setter = setBeta
+    @autoproperty delta::Cfloat setter = setDelta
+end
+
+@objcwrapper immutable = true MPSCNNLocalContrastNormalization <: MPSCNNKernel
+
+@objcproperties MPSCNNLocalContrastNormalization begin
+    @autoproperty alpha::Cfloat setter = setAlpha
+    @autoproperty beta::Cfloat setter = setBeta
+    @autoproperty delta::Cfloat setter = setDelta
+    @autoproperty p0::Cfloat setter = setP0
+    @autoproperty pm::Cfloat setter = setPm
+    @autoproperty ps::Cfloat setter = setPs
+end
+
+@objcwrapper immutable = true MPSCNNLocalContrastNormalizationGradient <: MPSCNNGradientKernel
+
+@objcproperties MPSCNNLocalContrastNormalizationGradient begin
+    @autoproperty alpha::Cfloat setter = setAlpha
+    @autoproperty beta::Cfloat setter = setBeta
+    @autoproperty delta::Cfloat setter = setDelta
+    @autoproperty p0::Cfloat setter = setP0
+    @autoproperty pm::Cfloat setter = setPm
+    @autoproperty ps::Cfloat setter = setPs
+end
+
+@objcwrapper immutable = true MPSCNNCrossChannelNormalization <: MPSCNNKernel
+
+@objcproperties MPSCNNCrossChannelNormalization begin
+    @autoproperty alpha::Cfloat setter = setAlpha
+    @autoproperty beta::Cfloat setter = setBeta
+    @autoproperty delta::Cfloat setter = setDelta
+    @autoproperty kernelSize::UInt64
+end
+
+@objcwrapper immutable = true MPSCNNCrossChannelNormalizationGradient <: MPSCNNGradientKernel
+
+@objcproperties MPSCNNCrossChannelNormalizationGradient begin
+    @autoproperty alpha::Cfloat setter = setAlpha
+    @autoproperty beta::Cfloat setter = setBeta
+    @autoproperty delta::Cfloat setter = setDelta
+    @autoproperty kernelSize::UInt64
+end
+
 @cenum MPSCNNNeuronType::Int32 begin
     MPSCNNNeuronTypeNone = 0
     MPSCNNNeuronTypeReLU = 1
@@ -349,6 +1038,93 @@ end
     MPSCNNNeuronTypeCount = 16
 end
 
+@objcwrapper immutable = true MPSNNNeuronDescriptor <: NSObject
+
+@objcproperties MPSNNNeuronDescriptor begin
+    @autoproperty neuronType::MPSCNNNeuronType setter = setNeuronType
+    @autoproperty a::Cfloat setter = setA
+    @autoproperty b::Cfloat setter = setB
+    @autoproperty c::Cfloat setter = setC
+    @autoproperty data::id{NSData} setter = setData
+end
+
+@objcwrapper immutable = true MPSCNNNeuron <: MPSCNNKernel
+
+@objcproperties MPSCNNNeuron begin
+    @autoproperty neuronType::MPSCNNNeuronType
+    @autoproperty a::Cfloat
+    @autoproperty b::Cfloat
+    @autoproperty c::Cfloat
+    @autoproperty data::id{NSData}
+end
+
+@objcwrapper immutable = true MPSCNNNeuronGradient <: MPSCNNGradientKernel
+
+@objcproperties MPSCNNNeuronGradient begin
+    @autoproperty neuronType::MPSCNNNeuronType
+    @autoproperty a::Cfloat
+    @autoproperty b::Cfloat
+    @autoproperty c::Cfloat
+    @autoproperty data::id{NSData}
+end
+
+@objcwrapper immutable = true MPSCNNNeuronLinear <: MPSCNNNeuron
+
+@objcwrapper immutable = true MPSCNNNeuronReLU <: MPSCNNNeuron
+
+@objcwrapper immutable = true MPSCNNNeuronPReLU <: MPSCNNNeuron
+
+@objcwrapper immutable = true MPSCNNNeuronSigmoid <: MPSCNNNeuron
+
+@objcwrapper immutable = true MPSCNNNeuronHardSigmoid <: MPSCNNNeuron
+
+@objcwrapper immutable = true MPSCNNNeuronTanH <: MPSCNNNeuron
+
+@objcwrapper immutable = true MPSCNNNeuronAbsolute <: MPSCNNNeuron
+
+@objcwrapper immutable = true MPSCNNNeuronSoftPlus <: MPSCNNNeuron
+
+@objcwrapper immutable = true MPSCNNNeuronSoftSign <: MPSCNNNeuron
+
+@objcwrapper immutable = true MPSCNNNeuronELU <: MPSCNNNeuron
+
+@objcwrapper immutable = true MPSCNNNeuronReLUN <: MPSCNNNeuron
+
+@objcwrapper immutable = true MPSCNNNeuronPower <: MPSCNNNeuron
+
+@objcwrapper immutable = true MPSCNNNeuronExponential <: MPSCNNNeuron
+
+@objcwrapper immutable = true MPSCNNNeuronLogarithm <: MPSCNNNeuron
+
+@objcwrapper immutable = true MPSCNNConvolutionDescriptor <: NSObject
+
+@objcproperties MPSCNNConvolutionDescriptor begin
+    @autoproperty kernelWidth::UInt64 setter = setKernelWidth
+    @autoproperty kernelHeight::UInt64 setter = setKernelHeight
+    @autoproperty inputFeatureChannels::UInt64 setter = setInputFeatureChannels
+    @autoproperty outputFeatureChannels::UInt64 setter = setOutputFeatureChannels
+    @autoproperty strideInPixelsX::UInt64 setter = setStrideInPixelsX
+    @autoproperty strideInPixelsY::UInt64 setter = setStrideInPixelsY
+    @autoproperty groups::UInt64 setter = setGroups
+    @autoproperty dilationRateX::UInt64 setter = setDilationRateX
+    @autoproperty dilationRateY::UInt64 setter = setDilationRateY
+    @autoproperty fusedNeuronDescriptor::id{MPSNNNeuronDescriptor} setter = setFusedNeuronDescriptor
+    @autoproperty neuron::id{MPSCNNNeuron} setter = setNeuron
+    @autoproperty supportsSecureCoding::Bool
+end
+
+@objcwrapper immutable = true MPSCNNSubPixelConvolutionDescriptor <: MPSCNNConvolutionDescriptor
+
+@objcproperties MPSCNNSubPixelConvolutionDescriptor begin
+    @autoproperty subPixelScaleFactor::UInt64 setter = setSubPixelScaleFactor
+end
+
+@objcwrapper immutable = true MPSCNNDepthWiseConvolutionDescriptor <: MPSCNNConvolutionDescriptor
+
+@objcproperties MPSCNNDepthWiseConvolutionDescriptor begin
+    @autoproperty channelMultiplier::UInt64
+end
+
 @cenum MPSCNNConvolutionWeightsLayout::UInt32 begin
     MPSCNNConvolutionWeightsLayoutOHWI = 0x0000000000000000
 end
@@ -359,11 +1135,153 @@ end
     MPSCNNWeightsQuantizationTypeLookupTable = 0x0000000000000002
 end
 
+@objcwrapper immutable = true MPSCNNConvolutionDataSource <: NSCopying
+
+@objcwrapper immutable = true MPSCNNConvolution <: MPSCNNKernel
+
+@objcproperties MPSCNNConvolution begin
+    @autoproperty inputFeatureChannels::UInt64
+    @autoproperty outputFeatureChannels::UInt64
+    @autoproperty groups::UInt64
+    @autoproperty dataSource::id{MPSCNNConvolutionDataSource}
+    @autoproperty subPixelScaleFactor::UInt64
+    @autoproperty neuron::id{MPSCNNNeuron}
+    @autoproperty neuronType::MPSCNNNeuronType
+    @autoproperty neuronParameterA::Cfloat
+    @autoproperty neuronParameterB::Cfloat
+    @autoproperty neuronParameterC::Cfloat
+    @autoproperty fusedNeuronDescriptor::id{MPSNNNeuronDescriptor}
+    @autoproperty channelMultiplier::UInt64
+    @autoproperty accumulatorPrecisionOption::MPSNNConvolutionAccumulatorPrecisionOption setter = setAccumulatorPrecisionOption
+end
+
+@objcwrapper immutable = true MPSCNNConvolutionGradientState <: MPSNNGradientState
+
+@objcproperties MPSCNNConvolutionGradientState begin
+    @autoproperty gradientForWeights::id{MTLBuffer}
+    @autoproperty gradientForBiases::id{MTLBuffer}
+    @autoproperty convolution::id{MPSCNNConvolution}
+    @autoproperty gradientForWeightsLayout::MPSCNNConvolutionWeightsLayout
+end
+
+@objcwrapper immutable = true MPSCNNConvolutionTranspose <: MPSCNNKernel
+
+@objcproperties MPSCNNConvolutionTranspose begin
+    @autoproperty inputFeatureChannels::UInt64
+    @autoproperty outputFeatureChannels::UInt64
+    @autoproperty kernelOffsetX::Int64 setter = setKernelOffsetX
+    @autoproperty kernelOffsetY::Int64 setter = setKernelOffsetY
+    @autoproperty groups::UInt64
+    @autoproperty accumulatorPrecisionOption::MPSNNConvolutionAccumulatorPrecisionOption setter = setAccumulatorPrecisionOption
+    @autoproperty dataSource::id{MPSCNNConvolutionDataSource}
+end
+
+@objcwrapper immutable = true MPSCNNConvolutionTransposeGradientState <: MPSCNNConvolutionGradientState
+
+@objcproperties MPSCNNConvolutionTransposeGradientState begin
+    @autoproperty convolutionTranspose::id{MPSCNNConvolutionTranspose}
+end
+
+@objcwrapper immutable = true MPSCNNConvolutionWeightsAndBiasesState <: MPSState
+
+@objcproperties MPSCNNConvolutionWeightsAndBiasesState begin
+    @autoproperty weights::id{MTLBuffer}
+    @autoproperty biases::id{MTLBuffer}
+    @autoproperty weightsOffset::UInt64
+    @autoproperty biasesOffset::UInt64
+end
+
 @cenum MPSCNNConvolutionGradientOption::UInt64 begin
     MPSCNNConvolutionGradientOptionGradientWithData = 0x0000000000000001
     MPSCNNConvolutionGradientOptionGradientWithWeightsAndBias = 0x0000000000000002
     MPSCNNConvolutionGradientOptionAll = 0x0000000000000003
 end
+
+@objcwrapper immutable = true MPSCNNConvolutionGradient <: MPSCNNGradientKernel
+
+@objcproperties MPSCNNConvolutionGradient begin
+    @autoproperty sourceGradientFeatureChannels::UInt64
+    @autoproperty sourceImageFeatureChannels::UInt64
+    @autoproperty groups::UInt64
+    @autoproperty channelMultiplier::UInt64
+    @autoproperty dataSource::id{MPSCNNConvolutionDataSource}
+    @autoproperty gradientOption::MPSCNNConvolutionGradientOption setter = setGradientOption
+    @autoproperty serializeWeightsAndBiases::Bool setter = setSerializeWeightsAndBiases
+end
+
+@objcwrapper immutable = true MPSCNNFullyConnected <: MPSCNNConvolution
+
+@objcwrapper immutable = true MPSCNNFullyConnectedGradient <: MPSCNNConvolutionGradient
+
+@objcwrapper immutable = true MPSCNNConvolutionTransposeGradient <: MPSCNNGradientKernel
+
+@objcproperties MPSCNNConvolutionTransposeGradient begin
+    @autoproperty sourceGradientFeatureChannels::UInt64
+    @autoproperty sourceImageFeatureChannels::UInt64
+    @autoproperty groups::UInt64
+    @autoproperty dataSource::id{MPSCNNConvolutionDataSource}
+    @autoproperty gradientOption::MPSCNNConvolutionGradientOption setter = setGradientOption
+end
+
+@objcwrapper immutable = true MPSCNNBinaryConvolution <: MPSCNNKernel
+
+@objcproperties MPSCNNBinaryConvolution begin
+    @autoproperty inputFeatureChannels::UInt64
+    @autoproperty outputFeatureChannels::UInt64
+end
+
+@objcwrapper immutable = true MPSCNNBinaryFullyConnected <: MPSCNNBinaryConvolution
+
+@objcwrapper immutable = true MPSNNGramMatrixCalculation <: MPSCNNKernel
+
+@objcproperties MPSNNGramMatrixCalculation begin
+    @autoproperty alpha::Cfloat setter = setAlpha
+end
+
+@objcwrapper immutable = true MPSNNGramMatrixCalculationGradient <: MPSCNNGradientKernel
+
+@objcproperties MPSNNGramMatrixCalculationGradient begin
+    @autoproperty alpha::Cfloat setter = setAlpha
+end
+
+@objcwrapper immutable = true MPSCNNPooling <: MPSCNNKernel
+
+@objcwrapper immutable = true MPSCNNPoolingMax <: MPSCNNPooling
+
+@objcwrapper immutable = true MPSCNNPoolingAverage <: MPSCNNPooling
+
+@objcproperties MPSCNNPoolingAverage begin
+    @autoproperty zeroPadSizeX::UInt64 setter = setZeroPadSizeX
+    @autoproperty zeroPadSizeY::UInt64 setter = setZeroPadSizeY
+end
+
+@objcwrapper immutable = true MPSCNNPoolingL2Norm <: MPSCNNPooling
+
+@objcwrapper immutable = true MPSCNNDilatedPoolingMax <: MPSCNNPooling
+
+@objcproperties MPSCNNDilatedPoolingMax begin
+    @autoproperty dilationRateX::UInt64
+    @autoproperty dilationRateY::UInt64
+end
+
+@objcwrapper immutable = true MPSCNNPoolingGradient <: MPSCNNGradientKernel
+
+@objcproperties MPSCNNPoolingGradient begin
+    @autoproperty sourceSize::MTLSize setter = setSourceSize
+end
+
+@objcwrapper immutable = true MPSCNNPoolingAverageGradient <: MPSCNNPoolingGradient
+
+@objcproperties MPSCNNPoolingAverageGradient begin
+    @autoproperty zeroPadSizeX::UInt64 setter = setZeroPadSizeX
+    @autoproperty zeroPadSizeY::UInt64 setter = setZeroPadSizeY
+end
+
+@objcwrapper immutable = true MPSCNNPoolingMaxGradient <: MPSCNNPoolingGradient
+
+@objcwrapper immutable = true MPSCNNPoolingL2NormGradient <: MPSCNNPoolingGradient
+
+@objcwrapper immutable = true MPSCNNDilatedPoolingMaxGradient <: MPSCNNPoolingGradient
 
 @cenum MPSCNNLossType::UInt32 begin
     MPSCNNLossTypeMeanAbsoluteError = 0x0000000000000000
@@ -387,6 +1305,135 @@ end
     MPSCNNReductionTypeCount = 4
 end
 
+@objcwrapper immutable = true MPSCNNLossDataDescriptor <: NSObject
+
+@objcproperties MPSCNNLossDataDescriptor begin
+    @autoproperty layout::MPSDataLayout
+    @autoproperty size::MTLSize
+    @autoproperty bytesPerRow::UInt64 setter = setBytesPerRow
+    @autoproperty bytesPerImage::UInt64 setter = setBytesPerImage
+end
+
+@objcwrapper immutable = true MPSCNNLossLabels <: MPSState
+
+@objcwrapper immutable = true MPSCNNLossDescriptor <: NSObject
+
+@objcproperties MPSCNNLossDescriptor begin
+    @autoproperty lossType::MPSCNNLossType setter = setLossType
+    @autoproperty reductionType::MPSCNNReductionType setter = setReductionType
+    @autoproperty reduceAcrossBatch::Bool setter = setReduceAcrossBatch
+    @autoproperty weight::Cfloat setter = setWeight
+    @autoproperty labelSmoothing::Cfloat setter = setLabelSmoothing
+    @autoproperty numberOfClasses::UInt64 setter = setNumberOfClasses
+    @autoproperty epsilon::Cfloat setter = setEpsilon
+    @autoproperty delta::Cfloat setter = setDelta
+end
+
+@objcwrapper immutable = true MPSCNNLoss <: MPSCNNKernel
+
+@objcproperties MPSCNNLoss begin
+    @autoproperty lossType::MPSCNNLossType
+    @autoproperty reductionType::MPSCNNReductionType
+    @autoproperty weight::Cfloat
+    @autoproperty labelSmoothing::Cfloat
+    @autoproperty numberOfClasses::UInt64
+    @autoproperty epsilon::Cfloat
+    @autoproperty delta::Cfloat
+    @autoproperty reduceAcrossBatch::Bool
+end
+
+@objcwrapper immutable = true MPSCNNYOLOLossDescriptor <: NSObject
+
+@objcproperties MPSCNNYOLOLossDescriptor begin
+    @autoproperty XYLossDescriptor::id{MPSCNNLossDescriptor} setter = setXYLossDescriptor
+    @autoproperty WHLossDescriptor::id{MPSCNNLossDescriptor} setter = setWHLossDescriptor
+    @autoproperty confidenceLossDescriptor::id{MPSCNNLossDescriptor} setter = setConfidenceLossDescriptor
+    @autoproperty classesLossDescriptor::id{MPSCNNLossDescriptor} setter = setClassesLossDescriptor
+    @autoproperty reductionType::MPSCNNReductionType setter = setReductionType
+    @autoproperty reduceAcrossBatch::Bool setter = setReduceAcrossBatch
+    @autoproperty rescore::Bool setter = setRescore
+    @autoproperty scaleXY::Cfloat setter = setScaleXY
+    @autoproperty scaleWH::Cfloat setter = setScaleWH
+    @autoproperty scaleNoObject::Cfloat setter = setScaleNoObject
+    @autoproperty scaleObject::Cfloat setter = setScaleObject
+    @autoproperty scaleClass::Cfloat setter = setScaleClass
+    @autoproperty minIOUForObjectPresence::Cfloat setter = setMinIOUForObjectPresence
+    @autoproperty maxIOUForObjectAbsence::Cfloat setter = setMaxIOUForObjectAbsence
+    @autoproperty numberOfAnchorBoxes::UInt64 setter = setNumberOfAnchorBoxes
+    @autoproperty anchorBoxes::id{NSData} setter = setAnchorBoxes
+end
+
+@objcwrapper immutable = true MPSCNNYOLOLoss <: MPSCNNKernel
+
+@objcproperties MPSCNNYOLOLoss begin
+    @autoproperty lossXY::id{MPSCNNLoss}
+    @autoproperty lossWH::id{MPSCNNLoss}
+    @autoproperty lossConfidence::id{MPSCNNLoss}
+    @autoproperty lossClasses::id{MPSCNNLoss}
+    @autoproperty scaleXY::Cfloat
+    @autoproperty scaleWH::Cfloat
+    @autoproperty scaleNoObject::Cfloat
+    @autoproperty scaleObject::Cfloat
+    @autoproperty scaleClass::Cfloat
+    @autoproperty minIOUForObjectPresence::Cfloat
+    @autoproperty maxIOUForObjectAbsence::Cfloat
+    @autoproperty reductionType::MPSCNNReductionType
+    @autoproperty numberOfAnchorBoxes::UInt64
+    @autoproperty anchorBoxes::id{NSData}
+    @autoproperty reduceAcrossBatch::Bool
+end
+
+@objcwrapper immutable = true MPSNNForwardLoss <: MPSCNNKernel
+
+@objcproperties MPSNNForwardLoss begin
+    @autoproperty lossType::MPSCNNLossType
+    @autoproperty reductionType::MPSCNNReductionType
+    @autoproperty reduceAcrossBatch::Bool
+    @autoproperty numberOfClasses::UInt64
+    @autoproperty weight::Cfloat setter = setWeight
+    @autoproperty labelSmoothing::Cfloat setter = setLabelSmoothing
+    @autoproperty epsilon::Cfloat setter = setEpsilon
+    @autoproperty delta::Cfloat setter = setDelta
+end
+
+@objcwrapper immutable = true MPSNNLossGradient <: MPSCNNBinaryKernel
+
+@objcproperties MPSNNLossGradient begin
+    @autoproperty lossType::MPSCNNLossType
+    @autoproperty reductionType::MPSCNNReductionType
+    @autoproperty reduceAcrossBatch::Bool
+    @autoproperty numberOfClasses::UInt64
+    @autoproperty weight::Cfloat setter = setWeight
+    @autoproperty labelSmoothing::Cfloat setter = setLabelSmoothing
+    @autoproperty epsilon::Cfloat setter = setEpsilon
+    @autoproperty delta::Cfloat setter = setDelta
+    @autoproperty computeLabelGradients::Bool setter = setComputeLabelGradients
+end
+
+@objcwrapper immutable = true MPSNNInitialGradient <: MPSCNNKernel
+
+@objcwrapper immutable = true MPSCNNArithmeticGradientState <: MPSNNBinaryGradientState
+
+@objcwrapper immutable = true MPSCNNArithmetic <: MPSCNNBinaryKernel
+
+@objcproperties MPSCNNArithmetic begin
+    @autoproperty primaryScale::Cfloat setter = setPrimaryScale
+    @autoproperty secondaryScale::Cfloat setter = setSecondaryScale
+    @autoproperty bias::Cfloat setter = setBias
+    @autoproperty primaryStrideInFeatureChannels::UInt64 setter = setPrimaryStrideInFeatureChannels
+    @autoproperty secondaryStrideInFeatureChannels::UInt64 setter = setSecondaryStrideInFeatureChannels
+    @autoproperty minimumValue::Cfloat setter = setMinimumValue
+    @autoproperty maximumValue::Cfloat setter = setMaximumValue
+end
+
+@objcwrapper immutable = true MPSCNNAdd <: MPSCNNArithmetic
+
+@objcwrapper immutable = true MPSCNNSubtract <: MPSCNNArithmetic
+
+@objcwrapper immutable = true MPSCNNMultiply <: MPSCNNArithmetic
+
+@objcwrapper immutable = true MPSCNNDivide <: MPSCNNArithmetic
+
 @cenum MPSNNComparisonType::UInt64 begin
     MPSNNComparisonTypeEqual = 0x0000000000000000
     MPSNNComparisonTypeNotEqual = 0x0000000000000001
@@ -394,6 +1441,173 @@ end
     MPSNNComparisonTypeLessOrEqual = 0x0000000000000003
     MPSNNComparisonTypeGreater = 0x0000000000000004
     MPSNNComparisonTypeGreaterOrEqual = 0x0000000000000005
+end
+
+@objcwrapper immutable = true MPSNNCompare <: MPSCNNArithmetic
+
+@objcproperties MPSNNCompare begin
+    @autoproperty comparisonType::MPSNNComparisonType setter = setComparisonType
+    @autoproperty threshold::Cfloat setter = setThreshold
+end
+
+@objcwrapper immutable = true MPSCNNArithmeticGradient <: MPSCNNGradientKernel
+
+@objcproperties MPSCNNArithmeticGradient begin
+    @autoproperty primaryScale::Cfloat setter = setPrimaryScale
+    @autoproperty secondaryScale::Cfloat setter = setSecondaryScale
+    @autoproperty bias::Cfloat setter = setBias
+    @autoproperty secondaryStrideInFeatureChannels::UInt64 setter = setSecondaryStrideInFeatureChannels
+    @autoproperty minimumValue::Cfloat setter = setMinimumValue
+    @autoproperty maximumValue::Cfloat setter = setMaximumValue
+    @autoproperty isSecondarySourceFilter::Bool
+end
+
+@objcwrapper immutable = true MPSCNNAddGradient <: MPSCNNArithmeticGradient
+
+@objcwrapper immutable = true MPSCNNSubtractGradient <: MPSCNNArithmeticGradient
+
+@objcwrapper immutable = true MPSCNNMultiplyGradient <: MPSCNNArithmeticGradient
+
+@objcwrapper immutable = true MPSCNNSoftMax <: MPSCNNKernel
+
+@objcwrapper immutable = true MPSCNNSoftMaxGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = true MPSCNNLogSoftMax <: MPSCNNKernel
+
+@objcwrapper immutable = true MPSCNNLogSoftMaxGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = true MPSCNNUpsampling <: MPSCNNKernel
+
+@objcproperties MPSCNNUpsampling begin
+    @autoproperty scaleFactorX::Cdouble
+    @autoproperty scaleFactorY::Cdouble
+    @autoproperty alignCorners::Bool
+end
+
+@objcwrapper immutable = true MPSCNNUpsamplingNearest <: MPSCNNUpsampling
+
+@objcwrapper immutable = true MPSCNNUpsamplingBilinear <: MPSCNNUpsampling
+
+@objcwrapper immutable = true MPSCNNUpsamplingGradient <: MPSCNNGradientKernel
+
+@objcproperties MPSCNNUpsamplingGradient begin
+    @autoproperty scaleFactorX::Cdouble
+    @autoproperty scaleFactorY::Cdouble
+end
+
+@objcwrapper immutable = true MPSCNNUpsamplingNearestGradient <: MPSCNNUpsamplingGradient
+
+@objcwrapper immutable = true MPSCNNUpsamplingBilinearGradient <: MPSCNNUpsamplingGradient
+
+@objcwrapper immutable = true MPSCNNNormalizationGammaAndBetaState <: MPSState
+
+@objcproperties MPSCNNNormalizationGammaAndBetaState begin
+    @autoproperty gamma::id{MTLBuffer}
+    @autoproperty beta::id{MTLBuffer}
+end
+
+@objcwrapper immutable = true MPSCNNBatchNormalizationDataSource <: NSObject
+
+@objcproperties MPSCNNBatchNormalizationDataSource begin
+    @autoproperty supportsSecureCoding::Bool
+end
+
+@objcwrapper immutable = true MPSCNNBatchNormalization <: MPSCNNKernel
+
+@objcproperties MPSCNNBatchNormalization begin
+    @autoproperty numberOfFeatureChannels::UInt64
+    @autoproperty epsilon::Cfloat setter = setEpsilon
+    @autoproperty dataSource::id{MPSCNNBatchNormalizationDataSource}
+end
+
+@objcwrapper immutable = true MPSCNNBatchNormalizationState <: MPSNNGradientState
+
+@objcproperties MPSCNNBatchNormalizationState begin
+    @autoproperty batchNormalization::id{MPSCNNBatchNormalization}
+end
+
+@objcwrapper immutable = true MPSCNNNormalizationMeanAndVarianceState <: MPSState
+
+@objcproperties MPSCNNNormalizationMeanAndVarianceState begin
+    @autoproperty mean::id{MTLBuffer}
+    @autoproperty variance::id{MTLBuffer}
+end
+
+@objcwrapper immutable = true MPSCNNBatchNormalizationStatistics <: MPSCNNKernel
+
+@objcwrapper immutable = true MPSCNNBatchNormalizationGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = true MPSCNNBatchNormalizationStatisticsGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = true MPSCNNInstanceNormalizationDataSource <: NSObject
+
+@objcproperties MPSCNNInstanceNormalizationDataSource begin
+    @autoproperty numberOfFeatureChannels::UInt64
+    @autoproperty supportsSecureCoding::Bool
+end
+
+@objcwrapper immutable = true MPSCNNInstanceNormalization <: MPSCNNKernel
+
+@objcproperties MPSCNNInstanceNormalization begin
+    @autoproperty epsilon::Cfloat setter = setEpsilon
+    @autoproperty dataSource::id{MPSCNNInstanceNormalizationDataSource}
+end
+
+@objcwrapper immutable = true MPSCNNInstanceNormalizationGradientState <: MPSNNGradientState
+
+@objcproperties MPSCNNInstanceNormalizationGradientState begin
+    @autoproperty instanceNormalization::id{MPSCNNInstanceNormalization}
+    @autoproperty gamma::id{MTLBuffer}
+    @autoproperty beta::id{MTLBuffer}
+    @autoproperty gradientForGamma::id{MTLBuffer}
+    @autoproperty gradientForBeta::id{MTLBuffer}
+end
+
+@objcwrapper immutable = true MPSCNNInstanceNormalizationGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = true MPSCNNGroupNormalizationDataSource <: NSObject
+
+@objcproperties MPSCNNGroupNormalizationDataSource begin
+    @autoproperty numberOfFeatureChannels::UInt64
+    @autoproperty numberOfGroups::UInt64 setter = setNumberOfGroups
+    @autoproperty supportsSecureCoding::Bool
+end
+
+@objcwrapper immutable = true MPSCNNGroupNormalization <: MPSCNNKernel
+
+@objcproperties MPSCNNGroupNormalization begin
+    @autoproperty epsilon::Cfloat setter = setEpsilon
+    @autoproperty dataSource::id{MPSCNNGroupNormalizationDataSource}
+end
+
+@objcwrapper immutable = true MPSCNNGroupNormalizationGradientState <: MPSNNGradientState
+
+@objcproperties MPSCNNGroupNormalizationGradientState begin
+    @autoproperty groupNormalization::id{MPSCNNGroupNormalization}
+    @autoproperty gamma::id{MTLBuffer}
+    @autoproperty beta::id{MTLBuffer}
+    @autoproperty gradientForGamma::id{MTLBuffer}
+    @autoproperty gradientForBeta::id{MTLBuffer}
+end
+
+@objcwrapper immutable = true MPSCNNGroupNormalizationGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = true MPSCNNDropoutGradientState <: MPSNNGradientState
+
+@objcwrapper immutable = true MPSCNNDropout <: MPSCNNKernel
+
+@objcproperties MPSCNNDropout begin
+    @autoproperty keepProbability::Cfloat
+    @autoproperty seed::UInt64
+    @autoproperty maskStrideInPixels::MTLSize
+end
+
+@objcwrapper immutable = true MPSCNNDropoutGradient <: MPSCNNGradientKernel
+
+@objcproperties MPSCNNDropoutGradient begin
+    @autoproperty keepProbability::Cfloat
+    @autoproperty seed::UInt64
+    @autoproperty maskStrideInPixels::MTLSize
 end
 
 @cenum MPSRNNSequenceDirection::UInt64 begin
@@ -406,6 +1620,87 @@ end
     MPSRNNBidirectionalCombineModeAdd = 0x0000000000000001
     MPSRNNBidirectionalCombineModeConcatenate = 0x0000000000000002
 end
+
+@objcwrapper immutable = true MPSRNNDescriptor <: NSObject
+
+@objcproperties MPSRNNDescriptor begin
+    @autoproperty inputFeatureChannels::UInt64 setter = setInputFeatureChannels
+    @autoproperty outputFeatureChannels::UInt64 setter = setOutputFeatureChannels
+    @autoproperty useLayerInputUnitTransformMode::Bool setter = setUseLayerInputUnitTransformMode
+    @autoproperty useFloat32Weights::Bool setter = setUseFloat32Weights
+    @autoproperty layerSequenceDirection::MPSRNNSequenceDirection setter = setLayerSequenceDirection
+end
+
+@objcwrapper immutable = true MPSRNNSingleGateDescriptor <: MPSRNNDescriptor
+
+@objcproperties MPSRNNSingleGateDescriptor begin
+    @autoproperty inputWeights::id{MPSCNNConvolutionDataSource} setter = setInputWeights
+    @autoproperty recurrentWeights::id{MPSCNNConvolutionDataSource} setter = setRecurrentWeights
+end
+
+@objcwrapper immutable = true MPSGRUDescriptor <: MPSRNNDescriptor
+
+@objcproperties MPSGRUDescriptor begin
+    @autoproperty inputGateInputWeights::id{MPSCNNConvolutionDataSource} setter = setInputGateInputWeights
+    @autoproperty inputGateRecurrentWeights::id{MPSCNNConvolutionDataSource} setter = setInputGateRecurrentWeights
+    @autoproperty recurrentGateInputWeights::id{MPSCNNConvolutionDataSource} setter = setRecurrentGateInputWeights
+    @autoproperty recurrentGateRecurrentWeights::id{MPSCNNConvolutionDataSource} setter = setRecurrentGateRecurrentWeights
+    @autoproperty outputGateInputWeights::id{MPSCNNConvolutionDataSource} setter = setOutputGateInputWeights
+    @autoproperty outputGateRecurrentWeights::id{MPSCNNConvolutionDataSource} setter = setOutputGateRecurrentWeights
+    @autoproperty outputGateInputGateWeights::id{MPSCNNConvolutionDataSource} setter = setOutputGateInputGateWeights
+    @autoproperty gatePnormValue::Cfloat setter = setGatePnormValue
+    @autoproperty flipOutputGates::Bool setter = setFlipOutputGates
+end
+
+@objcwrapper immutable = true MPSLSTMDescriptor <: MPSRNNDescriptor
+
+@objcproperties MPSLSTMDescriptor begin
+    @autoproperty memoryWeightsAreDiagonal::Bool setter = setMemoryWeightsAreDiagonal
+    @autoproperty inputGateInputWeights::id{MPSCNNConvolutionDataSource} setter = setInputGateInputWeights
+    @autoproperty inputGateRecurrentWeights::id{MPSCNNConvolutionDataSource} setter = setInputGateRecurrentWeights
+    @autoproperty inputGateMemoryWeights::id{MPSCNNConvolutionDataSource} setter = setInputGateMemoryWeights
+    @autoproperty forgetGateInputWeights::id{MPSCNNConvolutionDataSource} setter = setForgetGateInputWeights
+    @autoproperty forgetGateRecurrentWeights::id{MPSCNNConvolutionDataSource} setter = setForgetGateRecurrentWeights
+    @autoproperty forgetGateMemoryWeights::id{MPSCNNConvolutionDataSource} setter = setForgetGateMemoryWeights
+    @autoproperty outputGateInputWeights::id{MPSCNNConvolutionDataSource} setter = setOutputGateInputWeights
+    @autoproperty outputGateRecurrentWeights::id{MPSCNNConvolutionDataSource} setter = setOutputGateRecurrentWeights
+    @autoproperty outputGateMemoryWeights::id{MPSCNNConvolutionDataSource} setter = setOutputGateMemoryWeights
+    @autoproperty cellGateInputWeights::id{MPSCNNConvolutionDataSource} setter = setCellGateInputWeights
+    @autoproperty cellGateRecurrentWeights::id{MPSCNNConvolutionDataSource} setter = setCellGateRecurrentWeights
+    @autoproperty cellGateMemoryWeights::id{MPSCNNConvolutionDataSource} setter = setCellGateMemoryWeights
+    @autoproperty cellToOutputNeuronType::MPSCNNNeuronType setter = setCellToOutputNeuronType
+    @autoproperty cellToOutputNeuronParamA::Cfloat setter = setCellToOutputNeuronParamA
+    @autoproperty cellToOutputNeuronParamB::Cfloat setter = setCellToOutputNeuronParamB
+    @autoproperty cellToOutputNeuronParamC::Cfloat setter = setCellToOutputNeuronParamC
+end
+
+@objcwrapper immutable = true MPSRNNRecurrentImageState <: MPSState
+
+@objcwrapper immutable = true MPSRNNImageInferenceLayer <: MPSCNNKernel
+
+@objcproperties MPSRNNImageInferenceLayer begin
+    @autoproperty inputFeatureChannels::UInt64
+    @autoproperty outputFeatureChannels::UInt64
+    @autoproperty numberOfLayers::UInt64
+    @autoproperty recurrentOutputIsTemporary::Bool setter = setRecurrentOutputIsTemporary
+    @autoproperty storeAllIntermediateStates::Bool setter = setStoreAllIntermediateStates
+    @autoproperty bidirectionalCombineMode::MPSRNNBidirectionalCombineMode setter = setBidirectionalCombineMode
+end
+
+@objcwrapper immutable = true MPSRNNRecurrentMatrixState <: MPSState
+
+@objcwrapper immutable = true MPSRNNMatrixInferenceLayer <: MPSKernel
+
+@objcproperties MPSRNNMatrixInferenceLayer begin
+    @autoproperty inputFeatureChannels::UInt64
+    @autoproperty outputFeatureChannels::UInt64
+    @autoproperty numberOfLayers::UInt64
+    @autoproperty recurrentOutputIsTemporary::Bool setter = setRecurrentOutputIsTemporary
+    @autoproperty storeAllIntermediateStates::Bool setter = setStoreAllIntermediateStates
+    @autoproperty bidirectionalCombineMode::MPSRNNBidirectionalCombineMode setter = setBidirectionalCombineMode
+end
+
+@objcwrapper immutable = true MPSRNNMatrixTrainingState <: MPSState
 
 @cenum MPSRNNMatrixId::UInt64 begin
     MPSRNNMatrixIdSingleGateInputWeights = 0x0000000000000000
@@ -440,18 +1735,814 @@ end
     MPSRNNMatrixId_count = 0x000000000000001d
 end
 
+@objcwrapper immutable = true MPSRNNMatrixTrainingLayer <: MPSKernel
+
+@objcproperties MPSRNNMatrixTrainingLayer begin
+    @autoproperty inputFeatureChannels::UInt64
+    @autoproperty outputFeatureChannels::UInt64
+    @autoproperty storeAllIntermediateStates::Bool setter = setStoreAllIntermediateStates
+    @autoproperty recurrentOutputIsTemporary::Bool setter = setRecurrentOutputIsTemporary
+    @autoproperty trainingStateIsTemporary::Bool setter = setTrainingStateIsTemporary
+    @autoproperty accumulateWeightGradients::Bool setter = setAccumulateWeightGradients
+end
+
+@objcwrapper immutable = true MPSMatrixNeuron <: MPSMatrixUnaryKernel
+
+@objcproperties MPSMatrixNeuron begin
+    @autoproperty sourceNumberOfFeatureVectors::UInt64 setter = setSourceNumberOfFeatureVectors
+    @autoproperty sourceInputFeatureChannels::UInt64 setter = setSourceInputFeatureChannels
+    @autoproperty alpha::Cdouble setter = setAlpha
+end
+
+@objcwrapper immutable = true MPSMatrixNeuronGradient <: MPSMatrixBinaryKernel
+
+@objcproperties MPSMatrixNeuronGradient begin
+    @autoproperty sourceNumberOfFeatureVectors::UInt64 setter = setSourceNumberOfFeatureVectors
+    @autoproperty sourceInputFeatureChannels::UInt64 setter = setSourceInputFeatureChannels
+    @autoproperty alpha::Cdouble setter = setAlpha
+end
+
+@objcwrapper immutable = true MPSMatrixFullyConnected <: MPSMatrixBinaryKernel
+
+@objcproperties MPSMatrixFullyConnected begin
+    @autoproperty sourceNumberOfFeatureVectors::UInt64 setter = setSourceNumberOfFeatureVectors
+    @autoproperty sourceInputFeatureChannels::UInt64 setter = setSourceInputFeatureChannels
+    @autoproperty sourceOutputFeatureChannels::UInt64 setter = setSourceOutputFeatureChannels
+    @autoproperty alpha::Cdouble setter = setAlpha
+end
+
+@objcwrapper immutable = true MPSMatrixFullyConnectedGradient <: MPSMatrixBinaryKernel
+
+@objcproperties MPSMatrixFullyConnectedGradient begin
+    @autoproperty sourceNumberOfFeatureVectors::UInt64 setter = setSourceNumberOfFeatureVectors
+    @autoproperty sourceOutputFeatureChannels::UInt64 setter = setSourceOutputFeatureChannels
+    @autoproperty sourceInputFeatureChannels::UInt64 setter = setSourceInputFeatureChannels
+    @autoproperty alpha::Cdouble setter = setAlpha
+end
+
+@objcwrapper immutable = true MPSMatrixSum <: MPSKernel
+
+@objcproperties MPSMatrixSum begin
+    @autoproperty rows::UInt64
+    @autoproperty columns::UInt64
+    @autoproperty count::UInt64
+    @autoproperty transpose::Bool
+    @autoproperty resultMatrixOrigin::MTLOrigin setter = setResultMatrixOrigin
+    @autoproperty neuronParameterA::Cfloat
+    @autoproperty neuronParameterB::Cfloat
+    @autoproperty neuronParameterC::Cfloat
+end
+
+@objcwrapper immutable = true MPSMatrixBatchNormalization <: MPSMatrixUnaryKernel
+
+@objcproperties MPSMatrixBatchNormalization begin
+    @autoproperty sourceNumberOfFeatureVectors::UInt64 setter = setSourceNumberOfFeatureVectors
+    @autoproperty sourceInputFeatureChannels::UInt64 setter = setSourceInputFeatureChannels
+    @autoproperty epsilon::Cfloat setter = setEpsilon
+    @autoproperty computeStatistics::Bool setter = setComputeStatistics
+end
+
+@objcwrapper immutable = true MPSMatrixBatchNormalizationGradient <: MPSMatrixBinaryKernel
+
+@objcproperties MPSMatrixBatchNormalizationGradient begin
+    @autoproperty sourceNumberOfFeatureVectors::UInt64 setter = setSourceNumberOfFeatureVectors
+    @autoproperty sourceInputFeatureChannels::UInt64 setter = setSourceInputFeatureChannels
+    @autoproperty epsilon::Cfloat setter = setEpsilon
+end
+
+@objcwrapper immutable = true MPSNNGridSample <: MPSCNNBinaryKernel
+
+@objcproperties MPSNNGridSample begin
+    @autoproperty useGridValueAsInputCoordinate::Bool setter = setUseGridValueAsInputCoordinate
+end
+
 @cenum MPSNNRegularizationType::UInt64 begin
     MPSNNRegularizationTypeNone = 0x0000000000000000
     MPSNNRegularizationTypeL1 = 0x0000000000000001
     MPSNNRegularizationTypeL2 = 0x0000000000000002
 end
 
+@objcwrapper immutable = true MPSNNOptimizerDescriptor <: NSObject
+
+@objcproperties MPSNNOptimizerDescriptor begin
+    @autoproperty learningRate::Cfloat setter = setLearningRate
+    @autoproperty gradientRescale::Cfloat setter = setGradientRescale
+    @autoproperty applyGradientClipping::Bool setter = setApplyGradientClipping
+    @autoproperty gradientClipMax::Cfloat setter = setGradientClipMax
+    @autoproperty gradientClipMin::Cfloat setter = setGradientClipMin
+    @autoproperty regularizationScale::Cfloat setter = setRegularizationScale
+    @autoproperty regularizationType::MPSNNRegularizationType setter = setRegularizationType
+end
+
+@objcwrapper immutable = true MPSNNOptimizer <: MPSKernel
+
+@objcproperties MPSNNOptimizer begin
+    @autoproperty learningRate::Cfloat
+    @autoproperty gradientRescale::Cfloat
+    @autoproperty applyGradientClipping::Bool setter = setApplyGradientClipping
+    @autoproperty gradientClipMax::Cfloat
+    @autoproperty gradientClipMin::Cfloat
+    @autoproperty regularizationScale::Cfloat
+    @autoproperty regularizationType::MPSNNRegularizationType
+end
+
+@objcwrapper immutable = true MPSNNOptimizerStochasticGradientDescent <: MPSNNOptimizer
+
+@objcproperties MPSNNOptimizerStochasticGradientDescent begin
+    @autoproperty momentumScale::Cfloat
+    @autoproperty useNesterovMomentum::Bool
+    @autoproperty useNestrovMomentum::Bool
+end
+
+@objcwrapper immutable = true MPSNNOptimizerRMSProp <: MPSNNOptimizer
+
+@objcproperties MPSNNOptimizerRMSProp begin
+    @autoproperty decay::Cdouble
+    @autoproperty epsilon::Cfloat
+end
+
+@objcwrapper immutable = true MPSNNOptimizerAdam <: MPSNNOptimizer
+
+@objcproperties MPSNNOptimizerAdam begin
+    @autoproperty beta1::Cdouble
+    @autoproperty beta2::Cdouble
+    @autoproperty epsilon::Cfloat
+    @autoproperty timeStep::UInt64 setter = setTimeStep
+end
+
+@objcwrapper immutable = true MPSNNReduceUnary <: MPSCNNKernel
+
+@objcproperties MPSNNReduceUnary begin
+    @autoproperty clipRectSource::MTLRegion setter = setClipRectSource
+    @autoproperty offset::MPSOffset setter = setOffset
+end
+
+@objcwrapper immutable = true MPSNNReduceRowMin <: MPSNNReduceUnary
+
+@objcwrapper immutable = true MPSNNReduceColumnMin <: MPSNNReduceUnary
+
+@objcwrapper immutable = true MPSNNReduceFeatureChannelsMin <: MPSNNReduceUnary
+
+@objcwrapper immutable = true MPSNNReduceFeatureChannelsArgumentMin <: MPSNNReduceUnary
+
+@objcwrapper immutable = true MPSNNReduceRowMax <: MPSNNReduceUnary
+
+@objcwrapper immutable = true MPSNNReduceColumnMax <: MPSNNReduceUnary
+
+@objcwrapper immutable = true MPSNNReduceFeatureChannelsMax <: MPSNNReduceUnary
+
+@objcwrapper immutable = true MPSNNReduceFeatureChannelsArgumentMax <: MPSNNReduceUnary
+
+@objcwrapper immutable = true MPSNNReduceRowMean <: MPSNNReduceUnary
+
+@objcwrapper immutable = true MPSNNReduceColumnMean <: MPSNNReduceUnary
+
+@objcwrapper immutable = true MPSNNReduceFeatureChannelsMean <: MPSNNReduceUnary
+
+@objcwrapper immutable = true MPSNNReduceRowSum <: MPSNNReduceUnary
+
+@objcwrapper immutable = true MPSNNReduceColumnSum <: MPSNNReduceUnary
+
+@objcwrapper immutable = true MPSNNReduceFeatureChannelsSum <: MPSNNReduceUnary
+
+@objcproperties MPSNNReduceFeatureChannelsSum begin
+    @autoproperty weight::Cfloat setter = setWeight
+end
+
+@objcwrapper immutable = true MPSNNReduceBinary <: MPSCNNBinaryKernel
+
+@objcproperties MPSNNReduceBinary begin
+    @autoproperty primarySourceClipRect::MTLRegion setter = setPrimarySourceClipRect
+    @autoproperty secondarySourceClipRect::MTLRegion setter = setSecondarySourceClipRect
+    @autoproperty primaryOffset::MPSOffset setter = setPrimaryOffset
+    @autoproperty secondaryOffset::MPSOffset setter = setSecondaryOffset
+end
+
+@objcwrapper immutable = true MPSNNReduceFeatureChannelsAndWeightsMean <: MPSNNReduceBinary
+
+@objcwrapper immutable = true MPSNNReduceFeatureChannelsAndWeightsSum <: MPSNNReduceBinary
+
+@objcproperties MPSNNReduceFeatureChannelsAndWeightsSum begin
+    @autoproperty doWeightedSumByNonZeroWeights::Bool
+end
+
+@objcwrapper immutable = true MPSNNLocalCorrelation <: MPSNNReduceBinary
+
+@objcproperties MPSNNLocalCorrelation begin
+    @autoproperty windowInX::UInt64 setter = setWindowInX
+    @autoproperty windowInY::UInt64 setter = setWindowInY
+    @autoproperty strideInX::UInt64 setter = setStrideInX
+    @autoproperty strideInY::UInt64 setter = setStrideInY
+end
+
+@objcwrapper immutable = true MPSNNReshape <: MPSCNNKernel
+
+@objcwrapper immutable = true MPSNNReshapeGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = true MPSNNPad <: MPSCNNKernel
+
+@objcproperties MPSNNPad begin
+    @autoproperty paddingSizeBefore::MPSImageCoordinate setter = setPaddingSizeBefore
+    @autoproperty paddingSizeAfter::MPSImageCoordinate setter = setPaddingSizeAfter
+    @autoproperty fillValue::Cfloat setter = setFillValue
+end
+
+@objcwrapper immutable = true MPSNNPadGradient <: MPSCNNGradientKernel
+
+@objcwrapper immutable = true MPSNNResizeBilinear <: MPSCNNKernel
+
+@objcproperties MPSNNResizeBilinear begin
+    @autoproperty resizeWidth::UInt64
+    @autoproperty resizeHeight::UInt64
+    @autoproperty alignCorners::Bool
+end
+
+@objcwrapper immutable = true MPSNNCropAndResizeBilinear <: MPSCNNKernel
+
+@objcproperties MPSNNCropAndResizeBilinear begin
+    @autoproperty resizeWidth::UInt64
+    @autoproperty resizeHeight::UInt64
+    @autoproperty numberOfRegions::UInt64
+    @autoproperty regions::Ptr{MPSRegion}
+end
+
+@objcwrapper immutable = true MPSNNSlice <: MPSCNNKernel
+
+@objcwrapper immutable = true MPSHandle <: NSObject
+
+@objcwrapper immutable = true MPSNNTrainableNode <: NSObject
+
+@objcproperties MPSNNTrainableNode begin
+    @autoproperty trainingStyle::MPSNNTrainingStyle setter = setTrainingStyle
+end
+
+@objcwrapper immutable = true MPSNNImageNode <: NSObject
+
+@objcproperties MPSNNImageNode begin
+    @autoproperty handle::id{MPSHandle} setter = setHandle
+    @autoproperty format::MPSImageFeatureChannelFormat setter = setFormat
+    @autoproperty imageAllocator::id{MPSImageAllocator} setter = setImageAllocator
+    @autoproperty exportFromGraph::Bool setter = setExportFromGraph
+    @autoproperty synchronizeResource::Bool setter = setSynchronizeResource
+    @autoproperty stopGradient::Bool setter = setStopGradient
+end
+
+@objcwrapper immutable = true MPSNNStateNode <: NSObject
+
+@objcproperties MPSNNStateNode begin
+    @autoproperty handle::id{MPSHandle} setter = setHandle
+    @autoproperty exportFromGraph::Bool setter = setExportFromGraph
+    @autoproperty synchronizeResource::Bool setter = setSynchronizeResource
+end
+
+@objcwrapper immutable = true MPSNNGradientStateNode <: MPSNNStateNode
+
+@objcwrapper immutable = true MPSCNNConvolutionGradientStateNode <: MPSNNGradientStateNode
+
+@objcwrapper immutable = true MPSCNNConvolutionTransposeGradientStateNode <: MPSCNNConvolutionGradientStateNode
+
+@objcwrapper immutable = true MPSNNBinaryGradientStateNode <: MPSNNStateNode
+
+@objcwrapper immutable = true MPSNNMultiaryGradientStateNode <: MPSNNStateNode
+
+@objcwrapper immutable = true MPSNNArithmeticGradientStateNode <: MPSNNBinaryGradientStateNode
+
+@objcwrapper immutable = true MPSNNFilterNode <: NSObject
+
+@objcproperties MPSNNFilterNode begin
+    @autoproperty resultImage::id{MPSNNImageNode}
+    @autoproperty resultState::id{MPSNNStateNode}
+    @autoproperty resultStates::id{NSArray} type = Vector{MPSNNStateNode}
+    @autoproperty paddingPolicy::id{MPSNNPadding} setter = setPaddingPolicy
+    @autoproperty label::id{NSString} setter = setLabel
+end
+
+@objcwrapper immutable = true MPSNNGradientFilterNode <: MPSNNFilterNode
+
+@objcwrapper immutable = true MPSCNNConvolutionNode <: MPSNNFilterNode
+
+@objcproperties MPSCNNConvolutionNode begin
+    @autoproperty trainingStyle::MPSNNTrainingStyle setter = setTrainingStyle
+    @autoproperty accumulatorPrecision::MPSNNConvolutionAccumulatorPrecisionOption setter = setAccumulatorPrecision
+    @autoproperty convolutionGradientState::id{MPSCNNConvolutionGradientStateNode}
+end
+
+@objcwrapper immutable = true MPSCNNFullyConnectedNode <: MPSCNNConvolutionNode
+
+@objcwrapper immutable = true MPSCNNBinaryConvolutionNode <: MPSCNNConvolutionNode
+
+@objcproperties MPSCNNBinaryConvolutionNode begin
+    @autoproperty convolutionGradientState::id{MPSCNNConvolutionGradientStateNode}
+end
+
+@objcwrapper immutable = true MPSCNNBinaryFullyConnectedNode <: MPSCNNBinaryConvolutionNode
+
+@objcwrapper immutable = true MPSCNNConvolutionTransposeNode <: MPSCNNConvolutionNode
+
+@objcproperties MPSCNNConvolutionTransposeNode begin
+    @autoproperty convolutionGradientState::id{MPSCNNConvolutionGradientStateNode}
+end
+
+@objcwrapper immutable = true MPSCNNConvolutionGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = true MPSCNNFullyConnectedGradientNode <: MPSCNNConvolutionGradientNode
+
+@objcwrapper immutable = true MPSCNNConvolutionTransposeGradientNode <: MPSCNNConvolutionGradientNode
+
+@objcwrapper immutable = true MPSCNNNeuronNode <: MPSNNFilterNode
+
+@objcproperties MPSCNNNeuronNode begin
+    @autoproperty a::Cfloat
+    @autoproperty b::Cfloat
+    @autoproperty c::Cfloat
+end
+
+@objcwrapper immutable = true MPSCNNNeuronAbsoluteNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = true MPSCNNNeuronELUNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = true MPSCNNNeuronReLUNNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = true MPSCNNNeuronLinearNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = true MPSCNNNeuronReLUNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = true MPSCNNNeuronSigmoidNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = true MPSCNNNeuronHardSigmoidNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = true MPSCNNNeuronSoftPlusNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = true MPSCNNNeuronSoftSignNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = true MPSCNNNeuronTanHNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = true MPSCNNNeuronPReLUNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = true MPSCNNNeuronPowerNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = true MPSCNNNeuronExponentialNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = true MPSCNNNeuronLogarithmNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = true MPSCNNNeuronGeLUNode <: MPSCNNNeuronNode
+
+@objcwrapper immutable = true MPSCNNNeuronGradientNode <: MPSNNGradientFilterNode
+
+@objcproperties MPSCNNNeuronGradientNode begin
+    @autoproperty descriptor::id{MPSNNNeuronDescriptor}
+end
+
+@objcwrapper immutable = true MPSNNUnaryReductionNode <: MPSNNFilterNode
+
+@objcproperties MPSNNUnaryReductionNode begin
+    @autoproperty clipRectSource::MTLRegion setter = setClipRectSource
+end
+
+@objcwrapper immutable = true MPSNNReductionRowMinNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = true MPSNNReductionColumnMinNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = true MPSNNReductionFeatureChannelsMinNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = true MPSNNReductionFeatureChannelsArgumentMinNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = true MPSNNReductionRowMaxNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = true MPSNNReductionColumnMaxNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = true MPSNNReductionFeatureChannelsMaxNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = true MPSNNReductionFeatureChannelsArgumentMaxNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = true MPSNNReductionRowMeanNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = true MPSNNReductionColumnMeanNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = true MPSNNReductionFeatureChannelsMeanNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = true MPSNNReductionSpatialMeanNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = true MPSNNReductionRowSumNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = true MPSNNReductionColumnSumNode <: MPSNNUnaryReductionNode
+
+@objcwrapper immutable = true MPSNNReductionFeatureChannelsSumNode <: MPSNNUnaryReductionNode
+
+@objcproperties MPSNNReductionFeatureChannelsSumNode begin
+    @autoproperty weight::Cfloat setter = setWeight
+end
+
+@objcwrapper immutable = true MPSCNNPoolingNode <: MPSNNFilterNode
+
+@objcproperties MPSCNNPoolingNode begin
+    @autoproperty kernelWidth::UInt64
+    @autoproperty kernelHeight::UInt64
+    @autoproperty strideInPixelsX::UInt64
+    @autoproperty strideInPixelsY::UInt64
+end
+
+@objcwrapper immutable = true MPSCNNPoolingAverageNode <: MPSCNNPoolingNode
+
+@objcwrapper immutable = true MPSCNNPoolingL2NormNode <: MPSCNNPoolingNode
+
+@objcwrapper immutable = true MPSCNNPoolingMaxNode <: MPSCNNPoolingNode
+
+@objcwrapper immutable = true MPSCNNDilatedPoolingMaxNode <: MPSNNFilterNode
+
+@objcproperties MPSCNNDilatedPoolingMaxNode begin
+    @autoproperty dilationRateX::UInt64
+    @autoproperty dilationRateY::UInt64
+end
+
+@objcwrapper immutable = true MPSCNNPoolingGradientNode <: MPSNNGradientFilterNode
+
+@objcproperties MPSCNNPoolingGradientNode begin
+    @autoproperty kernelWidth::UInt64
+    @autoproperty kernelHeight::UInt64
+    @autoproperty strideInPixelsX::UInt64
+    @autoproperty strideInPixelsY::UInt64
+end
+
+@objcwrapper immutable = true MPSCNNPoolingMaxGradientNode <: MPSCNNPoolingGradientNode
+
+@objcwrapper immutable = true MPSCNNPoolingAverageGradientNode <: MPSCNNPoolingGradientNode
+
+@objcwrapper immutable = true MPSCNNPoolingL2NormGradientNode <: MPSCNNPoolingGradientNode
+
+@objcwrapper immutable = true MPSCNNDilatedPoolingMaxGradientNode <: MPSCNNPoolingGradientNode
+
+@objcproperties MPSCNNDilatedPoolingMaxGradientNode begin
+    @autoproperty dilationRateX::UInt64
+    @autoproperty dilationRateY::UInt64
+end
+
+@objcwrapper immutable = true MPSCNNNormalizationNode <: MPSNNFilterNode
+
+@objcproperties MPSCNNNormalizationNode begin
+    @autoproperty alpha::Cfloat setter = setAlpha
+    @autoproperty beta::Cfloat setter = setBeta
+    @autoproperty delta::Cfloat setter = setDelta
+end
+
+@objcwrapper immutable = true MPSCNNSpatialNormalizationNode <: MPSCNNNormalizationNode
+
+@objcproperties MPSCNNSpatialNormalizationNode begin
+    @autoproperty kernelWidth::UInt64 setter = setKernelWidth
+    @autoproperty kernelHeight::UInt64 setter = setKernelHeight
+end
+
+@objcwrapper immutable = true MPSCNNSpatialNormalizationGradientNode <: MPSNNGradientFilterNode
+
+@objcproperties MPSCNNSpatialNormalizationGradientNode begin
+    @autoproperty kernelWidth::UInt64 setter = setKernelWidth
+    @autoproperty kernelHeight::UInt64 setter = setKernelHeight
+    @autoproperty alpha::Cfloat setter = setAlpha
+    @autoproperty beta::Cfloat setter = setBeta
+    @autoproperty delta::Cfloat setter = setDelta
+end
+
+@objcwrapper immutable = true MPSCNNLocalContrastNormalizationNode <: MPSCNNNormalizationNode
+
+@objcproperties MPSCNNLocalContrastNormalizationNode begin
+    @autoproperty pm::Cfloat setter = setPm
+    @autoproperty ps::Cfloat setter = setPs
+    @autoproperty p0::Cfloat setter = setP0
+    @autoproperty kernelWidth::UInt64 setter = setKernelWidth
+    @autoproperty kernelHeight::UInt64 setter = setKernelHeight
+end
+
+@objcwrapper immutable = true MPSCNNLocalContrastNormalizationGradientNode <: MPSNNGradientFilterNode
+
+@objcproperties MPSCNNLocalContrastNormalizationGradientNode begin
+    @autoproperty alpha::Cfloat setter = setAlpha
+    @autoproperty beta::Cfloat setter = setBeta
+    @autoproperty delta::Cfloat setter = setDelta
+    @autoproperty p0::Cfloat setter = setP0
+    @autoproperty pm::Cfloat setter = setPm
+    @autoproperty ps::Cfloat setter = setPs
+    @autoproperty kernelWidth::UInt64
+    @autoproperty kernelHeight::UInt64
+end
+
+@objcwrapper immutable = true MPSCNNCrossChannelNormalizationNode <: MPSCNNNormalizationNode
+
+@objcproperties MPSCNNCrossChannelNormalizationNode begin
+    @autoproperty kernelSizeInFeatureChannels::UInt64 setter = setKernelSizeInFeatureChannels
+end
+
+@objcwrapper immutable = true MPSCNNCrossChannelNormalizationGradientNode <: MPSNNGradientFilterNode
+
+@objcproperties MPSCNNCrossChannelNormalizationGradientNode begin
+    @autoproperty kernelSize::UInt64
+end
+
+@objcwrapper immutable = true MPSCNNInstanceNormalizationNode <: MPSNNFilterNode
+
+@objcproperties MPSCNNInstanceNormalizationNode begin
+    @autoproperty trainingStyle::MPSNNTrainingStyle setter = setTrainingStyle
+end
+
+@objcwrapper immutable = true MPSCNNInstanceNormalizationGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = true MPSCNNGroupNormalizationNode <: MPSNNFilterNode
+
+@objcproperties MPSCNNGroupNormalizationNode begin
+    @autoproperty trainingStyle::MPSNNTrainingStyle setter = setTrainingStyle
+end
+
+@objcwrapper immutable = true MPSCNNGroupNormalizationGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = true MPSCNNBatchNormalizationNode <: MPSNNFilterNode
+
+@objcproperties MPSCNNBatchNormalizationNode begin
+    @autoproperty flags::MPSCNNBatchNormalizationFlags setter = setFlags
+    @autoproperty trainingStyle::MPSNNTrainingStyle setter = setTrainingStyle
+end
+
+@objcwrapper immutable = true MPSCNNBatchNormalizationGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = true MPSNNScaleNode <: MPSNNFilterNode
+
+@objcwrapper immutable = true MPSNNBilinearScaleNode <: MPSNNScaleNode
+
+@objcwrapper immutable = true MPSNNLanczosScaleNode <: MPSNNScaleNode
+
+@objcwrapper immutable = true MPSNNBinaryArithmeticNode <: MPSNNFilterNode
+
+@objcproperties MPSNNBinaryArithmeticNode begin
+    @autoproperty primaryScale::Cfloat setter = setPrimaryScale
+    @autoproperty secondaryScale::Cfloat setter = setSecondaryScale
+    @autoproperty bias::Cfloat setter = setBias
+    @autoproperty primaryStrideInPixelsX::UInt64 setter = setPrimaryStrideInPixelsX
+    @autoproperty primaryStrideInPixelsY::UInt64 setter = setPrimaryStrideInPixelsY
+    @autoproperty primaryStrideInFeatureChannels::UInt64 setter = setPrimaryStrideInFeatureChannels
+    @autoproperty secondaryStrideInPixelsX::UInt64 setter = setSecondaryStrideInPixelsX
+    @autoproperty secondaryStrideInPixelsY::UInt64 setter = setSecondaryStrideInPixelsY
+    @autoproperty secondaryStrideInFeatureChannels::UInt64 setter = setSecondaryStrideInFeatureChannels
+    @autoproperty minimumValue::Cfloat setter = setMinimumValue
+    @autoproperty maximumValue::Cfloat setter = setMaximumValue
+end
+
+@objcwrapper immutable = true MPSNNAdditionNode <: MPSNNBinaryArithmeticNode
+
+@objcwrapper immutable = true MPSNNSubtractionNode <: MPSNNBinaryArithmeticNode
+
+@objcwrapper immutable = true MPSNNMultiplicationNode <: MPSNNBinaryArithmeticNode
+
+@objcwrapper immutable = true MPSNNDivisionNode <: MPSNNBinaryArithmeticNode
+
+@objcwrapper immutable = true MPSNNComparisonNode <: MPSNNBinaryArithmeticNode
+
+@objcproperties MPSNNComparisonNode begin
+    @autoproperty comparisonType::MPSNNComparisonType setter = setComparisonType
+end
+
+@objcwrapper immutable = true MPSNNArithmeticGradientNode <: MPSNNGradientFilterNode
+
+@objcproperties MPSNNArithmeticGradientNode begin
+    @autoproperty primaryScale::Cfloat setter = setPrimaryScale
+    @autoproperty secondaryScale::Cfloat setter = setSecondaryScale
+    @autoproperty bias::Cfloat setter = setBias
+    @autoproperty secondaryStrideInPixelsX::UInt64 setter = setSecondaryStrideInPixelsX
+    @autoproperty secondaryStrideInPixelsY::UInt64 setter = setSecondaryStrideInPixelsY
+    @autoproperty secondaryStrideInFeatureChannels::UInt64 setter = setSecondaryStrideInFeatureChannels
+    @autoproperty minimumValue::Cfloat setter = setMinimumValue
+    @autoproperty maximumValue::Cfloat setter = setMaximumValue
+    @autoproperty isSecondarySourceFilter::Bool
+end
+
+@objcwrapper immutable = true MPSNNAdditionGradientNode <: MPSNNArithmeticGradientNode
+
+@objcwrapper immutable = true MPSNNSubtractionGradientNode <: MPSNNArithmeticGradientNode
+
+@objcwrapper immutable = true MPSNNMultiplicationGradientNode <: MPSNNArithmeticGradientNode
+
+@objcwrapper immutable = true MPSCNNDropoutNode <: MPSNNFilterNode
+
+@objcproperties MPSCNNDropoutNode begin
+    @autoproperty keepProbability::Cfloat
+    @autoproperty seed::UInt64
+    @autoproperty maskStrideInPixels::MTLSize
+end
+
+@objcwrapper immutable = true MPSCNNDropoutGradientNode <: MPSNNGradientFilterNode
+
+@objcproperties MPSCNNDropoutGradientNode begin
+    @autoproperty keepProbability::Cfloat
+    @autoproperty seed::UInt64
+    @autoproperty maskStrideInPixels::MTLSize
+end
+
+@objcwrapper immutable = true MPSNNLabelsNode <: MPSNNStateNode
+
+@objcwrapper immutable = true MPSCNNLossNode <: MPSNNFilterNode
+
+@objcproperties MPSCNNLossNode begin
+    @autoproperty inputLabels::id{MPSNNLabelsNode}
+end
+
+@objcwrapper immutable = true MPSCNNYOLOLossNode <: MPSNNFilterNode
+
+@objcproperties MPSCNNYOLOLossNode begin
+    @autoproperty inputLabels::id{MPSNNLabelsNode}
+end
+
+@objcwrapper immutable = true MPSNNConcatenationNode <: MPSNNFilterNode
+
+@objcwrapper immutable = true MPSNNConcatenationGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = true MPSNNReshapeNode <: MPSNNFilterNode
+
+@objcwrapper immutable = true MPSNNReshapeGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = true MPSNNReductionSpatialMeanGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = true MPSNNPadNode <: MPSNNFilterNode
+
+@objcproperties MPSNNPadNode begin
+    @autoproperty fillValue::Cfloat setter = setFillValue
+end
+
+@objcwrapper immutable = true MPSNNPadGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = true MPSCNNSoftMaxNode <: MPSNNFilterNode
+
+@objcwrapper immutable = true MPSCNNSoftMaxGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = true MPSCNNLogSoftMaxNode <: MPSNNFilterNode
+
+@objcwrapper immutable = true MPSCNNLogSoftMaxGradientNode <: MPSNNGradientFilterNode
+
+@objcwrapper immutable = true MPSCNNUpsamplingNearestNode <: MPSNNFilterNode
+
+@objcproperties MPSCNNUpsamplingNearestNode begin
+    @autoproperty scaleFactorX::Cdouble
+    @autoproperty scaleFactorY::Cdouble
+end
+
+@objcwrapper immutable = true MPSCNNUpsamplingBilinearNode <: MPSNNFilterNode
+
+@objcproperties MPSCNNUpsamplingBilinearNode begin
+    @autoproperty scaleFactorX::Cdouble
+    @autoproperty scaleFactorY::Cdouble
+    @autoproperty alignCorners::Bool
+end
+
+@objcwrapper immutable = true MPSCNNUpsamplingNearestGradientNode <: MPSNNGradientFilterNode
+
+@objcproperties MPSCNNUpsamplingNearestGradientNode begin
+    @autoproperty scaleFactorX::Cdouble
+    @autoproperty scaleFactorY::Cdouble
+end
+
+@objcwrapper immutable = true MPSCNNUpsamplingBilinearGradientNode <: MPSNNGradientFilterNode
+
+@objcproperties MPSCNNUpsamplingBilinearGradientNode begin
+    @autoproperty scaleFactorX::Cdouble
+    @autoproperty scaleFactorY::Cdouble
+end
+
+@objcwrapper immutable = true MPSNNGramMatrixCallback <: NSObject
+
+@objcwrapper immutable = true MPSNNGramMatrixCalculationNode <: MPSNNFilterNode
+
+@objcproperties MPSNNGramMatrixCalculationNode begin
+    @autoproperty alpha::Cfloat
+    @autoproperty propertyCallBack::id{MPSNNGramMatrixCallback} setter = setPropertyCallBack
+end
+
+@objcwrapper immutable = true MPSNNGramMatrixCalculationGradientNode <: MPSNNGradientFilterNode
+
+@objcproperties MPSNNGramMatrixCalculationGradientNode begin
+    @autoproperty alpha::Cfloat
+end
+
+@objcwrapper immutable = true MPSNNLossCallback <: NSObject
+
+@objcwrapper immutable = true MPSNNForwardLossNode <: MPSNNFilterNode
+
+@objcproperties MPSNNForwardLossNode begin
+    @autoproperty lossType::MPSCNNLossType
+    @autoproperty reductionType::MPSCNNReductionType
+    @autoproperty numberOfClasses::UInt64
+    @autoproperty reduceAcrossBatch::Bool
+    @autoproperty weight::Cfloat
+    @autoproperty labelSmoothing::Cfloat
+    @autoproperty epsilon::Cfloat
+    @autoproperty delta::Cfloat
+    @autoproperty propertyCallBack::id{MPSNNLossCallback} setter = setPropertyCallBack
+end
+
+@objcwrapper immutable = true MPSNNLossGradientNode <: MPSNNGradientFilterNode
+
+@objcproperties MPSNNLossGradientNode begin
+    @autoproperty lossType::MPSCNNLossType
+    @autoproperty reductionType::MPSCNNReductionType
+    @autoproperty numberOfClasses::UInt64
+    @autoproperty reduceAcrossBatch::Bool
+    @autoproperty weight::Cfloat
+    @autoproperty labelSmoothing::Cfloat
+    @autoproperty epsilon::Cfloat
+    @autoproperty delta::Cfloat
+    @autoproperty isLabelsGradientFilter::Bool
+    @autoproperty propertyCallBack::id{MPSNNLossCallback} setter = setPropertyCallBack
+end
+
+@objcwrapper immutable = true MPSNNInitialGradientNode <: MPSNNFilterNode
+
+@objcwrapper immutable = true MPSNNGraph <: MPSKernel
+
+@objcproperties MPSNNGraph begin
+    @autoproperty sourceImageHandles::id{NSArray} type = Vector{MPSHandle}
+    @autoproperty sourceStateHandles::id{NSArray} type = Vector{MPSHandle}
+    @autoproperty intermediateImageHandles::id{NSArray} type = Vector{MPSHandle}
+    @autoproperty resultStateHandles::id{NSArray} type = Vector{MPSHandle}
+    @autoproperty resultHandle::id{MPSHandle}
+    @autoproperty outputStateIsTemporary::Bool setter = setOutputStateIsTemporary
+    @autoproperty destinationImageAllocator::id{MPSImageAllocator} setter = setDestinationImageAllocator
+    @autoproperty format::MPSImageFeatureChannelFormat setter = setFormat
+    @autoproperty resultImageIsNeeded::Bool
+end
+
 struct MPSNDArrayOffsets
-    dimensions::NTuple{16,NSInteger}
+    dimensions::NTuple{16, NSInteger}
 end
 
 struct MPSNDArraySizes
-    dimensions::NTuple{16,NSUInteger}
+    dimensions::NTuple{16, NSUInteger}
+end
+
+@objcwrapper immutable = false MPSNDArrayMultiaryBase <: MPSKernel
+
+@objcproperties MPSNDArrayMultiaryBase begin
+    @autoproperty destinationArrayAllocator::id{MPSNDArrayAllocator} setter = setDestinationArrayAllocator
+end
+
+@objcwrapper immutable = false MPSNDArrayMultiaryKernel <: MPSNDArrayMultiaryBase
+
+@objcwrapper immutable = true MPSNDArrayMultiaryGradientKernel <: MPSNDArrayMultiaryBase
+
+@objcwrapper immutable = false MPSNDArrayUnaryKernel <: MPSNDArrayMultiaryKernel
+
+@objcproperties MPSNDArrayUnaryKernel begin
+    @autoproperty offsets::MPSNDArrayOffsets
+    @autoproperty edgeMode::MPSImageEdgeMode
+    @autoproperty kernelSizes::MPSNDArraySizes
+    @autoproperty strides::MPSNDArrayOffsets
+    @autoproperty dilationRates::MPSNDArraySizes
+end
+
+@objcwrapper immutable = true MPSNDArrayUnaryGradientKernel <: MPSNDArrayMultiaryGradientKernel
+
+@objcwrapper immutable = false MPSNDArrayBinaryKernel <: MPSNDArrayMultiaryKernel
+
+@objcproperties MPSNDArrayBinaryKernel begin
+    @autoproperty primaryOffsets::MPSNDArrayOffsets
+    @autoproperty primaryEdgeMode::MPSImageEdgeMode
+    @autoproperty primaryKernelSizes::MPSNDArraySizes
+    @autoproperty primaryStrides::MPSNDArrayOffsets
+    @autoproperty primaryDilationRates::MPSNDArraySizes
+    @autoproperty secondaryOffsets::MPSNDArrayOffsets
+    @autoproperty secondaryEdgeMode::MPSImageEdgeMode
+    @autoproperty secondaryKernelSizes::MPSNDArraySizes
+    @autoproperty secondaryStrides::MPSNDArrayOffsets
+    @autoproperty secondaryDilationRates::MPSNDArraySizes
+end
+
+@objcwrapper immutable = true MPSNDArrayBinaryPrimaryGradientKernel <: MPSNDArrayMultiaryGradientKernel
+
+@objcwrapper immutable = true MPSNDArrayBinarySecondaryGradientKernel <: MPSNDArrayMultiaryGradientKernel
+
+@objcwrapper immutable = true MPSNDArrayGradientState <: MPSState
+
+@objcwrapper immutable = false MPSNDArrayMatrixMultiplication <: MPSNDArrayMultiaryKernel
+
+@objcproperties MPSNDArrayMatrixMultiplication begin
+    @autoproperty alpha::Cdouble setter = setAlpha
+    @autoproperty beta::Cdouble setter = setBeta
+end
+
+@objcwrapper immutable = true MPSNDArrayStridedSlice <: MPSNDArrayUnaryKernel
+
+@objcproperties MPSNDArrayStridedSlice begin
+    @autoproperty strides::MPSNDArrayOffsets setter = setStrides
+end
+
+@objcwrapper immutable = true MPSNDArrayStridedSliceGradient <: MPSNDArrayUnaryGradientKernel
+
+@objcwrapper immutable = true MPSNDArrayGatherGradientState <: MPSNDArrayGradientState
+
+@objcwrapper immutable = true MPSNDArrayGather <: MPSNDArrayBinaryKernel
+
+@objcproperties MPSNDArrayGather begin
+    @autoproperty axis::UInt64 setter = setAxis
+end
+
+@objcwrapper immutable = true MPSNDArrayGatherGradient <: MPSNDArrayBinaryPrimaryGradientKernel
+
+@static if Metal.is_macos(v"15.0.0")
+    @objcwrapper immutable = true MPSNDArrayIdentity <: MPSNDArrayUnaryKernel
 end
 
 @cenum MPSNDArrayQuantizationScheme::UInt64 begin
@@ -460,15 +2551,55 @@ end
     MPSNDArrayQuantizationTypeLUT = 0x0000000000000002
 end
 
+@static if Metal.is_macos(v"15.0.0")
+    @objcwrapper immutable = true MPSNDArrayQuantizationDescriptor <: NSObject
+    @objcproperties MPSNDArrayQuantizationDescriptor begin
+        @autoproperty quantizationDataType::MPSDataType
+        @autoproperty quantizationScheme::MPSNDArrayQuantizationScheme
+    end
+end
+
+@static if Metal.is_macos(v"15.0.0")
+    @objcwrapper immutable = true MPSNDArrayAffineQuantizationDescriptor <: MPSNDArrayQuantizationDescriptor
+    @objcproperties MPSNDArrayAffineQuantizationDescriptor begin
+        @autoproperty hasZeroPoint::Bool setter = setHasZeroPoint
+        @autoproperty hasMinValue::Bool setter = setHasMinValue
+        @autoproperty implicitZeroPoint::Bool setter = setImplicitZeroPoint
+    end
+end
+
+@static if Metal.is_macos(v"15.0.0")
+    @objcwrapper immutable = true MPSNDArrayLUTQuantizationDescriptor <: MPSNDArrayQuantizationDescriptor
+end
+
+@static if Metal.is_macos(v"15.0.0")
+    @objcwrapper immutable = true MPSNDArrayQuantizedMatrixMultiplication <: MPSNDArrayMatrixMultiplication
+end
+
+@static if Metal.is_macos(v"15.0.0")
+    @objcwrapper immutable = true MPSNDArrayLUTDequantize <: MPSNDArrayMultiaryKernel
+end
+
+@static if Metal.is_macos(v"15.0.0")
+    @objcwrapper immutable = true MPSNDArrayVectorLUTDequantize <: MPSNDArrayMultiaryKernel
+    @objcproperties MPSNDArrayVectorLUTDequantize begin
+        @autoproperty vectorAxis::UInt64 setter = setVectorAxis
+    end
+end
+
+@static if Metal.is_macos(v"15.0.0")
+    @objcwrapper immutable = true MPSNDArrayAffineInt4Dequantize <: MPSNDArrayMultiaryKernel
+end
+
 struct _MPSPackedFloat3
-    data::NTuple{12,UInt8}
+    data::NTuple{12, UInt8}
 end
 
 function Base.getproperty(x::Ptr{_MPSPackedFloat3}, f::Symbol)
     f === :x && return Ptr{Cfloat}(x + 0)
     f === :y && return Ptr{Cfloat}(x + 4)
     f === :z && return Ptr{Cfloat}(x + 8)
-    f === :elements && return Ptr{NTuple{3,Cfloat}}(x + 0)
+    f === :elements && return Ptr{NTuple{3, Cfloat}}(x + 0)
     return getfield(x, f)
 end
 
@@ -476,7 +2607,7 @@ function Base.getproperty(x::_MPSPackedFloat3, f::Symbol)
     r = Ref{_MPSPackedFloat3}(x)
     ptr = Base.unsafe_convert(Ptr{_MPSPackedFloat3}, r)
     fptr = getproperty(ptr, f)
-    GC.@preserve r unsafe_load(fptr)
+    return GC.@preserve r unsafe_load(fptr)
 end
 
 function Base.setproperty!(x::Ptr{_MPSPackedFloat3}, f::Symbol, v)
@@ -532,17 +2663,16 @@ struct MPSIntersectionDistancePrimitiveIndexBufferIndexInstanceIndex
     instanceIndex::Cuint
 end
 
-@cenum MPSAccelerationStructureUsage::UInt64 begin
-    MPSAccelerationStructureUsageNone = 0x0000000000000000
-    MPSAccelerationStructureUsageRefit = 0x0000000000000001
-    MPSAccelerationStructureUsageFrequentRebuild = 0x0000000000000002
-    MPSAccelerationStructureUsagePreferGPUBuild = 0x0000000000000004
-    MPSAccelerationStructureUsagePreferCPUBuild = 0x0000000000000008
-end
+@objcwrapper immutable = true MPSPolygonBuffer <: NSObject
 
-@cenum MPSAccelerationStructureStatus::UInt64 begin
-    MPSAccelerationStructureStatusUnbuilt = 0x0000000000000000
-    MPSAccelerationStructureStatusBuilt = 0x0000000000000001
+@objcproperties MPSPolygonBuffer begin
+    @autoproperty vertexBuffer::id{MTLBuffer} setter = setVertexBuffer
+    @autoproperty vertexBufferOffset::UInt64 setter = setVertexBufferOffset
+    @autoproperty indexBuffer::id{MTLBuffer} setter = setIndexBuffer
+    @autoproperty indexBufferOffset::UInt64 setter = setIndexBufferOffset
+    @autoproperty maskBuffer::id{MTLBuffer} setter = setMaskBuffer
+    @autoproperty maskBufferOffset::UInt64 setter = setMaskBufferOffset
+    @autoproperty polygonCount::UInt64 setter = setPolygonCount
 end
 
 @cenum MPSPolygonType::UInt64 begin
@@ -558,6 +2688,49 @@ end
 @cenum MPSTemporalWeighting::UInt64 begin
     MPSTemporalWeightingAverage = 0x0000000000000000
     MPSTemporalWeightingExponentialMovingAverage = 0x0000000000000001
+end
+
+@objcwrapper immutable = true MPSSVGF <: MPSKernel
+
+@objcproperties MPSSVGF begin
+    @autoproperty depthWeight::Cfloat setter = setDepthWeight
+    @autoproperty normalWeight::Cfloat setter = setNormalWeight
+    @autoproperty luminanceWeight::Cfloat setter = setLuminanceWeight
+    @autoproperty temporalWeighting::MPSTemporalWeighting setter = setTemporalWeighting
+    @autoproperty temporalReprojectionBlendFactor::Cfloat setter = setTemporalReprojectionBlendFactor
+    @autoproperty reprojectionThreshold::Cfloat setter = setReprojectionThreshold
+    @autoproperty minimumFramesForVarianceEstimation::UInt64 setter = setMinimumFramesForVarianceEstimation
+    @autoproperty varianceEstimationRadius::UInt64 setter = setVarianceEstimationRadius
+    @autoproperty varianceEstimationSigma::Cfloat setter = setVarianceEstimationSigma
+    @autoproperty variancePrefilterSigma::Cfloat setter = setVariancePrefilterSigma
+    @autoproperty variancePrefilterRadius::UInt64 setter = setVariancePrefilterRadius
+    @autoproperty bilateralFilterSigma::Cfloat setter = setBilateralFilterSigma
+    @autoproperty bilateralFilterRadius::UInt64 setter = setBilateralFilterRadius
+    @autoproperty channelCount::UInt64 setter = setChannelCount
+    @autoproperty channelCount2::UInt64 setter = setChannelCount2
+end
+
+@objcwrapper immutable = true MPSSVGFTextureAllocator <: NSObject
+
+@objcwrapper immutable = true MPSSVGFDefaultTextureAllocator <: NSObject
+
+@objcproperties MPSSVGFDefaultTextureAllocator begin
+    @autoproperty device::id{MTLDevice}
+    @autoproperty allocatedTextureCount::UInt64
+end
+
+@objcwrapper immutable = true MPSSVGFDenoiser <: NSObject
+
+@objcproperties MPSSVGFDenoiser begin
+    @autoproperty svgf::id{MPSSVGF}
+    @autoproperty textureAllocator::id{MPSSVGFTextureAllocator}
+    @autoproperty bilateralFilterIterations::UInt64 setter = setBilateralFilterIterations
+end
+
+@objcwrapper immutable = true MPSTemporalAA <: MPSKernel
+
+@objcproperties MPSTemporalAA begin
+    @autoproperty blendFactor::Cfloat setter = setBlendFactor
 end
 
 @cenum MPSDeviceOptions::UInt64 begin
@@ -620,4 +2793,21 @@ end
     MPSRayMaskOperatorGreaterThanOrEqualTo = 0x0000000000000009
     MPSRayMaskOperatorEqual = 0x000000000000000a
     MPSRayMaskOperatorNotEqual = 0x000000000000000b
+end
+
+@objcwrapper immutable = true MPSRayIntersector <: MPSKernel
+
+@objcproperties MPSRayIntersector begin
+    @autoproperty cullMode::MTLCullMode setter = setCullMode
+    @autoproperty frontFacingWinding::MTLWinding setter = setFrontFacingWinding
+    @autoproperty triangleIntersectionTestType::MPSTriangleIntersectionTestType setter = setTriangleIntersectionTestType
+    @autoproperty boundingBoxIntersectionTestType::MPSBoundingBoxIntersectionTestType setter = setBoundingBoxIntersectionTestType
+    @autoproperty rayMaskOptions::MPSRayMaskOptions setter = setRayMaskOptions
+    @autoproperty rayMaskOperator::MPSRayMaskOperator setter = setRayMaskOperator
+    @autoproperty rayStride::UInt64 setter = setRayStride
+    @autoproperty intersectionStride::UInt64 setter = setIntersectionStride
+    @autoproperty rayDataType::MPSRayDataType setter = setRayDataType
+    @autoproperty intersectionDataType::MPSIntersectionDataType setter = setIntersectionDataType
+    @autoproperty rayIndexDataType::MPSDataType setter = setRayIndexDataType
+    @autoproperty rayMask::UInt32 setter = setRayMask
 end

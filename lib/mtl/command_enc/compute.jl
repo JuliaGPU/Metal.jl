@@ -2,7 +2,7 @@ export MTLComputeCommandEncoder
 export set_function!, set_buffer!, dispatchThreadgroups!, endEncoding!
 export append_current_function!
 
-@objcwrapper immutable=false MTLComputeCommandEncoder <: MTLCommandEncoder
+# @objcwrapper immutable=false MTLComputeCommandEncoder <: MTLCommandEncoder
 
 function MTLComputeCommandEncoder(cmdbuf::MTLCommandBuffer;
                                   dispatch_type::Union{Nothing,MTLDispatchType} = nothing)

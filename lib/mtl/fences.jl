@@ -1,11 +1,6 @@
 export MTLFence
 
-@objcwrapper immutable=false MTLFence <: NSObject
-
-@objcproperties MTLFence begin
-    @autoproperty device::id{MTLDevice}
-    @autoproperty label::id{NSString}
-end
+# @objcwrapper immutable=false MTLFence <: NSObject
 
 function MTLFence(dev::MTLDevice)
     ptr = @objc [dev::id{MTLDevice} newFence]::id{MTLFence}

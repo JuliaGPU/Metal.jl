@@ -1,6 +1,6 @@
 export MTLBlitCommandEncoder, append_copy!, append_fillbuffer!, append_sync!
 
-@objcwrapper MTLBlitCommandEncoder <: MTLCommandEncoder
+# @objcwrapper MTLBlitCommandEncoder <: MTLCommandEncoder
 
 function MTLBlitCommandEncoder(cmdbuf::MTLCommandBuffer)
     handle = @objc [cmdbuf::id{MTLCommandBuffer} blitCommandEncoder]::id{MTLBlitCommandEncoder}

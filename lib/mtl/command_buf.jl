@@ -4,12 +4,7 @@
 
 export MTLCommandBufferDescriptor
 
-@objcwrapper immutable=false MTLCommandBufferDescriptor <: NSObject
-
-@objcproperties MTLCommandBufferDescriptor begin
-    @autoproperty retainedReferences::Bool setter=setRetainedReferences
-    @autoproperty errorOptions::MTLCommandBufferErrorOption setter=setErrorOptions
-end
+# @objcwrapper immutable=false MTLCommandBufferDescriptor <: NSObject
 
 function MTLCommandBufferDescriptor()
     handle = @objc [MTLCommandBufferDescriptor new]::id{MTLCommandBufferDescriptor}
@@ -27,33 +22,7 @@ end
 export MTLCommandBuffer, enqueue!, wait_scheduled, wait_completed, encode_signal!,
        encode_wait!, commit!, on_scheduled, on_completed
 
-@objcwrapper MTLCommandBuffer <: NSObject
-
-@objcproperties MTLCommandBuffer begin
-    # Identifying the Command Buffer
-    @autoproperty commandQueue::id{MTLCommandQueue}
-    @autoproperty label::id{NSString} setter=setLabel
-    @autoproperty device::id{MTLDevice}
-    @autoproperty status::MTLCommandBufferStatus
-
-    # Getting Error Details
-    @autoproperty error::id{NSError}
-    @autoproperty errorOptions::MTLCommandBufferErrorOption
-
-    # Reading the Runtime Message Logs
-    #@autoproperty logs::id{NSArray} type=Vector{MTLCommandBufferLogEntry}
-
-    # Checking Scheduling Times on the CPU
-    @autoproperty kernelStartTime::Cdouble
-    @autoproperty kernelEndTime::Cdouble
-
-    # Checking Execution Times on the GPU
-    @autoproperty GPUStartTime::Cdouble
-    @autoproperty GPUEndTime::Cdouble
-
-    # Determining Whether to Maintain Strong References
-    @autoproperty retainedReferences::Bool
-end
+# @objcwrapper MTLCommandBuffer <: NSObject
 
 function MTLCommandBuffer(queue::MTLCommandQueue,
                           desc::MTLCommandBufferDescriptor=MTLCommandBufferDescriptor())

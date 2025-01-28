@@ -4,69 +4,7 @@
 
 export MTLDevice, MTLCreateSystemDefaultDevice, devices
 
-@static if Metal.is_macos(v"14")
-    @objcwrapper MTLArchitecture <: NSObject
-
-    @objcproperties MTLArchitecture begin
-        @autoproperty name::id{NSString}
-    end
-end
-
-@objcwrapper MTLDevice <: NSObject
-
-@objcproperties MTLDevice begin
-    ## device inspection
-    # compute support
-    @autoproperty maxThreadgroupMemoryLength::NSUInteger
-    @autoproperty maxThreadsPerThreadgroup::MTLSize
-    # render support
-    @autoproperty supportsRaytracing::Bool
-    @autoproperty supportsPrimitiveMotionBlur::Bool
-    @autoproperty supportsRaytracingFromRender::Bool
-    @autoproperty supports32BitMSAA::Bool
-    @autoproperty supportsPullModelInterpolation::Bool
-    @autoproperty supportsShaderBarycentricCoordinates::Bool
-    @autoproperty programmableSamplePositionsSupported::Bool
-    @autoproperty rasterOrderGroupsSupported::Bool
-    # texture and sampler support
-    @autoproperty supports32BitFloatFiltering::Bool
-    @autoproperty supportsBCTextureCompression::Bool
-    @autoproperty depth24Stencil8PixelFormatSupported::Bool
-    @autoproperty supportsQueryTextureLOD::Bool
-    #@autoproperty readWriteTextureSupport::MTLReadWriteTextureTier
-    # function pointer support
-    @autoproperty supportsFunctionPointers::Bool
-    @autoproperty supportsFunctionPointersFromRender::Bool
-    # memory
-    @autoproperty currentAllocatedSize::UInt64
-    @autoproperty recommendedMaxWorkingSetSize::NSUInteger
-    @autoproperty hasUnifiedMemory::Bool
-    @autoproperty maxTransferRate::NSUInteger
-    # counters
-    #@autoproperty counterSets::MTLCounterSet
-    # identifying
-    @autoproperty name::id{NSString}
-    @autoproperty registryID::UInt64
-    #@autoproperty location::MTLDeviceLocation
-    @autoproperty locationNumber::UInt64
-    @autoproperty isLowPower::Bool
-    @autoproperty isRemovable::Bool
-    @autoproperty isHeadless::Bool
-    @autoproperty peerGroupID::UInt64
-    @autoproperty peerCount::UInt64
-    @autoproperty peerIndex::UInt64
-
-    @static if Metal.is_macos(v"14")
-        @autoproperty architecture::id{MTLArchitecture}
-    end
-
-    ## resource creation
-    # creating buffers
-    @autoproperty maxBufferLength::NSUInteger
-    # creating argument buffer encoders
-    @autoproperty argumentBuffersSupport::MTLArgumentBuffersTier
-    @autoproperty maxArgumentBufferSamplerCount::NSUInteger
-end
+# @objcwrapper MTLDevice <: NSObject
 
 MTLCreateSystemDefaultDevice() =
     MTLDevice(ccall(:MTLCreateSystemDefaultDevice, id{MTLDevice}, ()))

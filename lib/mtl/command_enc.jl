@@ -1,11 +1,6 @@
 export endEncoding!
 
-@objcwrapper MTLCommandEncoder <: NSObject
-
-@objcproperties MTLCommandEncoder begin
-    @autoproperty device::id{MTLDevice}
-    @autoproperty label::id{NSString} setter=setLabel
-end
+# @objcwrapper immutable=false MTLCommandEncoder <: NSObject
 
 endEncoding!(ce::MTLCommandEncoder) = @objc [ce::id{MTLCommandEncoder} endEncoding]::Nothing
 Base.close(ce::MTLCommandEncoder) = endEncoding!(ce)

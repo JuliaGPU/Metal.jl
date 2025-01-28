@@ -2,7 +2,7 @@
 # matrix descriptor
 #
 using Metal,Test;
-using .MPS: MPSNDArrayDescriptor, MPSDataType, lengthOfDimension
+using .MPS: MPSNDArrayDescriptor, MPSDataType, lengthOfDimension, userBuffer, descriptor, resourceSize
 @testset "MPSNDArrayDescriptor" begin
     T = Float32
     DT = convert(MPSDataType, T)
@@ -69,13 +69,13 @@ using .MPS: MPSNDArray
     arr4 = MtlArray(ones(Float16, 8,3,2))
 
     @static if Metal.macos_version() >= v"15"
-        @test ndarr1.descriptor isa MPSNDArrayDescriptor
-        @test ndarr1.resourceSize isa UInt
-        @test ndarr1.userBuffer === nothing
+        @test descriptor(ndarr1) isa MPSNDArrayDescriptor
+        @test resourceSize(ndarr1) isa UInt
+        @test userBuffer(ndarr1) === nothing
 
-        @test ndarr2.descriptor isa MPSNDArrayDescriptor
-        @test ndarr2.resourceSize isa UInt
-        @test ndarr2.userBuffer === nothing
+        @test descriptor(ndarr2) isa MPSNDArrayDescriptor
+        @test resourceSize(ndarr2) isa UInt
+        @test userBuffer(ndarr2) === nothing
 
         ndarr4 = MPSNDArray(arr4)
 

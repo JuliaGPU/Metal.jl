@@ -1,6 +1,9 @@
 [general]
 library_name = "Symbol(\"/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib\")"
 output_file_path = "../../lib/mtl/libmtl.jl"
+prologue_file_path = "libmtl_prologue.jl"
+
+minimum_macos_supported = "13"
 
 generate_isystem_symbols = false
 
@@ -8,12 +11,21 @@ printer_blacklist = [
     "mt_macCatalyst",
     "mt_ios",
     "mt_macos",
-    "CF*"
+    "CF*",
+
+    # Temporarily disable MTLFunctionLog because
+    # "function" property breaks formatter
+    "MTLFunctionLog",
+    # Don't print because dispatch_queue_t ??
+    "MTLSharedEventListener",
 ]
 
 [codegen]
 use_ccall_macro = true
 always_NUL_terminated_string = true
+opaque_as_mutable_struct = true
+
+version_function = "Metal.is_macos"
 
 [codegen.macro]
 # it's highly recommended to set this entry to "basic".
@@ -21,11 +33,68 @@ always_NUL_terminated_string = true
 # if you'd like to translate function-like macros to Julia, please set this entry to "aggressive".
 macro_mode = "disable"
 
-[api.MTLSize]
-constructor = "MTLSize(w=1, h=1, d=1) = new(w, h, d)"
+# API
+# Adjustments to the expressions done by the rewriter in wrap.jl
+# Sorted in alphabetical order. For more info on the options, see
+# the comment in wrap.jl
+[api.MTLBinaryArchive]
+immutable=false
 
-[api.MTLRegion]
-constructor = "MTLRegion(origin=MTLOrigin(), size=MTLSize()) = new(origin, size)"
+[api.MTLBinaryArchiveDescriptor]
+immutable=false
 
-[api.MTLOrigin]
-constructor = "MTLOrigin(x=0, y=0, z=0) = new(x, y, z)"
+[api.MTLBuffer.proptype]
+gpuAddress="Ptr{Cvoid}"
+
+[api.MTLCaptureDescriptor]
+immutable=false
+
+[api.MTLCommandBufferDescriptor]
+immutable=false
+
+[api.MTLCommandQueue]
+immutable=false
+
+[api.MTLCompileOptions]
+immutable=false
+    [api.MTLCompileOptions.proptype]
+    languageVersion="VersionNumber"
+
+[api.MTLComputeCommandEncoder]
+immutable=false
+
+[api.MTLComputePipelineDescriptor]
+immutable=false
+
+[api.MTLComputePipelineState]
+immutable=false
+
+[api.MTLEvent]
+immutable=false
+
+[api.MTLFence]
+immutable=false
+
+[api.MTLFunction]
+immutable=false
+
+[api.MTLFunctionDescriptor]
+immutable=false
+
+[api.MTLHeap]
+immutable=false
+
+[api.MTLHeapDescriptor]
+immutable=false
+
+[api.MTLLibrary]
+immutable=false
+
+[api.MTLSharedEvent]
+immutable=false
+
+[api.MTLTexture]
+immutable=false
+
+[api.MTLTextureDescriptor]
+immutable=false
