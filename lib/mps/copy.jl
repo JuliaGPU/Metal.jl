@@ -18,13 +18,6 @@ export MPSMatrixCopy, encode!
 
 # @objcwrapper immutable=false MPSMatrixCopy <: MPSKernel
 
-# @objcproperties MPSMatrixCopy begin
-#     @autoproperty copyRows::NSUInteger
-#     @autoproperty copyColumns::NSUInteger
-#     @autoproperty sourcesAreTransposed::Bool
-#     @autoproperty destinationsAreTransposed::Bool
-# end
-
 function MPSMatrixCopy(dev, copyRows, copyColumns, sourcesAreTransposed, destinationsAreTransposed)
     kernel = @objc [MPSMatrixCopy alloc]::id{MPSMatrixCopy}
     obj = MPSMatrixCopy(kernel)

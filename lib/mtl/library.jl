@@ -2,12 +2,6 @@ export MTLLibrary, MTLLibraryFromFile, MTLLibraryFromData
 
 # @objcwrapper immutable=false MTLLibrary <: NSObject
 
-# @objcproperties MTLLibrary begin
-#     @autoproperty device::id{MTLDevice}
-#     @autoproperty label::id{NSString} setter=setLabel
-#     @autoproperty functionNames::id{NSArray} type=Vector{NSString}
-# end
-
 function MTLLibrary(dev::MTLDevice, src::String,
                     opts::MTLCompileOptions=MTLCompileOptions())
     err = Ref{id{NSError}}(nil)

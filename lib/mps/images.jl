@@ -2,12 +2,6 @@
 
 # @objcwrapper immutable=false MPSUnaryImageKernel <: MPSKernel
 
-# @objcproperties MPSUnaryImageKernel begin
-#     @autoproperty offset::MPSOffset
-#     @autoproperty clipRect::MTLRegion
-#     @autoproperty edgeMode::MPSImageEdgeMode setter=setEdgeMode
-# end
-
 function encode!(cmdbuf::MTLCommandBuffer, kernel::K, sourceTexture::MTLTexture, destinationTexture::MTLTexture) where {K<:MPSUnaryImageKernel}
     @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                      sourceTexture:sourceTexture::id{MTLTexture}
@@ -22,15 +16,6 @@ end
 # end
 
 # @objcwrapper immutable=false MPSBinaryImageKernel <: MPSKernel
-
-# @objcproperties MPSBinaryImageKernel begin
-#     @autoproperty primaryOffset::MPSOffset
-#     @autoproperty secondaryOffset::MPSOffset
-#     @autoproperty primaryEdgeMode::MPSImageEdgeMode
-#     @autoproperty secondaryEdgeMode::MPSImageEdgeMode
-#     @autoproperty clipRect::MTLRegion
-# end
-
 
 ## gaussian blur
 

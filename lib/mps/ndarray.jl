@@ -6,15 +6,6 @@ export MPSNDArrayDescriptor
 
 # @objcwrapper immutable=false MPSNDArrayDescriptor <: NSObject
 
-# @objcproperties MPSNDArrayDescriptor begin
-#     @autoproperty dataType::MPSDataType setter=setDataType
-#     @autoproperty numberOfDimensions::NSUInteger setter=setNumberOfDimensions
-
-#     # Both are officially available starting macOS 15, but they work in macOS 13/14
-#     @autoproperty preferPackedRows::Bool setter=setPreferPackedRows # macOS 15+
-#     @autoproperty getShape::id{NSArray} # macOS 15+
-# end
-
 function MPSNDArrayDescriptor(dataType::DataType, dimensionCount, dimensionSizes::Ptr)
     desc = @objc [MPSNDArrayDescriptor descriptorWithDataType:dataType::MPSDataType
                                       dimensionCount:dimensionCount::NSUInteger
@@ -49,22 +40,6 @@ export MPSNDArray
 
 # @objcwrapper immutable=false MPSNDArray <: NSObject
 
-# @objcproperties MPSNDArray begin
-#     @autoproperty dataType::MPSDataType
-#     @autoproperty dataTypeSize::Csize_t
-#     @autoproperty device::id{MTLDevice}
-#     @autoproperty label::id{NSString} setter = setLabel
-#     @autoproperty numberOfDimensions::NSUInteger
-#     @autoproperty parent::id{MPSNDArray}
-
-#     #Instance methods that act like properties
-#     @static if Metal.is_macos(v"15")
-#         @autoproperty descriptor::id{MPSNDArrayDescriptor}
-#         @autoproperty resourceSize::NSUInteger
-#         @autoproperty userBuffer::id{MTLBuffer}
-#     end
-# end
-
 @static if Metal.is_macos(v"15")
     function userBuffer(ndarr::MPSNDArray)::Union{Nothing, MTLBuffer}
         res = @objc [ndarr::id{MPSNDArray} userBuffer]::id{MTLBuffer}
@@ -85,10 +60,6 @@ function Base.size(ndarr::MPSNDArray)
 end
 
 # @objcwrapper immutable=false MPSTemporaryNDArray <: MPSNDArray
-
-# @objcproperties MPSTemporaryNDArray begin
-#     @autoproperty readCount::NSUInteger setter=setReadCount
-# end
 
 function MPSTemporaryNDArray(cmdbuf::MTLCommandBuffer, descriptor::MPSNDArrayDescriptor)
     @objc [MPSTemporaryNDArray temporaryNDArrayWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
@@ -321,11 +292,6 @@ end
 # end
 
 # @objcwrapper immutable=false MPSNDArrayMatrixMultiplication <: MPSNDArrayMultiaryKernel
-
-# @objcproperties MPSNDArrayMatrixMultiplication begin
-#     @autoproperty alpha::Float64 setter=setAlpha
-#     @autoproperty beta::Float64  setter=setBeta
-# end
 
 function MPSNDArrayMatrixMultiplication(device, sourceCount)
     kernel = @objc [MPSNDArrayMatrixMultiplication alloc]::id{MPSNDArrayMatrixMultiplication}

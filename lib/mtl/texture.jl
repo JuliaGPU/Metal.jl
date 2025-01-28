@@ -12,16 +12,6 @@ Base.convert(::Type{MTLTextureUsage}, x::Integer) = MTLTextureUsage(x)
 
 # @objcwrapper immutable=false MTLTextureDescriptor <: NSObject
 
-# @objcproperties MTLTextureDescriptor begin
-#     # Configuring an MTLTextureDescriptor
-#     @autoproperty usage::MTLTextureUsage setter=setUsage
-#     # @autoproperty storageMode::MTLStorageMode setter=setStorageMode
-#     # @autoproperty cpuCacheMode::MTLCPUCacheMode setter=setCpuCacheMode
-#     # @autoproperty hazardTrackingMode::MTLHazardTrackingMode setter=setHazardTrackingMode
-#     # @autoproperty resourceOptions::MTLResourceOptions setter=setResourceOptions
-#     # @autoproperty size::NSUInteger setter=setSize
-# end
-
 function MTLTextureDescriptor(pixelFormat, width, height, mipmapped=false)
     desc = @objc [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat::MTLPixelFormat
                                           width:width::NSUInteger
