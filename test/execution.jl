@@ -261,6 +261,7 @@ end
     end
 end
 
+
 @testset "error handling" begin
     function failing_kernel(arr, ptr)
         x = unsafe_load(reinterpret(Ptr{Int}, ptr))
@@ -268,5 +269,5 @@ end
         return nothing
     end
 
-    @test_logs (:error, r"GPU kernel execution failed") @metal failing_kernel(mtl([0], 0)
+    @test_logs (:error, r"GPU kernel execution failed") @metal failing_kernel(mtl([0], 0))
 end

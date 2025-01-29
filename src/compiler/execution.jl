@@ -313,7 +313,6 @@ end
         end
 
     end
-
     commit!(cmdbuf)
 end
 
