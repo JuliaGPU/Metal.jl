@@ -38,9 +38,10 @@ skip the first two steps.
 2. Create high-level Julia structures and functionality
 3. Create tests for added functionality
 
-`struct`s and `enums` for Objective-C interfaces are automatically generated (see res/wrap/),
+Objective-C object definitions, `struct`s, and `enums` for Objective-C interfaces are automatically generated (see res/wrap/),
 so you should not have to define them. If using a struct for the first time in a higher-level
-interface, remember to add tests! You may need to define more functions around the structs.
+interface, remember to add tests! Objective-C object methods and constructors are not yet automtically
+generatied, so any contributions there are welcome.
 
 ## Mapping to Metal Intrinsics
 
