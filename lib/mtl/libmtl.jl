@@ -2662,6 +2662,12 @@ end
     @autoproperty label::id{NSString} setter = setLabel
 end
 
+@objcwrapper immutable = true MTLSharedEventListener <: NSObject
+
+@objcproperties MTLSharedEventListener begin
+    @autoproperty dispatchQueue::id{dispatch_queue_t}
+end
+
 @objcwrapper immutable = false MTLSharedEvent <: MTLEvent
 
 @objcproperties MTLSharedEvent begin

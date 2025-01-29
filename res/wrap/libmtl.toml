@@ -16,8 +16,6 @@ printer_blacklist = [
     # Temporarily disable MTLFunctionLog because
     # "function" property breaks formatter
     "MTLFunctionLog",
-    # Don't print because dispatch_queue_t ??
-    "MTLSharedEventListener",
 ]
 
 [codegen]
