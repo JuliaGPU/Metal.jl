@@ -105,36 +105,41 @@ end
 ############################################################################################
 
 MATH_INTR_FUNCS_1_ARG = [
-    abs,
-    acos,
-    # acosh, # not defined for values < 1, tested separately
-    asin,
-    asinh,
-    atan,
-    atanh,
-    ceil,
-    cos,
-    cosh,
-    cospi,
-    exp,
-    exp2,
-    exp10,
-    floor,
-    Metal.fract,
-    log,
-    log2,
-    log10,
-    # Metal.rint, # not sure what the behaviour actually is
-    round,
-    Metal.rsqrt,
-    sin,
-    sinh,
-    sinpi,
-    sqrt,
-    tan,
-    tanh,
-    tanpi,
-    trunc,
+    # Common functions
+    # saturate, # T saturate(T x) Clamp between 0.0 and 1.0
+    # sign, # T sign(T x) returns 0.0 if x is NaN. Not tested because intrinsic not yet defined
+
+    # float math
+    acos, # T acos(T x)
+    asin, # T asin(T x)
+    asinh, # T asinh(T x)
+    atan, # T atan(T x)
+    atanh, # T atanh(T x)
+    ceil, # T ceil(T x)
+    cos, # T cos(T x)
+    cosh, # T cosh(T x)
+    cospi, # T cospi(T x)
+    exp, # T exp(T x)
+    exp2, # T exp2(T x)
+    exp10, # T exp10(T x)
+    abs, #T [f]abs(T x)
+    floor, # T floor(T x)
+    Metal.fract, # T fract(T x)
+    # ilogb, # Ti ilogb(T x)
+    log, # T log(T x)
+    log2, # T log2(T x)
+    log10, # T log10(T x)
+    # Metal.rint, # T rint(T x) # TODO: Add test. Not sure what the behaviour actually is
+    round, # T round(T x)
+    Metal.rsqrt, # T rsqrt(T x)
+    sin, # T sin(T x)
+    sinh, # T sinh(T x)
+    sinpi, # T sinpi(T x)
+    sqrt, # sqrt(T x)
+    tan, # T tan(T x)
+    tanh, # T tanh(T x)
+    tanpi, # T tanpi(T x)
+    trunc, # T trunc(T x)
 ]
 Metal.rsqrt(x::Float16) = 1 / sqrt(x)
 Metal.rsqrt(x::Float32) = 1 / sqrt(x)
@@ -142,15 +147,32 @@ Metal.fract(x::Float16) = mod(x, 1)
 Metal.fract(x::Float32) = mod(x, 1)
 
 MATH_INTR_FUNCS_2_ARG = [
-    min,
-    max,
-    pow, # :(^),
-    Metal.powr,
-    hypot,
+    # Common function
+    # step, # T step(T edge, T x) Returns 0.0 if x < edge, otherwise it returns 1.0
+
+    # float math
+    # atan2, # T atan2(T x, T y) Compute arc tangent of y over x.
+    # fdim, # T fdim(T x, T y)
+    max, # T [f]max(T x, T y)
+    min, # T [f]min(T x, T y)
+    # fmod, # T fmod(T x, T y)
+    # frexp, # T frexp(T x, Ti &exponent)
+    # ldexp, # T ldexp(T x, Ti k)
+    # modf, # T modf(T x, T &intval)
+    # nextafter, # T nextafter(T x, T y) # Metal 3.1+
+    # sincos,
+    hypot, # NOT MSL but tested the same
 ]
 
 MATH_INTR_FUNCS_3_ARG = [
-    fma,
+    # Common functions
+    # clamp, # T clamp(T x, T minval, T maxval). Not tested because intrinsic not yet defined
+    # mix, # T mix(T x, T y, T a) # x+(y-x)*a
+    # smoothstep, # T smoothstep(T edge0, T edge1, T x)
+    fma, # T fma(T a, T b, T c)
+    # max3, # T max3(T x, T y, T z)
+    # median3, # T median3(T x, T y, T z)
+    # min3, # T min3(T x, T y, T z)
 ]
 
 @testset "math" begin
