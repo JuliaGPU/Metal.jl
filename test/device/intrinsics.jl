@@ -1,5 +1,6 @@
-using SpecialFunctions
 using Metal: metal_support
+using Random
+using SpecialFunctions
 
 @testset "arguments" begin
     @on_device dispatch_quadgroups_per_threadgroup()
@@ -103,71 +104,219 @@ end
 
 ############################################################################################
 
+MATH_INTR_FUNCS_1_ARG = [
+    abs,
+    acos,
+    # acosh, # not defined for values < 1, tested separately
+    asin,
+    asinh,
+    atan,
+    atanh,
+    ceil,
+    cos,
+    cosh,
+    cospi,
+    exp,
+    exp2,
+    exp10,
+    floor,
+    Metal.fract,
+    log,
+    log2,
+    log10,
+    # Metal.rint, # not sure what the behaviour actually is
+    round,
+    Metal.rsqrt,
+    sin,
+    sinh,
+    sinpi,
+    sqrt,
+    tan,
+    tanh,
+    tanpi,
+    trunc,
+]
+Metal.rsqrt(x::Float16) = 1 / sqrt(x)
+Metal.rsqrt(x::Float32) = 1 / sqrt(x)
+Metal.fract(x::Float16) = mod(x, 1)
+Metal.fract(x::Float32) = mod(x, 1)
+
+MATH_INTR_FUNCS_2_ARG = [
+    min,
+    max,
+    pow, # :(^),
+    Metal.powr,
+    hypot,
+]
+
+MATH_INTR_FUNCS_3_ARG = [
+    fma,
+]
+
 @testset "math" begin
-    a = ones(Float32,1)
-    a .* Float32(3.14)
-    bufferA = MtlArray{eltype(a),length(size(a)),Metal.SharedStorage}(a)
-    vecA = unsafe_wrap(Vector{Float32}, pointer(bufferA), 1)
-
-    function intr_test(arr)
-        idx = thread_position_in_grid_1d()
-        arr[idx] = cos(arr[idx])
-        return nothing
-    end
-    @metal intr_test(bufferA)
-    synchronize()
-    @test vecA ≈ cos.(a)
-
-    function intr_test2(arr)
-        idx = thread_position_in_grid_1d()
-        arr[idx] = Metal.rsqrt(arr[idx])
-        return nothing
-    end
-    @metal intr_test2(bufferA)
-    synchronize()
-
-    bufferB = MtlArray{eltype(a),length(size(a)),Metal.SharedStorage}(a)
-    vecB = unsafe_wrap(Vector{Float32}, pointer(bufferB), 1)
-
-    function intr_test3(arr_sin, arr_cos)
-        idx = thread_position_in_grid_1d()
-        s, c = sincos(arr_cos[idx])
-        arr_sin[idx] = s
-        arr_cos[idx] = c
-        return nothing
+# 1-arg functions
+@testset "$(fun)()::$T" for fun in MATH_INTR_FUNCS_1_ARG, T in (Float32, Float16)
+    cpuarr = if fun in [log, log2, log10, Metal.rsqrt, sqrt]
+        rand(T, 4)
+    else
+        T[0.0, -0.0, rand(T), -rand(T)]
     end
 
-    @metal intr_test3(bufferA, bufferB)
-    synchronize()
-    @test vecA ≈ sin.(a)
-    @test vecB ≈ cos.(a)
+    mtlarr = MtlArray(cpuarr)
 
-    b = collect(LinRange(nextfloat(-1f0), 10f0, 20))
-    bufferC = MtlArray(b)
-    vecC = Array(log1p.(bufferC))
-    @test vecC ≈ log1p.(b)
+    mtlout = fill!(similar(mtlarr), 0)
 
+    function kernel(res, arr)
+        idx = thread_position_in_grid_1d()
+        res[idx] = fun(arr[idx])
+        return nothing
+    end
+    Metal.@sync @metal threads = length(mtlout) kernel(mtlout, mtlarr)
+    @eval @test Array($mtlout) ≈ $fun.($cpuarr)
+end
+# 2-arg functions
+@testset "$(fun)()::$T" for T in (Float32, Float16), fun in MATH_INTR_FUNCS_2_ARG
+    N = 4
+    arr1 = randn(T, N)
+    arr2 = randn(T, N)
+    mtlarr1 = MtlArray(arr1)
+    mtlarr2 = MtlArray(arr2)
 
-    d = collect(LinRange(nextfloat(-3.0f0), 3.0f0, 20))
-    bufferD = MtlArray(d)
-    vecD = Array(SpecialFunctions.erf.(bufferD))
-    @test vecD ≈ SpecialFunctions.erf.(d)
+    mtlout = fill!(similar(mtlarr1), 0)
 
+    function kernel(res, x, y)
+        idx = thread_position_in_grid_1d()
+        res[idx] = fun(x[idx], y[idx])
+        return nothing
+    end
+    Metal.@sync @metal threads = N kernel(mtlout, mtlarr1, mtlarr2)
+    @eval @test Array($mtlout) ≈ $fun.($arr1, $arr2)
+end
+# 3-arg functions
+@testset "$(fun)()::$T" for T in (Float32, Float16), fun in MATH_INTR_FUNCS_3_ARG
+    N = 4
+    arr1 = randn(T, N)
+    arr2 = randn(T, N)
+    arr3 = randn(T, N)
 
-    e = collect(LinRange(nextfloat(-3.0f0), 3.0f0, 20))
-    bufferE = MtlArray(e)
-    vecE = Array(SpecialFunctions.erfc.(bufferE))
-    @test vecE ≈ SpecialFunctions.erfc.(e)
+    mtlarr1 = MtlArray(arr1)
+    mtlarr2 = MtlArray(arr2)
+    mtlarr3 = MtlArray(arr3)
 
-    f = collect(LinRange(-1f0, 1f0, 20))
-    bufferF = MtlArray(f)
-    vecF = Array(SpecialFunctions.erfinv.(bufferF))
-    @test vecF ≈ SpecialFunctions.erfinv.(f)
+    mtlout = fill!(similar(mtlarr1), 0)
 
-    f = collect(LinRange(nextfloat(-88f0), 88f0, 100))
-    bufferF = MtlArray(f)
-    vecF = Array(expm1.(bufferF))
-    @test vecF ≈ expm1.(f)
+    function kernel(res, x, y, z)
+        idx = thread_position_in_grid_1d()
+        res[idx] = fun(x[idx], y[idx], z[idx])
+        return nothing
+    end
+    Metal.@sync @metal threads = N kernel(mtlout, mtlarr1, mtlarr2, mtlarr3)
+    @eval @test Array($mtlout) ≈ $fun.($arr1, $arr2, $arr3)
+end
+end
+
+@testset "unique math" begin
+@testset "$T" for T in (Float32, Float16)
+    let # acosh
+        arr = T[0, rand(T, 3)...] .+ T(1)
+        buffer = MtlArray(arr)
+        vec = acosh.(buffer)
+        @test Array(vec) ≈ acosh.(arr)
+    end
+
+    let # sincos
+        N = 4
+        arr = rand(T, N)
+        bufferA = MtlArray(arr)
+        bufferB = MtlArray(arr)
+        function intr_test3(arr_sin, arr_cos)
+            idx = thread_position_in_grid_1d()
+            sinres, cosres = sincos(arr_cos[idx])
+            arr_sin[idx] = sinres
+            arr_cos[idx] = cosres
+            return nothing
+        end
+        # Broken with Float16
+        if T == Float16
+            @test_broken Metal.@sync @metal threads = N intr_test3(bufferA, bufferB)
+        else
+            Metal.@sync @metal threads = N intr_test3(bufferA, bufferB)
+            @test Array(bufferA) ≈ sin.(arr)
+            @test Array(bufferB) ≈ cos.(arr)
+        end
+    end
+
+    let #pow
+        N = 4
+        arr1 = rand(T, N)
+        arr2 = rand(T, N)
+        mtlarr1 = MtlArray(arr1)
+        mtlarr2 = MtlArray(arr2)
+
+        mtlout = fill!(similar(mtlarr1), 0)
+
+        function kernel(res, x, y)
+            idx = thread_position_in_grid_1d()
+            res[idx] = x[idx]^y[idx]
+            return nothing
+        end
+        Metal.@sync @metal threads = N kernel(mtlout, mtlarr1, mtlarr2)
+        @test Array(mtlout) ≈ arr1 .^ arr2
+    end
+
+    let #powr
+        N = 4
+        arr1 = rand(T, N)
+        arr2 = rand(T, N)
+        mtlarr1 = MtlArray(arr1)
+        mtlarr2 = MtlArray(arr2)
+
+        mtlout = fill!(similar(mtlarr1), 0)
+
+        function kernel(res, x, y)
+            idx = thread_position_in_grid_1d()
+            res[idx] = Metal.powr(x[idx], y[idx])
+            return nothing
+        end
+        Metal.@sync @metal threads = N kernel(mtlout, mtlarr1, mtlarr2)
+        @test Array(mtlout) ≈ arr1 .^ arr2
+    end
+
+    let # log1p
+        arr = collect(LinRange(nextfloat(-1.0f0), 10.0f0, 20))
+        buffer = MtlArray(arr)
+        vec = Array(log1p.(buffer))
+        @test vec ≈ log1p.(arr)
+    end
+
+    let # erf
+        arr = collect(LinRange(nextfloat(-3.0f0), 3.0f0, 20))
+        buffer = MtlArray(arr)
+        vec = Array(SpecialFunctions.erf.(buffer))
+        @test vec ≈ SpecialFunctions.erf.(arr)
+    end
+
+    let # erfc
+        arr = collect(LinRange(nextfloat(-3.0f0), 3.0f0, 20))
+        buffer = MtlArray(arr)
+        vec = Array(SpecialFunctions.erfc.(buffer))
+        @test vec ≈ SpecialFunctions.erfc.(arr)
+    end
+
+    let # erfinv
+        arr = collect(LinRange(-1.0f0, 1.0f0, 20))
+        buffer = MtlArray(arr)
+        vec = Array(SpecialFunctions.erfinv.(buffer))
+        @test vec ≈ SpecialFunctions.erfinv.(arr)
+    end
+
+    let # expm1
+        arr = collect(LinRange(nextfloat(-88.0f0), 88.0f0, 100))
+        buffer = MtlArray(arr)
+        vec = Array(expm1.(buffer))
+        @test vec ≈ expm1.(arr)
+    end
+end
 end
 
 ############################################################################################
