@@ -107,7 +107,7 @@ end
 MATH_INTR_FUNCS_1_ARG = [
     # Common functions
     # saturate, # T saturate(T x) Clamp between 0.0 and 1.0
-    # sign, # T sign(T x) returns 0.0 if x is NaN. Not tested because intrinsic not yet defined
+    sign, # T sign(T x) returns 0.0 if x is NaN
 
     # float math
     acos, # T acos(T x)
@@ -166,7 +166,6 @@ MATH_INTR_FUNCS_2_ARG = [
 
 MATH_INTR_FUNCS_3_ARG = [
     # Common functions
-    # clamp, # T clamp(T x, T minval, T maxval). Not tested because intrinsic not yet defined
     # mix, # T mix(T x, T y, T a) # x+(y-x)*a
     # smoothstep, # T smoothstep(T edge0, T edge1, T x)
     fma, # T fma(T a, T b, T c)
@@ -266,6 +265,27 @@ end
             @test Array(bufferA) ≈ sin.(arr)
             @test Array(bufferB) ≈ cos.(arr)
         end
+    end
+
+    let # clamp
+        N = 4
+        in = randn(T, N)
+        minval = fill(T(-0.6), N)
+        maxval = fill(T(0.6), N)
+
+        mtlin = MtlArray(in)
+        mtlminval = MtlArray(minval)
+        mtlmaxval = MtlArray(maxval)
+
+        mtlout = fill!(similar(mtlin), 0)
+
+        function kernel(res, x, y, z)
+            idx = thread_position_in_grid_1d()
+            res[idx] = clamp(x[idx], y[idx], z[idx])
+            return nothing
+        end
+        Metal.@sync @metal threads = N kernel(mtlout, mtlin, mtlminval, mtlmaxval)
+        @test Array(mtlout) == clamp.(in, minval, maxval)
     end
 
     let #pow
