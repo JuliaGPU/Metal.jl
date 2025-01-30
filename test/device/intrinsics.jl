@@ -151,7 +151,7 @@ MATH_INTR_FUNCS_2_ARG = [
     # step, # T step(T edge, T x) Returns 0.0 if x < edge, otherwise it returns 1.0
 
     # float math
-    # atan2, # T atan2(T x, T y) Compute arc tangent of y over x.
+    atan, # T atan2(T x, T y) Compute arc tangent of y over x.
     # fdim, # T fdim(T x, T y)
     max, # T [f]max(T x, T y)
     min, # T [f]min(T x, T y)
