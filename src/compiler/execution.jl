@@ -300,10 +300,14 @@ end
         empty!(roots)
         foreach(free, argument_buffers)
 
-        # TODO: access logs here to check for errors
-        #       https://developer.apple.com/videos/play/wwdc2020/10616/
-    end
+        # Check for errors
+        # XXX: we cannot do this nicely, e.g. throwing an `error` or reporting with `@error`
+        #      because we're not allowed to switch tasks from this contexts.
+        if buf.status == MTL.MTLCommandBufferStatusError
+            Core.println("ERROR: Failed to submit command buffer: $(buf.error.localizedDescription)")
+        end
 
+    end
     commit!(cmdbuf)
 end
 
