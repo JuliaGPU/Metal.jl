@@ -301,15 +301,10 @@ end
         foreach(free, argument_buffers)
 
         # Check for errors
-        Core.println(buf.status)
+        # XXX: we cannot do this nicely, e.g. throwing an `error` or reporting with `@error`
+        #      because we're not allowed to switch tasks from this contexts.
         if buf.status == MTL.MTLCommandBufferStatusError
-            err = buf.error
-            if err !== nothing
-                code = err.code  # MTLCommandBufferError enum value
-                description = err.localizedDescription
-
-		        @error "GPU kernel execution failed" exception = (err, catch_backtrace()) kernel = nameof(kernel.f) error_code = code description = description
-            end
+            Core.println("ERROR: Failed to submit command buffer: $(buf.error.localizedDescription)")
         end
 
     end
