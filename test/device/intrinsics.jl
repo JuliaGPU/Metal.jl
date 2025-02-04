@@ -169,9 +169,9 @@ MATH_INTR_FUNCS_3_ARG = [
     # mix, # T mix(T x, T y, T a) # x+(y-x)*a
     # smoothstep, # T smoothstep(T edge0, T edge1, T x)
     fma, # T fma(T a, T b, T c)
-    # max3, # T max3(T x, T y, T z)
+    max, # T max3(T x, T y, T z)
     # median3, # T median3(T x, T y, T z)
-    # min3, # T min3(T x, T y, T z)
+    min, # T min3(T x, T y, T z)
 ]
 
 @testset "math" begin
