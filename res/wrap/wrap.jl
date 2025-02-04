@@ -147,9 +147,9 @@ end
 
 function stripStatic(expr::Expr)
     if expr.head == :macrocall && first(expr.args) == Symbol("@static")
-        return expr.args[3].args[2].args[1]
+        return expr.args[3].args[2].args
     else
-        return expr
+        return [expr]
     end
 end
 
@@ -176,25 +176,31 @@ function rewriter!(ctx, options)
 
         nodetype = typeof(node)
         if nodetype <: Generators.ExprNode{<:Generators.AbstractObjCObjNodeType}
-            declexpr = node.exprs[1]
-            if haskey(nodedict, "immutable")
-                declexpr = node.exprs[1]
-                con = nodedict["immutable"]
+            nostatic_exprs = if length(node.exprs) > 1
+                node.exprs
+            else
+                stripStatic(node.exprs[1])
+            end
 
+            declexpr = nostatic_exprs[1]
+
+            if haskey(nodedict, "immutable")
+                con = nodedict["immutable"]
                 declexpr.args[3].args[2] = con
             end
             if haskey(nodedict, "supertype")
-                expr2 = stripStatic(declexpr).args[4]
+                expr2 = declexpr.args[4]
                 typ = nodedict["supertype"] |> Meta.parse
 
                 expr2.args[2] = typ
             end
             if haskey(nodedict, "proptype")
                 proptypedict = nodedict["proptype"]
-                propertyexprs = node.exprs[2].args[4].args
+
+                propertyexprs = nostatic_exprs[2].args[4].args
                 for pro in propertyexprs
                     isnothing(pro) && continue
-                    strippedpro = stripStatic(pro)
+                    strippedpro = stripStatic(pro)[1]
                     propname = strippedpro.args[3].args[1]
                     if haskey(proptypedict, string(propname))
                         newtype = proptypedict[string(propname)] |> Meta.parse
