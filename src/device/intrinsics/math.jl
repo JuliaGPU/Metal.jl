@@ -252,18 +252,17 @@ end
 
 @device_override function FastMath.sincos_fast(x::Float32)
     c = Ref{Cfloat}()
-    s = ccall("extern air.fast_sincos.f32", llvmcall, Cfloat, (Cfloat, Ptr{Cfloat}), x, c)
+    s = @typed_ccall("air.fast_sincos.f32", llvmcall, Cfloat, (Cfloat, Ptr{Cfloat}), x, c)
     (s, c[])
 end
 @device_override function Base.sincos(x::Float32)
     c = Ref{Cfloat}()
-    s = ccall("extern air.sincos.f32", llvmcall, Cfloat, (Cfloat, Ptr{Cfloat}), x, c)
+    s = @typed_ccall("air.sincos.f32", llvmcall, Cfloat, (Cfloat, Ptr{Cfloat}), x, c)
     (s, c[])
 end
-# XXX: Broken
 @device_override function Base.sincos(x::Float16)
     c = Ref{Float16}()
-    s = ccall("extern air.sincos.f16", llvmcall, Float16, (Float16, Ptr{Float16}), x, c)
+    s = @typed_ccall("air.sincos.f16", llvmcall, Float16, (Float16, Ptr{Float16}), x, c)
     (s, c[])
 end
 
