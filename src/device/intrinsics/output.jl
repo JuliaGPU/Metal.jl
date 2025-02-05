@@ -47,14 +47,14 @@ Print a formatted string in device context on the host standard output.
 macro mtlprintf(fmt::String, args...)
     fmt_val = Val(Symbol(fmt))
 
-    quote
+    return quote
         _mtlprintf($fmt_val, $(map(arg -> :(promote_c_argument($arg)), esc.(args))...))
     end
 end
 
 @generated function _mtlprintf(::Val{fmt}, argspec...) where {fmt}
-    @dispose ctx=Context() begin
-        arg_exprs = [:( argspec[$i] ) for i in 1:length(argspec)]
+    return @dispose ctx = Context() begin
+        arg_exprs = [:(argspec[$i]) for i in 1:length(argspec)]
         arg_types = [argspec...]
 
         T_void = LLVM.VoidType()
@@ -68,18 +68,18 @@ end
         wrapper_f, wrapper_ft = create_function(T_void, param_types)
         mod = LLVM.parent(wrapper_f)
 
-        llvm_ft = LLVM.FunctionType(T_void, LLVMType[]; vararg=true)
+        llvm_ft = LLVM.FunctionType(T_void, LLVMType[]; vararg = true)
         llvm_f = LLVM.Function(mod, "metal_os_log", llvm_ft)
         push!(function_attributes(llvm_f), EnumAttribute("alwaysinline", 0))
 
         # generate IR
-        @dispose builder=IRBuilder() begin
+        @dispose builder = IRBuilder() begin
             entry = BasicBlock(llvm_f, "entry")
             position!(builder, entry)
 
-            str = globalstring_ptr!(builder, String(fmt), addrspace=2)
-            subsystem_str = globalstring_ptr!(builder, MTLLOG_SUBSYSTEM, addrspace=2)
-            category_str = globalstring_ptr!(builder, MTLLOG_CATEGORY, addrspace=2)
+            str = globalstring_ptr!(builder, String(fmt), addrspace = 2)
+            subsystem_str = globalstring_ptr!(builder, MTLLOG_SUBSYSTEM, addrspace = 2)
+            category_str = globalstring_ptr!(builder, MTLLOG_CATEGORY, addrspace = 2)
             log_type = LLVM.ConstantInt(T_int32, __METAL_OS_LOG_TYPE_DEBUG__)
 
             # compute argsize
@@ -115,7 +115,7 @@ end
             ret!(builder)
         end
 
-        @dispose builder=IRBuilder() begin
+        @dispose builder = IRBuilder() begin
             entry = BasicBlock(wrapper_f, "entry")
             position!(builder, entry)
 
@@ -137,29 +137,29 @@ export @mtlprint, @mtlprintln
 # simple conversions, defining an expression and the resulting argument type. nothing fancy,
 # `@mtlprint` pretty directly maps to `@mtlprintf`; we should just support `write(::IO)`.
 const mtlprint_conversions = [
-    Float32         => (x->:(Float64($x)),          Float64),
-    Ptr{<:Any}      => (x->:(reinterpret(Int, $x)), Ptr{Cvoid}),
-    LLVMPtr{<:Any}  => (x->:(reinterpret(Int, $x)), Ptr{Cvoid}),
-    Bool            => (x->:(Int32($x)),            Int32),
+    Float32 => (x -> :(Float64($x)), Float64),
+    Ptr{<:Any} => (x -> :(reinterpret(Int, $x)), Ptr{Cvoid}),
+    LLVMPtr{<:Any} => (x -> :(reinterpret(Int, $x)), Ptr{Cvoid}),
+    Bool => (x -> :(Int32($x)), Int32),
 ]
 
 # format specifiers
 const mtlprint_specifiers = Dict(
     # integers
-    Int16       => "%hd",
-    Int32       => "%d",
-    Int64       => "%ld",
-    UInt16      => "%hu",
-    UInt32      => "%u",
-    UInt64      => "%lu",
+    Int16 => "%hd",
+    Int32 => "%d",
+    Int64 => "%ld",
+    UInt16 => "%hu",
+    UInt32 => "%u",
+    UInt64 => "%lu",
 
     # floating-point
-    Float32     => "%f",
+    Float32 => "%f",
 
     # other
-    Cchar       => "%c",
-    Ptr{Cvoid}  => "%p",
-    Cstring     => "%s",
+    Cchar => "%c",
+    Ptr{Cvoid} => "%p",
+    Cstring => "%s",
 )
 
 @inline @generated function _mtlprint(parts...)
@@ -217,7 +217,7 @@ const mtlprint_specifiers = Dict(
         end
     end
 
-    quote
+    return quote
         @mtlprintf($fmt, $(args...))
     end
 end
@@ -240,7 +240,7 @@ Limited string interpolation is also possible:
 ```
 """
 macro mtlprint(parts...)
-    args = Union{Val,Expr,Symbol}[]
+    args = Union{Val, Expr, Symbol}[]
 
     parts = [parts...]
     while true
@@ -266,16 +266,18 @@ macro mtlprint(parts...)
         end
     end
 
-    quote
+    return quote
         _mtlprint($(map(esc, args)...))
     end
 end
 
 @doc (@doc @mtlprint) ->
 macro mtlprintln(parts...)
-    esc(quote
-        Metal.@mtlprint($(parts...), "\n")
-    end)
+    return esc(
+        quote
+            Metal.@mtlprint($(parts...), "\n")
+        end
+    )
 end
 
 export @mtlshow
@@ -292,9 +294,17 @@ GPU analog of `Base.@show`. It comes with the same type restrictions as [`@mtlpr
 macro mtlshow(exs...)
     blk = Expr(:block)
     for ex in exs
-        push!(blk.args, :(Metal.@mtlprintln($(sprint(Base.show_unquoted,ex)*" = "),
-                                          begin local value = $(esc(ex)) end)))
+        push!(
+            blk.args, :(
+                Metal.@mtlprintln(
+                    $(sprint(Base.show_unquoted, ex) * " = "),
+                    begin
+                        local value = $(esc(ex))
+                    end
+                )
+            )
+        )
     end
     isempty(exs) || push!(blk.args, :value)
-    blk
+    return blk
 end

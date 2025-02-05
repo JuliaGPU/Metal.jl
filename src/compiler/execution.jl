@@ -195,7 +195,7 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
         kernel = get(_kernel_instances, h, nothing)
         if kernel === nothing
             # create the kernel state object
-            kernel = HostKernel{F,tt}(f, pipeline, loggingEnabled)
+            kernel = HostKernel{F, tt}(f, pipeline, loggingEnabled)
             _kernel_instances[h] = kernel
         end
         return kernel::HostKernel{F,tt}
