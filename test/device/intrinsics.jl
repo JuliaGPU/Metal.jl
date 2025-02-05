@@ -160,7 +160,6 @@ MATH_INTR_FUNCS_2_ARG = [
     # ldexp, # T ldexp(T x, Ti k)
     # modf, # T modf(T x, T &intval)
     # nextafter, # T nextafter(T x, T y) # Metal 3.1+
-    # sincos,
     hypot, # NOT MSL but tested the same
 ]
 
@@ -257,14 +256,10 @@ end
             arr_cos[idx] = cosres
             return nothing
         end
-        # Broken with Float16
-        if T == Float16
-            @test_broken Metal.@sync @metal threads = N intr_test3(bufferA, bufferB)
-        else
-            Metal.@sync @metal threads = N intr_test3(bufferA, bufferB)
-            @test Array(bufferA) ≈ sin.(arr)
-            @test Array(bufferB) ≈ cos.(arr)
-        end
+
+        Metal.@sync @metal threads = N intr_test3(bufferA, bufferB)
+        @test Array(bufferA) ≈ sin.(arr)
+        @test Array(bufferB) ≈ cos.(arr)
     end
 
     let # clamp
