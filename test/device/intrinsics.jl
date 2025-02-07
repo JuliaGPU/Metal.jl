@@ -355,21 +355,19 @@ end
 
 
     let # nextafter
-        if Metal.is_macos(v"14")
-            N = 4
-            function nextafter_test(X, y)
-                idx = thread_position_in_grid_1d()
-                X[idx] = Metal.nextafter(X[idx], y)
-                return nothing
-            end
-            arr = rand(T, N)
-            buffer = MtlArray(arr)
-            Metal.@sync @metal threads = N nextafter_test(buffer, typemax(T))
-            @test Array(buffer) == nextfloat.(arr)
-
-            Metal.@sync @metal threads = N nextafter_test(buffer, typemin(T))
-            @test Array(buffer) == arr
+        N = 4
+        function nextafter_test(X, y)
+            idx = thread_position_in_grid_1d()
+            X[idx] = Metal.nextafter(X[idx], y)
+            return nothing
         end
+        arr = rand(T, N)
+        buffer = MtlArray(arr)
+        Metal.@sync @metal threads = N nextafter_test(buffer, typemax(T))
+        @test Array(buffer) == nextfloat.(arr)
+
+        Metal.@sync @metal threads = N nextafter_test(buffer, typemin(T))
+        @test Array(buffer) == arr
     end
 end
 end
