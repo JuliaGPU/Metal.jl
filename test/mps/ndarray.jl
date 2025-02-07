@@ -2,7 +2,11 @@
 # matrix descriptor
 #
 using Metal,Test;
-using .MPS: MPSNDArrayDescriptor, MPSDataType, lengthOfDimension, userBuffer, descriptor, resourceSize
+using .MPS: MPSNDArrayDescriptor, MPSDataType, lengthOfDimension, descriptor, resourceSize
+@static if Metal.macos_version() >= v"15"
+    using .MPS: userBuffer
+end
+
 @testset "MPSNDArrayDescriptor" begin
     T = Float32
     DT = convert(MPSDataType, T)
@@ -10,7 +14,6 @@ using .MPS: MPSNDArrayDescriptor, MPSDataType, lengthOfDimension, userBuffer, de
     desc1 = MPSNDArrayDescriptor(T,1,2,3,4,5)
     @test desc1 isa MPSNDArrayDescriptor
     @test desc1.dataType == DT
-    @test desc1.preferPackedRows == false
     @test desc1.numberOfDimensions == 5
 
     @test lengthOfDimension(desc1,4) == 5
@@ -25,9 +28,13 @@ using .MPS: MPSNDArrayDescriptor, MPSDataType, lengthOfDimension, userBuffer, de
     @test desc2.numberOfDimensions == 4
     desc2.numberOfDimensions = 6
     @test desc2.numberOfDimensions == 6
-    desc2.preferPackedRows = true
-    @test desc2.preferPackedRows == true
 
+    @static if Metal.macos_version() >= v"15"
+        @test desc1.preferPackedRows == false
+
+        desc2.preferPackedRows = true
+        @test desc2.preferPackedRows == true
+    end
 end
 
 
@@ -51,6 +58,8 @@ using .MPS: MPSNDArray
     @test ndarr1.label == "Test1"
     @test ndarr1.numberOfDimensions == 5
     @test ndarr1.parent === nothing
+    @test descriptor(ndarr1) isa MPSNDArrayDescriptor
+    @test resourceSize(ndarr1) isa UInt
     @test size(ndarr1) == (5,4,3,2,1)
 
     ndarr2 = MPSNDArray(dev, 4)
@@ -62,6 +71,8 @@ using .MPS: MPSNDArray
     @test ndarr2.label == "Test2"
     @test ndarr2.numberOfDimensions == 1
     @test ndarr2.parent === nothing
+    @test descriptor(ndarr2) isa MPSNDArrayDescriptor
+    @test resourceSize(ndarr2) isa UInt
 
     arr3 = MtlArray(ones(Float16, 2,3,4))
     @test_throws "First dimension of input MtlArray must have a byte size divisible by 16" MPSNDArray(arr3)
@@ -69,19 +80,13 @@ using .MPS: MPSNDArray
     arr4 = MtlArray(ones(Float16, 8,3,2))
 
     @static if Metal.macos_version() >= v"15"
-        @test descriptor(ndarr1) isa MPSNDArrayDescriptor
-        @test resourceSize(ndarr1) isa UInt
         @test userBuffer(ndarr1) === nothing
-
-        @test descriptor(ndarr2) isa MPSNDArrayDescriptor
-        @test resourceSize(ndarr2) isa UInt
         @test userBuffer(ndarr2) === nothing
 
         ndarr4 = MPSNDArray(arr4)
 
         arr5 = MtlArray(arr4)
         @test arr4 == arr5
-
     else
         @test_throws "Creating an MPSNDArray that shares data with user-provided MTLBuffer is only supported in macOS v15+" MPSNDArray(arr4)
     end
