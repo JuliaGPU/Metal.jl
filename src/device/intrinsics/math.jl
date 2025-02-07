@@ -298,14 +298,14 @@ end
     if metal_version() >= sv"3.1" # macOS 14+
         ccall("extern air.nextafter.f32", llvmcall, Cfloat, (Cfloat, Cfloat), x, y)
     else
-        error()
+        reinterpret(Float32, reinterpret(UInt32, x) + sign(y-x))
     end
 end
 @device_function function nextafter(x::Float16, y::Float16)
     if metal_version() >= sv"3.1" # macOS 14+
         ccall("extern air.nextafter.f16", llvmcall, Float16, (Float16, Float16), x, y)
     else
-        error()
+        reinterpret(Float16, reinterpret(UInt16, x) + sign(y-x))
     end
 end
 
