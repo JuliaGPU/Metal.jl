@@ -362,12 +362,20 @@ end
             return nothing
         end
         arr = rand(T, N)
-        buffer = MtlArray(arr)
-        Metal.@sync @metal threads = N nextafter_test(buffer, typemax(T))
-        @test Array(buffer) == nextfloat.(arr)
 
-        Metal.@sync @metal threads = N nextafter_test(buffer, typemin(T))
-        @test Array(buffer) == arr
+        # test the intrinsic
+        buffer1 = MtlArray(arr)
+        Metal.@sync @metal threads = N nextafter_test(buffer1, typemax(T))
+        @test Array(buffer1) == nextfloat.(arr)
+        Metal.@sync @metal threads = N nextafter_test(buffer1, typemin(T))
+        @test Array(buffer1) == arr
+
+        # test for metal < 3.1
+        buffer2 = MtlArray(arr)
+        Metal.@sync @metal threads = N metal = v"3.0" nextafter_test(buffer2, typemax(T))
+        @test Array(buffer2) == nextfloat.(arr)
+        Metal.@sync @metal threads = N metal = v"3.0" nextafter_test(buffer2, typemin(T))
+        @test Array(buffer2) == arr
     end
 end
 end
