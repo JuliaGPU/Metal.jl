@@ -246,7 +246,7 @@ end
 
 function LinearAlgebra.ldiv!(A::LU{T,<:MtlMatrix{T},<:MtlVector{UInt32}}, B::MtlVecOrMat{T}) where {T<:MtlFloat}
     M, N = size(B, 1), size(B, 2)
-    dev = current_device()
+    dev = device()
     queue = global_queue(dev)
 
     At = similar(A.factors)
@@ -274,7 +274,7 @@ end
 
 function LinearAlgebra.ldiv!(A::UpperTriangular{T,<:MtlMatrix{T}}, B::MtlVecOrMat{T}) where {T<:MtlFloat}
     M, N = size(B, 1), size(B, 2)
-    dev = current_device()
+    dev = device()
     queue = global_queue(dev)
 
     Ad = MtlMatrix(A')
@@ -301,7 +301,7 @@ end
 
 function LinearAlgebra.ldiv!(A::UnitUpperTriangular{T,<:MtlMatrix{T}}, B::MtlVecOrMat{T}) where {T<:MtlFloat}
     M, N = size(B, 1), size(B, 2)
-    dev = current_device()
+    dev = device()
     queue = global_queue(dev)
 
     Ad = MtlMatrix(A)
@@ -327,7 +327,7 @@ end
 
 function LinearAlgebra.ldiv!(A::LowerTriangular{T,<:MtlMatrix{T}}, B::MtlVecOrMat{T}) where {T<:MtlFloat}
     M, N = size(B, 1), size(B, 2)
-    dev = current_device()
+    dev = device()
     queue = global_queue(dev)
 
     Ad = MtlMatrix(A)
@@ -353,7 +353,7 @@ end
 
 function LinearAlgebra.ldiv!(A::UnitLowerTriangular{T,<:MtlMatrix{T}}, B::MtlVecOrMat{T}) where {T<:MtlFloat}
     M, N = size(B, 1), size(B, 2)
-    dev = current_device()
+    dev = device()
     queue = global_queue(dev)
 
     Ad = MtlMatrix(A)
