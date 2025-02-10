@@ -376,6 +376,17 @@ end
         @test Array(buffer2) == nextfloat.(arr)
         Metal.@sync @metal threads = N metal = v"3.0" nextafter_test(buffer2, typemin(T))
         @test Array(buffer2) == arr
+
+        # Check the code is generated as expected
+        outval = T(0)
+        function nextafter_out_test()
+            Metal.nextafter(outval, outval)
+            return
+        end
+        ir = sprint(io->(@device_code_llvm io=io dump_module=true @metal nextafter_out_test()))
+        @test occursin(Regex("@air\\.nextafter\\.f$(8*sizeof(T))"), ir)
+        ir = sprint(io->(@device_code_llvm io=io dump_module=true @metal metal = v"3.0" nextafter_out_test()))
+        @test occursin(Regex("@air\\.sign\\.f$(8*sizeof(T))"), ir)
     end
 end
 end
