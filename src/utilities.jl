@@ -42,12 +42,13 @@ function versioninfo(io::IO=stdout)
 
     prefs = [
         "default_storage" => load_preference(Metal, "default_storage"),
+        "override_macos_version" => load_preference(Metal, "override_macos_version"),
     ]
     if any(x->!isnothing(x[2]), prefs)
         println(io, "Preferences:")
         for (key, val) in prefs
             if !isnothing(val)
-                println(io, "- $key: $val")
+                println(io, "- $key: \"$val\"")
             end
         end
         println(io)

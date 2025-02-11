@@ -10,9 +10,28 @@ import LLVMDowngrader_jll
 using Preferences: @load_preference, load_preference
 using ExprTools: splitdef, combinedef
 using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
-import ObjectiveC: is_macos, darwin_version, macos_version
+import ObjectiveC: is_macos, darwin_version
 import KernelAbstractions
 using ScopedValues
+
+const MACOS_OVERRIDE = @load_preference("override_macos_version")
+@static if isnothing(MACOS_OVERRIDE)
+    import ObjectiveC: macos_version
+else
+    @static if isdefined(Base, :OncePerProcess) # VERSION >= v"1.12.0-DEV.1421"
+        const macos_version = OncePerProcess{VersionNumber}() do
+            VersionNumber(MACOS_OVERRIDE)
+        end
+    else
+        const _macos_version = Ref{VersionNumber}()
+        function macos_version()
+            if !isassigned(_macos_version)
+                _macos_version[] = VersionNumber(MACOS_OVERRIDE)
+            end
+            _macos_version[]
+        end
+    end
+end
 
 include("version.jl")
 

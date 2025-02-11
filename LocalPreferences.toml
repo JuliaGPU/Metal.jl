@@ -2,3 +2,7 @@
 # which storage mode unspecified allocations should default to.
 # possible values: "private", "shared", "managed"
 #default_storage = "private"
+
+# Override the reported macOS version. Meant for testing package
+# on older versions of macOS. ex: override_macos_version = "13"
+#override_macos_version = nothing
