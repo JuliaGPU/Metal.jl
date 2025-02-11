@@ -12,7 +12,7 @@ if !Sys.isapple()
              Skipping tests."""
     Sys.exit()
 else # if Sys.isapple()
-    cmd = pipeline(Cmd(`xcrun -f metal-arch`, ignorestatus=true), stdout=devnull, stderr=devnull)
+    cmd = pipeline(Cmd(`xcrun -f metal-arch`, ignorestatus = true), stdout = devnull, stderr = devnull)
     is_xcode_present = run(cmd).exitcode == 0
 
     if is_xcode_present
