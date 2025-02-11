@@ -275,7 +275,5 @@ end
         end
     end
 
-    # most of the time, we don't need the function object,
-    # so don't keep it alive unconditionally in GPUCompiler's caches
     pipeline_state, compiled.loggingEnabled
 end
