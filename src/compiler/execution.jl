@@ -18,9 +18,9 @@ certain extent arguments will be converted and managed automatically using `mtlc
 Finally, a call to `mtlcall` is performed, creating a command buffer in the current global
 command queue then committing it.
 
-There is one supported keyword argument that influences the behavior of `@metal`:
+There are a few keyword arguments that influence the behavior of `@metal`:
 
-- `launch`: whether to launch this kernel, defaults to `true`. If `false` the returned
+- `launch`: whether to launch this kernel, defaults to `true`. If `false`, the returned
   kernel object should be launched by calling it and passing arguments again.
 - `name`: the name of the kernel in the generated code. Defaults to an automatically-
   generated name.

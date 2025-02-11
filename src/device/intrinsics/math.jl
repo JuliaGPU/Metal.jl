@@ -294,6 +294,21 @@ end
 @device_override Base.trunc(x::Float32) = ccall("extern air.trunc.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.trunc(x::Float16) = ccall("extern air.trunc.f16", llvmcall, Float16, (Float16,), x)
 
+@device_function function nextafter(x::Float32, y::Float32)
+    if metal_version() >= sv"3.1" # macOS 14+
+        ccall("extern air.nextafter.f32", llvmcall, Cfloat, (Cfloat, Cfloat), x, y)
+    else
+        nextfloat(x, unsafe_trunc(Int32, sign(y - x)))
+    end
+end
+@device_function function nextafter(x::Float16, y::Float16)
+    if metal_version() >= sv"3.1" # macOS 14+
+        ccall("extern air.nextafter.f16", llvmcall, Float16, (Float16, Float16), x, y)
+    else
+        nextfloat(x, unsafe_trunc(Int16, sign(y - x)))
+    end
+end
+
 # hypot without use of double
 #
 # taken from Cosmopolitan Libc
