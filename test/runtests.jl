@@ -12,17 +12,24 @@ if !Sys.isapple()
              Skipping tests."""
     Sys.exit()
 else # if Sys.isapple()
-    archchecker = occursin(read(`xcrun metal-arch --name`, String))
-    if archchecker("Paravirtual") # Virtualized graphics (probably Github Actions runners)
-        @warn """Metal.jl succesfully loaded on macOS system with unsupported Paravirtual graphics.
-                 This system is unsupported but should still load.
-                 Skipping tests."""
-        Sys.exit()
-    elseif !archchecker("applegpu") # Every other unsupported system (Intel or AMD graphics)
-        @warn """Metal.jl succesfully loaded on macOS system with unsupported graphics.
-                 This system is unsupported but should still load.
-                 Skipping tests."""
-        Sys.exit()
+    cmd = pipeline(Cmd(`xcrun -f metal-arch`, ignorestatus = true), stdout = devnull, stderr = devnull)
+    is_xcode_present = run(cmd).exitcode == 0
+
+    if is_xcode_present
+        archchecker = occursin(read(`xcrun metal-arch --name`, String))
+        if archchecker("Paravirtual") # Virtualized graphics (probably Github Actions runners)
+            @warn """Metal.jl succesfully loaded on macOS system with unsupported Paravirtual graphics.
+                    This system is unsupported but should still load.
+                    Skipping tests."""
+            Sys.exit()
+        elseif !archchecker("applegpu") # Every other unsupported system (Intel or AMD graphics)
+            @warn """Metal.jl succesfully loaded on macOS system with unsupported graphics.
+                    This system is unsupported but should still load.
+                    Skipping tests."""
+            Sys.exit()
+        end
+    else
+        @info "GPU architecture could not be detected, assuming supported device."
     end
 end
 
