@@ -3,14 +3,14 @@
         try
             dev = device()
             return supports_family(dev, MTL.MTLGPUFamilyApple7) &&
-            supports_family(dev, MTL.MTLGPUFamilyMetal3)
+                supports_family(dev, MTL.MTLGPUFamilyMetal3)
         catch
             return false
         end
     end
 else
     # Becomes `nothing` once it has been determined that the device is on macOS
-    const _functional = Ref{Union{Nothing,Bool}}(false)
+    const _functional = Ref{Union{Nothing, Bool}}(false)
 
     function functional()
         if isnothing(_functional[])
@@ -62,7 +62,7 @@ function __init__()
             _functional[] = nothing  # VERSION <= v"1.12.0-DEV.1421"
         end
     catch err
-        @error "Failed to load Metal" exception=(err,catch_backtrace())
+        @error "Failed to load Metal" exception = (err, catch_backtrace())
         return
     end
 
@@ -71,10 +71,12 @@ function __init__()
     if isdefined(Base, :active_repl_backend) && !isnothing(Base.active_repl_backend)
         push!(Base.active_repl_backend.ast_transforms, synchronize_metal_tasks)
     end
+
+    return
 end
 
 function synchronize_metal_tasks(ex)
-    quote
+    return quote
         try
             $(ex)
         finally

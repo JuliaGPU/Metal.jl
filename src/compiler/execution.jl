@@ -28,7 +28,7 @@ There are a few keyword arguments that influence the behavior of `@metal`:
 """
 macro metal(ex...)
     call = ex[end]
-    kwargs = map(ex[1:end-1]) do kwarg
+    kwargs = map(ex[1:(end - 1)]) do kwarg
         if kwarg isa Symbol
             :($kwarg = $kwarg)
         elseif Meta.isexpr(kwarg, :(=))
@@ -50,14 +50,14 @@ macro metal(ex...)
     macro_kwargs, compiler_kwargs, call_kwargs, other_kwargs =
         split_kwargs(kwargs, MACRO_KWARGS, COMPILER_KWARGS, LAUNCH_KWARGS)
     if !isempty(other_kwargs)
-        key,val = first(other_kwargs).args
+        key, val = first(other_kwargs).args
         throw(ArgumentError("Unsupported keyword argument '$key'"))
     end
 
     # handle keyword arguments that influence the macro's behavior
     launch = true
     for kwarg in macro_kwargs
-        key,val = kwarg.args
+        key, val = kwarg.args
         if key === :launch
             isa(val, Bool) || throw(ArgumentError("`launch` keyword argument to @metal should be a Bool"))
             launch = val::Bool
@@ -75,7 +75,8 @@ macro metal(ex...)
 
     # convert the arguments, call the compiler and launch the kernel
     # while keeping the original arguments alive
-    push!(code.args,
+    push!(
+        code.args,
         quote
             $f_var = $f
             GC.@preserve $(vars...) $f_var begin
@@ -88,13 +89,16 @@ macro metal(ex...)
                 end
                 $kernel
             end
-         end)
-
-    return esc(quote
-        let
-            $code
         end
-    end)
+    )
+
+    return esc(
+        quote
+            let
+                $code
+            end
+        end
+    )
 end
 
 
@@ -102,7 +106,7 @@ end
 
 struct Adaptor
     # the current command encoder, if any.
-    cce::Union{Nothing,MTLComputeCommandEncoder}
+    cce::Union{Nothing, MTLComputeCommandEncoder}
 end
 
 # convert Metal buffers to their GPU address
@@ -110,23 +114,23 @@ function Adapt.adapt_storage(to::Adaptor, buf::MTLBuffer)
     if to.cce !== nothing
         MTL.use!(to.cce, buf, MTL.ReadWriteUsage)
     end
-    reinterpret(Core.LLVMPtr{Nothing,AS.Device}, buf.gpuAddress)
+    return reinterpret(Core.LLVMPtr{Nothing, AS.Device}, buf.gpuAddress)
 end
 function Adapt.adapt_storage(to::Adaptor, ptr::MtlPtr{T}) where {T}
-    reinterpret(Core.LLVMPtr{T,AS.Device}, adapt(to, ptr.buffer)) + ptr.offset
+    return reinterpret(Core.LLVMPtr{T, AS.Device}, adapt(to, ptr.buffer)) + ptr.offset
 end
 
 # convert Metal host arrays to device arrays
-function Adapt.adapt_storage(to::Adaptor, xs::MtlArray{T,N}) where {T,N}
+function Adapt.adapt_storage(to::Adaptor, xs::MtlArray{T, N}) where {T, N}
     buf = pointer(xs)
     ptr = adapt(to, buf)
-    MtlDeviceArray{T,N,AS.Device}(xs.dims, ptr)
+    return MtlDeviceArray{T, N, AS.Device}(xs.dims, ptr)
 end
 
 # Base.RefValue isn't GPU compatible, so provide a compatible alternative
 # TODO: port improvements from CUDA.jl
 struct MtlRefValue{T} <: Ref{T}
-  x::T
+    x::T
 end
 Base.getindex(r::MtlRefValue) = r.x
 Adapt.adapt_structure(to::Adaptor, r::Base.RefValue) = MtlRefValue(adapt(to, r[]))
@@ -139,8 +143,10 @@ Adapt.adapt_structure(::Adaptor, r::Base.RefValue{<:Union{DataType, Type}}) =
     MtlRefType{r[]}()
 
 # case where type is the function being broadcasted
-Adapt.adapt_structure(to::Adaptor,
-                      bc::Broadcast.Broadcasted{Style, <:Any, Type{T}}) where {Style, T} =
+Adapt.adapt_structure(
+    to::Adaptor,
+    bc::Broadcast.Broadcasted{Style, <:Any, Type{T}}
+) where {Style, T} =
     Broadcast.Broadcasted{Style}((x...) -> T(x...), adapt(to, bc.args), bc.axes)
 
 """
@@ -153,12 +159,12 @@ input object `x` as-is.
 Do not add methods to this function, but instead extend the underlying Adapt.jl package and
 register methods for the the `Metal.Adaptor` type.
 """
-mtlconvert(arg, cce=nothing) = adapt(Adaptor(cce), arg)
+mtlconvert(arg, cce = nothing) = adapt(Adaptor(cce), arg)
 
 
 ## host-side kernel API
 
-struct HostKernel{F,TT}
+struct HostKernel{F, TT}
     f::F
     pipeline::MTLComputePipelineState
 end
@@ -179,7 +185,7 @@ The output of this function is automatically cached, i.e. you can simply call `m
 in a hot path without degrading performance. New code will be generated automatically when
 the function changes, or when different types or keyword arguments are provided.
 """
-function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
+function mtlfunction(f::F, tt::TT = Tuple{}; name = nothing, kwargs...) where {F, TT}
     dev = device()
     Base.@lock mtlfunction_lock begin
         # compile the function
@@ -194,10 +200,10 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
         kernel = get(_kernel_instances, h, nothing)
         if kernel === nothing
             # create the kernel state object
-            kernel = HostKernel{F,tt}(f, pipeline)
+            kernel = HostKernel{F, tt}(f, pipeline)
             _kernel_instances[h] = kernel
         end
-        return kernel::HostKernel{F,tt}
+        return kernel::HostKernel{F, tt}
     end
 end
 
@@ -230,20 +236,28 @@ const _kernel_instances = Dict{UInt, Any}()
             continue
         else
             # everything else is passed by reference, in an argument buffer
-            append!(ex.args, (quote
-                buf = encode_argument!(kernel, mtlconvert($(argex), cce))
-                set_buffer!(cce, buf, 0, $idx)
-                push!(bufs, buf)
-            end).args)
+            append!(
+                ex.args, (
+                    quote
+                        buf = encode_argument!(kernel, mtlconvert($(argex), cce))
+                        set_buffer!(cce, buf, 0, $idx)
+                        push!(bufs, buf)
+                    end
+                ).args
+            )
         end
         idx += 1
     end
 
-    append!(ex.args, (quote
-        return bufs
-    end).args)
+    append!(
+        ex.args, (
+            quote
+                return bufs
+            end
+        ).args
+    )
 
-    ex
+    return ex
 end
 
 @inline function encode_argument!(kernel, arg)
@@ -257,19 +271,21 @@ end
     end
 
     # pass by reference, in an argument buffer
-    argument_buffer = alloc(kernel.pipeline.device, sizeof(argtyp); storage=SharedStorage)
+    argument_buffer = alloc(kernel.pipeline.device, sizeof(argtyp); storage = SharedStorage)
     argument_buffer.label = "MTLBuffer for kernel argument"
     unsafe_store!(convert(Ptr{argtyp}, argument_buffer), arg)
     return argument_buffer
 end
 
-@autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
-                                               queue=global_queue(device()))
+@autoreleasepool function (kernel::HostKernel)(
+        args...; groups = 1, threads = 1,
+        queue = global_queue(device())
+    )
     groups = MTLSize(groups)
     threads = MTLSize(threads)
-    (groups.width>0 && groups.height>0 && groups.depth>0) ||
+    (groups.width > 0 && groups.height > 0 && groups.depth > 0) ||
         throw(ArgumentError("All group dimensions should be non-zero"))
-    (threads.width>0 && threads.height>0 && threads.depth>0) ||
+    (threads.width > 0 && threads.height > 0 && threads.depth > 0) ||
         throw(ArgumentError("All thread dimensions should be non-zero"))
 
     (threads.width * threads.height * threads.depth) > kernel.pipeline.maxTotalThreadsPerThreadgroup &&

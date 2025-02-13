@@ -3,9 +3,11 @@ Base.Experimental.@MethodTable(method_table)
 
 macro device_override(ex)
     ex = macroexpand(__module__, ex)
-    esc(quote
-        Base.Experimental.@overlay($method_table, $ex)
-    end)
+    return esc(
+        quote
+            Base.Experimental.@overlay($method_table, $ex)
+        end
+    )
 end
 
 macro device_function(ex)
@@ -17,8 +19,10 @@ macro device_function(ex)
         error("This function is not intended for use on the CPU")
     end
 
-    esc(quote
-        $(combinedef(def))
-        @device_override $ex
-    end)
+    return esc(
+        quote
+            $(combinedef(def))
+            @device_override $ex
+        end
+    )
 end

@@ -26,7 +26,7 @@ end
 # be allocated, then wrapped by a CPU array...not the other way around.
 
 # Create a Metal array with a storage mode of shared (both CPU and GPU get access)
-arr_mtl = Metal.zeros(Float32, (16,16); storage=Metal.SharedStorage)
+arr_mtl = Metal.zeros(Float32, (16, 16); storage = Metal.SharedStorage)
 # Unsafe wrap the contents of the Metal array with a CPU array
 arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, size(arr_mtl))
 
@@ -37,7 +37,7 @@ arr_cpu .= pi
 Metal.@allowscalar @test arr_mtl[1] == Float32(pi)
 
 # Now launch a kernel altering the Metal array
-Metal.@sync @metal threads=1024 groups=1024 simple_kernel(arr_mtl)
+Metal.@sync @metal threads = 1024 groups = 1024 simple_kernel(arr_mtl)
 
 # These changes are reflected in the wrapped CPU array
 synchronize()
@@ -47,7 +47,7 @@ synchronize()
 ### Using CPU functions that are unavailable to the GPU in the middle of a series of kernels
 # This would otherwise require a set of copies back and forth.
 
-round.(rand!(arr_cpu)*100)
+round.(rand!(arr_cpu) * 100)
 # Example 1: Calculate the determinant using CPU implementation
 det(arr_cpu)
 # Example 2: Singular Value Decomposition
@@ -71,14 +71,14 @@ end
 
 # Make larger arrays to make the kernel take non-trivial time
 # Create a Metal array with a default storage mode of shared (both CPU and GPU get access)
-arr_mtl = Metal.zeros(Float32, 1024*1024; storage=Metal.SharedStorage)
+arr_mtl = Metal.zeros(Float32, 1024 * 1024; storage = Metal.SharedStorage)
 # Unsafe wrap the contents of the Metal array with a CPU array
 arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, size(arr_mtl))
 dummy_mtl = MtlArray{Float32}(undef, 1)
 
 rand!(arr_cpu)
 # Now launch a kernel altering the Metal array
-@metal threads=1024 groups=1024 long_kernel(arr_mtl, dummy_mtl)
+@metal threads = 1024 groups = 1024 long_kernel(arr_mtl, dummy_mtl)
 
 # we need to synchronize the device as the kernel may not have finished yet
 synchronize()

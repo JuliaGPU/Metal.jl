@@ -2,10 +2,12 @@
 
 # @objcwrapper immutable=false MPSUnaryImageKernel <: MPSKernel
 
-function encode!(cmdbuf::MTLCommandBuffer, kernel::K, sourceTexture::MTLTexture, destinationTexture::MTLTexture) where {K<:MPSUnaryImageKernel}
-    @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
-                                     sourceTexture:sourceTexture::id{MTLTexture}
-                                     destinationTexture:destinationTexture::id{MTLTexture}]::Nothing
+function encode!(cmdbuf::MTLCommandBuffer, kernel::K, sourceTexture::MTLTexture, destinationTexture::MTLTexture) where {K <: MPSUnaryImageKernel}
+    return @objc [
+        kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+        sourceTexture:sourceTexture::id{MTLTexture}
+        destinationTexture:destinationTexture::id{MTLTexture}
+    ]::Nothing
 end
 
 # TODO: Implement MPSCopyAllocator to allow blurring (and other things) to be done in-place
@@ -27,8 +29,10 @@ function MPSImageGaussianBlur(dev, sigma)
     kernel = @objc [MPSImageGaussianBlur alloc]::id{MPSImageGaussianBlur}
     obj = MPSImageGaussianBlur(kernel)
     finalizer(release, obj)
-    @objc [obj::id{MPSImageGaussianBlur} initWithDevice:dev::id{MTLDevice}
-                                  sigma:sigma::Float32]::id{MPSImageGaussianBlur}
+    @objc [
+        obj::id{MPSImageGaussianBlur} initWithDevice:dev::id{MTLDevice}
+        sigma:sigma::Float32
+    ]::id{MPSImageGaussianBlur}
     return obj
 end
 
@@ -43,22 +47,24 @@ function MPSImageBox(dev, kernelWidth, kernelHeight)
     kernel = @objc [MPSImageBox alloc]::id{MPSImageBox}
     obj = MPSImageBox(kernel)
     finalizer(release, obj)
-    @objc [obj::id{MPSImageBox} initWithDevice:dev::id{MTLDevice}
-                                kernelWidth:kernelWidth::Int
-                                kernelHeight:kernelHeight::Int]::id{MPSImageBox}
+    @objc [
+        obj::id{MPSImageBox} initWithDevice:dev::id{MTLDevice}
+        kernelWidth:kernelWidth::Int
+        kernelHeight:kernelHeight::Int
+    ]::id{MPSImageBox}
     return obj
 end
 
 
 ## high-level blurring functionality. Interface subject to change
 
-function blur(image, kernel; pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
+function blur(image, kernel; pixelFormat = MTL.MTLPixelFormatRGBA8Unorm)
     res = copy(image)
 
-    w,h = size(image)
+    w, h = size(image)
 
     alignment = MTL.minimumLinearTextureAlignmentForPixelFormat(device(), pixelFormat)
-    preBytesPerRow = sizeof(eltype(image))*w
+    preBytesPerRow = sizeof(eltype(image)) * w
 
     rowoffset = alignment - (preBytesPerRow - 1) % alignment - 1
     bytesPerRow = preBytesPerRow + rowoffset
@@ -78,12 +84,12 @@ function blur(image, kernel; pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
     return res
 end
 
-function gaussianblur(image; sigma, pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
+function gaussianblur(image; sigma, pixelFormat = MTL.MTLPixelFormatRGBA8Unorm)
     kernel = MPSImageGaussianBlur(device(), sigma)
     return blur(image, kernel; pixelFormat)
 end
 
-function boxblur(image, kernelWidth, kernelHeight; pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
+function boxblur(image, kernelWidth, kernelHeight; pixelFormat = MTL.MTLPixelFormatRGBA8Unorm)
     kernel = MPSImageBox(device(), kernelWidth, kernelHeight)
     return blur(image, kernel; pixelFormat)
 end

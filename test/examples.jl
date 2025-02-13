@@ -1,6 +1,6 @@
 @testset "examples" begin
 
-function find_sources(path::String, sources=String[])
+function find_sources(path::String, sources = String[])
     if isdir(path)
         for entry in readdir(path)
             find_sources(joinpath(path, entry), sources)

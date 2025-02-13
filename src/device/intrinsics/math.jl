@@ -103,8 +103,8 @@ using Base.Math: throw_complex_domainerror
 
 # half/regular -> air.fma.f16
 # half/(precise or fast) -> air.fma.f32
-@device_override Base.fma(a::Float32, b::Float32, c::Float32) = ccall("extern air.fma.f32", llvmcall, Float32, (Float32,Float32,Float32,), a,b,c)
-@device_override Base.fma(a::Float16, b::Float16, c::Float16) = ccall("extern air.fma.f32", llvmcall, Float16, (Float16,Float16,Float16,), a,b,c)
+@device_override Base.fma(a::Float32, b::Float32, c::Float32) = ccall("extern air.fma.f32", llvmcall, Float32, (Float32, Float32, Float32), a, b, c)
+@device_override Base.fma(a::Float16, b::Float16, c::Float16) = ccall("extern air.fma.f32", llvmcall, Float16, (Float16, Float16, Float16), a, b, c)
 
 @device_function fract_fast(x::Float32) = ccall("extern air.fast_fract.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_function fract(x::Float32) = ccall("extern air.fract.f32", llvmcall, Cfloat, (Cfloat,), x)
@@ -162,7 +162,7 @@ const Lp7 = 0.14798199f0
         if hx > 0 || hx <= reinterpret(Int32, 0xbe95f619)  # (sqrt(2)/2)-1 <= x
             k = 0
             f = x
-            hu = 1f0
+            hu = 1.0f0
         end
     end  # hx < 0x3ed413d0
 
@@ -172,28 +172,28 @@ const Lp7 = 0.14798199f0
 
     if k ≠ 0
         if hx < 0x5a000000
-            u = 1f0 + x
+            u = 1.0f0 + x
             hu = reinterpret(Int32, u)
             k = (hu >> 23) - 127
-            c = k > 0 ? 1f0 - (u - x) : x - (u - 1f0)
+            c = k > 0 ? 1.0f0 - (u - x) : x - (u - 1.0f0)
             c /= u
         else
             u = x
             hu = reinterpret(Int32, u)
             k = (hu >> 23) - 127
-            c = 0f0
+            c = 0.0f0
         end
 
         hu &= 0x007fffff
 
-        if hu < 0x3504f4  # u < sqrt(2)
+        if hu < 0x003504f4  # u < sqrt(2)
             u = reinterpret(Float32, hu | 0x3f800000)
         else
             k += 1
             u = reinterpret(Float32, hu | 0x3f000000)
             hu = (0x00800000 - hu) >> 2
         end
-        f = u - 1f0
+        f = u - 1.0f0
     end
 
     hfsq = 0.5f0 * f * f
@@ -201,13 +201,13 @@ const Lp7 = 0.14798199f0
     if hu == 0  # |f| < 2^-20
         if f == 0
             if k == 0
-                return 0f0
+                return 0.0f0
             else
                 c += k * ln2_lo
                 return k * ln2_hi + c
             end
         end
-        R = hfsq * (1f0 - Lp1 * f)
+        R = hfsq * (1.0f0 - Lp1 * f)
         if k == 0
             return f - R
         else
@@ -215,7 +215,7 @@ const Lp7 = 0.14798199f0
         end
     end
 
-    s = f / (2f0 + f)
+    s = f / (2.0f0 + f)
     z = s * s
     R = z * (Lp1 + z * (Lp2 + z * (Lp3 + z * (Lp4 + z * (Lp5 + z * (Lp6 + z * Lp7))))))
     if k == 0
@@ -313,7 +313,7 @@ end
 #
 # taken from Cosmopolitan Libc
 # Copyright 2021 Justine Alexandra Roberts Tunney
-@inline function _hypot(a::T, b::T) where T <: AbstractFloat
+@inline function _hypot(a::T, b::T) where {T <: AbstractFloat}
     if isinf(a) || isinf(b)
         return T(Inf)
     end
@@ -403,20 +403,20 @@ function _mulhi(a::Int64, b::Int64)
     mask = typemax(UInt32)
     a1, a2 = (a >> shift), a & mask
     b1, b2 = (b >> shift), b & mask
-    a1b1, a1b2, a2b1 = a1*b1, a1*b2, a2*b1
+    a1b1, a1b2, a2b1 = a1 * b1, a1 * b2, a2 * b1
     t1 = a1b2 + _mulhi(a2 % UInt32, b2 % UInt32)
     t2 = a2b1 + (t1 & mask)
-    a1b1 + (t1 >> shift) + (t2 >> shift)
+    return a1b1 + (t1 >> shift) + (t2 >> shift)
 end
 @static if isdefined(Base.MultiplicativeInverses, :_mul_high)
-    _mulhi(a::T, b::T) where {T<:Union{Signed, Unsigned}} = Base.MultiplicativeInverses._mul_high(a, b)
+    _mulhi(a::T, b::T) where {T <: Union{Signed, Unsigned}} = Base.MultiplicativeInverses._mul_high(a, b)
     @device_override Base.MultiplicativeInverses._mul_high(a::Int64, b::Int64) = _mulhi(a, b)
 else
-    _mulhi(a::T, b::T) where {T<:Union{Signed, Unsigned}} = ((widen(a)*b) >>> (sizeof(a)*8)) % T
+    _mulhi(a::T, b::T) where {T <: Union{Signed, Unsigned}} = ((widen(a) * b) >>> (sizeof(a) * 8)) % T
     @device_override function Base.div(a::Int64, b::Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64})
         x = _mulhi(a, b.multiplier)
-        x += (a*b.addmul) % Int64
-        ifelse(abs(b.divisor) == 1, a*b.divisor, (signbit(x) + (x >> b.shift)) % Int64)
+        x += (a * b.addmul) % Int64
+        ifelse(abs(b.divisor) == 1, a * b.divisor, (signbit(x) + (x >> b.shift)) % Int64)
     end
 end
 
@@ -467,7 +467,7 @@ end
     t = fma(8.33342969f-3, f, 4.16667424f-2)
     r = fma(r, s, t)
     r = fma(r, f, 1.66666701f-1)
-    r = fma(r, f, 4.99999970f-1)
+    r = fma(r, f, 4.9999997f-1)
     # if i == 0, expm1(a) = z
     # if i == 1, expm1(a) = 2*(r*(f*f)+f+0.5)
     # if (i < 0) || (i > 1) expm1(a) = 2*((r*(f*f)+f)*t-0.5+t)

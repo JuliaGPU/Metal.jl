@@ -16,8 +16,8 @@ if length(devs) > 1
     @test dev != devs[2]
 end
 
-compact_str = sprint(io->show(io, dev))
-full_str = sprint(io->show(io, MIME"text/plain"(), dev))
+compact_str = sprint(io -> show(io, dev))
+full_str = sprint(io -> show(io, MIME"text/plain"(), dev))
 
 @test dev.name isa NSString
 @test dev.lowPower isa Bool
@@ -40,8 +40,8 @@ end
 
 opts = MTLCompileOptions()
 
-compact_str = sprint(io->show(io, opts))
-full_str = sprint(io->show(io, MIME"text/plain"(), opts))
+compact_str = sprint(io -> show(io, opts))
+full_str = sprint(io -> show(io, MIME"text/plain"(), opts))
 
 @test opts.fastMathEnabled isa Bool
 val = !opts.fastMathEnabled
@@ -96,8 +96,8 @@ let lib = MTLLibraryFromData(dev, binary_code)
     @test "kernel_1" in fns
     @test "kernel_2" in fns
 
-    compact_str = sprint(io->show(io, lib))
-    full_str = sprint(io->show(io, MIME"text/plain"(), lib))
+    compact_str = sprint(io -> show(io, lib))
+    full_str = sprint(io -> show(io, MIME"text/plain"(), lib))
 end
 
 end
@@ -106,8 +106,8 @@ end
 
 desc = MTLFunctionDescriptor()
 
-compact_str = sprint(io->show(io, desc))
-full_str = sprint(io->show(io, MIME"text/plain"(), desc))
+compact_str = sprint(io -> show(io, desc))
+full_str = sprint(io -> show(io, MIME"text/plain"(), desc))
 
 @test desc.name === nothing
 desc.name = "MyKernel"
@@ -122,8 +122,8 @@ dev = first(devices())
 lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "..", "dummy.metallib"))
 fun = MTLFunction(lib, "kernel_1")
 
-compact_str = sprint(io->show(io, fun))
-full_str = sprint(io->show(io, MIME"text/plain"(), fun))
+compact_str = sprint(io -> show(io, fun))
+full_str = sprint(io -> show(io, MIME"text/plain"(), fun))
 
 @test fun.device == dev
 @test fun.label === nothing
@@ -236,7 +236,7 @@ end
 
 dev = first(devices())
 
-buf = MTLBuffer(dev, 8; storage=SharedStorage)
+buf = MTLBuffer(dev, 8; storage = SharedStorage)
 
 @test buf.length == 8
 @test sizeof(buf) == 8
@@ -316,7 +316,7 @@ commit!(cmdbuf)
 #@test cmdbuf.status == MTL.MTLCommandBufferStatusCommitted
 wait_completed(cmdbuf) == MTL.MTLCommandBufferStatusCompleted
 @test cmdbuf.status == MTL.MTLCommandBufferStatusCompleted
-retry(; delays=[0, 0.1, 1]) do
+retry(; delays = [0, 0.1, 1]) do
     scheduled[] || error("scheduled callback not called")
     completed[] || error("completed callback not called")
 end()
@@ -343,7 +343,7 @@ end
 @test cmdbuf.errorOptions == MTL.MTLCommandBufferErrorOptionEncoderExecutionStatus
 
 end
-
+# runic: off
 @testset "compute pipeline" begin
 
 dev = first(devices())
@@ -362,8 +362,8 @@ pipeline = MTLComputePipelineState(dev, fun)
 
 desc = MTLComputePipelineDescriptor()
 
-compact_str = sprint(io->show(io, desc))
-full_str = sprint(io->show(io, MIME"text/plain"(), desc))
+compact_str = sprint(io -> show(io, desc))
+full_str = sprint(io -> show(io, MIME"text/plain"(), desc))
 
 @test desc.label === nothing
 desc.label = "foo"
@@ -386,6 +386,7 @@ desc.maxCallStackDepth = 2
 @test desc.maxCallStackDepth == 2
 
 end
+#runic: on
 
 @testset "binary archive" begin
 
@@ -396,8 +397,8 @@ fun = MTLFunction(lib, "kernel_1")
 desc = MTLBinaryArchiveDescriptor()
 bin = MTLBinaryArchive(dev, desc)
 
-compact_str = sprint(io->show(io, desc))
-full_str = sprint(io->show(io, MIME"text/plain"(), desc))
+compact_str = sprint(io -> show(io, desc))
+full_str = sprint(io -> show(io, MIME"text/plain"(), desc))
 
 @test desc.url === nothing
 desc.url = NSFileURL("/tmp/foo")
@@ -435,8 +436,8 @@ end
     Metal.encode_wait!(buf2, event, signal_value)
     Metal.commit!(buf2)
 
-    unsafe_copyto!(dev, pointer(a), pointer(B), N, queue=queue1, async=true) # GPU -> CPU
-    unsafe_copyto!(dev, pointer(A), pointer(a), N, queue=queue1, async=true) # CPU -> GPU
+    unsafe_copyto!(dev, pointer(a), pointer(B), N, queue = queue1, async = true) # GPU -> CPU
+    unsafe_copyto!(dev, pointer(A), pointer(a), N, queue = queue1, async = true) # CPU -> GPU
 
     Metal.encode_signal!(buf1, event, signal_value)
     Metal.commit!(buf1)

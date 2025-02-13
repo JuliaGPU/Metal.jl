@@ -11,7 +11,7 @@ cd(tmpdir) do
 
 # Verify Metal capture is enabled via environment variable
 @test haskey(ENV, "METAL_CAPTURE_ENABLED")
-@test ENV["METAL_CAPTURE_ENABLED"]=="1"
+@test ENV["METAL_CAPTURE_ENABLED"] == "1"
 
 function tester(A)
     idx = thread_position_in_grid_1d()
@@ -62,14 +62,14 @@ manager.defaultCaptureScope = new_scope
 @test manager.defaultCaptureScope == new_scope
 
 # Capturing
-bufferA = MtlArray{Float32,1,SharedStorage}(undef, tuple(4))
+bufferA = MtlArray{Float32, 1, SharedStorage}(undef, tuple(4))
 
 @test !isdir(path)
 @test manager.isCapturing == false
 startCapture(manager, desc)
 @test manager.isCapturing
 @test_throws ErrorException startCapture(manager, desc)
-@metal threads=4 tester(bufferA)
+@metal threads = 4 tester(bufferA)
 stopCapture(manager)
 @test manager.isCapturing == false
 @test isdir(path)
@@ -77,9 +77,9 @@ release(new_scope)
 
 # Profile Macro
 @testset "macro" begin
-    Metal.@capture @metal threads=4 tester(bufferA)
+    Metal.@capture @metal threads = 4 tester(bufferA)
     @test isdir("julia_1.gputrace")
-    Metal.@capture object=device() @metal threads=4 tester(bufferA)
+    Metal.@capture object = device() @metal threads = 4 tester(bufferA)
     @test isdir("julia_2.gputrace")
 end
 

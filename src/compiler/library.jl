@@ -72,8 +72,8 @@ end
 
 struct EmbeddedSource
     link_options::String
-    working_directory::Union{Nothing,String}
-    archives::Vector{Pair{String,Vector{UInt8}}}
+    working_directory::Union{Nothing, String}
+    archives::Vector{Pair{String, Vector{UInt8}}}
 end
 
 Base.@kwdef struct MetalLibFunction
@@ -83,7 +83,7 @@ Base.@kwdef struct MetalLibFunction
 
     air_module::Vector{UInt8}
 
-    source_id::Union{Nothing,String} = nothing
+    source_id::Union{Nothing, String} = nothing
 
     # public metadata
     constants::Vector{FunctionConstant} = FunctionConstant[]
@@ -100,14 +100,14 @@ Base.@kwdef struct MetalLib
     # even though Metal.jl only supports macOS 13+, which supports metallib v1.2.7, we don't
     # fully support this format yet and fall back to v1.2.6 for now. this matches macOS 12,
     # but does support AIR/Metal v2.5/v3.0, as opposed to v2.4/v2.4 by macOS 12.
-    file_version::VersionNumber=v"1.2.6"
-    file_type::FileType=FILE_EXECUTABLE
-    is_macos::Bool=true
-    is_stub::Bool=false
+    file_version::VersionNumber = v"1.2.6"
+    file_type::FileType = FILE_EXECUTABLE
+    is_macos::Bool = true
+    is_stub::Bool = false
 
-    platform_version::VersionNumber=v"13"
-    platform_type::PlatformType=PLATFORM_MACOS
-    is_64bit::Bool=true
+    platform_version::VersionNumber = v"13"
+    platform_type::PlatformType = PLATFORM_MACOS
+    is_64bit::Bool = true
 
     uuid::Union{Nothing, UUID} = nothing
 
@@ -147,7 +147,7 @@ function Base.show(io::IO, lib::MetalLib)
         println("    $(fun.name) [AIR v$(fun.air_version), Metal v$(fun.metal_version)]")
     end
 
-    print(")")
+    return print(")")
 end
 
 
@@ -155,18 +155,18 @@ end
 
 # a helper type for reading and writing tag groups
 Base.@kwdef struct TagGroup
-    data::Vector{Pair{String,Any}}=Pair{String,Any}[]   # like an ordered dict
+    data::Vector{Pair{String, Any}} = Pair{String, Any}[]   # like an ordered dict
 
-    offsets::Dict{String,Int} = Dict()
+    offsets::Dict{String, Int} = Dict()
 
     # the size of each tag's size fields in the tag group
-    size_type::Type=UInt16
+    size_type::Type = UInt16
 
     # whether the tag group starts with a 32-bit size field for the entire group
-    has_size::Bool=true
+    has_size::Bool = true
 
     # whether the tag group size field is included in the size
-    counts_size::Bool=true
+    counts_size::Bool = true
 end
 
 # Dict-like methods to interact with a tag group
@@ -194,7 +194,7 @@ function Base.setindex!(tg::TagGroup, value, tag::String)
     if haskey(tg, tag)
         throw(ArgumentError("Tag $tag already exists"))
     end
-    push!(tg.data, tag => value)
+    return push!(tg.data, tag => value)
 end
 
 # look up the offset of a tag
@@ -211,89 +211,109 @@ const tag_value_io = Dict()
 tag_value_io["NAME"] = (
     # Name of the function; a null-terminated string
     String,
-    (io, _)   -> String(readuntil(io, UInt8(0))),
+    (io, _) -> String(readuntil(io, UInt8(0))),
     (io, val) -> begin
-        length(val) <= typemax(UInt16)-1 || throw(ArgumentError("Name too long"))
+        length(val) <= typemax(UInt16) - 1 || throw(ArgumentError("Name too long"))
         write(io, val)
         write(io, UInt8(0))
-    end)
+    end,
+)
 tag_value_io["TYPE"] = (
     # Type of the function; 1 byte
     ProgramType,
-    (io, _)   -> read(io, ProgramType),
-    (io, val) -> write(io, UInt8(val)))
+    (io, _) -> read(io, ProgramType),
+    (io, val) -> write(io, UInt8(val)),
+)
 tag_value_io["HASH"] = (
     # Hash of the module data; 32 bytes (SHA-256)
     Vector{UInt8},
-    (io, nb)  -> read(io, nb),
-    (io, val) -> write(io, val))
+    (io, nb) -> read(io, nb),
+    (io, val) -> write(io, val),
+)
 tag_value_io["OFFT"] = (
     # Offsets of the information about this function in the public metadata section,
     # private metadata section, and module section; Each offset is a 64-bit unsigned integer
     @NamedTuple{public_md::UInt64, private_md::UInt64, air_module::UInt64},
-    (io, _)   -> (; public_md=read(io, UInt64),
-                    private_md=read(io, UInt64),
-                    air_module=read(io, UInt64)),
-    (io, val) -> write(io, UInt64[val.public_md, val.private_md, val.air_module]))
+    (io, _) -> (;
+        public_md = read(io, UInt64),
+        private_md = read(io, UInt64),
+        air_module = read(io, UInt64),
+    ),
+    (io, val) -> write(io, UInt64[val.public_md, val.private_md, val.air_module]),
+)
 tag_value_io["SOFF"] = (
     # Offset of the source code archive of the function in the embedded source code section;
     # a 64-bit unsigned integer
     UInt64,
-    (io, _)   -> read(io, UInt64),
-    (io, val) -> write(io, val))
+    (io, _) -> read(io, UInt64),
+    (io, val) -> write(io, val),
+)
 tag_value_io["VERS"] = (
     # Module and language versions (air.major, air.minor, language.major, language.minor);
     # 4 x 16-bit unsigned integers
     @NamedTuple{air::VersionNumber, metal::VersionNumber},
-    (io, _)   -> (; air=VersionNumber(read(io, UInt16), read(io, UInt16)),
-                    metal=VersionNumber(read(io, UInt16), read(io, UInt16))),
-    (io, val) -> write(io, UInt16[val.air.major, val.air.minor,
-                                  val.metal.major, val.metal.minor]))
+    (io, _) -> (;
+        air = VersionNumber(read(io, UInt16), read(io, UInt16)),
+        metal = VersionNumber(read(io, UInt16), read(io, UInt16)),
+    ),
+    (io, val) -> write(
+        io, UInt16[
+            val.air.major, val.air.minor,
+            val.metal.major, val.metal.minor,
+        ]
+    ),
+)
 tag_value_io["MDSZ"] = (
     # Size of the module; a 64-bit unsigned integer
     UInt64,
-    (io, _)   -> read(io, UInt64),
-    (io, val) -> write(io, val))
+    (io, _) -> read(io, UInt64),
+    (io, val) -> write(io, val),
+)
 tag_value_io["RFLT"] = (
     # Offset of the reflection list of the function in the reflection list section;
     # a 64-bit unsigned integer
     UInt64,
-    (io, _)   -> read(io, UInt64),
-    (io, val) -> write(io, val))
+    (io, _) -> read(io, UInt64),
+    (io, val) -> write(io, val),
+)
 ## header extension
 tag_value_io["HSRC"] = (
     # Offset and size of the embedded source code section; 2 x 64-bit unsigned integers
     @NamedTuple{offset::UInt64, size::UInt64},
-    (io, _)   -> (; offset=read(io, UInt64), size=read(io, UInt64)),
-    (io, val) -> write(io, UInt64[val.offset, val.size]))
+    (io, _) -> (; offset = read(io, UInt64), size = read(io, UInt64)),
+    (io, val) -> write(io, UInt64[val.offset, val.size]),
+)
 tag_value_io["HSRD"] = tag_value_io["HSRC"]
 tag_value_io["RLST"] = (
     # Offset and size of the reflection list section; 2 x 64-bit unsigned integers
     @NamedTuple{offset::UInt64, size::UInt64},
-    (io, _)   -> (; offset=read(io, UInt64), size=read(io, UInt64)),
-    (io, val) -> write(io, UInt64[val.offset, val.size]))
+    (io, _) -> (; offset = read(io, UInt64), size = read(io, UInt64)),
+    (io, val) -> write(io, UInt64[val.offset, val.size]),
+)
 tag_value_io["SLST"] = (
     # Offset and size of the script list section; 2 x 64-bit unsigned integers
     @NamedTuple{offset::UInt64, size::UInt64},
-    (io, _)   -> (; offset=read(io, UInt64), size=read(io, UInt64)),
-    (io, val) -> write(io, UInt64[val.offset, val.size]))
+    (io, _) -> (; offset = read(io, UInt64), size = read(io, UInt64)),
+    (io, val) -> write(io, UInt64[val.offset, val.size]),
+)
 tag_value_io["UUID"] = (
     # UUID of the module; 16 bytes
     UUID,
-    (io, _)   -> begin
+    (io, _) -> begin
         uuid_bits = Vector{UInt64}(undef, 2)
         read!(io, uuid_bits)
         UUID(Tuple(uuid_bits))
     end,
     (io, val) -> begin
-        bits = convert(Tuple{UInt64,UInt64}, val)
+        bits = convert(Tuple{UInt64, UInt64}, val)
         write(io, UInt64[bits...])
-    end)
+    end,
+)
 ## public metadata
 tag_value_io["CNST"] = (
     # A list of function constants
     Vector{FunctionConstant},
-    (io, _)   -> begin
+    (io, _) -> begin
         num_constants = read(io, UInt16)
         constants = Vector{FunctionConstant}(undef, num_constants)
         for i in 1:num_constants
@@ -315,25 +335,28 @@ tag_value_io["CNST"] = (
             write(io, UInt16(constant.index))
             write(io, UInt8(constant.active))
         end
-    end)
+    end,
+)
 ## private metadata
 tag_value_io["DEBI"] = (
     # Debug information; line number and path of the source file
     DebugInfo,
-    (io, _)   -> DebugInfo(read(io, UInt32), String(readuntil(io, UInt8(0)))),
+    (io, _) -> DebugInfo(read(io, UInt32), String(readuntil(io, UInt8(0)))),
     (io, val) -> begin
         write(io, UInt32(val.line))
         write(io, val.path)
         write(io, UInt8(0))
-    end)
+    end,
+)
 tag_value_io["DEPF"] = (
     # Path of the dependent file; a null-terminated string
     String,
-    (io, _)   -> String(readuntil(io, UInt8(0))),
+    (io, _) -> String(readuntil(io, UInt8(0))),
     (io, val) -> begin
         write(io, val)
         write(io, UInt8(0))
-    end)
+    end,
+)
 ## embedded sources
 tag_value_io["SARC"] = (
     # Source archive; an identifier (null-terminated ASCII) and BZip2-compressed tarball
@@ -346,7 +369,7 @@ tag_value_io["SARC"] = (
         #archive = transcode(Bzip2Decompressor, compressed)
         # special handling is required to set `stop_on_end=true`,
         # as these archives are padded to multiples of 16KB.
-        stream = Bzip2DecompressorStream(IOBuffer(compressed); stop_on_end=true)
+        stream = Bzip2DecompressorStream(IOBuffer(compressed); stop_on_end = true)
         archive = read(stream, typemax(Int))
 
         (; id, archive)
@@ -357,11 +380,12 @@ tag_value_io["SARC"] = (
 
         # compress and pad the archive
         compressed = transcode(Bzip2Compressor, val.archive)
-        padding = 16*1024 - (sizeof(compressed) % (16*1024))
+        padding = 16 * 1024 - (sizeof(compressed) % (16 * 1024))
         compressed = vcat(compressed, Base.zeros(UInt8, padding))
 
         write(io, compressed)
-    end)
+    end,
+)
 ## reflection lists
 tag_value_io["RBUF"] = (
     # Reflection buffer
@@ -369,7 +393,8 @@ tag_value_io["RBUF"] = (
     (io, nb) -> begin
         read(io, nb)
     end,
-    (io, val) -> write(io, val))
+    (io, val) -> write(io, val),
+)
 ## script lists
 tag_value_io["SBUF"] = (
     # Script buffer
@@ -378,7 +403,8 @@ tag_value_io["SBUF"] = (
         # XXX: these are probably flatbuffers; decode here?
         read(io, nb)
     end,
-    (io, val) -> write(io, val))
+    (io, val) -> write(io, val),
+)
 
 function Base.read!(io::IO, tg::TagGroup)
     if tg.has_size
@@ -393,7 +419,7 @@ function Base.read!(io::IO, tg::TagGroup)
 
     while true
         # read the tag name
-        tag_name = String(read(io, 4*sizeof(Cchar)))
+        tag_name = String(read(io, 4 * sizeof(Cchar)))
         if tag_name == "ENDT"
             break
         end
@@ -434,7 +460,7 @@ end
 
 function Base.write(io::IO, tg::TagGroup)
     # emit the data and their values
-    group_data = let io=IOBuffer()
+    group_data = let io = IOBuffer()
         for (tag, value) in tg.data
             # write the tag name
             @assert length(tag) == 4
@@ -445,7 +471,7 @@ function Base.write(io::IO, tg::TagGroup)
             value_type, _, value_writer = tag_value_io[tag]
 
             # serialize the value
-            value_bytes = let io=IOBuffer()
+            value_bytes = let io = IOBuffer()
                 value_writer(io, convert(value_type, value))
                 take!(io)
             end
@@ -575,7 +601,7 @@ function Base.read(io::IO, ::Type{MetalLib})
 
     # header extension, if any
     if position(io) < public_md_offset
-        header_ex = read!(io, TagGroup(has_size=false))
+        header_ex = read!(io, TagGroup(has_size = false))
         @assert position(io) == public_md_offset
     else
         header_ex = nothing
@@ -672,7 +698,7 @@ function Base.read(io::IO, ::Type{MetalLib})
             # note the offset as used by the SOFF tag
             source_offset = position(io) + sizeof(UInt32) - header_ex[tag].offset
 
-            data = read!(io, TagGroup(size_type=UInt32, counts_size=false))
+            data = read!(io, TagGroup(size_type = UInt32, counts_size = false))
             id, archive = data["SARC"]
             push!(archives, id => archive)
 
@@ -707,13 +733,15 @@ function Base.read(io::IO, ::Type{MetalLib})
             push!(optional_args, :reflection_data => reflection_data[i])
         end
 
-        push!(functions, MetalLibFunction(;
-            name = function_list[i]["NAME"],
-            air_module = module_list[i],
-            air_version=function_list[i]["VERS"].air,
-            metal_version=function_list[i]["VERS"].metal,
-            optional_args...
-        ))
+        push!(
+            functions, MetalLibFunction(;
+                name = function_list[i]["NAME"],
+                air_module = module_list[i],
+                air_version = function_list[i]["VERS"].air,
+                metal_version = function_list[i]["VERS"].metal,
+                optional_args...
+            )
+        )
     end
 
     optional_args = []
@@ -722,10 +750,12 @@ function Base.read(io::IO, ::Type{MetalLib})
         push!(optional_args, :uuid => header_ex["UUID"])
     end
 
-    MetalLib(; file_version, file_type, is_macos, is_stub,
-               platform_version, platform_type, is_64bit,
-               functions, embedded_source,
-               optional_args...)
+    return MetalLib(;
+        file_version, file_type, is_macos, is_stub,
+        platform_version, platform_type, is_64bit,
+        functions, embedded_source,
+        optional_args...
+    )
 end
 
 Base.write(path::AbstractString, lib::MetalLib) = open(path, "w") do io
@@ -737,7 +767,7 @@ function Base.write(io::IO, lib::MetalLib)
 
     embedded_source_offsets = Dict()
 
-    embedded_source = let io=IOBuffer()
+    embedded_source = let io = IOBuffer()
         if lib.embedded_source !== nothing
             write(io, UInt32(length(lib.embedded_source.archives)))
             write(io, lib.embedded_source.link_options)
@@ -746,11 +776,11 @@ function Base.write(io::IO, lib::MetalLib)
                 write(io, lib.embedded_source.working_directory)
                 write(io, UInt8(0))
             end
-            for (id, archive) = lib.embedded_source.archives
+            for (id, archive) in lib.embedded_source.archives
                 # the offset points past the tag token
                 embedded_source_offsets[id] = position(io) + sizeof(UInt32)
 
-                archive_tags = TagGroup(size_type=UInt32, counts_size=false)
+                archive_tags = TagGroup(size_type = UInt32, counts_size = false)
                 archive_tags["SARC"] = (; id, archive)
                 write(io, archive_tags)
             end
@@ -763,7 +793,7 @@ function Base.write(io::IO, lib::MetalLib)
 
     reflection_list_offsets = Int[]
 
-    reflection_list = let io=IOBuffer()
+    reflection_list = let io = IOBuffer()
         reflection_buffers = count(lib.functions) do fun
             fun.reflection_data !== nothing
         end
@@ -825,10 +855,12 @@ function Base.write(io::IO, lib::MetalLib)
         function_tags["NAME"] = fun.name
         function_tags["TYPE"] = PROGRAM_KERNEL
         function_tags["HASH"] = module_hash
-        function_tags["OFFT"] = (; public_md=public_md_offset,
-                                   private_md=private_md_offset,
-                                   air_module=module_list_offset)
-        function_tags["VERS"] = (; air=fun.air_version, metal=fun.metal_version)
+        function_tags["OFFT"] = (;
+            public_md = public_md_offset,
+            private_md = private_md_offset,
+            air_module = module_list_offset,
+        )
+        function_tags["VERS"] = (; air = fun.air_version, metal = fun.metal_version)
         function_tags["MDSZ"] = module_size
         if fun.source_id !== nothing && haskey(embedded_source_offsets, fun.source_id)
             function_tags["SOFF"] = embedded_source_offsets[fun.source_id]
@@ -854,13 +886,13 @@ function Base.write(io::IO, lib::MetalLib)
     ## header extensions
 
     if lib.file_version >= v"1.2.3"
-        header_ex_tags = TagGroup(has_size=false)
+        header_ex_tags = TagGroup(has_size = false)
         if sizeof(embedded_source) > 0
             embedded_source_tag = lib.file_version >= v"1.2.6" ? "HSRD" : "HSRC"
-            header_ex_tags[embedded_source_tag] = (; offset=0, size=sizeof(embedded_source))
+            header_ex_tags[embedded_source_tag] = (; offset = 0, size = sizeof(embedded_source))
         end
         if lib.file_version >= v"1.2.7"
-            header_ex_tags["RLST"] = (; offset=0, size=sizeof(reflection_list))
+            header_ex_tags["RLST"] = (; offset = 0, size = sizeof(reflection_list))
         end
         # XXX: placeholder; this data is invalid
         #      it should be a UUID based on all of the module's data
@@ -911,20 +943,20 @@ function Base.write(io::IO, lib::MetalLib)
 
     # we can only write offset fields after having written the sections,
     # so keep track of their positions and patch them later
-    placeholders = Dict{Symbol,Int}()
+    placeholders = Dict{Symbol, Int}()
     function mark_placeholder(name, location)
-        placeholders[name] = location
+        return placeholders[name] = location
     end
     function write_placeholder(io, T, name)
         pos = position(io)
         write(io, zero(T) #= placeholder =#)
-        mark_placeholder(name, pos)
+        return mark_placeholder(name, pos)
     end
     function patch_placeholder(io, name, value)
         position = mark(io)
         seek(io, placeholders[name])
         write(io, value)
-        reset(io)
+        return reset(io)
     end
 
     # file size
@@ -956,12 +988,16 @@ function Base.write(io::IO, lib::MetalLib)
 
     # header extension
     if sizeof(embedded_source) > 0
-        mark_placeholder(:embedded_source_offset,
-                         position(io) + offsetof(header_ex_tags, embedded_source_tag))
+        mark_placeholder(
+            :embedded_source_offset,
+            position(io) + offsetof(header_ex_tags, embedded_source_tag)
+        )
     end
     if sizeof(reflection_list) > 0
-        mark_placeholder(:reflection_list_offset,
-                         position(io) + offsetof(header_ex_tags, "RLST"))
+        mark_placeholder(
+            :reflection_list_offset,
+            position(io) + offsetof(header_ex_tags, "RLST")
+        )
     end
     write(io, header_ex)
 
@@ -997,5 +1033,5 @@ function Base.write(io::IO, lib::MetalLib)
 
     # TODO: script list
 
-    patch_placeholder(io, :file_size, position(io))
+    return patch_placeholder(io, :file_size, position(io))
 end

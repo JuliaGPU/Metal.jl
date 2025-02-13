@@ -8,8 +8,8 @@ function main()
     ci = get(ENV, "CI", "") == "true"
 
     @info "Generating Documenter.jl site"
-    DocMeta.setdocmeta!(Metal, :DocTestSetup, :(using Metal); recursive=true)
-    makedocs(
+    DocMeta.setdocmeta!(Metal, :DocTestSetup, :(using Metal); recursive = true)
+    return makedocs(
         sitename = "Metal.jl",
         authors = "Tim Besard", # TODO: Who to put
         repo = "$src/blob/{commit}{path}#{line}",

@@ -30,21 +30,25 @@ export MPSMatrixDescriptor
 # @objcwrapper MPSMatrixDescriptor <: NSObject
 
 function MPSMatrixDescriptor(rows, columns, rowBytes, dataType)
-    desc = @objc [MPSMatrixDescriptor matrixDescriptorWithRows:rows::NSUInteger
-                                      columns:columns::NSUInteger
-                                      rowBytes:rowBytes::NSUInteger
-                                      dataType:dataType::MPSDataType]::id{MPSMatrixDescriptor}
-    MPSMatrixDescriptor(desc)
+    desc = @objc [
+        MPSMatrixDescriptor matrixDescriptorWithRows:rows::NSUInteger
+        columns:columns::NSUInteger
+        rowBytes:rowBytes::NSUInteger
+        dataType:dataType::MPSDataType
+    ]::id{MPSMatrixDescriptor}
+    return MPSMatrixDescriptor(desc)
 end
 
 function MPSMatrixDescriptor(rows, columns, matrices, rowBytes, matrixBytes, dataType)
-    desc = @objc [MPSMatrixDescriptor matrixDescriptorWithRows:rows::NSUInteger
-                                      columns:columns::NSUInteger
-                                      matrices:matrices::NSUInteger
-                                      rowBytes:rowBytes::NSUInteger
-                                      matrixBytes:matrixBytes::NSUInteger
-                                      dataType:dataType::MPSDataType]::id{MPSMatrixDescriptor}
-    MPSMatrixDescriptor(desc)
+    desc = @objc [
+        MPSMatrixDescriptor matrixDescriptorWithRows:rows::NSUInteger
+        columns:columns::NSUInteger
+        matrices:matrices::NSUInteger
+        rowBytes:rowBytes::NSUInteger
+        matrixBytes:matrixBytes::NSUInteger
+        dataType:dataType::MPSDataType
+    ]::id{MPSMatrixDescriptor}
+    return MPSMatrixDescriptor(desc)
 end
 
 
@@ -54,13 +58,15 @@ export MPSMatrix
 
 # @objcwrapper immutable=false MPSMatrix <: NSObject
 
-function MPSMatrix(buf, descriptor::MPSMatrixDescriptor, offset::Integer=0)
+function MPSMatrix(buf, descriptor::MPSMatrixDescriptor, offset::Integer = 0)
     mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
     obj = MPSMatrix(mat)
     finalizer(release, obj)
-    @objc [obj::id{MPSMatrix} initWithBuffer:buf::id{MTLBuffer}
-                              offset:offset::NSUInteger
-                              descriptor:descriptor::id{MPSMatrixDescriptor}]::id{MPSMatrix}
+    @objc [
+        obj::id{MPSMatrix} initWithBuffer:buf::id{MTLBuffer}
+        offset:offset::NSUInteger
+        descriptor:descriptor::id{MPSMatrixDescriptor}
+    ]::id{MPSMatrix}
     return obj
 end
 
@@ -68,8 +74,10 @@ function MPSMatrix(dev::MTLDevice, descriptor::MPSMatrixDescriptor)
     mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
     obj = MPSMatrix(mat)
     finalizer(release, obj)
-    @objc [obj::id{MPSMatrix} initWithDevice:dev::id{MTLDevice}
-                              descriptor:descriptor::id{MPSMatrixDescriptor}]::id{MPSMatrix}
+    @objc [
+        obj::id{MPSMatrix} initWithDevice:dev::id{MTLDevice}
+        descriptor:descriptor::id{MPSMatrixDescriptor}
+    ]::id{MPSMatrix}
     return obj
 end
 
@@ -81,9 +89,9 @@ Metal matrix representation used in Performance Shaders.
 Note that this results in a transposed view of the input,
 as Metal stores matrices row-major instead of column-major.
 """
-function MPSMatrix(mat::MtlMatrix{T}) where T
+function MPSMatrix(mat::MtlMatrix{T}) where {T}
     n_cols, n_rows = size(mat)
-    desc = MPSMatrixDescriptor(n_rows, n_cols, sizeof(T)*n_cols, T)
+    desc = MPSMatrixDescriptor(n_rows, n_cols, sizeof(T) * n_cols, T)
     offset = mat.offset * sizeof(T)
     return MPSMatrix(mat, desc, offset)
 end
@@ -96,9 +104,9 @@ Metal matrix representation used in Performance Shaders.
 Note that this results in a transposed view of the input,
 as Metal stores matrices row-major instead of column-major.
 """
-function MPSMatrix(vec::MtlVector{T}) where T
+function MPSMatrix(vec::MtlVector{T}) where {T}
     n_cols, n_rows = length(vec), 1
-    desc = MPSMatrixDescriptor(n_rows, n_cols, sizeof(T)*n_cols, T)
+    desc = MPSMatrixDescriptor(n_rows, n_cols, sizeof(T) * n_cols, T)
     offset = vec.offset * sizeof(T)
     return MPSMatrix(vec, desc, offset)
 end
@@ -111,9 +119,9 @@ Metal batched matrix representation used in Performance Shaders.
 Note that this results in a transposed view of the input,
 as Metal stores matrices row-major instead of column-major.
 """
-function MPSMatrix(arr::MtlArray{T,3}) where T
+function MPSMatrix(arr::MtlArray{T, 3}) where {T}
     n_cols, n_rows, n_matrices = size(arr)
-    row_bytes = sizeof(T)*n_cols
+    row_bytes = sizeof(T) * n_cols
     desc = MPSMatrixDescriptor(n_rows, n_cols, n_matrices, row_bytes, row_bytes * n_rows, T)
     offset = arr.offset * sizeof(T)
     return MPSMatrix(arr, desc, offset)
@@ -126,27 +134,33 @@ export MPSMatrixMultiplication, encode!, matmul!
 
 # @objcwrapper immutable=false MPSMatrixMultiplication <: MPSKernel
 
-function MPSMatrixMultiplication(dev, transposeLeft, transposeRight, resultRows,
-                                 resultColumns, interiorColumns, alpha, beta)
+function MPSMatrixMultiplication(
+        dev, transposeLeft, transposeRight, resultRows,
+        resultColumns, interiorColumns, alpha, beta
+    )
     kernel = @objc [MPSMatrixMultiplication alloc]::id{MPSMatrixMultiplication}
     obj = MPSMatrixMultiplication(kernel)
     finalizer(release, obj)
-    @objc [obj::id{MPSMatrixMultiplication} initWithDevice:dev::id{MTLDevice}
-                                            transposeLeft:transposeLeft::Bool
-                                            transposeRight:transposeRight::Bool
-                                            resultRows:resultRows::NSUInteger
-                                            resultColumns:resultColumns::NSUInteger
-                                            interiorColumns:interiorColumns::NSUInteger
-                                            alpha:alpha::Cdouble
-                                            beta:beta::Cdouble]::id{MPSMatrixMultiplication}
+    @objc [
+        obj::id{MPSMatrixMultiplication} initWithDevice:dev::id{MTLDevice}
+        transposeLeft:transposeLeft::Bool
+        transposeRight:transposeRight::Bool
+        resultRows:resultRows::NSUInteger
+        resultColumns:resultColumns::NSUInteger
+        interiorColumns:interiorColumns::NSUInteger
+        alpha:alpha::Cdouble
+        beta:beta::Cdouble
+    ]::id{MPSMatrixMultiplication}
     return obj
 end
 
 function encode!(cmdbuf::MTLCommandBuffer, matmul::MPSMatrixMultiplication, left, right, result)
-    @objc [matmul::id{MPSMatrixMultiplication} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
-                                               leftMatrix:left::id{MPSMatrix}
-                                               rightMatrix:right::id{MPSMatrix}
-                                               resultMatrix:result::id{MPSMatrix}]::Nothing
+    return @objc [
+        matmul::id{MPSMatrixMultiplication} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+        leftMatrix:left::id{MPSMatrix}
+        rightMatrix:right::id{MPSMatrix}
+        resultMatrix:result::id{MPSMatrix}
+    ]::Nothing
 end
 
 """
@@ -158,9 +172,11 @@ A `MPSMatrixMultiplication` kernel that computes:
 This function should not typically be used. Rather, use the normal `LinearAlgebra` interface
 with any `MtlArray` and it should be accelerated using Metal Performance Shaders.
 """
-function matmul!(c::MtlArray{T1,N}, a::MtlArray{T2,N}, b::MtlArray{T3,N},
-                 alpha::Number=true, beta::Number=true,
-    transpose_a=false, transpose_b=false) where {T1, T2, T3, N}
+function matmul!(
+        c::MtlArray{T1, N}, a::MtlArray{T2, N}, b::MtlArray{T3, N},
+        alpha::Number = true, beta::Number = true,
+        transpose_a = false, transpose_b = false
+    ) where {T1, T2, T3, N}
     # NOTE: MPS uses row major, while Julia is col-major. Instead of transposing
     #       the inputs (by passing !transpose_[ab]) and afterwards transposing
     #       the output, we use the property that (AB)ᵀ = BᵀAᵀ
@@ -172,10 +188,12 @@ function matmul!(c::MtlArray{T1,N}, a::MtlArray{T2,N}, b::MtlArray{T3,N},
     mps_b = MPSMatrix(b)
     mps_c = MPSMatrix(c)
 
-    mat_mul_kernel = MPSMatrixMultiplication(device(),
-                                             transpose_b, transpose_a,
-                                             rows_c, cols_c, cols_a,
-                                             alpha, beta)
+    mat_mul_kernel = MPSMatrixMultiplication(
+        device(),
+        transpose_b, transpose_a,
+        rows_c, cols_c, cols_a,
+        alpha, beta
+    )
 
 
     # Encode and commit matmul kernel
@@ -197,16 +215,20 @@ function MPSMatrixFindTopK(dev, numberOfTopKValues)
     kernel = @objc [MPSMatrixFindTopK alloc]::id{MPSMatrixFindTopK}
     obj = MPSMatrixFindTopK(kernel)
     finalizer(release, obj)
-    @objc [obj::id{MPSMatrixFindTopK} initWithDevice:dev::id{MTLDevice}
-                                                   numberOfTopKValues:numberOfTopKValues::NSUInteger]::id{MPSMatrixFindTopK}
+    @objc [
+        obj::id{MPSMatrixFindTopK} initWithDevice:dev::id{MTLDevice}
+        numberOfTopKValues:numberOfTopKValues::NSUInteger
+    ]::id{MPSMatrixFindTopK}
     return obj
 end
 
 function encode!(cmdbuf::MTLCommandBuffer, kernel::MPSMatrixFindTopK, inputMatrix, resultIndexMatrix, resultValueMatrix)
-    @objc [kernel::id{MPSMatrixFindTopK} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
-                                                      inputMatrix:inputMatrix::id{MPSMatrix}
-                                                      resultIndexMatrix:resultIndexMatrix::id{MPSMatrix}
-                                                      resultValueMatrix:resultValueMatrix::id{MPSMatrix}]::Nothing
+    return @objc [
+        kernel::id{MPSMatrixFindTopK} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+        inputMatrix:inputMatrix::id{MPSMatrix}
+        resultIndexMatrix:resultIndexMatrix::id{MPSMatrix}
+        resultValueMatrix:resultValueMatrix::id{MPSMatrix}
+    ]::Nothing
 end
 
 """
@@ -225,16 +247,16 @@ See also: [`topk`](@ref).
 !!! warning
     This interface is experimental, and might change without warning.
 """
-function topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
-    size(I,1) >= k         || throw(ArgumentError("Matrix 'I' must be large enough for k rows"))
-    size(I,2) >= size(A,2) || throw(ArgumentError("Matrix 'I' must have at least as many columns as A"))
-    size(V,1) >= k         || throw(ArgumentError("Matrix 'V' must be large enough for k rows"))
-    size(V,2) >= size(A,2) || throw(ArgumentError("Matrix 'V' must have at least as many columns as A"))
+function topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) where {T <: MtlFloat}
+    size(I, 1) >= k          || throw(ArgumentError("Matrix 'I' must be large enough for k rows"))
+    size(I, 2) >= size(A, 2) || throw(ArgumentError("Matrix 'I' must have at least as many columns as A"))
+    size(V, 1) >= k          || throw(ArgumentError("Matrix 'V' must be large enough for k rows"))
+    size(V, 2) >= size(A, 2) || throw(ArgumentError("Matrix 'V' must have at least as many columns as A"))
 
-    return _topk!(A,I,V,k)
+    return _topk!(A, I, V, k)
 end
-@inline function _topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
-    size(A,1) >= k || throw(ArgumentError("Matrix 'A' must must have more rows than k"))
+@inline function _topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) where {T <: MtlFloat}
+    size(A, 1) >= k || throw(ArgumentError("Matrix 'A' must must have more rows than k"))
     k <= 16        || throw(ArgumentError("MPSMatrixFindTopK does not support values of k > 16"))
 
     # Create MPS-compatible matrix from the MtlArrays
@@ -268,10 +290,10 @@ See also: [`topk!`](@ref).
 !!! warning
     This interface is experimental, and might change without warning.
 """
-function topk(A::MtlMatrix{T,S}, k) where {T<:MtlFloat,S}
-    s = (k,size(A,2))
-    I = MtlMatrix{UInt32,S}(undef, s)
-    V = MtlMatrix{T,S}(undef, s)
+function topk(A::MtlMatrix{T, S}, k) where {T <: MtlFloat, S}
+    s = (k, size(A, 2))
+    I = MtlMatrix{UInt32, S}(undef, s)
+    V = MtlMatrix{T, S}(undef, s)
 
     return _topk!(A, I, V, k)
 end
@@ -295,9 +317,11 @@ for f in (:MPSMatrixSoftMax, :MPSMatrixLogSoftMax)
         end
 
         function encode!(cmdbuf::MTLCommandBuffer, kernel::$(f), inputMatrix, resultMatrix)
-            @objc [kernel::id{$(f)} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
-                                    inputMatrix:inputMatrix::id{MPSMatrix}
-                                    resultMatrix:resultMatrix::id{MPSMatrix}]::Nothing
+            return @objc [
+                kernel::id{$(f)} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+                inputMatrix:inputMatrix::id{MPSMatrix}
+                resultMatrix:resultMatrix::id{MPSMatrix}
+            ]::Nothing
         end
     end
 end

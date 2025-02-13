@@ -18,7 +18,7 @@ function kernel_fma(a, b, c, out)
 end
 
 "Return calculated TFLOPS of Metal device"
-function peakflops(len=1024*1024*100)
+function peakflops(len = 1024 * 1024 * 100)
     a = MtlArray(rand(Float32, len))
     b = MtlArray(rand(Float32, len))
     c = MtlArray(rand(Float32, len))
@@ -28,7 +28,7 @@ function peakflops(len=1024*1024*100)
     grid = cld(len, threads)
 
     bench = @benchmark Metal.@sync begin
-        @metal threads=$threads groups=$grid kernel_fma($a, $b, $c, $out)
+        @metal threads = $threads groups = $grid kernel_fma($a, $b, $c, $out)
     end
 
     # Cleanup memory
@@ -37,11 +37,11 @@ function peakflops(len=1024*1024*100)
     finalize(c)
     finalize(out)
 
-    flopcount = (99*3+1) * 2 * len
-    secs = minimum(bench.times) * 1e-9
+    flopcount = (99 * 3 + 1) * 2 * len
+    secs = minimum(bench.times) * 1.0e-9
     flops = flopcount / secs
 
-    println("TFlops: $(round(flops/1e12; digits=2))")
+    println("TFlops: $(round(flops / 1.0e12; digits = 2))")
     return
 end
 

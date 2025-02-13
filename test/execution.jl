@@ -11,34 +11,34 @@ dummy() = return
 
     threads = 1
     @metal threads dummy()
-    @metal threads=1 dummy()
-    @metal threads=(1,1) dummy()
-    @metal threads=(Int32(1),Int64(1)) dummy()
-    @metal threads=(1,1,1) dummy()
-    @metal threads=(Int8(1),Int32(1),1) dummy()
+    @metal threads = 1 dummy()
+    @metal threads = (1, 1) dummy()
+    @metal threads = (Int32(1), Int64(1)) dummy()
+    @metal threads = (1, 1, 1) dummy()
+    @metal threads = (Int8(1), Int32(1), 1) dummy()
 
     groups = 1
     @metal groups dummy()
-    @metal groups=1 dummy()
-    @metal groups=(1,1) dummy()
-    @metal groups=(Int32(1),Int64(1)) dummy()
-    @metal groups=(1,1,1) dummy()
-    @metal groups=(Int8(1),Int32(1),1) dummy()
+    @metal groups = 1 dummy()
+    @metal groups = (1, 1) dummy()
+    @metal groups = (Int32(1), Int64(1)) dummy()
+    @metal groups = (1, 1, 1) dummy()
+    @metal groups = (Int8(1), Int32(1), 1) dummy()
 
-    @metal macos=Metal.macos_version() dummy()
-    @metal metal=Metal.metal_support() dummy()
-    @metal air=Metal.air_support() dummy()
+    @metal macos = Metal.macos_version() dummy()
+    @metal metal = Metal.metal_support() dummy()
+    @metal air = Metal.air_support() dummy()
 
-    @test_throws InexactError @metal threads=(-2) dummy()
-    @test_throws InexactError @metal groups=(-2) dummy()
-    @test_throws ArgumentError @metal threads=(1025) dummy()
-    @test_throws ArgumentError @metal threads=(1000,2) dummy()
+    @test_throws InexactError @metal threads = (-2) dummy()
+    @test_throws InexactError @metal groups = (-2) dummy()
+    @test_throws ArgumentError @metal threads = (1025) dummy()
+    @test_throws ArgumentError @metal threads = (1000, 2) dummy()
 end
 
 @testset "launch=false" begin
-    k = @metal launch=false dummy()
+    k = @metal launch = false dummy()
     k()
-    k(; threads=1)
+    k(; threads = 1)
 
     # TODO: kernel introspection
 end
@@ -62,18 +62,18 @@ end
 
     @device_code_lowered @metal dummy()
     @device_code_typed @metal dummy()
-    @device_code_warntype io=devnull @metal dummy()
-    @device_code_llvm io=devnull @metal dummy()
+    @device_code_warntype io = devnull @metal dummy()
+    @device_code_llvm io = devnull @metal dummy()
 
     mktempdir() do dir
-        @device_code dir=dir @metal dummy()
+        @device_code dir = dir @metal dummy()
     end
 
     @test_throws ErrorException @device_code_lowered nothing
 
     # make sure kernel name aliases are preserved in the generated code
-    @test occursin("dummy", sprint(io->(@device_code_llvm io=io optimize=false @metal dummy())))
-    @test occursin("dummy", sprint(io->(@device_code_llvm io=io @metal dummy())))
+    @test occursin("dummy", sprint(io -> (@device_code_llvm io = io optimize = false @metal dummy())))
+    @test occursin("dummy", sprint(io -> (@device_code_llvm io = io @metal dummy())))
 
     # make sure invalid kernels can be partially reflected upon
     let
@@ -90,31 +90,54 @@ end
     end
 
     # set name of kernel
-    @test occursin("mykernel", sprint(io->(@device_code_llvm io=io begin
-        @metal name="mykernel" dummy()
-    end)))
+    @test occursin(
+        "mykernel", sprint(
+            io -> (
+                @device_code_llvm io = io begin
+                    @metal name = "mykernel" dummy()
+                end
+            )
+        )
+    )
 
     # set macOS, AIR, and Metal versions
     let
-        @test occursin("""!{!"Metal", i32 3, i32 2, i32 1}""",
-                       sprint(io->Metal.code_llvm(io, dummy, Tuple{}; metal=v"3.2.1",
-                                                      dump_module=true, kernel=true)))
+        @test occursin(
+            """!{!"Metal", i32 3, i32 2, i32 1}""",
+            sprint(
+                io -> Metal.code_llvm(
+                    io, dummy, Tuple{}; metal = v"3.2.1",
+                    dump_module = true, kernel = true
+                )
+            )
+        )
 
-        @test occursin("!{i32 3, i32 2, i32 1}",
-                       sprint(io->Metal.code_llvm(io, dummy, Tuple{}; air=v"3.2.1",
-                                                      dump_module=true, kernel=true)))
+        @test occursin(
+            "!{i32 3, i32 2, i32 1}",
+            sprint(
+                io -> Metal.code_llvm(
+                    io, dummy, Tuple{}; air = v"3.2.1",
+                    dump_module = true, kernel = true
+                )
+            )
+        )
 
-        @test occursin("""!"SDK Version", [3 x i32] [i32 3, i32 2, i32 1]}""",
-                       sprint(io->Metal.code_llvm(io, dummy, Tuple{}; macos=v"3.2.1",
-                                                      dump_module=true, kernel=true)))
+        @test occursin(
+            """!"SDK Version", [3 x i32] [i32 3, i32 2, i32 1]}""",
+            sprint(
+                io -> Metal.code_llvm(
+                    io, dummy, Tuple{}; macos = v"3.2.1",
+                    dump_module = true, kernel = true
+                )
+            )
+        )
     end
 
     @test Metal.return_type(identity, Tuple{Int}) === Int
     @test Metal.return_type(sin, Tuple{Float32}) === Float32
-    @test Metal.return_type(getindex, Tuple{MtlDeviceArray{Float32,1,1},Int32}) === Float32
+    @test Metal.return_type(getindex, Tuple{MtlDeviceArray{Float32, 1, 1}, Int32}) === Float32
     @test Metal.return_type(getindex, Tuple{Base.RefValue{Integer}}) === Integer
 end
-
 
 
 function tester(A)
@@ -124,18 +147,18 @@ function tester(A)
 end
 
 bufferSize = 8
-bufferA = MtlArray{Int,1,Metal.SharedStorage}(undef, tuple(bufferSize))
+bufferA = MtlArray{Int, 1, Metal.SharedStorage}(undef, tuple(bufferSize))
 vecA = unsafe_wrap(Vector{Int}, pointer(bufferA), tuple(bufferSize))
 
 @testset "synchronization" begin
-    @metal threads=(bufferSize) tester(bufferA)
+    @metal threads = (bufferSize) tester(bufferA)
     synchronize()
     @test all(vecA .== Int(5))
 end
 
 @testset "device synchronization" begin
     t = @async begin
-        @metal threads=(bufferSize) tester(bufferA)
+        @metal threads = (bufferSize) tester(bufferA)
     end
     wait(t)
     device_synchronize()
@@ -144,27 +167,27 @@ end
 
 @testset "launch params" begin
     vecA .= 0
-    @metal threads=(2) tester(bufferA)
+    @metal threads = (2) tester(bufferA)
     synchronize()
     @test all(vecA == Int.([5, 5, 0, 0, 0, 0, 0, 0]))
     vecA .= 0
 
-    @metal groups=(3) threads=(2) tester(bufferA)
+    @metal groups = (3) threads = (2) tester(bufferA)
     synchronize()
     @test all(vecA == Int.([5, 5, 5, 5, 5, 5, 0, 0]))
     vecA .= 0
 
     dev = device()
     queue = MTL.MTLCommandQueue(dev)
-    @metal threads=(3) queue=queue tester(bufferA)
+    @metal threads = (3) queue = queue tester(bufferA)
     synchronize(queue)
     @test all(vecA == Int.([5, 5, 5, 0, 0, 0, 0, 0]))
     vecA .= 0
 
-    @test_throws InexactError @metal threads=(-2) tester(bufferA)
-    @test_throws InexactError @metal groups=(-2) tester(bufferA)
-    @test_throws ArgumentError @metal threads=(1025) tester(bufferA)
-    @test_throws ArgumentError @metal threads=(1000,2) tester(bufferA)
+    @test_throws InexactError @metal threads = (-2) tester(bufferA)
+    @test_throws InexactError @metal groups = (-2) tester(bufferA)
+    @test_throws ArgumentError @metal threads = (1025) tester(bufferA)
+    @test_throws ArgumentError @metal threads = (1000, 2) tester(bufferA)
 end
 
 end
@@ -240,12 +263,12 @@ end
 
     @testset "array in struct argument" begin
         function kernel(obj)
-            unsafe_store!(obj[1], obj[2][1]+obj[2][2])
+            unsafe_store!(obj[1], obj[2][1] + obj[2][2])
             return
         end
 
         a = MtlArray([1])
-        @metal kernel((pointer(a), (20,22)))
+        @metal kernel((pointer(a), (20, 22)))
         @test Array(a)[] == 42
     end
 

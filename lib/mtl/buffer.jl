@@ -17,9 +17,11 @@ end
 
 ## allocation
 
-function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer;
-                   storage=PrivateStorage, hazard_tracking=DefaultTracking,
-                   cache_mode=DefaultCPUCache)
+function MTLBuffer(
+        dev::Union{MTLDevice, MTLHeap}, bytesize::Integer;
+        storage = PrivateStorage, hazard_tracking = DefaultTracking,
+        cache_mode = DefaultCPUCache
+    )
     opts = convert(MTLResourceOptions, storage) | hazard_tracking | cache_mode
 
     @assert 0 < bytesize <= dev.maxBufferLength # XXX: not supported by MTLHeap
@@ -28,11 +30,13 @@ function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer;
     return MTLBuffer(ptr)
 end
 
-function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
-                   nocopy=false, storage=SharedStorage, hazard_tracking=DefaultTracking,
-                   cache_mode=DefaultCPUCache)
+function MTLBuffer(
+        dev::MTLDevice, bytesize::Integer, ptr::Ptr;
+        nocopy = false, storage = SharedStorage, hazard_tracking = DefaultTracking,
+        cache_mode = DefaultCPUCache
+    )
     storage == PrivateStorage && error("Cannot allocate-and-initialize a PrivateStorage buffer")
-    opts =  convert(MTLResourceOptions, storage) | hazard_tracking | cache_mode
+    opts = convert(MTLResourceOptions, storage) | hazard_tracking | cache_mode
 
     @assert 0 < bytesize <= dev.maxBufferLength
     ptr = if nocopy
@@ -74,25 +78,33 @@ end
 
 # from device
 alloc_buffer(dev::MTLDevice, bytesize, opts) =
-    @objc [dev::id{MTLDevice} newBufferWithLength:bytesize::NSUInteger
-                              options:opts::MTLResourceOptions]::id{MTLBuffer}
+    @objc [
+    dev::id{MTLDevice} newBufferWithLength:bytesize::NSUInteger
+    options:opts::MTLResourceOptions
+]::id{MTLBuffer}
 alloc_buffer(dev::MTLDevice, bytesize, opts, ptr::Ptr) =
-    @objc [dev::id{MTLDevice} newBufferWithBytes:ptr::Ptr{Cvoid}
-                              length:bytesize::NSUInteger
-                              options:opts::MTLResourceOptions]::id{MTLBuffer}
+    @objc [
+    dev::id{MTLDevice} newBufferWithBytes:ptr::Ptr{Cvoid}
+    length:bytesize::NSUInteger
+    options:opts::MTLResourceOptions
+]::id{MTLBuffer}
 function alloc_buffer_nocopy(dev::MTLDevice, bytesize, opts, ptr::Ptr)
     can_alloc_nocopy(ptr, bytesize) ||
         throw(ArgumentError("Cannot allocate nocopy buffer from non-aligned memory"))
-    @objc [dev::id{MTLDevice} newBufferWithBytesNoCopy:ptr::Ptr{Cvoid}
-                              length:bytesize::NSUInteger
-                              options:opts::MTLResourceOptions
-                              deallocator:nil::id{Object}]::id{MTLBuffer}
+    return @objc [
+        dev::id{MTLDevice} newBufferWithBytesNoCopy:ptr::Ptr{Cvoid}
+        length:bytesize::NSUInteger
+        options:opts::MTLResourceOptions
+        deallocator:nil::id{Object}
+    ]::id{MTLBuffer}
 end
 
 # from heap
 alloc_buffer(dev::MTLHeap, bytesize, opts) =
-    @objc [dev::id{MTLHeap} newBufferWithLength:bytesize::NSUInteger
-                            options:opts::MTLResourceOptions]::id{MTLBuffer}
+    @objc [
+    dev::id{MTLHeap} newBufferWithLength:bytesize::NSUInteger
+    options:opts::MTLResourceOptions
+]::id{MTLBuffer}
 
 """
     DidModifyRange!(buf::MTLBuffer, range::UnitRange)
@@ -103,5 +115,5 @@ and that they should be transferred to the device before executing any following
 Only valid for `ManagedStorage` buffers.
 """
 function DidModifyRange!(buf::MTLBuffer, range)
-    @objc [buf::id{MTLBuffer} didModifyRange:range::NSRange]::Nothing
+    return @objc [buf::id{MTLBuffer} didModifyRange:range::NSRange]::Nothing
 end

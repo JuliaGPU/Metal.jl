@@ -20,7 +20,7 @@ MTLCaptureScope
 Begin recording GPU command information.
 """
 function beginScope(scope::MTLCaptureScope)
-    @objc [scope::id{MTLCaptureScope} beginScope]::Nothing
+    return @objc [scope::id{MTLCaptureScope} beginScope]::Nothing
 end
 
 """
@@ -29,7 +29,7 @@ end
 Stop recording GPU command information.
 """
 function endScope(scope::MTLCaptureScope)
-    @objc [scope::id{MTLCaptureScope} endScope]::Nothing
+    return @objc [scope::id{MTLCaptureScope} endScope]::Nothing
 end
 
 
@@ -59,9 +59,11 @@ function MTLCaptureDescriptor()
 end
 
 # TODO: Add capture state
-function MTLCaptureDescriptor(obj::Union{MTLDevice,MTLCommandQueue, MTLCaptureScope},
-                              destination::MTLCaptureDestination;
-                              folder::String=nothing)
+function MTLCaptureDescriptor(
+        obj::Union{MTLDevice, MTLCommandQueue, MTLCaptureScope},
+        destination::MTLCaptureDestination;
+        folder::String = nothing
+    )
     desc = MTLCaptureDescriptor()
     desc.destination = destination
     desc.captureObject = obj
@@ -70,7 +72,6 @@ function MTLCaptureDescriptor(obj::Union{MTLDevice,MTLCommandQueue, MTLCaptureSc
     end
     return desc
 end
-
 
 
 #
@@ -100,7 +101,7 @@ function MTLCaptureManager()
     # One with capture enabled and one without
     MTLDevice(1)
     handle = @objc [MTLCaptureManager sharedCaptureManager]::id{MTLCaptureManager}
-    MTLCaptureManager(handle)
+    return MTLCaptureManager(handle)
 end
 
 """
@@ -110,13 +111,15 @@ end
 
 Start GPU frame capture using the default capture object and specifying capture descriptor parameters directly.
 """
-function startCapture(obj::Union{MTLDevice,MTLCommandQueue, MTLCaptureScope},
-                      destination::MTLCaptureDestination=MTLCaptureDestinationGPUTraceDocument;
-                      folder::String=nothing)
+function startCapture(
+        obj::Union{MTLDevice, MTLCommandQueue, MTLCaptureScope},
+        destination::MTLCaptureDestination = MTLCaptureDestinationGPUTraceDocument;
+        folder::String = nothing
+    )
     if destination == MTLCaptureDestinationGPUTraceDocument && folder == nothing
         throw(ArgumentError("Must specify output folder if destination is GPUTraceDocument"))
     end
-    startCapture(MTLCaptureManager(), MTLCaptureDescriptor(obj, destination; folder=folder))
+    return startCapture(MTLCaptureManager(), MTLCaptureDescriptor(obj, destination; folder = folder))
 end
 
 """
@@ -129,8 +132,10 @@ function startCapture(manager::MTLCaptureManager, desc::MTLCaptureDescriptor)
     manager.isCapturing && throw(error("Capture manager is already capturing."))
 
     err = Ref{id{NSError}}(nil)
-    success = @objc [manager::id{MTLCaptureManager} startCaptureWithDescriptor:desc::id{MTLCaptureDescriptor}
-                                                    error:err::Ptr{id{NSError}}]::Bool
+    success = @objc [
+        manager::id{MTLCaptureManager} startCaptureWithDescriptor:desc::id{MTLCaptureDescriptor}
+        error:err::Ptr{id{NSError}}
+    ]::Bool
     success || throw(NSError(err[]))
     return
 end
@@ -139,10 +144,10 @@ end
     stopCapture(manager::MTLCaptureManager=MTLCaptureManager())
 Stop GPU frame capture.
 """
-function stopCapture(manager::MTLCaptureManager=MTLCaptureManager())
-    @objc [manager::id{MTLCaptureManager} stopCapture]::Nothing
+function stopCapture(manager::MTLCaptureManager = MTLCaptureManager())
+    return @objc [manager::id{MTLCaptureManager} stopCapture]::Nothing
 end
 
 function supports_destination(manager::MTLCaptureManager, destination::MTLCaptureDestination)
-    @objc [manager::id{MTLCaptureManager} supportsDestination:destination::MTLCaptureDestination]::Bool
+    return @objc [manager::id{MTLCaptureManager} supportsDestination:destination::MTLCaptureDestination]::Bool
 end

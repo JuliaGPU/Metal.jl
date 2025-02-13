@@ -8,11 +8,11 @@ using StableRNGs
 rng = StableRNG(123)
 
 # print system information
-@info "System information:\n" * sprint(io->Metal.versioninfo(io))
+@info "System information:\n" * sprint(io -> Metal.versioninfo(io))
 
 # convenience macro to create a benchmark that requires synchronizing the GPU
 macro async_benchmarkable(ex...)
-    quote
+    return quote
         @benchmarkable Metal.@sync $(ex...)
     end
 end
@@ -29,7 +29,7 @@ include("kernel.jl")
 include("array.jl")
 
 @info "Preparing main benchmarks"
-warmup(SUITE; verbose=false)
+warmup(SUITE; verbose = false)
 tune!(SUITE)
 
 # reclaim memory that might have been used by the tuning process
@@ -41,7 +41,7 @@ GC.gc(true)
 addgroup!(SUITE, "integration")
 
 @info "Running main benchmarks"
-results = run(SUITE, verbose=true)
+results = run(SUITE, verbose = true)
 
 # integration tests (that do nasty things, so need to be run last)
 @info "Running integration benchmarks"

@@ -17,14 +17,14 @@ function indexing_kernel(dest, src)
     @inbounds dest[i] = src[i]
     return
 end
-group["indexing"] = @async_benchmarkable @metal threads=size(src,1) groups=size(src,2) $indexing_kernel($dest, $src)
+group["indexing"] = @async_benchmarkable @metal threads = size(src, 1) groups = size(src, 2) $indexing_kernel($dest, $src)
 
 function checked_indexing_kernel(dest, src)
     i = thread_position_in_grid_1d()
     dest[i] = src[i]
     return
 end
-group["indexing_checked"] = @async_benchmarkable @metal threads=size(src,1) groups=size(src,2) $checked_indexing_kernel($dest, $src)
+group["indexing_checked"] = @async_benchmarkable @metal threads = size(src, 1) groups = size(src, 2) $checked_indexing_kernel($dest, $src)
 
 ## DELETE
 # function rand_kernel(dest::AbstractArray{T}) where {T}

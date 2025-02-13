@@ -31,13 +31,13 @@ function add_z_slices!(y, x1, x2)
     m1, n1 = size(x1[1]) #get size of first slice
     groups = (m1 * n1 + threads - 1) ÷ threads
     # get length(x1) more groups than needed to process 1 slice
-    @metal groups = groups, length(x1) threads = threads kernel_add_mat_z_slices(m1 * n1, x1..., x2..., y...)
+    return @metal groups = groups, length(x1) threads = threads kernel_add_mat_z_slices(m1 * n1, x1..., x2..., y...)
 end
 
 function add!(y, x1, x2)
     m1, n1 = size(x1)
     groups = (m1 * n1 + threads - 1) ÷ threads
-    @metal groups = (groups, 1)  threads = threads kernel_add_mat(m1 * n1, x1, x2, y)
+    return @metal groups = (groups, 1)  threads = threads kernel_add_mat(m1 * n1, x1, x2, y)
 end
 
 function main()
@@ -53,15 +53,15 @@ function main()
     m, n = 3072, 1536    # 256 multiplier
     #m, n = 6007, 3001    # prime numbers to test memory access correctness
 
-    x1 = [mtl(randn(Float32, (m, n)) .+ Float32(0.5)) for i = 1:num_z_slices]
-    x2 = [mtl(randn(Float32, (m, n)) .+ Float32(0.5)) for i = 1:num_z_slices]
-    y1 = [similar(x1[1]) for i = 1:num_z_slices]
+    x1 = [mtl(randn(Float32, (m, n)) .+ Float32(0.5)) for i in 1:num_z_slices]
+    x2 = [mtl(randn(Float32, (m, n)) .+ Float32(0.5)) for i in 1:num_z_slices]
+    y1 = [similar(x1[1]) for i in 1:num_z_slices]
 
     # reference down to bones add on GPU
     results["reference"] = @benchmark Metal.@sync add!($y1[1], $x1[1], $x2[1])
 
     # adding arrays in an array
-    for slices = 1:num_z_slices
+    for slices in 1:num_z_slices
         results["slices=$slices"] = @benchmark Metal.@sync add_z_slices!($y1[1:$slices], $x1[1:$slices], $x2[1:$slices])
     end
 

@@ -1,5 +1,5 @@
 macro print_and_throw(args...)
-    quote
+    return quote
         #@println "ERROR: " $(args...) "."
         throw(nothing)
     end
@@ -10,7 +10,7 @@ end
     @print_and_throw "This operation requires a complex input to return a complex result"
 @device_override @noinline Base.Math.throw_exp_domainerror(x) =
     @print_and_throw "Exponentiation yielding a complex result requires a complex argument"
-@device_override function Base.Math.exponent(x::T) where T<:Base.IEEEFloat
+@device_override function Base.Math.exponent(x::T) where {T <: Base.IEEEFloat}
     xs = reinterpret(Unsigned, x) & ~Base.sign_mask(T)
     xs >= Base.exponent_mask(T) && @print_and_throw "Cannot be NaN or Inf."
     k = Int(xs >> Base.significand_bits(T))
@@ -70,16 +70,16 @@ end
 end
 
 # complex.jl
-@device_override function Base.ssqs(x::T, y::T) where T<:Real
+@device_override function Base.ssqs(x::T, y::T) where {T <: Real}
     k::Int = 0
-    ρ = x*x + y*y
+    ρ = x * x + y * y
     if !isfinite(ρ) && (isinf(x) || isinf(y))
         ρ = convert(T, Inf)
-    elseif isinf(ρ) || (ρ==0 && (x!=0 || y!=0)) || ρ<nextfloat(zero(T))/(2*eps(T)^2)
+    elseif isinf(ρ) || (ρ == 0 && (x != 0 || y != 0)) || ρ < nextfloat(zero(T)) / (2 * eps(T)^2)
         m::T = max(abs(x), abs(y))
-        k = m==0 ? 0 : exponent(m)
-        xk, yk = ldexp(x,-k), ldexp(y,-k)
-        ρ = xk*xk + yk*yk
+        k = m == 0 ? 0 : exponent(m)
+        xk, yk = ldexp(x, -k), ldexp(y, -k)
+        ρ = xk * xk + yk * yk
     end
     ρ, k
 end

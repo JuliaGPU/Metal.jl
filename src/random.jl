@@ -1,6 +1,6 @@
 using Random
 using ..MPS: MPSVector, _mpsmat_rand!, MPSMatrixRandomUniformDistributionDescriptor,
-             MPSMatrixRandomNormalDistributionDescriptor
+    MPSMatrixRandomNormalDistributionDescriptor
 
 gpuarrays_rng() = GPUArrays.default_rng(MtlArray)
 mpsrand_rng() = MPS.default_rng()
@@ -24,46 +24,47 @@ function Random.randn!(A::MPS.NormalArray)
 end
 
 # GPUArrays out-of-place
-function rand(T::MPS.UniformType, dims::Dims; storage=DefaultStorageMode)
-    rng =  prod(dims) * sizeof(T) % 4 == 0 ? mpsrand_rng() : gpuarrays_rng()
-    return Random.rand!(rng, MtlArray{T,length(dims),storage}(undef, dims...))
+function rand(T::MPS.UniformType, dims::Dims; storage = DefaultStorageMode)
+    rng = prod(dims) * sizeof(T) % 4 == 0 ? mpsrand_rng() : gpuarrays_rng()
+    return Random.rand!(rng, MtlArray{T, length(dims), storage}(undef, dims...))
 end
-function randn(T::MPS.NormalType, dims::Dims; storage=DefaultStorageMode)
-    rng =  prod(dims) * sizeof(T) % 4 == 0 ? mpsrand_rng() : gpuarrays_rng()
-    return Random.randn!(rng, MtlArray{T,length(dims),storage}(undef, dims...))
+function randn(T::MPS.NormalType, dims::Dims; storage = DefaultStorageMode)
+    rng = prod(dims) * sizeof(T) % 4 == 0 ? mpsrand_rng() : gpuarrays_rng()
+    return Random.randn!(rng, MtlArray{T, length(dims), storage}(undef, dims...))
 end
-rand(T::Type, dims::Dims; storage=DefaultStorageMode) =
-    Random.rand!(gpuarrays_rng(), MtlArray{T,length(dims),storage}(undef, dims...))
-randn(T::Type, dims::Dims; storage=DefaultStorageMode) =
-    Random.randn!(gpuarrays_rng(), MtlArray{T,length(dims),storage}(undef, dims...))
+rand(T::Type, dims::Dims; storage = DefaultStorageMode) =
+    Random.rand!(gpuarrays_rng(), MtlArray{T, length(dims), storage}(undef, dims...))
+randn(T::Type, dims::Dims; storage = DefaultStorageMode) =
+    Random.randn!(gpuarrays_rng(), MtlArray{T, length(dims), storage}(undef, dims...))
 
 # support all dimension specifications
-function rand(T::MPS.UniformType, dim1::Integer, dims::Integer...; storage=DefaultStorageMode)
+function rand(T::MPS.UniformType, dim1::Integer, dims::Integer...; storage = DefaultStorageMode)
     rng = (dim1 * prod(dims) * sizeof(T)) % 4 == 0 ? mpsrand_rng() : gpuarrays_rng()
-    return Random.rand!(rng, MtlArray{T,length(dims) + 1,storage}(undef, dim1, dims...))
+    return Random.rand!(rng, MtlArray{T, length(dims) + 1, storage}(undef, dim1, dims...))
 end
-function randn(T::MPS.NormalType, dim1::Integer, dims::Integer...; storage=DefaultStorageMode)
+function randn(T::MPS.NormalType, dim1::Integer, dims::Integer...; storage = DefaultStorageMode)
     rng = (dim1 * prod(dims) * sizeof(T)) % 4 == 0 ? mpsrand_rng() : gpuarrays_rng()
-    return Random.randn!(rng, MtlArray{T,length(dims) + 1,storage}(undef, dim1, dims...))
+    return Random.randn!(rng, MtlArray{T, length(dims) + 1, storage}(undef, dim1, dims...))
 end
 
-rand(T::Type, dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
-    Random.rand!(gpuarrays_rng(), MtlArray{T,length(dims) + 1,storage}(undef, dim1, dims...))
-randn(T::Type, dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
-    Random.randn!(gpuarrays_rng(), MtlArray{T,length(dims) + 1,storage}(undef, dim1, dims...))
+rand(T::Type, dim1::Integer, dims::Integer...; storage = DefaultStorageMode) =
+    Random.rand!(gpuarrays_rng(), MtlArray{T, length(dims) + 1, storage}(undef, dim1, dims...))
+randn(T::Type, dim1::Integer, dims::Integer...; storage = DefaultStorageMode) =
+    Random.randn!(gpuarrays_rng(), MtlArray{T, length(dims) + 1, storage}(undef, dim1, dims...))
 
 # untyped out-of-place
-rand(dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
-    Random.rand!(mpsrand_rng(), MtlArray{Float32,length(dims) + 1,storage}(undef, dim1, dims...))
-randn(dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
-    Random.randn!(mpsrand_rng(), MtlArray{Float32,length(dims) + 1,storage}(undef, dim1, dims...))
+rand(dim1::Integer, dims::Integer...; storage = DefaultStorageMode) =
+    Random.rand!(mpsrand_rng(), MtlArray{Float32, length(dims) + 1, storage}(undef, dim1, dims...))
+randn(dim1::Integer, dims::Integer...; storage = DefaultStorageMode) =
+    Random.randn!(mpsrand_rng(), MtlArray{Float32, length(dims) + 1, storage}(undef, dim1, dims...))
 
 # scalars
-rand(T::Type=Float32; storage=SharedStorage) = rand(T, 4; storage)[1]
-randn(T::Type=Float32; storage=SharedStorage) = randn(T, 4; storage)[1]
+rand(T::Type = Float32; storage = SharedStorage) = rand(T, 4; storage)[1]
+randn(T::Type = Float32; storage = SharedStorage) = randn(T, 4; storage)[1]
 
 # seeding
-function seed!(seed=Base.rand(UInt64))
-    Random.seed!(gpuarrays_rng(), seed)
-    Random.seed!(mpsrand_rng(), seed)
+function seed!(seed = Base.rand(UInt64))
+    gpuarr = Random.seed!(gpuarrays_rng(), seed)
+    mps = Random.seed!(mpsrand_rng(), seed)
+    return gpuarr, mps
 end

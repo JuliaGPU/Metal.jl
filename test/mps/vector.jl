@@ -90,9 +90,11 @@ using .MPS: MPSMatrixVectorMultiplication
     alpha = 1
     beta = 0
 
-    matvec_mul = MPSMatrixVectorMultiplication(device(), trans,
-                                                      rows_c, cols_a,
-                                                      alpha, beta)
+    matvec_mul = MPSMatrixVectorMultiplication(
+        device(), trans,
+        rows_c, cols_a,
+        alpha, beta
+    )
 
     @test matvec_mul isa MPSMatrixVectorMultiplication
 end

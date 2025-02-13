@@ -18,7 +18,7 @@ const language_versions = Dict(
 
 function Base.convert(::Type{VersionNumber}, ver::MTLLanguageVersion)
     haskey(language_versions, ver) || error("Unknown language version $ver; please file an issue.")
-    language_versions[ver]
+    return language_versions[ver]
 end
 
 function Base.convert(::Type{MTLLanguageVersion}, ver::VersionNumber)

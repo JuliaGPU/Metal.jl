@@ -9,17 +9,23 @@ GPUCompiler.runtime_module(::MetalCompilerJob) = Metal
 GPUCompiler.method_table(::MetalCompilerJob) = method_table
 
 
-function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
-                                    mod::LLVM.Module, entry::LLVM.Function)
-    entry = invoke(GPUCompiler.finish_ir!,
-                   Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module, LLVM.Function},
-                   job, mod, entry)
+function GPUCompiler.finish_ir!(
+        @nospecialize(job::MetalCompilerJob),
+        mod::LLVM.Module, entry::LLVM.Function
+    )
+    entry = invoke(
+        GPUCompiler.finish_ir!,
+        Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module, LLVM.Function},
+        job, mod, entry
+    )
 
     # pointer type information for typed intrinsics
     # (this is consumed by the LLVM IR downgrader)
-    for (jltyp, llvmtyp) in (Int32 => :i32, Int64 => :i64,
-                             Float16 => :f16, Float32 => :f32),
-        (as, asname) in (AS.Device => "global", AS.ThreadGroup => "local")
+    for (jltyp, llvmtyp) in (
+                Int32 => :i32, Int64 => :i64,
+                Float16 => :f16, Float32 => :f32,
+            ),
+            (as, asname) in (AS.Device => "global", AS.ThreadGroup => "local")
 
         # map of intrinsics to pointer operand indices and eltypes
         intrinsics = Dict()
@@ -39,7 +45,7 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
             f = functions(mod)[fn]
             mds = []
             for (idx, typ) in args
-                push!(mds, ConstantInt(Int32(idx-1)))
+                push!(mds, ConstantInt(Int32(idx - 1)))
                 push!(mds, null(convert(LLVMType, typ)))
             end
             metadata(f)["arg_eltypes"] = MDNode(mds)
@@ -75,9 +81,11 @@ function compiler_config(dev; kwargs...)
     end
     return config
 end
-@noinline function _compiler_config(dev; kernel=true, name=nothing, always_inline=false,
-                                         macos=nothing, air=nothing, metal=nothing,
-                                         kwargs...)
+@noinline function _compiler_config(
+        dev; kernel = true, name = nothing, always_inline = false,
+        macos = nothing, air = nothing, metal = nothing,
+        kwargs...
+    )
     # determine the versions of things to target
     if macos === nothing
         macos = macos_version()
@@ -95,14 +103,14 @@ end
     # create GPUCompiler objects
     target = MetalCompilerTarget(; macos, air, metal, kwargs...)
     params = MetalCompilerParams()
-    CompilerConfig(target, params; kernel, name, always_inline)
+    return CompilerConfig(target, params; kernel, name, always_inline)
 end
 
 # compile to executable machine code
 function compile(@nospecialize(job::CompilerJob))
-    @signpost_event log=log_compiler() "Compile" "Job=$job"
+    @signpost_event log = log_compiler() "Compile" "Job=$job"
 
-    @signpost_interval log=log_compiler() "Generate LLVM IR" begin
+    @signpost_interval log = log_compiler() "Generate LLVM IR" begin
         # TODO: on 1.9, this actually creates a context. cache those.
         ir, entry = JuliaContext() do ctx
             mod, meta = GPUCompiler.compile(:llvm, job)
@@ -110,7 +118,7 @@ function compile(@nospecialize(job::CompilerJob))
         end
     end
 
-    @signpost_interval log=log_compiler() "Downgrade to AIR" begin
+    @signpost_interval log = log_compiler() "Downgrade to AIR" begin
         # generate AIR
         air = let
             input = Pipe()
@@ -118,7 +126,7 @@ function compile(@nospecialize(job::CompilerJob))
             log = Pipe()
 
             cmd = `$(LLVMDowngrader_jll.llvm_as()) --bitcode-version=5.0 -o -`
-            proc = run(pipeline(cmd, stdout=output, stderr=log, stdin=input); wait=false)
+            proc = run(pipeline(cmd, stdout = output, stderr = log, stdin = input); wait = false)
             close(output.in)
             close(log.in)
 
@@ -133,42 +141,48 @@ function compile(@nospecialize(job::CompilerJob))
                 wait(proc)
                 success(proc) || error(fetch(logger))
             catch err
-                ir_file = tempname(cleanup=false) * ".ll"
+                ir_file = tempname(cleanup = false) * ".ll"
                 write(ir_file, ir)
                 if parse(Bool, get(ENV, "BUILDKITE", "false"))
                     run(`buildkite-agent artifact upload $(ir_file)`)
                 end
-                error("""Compilation to AIR failed; see above for details.
-                         If you think this is a bug, please file an issue and attach $(ir_file)""")
+                error(
+                    """Compilation to AIR failed; see above for details.
+                    If you think this is a bug, please file an issue and attach $(ir_file)"""
+                )
             end
 
             fetch(reader)
         end
     end
 
-    @signpost_interval log=log_compiler() "Create Metal library" begin
+    @signpost_interval log = log_compiler() "Create Metal library" begin
         metallib = try
-            fun = MetalLibFunction(; name=entry, air_module=air,
-                                     air_version=job.config.target.air,
-                                     metal_version=job.config.target.metal)
+            fun = MetalLibFunction(;
+                name = entry, air_module = air,
+                air_version = job.config.target.air,
+                metal_version = job.config.target.metal
+            )
             lib = MetalLib(; functions = [fun])
 
             io = IOBuffer()
             write(io, lib)
             take!(io)
         catch err
-            ir_file = tempname(cleanup=false) * ".ll"
+            ir_file = tempname(cleanup = false) * ".ll"
             write(ir_file, ir)
-            air_file = tempname(cleanup=false) * ".air"
+            air_file = tempname(cleanup = false) * ".air"
             write(air_file, air)
             if parse(Bool, get(ENV, "BUILDKITE", "false"))
                 run(`buildkite-agent artifact upload $(ir_file)`)
                 run(`buildkite-agent artifact upload $(air_file)`)
             end
-            error("""Compilation to Metal library failed; see below for details.
-                     If you think this is a bug, please file an issue and attach the following files:
-                     - $(ir_file)
-                     - $(air_file)""")
+            error(
+                """Compilation to Metal library failed; see below for details.
+                If you think this is a bug, please file an issue and attach the following files:
+                - $(ir_file)
+                - $(air_file)"""
+            )
         end
     end
 
@@ -177,9 +191,9 @@ end
 
 # link into an executable kernel
 @autoreleasepool function link(@nospecialize(job::CompilerJob), compiled)
-    @signpost_event log=log_compiler() "Link" "Job=$job"
+    @signpost_event log = log_compiler() "Link" "Job=$job"
 
-    @signpost_interval log=log_compiler() "Instantiate compute pipeline" begin
+    @signpost_interval log = log_compiler() "Instantiate compute pipeline" begin
         dev = device()
         lib = MTLLibraryFromData(dev, compiled.metallib)
         fun = MTLFunction(lib, compiled.entry)
@@ -191,22 +205,24 @@ end
 
             # the back-end compiler likely failed
             # XXX: check more accurately? the error domain doesn't help much here
-            ir_file = tempname(cleanup=false) * ".ll"
+            ir_file = tempname(cleanup = false) * ".ll"
             write(ir_file, compiled.ir)
-            air_file = tempname(cleanup=false) * ".air"
+            air_file = tempname(cleanup = false) * ".air"
             write(air_file, compiled.air)
-            metallib_file = tempname(cleanup=false) * ".metallib"
+            metallib_file = tempname(cleanup = false) * ".metallib"
             write(metallib_file, compiled.metallib)
             if parse(Bool, get(ENV, "BUILDKITE", "false"))
                 run(`buildkite-agent artifact upload $(ir_file)`)
                 run(`buildkite-agent artifact upload $(air_file)`)
                 run(`buildkite-agent artifact upload $(metallib_file)`)
             end
-            error("""Compilation to native code failed; see below for details.
-                     If you think this is a bug, please file an issue and attach the following files:
-                     - $(ir_file)
-                     - $(air_file)
-                     - $(metallib_file)""")
+            error(
+                """Compilation to native code failed; see below for details.
+                If you think this is a bug, please file an issue and attach the following files:
+                - $(ir_file)
+                - $(air_file)
+                - $(metallib_file)"""
+            )
         end
     end
 

@@ -1,7 +1,7 @@
 #
 # matrix descriptor
 #
-using Metal,Test;
+using Metal, Test;
 using .MPS: MPSNDArrayDescriptor, MPSDataType, lengthOfDimension, descriptor, resourceSize
 @static if Metal.macos_version() >= v"15"
     using .MPS: userBuffer
@@ -11,18 +11,18 @@ end
     T = Float32
     DT = convert(MPSDataType, T)
 
-    desc1 = MPSNDArrayDescriptor(T,1,2,3,4,5)
+    desc1 = MPSNDArrayDescriptor(T, 1, 2, 3, 4, 5)
     @test desc1 isa MPSNDArrayDescriptor
     @test desc1.dataType == DT
     @test desc1.numberOfDimensions == 5
 
-    @test lengthOfDimension(desc1,4) == 5
-    @test lengthOfDimension(desc1,3) == 4
-    MPS.transposeDimensionwithDimension(desc1, 3,4)
-    @test lengthOfDimension(desc1,4) == 4
-    @test lengthOfDimension(desc1,3) == 5
+    @test lengthOfDimension(desc1, 4) == 5
+    @test lengthOfDimension(desc1, 3) == 4
+    MPS.transposeDimensionwithDimension(desc1, 3, 4)
+    @test lengthOfDimension(desc1, 4) == 4
+    @test lengthOfDimension(desc1, 3) == 5
 
-    desc2 = MPSNDArrayDescriptor(T, (1,2,3,4))
+    desc2 = MPSNDArrayDescriptor(T, (1, 2, 3, 4))
     @test desc2 isa MPSNDArrayDescriptor
     @test desc2.dataType == DT
     @test desc2.numberOfDimensions == 4
@@ -48,7 +48,7 @@ using .MPS: MPSNDArray
     T1 = Int
     DT1 = convert(MPSDataType, T1)
 
-    desc1 = MPSNDArrayDescriptor(T1, 5,4,3,2,1)
+    desc1 = MPSNDArrayDescriptor(T1, 5, 4, 3, 2, 1)
     ndarr1 = MPSNDArray(dev, desc1)
     @test ndarr1 isa MPSNDArray
     @test ndarr1.dataType == DT1
@@ -60,7 +60,7 @@ using .MPS: MPSNDArray
     @test ndarr1.parent === nothing
     @test descriptor(ndarr1) isa MPSNDArrayDescriptor
     @test resourceSize(ndarr1) isa UInt
-    @test size(ndarr1) == (5,4,3,2,1)
+    @test size(ndarr1) == (5, 4, 3, 2, 1)
 
     ndarr2 = MPSNDArray(dev, 4)
     @test ndarr2 isa MPSNDArray
@@ -74,10 +74,10 @@ using .MPS: MPSNDArray
     @test descriptor(ndarr2) isa MPSNDArrayDescriptor
     @test resourceSize(ndarr2) isa UInt
 
-    arr3 = MtlArray(ones(Float16, 2,3,4))
+    arr3 = MtlArray(ones(Float16, 2, 3, 4))
     @test_throws "First dimension of input MtlArray must have a byte size divisible by 16" MPSNDArray(arr3)
 
-    arr4 = MtlArray(ones(Float16, 8,3,2))
+    arr4 = MtlArray(ones(Float16, 8, 3, 2))
 
     @static if Metal.macos_version() >= v"15"
         @test userBuffer(ndarr1) === nothing

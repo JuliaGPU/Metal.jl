@@ -22,9 +22,9 @@ The `KernelAbstractions` backend for running on Metal GPUs.
 struct MetalBackend <: KA.GPU
 end
 
-KA.allocate(::MetalBackend, ::Type{T}, dims::Tuple) where T = MtlArray{T}(undef, dims)
-KA.zeros(::MetalBackend, ::Type{T}, dims::Tuple) where T = Metal.zeros(T, dims)
-KA.ones(::MetalBackend, ::Type{T}, dims::Tuple) where T = Metal.ones(T, dims)
+KA.allocate(::MetalBackend, ::Type{T}, dims::Tuple) where {T} = MtlArray{T}(undef, dims)
+KA.zeros(::MetalBackend, ::Type{T}, dims::Tuple) where {T} = Metal.zeros(T, dims)
+KA.ones(::MetalBackend, ::Type{T}, dims::Tuple) where {T} = Metal.ones(T, dims)
 
 KA.get_backend(::MtlArray) = MetalBackend()
 KA.synchronize(::MetalBackend) = synchronize()
@@ -38,7 +38,7 @@ Adapt.adapt_storage(::KA.CPU, a::MtlArray) = convert(Array, a)
 
 ## memory operations
 
-function KA.copyto!(::MetalBackend, dest::MtlArray{T}, src::MtlArray{T}) where T
+function KA.copyto!(::MetalBackend, dest::MtlArray{T}, src::MtlArray{T}) where {T}
     if device(dest) == device(src)
         GC.@preserve dest src copyto!(dest, src)
         return dest
@@ -47,12 +47,12 @@ function KA.copyto!(::MetalBackend, dest::MtlArray{T}, src::MtlArray{T}) where T
     end
 end
 
-function KA.copyto!(::MetalBackend, dest::Array{T}, src::MtlArray{T}) where T
+function KA.copyto!(::MetalBackend, dest::Array{T}, src::MtlArray{T}) where {T}
     GC.@preserve dest src copyto!(dest, src)
     return dest
 end
 
-function KA.copyto!(::MetalBackend, dest::MtlArray{T}, src::Array{T}) where T
+function KA.copyto!(::MetalBackend, dest::MtlArray{T}, src::Array{T}) where {T}
     GC.@preserve dest src copyto!(dest, src)
     return dest
 end
@@ -61,11 +61,13 @@ end
 ## kernel launch
 
 function KA.mkcontext(kernel::KA.Kernel{MetalBackend}, _ndrange, iterspace)
-    KA.CompilerMetadata{KA.ndrange(kernel), KA.DynamicCheck}(_ndrange, iterspace)
+    return KA.CompilerMetadata{KA.ndrange(kernel), KA.DynamicCheck}(_ndrange, iterspace)
 end
-function KA.mkcontext(kernel::KA.Kernel{MetalBackend}, I, _ndrange, iterspace,
-                      ::Dynamic) where Dynamic
-    KA.CompilerMetadata{KA.ndrange(kernel), Dynamic}(I, _ndrange, iterspace)
+function KA.mkcontext(
+        kernel::KA.Kernel{MetalBackend}, I, _ndrange, iterspace,
+        ::Dynamic
+    ) where {Dynamic}
+    return KA.CompilerMetadata{KA.ndrange(kernel), Dynamic}(I, _ndrange, iterspace)
 end
 
 function KA.launch_config(kernel::KA.Kernel{MetalBackend}, ndrange, workgroupsize)
@@ -73,7 +75,7 @@ function KA.launch_config(kernel::KA.Kernel{MetalBackend}, ndrange, workgroupsiz
         ndrange = (ndrange,)
     end
     if workgroupsize isa Integer
-        workgroupsize = (workgroupsize, )
+        workgroupsize = (workgroupsize,)
     end
 
     # partition checked that the ndrange's agreed
@@ -81,8 +83,7 @@ function KA.launch_config(kernel::KA.Kernel{MetalBackend}, ndrange, workgroupsiz
         ndrange = nothing
     end
 
-    iterspace, dynamic = if KA.workgroupsize(kernel) <: KA.DynamicSize &&
-                            workgroupsize === nothing
+    iterspace, dynamic = if KA.workgroupsize(kernel) <: KA.DynamicSize && workgroupsize === nothing
         # use ndrange as preliminary workgroupsize for autotuning
         KA.partition(kernel, ndrange, ndrange)
     else
@@ -103,11 +104,11 @@ end
 
 KA.argconvert(::KA.Kernel{MetalBackend}, arg) = Metal.mtlconvert(arg)
 
-function (obj::KA.Kernel{MetalBackend})(args...; ndrange=nothing, workgroupsize=nothing)
+function (obj::KA.Kernel{MetalBackend})(args...; ndrange = nothing, workgroupsize = nothing)
     ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(obj, ndrange, workgroupsize)
     # this might not be the final context, since we may tune the workgroupsize
     ctx = KA.mkcontext(obj, ndrange, iterspace)
-    kernel = @metal launch=false obj.f(ctx, args...)
+    kernel = @metal launch = false obj.f(ctx, args...)
 
     if KA.workgroupsize(obj) <: KA.DynamicSize && workgroupsize === nothing
         groupsize = kernel.pipeline.maxTotalThreadsPerThreadgroup
@@ -140,7 +141,7 @@ end
 end
 
 @device_override @inline function KA.__index_Global_Linear(ctx)
-    I =  @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid_1d(), thread_position_in_threadgroup_1d())
+    I = @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid_1d(), thread_position_in_threadgroup_1d())
     # TODO: This is unfortunate, can we get the linear index cheaper
     @inbounds LinearIndices(KA.__ndrange(ctx))[I]
 end
@@ -154,14 +155,18 @@ end
 end
 
 @device_override @inline function KA.__index_Global_Cartesian(ctx)
-    return @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid_1d(),
-                               thread_position_in_threadgroup_1d())
+    return @inbounds KA.expand(
+        KA.__iterspace(ctx), threadgroup_position_in_grid_1d(),
+        thread_position_in_threadgroup_1d()
+    )
 end
 
 @device_override @inline function KA.__validindex(ctx)
     if KA.__dynamic_checkbounds(ctx)
-        I = @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid_1d(),
-                                thread_position_in_threadgroup_1d())
+        I = @inbounds KA.expand(
+            KA.__iterspace(ctx), threadgroup_position_in_grid_1d(),
+            thread_position_in_threadgroup_1d()
+        )
         return I in KA.__ndrange(ctx)
     else
         return true
@@ -171,8 +176,10 @@ end
 
 ## shared memory
 
-@device_override @inline function KA.SharedMemory(::Type{T}, ::Val{Dims},
-                                                  ::Val{Id}) where {T, Dims, Id}
+@device_override @inline function KA.SharedMemory(
+        ::Type{T}, ::Val{Dims},
+        ::Val{Id}
+    ) where {T, Dims, Id}
     ptr = Metal.emit_threadgroup_memory(T, Val(prod(Dims)))
     MtlDeviceArray(Dims, ptr)
 end

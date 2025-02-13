@@ -6,14 +6,14 @@ Run expression `ex` and synchronize the GPU afterwards.
 See also: [`synchronize`](@ref).
 """
 macro sync(code)
-    quote
+    return quote
         local ret = $(esc(code))
         synchronize()
         ret
     end
 end
 
-function versioninfo(io::IO=stdout)
+function versioninfo(io::IO = stdout)
     println(io, "macOS $(macos_version()), Darwin $(darwin_version())")
     println(io)
 
@@ -24,14 +24,16 @@ function versioninfo(io::IO=stdout)
 
     println(io, "Julia packages: ")
     println(io, "- Metal.jl: $(Base.pkgversion(Metal))")
-    for name in [:GPUArrays, :GPUCompiler, :KernelAbstractions, :ObjectiveC,
-                 :LLVM, :LLVMDowngrader_jll]
+    for name in [
+            :GPUArrays, :GPUCompiler, :KernelAbstractions, :ObjectiveC,
+            :LLVM, :LLVMDowngrader_jll,
+        ]
         mod = getfield(Metal, name)
         println(io, "- $(name): $(Base.pkgversion(mod))")
     end
     println(io)
 
-    env = filter(var->startswith(var, "JULIA_METAL") || startswith(var, "MTL") || startswith(var, "METAL"), keys(ENV))
+    env = filter(var -> startswith(var, "JULIA_METAL") || startswith(var, "MTL") || startswith(var, "METAL"), keys(ENV))
     if !isempty(env)
         println(io, "Environment:")
         for var in env
@@ -43,7 +45,7 @@ function versioninfo(io::IO=stdout)
     prefs = [
         "default_storage" => load_preference(Metal, "default_storage"),
     ]
-    if any(x->!isnothing(x[2]), prefs)
+    if any(x -> !isnothing(x[2]), prefs)
         println(io, "Preferences:")
         for (key, val) in prefs
             if !isnothing(val)
@@ -79,10 +81,13 @@ function capture_dir()
         isdir(path) || return path
         i += 1
     end
+    return
 end
 
-function captured(f; dest=MTL.MTLCaptureDestinationGPUTraceDocument,
-                     object=global_queue(device()))
+function captured(
+        f; dest = MTL.MTLCaptureDestinationGPUTraceDocument,
+        object = global_queue(device())
+    )
     if !haskey(ENV, "METAL_CAPTURE_ENABLED") || ENV["METAL_CAPTURE_ENABLED"] != "1"
         @warn """Environment variable 'METAL_CAPTURE_ENABLED' is not set. In most cases, this
         will need to be set to 1 before launching Julia to enable GPU frame capture."""
@@ -90,8 +95,8 @@ function captured(f; dest=MTL.MTLCaptureDestinationGPUTraceDocument,
 
     folder = capture_dir()
     startCapture(object, dest; folder)
-    try
-       f()
+    return try
+        f()
     finally
         @info "GPU frame capture saved to $folder; open the resulting trace in Xcode"
         stopCapture()
@@ -128,7 +133,7 @@ profiling data found" errors.
 """
 macro capture(ex...)
     work = ex[end]
-    kwargs = map(ex[1:end-1]) do kwarg
+    kwargs = map(ex[1:(end - 1)]) do kwarg
         if !Meta.isexpr(kwarg, :(=))
             throw(ArgumentError("Invalid keyword argument '$kwarg'"))
         end
@@ -136,7 +141,7 @@ macro capture(ex...)
         Expr(:kw, key, esc(value))
     end
 
-    quote
+    return quote
         $captured(; $(kwargs...)) do
             $(esc(work))
         end
@@ -154,6 +159,7 @@ function profile_dir()
         isdir(path) || return path
         i += 1
     end
+    return
 end
 
 function profiled(f)
@@ -189,15 +195,15 @@ function profiled(f)
     observer = CFNotificationObserver() do center, name, object, info
         tracing_started[] = true
     end
-    add_observer!(center, observer; name=notification_name)
+    add_observer!(center, observer; name = notification_name)
 
     # start xctrace
-    xctrace = run(`$cmd --attach $(getpid())`, devnull, stdout, stderr; wait=false)
-    try
+    xctrace = run(`$cmd --attach $(getpid())`, devnull, stdout, stderr; wait = false)
+    return try
         # wait until the tracing has started
         t0 = time()
         while !tracing_started[]
-            run_loop(1; return_after_source_handled=true)
+            run_loop(1; return_after_source_handled = true)
             if time() - t0 > 10
                 error("xctrace failed to start")
                 break
@@ -228,10 +234,10 @@ high-level overview of the GPU work, and how it was launched from the CPU.
 """
 macro profile(ex...)
     code = ex[end]
-    kwargs = ex[1:end-1]
+    kwargs = ex[1:(end - 1)]
     @assert isempty(kwargs)
 
-    quote
+    return quote
         $profiled() do
             $(esc(code))
         end

@@ -22,7 +22,7 @@ mktempdir() do dir
     # disassemble to bitcode
     run(`$metallib_dis -o $dir/dummy.bc $dummy kernel_1`)
     @test isfile(joinpath(dir, "dummy.bc"))
-    @dispose ctx=Context() mod=parse(LLVM.Module, read(joinpath(dir, "dummy.bc"))) begin
+    @dispose ctx = Context() mod = parse(LLVM.Module, read(joinpath(dir, "dummy.bc"))) begin
         @test mod isa LLVM.Module
     end
 
@@ -40,12 +40,20 @@ mktempdir() do dir
     @test success(`$metallib_load $dir/dummy.metallib`)
 
     # test pipelines
-    @test success(pipeline(`$metallib_dis -o - $dummy kernel_1`,
-                           `$metallib_as -o - -`,
-                           `$metallib_load -`))
-    @test success(pipeline(`$metallib_dis -S -o - $dummy kernel_1`,
-                           `$metallib_as -o - -`,
-                           `$metallib_load -`))
+    @test success(
+        pipeline(
+            `$metallib_dis -o - $dummy kernel_1`,
+            `$metallib_as -o - -`,
+            `$metallib_load -`
+        )
+    )
+    @test success(
+        pipeline(
+            `$metallib_dis -S -o - $dummy kernel_1`,
+            `$metallib_as -o - -`,
+            `$metallib_load -`
+        )
+    )
 end
 
 end

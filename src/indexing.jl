@@ -13,8 +13,10 @@ Base.to_index(::MtlArray, I::AbstractArray{Bool}) = findall(I)
 if VERSION >= v"1.11.0-DEV.1157"
     Base.to_indices(A::MtlArray, I::Tuple{AbstractArray{Bool}}) = (Base.to_index(A, I[1]),)
 else
-    Base.to_indices(A::MtlArray, inds,
-                    I::Tuple{Union{Array{Bool,N}, BitArray{N}}}) where {N} =
+    Base.to_indices(
+        A::MtlArray, inds,
+        I::Tuple{Union{Array{Bool, N}, BitArray{N}}}
+    ) where {N} =
         (Base.to_index(A, I[1]),)
 end
 
@@ -41,7 +43,7 @@ function Base.findall(bools::WrappedMtlArray{Bool})
             return
         end
 
-        kernel = @metal name="findall" launch=false kernel(ys, bools, indices)
+        kernel = @metal name = "findall" launch = false kernel(ys, bools, indices)
         threads = Int(kernel.pipeline.maxTotalThreadsPerThreadgroup)
         groups = cld(length(indices), threads)
         kernel(ys, bools, indices; groups, threads)

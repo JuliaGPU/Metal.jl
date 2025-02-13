@@ -27,35 +27,45 @@ for typ in (:Int32, :UInt32, :Float32), as in (AS.Device, AS.ThreadGroup)
     typnam = atomic_type_names[typ]
     memnam, memid = atomic_memory_names[as]
     @eval begin
-        function atomic_store_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ)
-            @typed_ccall($"air.atomic.$memnam.store.$typnam", llvmcall, Nothing,
-                         (LLVMPtr{$typ,$as}, $typ, Int32, Int32, Bool),
-                         ptr, desired, Val(memory_order_relaxed), Val($memid), Val(true))
+        function atomic_store_explicit(ptr::LLVMPtr{$typ, $as}, desired::$typ)
+            return @typed_ccall(
+                $"air.atomic.$memnam.store.$typnam", llvmcall, Nothing,
+                (LLVMPtr{$typ, $as}, $typ, Int32, Int32, Bool),
+                ptr, desired, Val(memory_order_relaxed), Val($memid), Val(true)
+            )
         end
 
-        function atomic_load_explicit(ptr::LLVMPtr{$typ,$as})
-            @typed_ccall($"air.atomic.$memnam.load.$typnam", llvmcall, $typ,
-                         (LLVMPtr{$typ,$as}, Int32, Int32, Bool),
-                         ptr, Val(memory_order_relaxed), Val($memid), Val(true))
+        function atomic_load_explicit(ptr::LLVMPtr{$typ, $as})
+            return @typed_ccall(
+                $"air.atomic.$memnam.load.$typnam", llvmcall, $typ,
+                (LLVMPtr{$typ, $as}, Int32, Int32, Bool),
+                ptr, Val(memory_order_relaxed), Val($memid), Val(true)
+            )
         end
 
-        function atomic_exchange_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ)
-            @typed_ccall($"air.atomic.$memnam.xchg.$typnam", llvmcall, $typ,
-                         (LLVMPtr{$typ,$as}, $typ, Int32, Int32, Bool),
-                         ptr, desired, Val(memory_order_relaxed), Val($memid), Val(true))
+        function atomic_exchange_explicit(ptr::LLVMPtr{$typ, $as}, desired::$typ)
+            return @typed_ccall(
+                $"air.atomic.$memnam.xchg.$typnam", llvmcall, $typ,
+                (LLVMPtr{$typ, $as}, $typ, Int32, Int32, Bool),
+                ptr, desired, Val(memory_order_relaxed), Val($memid), Val(true)
+            )
         end
 
-        function atomic_compare_exchange_weak_explicit(ptr::LLVMPtr{$typ,$as},
-                                                       expected::$typ, desired::$typ)
+        function atomic_compare_exchange_weak_explicit(
+                ptr::LLVMPtr{$typ, $as},
+                expected::$typ, desired::$typ
+            )
             # NOTE: we deviate slightly from the Metal/C++ API here, not returning the
             #       status boolean, but the contents of the expected value box, which will
             #       have been changed to the current value if the exchange failed.
             expected_box = Ref(expected)
-            @typed_ccall($"air.atomic.$memnam.cmpxchg.weak.$typnam", llvmcall, Bool,
-                         (LLVMPtr{$typ,$as}, Ptr{$typ}, $typ, Int32, Int32, Int32, Bool),
-                         ptr, expected_box, desired, Val(memory_order_relaxed),
-                         Val(memory_order_relaxed), Val($memid), Val(true))
-            expected_box[]
+            @typed_ccall(
+                $"air.atomic.$memnam.cmpxchg.weak.$typnam", llvmcall, Bool,
+                (LLVMPtr{$typ, $as}, Ptr{$typ}, $typ, Int32, Int32, Int32, Bool),
+                ptr, expected_box, desired, Val(memory_order_relaxed),
+                Val(memory_order_relaxed), Val($memid), Val(true)
+            )
+            return expected_box[]
         end
     end
 end
@@ -67,7 +77,7 @@ const atomic_fetch_and_modify = [
     :max => [:Int32, :UInt32],
     :and => [:Int32, :UInt32],
     :or  => [:Int32, :UInt32],
-    :xor => [:Int32, :UInt32]
+    :xor => [:Int32, :UInt32],
 ]
 
 for (op, types) in atomic_fetch_and_modify, typ in types, as in (AS.Device, AS.ThreadGroup)
@@ -80,10 +90,12 @@ for (op, types) in atomic_fetch_and_modify, typ in types, as in (AS.Device, AS.T
     memnam, memid = atomic_memory_names[as]
     f = Symbol("atomic_fetch_$(op)_explicit")
     @eval begin
-        function $f(ptr::LLVMPtr{$typ,$as}, desired::$typ)
-            @typed_ccall($"air.atomic.$memnam.$op.$typnam", llvmcall, $typ,
-                         (LLVMPtr{$typ,$as}, $typ, Int32, Int32, Bool),
-                         ptr, desired, Val(memory_order_relaxed), Val($memid), Val(true))
+        function $f(ptr::LLVMPtr{$typ, $as}, desired::$typ)
+            return @typed_ccall(
+                $"air.atomic.$memnam.$op.$typnam", llvmcall, $typ,
+                (LLVMPtr{$typ, $as}, $typ, Int32, Int32, Bool),
+                ptr, desired, Val(memory_order_relaxed), Val($memid), Val(true)
+            )
         end
     end
 end
@@ -99,6 +111,7 @@ end
         old = atomic_compare_exchange_weak_explicit(ptr, cmp, new)
         isequal(old, cmp) && return new
     end
+    return
 end
 
 
@@ -185,14 +198,18 @@ macro atomic(ex)
     array = ref.args[1]
     indices = Expr(:tuple, ref.args[2:end]...)
 
-    if val === nothing
-        esc(quote
-            $atomic_arrayref($array, $indices)
-        end)
+    return if val === nothing
+        esc(
+            quote
+                $atomic_arrayref($array, $indices)
+            end
+        )
     else
-        esc(quote
-            $atomic_arrayset($array, $indices, $op, $val)
-        end)
+        esc(
+            quote
+                $atomic_arrayset($array, $indices, $op, $val)
+            end
+        )
     end
 end
 
@@ -204,33 +221,41 @@ end
 
 # native atomics
 @inline atomic_arrayref(A::AbstractArray, I::Integer) = atomic_load_explicit(pointer(A, I))
-@inline atomic_arrayset(A::AbstractArray{T}, I::Integer, ::Nothing, val) where T =
+@inline atomic_arrayset(A::AbstractArray{T}, I::Integer, ::Nothing, val) where {T} =
     atomic_store_explicit(pointer(A, I), convert(T, val))
-for (op,impl,typ) in [(:(+), :(atomic_fetch_add_explicit), [:UInt32,:Int32,:Float32]),
-                      (:(-), :(atomic_fetch_sub_explicit), [:UInt32,:Int32,:Float32]),
-                      (:(&), :(atomic_fetch_and_explicit), [:UInt32,:Int32]),
-                      (:(|), :(atomic_fetch_or_explicit),  [:UInt32,:Int32]),
-                      (:(⊻), :(atomic_fetch_xor_explicit), [:UInt32,:Int32]),
-                      (:max, :(atomic_fetch_max_explicit), [:UInt32,:Int32]),
-                      (:min, :(atomic_fetch_min_explicit), [:UInt32,:Int32])]
-    @eval @inline atomic_arrayset(A::AbstractArray{T}, I::Integer, ::typeof($op),
-                                  val::T) where {T<:Union{$(typ...)}} =
+for (op, impl, typ) in [
+        (:(+), :(atomic_fetch_add_explicit), [:UInt32, :Int32, :Float32]),
+        (:(-), :(atomic_fetch_sub_explicit), [:UInt32, :Int32, :Float32]),
+        (:(&), :(atomic_fetch_and_explicit), [:UInt32, :Int32]),
+        (:(|), :(atomic_fetch_or_explicit),  [:UInt32, :Int32]),
+        (:(⊻), :(atomic_fetch_xor_explicit), [:UInt32, :Int32]),
+        (:max, :(atomic_fetch_max_explicit), [:UInt32, :Int32]),
+        (:min, :(atomic_fetch_min_explicit), [:UInt32, :Int32]),
+    ]
+    @eval @inline atomic_arrayset(
+        A::AbstractArray{T}, I::Integer, ::typeof($op),
+        val::T
+    ) where {T <: Union{$(typ...)}} =
         $impl(pointer(A, I), val)
 end
 
 # native atomics that are not supported on all devices
-@inline function atomic_arrayset(A::AbstractArray{T}, I::Integer, op::typeof(+),
-                                 val::T) where {T <: AbstractFloat}
+@inline function atomic_arrayset(
+        A::AbstractArray{T}, I::Integer, op::typeof(+),
+        val::T
+    ) where {T <: AbstractFloat}
     ptr = pointer(A, I)
     # XXX: consider falling back to fetch_op here to support Metal < 3.0 (this also requires
     #      cmpxchg support for Float32, but we should be able to do that using bitcast)
-    atomic_fetch_add_explicit(ptr, val)
+    return atomic_fetch_add_explicit(ptr, val)
 end
-@inline function atomic_arrayset(A::AbstractArray{T}, I::Integer, op::typeof(-),
-                                 val::T) where {T <: AbstractFloat}
+@inline function atomic_arrayset(
+        A::AbstractArray{T}, I::Integer, op::typeof(-),
+        val::T
+    ) where {T <: AbstractFloat}
     ptr = pointer(A, I)
     # XXX: see above
-    atomic_fetch_sub_explicit(ptr, val)
+    return atomic_fetch_sub_explicit(ptr, val)
 end
 
 # fallback using compare-and-swap

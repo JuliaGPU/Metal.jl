@@ -1,10 +1,10 @@
 export simdgroup_load, simdgroup_store, simdgroup_multiply, simdgroup_multiply_accumulate,
-        simd_shuffle_down, simd_shuffle_up
+    simd_shuffle_down, simd_shuffle_up
 
 using Core: LLVMPtr
 
 function convert_origin(origin::NTuple{2, Int64})
-    return (VecElement{Int64}(origin[1]-1), VecElement{Int64}(origin[2]-1))
+    return (VecElement{Int64}(origin[1] - 1), VecElement{Int64}(origin[2] - 1))
 end
 
 for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"))
@@ -13,19 +13,23 @@ for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"))
             @device_function simdgroup_load(
                 data::Union{MtlDeviceArray{$jltype, <:Any, $as}, MtlLargerDeviceArray{$jltype, <:Any, $as}},
                 matrix_origin::NTuple{2, Int64} = (1, 1),
-            ) = @typed_ccall($"air.simdgroup_matrix_8x8_load.v64$suffix.p$as$suffix",
+            ) = @typed_ccall(
+                $"air.simdgroup_matrix_8x8_load.v64$suffix.p$as$suffix",
                 llvmcall, NTuple{64, VecElement{$jltype}},
                 (LLVMPtr{$jltype, $as}, Int64, NTuple{2, VecElement{Int64}}, Bool),
-                pointer(data), size(data)[1], convert_origin(matrix_origin), Val(true))
+                pointer(data), size(data)[1], convert_origin(matrix_origin), Val(true)
+            )
 
             @device_function simdgroup_store(
                 src::NTuple{64, VecElement{$jltype}},
                 dest::Union{MtlDeviceArray{$jltype, <:Any, $as}, MtlLargerDeviceArray{$jltype, <:Any, $as}},
                 matrix_origin::NTuple{2, Int64} = (1, 1),
-            ) = @typed_ccall($"air.simdgroup_matrix_8x8_store.v64$suffix.p$as$suffix",
+            ) = @typed_ccall(
+                $"air.simdgroup_matrix_8x8_store.v64$suffix.p$as$suffix",
                 llvmcall, Cvoid,
                 (NTuple{64, VecElement{$jltype}}, LLVMPtr{$jltype, $as}, Int64, NTuple{2, VecElement{Int64}}, Bool),
-                src, pointer(dest), size(dest)[1], convert_origin(matrix_origin), Val(true))
+                src, pointer(dest), size(dest)[1], convert_origin(matrix_origin), Val(true)
+            )
         end
     end
 
@@ -33,19 +37,23 @@ for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"))
         @device_function simdgroup_multiply(
             a::NTuple{64, VecElement{$jltype}},
             b::NTuple{64, VecElement{$jltype}},
-        ) = ccall($"extern air.simdgroup_matrix_8x8_multiply_accumulate.v64$suffix.v64$suffix.v64$suffix.v64$suffix",
+        ) = ccall(
+            $"extern air.simdgroup_matrix_8x8_multiply_accumulate.v64$suffix.v64$suffix.v64$suffix.v64$suffix",
             llvmcall, NTuple{64, VecElement{$jltype}},
             (NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}),
-            a, b, ntuple(_ -> VecElement{$jltype}(0.0), Val(64)))
+            a, b, ntuple(_ -> VecElement{$jltype}(0.0), Val(64))
+        )
 
         @device_function simdgroup_multiply_accumulate(
             a::NTuple{64, VecElement{$jltype}},
             b::NTuple{64, VecElement{$jltype}},
             c::NTuple{64, VecElement{$jltype}},
-        ) = ccall($"extern air.simdgroup_matrix_8x8_multiply_accumulate.v64$suffix.v64$suffix.v64$suffix.v64$suffix",
+        ) = ccall(
+            $"extern air.simdgroup_matrix_8x8_multiply_accumulate.v64$suffix.v64$suffix.v64$suffix.v64$suffix",
             llvmcall, NTuple{64, VecElement{$jltype}},
             (NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}, NTuple{64, VecElement{$jltype}}),
-            a, b, c)
+            a, b, c
+        )
     end
 end
 
@@ -86,24 +94,30 @@ Returns `a * b + c`.
 
 ## SIMD Shuffle Up/Down
 
-simd_shuffle_map = ((Float32, "f32"),
-                    (Float16, "f16"),
-                    (Int32,   "s.i32"),
-                    (UInt32,  "u.i32"),
-                    (Int16,   "s.i16"),
-                    (UInt16,  "u.i16"),
-                    (Int8,    "s.i8"),
-                    (UInt8,   "u.i8"))
+simd_shuffle_map = (
+    (Float32, "f32"),
+    (Float16, "f16"),
+    (Int32,   "s.i32"),
+    (UInt32,  "u.i32"),
+    (Int16,   "s.i16"),
+    (UInt16,  "u.i16"),
+    (Int8,    "s.i8"),
+    (UInt8,   "u.i8"),
+)
 
 for (jltype, suffix) in simd_shuffle_map
     @eval begin
         @device_function simd_shuffle_down(data::$jltype, delta::Integer) =
-            ccall($"extern air.simd_shuffle_down.$suffix",
-                llvmcall, $jltype, ($jltype, Int16), data, delta)
+            ccall(
+            $"extern air.simd_shuffle_down.$suffix",
+            llvmcall, $jltype, ($jltype, Int16), data, delta
+        )
 
         @device_function simd_shuffle_up(data::$jltype, delta::Integer) =
-            ccall($"extern air.simd_shuffle_up.$suffix",
-                llvmcall, $jltype, ($jltype, Int16), data, delta)
+            ccall(
+            $"extern air.simd_shuffle_up.$suffix",
+            llvmcall, $jltype, ($jltype, Int16), data, delta
+        )
     end
 end
 

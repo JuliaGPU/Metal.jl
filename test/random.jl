@@ -1,10 +1,16 @@
-const RAND_TYPES = [Float16, Float32, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64,
-                    UInt64]
+const RAND_TYPES = [
+    Float16, Float32, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64,
+    UInt64,
+]
 const RANDN_TYPES = [Float16, Float32]
-const INPLACE_TUPLES = [[(rand!, T) for T in RAND_TYPES];
-                        [(randn!, T) for T in RANDN_TYPES]]
-const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
-                        [(Metal.randn, rand, T) for T in RANDN_TYPES]]
+const INPLACE_TUPLES = [
+    [(rand!, T) for T in RAND_TYPES];
+    [(randn!, T) for T in RANDN_TYPES]
+]
+const OOPLACE_TUPLES = [
+    [(Metal.rand, rand, T) for T in RAND_TYPES];
+    [(Metal.randn, rand, T) for T in RANDN_TYPES]
+]
 
 @testset "random" begin
     # in-place
@@ -13,7 +19,7 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
 
         @testset "$f with $T" for (f, T) in INPLACE_TUPLES
             # d == 2 and d == 3 are to hit the test cases where sizeof(A) <= 4
-            @testset "$d" for d in (2, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000))
+            @testset "$d" for d in (2, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000, 1000))
                 A = MtlArray{T}(undef, d)
 
                 # default_rng
@@ -38,7 +44,7 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
 
                 # default_rng
                 f(A)
-                @test A isa MtlArray{T,1}
+                @test A isa MtlArray{T, 1}
                 @test Array(A) == fill(1, 0)
 
                 # specified MPS rng
@@ -123,7 +129,7 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
         # Test when views try to use rand!(rng, args..)
         @testset "MPS.RNG with views" begin
             rng = Metal.MPS.RNG()
-            @testset "$f with $T" for (f, T) in ((randn!, Float32),(rand!, Int64),(rand!, Float32), (rand!, UInt16), (rand!,Int8))
+            @testset "$f with $T" for (f, T) in ((randn!, Float32), (rand!, Int64), (rand!, Float32), (rand!, UInt16), (rand!, Int8))
                 A = MtlArray{T}(undef, 100)
 
                 ## Offset > 0
@@ -137,7 +143,7 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
 
                     cpuA = collect(A)
                     @test !iszero(cpuA[idx])
-                    @test iszero(cpuA[1:100 .∉ Ref(idx)]) broken=(sizeof(view_A) % 4 != 0)
+                    @test iszero(cpuA[1:100 .∉ Ref(idx)]) broken = (sizeof(view_A) % 4 != 0)
                 else
                     @test_throws "Destination buffer" f(rng, view_A)
                 end
@@ -161,9 +167,9 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
     # out-of-place
     @testset "out-of-place" begin
         @testset "$fr with implicit type" for (fm, fr, T) in
-                                             ((Metal.rand, rand, Float32), (Metal.randn, randn, Float32))
+            ((Metal.rand, rand, Float32), (Metal.randn, randn, Float32))
             rng = Metal.MPS.RNG()
-            @testset "args" for args in ((0,), (1,), (3,), (3, 3), (16,), (16, 16), (1000,), (1000,1000))
+            @testset "args" for args in ((0,), (1,), (3,), (3, 3), (16,), (16, 16), (1000,), (1000, 1000))
                 # default_rng
                 A = fm(args...)
                 @test eltype(A) == T
@@ -184,16 +190,18 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
         # out-of-place, with type specified
         @testset "$fr with $T" for (fm, fr, T) in OOPLACE_TUPLES
             rng = Metal.MPS.RNG()
-            @testset "$args" for args in ((T, 0),
-                                          (T, 1),
-                                          (T, 3),
-                                          (T, 3, 3),
-                                          (T, (3, 3)),
-                                          (T, 16),
-                                          (T, 16, 16),
-                                          (T, (16, 16)),
-                                          (T, 1000),
-                                          (T, 1000, 1000),)
+            @testset "$args" for args in (
+                    (T, 0),
+                    (T, 1),
+                    (T, 3),
+                    (T, 3, 3),
+                    (T, (3, 3)),
+                    (T, 16),
+                    (T, 16, 16),
+                    (T, (16, 16)),
+                    (T, 1000),
+                    (T, 1000, 1000),
+                )
                 # default_rng
                 A = fm(args...)
                 @test eltype(A) == T
@@ -226,7 +234,7 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
         rng = Metal.MPS.RNG()
         @testset "$f with $T" for (f, T) in mps_tuples
             # d == 2 and d == 3 are to hit the test cases where sizeof(A) <= 4
-            @testset "$d" for d in (2, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000))
+            @testset "$d" for d in (2, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000, 1000))
                 A = zeros(T, d)
                 if (prod(d) * sizeof(T)) % 4 == 0
                     f(rng, A)
@@ -239,11 +247,13 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
     end
 
     ## seeding
-    @testset "Seeding $L" for (f,T,L) in [(Metal.rand,UInt32,"Uniform Integers MPS"),
-                                          (Metal.rand,Float32,"Uniform Float32 MPS"),
-                                          (Metal.randn,Float32,"Normal Float32 MPS"),
-                                          (Metal.randn,Float16,"Float16 GPUArrays")]
-        @testset "$d" for d in (1, 3, (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000))
+    @testset "Seeding $L" for (f, T, L) in [
+            (Metal.rand, UInt32, "Uniform Integers MPS"),
+            (Metal.rand, Float32, "Uniform Float32 MPS"),
+            (Metal.randn, Float32, "Normal Float32 MPS"),
+            (Metal.randn, Float16, "Float16 GPUArrays"),
+        ]
+        @testset "$d" for d in (1, 3, (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000, 1000))
             Metal.seed!(1)
             a = f(T, d)
             Metal.seed!(1)

@@ -1,21 +1,21 @@
 const m = 512
 const n = 1000
 
-for (S, smname) in [(Metal.PrivateStorage,"private"), (Metal.SharedStorage,"shared")]
+for (S, smname) in [(Metal.PrivateStorage, "private"), (Metal.SharedStorage, "shared")]
     local group = addgroup!(SUITE, "$smname array")
 
     # generate some arrays
     cpu_mat = rand(rng, Float32, m, n)
-    gpu_mat = MtlMatrix{Float32,S}(undef, size(cpu_mat))
+    gpu_mat = MtlMatrix{Float32, S}(undef, size(cpu_mat))
     gpu_vec = reshape(gpu_mat, length(gpu_mat))
     gpu_arr_3d = reshape(gpu_mat, (m, 40, 25))
     gpu_arr_4d = reshape(gpu_mat, (m, 10, 10, 10))
-    gpu_mat_ints = MtlMatrix{Int,S}(rand(rng, Int, m, n))
+    gpu_mat_ints = MtlMatrix{Int, S}(rand(rng, Int, m, n))
     gpu_vec_ints = reshape(gpu_mat_ints, length(gpu_mat_ints))
-    gpu_mat_bools = MtlMatrix{Bool,S}(rand(rng, Bool, m, n))
+    gpu_mat_bools = MtlMatrix{Bool, S}(rand(rng, Bool, m, n))
     gpu_vec_bools = reshape(gpu_mat_bools, length(gpu_mat_bools))
 
-    group["construct"] = @benchmarkable MtlArray{Int,1,$S}(undef, 1)
+    group["construct"] = @benchmarkable MtlArray{Int, 1, $S}(undef, 1)
 
     group["copy"] = @benchmarkable Metal.@sync copy($gpu_mat)
 
@@ -43,7 +43,7 @@ for (S, smname) in [(Metal.PrivateStorage,"private"), (Metal.SharedStorage,"shar
 
         let group = addgroup!(group, "findmin") # findmax
             group["1d"] = @benchmarkable Metal.@sync findmin($gpu_vec)
-            group["2d"] = @benchmarkable Metal.@sync findmin($gpu_mat; dims=1)
+            group["2d"] = @benchmarkable Metal.@sync findmin($gpu_mat; dims = 1)
         end
     end
 
@@ -54,23 +54,23 @@ for (S, smname) in [(Metal.PrivateStorage,"private"), (Metal.SharedStorage,"shar
     #     group["2d_inplace"] = @benchmarkable Metal.@sync reverse!($gpu_mat; dims=1)
     # end
 
-    group["broadcast"] = @benchmarkable Metal.@sync $gpu_mat .= 0f0
+    group["broadcast"] = @benchmarkable Metal.@sync $gpu_mat .= 0.0f0
 
     # no need to test inplace version, which performs the same operation (but with an alloc)
     let group = addgroup!(group, "accumulate")
         group["1d"] = @benchmarkable Metal.@sync accumulate(+, $gpu_vec)
-        group["2d"] = @benchmarkable Metal.@sync accumulate(+, $gpu_mat; dims=1)
+        group["2d"] = @benchmarkable Metal.@sync accumulate(+, $gpu_mat; dims = 1)
     end
 
     let group = addgroup!(group, "reductions")
         let group = addgroup!(group, "reduce")
             group["1d"] = @benchmarkable Metal.@sync reduce(+, $gpu_vec)
-            group["2d"] = @benchmarkable Metal.@sync reduce(+, $gpu_mat; dims=1)
+            group["2d"] = @benchmarkable Metal.@sync reduce(+, $gpu_mat; dims = 1)
         end
 
         let group = addgroup!(group, "mapreduce")
-            group["1d"] = @benchmarkable Metal.@sync mapreduce(x->x+1, +, $gpu_vec)
-            group["2d"] = @benchmarkable Metal.@sync mapreduce(x->x+1, +, $gpu_mat; dims=1)
+            group["1d"] = @benchmarkable Metal.@sync mapreduce(x -> x + 1, +, $gpu_vec)
+            group["2d"] = @benchmarkable Metal.@sync mapreduce(x -> x + 1, +, $gpu_mat; dims = 1)
         end
 
         # used by sum, prod, minimum, maximum, all, any, count
@@ -78,8 +78,8 @@ for (S, smname) in [(Metal.PrivateStorage,"private"), (Metal.SharedStorage,"shar
 
     let group = addgroup!(group, "random")
         let group = addgroup!(group, "rand")
-            group["Float32"] = @benchmarkable Metal.@sync Metal.rand(Float32, m*n)
-            group["Int64"] = @benchmarkable Metal.@sync Metal.rand(Int64, m*n)
+            group["Float32"] = @benchmarkable Metal.@sync Metal.rand(Float32, m * n)
+            group["Int64"] = @benchmarkable Metal.@sync Metal.rand(Int64, m * n)
         end
 
         let group = addgroup!(group, "rand!")
@@ -88,7 +88,7 @@ for (S, smname) in [(Metal.PrivateStorage,"private"), (Metal.SharedStorage,"shar
         end
 
         let group = addgroup!(group, "randn")
-            group["Float32"] = @benchmarkable Metal.@sync Metal.randn(Float32, m*n)
+            group["Float32"] = @benchmarkable Metal.@sync Metal.randn(Float32, m * n)
             # group["Int64"] = @benchmarkable Metal.@sync Metal.randn(Int64, m*n)
         end
 
@@ -105,8 +105,8 @@ for (S, smname) in [(Metal.PrivateStorage,"private"), (Metal.SharedStorage,"shar
     # end
 
     let group = addgroup!(group, "permutedims")
-        group["2d"] = @benchmarkable Metal.@sync permutedims($gpu_mat, (2,1))
-        group["3d"] = @benchmarkable Metal.@sync permutedims($gpu_arr_3d, (3,1,2))
-        group["4d"] = @benchmarkable Metal.@sync permutedims($gpu_arr_4d, (2,1,4,3))
+        group["2d"] = @benchmarkable Metal.@sync permutedims($gpu_mat, (2, 1))
+        group["3d"] = @benchmarkable Metal.@sync permutedims($gpu_arr_3d, (3, 1, 2))
+        group["4d"] = @benchmarkable Metal.@sync permutedims($gpu_arr_4d, (2, 1, 4, 3))
     end
 end

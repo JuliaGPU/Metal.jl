@@ -7,7 +7,7 @@ function vadd(a, b, c)
     return
 end
 
-dims = (3,4)
+dims = (3, 4)
 a = round.(rand(Float32, dims) * 100)
 b = round.(rand(Float32, dims) * 100)
 c = similar(a)
@@ -17,6 +17,6 @@ d_b = MtlArray(b)
 d_c = MtlArray(c)
 
 len = prod(dims)
-@metal threads=len vadd(d_a, d_b, d_c)
+@metal threads = len vadd(d_a, d_b, d_c)
 c = Array(d_c)
-@test a+b ≈ c
+@test a + b ≈ c

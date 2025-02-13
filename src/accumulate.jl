@@ -1,6 +1,8 @@
-function partial_scan(op::Function, output::AbstractArray{T}, input::AbstractArray,
-                      Rdim, Rpre, Rpost, Rother, neutral, init,
-                      ::Val{maxthreads}, ::Val{inclusive}=Val(true)) where {T, maxthreads, inclusive}
+function partial_scan(
+        op::Function, output::AbstractArray{T}, input::AbstractArray,
+        Rdim, Rpre, Rpost, Rother, neutral, init,
+        ::Val{maxthreads}, ::Val{inclusive} = Val(true)
+    ) where {T, maxthreads, inclusive}
     threads = threads_per_threadgroup_3d().x
     thread = thread_position_in_threadgroup_3d().x
 
@@ -26,16 +28,16 @@ function partial_scan(op::Function, output::AbstractArray{T}, input::AbstractArr
     end
 
     offset = one(thread)
-    d = threads >> 0x1
+    d = threads >> 0x01
     while d > zero(d)
         threadgroup_barrier(MemoryFlagThreadGroup)
         @inbounds if thread <= d
-            ai = offset * (thread << 0x1 - 0x1)
-            bi = offset * (thread << 0x1)
+            ai = offset * (thread << 0x01 - 0x01)
+            bi = offset * (thread << 0x01)
             temp[bi] = op(temp[ai], temp[bi])
         end
-        offset <<= 0x1
-        d >>= 0x1
+        offset <<= 0x01
+        d >>= 0x01
     end
 
     @inbounds if isone(thread)
@@ -44,17 +46,17 @@ function partial_scan(op::Function, output::AbstractArray{T}, input::AbstractArr
 
     d = one(thread)
     while d < threads
-        offset >>= 0x1
+        offset >>= 0x01
         threadgroup_barrier(MemoryFlagThreadGroup)
         @inbounds if thread <= d
-            ai = offset * (thread << 0x1 - 0x1)
-            bi = offset * (thread << 0x1)
+            ai = offset * (thread << 0x01 - 0x01)
+            bi = offset * (thread << 0x01)
 
             t = temp[ai]
             temp[ai] = temp[bi]
             temp[bi] = op(t, temp[bi])
         end
-        d <<= 0x1
+        d <<= 0x01
     end
 
     threadgroup_barrier(MemoryFlagThreadGroup)
@@ -101,8 +103,10 @@ function aggregate_partial_scan(op::Function, output::AbstractArray, aggregates:
     return
 end
 
-function scan!(f::Function, output::WrappedMtlArray{T}, input::WrappedMtlArray;
-               dims::Integer, init=nothing, neutral=GPUArrays.neutral_element(f, T)) where {T}
+function scan!(
+        f::Function, output::WrappedMtlArray{T}, input::WrappedMtlArray;
+        dims::Integer, init = nothing, neutral = GPUArrays.neutral_element(f, T)
+    ) where {T}
     dims > 0 || throw(ArgumentError("dims must be a positive integer"))
     inds_t = axes(input)
     axes(output) == inds_t || throw(DimensionMismatch("shape of B must match A"))
@@ -113,17 +117,19 @@ function scan!(f::Function, output::WrappedMtlArray{T}, input::WrappedMtlArray;
     Rdim = CartesianIndices((size(input, dims),))
 
     # iteration domain for the other dimensions
-    Rpre = CartesianIndices(size(input)[1:dims-1])
-    Rpost = CartesianIndices(size(input)[dims+1:end])
+    Rpre = CartesianIndices(size(input)[1:(dims - 1)])
+    Rpost = CartesianIndices(size(input)[(dims + 1):end])
     Rother = CartesianIndices((length(Rpre), length(Rpost)))
 
     # the maximum number of threads is limited by the hardware
     dev = device()
-    maxthreads = min(Int(dev.maxThreadsPerThreadgroup.width),
-                     Int(dev.maxThreadgroupMemoryLength) ÷ sizeof(T) ÷ 2)
+    maxthreads = min(
+        Int(dev.maxThreadsPerThreadgroup.width),
+        Int(dev.maxThreadgroupMemoryLength) ÷ sizeof(T) ÷ 2
+    )
 
     # determine how many threads we can launch for the scan kernel
-    kernel = @metal launch=false partial_scan(f, output, input, Rdim, Rpre, Rpost, Rother, neutral, init, Val(maxthreads), Val(true))
+    kernel = @metal launch = false partial_scan(f, output, input, Rdim, Rpre, Rpost, Rother, neutral, init, Val(maxthreads), Val(true))
     threads = Int(kernel.pipeline.maxTotalThreadsPerThreadgroup)
 
     # determine the grid layout to cover the other dimensions
@@ -132,15 +138,19 @@ function scan!(f::Function, output::WrappedMtlArray{T}, input::WrappedMtlArray;
     # does that suffice to scan the array in one go?
     full = nextpow(2, length(Rdim))
     if full <= threads
-        @metal(threads=full, groups=(1, blocks_other...),
-               partial_scan(f, output, input, Rdim, Rpre, Rpost, Rother, neutral, init, Val(full), Val(true)))
+        @metal(
+            threads = full, groups = (1, blocks_other...),
+            partial_scan(f, output, input, Rdim, Rpre, Rpost, Rother, neutral, init, Val(full), Val(true))
+        )
     else
         # perform partial scans across the scanning dimension
         # NOTE: don't set init here to avoid applying the value multiple times
         partial = prevpow(2, threads)
         blocks_dim = cld(length(Rdim), partial)
-        @metal(threads=partial, groups=(blocks_dim, blocks_other...),
-              partial_scan(f, output, input, Rdim, Rpre, Rpost, Rother, neutral, nothing, Val(partial), Val(true)))
+        @metal(
+            threads = partial, groups = (blocks_dim, blocks_other...),
+            partial_scan(f, output, input, Rdim, Rpre, Rpost, Rother, neutral, nothing, Val(partial), Val(true))
+        )
 
         # get the total of each thread block (except the first) of the partial scans
         aggregates = fill(neutral, Base.setindex(size(input), blocks_dim, dims))
@@ -149,14 +159,16 @@ function scan!(f::Function, output::WrappedMtlArray{T}, input::WrappedMtlArray;
         copyto!(aggregates, indices, partials, indices)
 
         # scan these totals to get totals for the entire partial scan
-        accumulate!(f, aggregates, aggregates; dims=dims)
+        accumulate!(f, aggregates, aggregates; dims = dims)
 
         # add those totals to the partial scan result
         # NOTE: we assume that this kernel requires fewer resources than the scan kernel.
         #       if that does not hold, launch with fewer threads and calculate
         #       the aggregate block index within the kernel itself.
-        @metal(threads=partial, groups=(blocks_dim, blocks_other...),
-              aggregate_partial_scan(f, output, aggregates, Rdim, Rpre, Rpost, Rother, init))
+        @metal(
+            threads = partial, groups = (blocks_dim, blocks_other...),
+            aggregate_partial_scan(f, output, aggregates, Rdim, Rpre, Rpost, Rother, init)
+        )
 
         unsafe_free!(aggregates)
     end
@@ -168,22 +180,24 @@ end
 ## Base interface
 
 Base._accumulate!(op, output::WrappedMtlArray, input::WrappedMtlVector, dims::Nothing, init::Nothing) =
-    scan!(op, output, input; dims=1)
+    scan!(op, output, input; dims = 1)
 
 Base._accumulate!(op, output::WrappedMtlArray, input::WrappedMtlArray, dims::Integer, init::Nothing) =
-    scan!(op, output, input; dims=dims)
+    scan!(op, output, input; dims = dims)
 
 Base._accumulate!(op, output::WrappedMtlArray, input::MtlVector, dims::Nothing, init::Some) =
-    scan!(op, output, input; dims=1, init=init)
+    scan!(op, output, input; dims = 1, init = init)
 
 Base._accumulate!(op, output::WrappedMtlArray, input::WrappedMtlArray, dims::Integer, init::Some) =
-    scan!(op, output, input; dims=dims, init=init)
+    scan!(op, output, input; dims = dims, init = init)
 
 Base.accumulate_pairwise!(op, result::WrappedMtlVector, v::WrappedMtlVector) = accumulate!(op, result, v)
 
 # default behavior unless dims are specified by the user
-function Base.accumulate(op, A::WrappedMtlArray;
-                         dims::Union{Nothing,Integer}=nothing, kw...)
+function Base.accumulate(
+        op, A::WrappedMtlArray;
+        dims::Union{Nothing, Integer} = nothing, kw...
+    )
     if dims === nothing && !(A isa AbstractVector)
         # This branch takes care of the cases not handled by `_accumulate!`.
         return reshape(accumulate(op, A[:]; kw...), size(A))
@@ -196,5 +210,5 @@ function Base.accumulate(op, A::WrappedMtlArray;
     else
         throw(ArgumentError("accumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
     end
-    accumulate!(op, out, A; dims=dims, kw...)
+    return accumulate!(op, out, A; dims = dims, kw...)
 end

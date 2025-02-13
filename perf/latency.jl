@@ -16,22 +16,22 @@ function main()
     # time to precompile the package and its dependencies
     precompile_cmd =
         `$base_cmd -e "pkg = Base.identify_package(\"Metal\")
-                       Base.compilecache(pkg)"`
-    results["precompile"] = @benchmark run($precompile_cmd) evals=1 seconds=60
+                    Base.compilecache(pkg)"`
+    results["precompile"] = @benchmark run($precompile_cmd) evals = 1 seconds = 60
 
     # time to actually import the package
     import_cmd =
         `$base_cmd -e "using Metal"`
-    results["import"] = @benchmark run($import_cmd) evals=1 seconds=30
+    results["import"] = @benchmark run($import_cmd) evals = 1 seconds = 30
 
     # time to actually compile a kernel
     ttfp_cmd =
         `$base_cmd -e "using Metal
-                       kernel() = return
-                       Metal.code_native(devnull, kernel, Tuple{}; kernel=true)"`
-    results["ttfp"] = @benchmark run($ttfp_cmd) evals=1 seconds=60
+                    kernel() = return
+                    Metal.code_native(devnull, kernel, Tuple{}; kernel=true)"`
+    results["ttfp"] = @benchmark run($ttfp_cmd) evals = 1 seconds = 60
 
-    results
+    return results
 end
 
 end

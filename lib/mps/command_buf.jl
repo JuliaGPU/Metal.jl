@@ -8,12 +8,12 @@
 
 function MPSCommandBuffer(commandBuffer::MTLCommandBuffer)
     handle = @objc [MPSCommandBuffer commandBufferWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}]::id{MPSCommandBuffer}
-    MPSCommandBuffer(handle)
+    return MPSCommandBuffer(handle)
 end
 
 function MPSCommandBuffer(commandQueue::MTLCommandQueue)
     handle = @objc [MPSCommandBuffer commandBufferFromCommandQueue:commandQueue::id{MTLCommandQueue}]::id{MPSCommandBuffer}
-    MPSCommandBuffer(handle)
+    return MPSCommandBuffer(handle)
 end
 
 function MPSCommandBuffer(f::Base.Callable, queueOrBuf)

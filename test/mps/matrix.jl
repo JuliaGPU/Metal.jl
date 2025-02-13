@@ -87,7 +87,7 @@ using .MPS: MPSMatrix
     @test vbufmat.offset == vmat.offset * sizeof(T)
     @test vbufmat.data == vmat.data[]
 
-    arr = MtlArray{T,3}(undef, rows, cols, mats)
+    arr = MtlArray{T, 3}(undef, rows, cols, mats)
     mcols, mrows, mmats = size(arr)
     mrowBytes = sizeof(T) * mcols
     mpsmat = MPSMatrix(mat)
@@ -104,7 +104,7 @@ using .MPS: MPSMatrix
 
     vec = MtlVector{T}(undef, rows)
     veccols, vecrows = length(vec), 1
-    vecrowBytes = sizeof(T)*veccols
+    vecrowBytes = sizeof(T) * veccols
     vmpsmat = MPSMatrix(vec)
     @test vmpsmat isa MPSMatrix
     @test vmpsmat.device == dev
@@ -113,7 +113,7 @@ using .MPS: MPSMatrix
     @test vmpsmat.rowBytes == vecrowBytes
     @test vmpsmat.matrices == 1
     @test vmpsmat.dataType == DT
-    @test vmpsmat.matrixBytes == vecrowBytes*vecrows
+    @test vmpsmat.matrixBytes == vecrowBytes * vecrows
     @test vmpsmat.offset == 0
     @test vmpsmat.data == vec.data[]
 end
@@ -136,10 +136,12 @@ using .MPS: MPSMatrixMultiplication
     alpha = 1
     beta = 0
 
-    mat_mul = MPSMatrixMultiplication(device(),
-                                        transpose_b, transpose_a,
-                                        rows_c, cols_c, cols_a,
-                                        alpha, beta)
+    mat_mul = MPSMatrixMultiplication(
+        device(),
+        transpose_b, transpose_a,
+        rows_c, cols_c, cols_a,
+        alpha, beta
+    )
 
     @test mat_mul isa MPSMatrixMultiplication
     @test mat_mul.leftMatrixOrigin == MTLOrigin(0, 0, 0)

@@ -24,8 +24,10 @@ export MTLBinaryArchive, add_functions!
 
 function MTLBinaryArchive(dev::MTLDevice, desc::MTLBinaryArchiveDescriptor)
     err = Ref{id{NSError}}(nil)
-    handle = @objc [dev::id{MTLDevice} newBinaryArchiveWithDescriptor:desc::id{MTLBinaryArchiveDescriptor}
-                                       error:err::Ptr{id{NSError}}]::id{MTLBinaryArchive}
+    handle = @objc [
+        dev::id{MTLDevice} newBinaryArchiveWithDescriptor:desc::id{MTLBinaryArchiveDescriptor}
+        error:err::Ptr{id{NSError}}
+    ]::id{MTLBinaryArchive}
     err[] == nil || throw(NSError(err[]))
 
     obj = MTLBinaryArchive(handle)
@@ -35,15 +37,19 @@ end
 
 function add_functions!(bin::MTLBinaryArchive, desc::MTLComputePipelineDescriptor)
     err = Ref{id{NSError}}(nil)
-    @objc [bin::id{MTLBinaryArchive} addComputePipelineFunctionsWithDescriptor:desc::id{MTLComputePipelineDescriptor}
-                                     error:err::Ptr{id{NSError}}]::Nothing
-    err[] == nil || throw(NSError(err[]))
+    @objc [
+        bin::id{MTLBinaryArchive} addComputePipelineFunctionsWithDescriptor:desc::id{MTLComputePipelineDescriptor}
+        error:err::Ptr{id{NSError}}
+    ]::Nothing
+    return err[] == nil || throw(NSError(err[]))
 end
 
 function Base.write(filename::String, bin::MTLBinaryArchive)
     url = NSFileURL(filename)
     err = Ref{id{NSError}}(nil)
-    @objc [bin::id{MTLBinaryArchive} serializeToURL:url::id{NSURL}
-                                     error:err::Ptr{id{NSError}}]::Nothing
-    err[] == nil || throw(NSError(err[]))
+    @objc [
+        bin::id{MTLBinaryArchive} serializeToURL:url::id{NSURL}
+        error:err::Ptr{id{NSError}}
+    ]::Nothing
+    return err[] == nil || throw(NSError(err[]))
 end

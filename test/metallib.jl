@@ -8,11 +8,11 @@ using Printf: @printf
 hexdump(obj) = hexdump(stdout, obj)
 hexdump(io, obj) = GC.@preserve obj hexdump(io, pointer(obj), sizeof(obj))
 hexdump(io, mem::Ptr, len::Integer) = hexdump(io, mem, len)
-function hexdump(io::IO, mem::Ptr, len::Integer; per_line::Integer=16, split_per::Integer=2)
+function hexdump(io::IO, mem::Ptr, len::Integer; per_line::Integer = 16, split_per::Integer = 2)
     mem = convert(Ptr{UInt8}, mem)
     off = 1
     while off <= len
-        @printf io "%08x: " off-1
+        @printf io "%08x: " off - 1
 
         # bytes
         str = ""
@@ -31,7 +31,7 @@ function hexdump(io::IO, mem::Ptr, len::Integer; per_line::Integer=16, split_per
                 @printf io "  "
             end
 
-            if i%split_per == 0
+            if i % split_per == 0
                 print(io, " ")
             end
             off += 1
@@ -43,6 +43,7 @@ function hexdump(io::IO, mem::Ptr, len::Integer; per_line::Integer=16, split_per
             println(io)
         end
     end
+    return
 end
 
 # diff two objects, highlighting using `colordiff`
@@ -50,12 +51,12 @@ hexdiff(obj1, obj2) = hexdiff(stdout, obj1, obj2)
 function hexdiff(io, obj1, obj2)
     dump1 = sprint(io -> hexdump(io, obj1))
     dump2 = sprint(io -> hexdump(io, obj2))
-    colordiff(io ,IOBuffer(dump1), IOBuffer(dump2))
+    return colordiff(io, IOBuffer(dump1), IOBuffer(dump2))
 end
 
 # diff two streams, highlighting different lines and additionally different characters.
 colordiff(in1, in2) = colordiff(stdout, in1, in2)
-function colordiff(io, in1, in2; context=2)
+function colordiff(io, in1, in2; context = 2)
     lines1 = collect(eachline(in1))
     lines2 = collect(eachline(in2))
     lines = max(length(lines1), length(lines2))
@@ -76,7 +77,7 @@ function colordiff(io, in1, in2; context=2)
     ## include context
     for i in 1:lines
         if line_status[i] == 1
-            for j in max(1, i-context):min(lines, i+context)
+            for j in max(1, i - context):min(lines, i + context)
                 if line_status[j] == 0
                     line_status[j] = 2
                 end
@@ -129,6 +130,7 @@ function colordiff(io, in1, in2; context=2)
             println(io)
         end
     end
+    return
 end
 
 function compare(ref_path)
@@ -139,7 +141,7 @@ function compare(ref_path)
     end
 
     # generate new data, and parse it again
-    new_bytes = let IO=IOBuffer()
+    new_bytes = let IO = IOBuffer()
         write(IO, ref_library)
         take!(IO)
     end
@@ -161,17 +163,15 @@ end
 
 
 @testset "metallib" begin
-
-metallib_dir = joinpath(@__DIR__, "metallib")
-metallibs = String[]
-for file in readdir(metallib_dir)
-    if endswith(file, ".metallib")
-        push!(metallibs, file)
+    metallib_dir = joinpath(@__DIR__, "metallib")
+    metallibs = String[]
+    for file in readdir(metallib_dir)
+        if endswith(file, ".metallib")
+            push!(metallibs, file)
+        end
     end
-end
 
-@testset for metallib in metallibs
-    @test compare(joinpath(metallib_dir, metallib))
-end
-
+    @testset for metallib in metallibs
+        @test compare(joinpath(metallib_dir, metallib))
+    end
 end

@@ -50,18 +50,26 @@ for (intr, offset) in dim_intr
         end
 
         @device_function function $(Symbol(intr * "_2d"))()
-            vec = ccall($"extern julia.air.$intr.v2i32", llvmcall,
-                        NTuple{2, VecElement{UInt32}}, ())
-            (x = vec[1].value + UInt32($offset),
-             y = vec[2].value + UInt32($offset))
+            vec = ccall(
+                $"extern julia.air.$intr.v2i32", llvmcall,
+                NTuple{2, VecElement{UInt32}}, ()
+            )
+            (
+                x = vec[1].value + UInt32($offset),
+                y = vec[2].value + UInt32($offset),
+            )
         end
 
         @device_function function $(Symbol(intr * "_3d"))()
-            vec = ccall($"extern julia.air.$intr.v3i32", llvmcall,
-                        NTuple{3, VecElement{UInt32}}, ())
-            (x = vec[1].value + UInt32($offset),
-             y = vec[2].value + UInt32($offset),
-             z = vec[3].value + UInt32($offset))
+            vec = ccall(
+                $"extern julia.air.$intr.v3i32", llvmcall,
+                NTuple{3, VecElement{UInt32}}, ()
+            )
+            (
+                x = vec[1].value + UInt32($offset),
+                y = vec[2].value + UInt32($offset),
+                z = vec[3].value + UInt32($offset),
+            )
         end
     end
 end
@@ -150,7 +158,7 @@ macro doc_dim(docs, base_name)
         @doc $docs $_2d_name
         @doc $docs $_3d_name
     end
-    esc(expr)
+    return esc(expr)
 end
 
 @doc_dim """

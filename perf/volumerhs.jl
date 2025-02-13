@@ -33,7 +33,7 @@ for (jlf, f) in zip((:+, :*, :-), (:add, :mul, :sub))
         end
     end
     @eval function $jlf(args...)
-        Base.$jlf(args...)
+        return Base.$jlf(args...)
     end
 end
 
@@ -51,7 +51,7 @@ let (jlf, f) = (:div_arcp, :div)
         end
     end
     @eval function $jlf(args...)
-        Base.$jlf(args...)
+        return Base.$jlf(args...)
     end
 end
 rcp(x) = div_arcp(one(x), x) # still leads to rcp.rn which is also a function call
@@ -66,12 +66,14 @@ const stateid = (ρ = _ρ, U = _U, V = _V, W = _W, E = _E)
 
 const _nvgeo = 14
 const _ξx, _ηx, _ζx, _ξy, _ηy, _ζy, _ξz, _ηz, _ζz, _MJ, _MJI,
-_x, _y, _z = 1:_nvgeo
-const vgeoid = (ξx = _ξx, ηx = _ηx, ζx = _ζx,
-                ξy = _ξy, ηy = _ηy, ζy = _ζy,
-                ξz = _ξz, ηz = _ηz, ζz = _ζz,
-                MJ = _MJ, MJI = _MJI,
-                x = _x,   y = _y,   z = _z)
+    _x, _y, _z = 1:_nvgeo
+const vgeoid = (
+    ξx = _ξx, ηx = _ηx, ζx = _ζx,
+    ξy = _ξy, ηy = _ηy, ζy = _ζy,
+    ξz = _ξz, ηz = _ηz, ζz = _ζz,
+    MJ = _MJ, MJI = _MJI,
+    x = _x, y = _y, z = _z,
+)
 
 const N = 4
 const nmoist = 0
@@ -121,10 +123,10 @@ function volumerhs!(rhs, Q, vgeo, gravity, D, nelem)
 
             # Load values will need into registers
             MJ = vgeo[i, j, k, _MJ, e]
-            ξx, ξy, ξz = vgeo[i,j,k,_ξx,e], vgeo[i,j,k,_ξy,e], vgeo[i,j,k,_ξz,e]
-            ηx, ηy, ηz = vgeo[i,j,k,_ηx,e], vgeo[i,j,k,_ηy,e], vgeo[i,j,k,_ηz,e]
-            ζx, ζy, ζz = vgeo[i,j,k,_ζx,e], vgeo[i,j,k,_ζy,e], vgeo[i,j,k,_ζz,e]
-            z = vgeo[i,j,k,_z,e]
+            ξx, ξy, ξz = vgeo[i, j, k, _ξx, e], vgeo[i, j, k, _ξy, e], vgeo[i, j, k, _ξz, e]
+            ηx, ηy, ηz = vgeo[i, j, k, _ηx, e], vgeo[i, j, k, _ηy, e], vgeo[i, j, k, _ηz, e]
+            ζx, ζy, ζz = vgeo[i, j, k, _ζx, e], vgeo[i, j, k, _ζy, e], vgeo[i, j, k, _ζz, e]
+            z = vgeo[i, j, k, _z, e]
 
             U, V, W = Q[i, j, k, _U, e], Q[i, j, k, _V, e], Q[i, j, k, _W, e]
             ρ, E = Q[i, j, k, _ρ, e], Q[i, j, k, _E, e]
@@ -136,7 +138,7 @@ function volumerhs!(rhs, Q, vgeo, gravity, D, nelem)
             ρ2inv = rcp(2ρ)
             # ρ2inv = 0.5f0 * pinv
 
-            P = gdm1*(E - (U^2 + V^2 + W^2)*ρ2inv - ρ*gravity*z)
+            P = gdm1 * (E - (U^2 + V^2 + W^2) * ρ2inv - ρ * gravity * z)
 
             fluxρ_x = U
             fluxU_x = ρinv * U * U + P
@@ -156,17 +158,17 @@ function volumerhs!(rhs, Q, vgeo, gravity, D, nelem)
             fluxW_z = ρinv * W * W + P
             fluxE_z = ρinv * W * (E + P)
 
-            s_F[i, j,  _ρ] = MJ * (ξx * fluxρ_x + ξy * fluxρ_y + ξz * fluxρ_z)
-            s_F[i, j,  _U] = MJ * (ξx * fluxU_x + ξy * fluxU_y + ξz * fluxU_z)
-            s_F[i, j,  _V] = MJ * (ξx * fluxV_x + ξy * fluxV_y + ξz * fluxV_z)
-            s_F[i, j,  _W] = MJ * (ξx * fluxW_x + ξy * fluxW_y + ξz * fluxW_z)
-            s_F[i, j,  _E] = MJ * (ξx * fluxE_x + ξy * fluxE_y + ξz * fluxE_z)
+            s_F[i, j, _ρ] = MJ * (ξx * fluxρ_x + ξy * fluxρ_y + ξz * fluxρ_z)
+            s_F[i, j, _U] = MJ * (ξx * fluxU_x + ξy * fluxU_y + ξz * fluxU_z)
+            s_F[i, j, _V] = MJ * (ξx * fluxV_x + ξy * fluxV_y + ξz * fluxV_z)
+            s_F[i, j, _W] = MJ * (ξx * fluxW_x + ξy * fluxW_y + ξz * fluxW_z)
+            s_F[i, j, _E] = MJ * (ξx * fluxE_x + ξy * fluxE_y + ξz * fluxE_z)
 
-            s_G[i, j,  _ρ] = MJ * (ηx * fluxρ_x + ηy * fluxρ_y + ηz * fluxρ_z)
-            s_G[i, j,  _U] = MJ * (ηx * fluxU_x + ηy * fluxU_y + ηz * fluxU_z)
-            s_G[i, j,  _V] = MJ * (ηx * fluxV_x + ηy * fluxV_y + ηz * fluxV_z)
-            s_G[i, j,  _W] = MJ * (ηx * fluxW_x + ηy * fluxW_y + ηz * fluxW_z)
-            s_G[i, j,  _E] = MJ * (ηx * fluxE_x + ηy * fluxE_y + ηz * fluxE_z)
+            s_G[i, j, _ρ] = MJ * (ηx * fluxρ_x + ηy * fluxρ_y + ηz * fluxρ_z)
+            s_G[i, j, _U] = MJ * (ηx * fluxU_x + ηy * fluxU_y + ηz * fluxU_z)
+            s_G[i, j, _V] = MJ * (ηx * fluxV_x + ηy * fluxV_y + ηz * fluxV_z)
+            s_G[i, j, _W] = MJ * (ηx * fluxW_x + ηy * fluxW_y + ηz * fluxW_z)
+            s_G[i, j, _E] = MJ * (ηx * fluxE_x + ηy * fluxE_y + ηz * fluxE_z)
 
             r_Hρ = MJ * (ζx * fluxρ_x + ζy * fluxρ_y + ζz * fluxρ_z)
             r_HU = MJ * (ζx * fluxU_x + ζy * fluxU_y + ζz * fluxU_z)
@@ -175,7 +177,7 @@ function volumerhs!(rhs, Q, vgeo, gravity, D, nelem)
             r_HE = MJ * (ζx * fluxE_x + ζy * fluxE_y + ζz * fluxE_z)
 
             # one shared access per 10 flops
-            for n = 1:Nq
+            for n in 1:Nq
                 Dkn = s_D[k, n]
 
                 r_rhsρ[n] += Dkn * r_Hρ
@@ -190,7 +192,7 @@ function volumerhs!(rhs, Q, vgeo, gravity, D, nelem)
             sync_threads()
 
             # loop of ξ-grid lines
-            @unroll for n = 1:Nq
+            @unroll for n in 1:Nq
                 Dni = s_D[n, i]
                 Dnj = s_D[n, j]
 
@@ -216,11 +218,11 @@ function volumerhs!(rhs, Q, vgeo, gravity, D, nelem)
 
             # Updates are a performance bottleneck
             # primary source of stall_long_sb
-            rhs[i, j, k, _U, e] += MJI*r_rhsU[k]
-            rhs[i, j, k, _V, e] += MJI*r_rhsV[k]
-            rhs[i, j, k, _W, e] += MJI*r_rhsW[k]
-            rhs[i, j, k, _ρ, e] += MJI*r_rhsρ[k]
-            rhs[i, j, k, _E, e] += MJI*r_rhsE[k]
+            rhs[i, j, k, _U, e] += MJI * r_rhsU[k]
+            rhs[i, j, k, _V, e] += MJI * r_rhsV[k]
+            rhs[i, j, k, _W, e] += MJI * r_rhsW[k]
+            rhs[i, j, k, _ρ, e] += MJI * r_rhsρ[k]
+            rhs[i, j, k, _E, e] += MJI * r_rhsE[k]
         end
     end
     return
@@ -247,9 +249,9 @@ function main()
 
     rhs = MtlArray(zeros(DFloat, Nq, Nq, Nq, nvar, nelem))
 
-    threads=(N+1, N+1)
+    threads = (N + 1, N + 1)
 
-    kernel = @metal launch=false volumerhs!(rhs, Q, vgeo, DFloat(grav), D, nelem)
+    kernel = @metal launch = false volumerhs!(rhs, Q, vgeo, DFloat(grav), D, nelem)
     # XXX: should we print these for all kernels? maybe upload them to Codespeed?
     # @info """volumerhs! details:
     #           - $(Metal.registers(kernel)) registers, max $(Metal.maxthreads(kernel)) threads
@@ -257,8 +259,10 @@ function main()
     #             $(Base.format_bytes(Metal.memory(kernel).shared)) shared memory,
     #             $(Base.format_bytes(Metal.memory(kernel).constant)) constant memory"""
     results = @benchmark begin
-        Metal.@sync blocking=true $kernel($rhs, $Q, $vgeo, $(DFloat(grav)), $D, $nelem;
-                                         threads=$threads, groups=$nelem)
+        Metal.@sync blocking = true $kernel(
+            $rhs, $Q, $vgeo, $(DFloat(grav)), $D, $nelem;
+            threads = $threads, groups = $nelem
+        )
     end
 
     # BenchmarkTools captures inputs, JuliaCI/BenchmarkTools.jl#127, so forcibly free them
@@ -267,7 +271,7 @@ function main()
     Metal.unsafe_free!(vgeo)
     Metal.unsafe_free!(D)
 
-    results
+    return results
 end
 
 end
