@@ -43,6 +43,9 @@ so you should not have to define them. If using a struct for the first time in a
 interface, remember to add tests! Objective-C object methods and constructors are not yet automtically
 generatied, so any contributions there are welcome.
 
+It is also recommended to follow [these steps](https://github.com/fredrikekre/Runic.jl?tab=readme-ov-file#ignore-formatting-commits-in-git-blame) from the Runic.jl documentation
+in your local development repository so that formatting commits are ignored in blame.
+
 ## Mapping to Metal Intrinsics
 
 Some Metal functions map directly to Apple intermediate representation intrinsics. In this
