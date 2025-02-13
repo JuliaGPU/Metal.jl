@@ -86,7 +86,7 @@ function metal_support()
         v"3.0"
     elseif macos >= v"12"
         v"2.4"
-    elseif macos v> v"11"
+    elseif macos >= v"11"
         v"2.3"
     elseif macos >= v"10.15"
         v"2.2"
