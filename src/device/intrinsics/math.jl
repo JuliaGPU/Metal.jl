@@ -333,7 +333,7 @@ end
 
 
 ### Integer Intrinsics
-
+# runic: off
 @device_override Base.abs(x::Int64)   = ccall("extern air.abs.s.i64", llvmcall, Int64, (Int64,), x)
 @device_override Base.abs(x::UInt64)  = ccall("extern air.abs.u.i64", llvmcall, UInt64, (UInt64,), x)
 @device_override Base.abs(x::Int32)   = ccall("extern air.abs.s.i32", llvmcall, Int32, (Int32,), x)
@@ -396,7 +396,7 @@ end
 @device_function reverse_bits(x::UInt16)  = ccall("extern air.reverse_bits.i16", llvmcall, UInt16, (UInt16,), x)
 @device_function reverse_bits(x::Int8)    = ccall("extern air.reverse_bits.i8", llvmcall, Int8, (Int8,), x)
 @device_function reverse_bits(x::UInt8)   = ccall("extern air.reverse_bits.i8", llvmcall, UInt8, (UInt8,), x)
-
+# runic: on
 
 function _mulhi(a::Int64, b::Int64)
     shift = sizeof(a) * 4

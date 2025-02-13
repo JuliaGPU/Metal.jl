@@ -3,6 +3,7 @@ using CEnum
 
 export MemoryFlags, threadgroup_barrier, simdgroup_barrier
 
+# runic: off
 """
     MemoryFlags
 
@@ -31,6 +32,7 @@ Possible values:
     MemoryFlagTexture               = 4
     MemoryFlagThreadGroup_ImgBlock  = 8
 end
+# runic: on
 
 
 """
