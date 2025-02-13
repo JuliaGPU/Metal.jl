@@ -667,7 +667,9 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
 @testset "low-level" begin
     # TODO: make these tests actually write to the overlapping memory locations
 
-    # XXX: according to the docs, Float32 atomics should also work on threadgroup memory
+    atomic_store_load_exch_cmpexch_types = (Int32, UInt32, Float32)
+    # The Metal Shading Language spec states: "Metal 3 supports the atomic_float for device memory only"
+    local_atomic_store_load_exch_cmpexch_types = setdiff(atomic_store_load_exch_cmpexch_types, [Float32])
 
     @testset "store_explicit" begin
         function global_kernel(a, val)
@@ -676,9 +678,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        types = [Int32]
-        metal_support() >= v"3.0" && push!(types, Float32)
-        @testset for T in types
+        @testset for T in atomic_store_load_exch_cmpexch_types
             a = Metal.zeros(T, n)
             @metal threads=n global_kernel(a, T(42))
             @test all(isequal(42), Array(a))
@@ -692,7 +692,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in [Int32,]
+        @testset for T in local_atomic_store_load_exch_cmpexch_types
             a = Metal.zeros(T, n)
             @metal threads=n local_kernel(a, T(42))
             @test all(isequal(42), Array(a))
@@ -707,9 +707,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        types = [Int32]
-        metal_support() >= v"3.0" && push!(types, Float32)
-        @testset for T in types
+        @testset for T in atomic_store_load_exch_cmpexch_types
             a = MtlArray(rand(T, n))
             b = Metal.zeros(T, n)
             @metal threads=n global_kernel(a, b)
@@ -728,7 +726,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in [Int32,]
+        @testset for T in local_atomic_store_load_exch_cmpexch_types
             a = MtlArray(rand(T, n))
             b = Metal.zeros(T, n)
             @metal threads=n local_kernel(a, b)
@@ -743,9 +741,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        types = [Int32]
-        metal_support() >= v"3.0" && push!(types, Float32)
-        @testset for T in types
+        @testset for T in atomic_store_load_exch_cmpexch_types
             a = MtlArray(rand(T, n))
             @metal threads=n global_kernel(a, T(42))
             @test all(isequal(42), Array(a))
@@ -759,7 +755,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in [Int32,]
+        @testset for T in local_atomic_store_load_exch_cmpexch_types
             a = Metal.zeros(T, n)
             @metal threads=n local_kernel(a, T(42))
             @test all(isequal(42), Array(a))
@@ -775,9 +771,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        types = [Int32]
-        metal_support() >= v"3.0" && push!(types, Float32)
-        @testset for T in types
+        @testset for T in atomic_store_load_exch_cmpexch_types
             a = MtlArray(rand(T, n))
             expected = copy(a)
             desired = T(42)
@@ -800,7 +794,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in [Int32,]
+        @testset for T in local_atomic_store_load_exch_cmpexch_types
             a = Metal.zeros(T, n)
             expected = copy(a)
             desired = T(42)
@@ -810,8 +804,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
     end
 
     @testset "fetch and modify" begin
-        add_sub_types = [Int32, UInt32]
-        metal_support() >= v"3.0" && push!(add_sub_types, Float32)
+        add_sub_types = [Int32, UInt32, Float32]
         other_types = [Int32, UInt32]
         for (jlfun, mtlfun, types) in [(min, Metal.atomic_fetch_min_explicit, other_types),
                                        (max, Metal.atomic_fetch_max_explicit, other_types),
@@ -870,7 +863,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in (Int32, UInt32)
+        @testset for T in (Int32, UInt32, Float32)
             a = rand(T, n)
             b = MtlArray(a)
             val = rand(T)
@@ -906,8 +899,7 @@ end
     #       covered by the low-level tests above, but only the atomic macro functionality.
 
     @testset "load" begin
-        types = [Int32, UInt32]
-        metal_support() >= v"3.0" && append!(types, [Float32])
+        types = [Int32, UInt32, Float32]
 
         function kernel(a, b)
             i = thread_position_in_grid_1d()
@@ -924,8 +916,7 @@ end
     end
 
     @testset "store" begin
-        types = [Int32, UInt32]
-        metal_support() >= v"3.0" && append!(types, [Float32])
+        types = [Int32, UInt32, Float32]
 
         function kernel(a, b)
             i = thread_position_in_grid_1d()
@@ -943,8 +934,7 @@ end
     end
 
     @testset "add" begin
-        types = [Int32, UInt32]
-        metal_support() >= v"3.0" && append!(types, [Float32])
+        types = [Int32, UInt32, Float32]
 
         function kernel(a)
             Metal.@atomic a[1] = a[1] + 1
@@ -960,8 +950,7 @@ end
     end
 
     @testset "sub" begin
-        types = [Int32, UInt32]
-        metal_support() >= v"3.0" && append!(types, [Float32])
+        types = [Int32, UInt32, Float32]
 
         function kernel(a)
             Metal.@atomic a[1] = a[1] - 1
