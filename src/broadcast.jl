@@ -17,7 +17,7 @@ BroadcastStyle(::MtlArrayStyle{N, S1},
     MtlArrayStyle{N, SharedStorage}()
 
 # allocation of output arrays
-Base.similar(bc::Broadcasted{MtlArrayStyle{N,S}}, ::Type{T}, dims) where {T,N,S} =
+Base.similar(::Broadcasted{MtlArrayStyle{N, S}}, ::Type{T}, dims) where {T, N, S} =
     similar(MtlArray{T,length(dims),S}, dims)
 
 # a static version of CartesianIndices that helps avoiding integer division

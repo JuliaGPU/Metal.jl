@@ -134,8 +134,8 @@ Adapt.adapt_structure(to::Adaptor, r::Base.RefValue) = MtlRefValue(adapt(to, r[]
 # broadcast sometimes passes a ref(type), resulting in a GPU-incompatible DataType box.
 # avoid that by using a special kind of ref that knows about the boxed type.
 struct MtlRefType{T} <: Ref{DataType} end
-Base.getindex(r::MtlRefType{T}) where T = T
-Adapt.adapt_structure(to::Adaptor, r::Base.RefValue{<:Union{DataType,Type}}) =
+Base.getindex(::MtlRefType{T}) where {T} = T
+Adapt.adapt_structure(::Adaptor, r::Base.RefValue{<:Union{DataType, Type}}) =
     MtlRefType{r[]}()
 
 # case where type is the function being broadcasted
