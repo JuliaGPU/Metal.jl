@@ -4,7 +4,6 @@
     memory_order_relaxed = 0
 end
 
-# runic: off
 # XXX: the integers should come from some enum
 const atomic_memory_names = Dict(
     AS.Device      => ("global", Int32(2)),
@@ -18,7 +17,7 @@ const atomic_type_names = Dict(
     :UInt64  => "i64",
     :Float32 => "f32"
 )
-# runic: on
+
 
 ## low-level functions
 
@@ -61,7 +60,6 @@ for typ in (:Int32, :UInt32, :Float32), as in (AS.Device, AS.ThreadGroup)
     end
 end
 
-# runic: off
 const atomic_fetch_and_modify = [
     :add => [:Int32, :UInt32, :Float32],
     :sub => [:Int32, :UInt32, :Float32],
@@ -71,7 +69,6 @@ const atomic_fetch_and_modify = [
     :or  => [:Int32, :UInt32],
     :xor => [:Int32, :UInt32]
 ]
-# runic: on
 
 for (op, types) in atomic_fetch_and_modify, typ in types, as in (AS.Device, AS.ThreadGroup)
     typnam = atomic_type_names[typ]
@@ -109,7 +106,6 @@ end
 
 # copied from CUDA.jl -- should be generalized or integrated with Base
 
-# runic: off
 const inplace_ops = Dict(
     :(+=)   => :(+),
     :(-=)   => :(-),
@@ -125,7 +121,6 @@ const inplace_ops = Dict(
     :(>>=)  => :(>>),
     :(<<=)  => :(<<),
 )
-# runic: on
 
 struct AtomicError <: Exception
     msg::AbstractString
@@ -211,7 +206,6 @@ end
 @inline atomic_arrayref(A::AbstractArray, I::Integer) = atomic_load_explicit(pointer(A, I))
 @inline atomic_arrayset(A::AbstractArray{T}, I::Integer, ::Nothing, val) where T =
     atomic_store_explicit(pointer(A, I), convert(T, val))
-# runic: off
 for (op,impl,typ) in [(:(+), :(atomic_fetch_add_explicit), [:UInt32,:Int32,:Float32]),
                       (:(-), :(atomic_fetch_sub_explicit), [:UInt32,:Int32,:Float32]),
                       (:(&), :(atomic_fetch_and_explicit), [:UInt32,:Int32]),
@@ -223,7 +217,6 @@ for (op,impl,typ) in [(:(+), :(atomic_fetch_add_explicit), [:UInt32,:Int32,:Floa
                                   val::T) where {T<:Union{$(typ...)}} =
         $impl(pointer(A, I), val)
 end
-# runic: on
 
 # native atomics that are not supported on all devices
 @inline function atomic_arrayset(A::AbstractArray{T}, I::Integer, op::typeof(+),

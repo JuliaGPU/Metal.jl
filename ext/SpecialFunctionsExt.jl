@@ -5,7 +5,6 @@ using SpecialFunctions
 
 # math functionality corresponding to SpecialFunctions.jl
 
-# runic: off
 ## error function
 
 const tiny = 1f-30
@@ -54,7 +53,6 @@ const sb2  =  4.51839523f+01
 const sb3  =  4.72810211f+01
 const sb4  =  8.93033314f+00
 
-# runic: on
 
 # Implementation of `erf(::Float32)` from openlibm's `erfcf`
 # https://github.com/JuliaMath/openlibm/blob/12f5ffcc990e16f4120d4bf607185243f5affcb8/src/s_erff.c

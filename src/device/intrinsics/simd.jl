@@ -86,7 +86,6 @@ Returns `a * b + c`.
 
 ## SIMD Shuffle Up/Down
 
-# runic: off
 simd_shuffle_map = ((Float32, "f32"),
                     (Float16, "f16"),
                     (Int32,   "s.i32"),
@@ -95,7 +94,6 @@ simd_shuffle_map = ((Float32, "f32"),
                     (UInt16,  "u.i16"),
                     (Int8,    "s.i8"),
                     (UInt8,   "u.i8"))
-# runic: on
 
 for (jltype, suffix) in simd_shuffle_map
     @eval begin

@@ -17,7 +17,7 @@ using UUIDs: UUID
 using Printf: @printf
 using CodecBzip2: Bzip2Compressor, Bzip2Decompressor, Bzip2DecompressorStream
 
-# runic: off
+
 ## enums
 
 @cenum FileType::UInt8 begin
@@ -54,7 +54,7 @@ end
     PROGRAM_INTERSECTION = 6
     PROGRAM_NONE         = 255
 end
-# runic: on
+
 
 ## structures
 
