@@ -104,7 +104,7 @@ end
 
 ############################################################################################
 
-MATH_INTR_FUNCS_1_ARG = [
+FLOAT_MATH_INTR_FUNCS_1_ARG = [
     # Common functions
     # saturate, # T saturate(T x) Clamp between 0.0 and 1.0
     sign, # T sign(T x) returns 0.0 if x is NaN
@@ -146,7 +146,7 @@ Metal.rsqrt(x::Float32) = 1 / sqrt(x)
 Metal.fract(x::Float16) = mod(x, 1)
 Metal.fract(x::Float32) = mod(x, 1)
 
-MATH_INTR_FUNCS_2_ARG = [
+FLOAT_MATH_INTR_FUNCS_2_ARG = [
     # Common function
     # step, # T step(T edge, T x) Returns 0.0 if x < edge, otherwise it returns 1.0
 
@@ -162,7 +162,7 @@ MATH_INTR_FUNCS_2_ARG = [
     hypot, # NOT MSL but tested the same
 ]
 
-MATH_INTR_FUNCS_3_ARG = [
+FLOAT_MATH_INTR_FUNCS_3_ARG = [
     # Common functions
     # mix, # T mix(T x, T y, T a) # x+(y-x)*a
     # smoothstep, # T smoothstep(T edge0, T edge1, T x)
@@ -172,9 +172,9 @@ MATH_INTR_FUNCS_3_ARG = [
     min, # T min3(T x, T y, T z)
 ]
 
-@testset "math" begin
+@testset "float math" begin
 # 1-arg functions
-@testset "$(fun)()::$T" for fun in MATH_INTR_FUNCS_1_ARG, T in (Float32, Float16)
+@testset "$(fun)()::$T" for fun in FLOAT_MATH_INTR_FUNCS_1_ARG, T in (Float32, Float16)
     cpuarr = if fun in [log, log2, log10, Metal.rsqrt, sqrt]
         rand(T, 4)
     else
@@ -194,7 +194,7 @@ MATH_INTR_FUNCS_3_ARG = [
     @eval @test Array($mtlout) ≈ $fun.($cpuarr)
 end
 # 2-arg functions
-@testset "$(fun)()::$T" for T in (Float32, Float16), fun in MATH_INTR_FUNCS_2_ARG
+@testset "$(fun)()::$T" for T in (Float32, Float16), fun in FLOAT_MATH_INTR_FUNCS_2_ARG
     N = 4
     arr1 = randn(T, N)
     arr2 = randn(T, N)
@@ -212,7 +212,7 @@ end
     @eval @test Array($mtlout) ≈ $fun.($arr1, $arr2)
 end
 # 3-arg functions
-@testset "$(fun)()::$T" for T in (Float32, Float16), fun in MATH_INTR_FUNCS_3_ARG
+@testset "$(fun)()::$T" for T in (Float32, Float16), fun in FLOAT_MATH_INTR_FUNCS_3_ARG
     N = 4
     arr1 = randn(T, N)
     arr2 = randn(T, N)
@@ -234,7 +234,7 @@ end
 end
 end
 
-@testset "unique math" begin
+@testset "unique float math" begin
 @testset "$T" for T in (Float32, Float16)
     let # acosh
         arr = T[0, rand(T, 3)...] .+ T(1)
@@ -393,6 +393,96 @@ end
         ir = sprint(io->(@device_code_llvm io=io dump_module=true @metal metal = v"3.0" nextafter_out_test()))
         @test occursin(Regex("@air\\.sign\\.f$(8*sizeof(T))"), ir)
     end
+end
+end
+
+INT_MATH_INTR_FUNCS_1_ARG = [
+    # integer math
+    abs,
+    Metal.clz, # T clz(T x)
+    Metal.ctz, # T ctz(T x)
+    Metal.popcount, # T popcount(T x)
+    Metal.reverse_bits, # T reverse_bits(T x)
+]
+
+INT_MATH_INTR_FUNCS_2_ARG = [
+    # int math
+    # absdiff, # Tu absdiff(T x, T y)
+    # addsat, # T addsat(T x, T y)
+    # hadd, # T hadd(T x, T y)
+    max, # T max(T x, T y)
+    min, # T min(T x, T y)
+    Metal.mulhi, # T mulhi(T x, T y)
+    # rhadd, # T rhadd(T x, T y)
+    # rotate, # T rotate(T v, T i)
+    # subsat, # T subsat(T x, T y)
+]
+
+INT_MATH_INTR_FUNCS_3_ARG = [
+    # Common functions
+    # clamp, # T clamp(T x, T minval, T maxval)
+    # madhi, # T madhi(T a, T b, T c)
+    # madsat, # T madsat(T a, T b, T c)
+    max, # T max3(T x, T y, T z)
+    # median3, # T median3(T x, T y, T z)
+    min, # T min3(T x, T y, T z)
+]
+
+@testset "int math" begin
+# 1-arg functions
+@testset "$(fun)()::$T" for fun in INT_MATH_INTR_FUNCS_1_ARG, T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64)
+    cpuarr = T[0.0, -0.0, rand(T), -rand(T)]
+
+    mtlarr = MtlArray(cpuarr)
+
+    mtlout = fill!(similar(mtlarr), 0)
+
+    function kernel(res, arr)
+        idx = thread_position_in_grid_1d()
+        res[idx] = fun(arr[idx])
+        return nothing
+    end
+    Metal.@sync @metal threads = length(mtlout) kernel(mtlout, mtlarr)
+    @eval @test Array($mtlout) ≈ $fun.($cpuarr)
+end
+# 2-arg functions
+@testset "$(fun)()::$T" for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64), fun in INT_MATH_INTR_FUNCS_2_ARG
+    N = 4
+    arr1 = rand(T, N)
+    arr2 = rand(T, N)
+    mtlarr1 = MtlArray(arr1)
+    mtlarr2 = MtlArray(arr2)
+
+    mtlout = fill!(similar(mtlarr1), 0)
+
+    function kernel(res, x, y)
+        idx = thread_position_in_grid_1d()
+        res[idx] = fun(x[idx], y[idx])
+        return nothing
+    end
+    Metal.@sync @metal threads = N kernel(mtlout, mtlarr1, mtlarr2)
+    @eval @test Array($mtlout) ≈ $fun.($arr1, $arr2)
+end
+# 3-arg functions
+@testset "$(fun)()::$T" for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64), fun in INT_MATH_INTR_FUNCS_3_ARG
+    N = 4
+    arr1 = rand(T, N)
+    arr2 = rand(T, N)
+    arr3 = rand(T, N)
+
+    mtlarr1 = MtlArray(arr1)
+    mtlarr2 = MtlArray(arr2)
+    mtlarr3 = MtlArray(arr3)
+
+    mtlout = fill!(similar(mtlarr1), 0)
+
+    function kernel(res, x, y, z)
+        idx = thread_position_in_grid_1d()
+        res[idx] = fun(x[idx], y[idx], z[idx])
+        return nothing
+    end
+    Metal.@sync @metal threads = N kernel(mtlout, mtlarr1, mtlarr2, mtlarr3)
+    @eval @test Array($mtlout) ≈ $fun.($arr1, $arr2, $arr3)
 end
 end
 
