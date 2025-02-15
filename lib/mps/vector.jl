@@ -96,7 +96,7 @@ end
     matvecmul!(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha=1, beta=1, transpose=false)
 
 A `MPSMatrixVectorMultiplication` kernel thay computes:
-  `c = alpha * op(a) * b + beta * c`
+    `c = alpha * op(a) * b + beta * c`
 
 This function should not typically be used. Rather, use the normal `LinearAlgebra` interface
 with any `MtlArray` and it should be accelerated using Metal Performance Shaders.

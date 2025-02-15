@@ -311,39 +311,39 @@ end
 
 # https://github.com/JuliaGPU/CUDA.jl/issues/2191
 @testset "preserving storage mode" begin
-  a = mtl([1]; storage=Metal.SharedStorage)
-  @test Metal.storagemode(a) == Metal.SharedStorage
+    a = mtl([1]; storage=Metal.SharedStorage)
+    @test Metal.storagemode(a) == Metal.SharedStorage
 
-  # storage mode should be preserved
-  b = a .+ 1
-  @test Metal.storagemode(b) == Metal.SharedStorage
+    # storage mode should be preserved
+    b = a .+ 1
+    @test Metal.storagemode(b) == Metal.SharedStorage
 
-  # when there's a conflict, we should defer to shared memory
-  c = mtl([1]; storage=Metal.PrivateStorage)
-  d = mtl([1]; storage=Metal.SharedStorage)
-  e = c .+ d
-  @test Metal.storagemode(e) == Metal.SharedStorage
+    # when there's a conflict, we should defer to shared memory
+    c = mtl([1]; storage=Metal.PrivateStorage)
+    d = mtl([1]; storage=Metal.SharedStorage)
+    e = c .+ d
+    @test Metal.storagemode(e) == Metal.SharedStorage
 end
 
 @testset "resizing" begin
-  a = MtlArray([1,2,3])
+    a = MtlArray([1,2,3])
 
-  resize!(a, 3)
-  @test length(a) == 3
-  @test Array(a) == [1,2,3]
+    resize!(a, 3)
+    @test length(a) == 3
+    @test Array(a) == [1,2,3]
 
-  resize!(a, 5)
-  @test length(a) == 5
-  @test Array(a)[1:3] == [1,2,3]
+    resize!(a, 5)
+    @test length(a) == 5
+    @test Array(a)[1:3] == [1,2,3]
 
-  resize!(a, 2)
-  @test length(a) == 2
-  @test Array(a)[1:2] == [1,2]
+    resize!(a, 2)
+    @test length(a) == 2
+    @test Array(a)[1:2] == [1,2]
 
-  b = MtlArray{Int}(undef, 0)
-  @test length(b) == 0
-  resize!(b, 1)
-  @test length(b) == 1
+    b = MtlArray{Int}(undef, 0)
+    @test length(b) == 0
+    resize!(b, 1)
+    @test length(b) == 1
 end
 
 function _alignedvec(::Type{T}, n::Integer, alignment::Integer=16384) where {T}
@@ -448,10 +448,10 @@ end
 
     # ND
     let x = rand(Bool, 1000, 1000)
-      @test findall(x) == Array(findall(MtlArray(x)))
+        @test findall(x) == Array(findall(MtlArray(x)))
     end
     let x = rand(Float32, 1000, 1000)
-      @test findall(y->y>Float32(0.5), x) == Array(findall(y->y>Float32(0.5), MtlArray(x)))
+        @test findall(y->y>Float32(0.5), x) == Array(findall(y->y>Float32(0.5), MtlArray(x)))
     end
 end
 
