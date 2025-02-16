@@ -352,7 +352,8 @@ end
 @device_override Base.min(x::Int8, y::Int8)     = ccall("extern air.min.s.i8", llvmcall, Int8, (Int8, Int8), x, y)
 @device_override Base.min(x::UInt8, y::UInt8)   = ccall("extern air.min.u.i8", llvmcall, UInt8, (UInt8, UInt8), x, y)
 
-@device_override Base.max(x::Int64, y::Int64)   = ccall("extern air.max.s.i64", llvmcall, Int64, (Int64, Int64), x, y)
+# XXX: Breaks mul! when uncommented. MWE: using Revise, Metal;A, x = mtl(rand(Int32, 4, 4)), mtl(rand(Int32, 4)); A*x
+# @device_override Base.max(x::Int64, y::Int64)   = ccall("extern air.max.s.i64", llvmcall, Int64, (Int64, Int64), x, y)
 @device_override Base.max(x::UInt64, y::UInt64) = ccall("extern air.max.u.i64", llvmcall, UInt64, (UInt64, UInt64), x, y)
 @device_override Base.max(x::Int32, y::Int32)   = ccall("extern air.max.s.i32", llvmcall, Int32, (Int32, Int32), x, y)
 @device_override Base.max(x::UInt32, y::UInt32) = ccall("extern air.max.u.i32", llvmcall, UInt32, (UInt32, UInt32), x, y)
