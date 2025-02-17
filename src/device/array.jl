@@ -68,7 +68,7 @@ end
 ## conversions
 
 Base.unsafe_convert(::Type{Core.LLVMPtr{T,A}}, x::MtlDeviceArray{T,<:Any,A}) where {T,A} =
-  x.ptr
+    x.ptr
 
 
 ## indexing intrinsics
@@ -169,29 +169,29 @@ end
 # create a derived device array (reinterpreted or reshaped) that's still a MtlDeviceArray
 @inline function _derived_array(::Type{T}, N::Int, a::MtlDeviceArray{T,M,A},
                                 osize::Dims) where {T, M, A}
-  return MtlDeviceArray{T,N,A}(osize, a.ptr)
+    return MtlDeviceArray{T,N,A}(osize, a.ptr)
 end
 
 function Base.reinterpret(::Type{T}, a::MtlDeviceArray{S,N,A}) where {T,S,N,A}
-  err = _reinterpret_exception(T, a)
-  err === nothing || throw(err)
+    err = _reinterpret_exception(T, a)
+    err === nothing || throw(err)
 
-  if sizeof(T) == sizeof(S) # fast case
-    return MtlDeviceArray{T,N,A}(size(a), reinterpret(LLVMPtr{T,A}, a.ptr))
-  end
+    if sizeof(T) == sizeof(S) # fast case
+        return MtlDeviceArray{T,N,A}(size(a), reinterpret(LLVMPtr{T,A}, a.ptr))
+    end
 
-  isize = size(a)
-  size1 = div(isize[1]*sizeof(S), sizeof(T))
-  osize = tuple(size1, Base.tail(isize)...)
-  return MtlDeviceArray{T,N,A}(osize, reinterpret(LLVMPtr{T,A}, a.ptr))
+    isize = size(a)
+    size1 = div(isize[1]*sizeof(S), sizeof(T))
+    osize = tuple(size1, Base.tail(isize)...)
+    return MtlDeviceArray{T,N,A}(osize, reinterpret(LLVMPtr{T,A}, a.ptr))
 end
 
 function Base.reshape(a::MtlDeviceArray{T,M}, dims::NTuple{N,Int}) where {T,N,M}
-  if prod(dims) != length(a)
-      throw(DimensionMismatch("new dimensions (argument `dims`) must be consistent with array size (`size(a)`)"))
-  end
-  if N == M && dims == size(a)
-      return a
-  end
-  _derived_array(T, N, a, dims)
+    if prod(dims) != length(a)
+        throw(DimensionMismatch("new dimensions (argument `dims`) must be consistent with array size (`size(a)`)"))
+    end
+    if N == M && dims == size(a)
+        return a
+    end
+    _derived_array(T, N, a, dims)
 end

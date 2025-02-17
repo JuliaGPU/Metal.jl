@@ -126,7 +126,7 @@ end
 # Base.RefValue isn't GPU compatible, so provide a compatible alternative
 # TODO: port improvements from CUDA.jl
 struct MtlRefValue{T} <: Ref{T}
-  x::T
+    x::T
 end
 Base.getindex(r::MtlRefValue) = r.x
 Adapt.adapt_structure(to::Adaptor, r::Base.RefValue) = MtlRefValue(adapt(to, r[]))
@@ -144,7 +144,7 @@ Adapt.adapt_structure(to::Adaptor,
     Broadcast.Broadcasted{Style}((x...) -> T(x...), adapt(to, bc.args), bc.axes)
 
 """
-  mtlconvert(x, [cce])
+    mtlconvert(x, [cce])
 
 This function is called for every argument to be passed to a kernel, allowing it to be
 converted to a GPU-friendly format. By default, the function does nothing and returns the

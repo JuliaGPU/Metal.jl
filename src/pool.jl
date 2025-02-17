@@ -128,29 +128,29 @@ macro time(ex)
         for (typ, gctime, memtime, bytes, allocs) in
             (("CPU", cpu_gc_time, 0, cpu_alloc_size, cpu_alloc_count),
              ("GPU", 0, gpu_mem_time, gpu_alloc_size, gpu_alloc_count))
-          if bytes != 0 || allocs != 0
-              allocs, ma = Base.prettyprint_getunits(allocs, length(Base._cnt_units), Int64(1000))
-              if ma == 1
-                  Printf.@printf(" (%d%s %s allocation%s: ", allocs, Base._cnt_units[ma], typ, allocs==1 ? "" : "s")
-              else
-                  Printf.@printf(" (%.2f%s %s allocations: ", allocs, Base._cnt_units[ma], typ)
-              end
-              print(Base.format_bytes(bytes))
-              if gctime > 0
-                  Printf.@printf(", %.2f%% gc time", 100*gctime/cpu_time)
-              end
-              if memtime > 0
-                  Printf.@printf(", %.2f%% memmgmt time", 100*memtime/cpu_time)
-              end
-              print(")")
-          else
-              if gctime > 0
-                  Printf.@printf(", %.2f%% %s gc time", 100*gctime/cpu_time, typ)
-              end
-              if memtime > 0
-                  Printf.@printf(", %.2f%% %s memmgmt time", 100*memtime/cpu_time, typ)
-              end
-          end
+            if bytes != 0 || allocs != 0
+                allocs, ma = Base.prettyprint_getunits(allocs, length(Base._cnt_units), Int64(1000))
+                if ma == 1
+                    Printf.@printf(" (%d%s %s allocation%s: ", allocs, Base._cnt_units[ma], typ, allocs==1 ? "" : "s")
+                else
+                    Printf.@printf(" (%.2f%s %s allocations: ", allocs, Base._cnt_units[ma], typ)
+                end
+                print(Base.format_bytes(bytes))
+                if gctime > 0
+                    Printf.@printf(", %.2f%% gc time", 100*gctime/cpu_time)
+                end
+                if memtime > 0
+                    Printf.@printf(", %.2f%% memmgmt time", 100*memtime/cpu_time)
+                end
+                print(")")
+            else
+                if gctime > 0
+                    Printf.@printf(", %.2f%% %s gc time", 100*gctime/cpu_time, typ)
+                end
+                if memtime > 0
+                    Printf.@printf(", %.2f%% %s memmgmt time", 100*memtime/cpu_time, typ)
+                end
+            end
         end
         println()
 
