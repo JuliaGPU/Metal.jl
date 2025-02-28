@@ -1,5 +1,5 @@
 export simdgroup_load, simdgroup_store, simdgroup_multiply, simdgroup_multiply_accumulate,
-        simd_shuffle_down, simd_shuffle_up
+        simd_shuffle_down, simd_shuffle_up, simd_shuffle_and_fill_down, simd_shuffle_and_fill_up
 
 using Core: LLVMPtr
 
@@ -104,6 +104,15 @@ for (jltype, suffix) in simd_shuffle_map
         @device_function simd_shuffle_up(data::$jltype, delta::Integer) =
             ccall($"extern air.simd_shuffle_up.$suffix",
                 llvmcall, $jltype, ($jltype, Int16), data, delta)
+
+        # TODO: Emulate or disallow on M1 (Apple7)
+        @device_function simd_shuffle_and_fill_down(data::$jltype, filling_data::$jltype, delta::Integer, modulo::Integer=threads_per_simdgroup()) =
+            ccall($"extern air.simd_shuffle_and_fill_down.$suffix",
+                llvmcall, $jltype, ($jltype, $jltype, Int16, Int16), data, filling_data, delta, modulo)
+
+        @device_function simd_shuffle_and_fill_up(data::$jltype, filling_data::$jltype, delta::Integer, modulo::Integer=threads_per_simdgroup()) =
+            ccall($"extern air.simd_shuffle_and_fill_up.$suffix",
+                llvmcall, $jltype, ($jltype, $jltype, Int16, Int16), data, filling_data, delta, modulo)
     end
 end
 
@@ -134,3 +143,45 @@ modify the lower `delta` lanes of `data` because it doesn't wrap values around t
 T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
 """
 simd_shuffle_up
+
+@doc """
+    simd_shuffle_and_fill_down(data::T, filling_data::T, delta::Integer, [modulo::Integer])
+
+Returns `data` or `filling_data` for each vector from the thread whose SIMD lane ID is the
+difference from the caller's SIMD lane ID minus `delta`.
+
+If the difference is negative, the operation copies values from the upper `delta` lanes of
+`filling_data` to the lower `delta` lanes of `data`.
+
+The value of `delta` needs to be the same for all threads in a SIMD-group.
+
+The `modulo` parameter defines the vector width that splits the SIMD-group into separate vectors
+ and must be 2, 4, 8, 16, or 32.
+
+T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+
+!!! note
+    `simd_shuffle_and_fill_down` is only available on Apple8+ GPUs (M2 and newer)
+"""
+simd_shuffle_and_fill_down
+
+@doc """
+    simd_shuffle_and_fill_up(data::T, filling_data::T, delta::Integer, [modulo::Integer])
+
+Returns `data` or `filling_data` for each vector from the thread whose SIMD lane ID is the
+sum of the caller's SIMD lane ID and `delta`.
+
+If the sum is greater than `modulo`, the function copies values from the lower `delta` lanes of
+`filling_data` into the upper `delta` lanes of `data`.
+
+The value of `delta` needs to be the same for all threads in a SIMD-group.
+
+The `modulo` parameter defines the vector width that splits the SIMD-group into separate vectors
+ and must be 2, 4, 8, 16, or 32.
+
+T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+
+!!! note
+    `simd_shuffle_and_fill_up` is only available on Apple8+ GPUs (M2 and newer)
+"""
+simd_shuffle_and_fill_up
