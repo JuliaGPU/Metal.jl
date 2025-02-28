@@ -34,7 +34,44 @@
     Metal.@sync @metal threads=32 kernel(dev_a, dev_b)
     @test sum(a) ≈ b[res_idx]
 end
+@testset "$f($typ)" for typ in [Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8], (f,nshift) in [(simd_shuffle_and_fill_down, -4), (simd_shuffle_and_fill_up, 2)]
+    function kernel_mod(data::MtlDeviceVector{T}, filling_data::MtlDeviceVector{T}, modulo) where T
+        idx = thread_position_in_grid_1d()
+        idx_in_simd = thread_index_in_simdgroup() #simd_lane_id
+        simd_idx = simdgroup_index_in_threadgroup() #simd_group_id
 
+        temp_data = MtlThreadGroupArray(T, 16)
+        temp_data[idx] = data[idx]
+        temp_filling_data = MtlThreadGroupArray(T, 16)
+        temp_filling_data[idx] = filling_data[idx]
+        simdgroup_barrier(Metal.MemoryFlagThreadGroup)
+
+        if simd_idx == 1
+            dat_value = temp_data[idx_in_simd]
+            dat_fil_value = temp_filling_data[idx_in_simd]
+
+            value = f(dat_value, dat_fil_value, abs(nshift), modulo)
+
+            data[idx] = value
+        end
+        return
+    end
+
+    N = 16
+    midN = N ÷ 2
+
+    a = Array{typ}(1:N)
+    mtla = MtlArray(a)
+    mtlb = MtlArray(a)
+
+    Metal.@sync @metal threads=N kernel_mod(mtla, mtlb, N)
+    @test Array(mtla) == circshift(a,nshift)
+
+    mtlc = MtlArray(a)
+
+    Metal.@sync @metal threads=N kernel_mod(mtlc, mtlb, midN)
+    @test Array(mtlc) == [circshift(a[1:midN],nshift);circshift(a[midN+1:end],nshift)]
+end
 @testset "matrix functions" begin
     @testset "load_store($typ)" for typ in [Float16, Float32]
         function kernel(a::MtlDeviceArray{T}, b::MtlDeviceArray{T},
