@@ -625,7 +625,7 @@ end
 
 @testset "simd intrinsics" begin
 
-@testset "shuffle($typ)" for typ in [Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8]
+@testset "$f($typ)" for typ in [Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8], (f,res_idx) in [(simd_shuffle_down, 1), (simd_shuffle_up, 32)]
     function kernel(a::MtlDeviceVector{T}, b::MtlDeviceVector{T}) where T
         idx = thread_position_in_grid_1d()
         idx_in_simd = thread_index_in_simdgroup()
@@ -638,11 +638,11 @@ end
         if simd_idx == 1
             value = temp[idx_in_simd]
 
-            value = value + simd_shuffle_down(value, 16)
-            value = value + simd_shuffle_down(value,  8)
-            value = value + simd_shuffle_down(value,  4)
-            value = value + simd_shuffle_down(value,  2)
-            value = value + simd_shuffle_down(value,  1)
+            value = value + f(value, 16)
+            value = value + f(value,  8)
+            value = value + f(value,  4)
+            value = value + f(value,  2)
+            value = value + f(value,  1)
 
             b[idx] = value
         end
@@ -656,7 +656,7 @@ end
 
     rand!(a, (1:4))
     Metal.@sync @metal threads=32 kernel(dev_a, dev_b)
-    @test sum(a) ≈ b[1]
+    @test sum(a) ≈ b[res_idx]
 end
 
 @testset "matrix functions" begin
