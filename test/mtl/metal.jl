@@ -146,7 +146,9 @@ let ev = MTLEvent(dev)
 end
 
 let ev = MTLSharedEvent(dev)
-    @test ev.device == dev broken=(!haskey(ENV, "MTL_SHADER_VALIDATION") && Metal.is_m1(dev))
+    # XXX: this returns nothing, which seems like a Metal bug,
+    #      especially because it does return a device under validation.
+    @test ev.device == dev broken=!haskey(ENV, "MTL_SHADER_VALIDATION")
     @test ev.label === nothing
     ev.label = "MyEvent"
     @test ev.label == "MyEvent"
