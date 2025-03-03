@@ -401,6 +401,10 @@ end
 
         @test b == c
     end
+
+    # test that you cannot create an array with a different eltype
+    marr3 = mtl(zeros(Float32, 10); storage = Metal.SharedStorage)
+    @test_throws MethodError unsafe_wrap(Array{Float16}, marr3)
 end
 
 @testset "ReshapedArray" begin
