@@ -346,52 +346,141 @@ end
     @test length(b) == 1
 end
 
-function _alignedvec(::Type{T}, n::Integer, alignment::Integer=16384) where {T}
+function _alignedvec(::Type{T}, n::Integer, alignment::Integer = 16384) where {T}
     ispow2(alignment) || throw(ArgumentError("$alignment is not a power of 2"))
     alignment ≥ sizeof(Int) || throw(ArgumentError("$alignment is not a multiple of $(sizeof(Int))"))
     isbitstype(T) || throw(ArgumentError("$T is not a bitstype"))
     p = Ref{Ptr{T}}()
-    err = ccall(:posix_memalign, Cint, (Ref{Ptr{T}}, Csize_t, Csize_t), p, alignment, n*sizeof(T))
+    err = ccall(:posix_memalign, Cint, (Ref{Ptr{T}}, Csize_t, Csize_t), p, alignment, n * sizeof(T))
     iszero(err) || throw(OutOfMemoryError())
-    return unsafe_wrap(Array, p[], n, own=true)
+    return unsafe_wrap(Array, p[], n, own = true)
 end
 
 @testset "unsafe_wrap" begin
-    # Create page-aligned vector for testing
-    arr1 = _alignedvec(Float32, 16384*2);
-    fill!(arr1, zero(eltype(arr1)))
-    marr1 = unsafe_wrap(MtlVector{Float32}, arr1);
+    let # ensure all operations are compiled
+        marr = Metal.ones(Float32, 18000; storage = Metal.SharedStorage)
+        aarr = unsafe_wrap(Vector{Float32}, marr)
+        marr .+= 1
+        aarr .+= 1
 
-    @test all(arr1 .== 0)
-    @test all(marr1 .== 0)
+        arr = _alignedvec(Float32, 16384 * 2)
+        fill!(arr, one(eltype(arr)))
+        mmarr = unsafe_wrap(MtlVector{Float32}, arr)
 
-    # XXX: Test fails when ordered as shown
-    # @test all(arr1 .== 1)
-    # @test all(marr1 .== 1)
-    marr1 .+= 1;
-    @test all(marr1 .== 1)
-    @test all(arr1 .== 1)
+        mmarr .+= 1
+        arr .+= 1
+    end
+    @testset "cpu array incremented" begin
+        @testset "wrap cpu" begin
+            @testset "check cpu" begin # cpu array checked first
+                arr = _alignedvec(Float32, 16384 * 2)
+                fill!(arr, one(eltype(arr)))
+                marr = unsafe_wrap(MtlVector{Float32}, arr)
 
-    arr1 .+= 1;
-    @test all(marr1 .== 2)
-    @test all(arr1 .== 2)
+                @test all(arr .== 1)
+                @test all(marr .== 1)
 
-    marr2 = Metal.zeros(Float32, 18000; storage=Metal.SharedStorage);
-    arr2 = unsafe_wrap(Vector{Float32}, marr2);
+                arr .+= 1
+                @test all(arr .== 2)
+                @test all(marr .== 2)
+            end
 
-    @test all(arr2 .== 0)
-    @test all(marr2 .== 0)
+            @testset "check gpu" begin # gpu array checked first
+                arr = _alignedvec(Float32, 16384 * 2)
+                fill!(arr, one(eltype(arr)))
+                marr = unsafe_wrap(MtlVector{Float32}, arr)
 
-    # XXX: Test fails when ordered as shown
-    # @test all(arr2 .== 1)
-    # @test all(marr2 .== 1)
-    marr2 .+= 1;
-    @test all(marr2 .== 1)
-    @test all(arr2 .== 1)
+                @test all(marr .== 1)
+                @test all(arr .== 1)
 
-    arr2 .+= 1;
-    @test all(arr2 .== 2)
-    @test all(marr2 .== 2)
+                arr .+= 1
+                @test all(marr .== 2)
+                @test all(arr .== 2)
+            end
+        end
+
+        @testset "wrap gpu" begin
+            @testset "check cpu" begin # cpu array checked first
+                marr = Metal.ones(Float32, 18000; storage = Metal.SharedStorage)
+                arr = unsafe_wrap(Vector{Float32}, marr)
+
+                @test all(arr .== 1) broken = true
+                @test all(marr .== 1)
+
+                arr .+= 1
+                @test all(arr .== 2)
+                @test all(marr .== 2)
+            end
+
+            @testset "check gpu" begin # gpu array checked first
+                marr = Metal.ones(Float32, 18000; storage = Metal.SharedStorage)
+                arr = unsafe_wrap(Vector{Float32}, marr)
+
+                @test all(marr .== 1)
+                @test all(arr .== 1)
+
+                arr .+= 1
+                @test all(marr .== 2)
+                @test all(arr .== 2)
+            end
+        end
+    end
+
+    @testset "gpu array incremented" begin
+        @testset "wrap cpu" begin
+            @testset "check cpu" begin # cpu array checked first
+                arr = _alignedvec(Float32, 16384 * 2)
+                fill!(arr, one(eltype(arr)))
+                marr = unsafe_wrap(MtlVector{Float32}, arr)
+
+                @test all(arr .== 1)
+                @test all(marr .== 1)
+
+                marr .+= 1
+                @test all(arr .== 2) broken = true
+                @test all(marr .== 2)
+            end
+
+            @testset "check gpu" begin # gpu array checked first
+                arr = _alignedvec(Float32, 16384 * 2)
+                fill!(arr, one(eltype(arr)))
+                marr = unsafe_wrap(MtlVector{Float32}, arr)
+
+                @test all(marr .== 1)
+                @test all(arr .== 1)
+
+                marr .+= 1
+                @test all(marr .== 2)
+                @test all(arr .== 2)
+            end
+        end
+
+        @testset "wrap gpu" begin
+            @testset "check cpu" begin # cpu array checked first
+                marr = Metal.ones(Float32, 18000; storage = Metal.SharedStorage)
+                arr = unsafe_wrap(Vector{Float32}, marr)
+
+                @test all(arr .== 1) broken = true
+                @test all(marr .== 1)
+
+                marr .+= 1
+                @test all(arr .== 2) broken = true
+                @test all(marr .== 2)
+            end
+
+            @testset "check gpu" begin # gpu array checked first
+                marr = Metal.ones(Float32, 18000; storage = Metal.SharedStorage)
+                arr = unsafe_wrap(Vector{Float32}, marr)
+
+                @test all(marr .== 1)
+                @test all(arr .== 1)
+
+                marr .+= 1
+                @test all(marr .== 2)
+                @test all(arr .== 2)
+            end
+        end
+    end
 
     @testset "Issue #451" begin
         a = mtl(reshape(Float32.(1:60), 5,4,3);storage=Metal.SharedStorage)
