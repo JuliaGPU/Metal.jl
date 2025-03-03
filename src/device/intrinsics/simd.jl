@@ -159,6 +159,9 @@ The `modulo` parameter defines the vector width that splits the SIMD-group into 
  and must be 2, 4, 8, 16, or 32.
 
 T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+
+!!! note
+    `simd_shuffle_and_fill_down` is only available on Apple8+ GPUs (M2 and newer)
 """
 simd_shuffle_and_fill_down
 
@@ -177,5 +180,8 @@ The `modulo` parameter defines the vector width that splits the SIMD-group into 
  and must be 2, 4, 8, 16, or 32.
 
 T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+
+!!! note
+    `simd_shuffle_and_fill_up` is only available on Apple8+ GPUs (M2 and newer)
 """
 simd_shuffle_and_fill_up
