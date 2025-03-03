@@ -660,7 +660,7 @@ end
 end
 
 @testset "$f($typ)" for typ in [Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8], (f,nshift) in [(simd_shuffle_and_fill_down, -4), (simd_shuffle_and_fill_up, 2)]
-    function kernel_mod(data::MtlDeviceVector{T}, filling_data::MtlDeviceVector{T}) where T
+   function kernel_mod(data::MtlDeviceVector{T}, filling_data::MtlDeviceVector{T}, modulo) where T
         idx = thread_position_in_grid_1d()
         idx_in_simd = thread_index_in_simdgroup() #simd_lane_id
         simd_idx = simdgroup_index_in_threadgroup() #simd_group_id
@@ -675,24 +675,27 @@ end
             dat_value = temp_data[idx_in_simd]
             dat_fil_value = temp_filling_data[idx_in_simd]
 
-            value = f(dat_value, dat_fil_value, abs(nshift), length(data))
+            value = f(dat_value, dat_fil_value, abs(nshift), modulo)
 
             data[idx] = value
         end
         return
     end
 
-    dev_a = Metal.zeros(typ, 16; storage=Metal.SharedStorage)
-    dev_b = Metal.zeros(typ, 16; storage=Metal.SharedStorage)
-    # GC.@preserve dev_a dev_b begin
-    a = unsafe_wrap(Array{typ}, dev_a, 16)
-    b = unsafe_wrap(Array{typ}, dev_b, 16)
+    N = 16
+    midN = N ÷ 2
 
-    a .= 1:16
-    b .= 1:16
+    a = Array{typ}(1:N)
+    mtla = MtlArray(a)
+    mtlb = MtlArray(a)
 
-    Metal.@sync @metal threads=16 kernel_mod(dev_a, dev_b)
-    @test a == circshift(b,nshift)
+    Metal.@sync @metal threads=N kernel_mod(mtla, mtlb, N)
+    @test Array(mtla) == circshift(a,nshift)
+
+    mtlc = MtlArray(a)
+
+    Metal.@sync @metal threads=N kernel_mod(mtlc, mtlb, midN)
+    @test Array(mtlc) == [circshift(a[1:midN],nshift);circshift(a[midN+1:end],nshift)]
 end
 @testset "matrix functions" begin
     @testset "load_store($typ)" for typ in [Float16, Float32]
