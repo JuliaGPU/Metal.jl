@@ -235,17 +235,17 @@ end
     y == -1 && return inv(x)
     y == 0 && return one(x)
     y == 1 && return x
-    y == 2 && return x*x
-    y == 3 && return x*x*x
-    x ^ Float32(y)
+    y == 2 && return x * x
+    y == 3 && return x * x * x
+    x^Float32(y)
 end
 @device_override @inline function Base.:(^)(x::Float16, y::Integer)
     y == -1 && return inv(x)
     y == 0 && return one(x)
     y == 1 && return x
-    y == 2 && return x*x
-    y == 3 && return x*x*x
-    x ^ Float16(y)
+    y == 2 && return x * x
+    y == 3 && return x * x * x
+    x^Float16(y)
 end
 
 @device_function powr_fast(x::Float32, y::Float32) = ccall("extern air.fast_powr.f32", llvmcall, Cfloat, (Cfloat, Cfloat), x, y)

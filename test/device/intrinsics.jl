@@ -302,7 +302,7 @@ end
 
     let #pow with Integer exponent (Issue 552)
         N = 4
-        arr2 = [-1,0,1,2,3,rand(-10:10, N)...]
+        arr2 = [-1, 0, 1, 2, 3, rand(-10:10, N)...]
         arr1 = rand(T, length(arr2))
         mtlarr1 = MtlArray(arr1)
         mtlarr2 = MtlArray(arr2)
