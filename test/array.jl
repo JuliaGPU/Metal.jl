@@ -375,7 +375,7 @@ end
             @testset "check cpu" begin # cpu array checked first
                 arr = _alignedvec(Float32, 16384 * 2)
                 fill!(arr, one(eltype(arr)))
-                marr = unsafe_wrap(MtlVector{Float32}, arr)
+                marr = Metal.@sync unsafe_wrap(MtlVector{Float32}, arr)
 
                 @test all(arr .== 1)
                 @test all(marr .== 1)
@@ -388,7 +388,7 @@ end
             @testset "check gpu" begin # gpu array checked first
                 arr = _alignedvec(Float32, 16384 * 2)
                 fill!(arr, one(eltype(arr)))
-                marr = unsafe_wrap(MtlVector{Float32}, arr)
+                marr = Metal.@sync unsafe_wrap(MtlVector{Float32}, arr)
 
                 @test all(marr .== 1)
                 @test all(arr .== 1)
@@ -401,10 +401,10 @@ end
 
         @testset "wrap gpu" begin
             @testset "check cpu" begin # cpu array checked first
-                marr = Metal.ones(Float32, 18000; storage = Metal.SharedStorage)
+                marr = Metal.@sync Metal.ones(Float32, 18000; storage = Metal.SharedStorage)
                 arr = unsafe_wrap(Vector{Float32}, marr)
 
-                @test all(arr .== 1) broken = true
+                @test all(arr .== 1)
                 @test all(marr .== 1)
 
                 arr .+= 1
@@ -413,7 +413,7 @@ end
             end
 
             @testset "check gpu" begin # gpu array checked first
-                marr = Metal.ones(Float32, 18000; storage = Metal.SharedStorage)
+                marr = Metal.@sync Metal.ones(Float32, 18000; storage = Metal.SharedStorage)
                 arr = unsafe_wrap(Vector{Float32}, marr)
 
                 @test all(marr .== 1)
@@ -431,20 +431,20 @@ end
             @testset "check cpu" begin # cpu array checked first
                 arr = _alignedvec(Float32, 16384 * 2)
                 fill!(arr, one(eltype(arr)))
-                marr = unsafe_wrap(MtlVector{Float32}, arr)
+                marr = Metal.@sync unsafe_wrap(MtlVector{Float32}, arr)
 
                 @test all(arr .== 1)
                 @test all(marr .== 1)
 
-                marr .+= 1
-                @test all(arr .== 2) broken = true
+                Metal.@sync marr .+= 1
+                @test all(arr .== 2)
                 @test all(marr .== 2)
             end
 
             @testset "check gpu" begin # gpu array checked first
                 arr = _alignedvec(Float32, 16384 * 2)
                 fill!(arr, one(eltype(arr)))
-                marr = unsafe_wrap(MtlVector{Float32}, arr)
+                marr = Metal.@sync unsafe_wrap(MtlVector{Float32}, arr)
 
                 @test all(marr .== 1)
                 @test all(arr .== 1)
@@ -457,19 +457,19 @@ end
 
         @testset "wrap gpu" begin
             @testset "check cpu" begin # cpu array checked first
-                marr = Metal.ones(Float32, 18000; storage = Metal.SharedStorage)
+                marr = Metal.@sync Metal.ones(Float32, 18000; storage = Metal.SharedStorage)
                 arr = unsafe_wrap(Vector{Float32}, marr)
 
-                @test all(arr .== 1) broken = true
+                @test all(arr .== 1)
                 @test all(marr .== 1)
 
-                marr .+= 1
-                @test all(arr .== 2) broken = true
+                Metal.@sync marr .+= 1
+                @test all(arr .== 2)
                 @test all(marr .== 2)
             end
 
             @testset "check gpu" begin # gpu array checked first
-                marr = Metal.ones(Float32, 18000; storage = Metal.SharedStorage)
+                marr = Metal.@sync Metal.ones(Float32, 18000; storage = Metal.SharedStorage)
                 arr = unsafe_wrap(Vector{Float32}, marr)
 
                 @test all(marr .== 1)
