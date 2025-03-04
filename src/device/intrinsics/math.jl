@@ -8,6 +8,12 @@ using Base.Math: throw_complex_domainerror
 # - add support for vector types
 # - consider emitting LLVM intrinsics and lowering those in the back-end
 
+### Constants
+@device_override Core.Float32(::typeof(π), ::RoundingMode) = reinterpret(Float32, 0x40490fdb) # 3.1415927f0 reinterpret(UInt32,Float32(reinterpret(Float64,0x400921FB60000000)))
+@device_override Core.Float16(::typeof(π), ::RoundingMode) = reinterpret(Float16, 0x4248)     # Float16(3.14)
+@device_override Core.Float32(::typeof(ℯ), ::RoundingMode) = reinterpret(Float32, 0x402df854) # 2.7182817f0 reinterpret(UInt32,Float32(reinterpret(Float64,0x4005BF0A80000000)))
+@device_override Core.Float16(::typeof(ℯ), ::RoundingMode) = reinterpret(Float16, 0x4170)     # Float16(2.719)
+
 ### Common Intrinsics
 @device_function clamp_fast(x::Float32, minval::Float32, maxval::Float32) = ccall("extern air.fast_clamp.f32", llvmcall, Cfloat, (Cfloat, Cfloat, Cfloat), x, minval, maxval)
 @device_override Base.clamp(x::Float32, minval::Float32, maxval::Float32) = ccall("extern air.clamp.f32", llvmcall, Cfloat, (Cfloat, Cfloat, Cfloat), x, minval, maxval)

@@ -311,6 +311,13 @@ end
         ir = sprint(io->(@device_code_llvm io=io dump_module=true @metal metal = v"3.0" nextafter_out_test()))
         @test occursin(Regex("@air\\.sign\\.f$(8*sizeof(T))"), ir)
     end
+
+    let # "issue551"
+        mtl_pi = only(Array(T.(MtlArray([π]), RoundNearest)))
+        @test mtl_pi == T(π)
+        mtl_ℯ = only(Array(T.(MtlArray([ℯ]), RoundNearest)))
+        @test mtl_ℯ == T(ℯ)
+    end
 end
 end
 
