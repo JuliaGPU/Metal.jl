@@ -300,6 +300,24 @@ end
         @test Array(mtlout) ≈ arr1 .^ arr2
     end
 
+    let #pow with Integer exponent (Issue 552)
+        N = 4
+        arr2 = [-1, 0, 1, 2, 3, rand(-10:10, N)...]
+        arr1 = rand(T, length(arr2))
+        mtlarr1 = MtlArray(arr1)
+        mtlarr2 = MtlArray(arr2)
+
+        mtlout = fill!(similar(mtlarr1), 0)
+
+        function kernel(res, x, y)
+            idx = thread_position_in_grid_1d()
+            res[idx] = x[idx]^y[idx]
+            return nothing
+        end
+        Metal.@sync @metal threads = length(mtlout) kernel(mtlout, mtlarr1, mtlarr2)
+        @test Array(mtlout) ≈ arr1 .^ arr2
+    end
+
     let #powr
         N = 4
         arr1 = rand(T, N)
