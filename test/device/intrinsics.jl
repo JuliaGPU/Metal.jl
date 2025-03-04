@@ -413,8 +413,8 @@ end
     end
 
     let # "issue551"
-        @test only(Array(map(y -> y < pi, Metal.zeros(T, 1))))
-        @test only(Array(map(y -> y < ℯ, Metal.zeros(T, 1))))
+        @test T.(MtlArray([π]), RoundNearest) = T(π)
+        @test T.(MtlArray([ℯ]), RoundNearest) = T(ℯ)
     end
 end
 end
