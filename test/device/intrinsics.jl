@@ -411,6 +411,11 @@ end
         ir = sprint(io->(@device_code_llvm io=io dump_module=true @metal metal = v"3.0" nextafter_out_test()))
         @test occursin(Regex("@air\\.sign\\.f$(8*sizeof(T))"), ir)
     end
+
+    let # "issue551"
+        @test only(Array(map(y -> y < pi, Metal.zeros(T, 1))))
+        @test only(Array(map(y -> y < ℯ, Metal.zeros(T, 1))))
+    end
 end
 end
 
