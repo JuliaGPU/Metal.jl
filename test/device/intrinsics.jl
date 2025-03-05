@@ -413,8 +413,10 @@ end
     end
 
     let # "issue551"
-        @test T.(MtlArray([π]), RoundNearest) = T(π)
-        @test T.(MtlArray([ℯ]), RoundNearest) = T(ℯ)
+        mtl_pi = only(Array(T.(MtlArray([π]), RoundNearest)))
+        @test mtl_pi == T(π)
+        mtl_ℯ = only(Array(T.(MtlArray([ℯ]), RoundNearest)))
+        @test mtl_ℯ == T(ℯ)
     end
 end
 end
