@@ -357,19 +357,6 @@ function _alignedvec(::Type{T}, n::Integer, alignment::Integer = 16384) where {T
 end
 
 @testset "unsafe_wrap" begin
-    let # ensure all operations are compiled
-        marr = Metal.ones(Float32, 18000; storage = Metal.SharedStorage)
-        aarr = unsafe_wrap(Vector{Float32}, marr)
-        marr .+= 1
-        aarr .+= 1
-
-        arr = _alignedvec(Float32, 16384 * 2)
-        fill!(arr, one(eltype(arr)))
-        mmarr = unsafe_wrap(MtlVector{Float32}, arr)
-
-        mmarr .+= 1
-        arr .+= 1
-    end
     @testset "cpu array incremented" begin
         @testset "wrap cpu" begin
             @testset "check cpu" begin # cpu array checked first
