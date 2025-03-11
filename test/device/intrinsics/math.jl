@@ -312,11 +312,31 @@ end
         @test occursin(Regex("@air\\.sign\\.f$(8*sizeof(T))"), ir)
     end
 
-    let # "issue551"
-        mtl_pi = only(Array(T.(MtlArray([π]), RoundNearest)))
-        @test mtl_pi == T(π)
-        mtl_ℯ = only(Array(T.(MtlArray([ℯ]), RoundNearest)))
-        @test mtl_ℯ == T(ℯ)
+    # Borrowed from the Julia "Irrationals compared with Rationals and Floats" testset
+    @testset "Comparisons with $irr" for irr in (π, ℯ)
+        function convert_test_32(res)
+            res[1] = Float32(irr,RoundDown) < irr
+            res[2] = Float32(irr,RoundUp) > irr
+            res[3] = !(Float32(irr,RoundDown) > irr)
+            res[4] = !(Float32(irr,RoundUp) < irr)
+            return nothing
+        end
+
+        res_32 = MtlArray(zeros(Bool,4))
+        Metal.@sync @metal convert_test_32(res_32)
+        @test all(Array(res_32))
+
+        function convert_test_16(res)
+            res[1] = Float16(irr,RoundDown) < irr
+            res[2] = Float16(irr,RoundUp) > irr
+            res[3] = !(Float16(irr,RoundDown) > irr)
+            res[4] = !(Float16(irr,RoundUp) < irr)
+            return nothing
+        end
+
+        res_16 = MtlArray(zeros(Bool,4))
+        Metal.@sync @metal convert_test_16(res_16)
+        @test all(Array(res_16))
     end
 end
 end
