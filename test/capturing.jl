@@ -69,7 +69,7 @@ bufferA = MtlArray{Float32,1,SharedStorage}(undef, tuple(4))
 startCapture(manager, desc)
 @test manager.isCapturing
 @test_throws ErrorException startCapture(manager, desc)
-@metal threads=4 tester(bufferA)
+Metal.@sync @metal threads=4 tester(bufferA)
 stopCapture(manager)
 @test manager.isCapturing == false
 @test isdir(path)
