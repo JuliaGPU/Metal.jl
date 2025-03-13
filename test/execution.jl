@@ -124,7 +124,7 @@ function tester(A)
 end
 
 bufferSize = 8
-bufferA = Metal.@sync MtlArray{Int,1,Metal.SharedStorage}(undef, tuple(bufferSize))
+bufferA = Metal.@sync MtlArray{Int, 1, Metal.SharedStorage}(undef, tuple(bufferSize))
 vecA = unsafe_wrap(Vector{Int}, pointer(bufferA), tuple(bufferSize))
 
 @testset "synchronization" begin
