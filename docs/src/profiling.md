@@ -25,9 +25,8 @@ find which kernels needs optimization.
 As we cannot use the Julia profiler for this task, we will use Metal's GPU profiler
 directly. Use the `Metal.@profile` macro to surround the code code of interest. This macro
 tells your system to track GPU calls and usage statistics and will save this information in
-a temporary folder ending in '.trace'. For later viewing, copy this folder to a stable
-location or use the 'dir' argument of the profile macro to store the gputrace to a different
-location directly.
+a temporary folder ending in '.trace'. For later viewing in Xcode's Instruments app,
+copy this folder to a stable location.
 
 The resulting trace can be opened with the Instruments app, part of Xcode.
 
