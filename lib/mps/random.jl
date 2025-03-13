@@ -74,14 +74,16 @@ end
 function Random.rand!(rng::RNG, A::AbstractArray{T,N}) where {T <: Union{UniformTypes...}, N}
     isempty(A) && return A
     B = MtlArray{T,N,SharedStorage}(undef, size(A))
-    Metal.@sync rand!(rng, B)
+    rand!(rng, B)
+    synchronize()
     copyto!(A, unsafe_wrap(Array{T},B))
     return A
 end
 function Random.randn!(rng::RNG, A::AbstractArray{T,N}) where {T <: Float32, N}
     isempty(A) && return A
     B = MtlArray{T,N,SharedStorage}(undef, size(A))
-    Metal.@sync randn!(rng, B)
+    randn!(rng, B)
+    synchronize()
     copyto!(A, unsafe_wrap(Array{T},B))
     return A
 end
