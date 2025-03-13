@@ -323,7 +323,6 @@ end
         end
 
         res = MtlArray(zeros(Bool, 4))
-        @device_code_llvm @metal launch = false convert_test(res)
         Metal.@sync @metal convert_test(res)
         @test all(Array(res))
     end
