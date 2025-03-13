@@ -157,7 +157,7 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
 
     # private storage errors.
     if SM == Metal.PrivateStorage
-        let arr_mtl = Metal.zeros(Float32, dim...; storage=Metal.PrivateStorage)
+        let arr_mtl = Metal.@sync Metal.zeros(Float32, dim...; storage=Metal.PrivateStorage)
             @test is_private(arr_mtl) && !is_shared(arr_mtl) && !is_managed(arr_mtl)
             @test_throws "Cannot access the contents of a private buffer" arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, dim)
         end
@@ -168,7 +168,7 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
             @test Metal.@allowscalar arr_mtl[1] == b[1]
         end
     elseif SM == Metal.SharedStorage
-        let arr_mtl = Metal.zeros(Float32, dim...; storage=Metal.SharedStorage)
+        let arr_mtl = Metal.@sync Metal.zeros(Float32, dim...; storage=Metal.SharedStorage)
             @test !is_private(arr_mtl) && is_shared(arr_mtl) && !is_managed(arr_mtl)
             @test unsafe_wrap(Array{Float32}, arr_mtl) isa Array{Float32}
         end
@@ -178,7 +178,7 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
             @test arr_mtl[1] == b[1]
         end
     elseif SM == Metal.ManagedStorage
-        let arr_mtl = Metal.zeros(Float32, dim...; storage=Metal.ManagedStorage)
+        let arr_mtl = Metal.@sync Metal.zeros(Float32, dim...; storage=Metal.ManagedStorage)
             @test !is_private(arr_mtl) && !is_shared(arr_mtl) && is_managed(arr_mtl)
             @test unsafe_wrap(Array{Float32}, arr_mtl) isa Array{Float32}
         end
@@ -479,7 +479,7 @@ end
     end
 
     # test that you cannot create an array with a different eltype
-    marr3 = mtl(zeros(Float32, 10); storage = Metal.SharedStorage)
+    marr3 = Metal.@sync mtl(zeros(Float32, 10); storage = Metal.SharedStorage)
     @test_throws MethodError unsafe_wrap(Array{Float16}, marr3)
 end
 
