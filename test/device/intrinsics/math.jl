@@ -314,29 +314,18 @@ end
 
     # Borrowed from the Julia "Irrationals compared with Rationals and Floats" testset
     @testset "Comparisons with $irr" for irr in (π, ℯ)
-        function convert_test_32(res)
-            res[1] = Float32(irr,RoundDown) < irr
-            res[2] = Float32(irr,RoundUp) > irr
-            res[3] = !(Float32(irr,RoundDown) > irr)
-            res[4] = !(Float32(irr,RoundUp) < irr)
+        @eval function convert_test(res)
+            res[1] = $T($irr, RoundDown) < $irr
+            res[2] = $T($irr, RoundUp) > $irr
+            res[3] = !($T($irr, RoundDown) > $irr)
+            res[4] = !($T($irr, RoundUp) < $irr)
             return nothing
         end
 
-        res_32 = MtlArray(zeros(Bool,4))
-        Metal.@sync @metal convert_test_32(res_32)
-        @test all(Array(res_32))
-
-        function convert_test_16(res)
-            res[1] = Float16(irr,RoundDown) < irr
-            res[2] = Float16(irr,RoundUp) > irr
-            res[3] = !(Float16(irr,RoundDown) > irr)
-            res[4] = !(Float16(irr,RoundUp) < irr)
-            return nothing
-        end
-
-        res_16 = MtlArray(zeros(Bool,4))
-        Metal.@sync @metal convert_test_16(res_16)
-        @test all(Array(res_16))
+        res = MtlArray(zeros(Bool, 4))
+        @device_code_llvm @metal launch = false convert_test(res)
+        Metal.@sync @metal convert_test(res)
+        @test all(Array(res))
     end
 end
 end
