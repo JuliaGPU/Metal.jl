@@ -226,11 +226,11 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
         rng = Metal.MPS.RNG()
         @testset "$f with $T" for (f, T) in mps_tuples
             # d == 2 and d == 3 are to hit the test cases where sizeof(A) <= 4
-            @testset "$d" for d in (2, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000))
+            @testset "$d" for d in (2, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000), 16384, 16385)
                 A = zeros(T, d)
                 if (prod(d) * sizeof(T)) % 4 == 0
                     f(rng, A)
-                    @test !iszero(collect(A))
+                    @test !iszero(A)
                 else
                     @test_throws "Destination buffer" f(rng, A)
                 end

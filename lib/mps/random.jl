@@ -71,15 +71,18 @@ const NormalArray = MtlArray{<:Float32}
 end
 
 # CPU arrays
+# TODO: use unsafe_wrap when possible
 function Random.rand!(rng::RNG, A::AbstractArray{T, N}) where {T <: Union{UniformTypes...}, N}
     isempty(A) && return A
     B = MtlArray{T, N, SharedStorage}(undef, size(A))
-    return Array{T, N}(rand!(rng, B))
+    rand!(rng, B)
+    return copyto!(A,B)
 end
 function Random.randn!(rng::RNG, A::AbstractArray{T, N}) where {T <: Float32, N}
     isempty(A) && return A
     B = MtlArray{T, N, SharedStorage}(undef, size(A))
-    Array{T, N}(randn!(rng, B))
+    randn!(rng, B)
+    return copyto!(A,B)
 end
 
 # Out of place
