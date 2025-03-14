@@ -83,8 +83,8 @@ release(new_scope)
     @test isdir("julia_2.gputrace")
 end
 
-end
-end
+end # cd(tmpdir) do
+end # mktempdir() do tmpdir
 
-end
-end
+end # @testset "capturing" begin
+end # if shader_validation (else branch)

@@ -111,7 +111,7 @@ For a higher-level overview of the GPU work, use [`Metal.@profile`](@ref) instea
 
 !!! note
 
-    Metal frame capture must be enabled by setting the `METAL_FRAME_CAPTURE`
+    Metal frame capture must be enabled by setting the `METAL_CAPTURE_ENABLED`
     environment variable to `1` before launching Julia.
 
 Several keyword arguments are supported that influence the behavior of `Metal.@capture`:
