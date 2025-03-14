@@ -311,6 +311,21 @@ end
         ir = sprint(io->(@device_code_llvm io=io dump_module=true @metal metal = v"3.0" nextafter_out_test()))
         @test occursin(Regex("@air\\.sign\\.f$(8*sizeof(T))"), ir)
     end
+
+    # Borrowed from the Julia "Irrationals compared with Rationals and Floats" testset
+    @testset "Comparisons with $irr" for irr in (π, ℯ)
+        @eval function convert_test(res)
+            res[1] = $T($irr, RoundDown) < $irr
+            res[2] = $T($irr, RoundUp) > $irr
+            res[3] = !($T($irr, RoundDown) > $irr)
+            res[4] = !($T($irr, RoundUp) < $irr)
+            return nothing
+        end
+
+        res = MtlArray(zeros(Bool, 4))
+        Metal.@sync @metal convert_test(res)
+        @test all(Array(res))
+    end
 end
 end
 
