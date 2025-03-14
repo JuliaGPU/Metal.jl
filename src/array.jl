@@ -431,7 +431,6 @@ end
 function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::MtlArray{T}, soffs, n) where T
     # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
     synchronize()
-
     GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
     if Base.isbitsunion(T)
         # copy selector bytes

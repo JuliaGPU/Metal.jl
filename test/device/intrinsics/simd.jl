@@ -28,7 +28,7 @@ using Random
 
     dev_a = Metal.zeros(typ, 32; storage=Metal.SharedStorage)
     dev_b = Metal.zeros(typ, 32; storage=Metal.SharedStorage)
-    Metal.synchronize()
+    synchronize()
     a = unsafe_wrap(Array{typ}, dev_a, 32)
     b = unsafe_wrap(Array{typ}, dev_b, 32)
 
