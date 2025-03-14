@@ -76,13 +76,13 @@ function Random.rand!(rng::RNG, A::AbstractArray{T, N}) where {T <: Union{Unifor
     isempty(A) && return A
     B = MtlArray{T, N, SharedStorage}(undef, size(A))
     rand!(rng, B)
-    return copyto!(A,B)
+    return copyto!(A, B)
 end
 function Random.randn!(rng::RNG, A::AbstractArray{T, N}) where {T <: Float32, N}
     isempty(A) && return A
     B = MtlArray{T, N, SharedStorage}(undef, size(A))
     randn!(rng, B)
-    return copyto!(A,B)
+    return copyto!(A, B)
 end
 
 # Out of place
