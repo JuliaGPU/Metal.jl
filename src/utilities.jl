@@ -92,6 +92,7 @@ function captured(f; dest=MTL.MTLCaptureDestinationGPUTraceDocument,
     startCapture(object, dest; folder)
     try
        f()
+       synchronize()
     finally
         @info "GPU frame capture saved to $folder; open the resulting trace in Xcode"
         stopCapture()
@@ -207,6 +208,7 @@ function profiled(f)
         # run the user code
         try
             f()
+            synchronize()
         finally
             kill(xctrace, Base.SIGINT)
             wait(xctrace)
