@@ -7,7 +7,7 @@ using Random
             @inbounds buf[idx] += 1
             return nothing
         end
-        buf = Metal.zeros(Int, 1024; storage = Metal.SharedStorage)
+        buf = Metal.zeros(Int, 1024; storage=Metal.SharedStorage)
         vec = unsafe_wrap(Vector{Int}, pointer(buf), size(buf))
         @metal threads=length(buf) sync_test_kernel(buf)
         synchronize()
