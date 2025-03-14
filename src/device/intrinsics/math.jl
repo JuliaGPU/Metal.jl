@@ -2,6 +2,7 @@
 
 using Base: FastMath
 using Base.Math: throw_complex_domainerror
+import Core: Float16, Float32
 
 # TODO:
 # - wrap all intrinsics from include/metal/metal_math
@@ -9,24 +10,9 @@ using Base.Math: throw_complex_domainerror
 # - consider emitting LLVM intrinsics and lowering those in the back-end
 
 ### Constants
-# π
-const M_PI_F = Float32(reinterpret(Float64, 0x400921FB60000000))
-const M_PI_H = reinterpret(Float16, 0x4248)
-@eval begin
-    @device_override Core.Float32(::typeof(π), ::RoundingMode) = $M_PI_F
-    @device_override Core.Float32(::typeof(π), ::RoundingMode{:Down}) = $(prevfloat(M_PI_F))
-    @device_override Core.Float16(::typeof(π), ::RoundingMode{:Up}) = $(nextfloat(M_PI_H))
-    @device_override Core.Float16(::typeof(π), ::RoundingMode) = $M_PI_H
-end
-
-# ℯ
-const M_E_F = Float32(reinterpret(Float64, 0x4005BF0A80000000))
-const M_E_H = reinterpret(Float16, 0x4170)
-@eval begin
-    @device_override Core.Float32(::typeof(ℯ), ::RoundingMode{:Up}) = $(nextfloat(M_E_F))
-    @device_override Core.Float32(::typeof(ℯ), ::RoundingMode) = $M_E_F
-    @device_override Core.Float16(::typeof(ℯ), ::RoundingMode) = $M_E_H
-    @device_override Core.Float16(::typeof(ℯ), ::RoundingMode{:Down}) = $(prevfloat(M_E_H))
+# π and ℯ
+for T in (:Float16,:Float32), R in (RoundUp, RoundDown), irr in (π, ℯ)
+    @eval @device_override $T(::typeof($irr), ::typeof($R)) = $@eval($T($irr,$R))
 end
 
 ### Common Intrinsics
