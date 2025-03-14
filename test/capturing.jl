@@ -69,7 +69,7 @@ bufferA = MtlArray{Float32,1,SharedStorage}(undef, tuple(4))
 startCapture(manager, desc)
 @test manager.isCapturing
 @test_throws ErrorException startCapture(manager, desc)
-@metal threads=4 tester(bufferA)
+Metal.@sync @metal threads=4 tester(bufferA)
 stopCapture(manager)
 @test manager.isCapturing == false
 @test isdir(path)
@@ -83,8 +83,8 @@ release(new_scope)
     @test isdir("julia_2.gputrace")
 end
 
-end
-end
+end # cd(tmpdir) do
+end # mktempdir() do tmpdir
 
-end
-end
+end # @testset "capturing" begin
+end # if shader_validation (else branch)
