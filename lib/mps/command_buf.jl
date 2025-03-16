@@ -6,6 +6,8 @@
 
 # @objcwrapper MPSCommandBuffer <: MTLCommandBuffer
 
+export MPSCommandBuffer
+
 function MPSCommandBuffer(commandBuffer::MTLCommandBuffer)
     handle = @objc [MPSCommandBuffer commandBufferWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}]::id{MPSCommandBuffer}
     MPSCommandBuffer(handle)
@@ -31,6 +33,8 @@ function MTL.commit!(f::Base.Callable, cmdbuf::MPSCommandBuffer)
     commit!(cmdbuf)
     return ret
 end
+
+export commitAndContinue!
 
 commitAndContinue!(cmdbuf::MPSCommandBuffer) =
     @objc [cmdbuf::id{MPSCommandBuffer} commitAndContinue]::Nothing
