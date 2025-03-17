@@ -73,7 +73,7 @@ end
 # CPU arrays
 function Random.rand!(rng::RNG, A::AbstractArray{T, N}) where {T <: Union{UniformTypes...}, N}
     isempty(A) && return A
-    if MTL.can_alloc_nocopy(pointer(A),sizeof(A))
+    if MTL.can_alloc_nocopy(pointer(A), sizeof(A))
         mtlA = unsafe_wrap(MtlArray{T, N}, A)
         rand!(rng, mtlA)
     else
@@ -85,7 +85,7 @@ function Random.rand!(rng::RNG, A::AbstractArray{T, N}) where {T <: Union{Unifor
 end
 function Random.randn!(rng::RNG, A::AbstractArray{T, N}) where {T <: Float32, N}
     isempty(A) && return A
-    if MTL.can_alloc_nocopy(pointer(A),sizeof(A))
+    if MTL.can_alloc_nocopy(pointer(A), sizeof(A))
         mtlA = unsafe_wrap(MtlArray{T, N}, A)
         randn!(rng, mtlA)
     else
