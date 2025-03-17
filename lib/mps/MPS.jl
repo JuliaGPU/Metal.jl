@@ -23,6 +23,20 @@ const MtlFloat = Union{Float32, Float16}
 const MPSShape = NSArray#{NSNumber}
 Base.convert(::Type{MPSShape}, tuple::Union{Vector{N},NTuple{N, <:Integer}}) where N = NSArray(NSNumber.(collect(tuple)))
 
+# Valid combination of input (A and B matrices) and output (C) types
+const MPS_VALID_MATMUL_TYPES =
+    [(Int8, Float16),
+     (Int8, Float32),
+     (Int16, Float32),
+     (Float16, Float16),
+     (Float16, Float32),
+     (Float32, Float32)]
+
+const MPS_VALID_MATVECMUL_TYPES =
+    [(Float16, Float16),
+     (Float16, Float32),
+     (Float32, Float32)]
+
 is_supported(dev::MTLDevice) = ccall(:MPSSupportsMTLDevice, Bool, (id{MTLDevice},), dev)
 
 # Load in generated enums and structs
@@ -43,6 +57,5 @@ include("copy.jl")
 
 # integrations
 include("random.jl")
-include("linalg.jl")
 
 end

@@ -53,6 +53,9 @@ include("compiler/reflection.jl")
 include("../lib/mps/MPS.jl")
 export MPS
 
+# LinearAlgebra
+include("linalg.jl")
+
 # array implementation
 include("utilities.jl")
 include("broadcast.jl")
