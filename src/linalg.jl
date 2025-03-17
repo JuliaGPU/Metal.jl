@@ -2,6 +2,24 @@ using LinearAlgebra
 using LinearAlgebra: MulAddMul, wrap
 using .MPS
 using .MPS: MPS_VALID_MATMUL_TYPES, MPS_VALID_MATVECMUL_TYPES, MtlFloat
+using .MPSGraphs: MPSGRAPH_VALID_MATMUL_TYPES, MPSGRAPH_VALID_MATVECMUL_TYPES,
+                  graph_matmul!, graph_matvecmul!
+
+@inline function supports_mps_matmul(A, B, C, valid_types)
+    MPS.is_supported(device(A)) &&
+        eltype(A) == eltype(B) &&
+        (eltype(A), eltype(C)) in valid_types
+end
+
+@inline function supports_mpsgraph_matmul(A, B, C, valid_types)
+    MPS.is_supported(device(A)) &&
+        eltype(A) == eltype(B) &&
+        (eltype(A), eltype(C)) in valid_types &&
+        # TODO: remove this limitation
+        A.offset == 0 &&
+        B.offset == 0 &&
+        C.offset == 0
+end
 
 LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
     LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
@@ -28,13 +46,10 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     transA = tA == 'T' || tA == 'C'
     transB = tB == 'T' || tB == 'C'
 
-    typA = eltype(A)
-    typB = eltype(B)
-    typC = eltype(C)
-
-    # If possible, dispatch to performance shaders
-    if MPS.is_supported(device()) &&
-            typA == typB && (typA, typC) in MPS_VALID_MATMUL_TYPES
+    # If possible, dispatch to MPSGraphs, then performance shaders
+    if supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATMUL_TYPES)
+        graph_matmul!(C, A, B, alpha, beta, transA, transB)
+    elseif supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES)
         matmul!(C, A, B, alpha, beta, transA, transB)
     else
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
@@ -66,13 +81,10 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
 
     transA = tA == 'T' || tA == 'C'
 
-    typA = eltype(A)
-    typB = eltype(B)
-    typC = eltype(C)
-
-    # If possible, dispatch to performance shaders
-    if MPS.is_supported(device()) &&
-            typA == typB && (typA, typC) in MPS_VALID_MATVECMUL_TYPES
+    # If possible, dispatch to MPSGraphs, then performance shaders
+    if supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATVECMUL_TYPES)
+        graph_matvecmul!(C, A, B, alpha, beta, transA)
+    elseif supports_mps_matmul(A, B, C, MPS_VALID_MATVECMUL_TYPES)
         matvecmul!(C, A, B, alpha, beta, transA)
     else
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)

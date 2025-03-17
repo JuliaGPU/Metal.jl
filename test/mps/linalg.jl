@@ -34,17 +34,19 @@ if MPS.is_supported(device())
 end
 
 @testset "batched matrix matrix multiplication" begin
-    N = 10
+    M = 8
+    N = 7
+    P = 9
     batch_size = 3
 
-    rows_a = N
+    rows_a = M
     cols_a = N
 
     rows_b = N
-    cols_b = N
+    cols_b = P
 
-    rows_c = rows_a
-    cols_c = cols_b
+    rows_c = M
+    cols_c = P
 
     alpha = Float64(1)
     beta = Float64(1)
