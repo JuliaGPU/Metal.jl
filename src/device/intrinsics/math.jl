@@ -2,11 +2,18 @@
 
 using Base: FastMath
 using Base.Math: throw_complex_domainerror
+import Core: Float16, Float32
 
 # TODO:
 # - wrap all intrinsics from include/metal/metal_math
 # - add support for vector types
 # - consider emitting LLVM intrinsics and lowering those in the back-end
+
+### Constants
+# π and ℯ
+for T in (:Float16,:Float32), R in (RoundUp, RoundDown), irr in (π, ℯ)
+    @eval @device_override $T(::typeof($irr), ::typeof($R)) = $@eval($T($irr,$R))
+end
 
 ### Common Intrinsics
 @device_function clamp_fast(x::Float32, minval::Float32, maxval::Float32) = ccall("extern air.fast_clamp.f32", llvmcall, Cfloat, (Cfloat, Cfloat, Cfloat), x, minval, maxval)
