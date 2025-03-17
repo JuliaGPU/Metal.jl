@@ -82,8 +82,8 @@ function MPSGraphTensorData(vector::MPSVector)
     @objc [tensor::id{MPSGraphTensorData} initWithMPSVector:vector::id{MPSVector}]::id{MPSGraphTensorData}
     return tensor
 end
-MPSGraphTensorData(vector::MtlVector{T}) where T = MPSGraphTensorData(vector.data[], convert(MPSShape, size(vector)), T)
-# MPSGraphTensorData(vector::MtlVector) = MPSGraphTensorData(MPSVector(vector))
+# MPSGraphTensorData(vector::MtlVector{T}) where T = MPSGraphTensorData(vector.data[], convert(MPSShape, size(vector)), T)
+MPSGraphTensorData(vector::MtlVector) = MPSGraphTensorData(MPSVector(vector))
 
 # rank must be between 1 and 16 inclusive
 function MPSGraphTensorData(vector::MPSVector, rank)
