@@ -26,7 +26,7 @@ end
 # be allocated, then wrapped by a CPU array...not the other way around.
 
 # Create a Metal array with a storage mode of shared (both CPU and GPU get access)
-arr_mtl = Metal.zeros(Float32, (16,16); storage=Metal.SharedStorage)
+arr_mtl = Metal.@sync Metal.zeros(Float32, (16, 16); storage = Metal.SharedStorage)
 # Unsafe wrap the contents of the Metal array with a CPU array
 arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, size(arr_mtl))
 
@@ -71,7 +71,7 @@ end
 
 # Make larger arrays to make the kernel take non-trivial time
 # Create a Metal array with a default storage mode of shared (both CPU and GPU get access)
-arr_mtl = Metal.zeros(Float32, 1024*1024; storage=Metal.SharedStorage)
+arr_mtl = Metal.@sync Metal.zeros(Float32, 1024 * 1024; storage = Metal.SharedStorage)
 # Unsafe wrap the contents of the Metal array with a CPU array
 arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, size(arr_mtl))
 dummy_mtl = MtlArray{Float32}(undef, 1)

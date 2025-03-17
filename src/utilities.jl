@@ -92,6 +92,7 @@ function captured(f; dest=MTL.MTLCaptureDestinationGPUTraceDocument,
     startCapture(object, dest; folder)
     try
        f()
+       synchronize()
     finally
         @info "GPU frame capture saved to $folder; open the resulting trace in Xcode"
         stopCapture()
@@ -110,7 +111,7 @@ For a higher-level overview of the GPU work, use [`Metal.@profile`](@ref) instea
 
 !!! note
 
-    Metal frame capture must be enabled by setting the `METAL_FRAME_CAPTURE`
+    Metal frame capture must be enabled by setting the `METAL_CAPTURE_ENABLED`
     environment variable to `1` before launching Julia.
 
 Several keyword arguments are supported that influence the behavior of `Metal.@capture`:
@@ -207,6 +208,7 @@ function profiled(f)
         # run the user code
         try
             f()
+            synchronize()
         finally
             kill(xctrace, Base.SIGINT)
             wait(xctrace)

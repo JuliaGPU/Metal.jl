@@ -113,7 +113,7 @@ Start GPU frame capture using the default capture object and specifying capture 
 function startCapture(obj::Union{MTLDevice,MTLCommandQueue, MTLCaptureScope},
                       destination::MTLCaptureDestination=MTLCaptureDestinationGPUTraceDocument;
                       folder::String=nothing)
-    if destination == MTLCaptureDestinationGPUTraceDocument && folder == nothing
+    if destination == MTLCaptureDestinationGPUTraceDocument && folder === nothing
         throw(ArgumentError("Must specify output folder if destination is GPUTraceDocument"))
     end
     startCapture(MTLCaptureManager(), MTLCaptureDescriptor(obj, destination; folder=folder))
