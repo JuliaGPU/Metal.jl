@@ -49,7 +49,7 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     # If possible, dispatch to MPSGraphs, then performance shaders
     if supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATMUL_TYPES)
         graph_matmul!(C, A, B, alpha, beta, transA, transB)
-    elseif supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES)
+    elseif supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES) # TODO: Remove once contiguous views are working
         matmul!(C, A, B, alpha, beta, transA, transB)
     else
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
@@ -84,7 +84,7 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
     # If possible, dispatch to MPSGraphs, then performance shaders
     if supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATVECMUL_TYPES)
         graph_matvecmul!(C, A, B, alpha, beta, transA)
-    elseif supports_mps_matmul(A, B, C, MPS_VALID_MATVECMUL_TYPES)
+    elseif supports_mps_matmul(A, B, C, MPS_VALID_MATVECMUL_TYPES) # TODO: Remove once contiguous views are working
         matvecmul!(C, A, B, alpha, beta, transA)
     else
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)
