@@ -34,7 +34,7 @@ function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab}, b::MtlArray{Tab}, alpha::Nu
     afteralpha = if isone(alpha)
         matmul
     else
-        alphatensor = constantWithScalar(graph, alpha, Tc)
+        alphatensor = constantWithScalar(graph, alpha, Float32)
         multiplicationWithPrimaryTensor(graph, alphatensor, matmul)
     end
 
@@ -43,8 +43,9 @@ function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab}, b::MtlArray{Tab}, alpha::Nu
     else
         placeC = placeholderTensor(graph, size(c), Tc)
         feeds[placeC] = outputTensorData
-        betatensor = constantWithScalar(graph, beta, Tc)
-        betaC = multiplicationWithPrimaryTensor(graph, betatensor, placeC)
+        betatensor = constantWithScalar(graph, beta, Float32)
+        castplaceC = castTensor(graph, placeC, Float32, "castplaceC")
+        betaC = multiplicationWithPrimaryTensor(graph, betatensor, castplaceC)
         additionWithPrimaryTensor(graph, afteralpha, betaC)
     end
 
