@@ -10,7 +10,8 @@ module MPSGraphs
 
 using ..Metal
 using .MTL
-using .MPS: MPSDataType, MPSMatrix, MPSVector, MPSShape, MPSNDArray, exportToMtlArray!
+using .MPS
+using .MPS: MPSDataType, MPSShape, exportDataWithCommandBuffer
 
 using CEnum
 using ObjectiveC, .Foundation, .Dispatch
