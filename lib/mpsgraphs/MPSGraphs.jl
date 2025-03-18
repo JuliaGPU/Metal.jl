@@ -41,6 +41,7 @@ include("libmpsgraph.jl")
 
 include("core.jl")
 include("tensor.jl")
+include("execution.jl")
 include("operations.jl")
 include("random.jl")
 

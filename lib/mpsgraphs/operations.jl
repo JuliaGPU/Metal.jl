@@ -45,20 +45,3 @@ function identityWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, name = "ide
                                 name:name::id{NSString}]::id{MPSGraphTensor}
     MPSGraphTensor(obj)
 end
-
-run(graph::MPSGraph, feeds::Dict, targetTensors::Vector) = run(graph, MPSGraphTensorDataDictionary(feeds), NSArray(targetTensors))
-function run(graph::MPSGraph, feeds::MPSGraphTensorDataDictionary, targetTensors::NSArray)
-    obj = @objc [graph::id{MPSGraph} runWithFeeds:feeds::id{MPSGraphTensorDataDictionary}
-                                            targetTensors:targetTensors::id{NSArray}
-                                         targetOperations:nil::id{Object}]::id{MPSGraphTensorDataDictionary}
-    MPSGraphTensorDataDictionary(obj)
-end
-
-run(graph::MPSGraph, commandQueue::MTLCommandQueue, feeds::Dict, targetTensors::Vector) = run(graph, commandQueue, MPSGraphTensorDataDictionary(feeds), NSArray(targetTensors))
-function run(graph::MPSGraph, commandQueue::MTLCommandQueue, feeds::MPSGraphTensorDataDictionary, targetTensors::NSArray)
-    obj = @objc [graph::id{MPSGraph} runWithMTLCommandQueue:commandQueue::id{MTLCommandQueue}
-                                                    feeds:feeds::id{MPSGraphTensorDataDictionary}
-                                            targetTensors:targetTensors::id{NSArray}
-                                         targetOperations:nil::id{Object}]::id{MPSGraphTensorDataDictionary}
-    MPSGraphTensorDataDictionary(obj)
-end
