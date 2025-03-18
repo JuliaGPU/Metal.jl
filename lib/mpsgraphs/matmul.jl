@@ -10,9 +10,9 @@ function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab}, b::MtlArray{Tab}, alpha::Nu
         placeB => MPSGraphTensorData(b)
     )
 
-    castA, castB = if Tc != Tab
-        castTensor(graph, placeA, Tc, "castA"),
-            castTensor(graph, placeB, Tc, "castB")
+    castA, castB = if Tab != Float32
+        castTensor(graph, placeA, Float32, "castA"),
+            castTensor(graph, placeB, Float32, "castB")
     else
         placeA, placeB
     end
@@ -48,8 +48,14 @@ function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab}, b::MtlArray{Tab}, alpha::Nu
         additionWithPrimaryTensor(graph, afteralpha, betaC)
     end
 
+    castC = if Tc != Float32
+        castTensor(graph, afterbeta, Tc, "castC")
+    else
+        afterbeta
+    end
+
     resultdict = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        afterbeta => outputTensorData
+        castC => outputTensorData
     )
 
     cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
