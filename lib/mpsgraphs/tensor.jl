@@ -14,7 +14,7 @@ function Base.size(td::MPSGraphTensor)
 end
 
 function placeholderTensor(graph::MPSGraph, shape::Union{Vector, Tuple}, args...)
-    mpsshape = convert(MPSShape, shape)
+    mpsshape = convert(MPSShape, reverse(shape))
     return placeholderTensor(graph, mpsshape, args...)
 end
 function placeholderTensor(graph::MPSGraph, shape::MPSShape, dataType::Type, name = "placeholder tensor")
@@ -53,9 +53,7 @@ function MPSGraphTensorData(buffer::MTLBuffer, shape::MPSShape, dataType, rowByt
                                     rowBytes:rowBytes::NSUInteger]::id{MPSGraphTensorData}
     return tensor
 end
-# MPSGraphTensorData(matrix::MtlMatrix{T}) where T = MPSGraphTensorData(matrix.data[], convert(MPSShape, reverse(size(matrix))), T)
-MPSGraphTensorData(matrix::MtlMatrix) = MPSGraphTensorData(MPSMatrix(matrix))
-MPSGraphTensorData(arr::MtlArray{<:Any, 3}) = MPSGraphTensorData(MPSMatrix(arr))
+MPSGraphTensorData(matrix::MtlArray{T}) where T = MPSGraphTensorData(matrix.data[], convert(MPSShape, reverse(size(matrix))), T)
 
 function MPSGraphTensorData(matrix::MPSMatrix)
     obj = @objc [MPSGraphTensorData alloc]::id{MPSGraphTensorData}
@@ -82,8 +80,6 @@ function MPSGraphTensorData(vector::MPSVector)
     @objc [tensor::id{MPSGraphTensorData} initWithMPSVector:vector::id{MPSVector}]::id{MPSGraphTensorData}
     return tensor
 end
-# MPSGraphTensorData(vector::MtlVector{T}) where T = MPSGraphTensorData(vector.data[], convert(MPSShape, size(vector)), T)
-MPSGraphTensorData(vector::MtlVector) = MPSGraphTensorData(MPSVector(vector))
 
 # rank must be between 1 and 16 inclusive
 function MPSGraphTensorData(vector::MPSVector, rank)
