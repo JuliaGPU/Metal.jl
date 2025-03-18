@@ -26,3 +26,7 @@ function MPSGraphDevice(device::MTLDevice)
     obj = @objc [MPSGraphDevice deviceWithMTLDevice:device::id{MTLDevice}]::id{MPSGraphDevice}
     MPSGraphDevice(obj)
 end
+
+function MPSGraphExecutionDescriptor()
+    MPSGraphExecutionDescriptor(@objc [MPSGraphExecutionDescriptor new]::id{MPSGraphExecutionDescriptor})
+end
