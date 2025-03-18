@@ -31,14 +31,14 @@ function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab}, b::MtlArray{Tab}, alpha::Nu
 
     matmul = matrixMultiplicationWithPrimaryTensor(graph, transB, transA)
 
-    afteralpha = if alpha == 1
+    afteralpha = if isone(alpha)
         matmul
     else
         alphatensor = constantWithScalar(graph, alpha, Tc)
         multiplicationWithPrimaryTensor(graph, alphatensor, matmul)
     end
 
-    afterbeta = if beta == 0
+    afterbeta = if iszero(beta)
         afteralpha
     else
         placeC = placeholderTensor(graph, size(c), Tc)
