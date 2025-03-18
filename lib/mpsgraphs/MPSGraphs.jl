@@ -20,9 +20,9 @@ using ObjectiveC, .Foundation, .Dispatch
 #   The commented type combinations work but are slower than with MPSMatrixMultiplicatiom
 const MPSGRAPH_VALID_MATMUL_TYPES =
     [
-    #  (Int8, Float16),
-    #  (Int8, Float32),
-    #  (Int16, Float32),
+     (Int8, Float16),
+     (Int8, Float32),
+     (Int16, Float32),
      (Float16, Float16),
      (Float16, Float32),
      (Float32, Float32),
