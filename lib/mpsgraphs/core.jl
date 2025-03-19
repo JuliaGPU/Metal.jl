@@ -27,6 +27,14 @@ function MPSGraphDevice(device::MTLDevice)
     MPSGraphDevice(obj)
 end
 
+# @objcwrapper MPSGraphExecutionDescriptor <: MPSGraphObject
+
 function MPSGraphExecutionDescriptor()
     MPSGraphExecutionDescriptor(@objc [MPSGraphExecutionDescriptor new]::id{MPSGraphExecutionDescriptor})
+end
+
+# @objcwrapper MPSGraphCompilationDescriptor <: MPSGraphObject
+
+function MPSGraphCompilationDescriptor()
+    MPSGraphCompilationDescriptor(@objc [MPSGraphCompilationDescriptor new]::id{MPSGraphCompilationDescriptor})
 end

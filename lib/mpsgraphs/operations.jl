@@ -64,3 +64,13 @@ function identityWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, name = "ide
                                 name:name::id{NSString}]::id{MPSGraphTensor}
     MPSGraphTensor(obj)
 end
+
+"""
+    dump_graph(graph::MPSGraph)
+
+Dumps the `graph`.
+
+!!! warning
+    This function is undocumented from Apple so it may stop working at any time.
+"""
+dump_graph(graph::MPSGraph) = @objc [graph::id{MPSGraph} dump]::Nothing
