@@ -1,3 +1,30 @@
+
+@static if isdefined(Base, :OncePerProcess) # VERSION >= v"1.12.0-DEV.1421"
+    const default_exec_desc = OncePerProcess{MPSGraphExecutionDescriptor}() do
+        compDesc = MPSGraphCompilationDescriptor()
+        # Use optimization level 0 to avoid operations being moved to the neural engine
+        compDesc.optimizationLevel = MPSGraphOptimizationLevel0
+
+        execDesc = MPSGraphExecutionDescriptor()
+        execDesc.compilationDescriptor = compDesc
+        execDesc
+    end
+else
+    const _default_exec_desc::Ref{MPSGraphExecutionDescriptor} = Ref{MPSGraphExecutionDescriptor}()
+    function default_exec_desc()
+        if !isassigned(_default_exec_desc)
+            compDesc = MPSGraphCompilationDescriptor()
+            # Use optimization level 0 to avoid operations being moved to the neural engine
+            compDesc.optimizationLevel = MPSGraphOptimizationLevel0
+
+            _default_exec_desc[] = MPSGraphExecutionDescriptor()
+            _default_exec_desc[].compilationDescriptor = compDesc
+        end
+        _default_exec_desc[]
+    end
+end
+
+
 function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb}, alpha::Number, beta::Number, transpose_a, transpose_b) where {Tc, Tab, Na, Nb}
     graph = MPSGraph()
 
@@ -11,9 +38,10 @@ function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb}, a
         placeC => MPSGraphTensorData(c)
     )
 
-    # cast to Float32 for better performance
-    castA = castTensor(graph, placeA, Float32, "castA")
-    castB = castTensor(graph, placeB, Float32, "castB")
+    # cast to output eltype if input type is an integer type
+    castT = Tab <: Integer ? Tc : Tab
+    castA = castTensor(graph, placeA, castT, "castA")
+    castB = castTensor(graph, placeB, castT, "castB")
 
     transA = transpose_a ? transposeTensor(graph, castA, Na-2, Na-1, "transpose_a") : castA
     transB = transpose_b ? transposeTensor(graph, castB, Nb-2, Nb-1, "transpose_b") : castB
@@ -35,13 +63,13 @@ function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb}, a
     matmul = matrixMultiplicationWithPrimaryTensor(graph, broadcastB, broadcastA)
 
     afteralpha = let
-        alphatensor = constantWithScalar(graph, alpha, Float32)
+        alphatensor = constantWithScalar(graph, alpha, castT)
         multiplicationWithPrimaryTensor(graph, alphatensor, matmul)
     end
 
     afterbeta = let
-        betatensor = constantWithScalar(graph, beta, Float32)
-        castplaceC = castTensor(graph, placeC, Float32, "castplaceC")
+        betatensor = constantWithScalar(graph, beta, castT)
+        castplaceC = castTensor(graph, placeC, castT, "castplaceC")
         betaC = multiplicationWithPrimaryTensor(graph, betatensor, castplaceC)
         afterbeta = additionWithPrimaryTensor(graph, afteralpha, betaC)
     end
@@ -53,7 +81,7 @@ function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb}, a
     )
 
     cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
-    encode!(cmdbuf, graph, NSDictionary(feeds), NSDictionary(resultdict))
+    encode!(cmdbuf, graph, NSDictionary(feeds), nil, NSDictionary(resultdict), default_exec_desc())
     commit!(cmdbuf)
     wait_completed(cmdbuf)
 
