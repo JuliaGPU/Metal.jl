@@ -1,4 +1,17 @@
 
+function broadcastTensor(graph::MPSGraph, tensor::MPSGraphTensor, shape::MPSShape, name="broadcast")
+    obj = @objc [graph::id{MPSGraph} broadcastTensor:tensor::id{MPSGraphTensor}
+                                toShape:shape::id{MPSShape}
+                                name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+function broadcastTensor(graph::MPSGraph, tensor::MPSGraphTensor, shapeTensor::MPSGraphTensor, name="broadcast")
+    obj = @objc [graph::id{MPSGraph} broadcastTensor:tensor::id{MPSGraphTensor}
+                                toShapeTensor:shapeTensor::id{MPSGraphTensor}
+                                name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+
 function castTensor(graph::MPSGraph, tensor::MPSGraphTensor, toType, name = "cast")
     obj = @objc [graph::id{MPSGraph} castTensor:tensor::id{MPSGraphTensor}
                                 toType:toType::MPSDataType
@@ -36,6 +49,12 @@ function transposeTensor(graph::MPSGraph, tensor::MPSGraphTensor, dimension, wit
     obj = @objc [graph::id{MPSGraph} transposeTensor:tensor::id{MPSGraphTensor}
                                 dimension:dimension::NSUInteger
                                 withDimension:withDimension::NSUInteger
+                                name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+
+function shapeOfTensor(graph::MPSGraph, tensor::MPSGraphTensor, name = "shapeOfTensor")
+    obj = @objc [graph::id{MPSGraph} shapeOfTensor:tensor::id{MPSGraphTensor}
                                 name:name::id{NSString}]::id{MPSGraphTensor}
     MPSGraphTensor(obj)
 end
