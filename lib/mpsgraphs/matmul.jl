@@ -1,62 +1,55 @@
-function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab}, b::MtlArray{Tab}, alpha::Number, beta::Number, transpose_a, transpose_b) where {Tc, Tab}
+function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb}, alpha::Number, beta::Number, transpose_a, transpose_b) where {Tc, Tab, Na, Nb}
     graph = MPSGraph()
 
     placeA = placeholderTensor(graph, size(a), Tab)
     placeB = placeholderTensor(graph, size(b), Tab)
-    outputTensorData = MPSGraphTensorData(c)
+    placeC = placeholderTensor(graph, size(c), Tc)
 
     feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
         placeA => MPSGraphTensorData(a),
-        placeB => MPSGraphTensorData(b)
+        placeB => MPSGraphTensorData(b),
+        placeC => MPSGraphTensorData(c)
     )
 
-    castA, castB = if Tab != Float32
-        castTensor(graph, placeA, Float32, "castA"),
-            castTensor(graph, placeB, Float32, "castB")
+    # cast to Float32 for better performance
+    castA = castTensor(graph, placeA, Float32, "castA")
+    castB = castTensor(graph, placeB, Float32, "castB")
+
+    transA = transpose_a ? transposeTensor(graph, castA, Na-2, Na-1, "transpose_a") : castA
+    transB = transpose_b ? transposeTensor(graph, castB, Nb-2, Nb-1, "transpose_b") : castB
+
+    nBatchA = Na == 2 ? 1 : size(transA)[1]
+    nBatchB = Nb == 2 ? 1 : size(transB)[1]
+
+    # for batched matmul between different sized tensors
+    broadcastA, broadcastB = if nBatchA == nBatchB
+        transA, transB
+    elseif Na == 1
+        broadcastTensor(graph, transA, convert(MPSShape, [nBatchB, size(transA)[2:end]...])), transB
+    elseif Nb == 1
+        transA, broadcastTensor(graph, transB, convert(MPSShape, [nBatchA, size(transB)[2:end]...]))
     else
-        placeA, placeB
+        transA, transB
     end
 
-    transA = if transpose_a
-        transposeTensor(graph, castA, 0, 1, "transpose_a")
-    else
-        castA
-    end
+    matmul = matrixMultiplicationWithPrimaryTensor(graph, broadcastB, broadcastA)
 
-    transB = if transpose_b
-        transposeTensor(graph, castB, 0, 1, "transpose_b")
-    else
-        castB
-    end
-
-    matmul = matrixMultiplicationWithPrimaryTensor(graph, transB, transA)
-
-    afteralpha = if isone(alpha)
-        matmul
-    else
+    afteralpha = let
         alphatensor = constantWithScalar(graph, alpha, Float32)
         multiplicationWithPrimaryTensor(graph, alphatensor, matmul)
     end
 
-    afterbeta = if iszero(beta)
-        afteralpha
-    else
-        placeC = placeholderTensor(graph, size(c), Tc)
-        feeds[placeC] = outputTensorData
+    afterbeta = let
         betatensor = constantWithScalar(graph, beta, Float32)
         castplaceC = castTensor(graph, placeC, Float32, "castplaceC")
         betaC = multiplicationWithPrimaryTensor(graph, betatensor, castplaceC)
-        additionWithPrimaryTensor(graph, afteralpha, betaC)
+        afterbeta = additionWithPrimaryTensor(graph, afteralpha, betaC)
     end
 
-    castC = if Tc != Float32
-        castTensor(graph, afterbeta, Tc, "castC")
-    else
-        afterbeta
-    end
+    castC = castTensor(graph, afterbeta, Tc, "castC")
 
     resultdict = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        castC => outputTensorData
+        castC => feeds[placeC]
     )
 
     cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
