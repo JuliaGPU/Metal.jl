@@ -68,6 +68,16 @@ function gpuarrpeakflops(; n::Integer=4096,
         GPUArrays.generic_matmatmul!(c, LinearAlgebra.wrap(a, 'N'), LinearAlgebra.wrap(b, 'N'), 1, 0)
     end
 end
+function defaultpeakflops(; n::Integer=4096,
+                           n_batch::Integer=1,
+                           inT::DataType=Float32,
+                           outT::DataType=inT,
+                           ntrials::Integer=3,
+                           verify=true)
+    _peakflops(n, 1, inT, outT, ntrials; verify) do c, a, b
+        LinearAlgebra.generic_matmatmul!(c, 'N', 'N', a, b, 1, 0)
+    end
+end
 function mpspeakflops(; n::Integer=4096,
                         n_batch::Integer=1,
                         inT::DataType=Float32,
@@ -128,11 +138,13 @@ function compare(Ns, Fs, inT, outT=inT; n_batch=1, ntrials)
     return results
 end
 
-function runcomparison(; Ns=[50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024, 2000, 2048, 4000, 4096, 6000, 6144, 8000, 8192],#, 10000],
+# function runcomparison(; Ns=[50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024, 2000, 2048, 4000, 4096, 6000, 6144, 8000, 8192],#, 10000],
+function runcomparison(; Ns=[50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024:20:2000..., 2000, 2048:20:3000..., 4000, 4096:20:6000..., 6000, 6144, 8000, 8192],#, 10000],
                 Fs=[
                     (mpspeakflops, "MPS"),
                     (graphpeakflops, "MPSGraph"),
-                    (anepeakflops, "MPSGraph (ANE)"),
+                    (defaultpeakflops, "Default"),
+                    # (anepeakflops, "MPSGraph (ANE)"),
                     # (gpuarrpeakflops, "GPUArrays"),
                     # (cpupeakflops, "CPU (AppleAccelerate)"), # Uncomment to test CPU performance
                    ],
@@ -146,7 +158,7 @@ function runcomparison(; Ns=[50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024, 2
     return res
 end
 
-function plot_results(res, Fs=["MPS", "MPSGraph", "MPSGraph (ANE)"]; outpath=nothing, outtype="svg", plt_title=PLOT_TITLE)
+function plot_results(res, Fs=["MPS", "MPSGraph", "Default"]; outpath=nothing, outtype="svg", plt_title=PLOT_TITLE)
     ylim_upper = 9e12
     resplts = []
 
@@ -164,7 +176,7 @@ function plot_results(res, Fs=["MPS", "MPSGraph", "MPSGraph (ANE)"]; outpath=not
             if maximum(flops) > ylim_upper
                 ylim_upper = maximum(flops) * 1.02
             end
-            plot!(plt, Ns, tmpres[info_str]; linewidth=1.5, label="$(peakf) peak: $info_str")
+            plot!(plt, Ns, tmpres[info_str]; linewidth=1.5, label="$(peakf) peak: $info_str", α=0.8)
         end
         push!(resplts, plt)
         push!(n_batches, n_batch)
@@ -185,3 +197,6 @@ end
 if testing
     runcomparison(Ns=[50, 64, 100, 128, 250, 256, 500, 512])
 end
+
+res = runcomparison()
+plot_results(res; outpath=".")

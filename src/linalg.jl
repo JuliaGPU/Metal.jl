@@ -6,19 +6,28 @@ using .MPSGraphs: MPSGRAPH_VALID_MATMUL_TYPES, MPSGRAPH_VALID_MATVECMUL_TYPES,
                   graph_matmul!, graph_matvecmul!
 
 @inline function supports_mps_matmul(A, B, C, valid_types)
-    MPS.is_supported(device(A)) &&
+    MPS.is_supported(device(C)) &&
         eltype(A) == eltype(B) &&
         (eltype(A), eltype(C)) in valid_types
 end
 
 @inline function supports_mpsgraph_matmul(A, B, C, valid_types)
-    MPS.is_supported(device(A)) &&
+    MPS.is_supported(device(C)) &&
         eltype(A) == eltype(B) &&
         (eltype(A), eltype(C)) in valid_types &&
         # TODO: remove this limitation
         A.offset == 0 &&
         B.offset == 0 &&
         C.offset == 0
+end
+
+# Assumes support for MPS matrix multiplication has been verified elsewhere
+@inline function should_use_MPS(A, _, C)
+    rows = size(C,1)
+    cols = size(C,2)
+    # TODO: matvecmul different?
+    (eltype(A) <: Integer && rows <= 2000 && cols <= 2000 ) ||
+    eltype(A) <: AbstractFloat && rows <= 6000 && cols <= 6000 && Metal.supports_family(device(C), MTL.MTLGPUFamilyApple9)
 end
 
 LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
@@ -47,7 +56,7 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     transB = tB == 'T' || tB == 'C'
 
     # If possible, dispatch to MPSGraphs, then performance shaders
-    if supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATMUL_TYPES)
+    if supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATMUL_TYPES) && !should_use_MPS(A, B, C)
         graph_matmul!(C, A, B, alpha, beta, transA, transB)
     elseif supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES) # TODO: Remove once contiguous views are working
         matmul!(C, A, B, alpha, beta, transA, transB)
