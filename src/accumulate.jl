@@ -1,3 +1,4 @@
+## COV_EXCL_START
 function partial_scan(op::Function, output::AbstractArray{T}, input::AbstractArray,
                       Rdim, Rpre, Rpost, Rother, neutral, init,
                       ::Val{maxthreads}, ::Val{inclusive}=Val(true)) where {T, maxthreads, inclusive}
@@ -100,6 +101,7 @@ function aggregate_partial_scan(op::Function, output::AbstractArray, aggregates:
 
     return
 end
+## COV_EXCL_STOP
 
 function scan!(f::Function, output::WrappedMtlArray{T}, input::WrappedMtlArray;
                dims::Integer, init=nothing, neutral=GPUArrays.neutral_element(f, T)) where {T}
