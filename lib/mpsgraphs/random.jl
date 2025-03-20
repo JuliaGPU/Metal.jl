@@ -1,7 +1,7 @@
 # @objcwrapper immutable=false MPSGraphRandomOpDescriptor <: MPSGraphObject
 
-function MPSMatrixRandomOpDescriptor(distribution::MPSGraphRandomDistribution, dataType::MPSDataType)
-    desc = @objc [MPSMatrixRandomOpDescriptor descriptorWithDistribution:distribution::MPSGraphRandomDistribution
+function MPSGraphRandomOpDescriptor(distribution::MPSGraphRandomDistribution, dataType)
+    desc = @objc [MPSGraphRandomOpDescriptor descriptorWithDistribution:distribution::MPSGraphRandomDistribution
                     dataType:dataType::MPSDataType]::id{MPSGraphRandomOpDescriptor}
     obj = MPSGraphRandomOpDescriptor(desc)
     return obj
