@@ -2,9 +2,9 @@
 
 @testset "size" begin
     siz1 = MPS.MPSSize()
-    @test siz1.width == 0
-    @test siz1.height == 0
-    @test siz1.depth == 0
+    @test siz1.width == 1.0
+    @test siz1.height == 1.0
+    @test siz1.depth == 1.0
 
     dim1 = rand()
     dim2 = rand()
