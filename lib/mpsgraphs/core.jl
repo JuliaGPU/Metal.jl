@@ -9,15 +9,17 @@ function MPSGraph()
     MPSGraph(@objc [MPSGraph new]::id{MPSGraph})
 end
 
-# @objcwrapper MPSGraphShapedType <: MPSGraphType
-function MPSGraphShapedType(shape::MPSShape, dataType)
-    tmp = @objc [MPSGraphShapedType alloc]::id{MPSGraphShapedType}
-    obj = MPSGraphShapedType(tmp)
-    finalizer(release, obj)
-    @objc [obj::id{MPSGraphShapedType} initWithShape:shape::id{MPSShape}
-                                       dataType:dataType::MPSDataType]::id{MPSGraphShapedType}
-    return obj
-end
+# @objcwrapper immutable=true MPSGraphShapedType <: MPSGraphType
+
+# XXX: Not used yet and needs fixing
+# function MPSGraphShapedType(shape::MPSShape, dataType)
+#     tmp = @objc [MPSGraphShapedType alloc]::id{MPSGraphShapedType}
+#     obj = MPSGraphShapedType(tmp)
+#     finalizer(release, obj)
+#     @objc [obj::id{MPSGraphShapedType} initWithShape:shape::id{MPSShape}
+#                                        dataType:dataType::MPSDataType]::id{MPSGraphShapedType}
+#     return obj
+# end
 
 ## MPSGraphDevice.h
 # @objcwrapper MPSGraphDevice <: MPSGraphType
