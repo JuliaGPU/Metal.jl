@@ -45,77 +45,83 @@ using .MPS: MPSMatrix
     rowBytes = sizeof(T) * cols
     mats = 4
 
-    desc = MPSMatrixDescriptor(rows, cols, rowBytes, T)
-    devmat = MPSMatrix(dev, desc)
-    @test devmat isa MPSMatrix
-    @test devmat.device == dev
-    @test devmat.rows == rows
-    @test devmat.columns == cols
-    @test devmat.rowBytes == rowBytes
-    @test devmat.matrices == 1
-    @test devmat.dataType == DT
-    @test devmat.matrixBytes == rowBytes * rows
-    @test devmat.offset == 0
+    let desc = MPSMatrixDescriptor(rows, cols, rowBytes, T)
+        devmat = MPSMatrix(dev, desc)
+        @test devmat isa MPSMatrix
+        @test devmat.device == dev
+        @test devmat.rows == rows
+        @test devmat.columns == cols
+        @test devmat.rowBytes == rowBytes
+        @test devmat.matrices == 1
+        @test devmat.dataType == DT
+        @test devmat.matrixBytes == rowBytes * rows
+        @test devmat.offset == 0
+        @test size(devmat) == (rows, cols)
+    end
 
-    mat = MtlMatrix{T}(undef, rows, cols)
-    acols, arows = size(mat)
-    arowBytes = sizeof(T) * acols
-    abufmat = MPSMatrix(mat)
-    @test abufmat isa MPSMatrix
-    @test abufmat.device == dev
-    @test abufmat.rows == arows
-    @test abufmat.columns == acols
-    @test abufmat.rowBytes == arowBytes
-    @test abufmat.matrices == 1
-    @test abufmat.dataType == DT
-    @test abufmat.matrixBytes == arowBytes * arows
-    @test abufmat.offset == 0
-    @test abufmat.data == mat.data[]
+    let mat = MtlMatrix{T}(undef, rows, cols)
+        acols, arows = size(mat)
+        arowBytes = sizeof(T) * acols
+        abufmat = MPSMatrix(mat)
+        @test abufmat isa MPSMatrix
+        @test abufmat.device == dev
+        @test abufmat.rows == arows
+        @test abufmat.columns == acols
+        @test abufmat.rowBytes == arowBytes
+        @test abufmat.matrices == 1
+        @test abufmat.dataType == DT
+        @test abufmat.matrixBytes == arowBytes * arows
+        @test abufmat.offset == 0
+        @test abufmat.data == mat.data[]
 
-    vmat = @view mat[:, 2:3]
-    vcols, vrows = size(vmat)
-    vrowBytes = sizeof(T) * vcols
-    vbufmat = MPSMatrix(vmat)
-    @test vbufmat isa MPSMatrix
-    @test vbufmat.device == dev
-    @test vbufmat.rows == vrows
-    @test vbufmat.columns == vcols
-    @test vbufmat.rowBytes == vrowBytes
-    @test vbufmat.matrices == 1
-    @test vbufmat.dataType == DT
-    @test vbufmat.matrixBytes == vrowBytes * vrows
-    @test vbufmat.offset == vmat.offset * sizeof(T)
-    @test vbufmat.data == vmat.data[]
+        vmat = @view mat[:, 2:3]
+        vcols, vrows = size(vmat)
+        vrowBytes = sizeof(T) * vcols
+        vbufmat = MPSMatrix(vmat)
+        @test vbufmat isa MPSMatrix
+        @test vbufmat.device == dev
+        @test vbufmat.rows == vrows
+        @test vbufmat.columns == vcols
+        @test vbufmat.rowBytes == vrowBytes
+        @test vbufmat.matrices == 1
+        @test vbufmat.dataType == DT
+        @test vbufmat.matrixBytes == vrowBytes * vrows
+        @test vbufmat.offset == vmat.offset * sizeof(T)
+        @test vbufmat.data == vmat.data[]
+    end
 
-    arr = MtlArray{T,3}(undef, rows, cols, mats)
-    mcols, mrows, mmats = size(arr)
-    mrowBytes = sizeof(T) * mcols
-    mpsmat = MPSMatrix(mat)
-    @test mpsmat isa MPSMatrix
-    @test mpsmat.device == dev
-    @test mpsmat.rows == mrows
-    @test mpsmat.columns == mcols
-    @test mpsmat.rowBytes == mrowBytes
-    @test mpsmat.matrices == 1
-    @test mpsmat.dataType == DT
-    @test mpsmat.matrixBytes == mrowBytes * mrows
-    @test mpsmat.offset == 0
-    @test mpsmat.data == mat.data[]
+    let arr = MtlArray{T,3}(undef, rows, cols, mats)
+        mcols, mrows, mmats = size(arr)
+        mrowBytes = sizeof(T) * mcols
+        mpsmat = MPSMatrix(arr)
+        @test mpsmat isa MPSMatrix
+        @test mpsmat.device == dev
+        @test mpsmat.rows == mrows
+        @test mpsmat.columns == mcols
+        @test mpsmat.rowBytes == mrowBytes
+        @test mpsmat.matrices == mmats
+        @test mpsmat.dataType == DT
+        @test mpsmat.matrixBytes == mrowBytes * mrows
+        @test mpsmat.offset == 0
+        @test mpsmat.data == arr.data[]
+        @test size(mpsmat) == (mmats, mrows, mcols)
+    end
 
-    vec = MtlVector{T}(undef, rows)
-    veccols, vecrows = length(vec), 1
-    vecrowBytes = sizeof(T)*veccols
-    vmpsmat = MPSMatrix(vec)
-    @test vmpsmat isa MPSMatrix
-    @test vmpsmat.device == dev
-    @test vmpsmat.rows == vecrows
-    @test vmpsmat.columns == veccols
-    @test vmpsmat.rowBytes == vecrowBytes
-    @test vmpsmat.matrices == 1
-    @test vmpsmat.dataType == DT
-    @test vmpsmat.matrixBytes == vecrowBytes*vecrows
-    @test vmpsmat.offset == 0
-    @test vmpsmat.data == vec.data[]
+    let vec = MtlVector{T}(undef, rows)
+        veccols, vecrows = length(vec), 1
+        vecrowBytes = sizeof(T)*veccols
+        vmpsmat = MPSMatrix(vec)
+        @test vmpsmat isa MPSMatrix
+        @test vmpsmat.device == dev
+        @test vmpsmat.rows == vecrows
+        @test vmpsmat.columns == veccols
+        @test vmpsmat.rowBytes == vecrowBytes
+        @test vmpsmat.matrices == 1
+        @test vmpsmat.dataType == DT
+        @test vmpsmat.matrixBytes == vecrowBytes*vecrows
+        @test vmpsmat.offset == 0
+        @test vmpsmat.data == vec.data[]
+    end
 end
 
 
