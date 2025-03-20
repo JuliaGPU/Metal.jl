@@ -1,4 +1,9 @@
-
+#=
+Creates a default MPSGraphExecutionDescriptor with a MPSGraphCompilationDescriptor
+ set to use optimization level 0 instead of 1. This is because level 1 causes operations
+ on eltypes <= 16 bytes to be executed on the ANE instead of the GPU, leading to worse
+ performance and hangs when the matrices are too big
+=#
 @static if isdefined(Base, :OncePerProcess) # VERSION >= v"1.12.0-DEV.1421"
     const default_exec_desc = OncePerProcess{MPSGraphExecutionDescriptor}() do
         compDesc = MPSGraphCompilationDescriptor()
