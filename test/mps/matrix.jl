@@ -90,7 +90,7 @@ using .MPS: MPSMatrix
         @test vbufmat.data == vmat.data[]
     end
 
-    let arr = MtlArray{T,3}(undef, rows, cols, mats)
+    let arr = MtlArray{T, 3}(undef, rows, cols, mats)
         mcols, mrows, mmats = size(arr)
         mrowBytes = sizeof(T) * mcols
         mpsmat = MPSMatrix(arr)
@@ -109,7 +109,7 @@ using .MPS: MPSMatrix
 
     let vec = MtlVector{T}(undef, rows)
         veccols, vecrows = length(vec), 1
-        vecrowBytes = sizeof(T)*veccols
+        vecrowBytes = sizeof(T) * veccols
         vmpsmat = MPSMatrix(vec)
         @test vmpsmat isa MPSMatrix
         @test vmpsmat.device == dev
@@ -118,7 +118,7 @@ using .MPS: MPSMatrix
         @test vmpsmat.rowBytes == vecrowBytes
         @test vmpsmat.matrices == 1
         @test vmpsmat.dataType == DT
-        @test vmpsmat.matrixBytes == vecrowBytes*vecrows
+        @test vmpsmat.matrixBytes == vecrowBytes * vecrows
         @test vmpsmat.offset == 0
         @test vmpsmat.data == vec.data[]
     end
