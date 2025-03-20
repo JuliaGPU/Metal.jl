@@ -142,7 +142,7 @@ with any `MtlArray` and it should be accelerated using Metal Performance Shaders
 """
 function matmul!(c::MtlArray{T1,N}, a::MtlArray{T2,N}, b::MtlArray{T3,N},
                  alpha::Number=true, beta::Number=true,
-    transpose_a=false, transpose_b=false) where {T1, T2, T3, N}
+                 transpose_a=false, transpose_b=false) where {T1, T2, T3, N}
     # NOTE: MPS uses row major, while Julia is col-major. Instead of transposing
     #       the inputs (by passing !transpose_[ab]) and afterwards transposing
     #       the output, we use the property that (AB)ᵀ = BᵀAᵀ
