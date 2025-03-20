@@ -114,7 +114,7 @@ Return an MPSNDArray object.
 
 Will copy contents if the contents are not stored in an MPS ndarray.
 """
-function MPS.MPSNDArray(tens::MPSGraphTensorData)
-    arr = @objc [tens::id{MPSNDArray} mpsndarray]::id{MPSNDArray}
+function MPS.MPSNDArray(tensor::MPSGraphTensorData)
+    arr = @objc [tensor::id{MPSNDArray} mpsndarray]::id{MPSNDArray}
     MPSNDArray(arr)
 end
