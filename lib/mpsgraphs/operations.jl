@@ -73,4 +73,4 @@ Dumps the `graph`.
 !!! warning
     This function is undocumented from Apple so it may stop working at any time.
 """
-dump_graph(graph::MPSGraph) = @objc [graph::id{MPSGraph} dump]::Nothing
+dump_graph(graph::MPSGraph) = @objc [graph::id{MPSGraph} dump]::Nothing ## COV_EXCL_LINE

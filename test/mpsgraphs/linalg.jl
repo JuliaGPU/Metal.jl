@@ -34,7 +34,6 @@ if MPS.is_supported(device())
     end
 end
 
-# XXX: Batched matlmul not yet working
 @testset "batched matrix matrix multiplication" begin
     M = 8
     N = 7
@@ -95,8 +94,7 @@ end
         MPSGraphs.graph_matvecmul!(buf_c, buf_a, buf_b, alpha, beta)
 
         @test all(Array(buf_c) .≈ truth_c)
-        # @test Array(buf_c) ≈ truth_c
     end
 end
 
-end
+end # MPS.is_supported(device())

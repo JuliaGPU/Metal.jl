@@ -62,13 +62,11 @@ end
 
     matmul = matrixMultiplicationWithPrimaryTensor(graph, broadcastB, broadcastA)
 
-    afteralpha = let
-        alphatensor = constantWithScalar(graph, alpha, castT)
+    afteralpha = let alphatensor = constantWithScalar(graph, alpha, castT)
         multiplicationWithPrimaryTensor(graph, alphatensor, matmul)
     end
 
-    afterbeta = let
-        betatensor = constantWithScalar(graph, beta, castT)
+    afterbeta = let betatensor = constantWithScalar(graph, beta, castT)
         castplaceC = castTensor(graph, placeC, castT, "castplaceC")
         betaC = multiplicationWithPrimaryTensor(graph, betatensor, castplaceC)
         afterbeta = additionWithPrimaryTensor(graph, afteralpha, betaC)
