@@ -9,7 +9,7 @@ using .MTL
 devs = devices()
 @test length(devs) > 0
 
-dev = first(devs)
+dev = MTLDevice(1)
 @test dev == devs[1]
 
 if length(devs) > 1
@@ -33,6 +33,13 @@ full_str = sprint(io->show(io, MIME"text/plain"(), dev))
 @test dev.maxBufferLength isa Integer
 
 @test dev.currentAllocatedSize isa Integer
+
+@test is_m1(dev) isa Bool
+@test is_m2(dev) isa Bool
+@test is_m3(dev) isa Bool
+@test is_m4(dev) isa Bool
+
+@test MTL.MTLCreateSystemDefaultDevice() isa MTLDevice
 
 end
 
