@@ -7,6 +7,8 @@ export MPSNDArrayDescriptor
 # @objcwrapper immutable=false MPSNDArrayDescriptor <: NSObject
 
 function MPSNDArrayDescriptor(dataType::DataType, dimensionCount, dimensionSizes::Ptr)
+    1 <= dimensionCount <= 16 || throw(ArgumentError("`dimensionCount` must be between 1 and 16 inclusive"))
+
     desc = @objc [MPSNDArrayDescriptor descriptorWithDataType:dataType::MPSDataType
                                       dimensionCount:dimensionCount::NSUInteger
                                       dimensionSizes:dimensionSizes::Ptr{NSUInteger}]::id{MPSNDArrayDescriptor}
