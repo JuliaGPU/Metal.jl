@@ -1,7 +1,9 @@
 
 using Metal, GPUArrays, LinearAlgebra, Printf, AppleAccelerate
 
-@static if !haskey(ENV, "CI")
+testing = (@isdefined TESTING) && TESTING
+
+@static if !testing
     using Plots
     using Plots.Measures
 end
@@ -180,6 +182,6 @@ function plot_results(res, Fs=["MPS", "MPSGraph", "MPSGraph (ANE)"]; outpath=not
     return finalplot
 end
 
-if haskey(ENV, "CI")
+if testing
     runcomparison(Ns=[50, 64, 100, 128, 250, 256, 500, 512])
 end

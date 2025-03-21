@@ -19,6 +19,7 @@ cd(examples_dir) do
     @testset for example in examples
         mod = @eval module $(gensym()) end
         @eval mod begin
+            const TESTING=true
             redirect_stdout(devnull) do
                 include($example)
             end
