@@ -1,8 +1,5 @@
 ## Some extra definitions for MPSDataType defined in libmps.jl
 
-## bitwise operations lose type information, so allow conversions
-Base.convert(::Type{MPSDataType}, x::Integer) = MPSDataType(x)
-
 # Conversions for MPSDataTypes with Julia equivalents
 const jl_mps_to_typ = Dict{MPSDataType, DataType}()
 for type in [
@@ -18,6 +15,3 @@ for type in [
     @eval Base.convert(::Type{MPSDataType}, ::Type{$jltype}) = $(mpstype)
     @eval jl_mps_to_typ[$(mpstype)] = $jltype
 end
-Base.sizeof(t::MPSDataType) = sizeof(jl_mps_to_typ[t])
-
-Base.convert(::Type{DataType}, mpstyp::MPSDataType) = jl_mps_to_typ[mpstyp]
