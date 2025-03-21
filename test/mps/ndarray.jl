@@ -29,6 +29,8 @@ end
     desc2.numberOfDimensions = 6
     @test desc2.numberOfDimensions == 6
 
+    @test_throws ArgumentError MPSNDArrayDescriptor(Float32, ones(Int, 17))
+
     @static if Metal.macos_version() >= v"15"
         @test desc1.preferPackedRows == false
 

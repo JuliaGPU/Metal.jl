@@ -63,8 +63,9 @@ function MPSGraphTensorData(matrix::MPSMatrix)
     return tensor
 end
 
-# rank must be between 1 and 16 inclusive
 function MPSGraphTensorData(matrix::MPSMatrix, rank)
+    1 <= rank <= 16 || throw(ArgumentError("`rank` must be between 1 and 16 inclusive"))
+
     obj = @objc [MPSGraphTensorData alloc]::id{MPSGraphTensorData}
     tensor = MPSGraphTensorData(obj)
     finalizer(release, tensor)
@@ -81,8 +82,9 @@ function MPSGraphTensorData(vector::MPSVector)
     return tensor
 end
 
-# rank must be between 1 and 16 inclusive
 function MPSGraphTensorData(vector::MPSVector, rank)
+    1 <= rank <= 16 || throw(ArgumentError("`rank` must be between 1 and 16 inclusive"))
+
     obj = @objc [MPSGraphTensorData alloc]::id{MPSGraphTensorData}
     tensor = MPSGraphTensorData(obj)
     finalizer(release, tensor)
