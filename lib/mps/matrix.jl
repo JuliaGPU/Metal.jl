@@ -96,9 +96,9 @@ end
 
 function Base.size(mat::MPS.MPSMatrix)
     if mat.matrices > 1
-        return Int64.((mat.matrices, mat.rows, mat.columns))
+        return Int.((mat.matrices, mat.rows, mat.columns))
     else
-        return Int64.((mat.rows, mat.columns))
+        return Int.((mat.rows, mat.columns))
     end
 end
 
