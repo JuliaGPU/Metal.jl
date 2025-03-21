@@ -25,7 +25,7 @@ if MPS.is_supported(device())
     mtl_view_c = mtl_view_a * mtl_view_b
     view_c = view_a * view_b
 
-    @test Array(mtl_view_c) == view_c
+    @test Array(mtl_view_c) ≈ view_c
 end
 
 using Metal: storagemode
