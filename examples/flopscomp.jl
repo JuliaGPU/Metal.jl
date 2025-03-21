@@ -1,16 +1,19 @@
-# using Pkg
-# Pkg.activate(temp=true)
-# Pkg.add(url="https://github.com/christiangnrd/Metal.jl/", rev="MPSGraph")
-# Pkg.add(["GPUArrays", "Plots"])
 
-# Uncomment if you want to compare with CPU
-# Pkg.add(["AppleAccelerate"])
-# using AppleAccelerate
+using Metal, GPUArrays, LinearAlgebra, Printf, AppleAccelerate
 
-using Metal, GPUArrays, LinearAlgebra, Printf
+@static if !haskey(ENV, "CI")
+    using Plots
+    using Plots.Measures
+end
 
-using Plots
-using Plots.Measures
+const Ts=[
+        (Int8, Float16),
+        (Int8, Float32),
+        (Int16, Float32),
+        (Float16, Float16),
+        (Float16, Float32),
+        (Float32, Float32),
+    ]
 
 n_gpu_cores = "??"
 # Comment this out if scary. Please mention number of cores in your comment when uploading the figure
@@ -123,7 +126,7 @@ function compare(Ns, Fs, inT, outT=inT; n_batch=1, ntrials)
     return results
 end
 
-function main(; Ns=[50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024, 2000, 2048, 4000, 4096, 6000, 6144, 8000, 8192],#, 10000],
+function runcomparison(; Ns=[50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024, 2000, 2048, 4000, 4096, 6000, 6144, 8000, 8192],#, 10000],
                 Fs=[
                     (mpspeakflops, "MPS"),
                     (graphpeakflops, "MPSGraph"),
@@ -132,28 +135,28 @@ function main(; Ns=[50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024, 2000, 2048
                     # (cpupeakflops, "CPU (AppleAccelerate)"), # Uncomment to test CPU performance
                    ],
                 n_batch=1,
-                ntrials=5,
-                outpath="",
-                outtype="svg",
-                plt_title=PLOT_TITLE)
-    Ts=[
-        (Int8, Float16),
-        (Int8, Float32),
-        (Int16, Float32),
-        (Float16, Float16),
-        (Float16, Float32),
-        (Float32, Float32),
-        ]
-
+                ntrials=5)
     res = Dict()
 
+    for (inT, outT) in Ts
+        res[(inT,outT)] = (n_batch, Ns, compare(Ns, Fs, inT, outT; n_batch, ntrials))
+    end
+    return res
+end
+
+function plot_results(res, Fs=["MPS", "MPSGraph", "MPSGraph (ANE)"]; outpath=nothing, outtype="svg", plt_title=PLOT_TITLE)
     ylim_upper = 9e12
+    resplts = []
+
+    n_batches = []
 
     for (inT, outT) in Ts
-        tmpres = compare(Ns, Fs, inT, outT; n_batch, ntrials)
+        n_batch, Ns, tmpres = res[(inT,outT)]
 
         plt = plot(xlabel="N, n_batch=$(n_batch)", legendtitle="($inT, $outT)")
-        for (res, (_, info_str)) in zip(tmpres,Fs)
+        for info_str in Fs
+            haskey(tmpres, info_str) || continue
+
             flops = tmpres[info_str]
             peakf = @sprintf("%.3e", maximum(flops))
             if maximum(flops) > ylim_upper
@@ -161,17 +164,22 @@ function main(; Ns=[50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024, 2000, 2048
             end
             plot!(plt, Ns, tmpres[info_str]; linewidth=1.5, label="$(peakf) peak: $info_str")
         end
-        res[(inT,outT)] = (plt=plt, results=tmpres)
+        push!(resplts, plt)
+        push!(n_batches, n_batch)
     end
 
-    finalplot = plot(res[Ts[1]].plt, res[Ts[2]].plt, res[Ts[3]].plt, res[Ts[4]].plt, res[Ts[5]].plt, res[Ts[6]].plt; layout=(2,3),
+    finalplot = plot(resplts...; layout=(2,3),
                      ylim=(0,ylim_upper),
                      plot_title=plt_title,
                      tickfonthalign=:left,
                      bottommargin=15pt,
                      size=(2000,1200))
     if !isnothing(outpath)
-        savefig(plot(finalplot, dpi=500), joinpath(outpath, "bench_all_$(n_batch).$outtype"))
+        savefig(plot(finalplot, dpi=500), joinpath(outpath, "bench_all_$(first(n_batches)).$outtype"))
     end
-    return res, finalplot
+    return finalplot
+end
+
+if haskey(ENV, "CI")
+    runcomparison(Ns=[50, 64, 100, 128, 250, 256, 500, 512])
 end
