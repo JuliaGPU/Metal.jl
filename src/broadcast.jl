@@ -59,6 +59,7 @@ end
         _broadcast_shapes[Is] += 1
     end
     if _broadcast_shapes[Is] > BROADCAST_SPECIALIZATION_THRESHOLD
+        ## COV_EXCL_START
         function broadcast_cartesian_static(dest, bc, Is)
              i = thread_position_in_grid_1d()
              stride = threads_per_grid_1d()
@@ -69,6 +70,7 @@ end
              end
              return
         end
+        ## COV_EXCL_STOP
 
         Is = StaticCartesianIndices(Is)
         kernel = @metal launch=false broadcast_cartesian_static(dest, bc, Is)
@@ -82,6 +84,7 @@ end
     # try to use the most appropriate hardware index to avoid integer division
     if ndims(dest) == 1 ||
        (isa(IndexStyle(dest), IndexLinear) && isa(IndexStyle(bc), IndexLinear))
+        ## COV_EXCL_START
         function broadcast_linear(dest, bc)
              i = thread_position_in_grid_1d()
              stride = threads_per_grid_1d()
@@ -91,12 +94,14 @@ end
              end
              return
         end
+        ## COV_EXCL_STOP
 
         kernel = @metal launch=false broadcast_linear(dest, bc)
         elements = cld(length(dest), 4)
         threads = min(elements, kernel.pipeline.maxTotalThreadsPerThreadgroup)
         groups = cld(elements, threads)
     elseif ndims(dest) == 2
+        ## COV_EXCL_START
         function broadcast_2d(dest, bc)
              is = Tuple(thread_position_in_grid_2d())
              stride = threads_per_grid_2d()
@@ -107,6 +112,7 @@ end
              end
              return
         end
+        ## COV_EXCL_STOP
 
         kernel = @metal launch=false broadcast_2d(dest, bc)
         w = min(size(dest, 1), kernel.pipeline.threadExecutionWidth)
@@ -114,6 +120,7 @@ end
         threads = (w, h)
         groups = cld.(size(dest), threads)
     elseif ndims(dest) == 3
+        ## COV_EXCL_START
         function broadcast_3d(dest, bc)
              is = Tuple(thread_position_in_grid_3d())
              stride = threads_per_grid_3d()
@@ -126,6 +133,7 @@ end
              end
              return
         end
+        ## COV_EXCL_STOP
 
         kernel = @metal launch=false broadcast_3d(dest, bc)
         w = min(size(dest, 1), kernel.pipeline.threadExecutionWidth)
@@ -135,6 +143,7 @@ end
         threads = (w, h, d)
         groups = cld.(size(dest), threads)
     else
+        ## COV_EXCL_START
         function broadcast_cartesian(dest, bc)
              i = thread_position_in_grid_1d()
              stride = threads_per_grid_1d()
@@ -145,6 +154,7 @@ end
              end
              return
         end
+        ## COV_EXCL_STOP
 
         kernel = @metal launch=false broadcast_cartesian(dest, bc)
         elements = cld(length(dest), 4)

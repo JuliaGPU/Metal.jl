@@ -146,7 +146,7 @@ end
 
 
 ## profile macro
-
+## COV_EXCL_START
 function profile_dir()
     root = pwd()
     i = 1
@@ -239,3 +239,5 @@ macro profile(ex...)
         end
     end
 end
+## COV_EXCL_START
+

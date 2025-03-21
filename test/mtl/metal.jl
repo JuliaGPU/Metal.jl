@@ -9,7 +9,7 @@ using .MTL
 devs = devices()
 @test length(devs) > 0
 
-dev = first(devs)
+dev = MTLDevice(1)
 @test dev == devs[1]
 
 if length(devs) > 1
@@ -34,6 +34,35 @@ full_str = sprint(io->show(io, MIME"text/plain"(), dev))
 
 @test dev.currentAllocatedSize isa Integer
 
+@test is_m1(dev) isa Bool
+@test is_m2(dev) isa Bool
+@test is_m3(dev) isa Bool
+@test is_m4(dev) isa Bool
+
+@test MTL.MTLCreateSystemDefaultDevice() isa MTLDevice
+
+end
+
+@testset "storage_type" begin
+    @test convert(MTL.MTLStorageMode, MTL.SharedStorage) == MTL.MTLStorageModeShared
+    @test convert(MTL.MTLStorageMode, MTL.ManagedStorage) == MTL.MTLStorageModeManaged
+    @test convert(MTL.MTLStorageMode, MTL.PrivateStorage) == MTL.MTLStorageModePrivate
+    @test convert(MTL.MTLStorageMode, MTL.Memoryless) == MTL.MTLStorageModeMemoryless
+
+    @test convert(MTL.MTLResourceOptions, MTL.SharedStorage) == MTL.MTLResourceStorageModeShared
+    @test convert(MTL.MTLResourceOptions, MTL.ManagedStorage) == MTL.MTLResourceStorageModeManaged
+    @test convert(MTL.MTLResourceOptions, MTL.PrivateStorage) == MTL.MTLResourceStorageModePrivate
+    @test convert(MTL.MTLResourceOptions, MTL.Memoryless) == MTL.MTLResourceStorageModeMemoryless
+
+    @test convert(MTL.MTLResourceOptions, MTL.MTLStorageModeShared) == MTL.MTLResourceStorageModeShared
+    @test convert(MTL.MTLResourceOptions, MTL.MTLStorageModeManaged) == MTL.MTLResourceStorageModeManaged
+    @test convert(MTL.MTLResourceOptions, MTL.MTLStorageModePrivate) == MTL.MTLResourceStorageModePrivate
+    @test convert(MTL.MTLResourceOptions, MTL.MTLStorageModeMemoryless) == MTL.MTLResourceStorageModeMemoryless
+
+    @test MTL.MTLResourceStorageModeShared == MTL.MTLStorageModeShared
+    @test MTL.MTLStorageModeManaged == MTL.MTLResourceStorageModeManaged
+    @test MTL.MTLResourceStorageModePrivate == MTL.MTLStorageModePrivate
+    @test MTL.MTLStorageModeMemoryless == MTL.MTLResourceStorageModeMemoryless
 end
 
 @testset "compile options" begin

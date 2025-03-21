@@ -1,28 +1,3 @@
-## Some extra definitions for MPSDataType defined in libmps.jl
-
-## bitwise operations lose type information, so allow conversions
-Base.convert(::Type{MPSDataType}, x::Integer) = MPSDataType(x)
-
-# Conversions for MPSDataTypes with Julia equivalents
-const jl_mps_to_typ = Dict{MPSDataType, DataType}()
-for type in [
-        :Bool, :UInt8, :UInt16, :UInt32, :UInt64, :Int8, :Int16, :Int32, :Int64,
-        :Float16, :BFloat16, :Float32, (:ComplexF16, :MPSDataTypeComplexFloat16),
-        (:ComplexF32, :MPSDataTypeComplexFloat32),
-    ]
-    jltype, mpstype = if type isa Symbol
-        type, Symbol(:MPSDataType, type)
-    else
-        type
-    end
-    @eval Base.convert(::Type{MPSDataType}, ::Type{$jltype}) = $(mpstype)
-    @eval jl_mps_to_typ[$(mpstype)] = $jltype
-end
-Base.sizeof(t::MPSDataType) = sizeof(jl_mps_to_typ[t])
-
-Base.convert(::Type{DataType}, mpstyp::MPSDataType) = jl_mps_to_typ[mpstyp]
-
-
 ## descriptor
 
 export MPSMatrixDescriptor
@@ -119,6 +94,13 @@ function MPSMatrix(arr::MtlArray{T,3}) where T
     return MPSMatrix(arr, desc, offset)
 end
 
+function Base.size(mat::MPS.MPSMatrix)
+    if mat.matrices > 1
+        return Int.((mat.matrices, mat.rows, mat.columns))
+    else
+        return Int.((mat.rows, mat.columns))
+    end
+end
 
 ## matrix multiplication
 
@@ -160,7 +142,7 @@ with any `MtlArray` and it should be accelerated using Metal Performance Shaders
 """
 function matmul!(c::MtlArray{T1,N}, a::MtlArray{T2,N}, b::MtlArray{T3,N},
                  alpha::Number=true, beta::Number=true,
-    transpose_a=false, transpose_b=false) where {T1, T2, T3, N}
+                 transpose_a=false, transpose_b=false) where {T1, T2, T3, N}
     # NOTE: MPS uses row major, while Julia is col-major. Instead of transposing
     #       the inputs (by passing !transpose_[ab]) and afterwards transposing
     #       the output, we use the property that (AB)ᵀ = BᵀAᵀ

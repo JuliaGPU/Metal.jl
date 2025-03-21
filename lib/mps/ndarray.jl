@@ -114,7 +114,7 @@ function MPSNDArray(arr::MtlArray{T,N}) where {T,N}
     arrsize = size(arr)
     @assert arrsize[1] * sizeof(T) % 16 == 0 "First dimension of input MtlArray must have a byte size divisible by 16"
     desc = MPSNDArrayDescriptor(T, arrsize)
-    return MPSNDArray(arr.data[], UInt(arr.offset), desc)
+    return MPSNDArray(arr.data[], UInt(arr.offset) * sizeof(T), desc)
 end
 
 function Metal.MtlArray(ndarr::MPSNDArray; storage = Metal.DefaultStorageMode, async = false)

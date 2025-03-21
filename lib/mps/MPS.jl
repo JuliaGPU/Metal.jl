@@ -43,6 +43,7 @@ is_supported(dev::MTLDevice) = ccall(:MPSSupportsMTLDevice, Bool, (id{MTLDevice}
 include("libmps.jl")
 
 include("size.jl")
+include("datatype.jl")
 
 # high-level wrappers
 include("command_buf.jl")
