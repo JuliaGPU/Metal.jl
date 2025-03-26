@@ -11,7 +11,7 @@ for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"))
     for as in (AS.Device, AS.ThreadGroup)
         @eval begin
             @device_function simdgroup_load(
-                data::Union{MtlDeviceArray{$jltype, <:Any, $as}, MtlLargerDeviceArray{$jltype, <:Any, $as}},
+                data::MtlDeviceArray{$jltype, <:Any, $as},
                 matrix_origin::NTuple{2, Int64} = (1, 1),
             ) = @typed_ccall($"air.simdgroup_matrix_8x8_load.v64$suffix.p$as$suffix",
                 llvmcall, NTuple{64, VecElement{$jltype}},
@@ -20,7 +20,7 @@ for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"))
 
             @device_function simdgroup_store(
                 src::NTuple{64, VecElement{$jltype}},
-                dest::Union{MtlDeviceArray{$jltype, <:Any, $as}, MtlLargerDeviceArray{$jltype, <:Any, $as}},
+                dest::MtlDeviceArray{$jltype, <:Any, $as},
                 matrix_origin::NTuple{2, Int64} = (1, 1),
             ) = @typed_ccall($"air.simdgroup_matrix_8x8_store.v64$suffix.p$as$suffix",
                 llvmcall, Cvoid,
