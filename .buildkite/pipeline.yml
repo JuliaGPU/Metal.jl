@@ -30,6 +30,7 @@ steps:
             julia:
               - "1.10"
               - "1.11"
+              - "1.12"
               - "nightly"
           adjustments:
             - with:
