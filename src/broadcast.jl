@@ -1,6 +1,6 @@
 # broadcasting
 
-using Base.Broadcast: BroadcastStyle, Broadcasted
+import Base.Broadcast: BroadcastStyle, Broadcasted
 
 struct MtlArrayStyle{N,S} <: AbstractGPUArrayStyle{N} end
 MtlArrayStyle{M,S}(::Val{N}) where {N,M,S} = MtlArrayStyle{N,S}()
