@@ -39,6 +39,12 @@ function main(names::AbstractVector=["all"]; sdk_path=SDK_PATH)
         push!(ctxs, tctx)
     end
 
+    if "all" in names || "libmpsgraph" in names || "mpsgraph" in names
+        fwpath = path_to_framework("MetalPerformanceShadersGraph")
+        tctx = wrap("libmpsgraph", joinpath(fwpath, "MetalPerformanceShadersGraph.h"); defines)
+        push!(ctxs, tctx)
+    end
+
     return ctxs
 end
 

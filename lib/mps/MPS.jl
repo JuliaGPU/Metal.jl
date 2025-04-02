@@ -21,7 +21,7 @@ using BFloat16s
 const MtlFloat = Union{Float32, Float16}
 
 const MPSShape = NSArray#{NSNumber}
-Base.convert(::Type{MPSShape}, tuple::Union{Vector{N},NTuple{N, <:Integer}}) where N = NSArray(NSNumber.(collect(tuple)))
+Base.convert(::Type{MPSShape}, tuple::Union{Vector{T},NTuple{T, <:Integer}}) where T = NSArray(NSNumber.(collect(tuple)))
 
 # Valid combination of input (A and B matrices) and output (C) types
 const MPS_VALID_MATMUL_TYPES =
