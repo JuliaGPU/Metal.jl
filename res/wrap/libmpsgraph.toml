@@ -1,0 +1,29 @@
+[general]
+library_name = "libmpsgraph"
+output_file_path = "../../lib/mpsgraphs/libmpsgraph.jl"
+prologue_file_path = "libmpsgraph_prologue.jl"
+
+minimum_macos_supported = "13"
+
+printer_blacklist = [
+    "mt_macCatalyst",
+    "mt_ios",
+    "mt_macos",
+    "CF.*",
+    "MTL.*",
+    "NS.*",
+    "BOOL"
+]
+
+[codegen]
+use_ccall_macro = true
+always_NUL_terminated_string = true
+
+[codegen.macro]
+# it's highly recommended to set this entry to "basic".
+# if you'd like to skip all of the macros, please set this entry to "disable".
+# if you'd like to translate function-like macros to Julia, please set this entry to "aggressive".
+macro_mode = "disable"
+
+[api.MPSGraphTensorData]
+immutable=false
