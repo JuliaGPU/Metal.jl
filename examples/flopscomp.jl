@@ -196,7 +196,7 @@ end
 
 if testing
     runcomparison(Ns=[50, 64, 100, 128, 250, 256, 500, 512])
+else
+    res = runcomparison(Ns=[50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024, 1500, 2000])#, 2048, 2500, 3000, 4000, 4096, 5000, 6000, 6144, 8000, 8192])
+    plot_results(res; outpath=".")
 end
-
-res = runcomparison()
-plot_results(res; outpath=".")
