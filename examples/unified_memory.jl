@@ -37,7 +37,7 @@ arr_cpu .= pi
 Metal.@allowscalar @test arr_mtl[1] == Float32(pi)
 
 # Now launch a kernel altering the Metal array
-Metal.@sync @metal threads=1024 groups=1024 simple_kernel(arr_mtl)
+Metal.@sync @metal threads=16 groups=16 simple_kernel(arr_mtl)
 
 # These changes are reflected in the wrapped CPU array
 synchronize()
