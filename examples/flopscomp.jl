@@ -1,5 +1,4 @@
-
-using Metal, GPUArrays, LinearAlgebra, Printf, AppleAccelerate
+using Metal, GPUArrays, LinearAlgebra, Printf#, AppleAccelerate
 
 testing = (@isdefined TESTING) && TESTING
 
@@ -8,14 +7,15 @@ testing = (@isdefined TESTING) && TESTING
     using Plots.Measures
 end
 
-const Ts=[
-        (Int8, Float16),
-        (Int8, Float32),
-        (Int16, Float32),
-        (Float16, Float16),
-        (Float16, Float32),
-        (Float32, Float32),
-    ]
+Ts=[
+    (Int8, Float16),
+    (Int8, Float32),
+    (Int16, Float32),
+    (Float16, Float16),
+    (Float16, Float32),
+    (Float32, Float32),
+]
+DEFAULT_NS = [50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024, 1500, 2000, 2048, 2500, 3000, 4000, 4096, 5000, 6000, 6144, 8000, 8192]
 
 n_gpu_cores = "??"
 # Comment this out if scary. Please mention number of cores in your comment when uploading the figure
@@ -138,27 +138,25 @@ function compare(Ns, Fs, inT, outT=inT; n_batch=1, ntrials)
     return results
 end
 
-# function runcomparison(; Ns=[50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024, 2000, 2048, 4000, 4096, 6000, 6144, 8000, 8192],#, 10000],
-function runcomparison(; Ns=[50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024:100:2000..., 2000, 2048:100:3000..., 4000, 4096:100:6000..., 6000, 6144, 8000, 8192],#, 10000],
-                Fs=[
-                    (mpspeakflops, "MPS"),
-                    (graphpeakflops, "MPSGraph"),
-                    (defaultpeakflops, "Default"),
-                    # (anepeakflops, "MPSGraph (ANE)"),
-                    # (gpuarrpeakflops, "GPUArrays"),
-                    # (cpupeakflops, "CPU (AppleAccelerate)"), # Uncomment to test CPU performance
-                   ],
-                n_batch=1,
-                ntrials=5)
-    res = Dict()
+DEFAULT_FS = [
+    (mpspeakflops, "MPS"),
+    (graphpeakflops, "MPSGraph"),
+    (defaultpeakflops, "Default"),
+    # (anepeakflops, "MPSGraph (ANE)"),
+    # (gpuarrpeakflops, "GPUArrays"),
+    # (cpupeakflops, "CPU (AppleAccelerate)"), # Uncomment to test CPU performance
+]
 
+function runcomparison(; Ns=DEFAULT_NS, Fs=DEFAULT_FS, n_batch=1, ntrials=5)
+    res = Dict()
     for (inT, outT) in Ts
         res[(inT,outT)] = (n_batch, Ns, compare(Ns, Fs, inT, outT; n_batch, ntrials))
     end
     return res
 end
 
-function plot_results(res, Fs=["MPS", "MPSGraph", "Default"]; outpath=nothing, outtype="svg", plt_title=PLOT_TITLE)
+function plot_results(res, Fs=DEFAULT_FS; outpath=nothing, outtype="svg", plt_title=PLOT_TITLE)
+    Fs = get.(Fs, 2, "You shouldn't be reading this")
     ylim_upper = 9e12
     resplts = []
 
@@ -196,7 +194,7 @@ end
 
 if testing
     runcomparison(Ns=[50, 64, 100, 128, 250, 256, 500, 512])
-else
-    res = runcomparison(Ns=[50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024, 1500, 2000])#, 2048, 2500, 3000, 4000, 4096, 5000, 6000, 6144, 8000, 8192])
+elseif abspath(PROGRAM_FILE) == @__FILE__
+    res = runcomparison()
     plot_results(res; outpath=".")
 end
