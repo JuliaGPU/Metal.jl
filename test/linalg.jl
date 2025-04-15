@@ -1,7 +1,28 @@
-using LinearAlgebra
+using LinearAlgebra, ScopedValues
 
 if MPS.is_supported(device())
 
+@testset "matmul algorithm selection" begin
+    # test that unsupported configurations error properly
+    N = 20
+    function test_matmul(inT, outT; vec_b=false, alg=:auto)
+        a = MtlArray(rand(inT, N, N))
+        b = MtlArray(rand(inT, vec_b ? (N,) : (N, N)))
+        c = fill!(similar(b, outT), zero(outT))
+
+        @with (Metal.matmul_alg => alg) mul!(c,a,b)
+    end
+
+    # Unsupported for MPS and MPSGraph
+    for vec_b in (true, false)
+        @test_throws "Matrix multiplication algorithm `:MPS`" test_matmul(Int8, Int16; vec_b, alg=:MPS)
+        @test_throws "Matrix multiplication algorithm `:MPSGraph`" test_matmul(Int8, Int16; vec_b, alg=:MPSGraph)
+
+        # Invalid algorithm Symbol
+        @test_throws ":bad is not a valid matmul algorithm." test_matmul(Int8, Int16; vec_b, alg=:bad)
+        @test_throws ":bad is not a valid matmul algorithm." test_matmul(Float16, Float16; vec_b, alg=:bad)
+    end
+end
 
 @testset "test matrix vector multiplication of views" begin
     N = 20
