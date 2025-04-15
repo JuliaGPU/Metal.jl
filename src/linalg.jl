@@ -30,6 +30,9 @@ end
     eltype(A) <: AbstractFloat && rows <= 6000 && cols <= 6000 && Metal.supports_family(device(C), MTL.MTLGPUFamilyApple9)
 end
 
+# Supported values are :auto, :MPS, :MPSGraph, and :GPUArrays
+const matmul_alg = ScopedValue(:auto)
+
 LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
     LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
 @autoreleasepool function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB,
@@ -55,13 +58,16 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     transA = tA == 'T' || tA == 'C'
     transB = tB == 'T' || tB == 'C'
 
+    alg = matmul_alg[]
     # If possible, dispatch to MPSGraphs, then performance shaders
-    if supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATMUL_TYPES) && !should_use_MPS(A, B, C)
+    if supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATMUL_TYPES) && (alg === :MPSGraph || (alg === :auto && !should_use_MPS(A, B, C)))
         graph_matmul!(C, A, B, alpha, beta, transA, transB)
-    elseif supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES) # TODO: Remove once contiguous views are working
+    elseif supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES) && (alg === :MPS || alg === :auto)
         matmul!(C, A, B, alpha, beta, transA, transB)
-    else
+    elseif alg === :GPUArrays || alg === :auto
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
+    else
+        error("Invalid matmul algorithm and input combination.")
     end
 end
 
@@ -90,13 +96,16 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
 
     transA = tA == 'T' || tA == 'C'
 
+    alg = matmul_alg[]
     # If possible, dispatch to MPSGraphs, then performance shaders
-    if supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATVECMUL_TYPES)
+    if supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATVECMUL_TYPES) && (alg === :MPSGraph || alg === :auto)
         graph_matvecmul!(C, A, B, alpha, beta, transA)
-    elseif supports_mps_matmul(A, B, C, MPS_VALID_MATVECMUL_TYPES) # TODO: Remove once contiguous views are working
+    elseif supports_mps_matmul(A, B, C, MPS_VALID_MATVECMUL_TYPES) && (alg === :MPS || alg === :auto)
         matvecmul!(C, A, B, alpha, beta, transA)
-    else
+    elseif alg === :GPUArrays || alg === :auto
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)
+    else
+        error("Invalid matmul algorithm and input combination.")
     end
 end
 
