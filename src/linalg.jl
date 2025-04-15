@@ -32,7 +32,7 @@ end
 
 # Supported values are :auto, :MPS, :MPSGraph, and :GPUArrays
 const matmul_alg = ScopedValue(:auto)
-matmul_alg_error(alg, inT, outT) = error("Matrix multiplication algorithm `:$alg` is not supported for input eltype $inT and output eltype $outT.")
+matmul_alg_error(alg, inT, outT, vec) = error("Matrix-$(vec ? "Vector" : "Matrix") multiplication algorithm `:$alg` is not supported for input eltype $inT and output eltype $outT.")
 
 LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
     LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
@@ -64,10 +64,10 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     mpsgraph_supported = supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATMUL_TYPES)
     # If possible, dispatch to MPSGraphs, then performance shaders
     if alg === :MPSGraph || (alg === :auto && mpsgraph_supported && !should_use_MPS(A, B, C))
-        mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C))
+        mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C), false)
         graph_matmul!(C, A, B, alpha, beta, transA, transB)
     elseif alg === :MPS || (alg === :auto && mps_supported)
-        mps_supported || matmul_alg_error(alg, eltype(A), eltype(C))
+        mps_supported || matmul_alg_error(alg, eltype(A), eltype(C), false)
         matmul!(C, A, B, alpha, beta, transA, transB)
     elseif alg === :GPUArrays || alg === :auto
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
@@ -106,10 +106,10 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
     mpsgraph_supported = supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATVECMUL_TYPES)
     # If possible, dispatch to MPSGraphs, then performance shaders
     if alg === :MPSGraph || (alg === :auto && mpsgraph_supported)
-        mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C))
+        mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C), true)
         graph_matvecmul!(C, A, B, alpha, beta, transA)
     elseif alg === :MPS || (alg === :auto && mps_supported)
-        mps_supported || matmul_alg_error(alg, eltype(A), eltype(C))
+        mps_supported || matmul_alg_error(alg, eltype(A), eltype(C), true)
         matvecmul!(C, A, B, alpha, beta, transA)
     elseif alg === :GPUArrays || alg === :auto
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)
