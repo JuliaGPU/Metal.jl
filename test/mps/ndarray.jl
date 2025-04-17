@@ -1,7 +1,7 @@
 #
 # matrix descriptor
 #
-using Metal,Test;
+using Metal
 using .MPS: MPSNDArrayDescriptor, MPSDataType, lengthOfDimension, descriptor, resourceSize
 @static if Metal.macos_version() >= v"15"
     using .MPS: userBuffer
