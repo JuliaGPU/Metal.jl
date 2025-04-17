@@ -74,6 +74,11 @@ Metal.@device_override function SpecialFunctions.erf(x::Float32)
                 return x + efx*x;
             end
         end
+        z = x * x
+        r = pp0 + z * (pp1 + z * pp2)
+        s = 1.0f0 + z * (qq1 + z * (qq2 + z * qq3))
+	    y = r / s
+	    return x + x*y
     end
 
     if ix < 0x3fa00000 	# 0.84375 <= |x| < 1.25

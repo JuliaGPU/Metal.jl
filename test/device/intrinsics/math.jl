@@ -244,7 +244,7 @@ end
     end
 
     let # erf
-        arr = collect(LinRange(nextfloat(-3.0f0), 3.0f0, 20))
+        arr = Float32[-1.0, -0.5, 0.0, 1.0e-3, 1.0, 2.0, 5.5]
         buffer = MtlArray(arr)
         vec = Array(SpecialFunctions.erf.(buffer))
         @test vec ≈ SpecialFunctions.erf.(arr)
