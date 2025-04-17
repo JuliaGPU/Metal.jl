@@ -237,38 +237,38 @@ end
     end
 
     let # log1p
-        arr = collect(LinRange(nextfloat(-1.0f0), 10.0f0, 20))
+        arr = T.(collect(LinRange(nextfloat(-1.0f0), 10.0f0, 20)))
         buffer = MtlArray(arr)
-        vec = Array(log1p.(buffer))
-        @test vec ≈ log1p.(arr)
+        cpures = log1p.(arr)
+        @test Array(log1p.(buffer)) ≈ log1p.(arr)
     end
 
     let # erf
-        arr = Float32[-1.0, -0.5, 0.0, 1.0e-3, 1.0, 2.0, 5.5]
+        arr = T[-1.0, -0.5, 0.0, 1.0e-3, 1.0, 2.0, 5.5]
         buffer = MtlArray(arr)
-        vec = Array(SpecialFunctions.erf.(buffer))
-        @test vec ≈ SpecialFunctions.erf.(arr)
+        cpures = SpecialFunctions.erf.(arr)
+        @test Array(SpecialFunctions.erf.(buffer)) ≈ cpures broken = (T == Float16)
     end
 
     let # erfc
-        arr = collect(LinRange(nextfloat(-3.0f0), 3.0f0, 20))
+        arr = T.(collect(LinRange(nextfloat(-3.0f0), 3.0f0, 20)))
         buffer = MtlArray(arr)
-        vec = Array(SpecialFunctions.erfc.(buffer))
-        @test vec ≈ SpecialFunctions.erfc.(arr)
+        cpures = SpecialFunctions.erfc.(arr)
+        @test Array(SpecialFunctions.erfc.(buffer)) ≈ cpures broken = (T == Float16)
     end
 
     let # erfinv
-        arr = collect(LinRange(-1.0f0, 1.0f0, 20))
+        arr = T.(collect(LinRange(-1.0f0, 1.0f0, 20)))
         buffer = MtlArray(arr)
-        vec = Array(SpecialFunctions.erfinv.(buffer))
-        @test vec ≈ SpecialFunctions.erfinv.(arr)
+        cpures = SpecialFunctions.erfinv.(arr)
+        @test Array(SpecialFunctions.erfinv.(buffer)) ≈ cpures
     end
 
     let # expm1
-        arr = collect(LinRange(nextfloat(-88.0f0), 88.0f0, 100))
+        arr = T.(collect(LinRange(nextfloat(-88.0f0), 88.0f0, 100)))
         buffer = MtlArray(arr)
-        vec = Array(expm1.(buffer))
-        @test vec ≈ expm1.(arr)
+        cpures = expm1.(arr)
+        @test Array(expm1.(buffer)) ≈ cpures
     end
 
 
