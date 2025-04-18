@@ -1,5 +1,4 @@
-
-using Metal, GPUArrays, LinearAlgebra, Printf, AppleAccelerate
+using Metal, GPUArrays, LinearAlgebra, Printf#, AppleAccelerate
 
 testing = (@isdefined TESTING) && TESTING
 
@@ -8,14 +7,15 @@ testing = (@isdefined TESTING) && TESTING
     using Plots.Measures
 end
 
-const Ts=[
-        (Int8, Float16),
-        (Int8, Float32),
-        (Int16, Float32),
-        (Float16, Float16),
-        (Float16, Float32),
-        (Float32, Float32),
-    ]
+Ts=[
+    (Int8, Float16),
+    (Int8, Float32),
+    (Int16, Float32),
+    (Float16, Float16),
+    (Float16, Float32),
+    (Float32, Float32),
+]
+DEFAULT_NS = [50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024, 1500, 2000, 2048, 2500, 3000, 4000, 4096, 5000, 6000, 6144, 8000, 8192]
 
 n_gpu_cores = "??"
 # Comment this out if scary. Please mention number of cores in your comment when uploading the figure
@@ -66,6 +66,16 @@ function gpuarrpeakflops(; n::Integer=4096,
     n_batch == 1 || @warn "n_batch > 1 not supported for `GPUArrays.generic_matmatmul!`, running with n_batch=1"
     _peakflops(n, 1, inT, outT, ntrials; verify) do c, a, b
         GPUArrays.generic_matmatmul!(c, LinearAlgebra.wrap(a, 'N'), LinearAlgebra.wrap(b, 'N'), 1, 0)
+    end
+end
+function defaultpeakflops(; n::Integer=4096,
+                           n_batch::Integer=1,
+                           inT::DataType=Float32,
+                           outT::DataType=inT,
+                           ntrials::Integer=3,
+                           verify=true)
+    _peakflops(n, 1, inT, outT, ntrials; verify) do c, a, b
+        LinearAlgebra.generic_matmatmul!(c, 'N', 'N', a, b, 1, 0)
     end
 end
 function mpspeakflops(; n::Integer=4096,
@@ -128,25 +138,25 @@ function compare(Ns, Fs, inT, outT=inT; n_batch=1, ntrials)
     return results
 end
 
-function runcomparison(; Ns=[50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024, 2000, 2048, 4000, 4096, 6000, 6144, 8000, 8192],#, 10000],
-                Fs=[
-                    (mpspeakflops, "MPS"),
-                    (graphpeakflops, "MPSGraph"),
-                    (anepeakflops, "MPSGraph (ANE)"),
-                    # (gpuarrpeakflops, "GPUArrays"),
-                    # (cpupeakflops, "CPU (AppleAccelerate)"), # Uncomment to test CPU performance
-                   ],
-                n_batch=1,
-                ntrials=5)
-    res = Dict()
+DEFAULT_FS = [
+    (mpspeakflops, "MPS"),
+    (graphpeakflops, "MPSGraph"),
+    (defaultpeakflops, "Default"),
+    # (anepeakflops, "MPSGraph (ANE)"),
+    # (gpuarrpeakflops, "GPUArrays"),
+    # (cpupeakflops, "CPU (AppleAccelerate)"), # Uncomment to test CPU performance
+]
 
+function runcomparison(; Ns=DEFAULT_NS, Fs=DEFAULT_FS, n_batch=1, ntrials=5)
+    res = Dict()
     for (inT, outT) in Ts
         res[(inT,outT)] = (n_batch, Ns, compare(Ns, Fs, inT, outT; n_batch, ntrials))
     end
     return res
 end
 
-function plot_results(res, Fs=["MPS", "MPSGraph", "MPSGraph (ANE)"]; outpath=nothing, outtype="svg", plt_title=PLOT_TITLE)
+function plot_results(res, Fs=DEFAULT_FS; outpath=nothing, outtype="svg", plt_title=PLOT_TITLE)
+    Fs = get.(Fs, 2, "You shouldn't be reading this")
     ylim_upper = 9e12
     resplts = []
 
@@ -164,7 +174,7 @@ function plot_results(res, Fs=["MPS", "MPSGraph", "MPSGraph (ANE)"]; outpath=not
             if maximum(flops) > ylim_upper
                 ylim_upper = maximum(flops) * 1.02
             end
-            plot!(plt, Ns, tmpres[info_str]; linewidth=1.5, label="$(peakf) peak: $info_str")
+            plot!(plt, Ns, tmpres[info_str]; linewidth=1.5, label="$(peakf) peak: $info_str", α=0.8)
         end
         push!(resplts, plt)
         push!(n_batches, n_batch)
@@ -184,4 +194,7 @@ end
 
 if testing
     runcomparison(Ns=[50, 64, 100, 128, 250, 256, 500, 512])
+elseif abspath(PROGRAM_FILE) == @__FILE__
+    res = runcomparison()
+    plot_results(res; outpath=".")
 end

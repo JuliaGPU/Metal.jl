@@ -6,13 +6,13 @@ using .MPSGraphs: MPSGRAPH_VALID_MATMUL_TYPES, MPSGRAPH_VALID_MATVECMUL_TYPES,
                   graph_matmul!, graph_matvecmul!
 
 @inline function supports_mps_matmul(A, B, C, valid_types)
-    MPS.is_supported(device(A)) &&
+    MPS.is_supported(device(C)) &&
         eltype(A) == eltype(B) &&
         (eltype(A), eltype(C)) in valid_types
 end
 
 @inline function supports_mpsgraph_matmul(A, B, C, valid_types)
-    MPS.is_supported(device(A)) &&
+    MPS.is_supported(device(C)) &&
         eltype(A) == eltype(B) &&
         (eltype(A), eltype(C)) in valid_types &&
         # TODO: remove this limitation
@@ -20,6 +20,19 @@ end
         B.offset == 0 &&
         C.offset == 0
 end
+
+# Assumes support for MPS matrix multiplication has been verified elsewhere
+@inline function should_use_MPS(A, _, C)
+    rows = size(C,1)
+    cols = size(C,2)
+    # TODO: matvecmul different?
+    (eltype(A) <: Integer && rows <= 2000 && cols <= 2000 ) ||
+    eltype(A) <: AbstractFloat && rows <= 6000 && cols <= 6000 && Metal.supports_family(device(C), MTL.MTLGPUFamilyApple9)
+end
+
+# Supported values are :auto, :MPS, :MPSGraph, and :GPUArrays
+const matmul_alg = ScopedValue(:auto)
+matmul_alg_error(alg, inT, outT, vec) = error("Matrix-$(vec ? "Vector" : "Matrix") multiplication algorithm `:$alg` is not supported for input eltype $inT and output eltype $outT.")
 
 LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
     LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
@@ -46,13 +59,20 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     transA = tA == 'T' || tA == 'C'
     transB = tB == 'T' || tB == 'C'
 
+    alg = matmul_alg[]
+    mps_supported = supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES)
+    mpsgraph_supported = supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATMUL_TYPES)
     # If possible, dispatch to MPSGraphs, then performance shaders
-    if supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATMUL_TYPES)
+    if alg === :MPSGraph || (alg === :auto && mpsgraph_supported && !should_use_MPS(A, B, C))
+        mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C), false)
         graph_matmul!(C, A, B, alpha, beta, transA, transB)
-    elseif supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES) # TODO: Remove once contiguous views are working
+    elseif alg === :MPS || (alg === :auto && mps_supported)
+        mps_supported || matmul_alg_error(alg, eltype(A), eltype(C), false)
         matmul!(C, A, B, alpha, beta, transA, transB)
-    else
+    elseif alg === :GPUArrays || alg === :auto
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
+    else
+        error(":$alg is not a valid matmul algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`")
     end
 end
 
@@ -81,13 +101,20 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
 
     transA = tA == 'T' || tA == 'C'
 
+    alg = matmul_alg[]
+    mps_supported = supports_mps_matmul(A, B, C, MPS_VALID_MATVECMUL_TYPES)
+    mpsgraph_supported = supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATVECMUL_TYPES)
     # If possible, dispatch to MPSGraphs, then performance shaders
-    if supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATVECMUL_TYPES)
+    if alg === :MPSGraph || (alg === :auto && mpsgraph_supported)
+        mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C), true)
         graph_matvecmul!(C, A, B, alpha, beta, transA)
-    elseif supports_mps_matmul(A, B, C, MPS_VALID_MATVECMUL_TYPES) # TODO: Remove once contiguous views are working
+    elseif alg === :MPS || (alg === :auto && mps_supported)
+        mps_supported || matmul_alg_error(alg, eltype(A), eltype(C), true)
         matvecmul!(C, A, B, alpha, beta, transA)
-    else
+    elseif alg === :GPUArrays || alg === :auto
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)
+    else
+        error(":$alg is not a valid matmul algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`")
     end
 end
 

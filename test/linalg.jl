@@ -1,7 +1,56 @@
-using LinearAlgebra
+using LinearAlgebra, ScopedValues
 
 if MPS.is_supported(device())
 
+@testset "matmul algorithm selection" begin
+    # test that unsupported configurations error properly
+    N = 20
+    function test_matmul(inT, outT; vec_b=false, alg=:auto)
+        a = inT <: Integer ? inT.(rand(-5:5, N,N)) : rand(inT, N, N)
+
+        bdims = vec_b ? (N,) : (N, N)
+        b = inT <: Integer ? inT.(rand(-5:5, bdims)) : rand(inT, bdims)
+
+        ma = MtlArray(a)
+        mb = MtlArray(b)
+        mc = fill!(similar(mb, outT), zero(outT))
+
+        @with (Metal.matmul_alg => alg) mul!(mc,ma,mb)
+
+        return all((outT.(a)*outT.(b)) .≈ Array(mc))
+    end
+
+    for vec_b in (true, false)
+        @testset let vec_b = vec_b
+        # Unsupported for MPS and MPSGraph
+        @test_throws "Matrix-$(vec_b ? "Vector" : "Matrix") multiplication algorithm `:MPS`" test_matmul(Int8, Int16; vec_b, alg=:MPS)
+        @test_throws "Matrix-$(vec_b ? "Vector" : "Matrix") multiplication algorithm `:MPSGraph`" test_matmul(Int8, Int16; vec_b, alg=:MPSGraph)
+
+        # Invalid algorithm Symbol
+        @test_throws ":bad is not a valid matmul algorithm." test_matmul(Int8, Int16; vec_b, alg=:bad)
+        @test_throws ":bad is not a valid matmul algorithm." test_matmul(Float16, Float16; vec_b, alg=:bad)
+
+        # :auto
+        @test test_matmul(Int32, Int32; vec_b)     # fallback to GPUArrays
+        @test test_matmul(Int8, Float32; vec_b)    # should use MPS
+        @test test_matmul(Float16, Float32; vec_b) # should use MPSGraph on M1/M2
+
+        # :MPS
+        mpsInT = vec_b ? Float32 : Int16
+        @test test_matmul(mpsInT, Float32; vec_b, alg=:MPS)
+        @test test_matmul(Float16, Float32; vec_b, alg=:MPS)
+
+        # :MPSGraph
+        @test test_matmul(Int8, Float32; vec_b, alg=:MPSGraph)
+        @test test_matmul(Float16, Float32; vec_b, alg=:MPSGraph)
+
+        # :GPUArrays
+        @test test_matmul(Int32, Int32; vec_b, alg=:GPUArrays)
+        @test test_matmul(Int8, Float32; vec_b, alg=:GPUArrays)
+        @test test_matmul(Float16, Float32; vec_b, alg=:GPUArrays)
+        end
+    end
+end
 
 @testset "test matrix vector multiplication of views" begin
     N = 20
