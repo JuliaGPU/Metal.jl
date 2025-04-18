@@ -71,9 +71,14 @@ Metal.@device_override function SpecialFunctions.erf(x::Float32)
                 if ix < 0x04000000 	# |x|<0x1p-119
                     return (8 * x + efx8 * x) / 8	# avoid spurious underflow
                 end
-                return x + efx*x;
+                return x + efx*x
             end
         end
+        z = x * x
+        r = pp0 + z * (pp1 + z * pp2)
+        s = 1.0f0 + z * (qq1 + z * (qq2 + z * qq3))
+	    y = r / s
+	    return x + x*y
     end
 
     if ix < 0x3fa00000 	# 0.84375 <= |x| < 1.25
@@ -152,7 +157,7 @@ Metal.@device_override function SpecialFunctions.erfc(x::Float32)
         Q = 1.0f0 + s * (qa1 + s * (qa2 + s * (qa3 + s * qa4)))
         if hx >= 0
             z = 1.0f0 - erx
-            return z - P / Q;
+            return z - P / Q
         else
             z = erx + P / Q
             return 1.0f0 + z
@@ -160,7 +165,7 @@ Metal.@device_override function SpecialFunctions.erfc(x::Float32)
     end
 
     if ix < 0x41300000	# |x|<28
-        x = abs(x);
+        x = abs(x)
         s = 1.0f0 / (x * x)
         if ix < 0x4036DB6D	# |x| < 1/.35 ~ 2.857143
             R = ra0 + s * (ra1 + s * (ra2 + s * ra3))
