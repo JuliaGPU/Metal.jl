@@ -1,5 +1,3 @@
-using BFloat16s
-
 if MPS.is_supported(device())
 
 using .MPSGraphs: MPSGraphRandomOpDescriptor, MPSGraphRandomDistributionNormal, MPSGraphRandomDistributionTruncatedNormal, MPSGraphRandomDistributionUniform
