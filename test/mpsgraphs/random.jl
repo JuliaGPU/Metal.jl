@@ -18,7 +18,7 @@ using .MPSGraphs: MPSGraphRandomOpDescriptor, MPSGraphRandomDistributionNormal, 
                       (MPSGraphRandomDistributionUniform, Float16),
                       (MPSGraphRandomDistributionUniform, BFloat16),
                       ]
-        @test MPSGraphRandomOpDescriptor(MPSGraphRandomDistributionNormal, Float32) isa MPSGraphRandomOpDescriptor
+        @test MPSGraphRandomOpDescriptor(dist, T) isa MPSGraphRandomOpDescriptor
     end
 end
 
