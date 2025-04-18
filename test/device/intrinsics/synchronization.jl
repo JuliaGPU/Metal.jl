@@ -1,4 +1,3 @@
-using Random
 @testset "synchronization" begin
     # host/device synchronization
     let

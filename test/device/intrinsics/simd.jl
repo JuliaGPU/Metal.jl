@@ -1,5 +1,3 @@
-using Random
-
 @testset "simd intrinsics" begin
 
 @testset "$f($typ)" for typ in [Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8], (f,res_idx) in [(simd_shuffle_down, 1), (simd_shuffle_up, 32)]

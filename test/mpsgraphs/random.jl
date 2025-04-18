@@ -1,5 +1,3 @@
-using BFloat16s
-
 if MPS.is_supported(device())
 
 using .MPSGraphs: MPSGraphRandomOpDescriptor, MPSGraphRandomDistributionNormal, MPSGraphRandomDistributionTruncatedNormal, MPSGraphRandomDistributionUniform
@@ -18,7 +16,7 @@ using .MPSGraphs: MPSGraphRandomOpDescriptor, MPSGraphRandomDistributionNormal, 
                       (MPSGraphRandomDistributionUniform, Float16),
                       (MPSGraphRandomDistributionUniform, BFloat16),
                       ]
-        @test MPSGraphRandomOpDescriptor(MPSGraphRandomDistributionNormal, Float32) isa MPSGraphRandomOpDescriptor
+        @test MPSGraphRandomOpDescriptor(dist, T) isa MPSGraphRandomOpDescriptor
     end
 end
 

@@ -1,4 +1,3 @@
-
 if MPS.is_supported(device())
 
 using .MPS: MPSShape

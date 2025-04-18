@@ -1,4 +1,4 @@
-@testset "Version" begin
+@testset "version" begin
 
 @test Metal.darwin_version() isa VersionNumber
 @test Metal.macos_version() isa VersionNumber
@@ -8,4 +8,4 @@
 @test Metal.air_support() isa VersionNumber
 @test Metal.metal_support() isa VersionNumber
 
-end # testset "Version"
+end # testset "version"

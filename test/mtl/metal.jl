@@ -491,6 +491,6 @@ end
 
 # TODO: continue adding tests
 
-end
+end # @autoreleasepool begin
 
-end
+end # @testset "MTL" begin
