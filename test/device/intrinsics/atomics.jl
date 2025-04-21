@@ -1,5 +1,3 @@
-using Random
-
 @testset "atomics" begin
 
 n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors

@@ -30,8 +30,8 @@ cd(tmpdir) do
     @test isdir("julia_1.trace")
 end
 
-end
-end
-end
+end # cd(tmpdir) do
+end # mktempdir() do tmpdir
+end # if run_tests
 
 end

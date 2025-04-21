@@ -1,6 +1,3 @@
-using LinearAlgebra
-
-
 if MPS.is_supported(device())
 
 @testset "mixed-precision matrix matrix multiplication" begin

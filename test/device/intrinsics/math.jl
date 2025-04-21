@@ -1,5 +1,4 @@
 using Metal: metal_support
-using Random
 using SpecialFunctions
 
 ############################################################################################
