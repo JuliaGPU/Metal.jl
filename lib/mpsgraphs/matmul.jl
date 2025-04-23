@@ -86,7 +86,7 @@ end
     )
 
     cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
-    encode!(cmdbuf, graph, NSDictionary(feeds), nil, NSDictionary(resultdict), default_exec_desc())
+    encode!(cmdbuf, graph, NSDictionary(feeds), NSDictionary(resultdict), nil, default_exec_desc())
     commit!(cmdbuf)
     wait_completed(cmdbuf)
 
