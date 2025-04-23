@@ -255,11 +255,11 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
     end
 
     @testset "MPS.RNG ambiguity with StaticArrays" begin
-       rng = MPS.RNG()
-       A = zeros(MArray{Tuple{4,3}, Float32})
-       @test any(rand!(rng, A) .!= 0)
+        rng = MPS.RNG()
+        A = zeros(MArray{Tuple{4,3}, Float32})
+        @test any(rand!(rng, A) .!= 0)
 
-       An = zeros(MArray{Tuple{4,3}, Float32})
-       @test any(randn!(rng, An) .!= 0)
+        An = zeros(MArray{Tuple{4,3}, Float32})
+        @test any(randn!(rng, An) .!= 0)
     end
 end # testset
