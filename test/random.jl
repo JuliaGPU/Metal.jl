@@ -1,3 +1,5 @@
+using StaticArrays: MArray
+
 const RAND_TYPES = [Float16, Float32, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64,
                     UInt64]
 const RANDN_TYPES = [Float16, Float32]
@@ -250,5 +252,14 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
             b = f(T, d)
             @test Array(a) == Array(b)
         end
+    end
+
+    @testset "MPS.RNG ambiguity with StaticArrays" begin
+       rng = MPS.RNG()
+       A = zeros(MArray{Tuple{4,3}, Float32})
+       @test any(rand!(rng, A) .!= 0)
+
+       An = zeros(MArray{Tuple{4,3}, Float32})
+       @test any(randn!(rng, An) .!= 0)
     end
 end # testset
