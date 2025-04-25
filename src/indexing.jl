@@ -26,7 +26,7 @@ function Base.findall(bools::WrappedMtlArray{Bool})
     indices = cumsum(reshape(bools, prod(size(bools))))
 
     n = @allowscalar indices[end]
-    ys = MtlArray{I}(undef, n)
+    ys = similar(bools, I, n)
 
     if n > 0
         function kernel(ys::MtlDeviceArray, bools, indices)
