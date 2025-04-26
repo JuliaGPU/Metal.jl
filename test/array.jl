@@ -526,6 +526,13 @@ end
     @test testf(x->findall(x), rand(Bool, 1000))
     @test testf(x->findall(y->y>Float32(0.5), x), rand(Float32,1000))
 
+    # Set storage mode to a different one than the default
+    let storage=Metal.DefaultStorageMode == Metal.PrivateStorage ? Metal.SharedStorage : Metal.PrivateStorage
+        x = mtl(rand(Float32,100); storage)
+        out = findall(y->y>Float32(0.5), x)
+        @test Metal.storagemode(x) == Metal.storagemode(out)
+    end
+
     # ND
     let x = rand(Bool, 1000, 1000)
         @test findall(x) == Array(findall(MtlArray(x)))
