@@ -1,6 +1,5 @@
 using Random
 using Metal: DefaultStorageMode
-using StaticArrays: StaticArrays, StaticArray, Size
 
 """
     MPS.RNG()
@@ -84,9 +83,6 @@ function Random.rand!(rng::RNG, A::AbstractArray{T, N}) where {T <: Union{Unifor
     end
     return A
 end
-function Random.rand!(rng::RNG, A::SA) where {N, T <: Union{UniformTypes...}, SA <: (StaticArray{S, T, N} where S<:Tuple)}
-    StaticArrays._rand!(rng, Size(SA), A)
-end
 
 function Random.randn!(rng::RNG, A::AbstractArray{T, N}) where {T <: Float32, N}
     isempty(A) && return A
@@ -99,9 +95,6 @@ function Random.randn!(rng::RNG, A::AbstractArray{T, N}) where {T <: Float32, N}
         copyto!(A, B)
     end
     return A
-end
-function Random.randn!(rng::RNG, A::SA) where {N, T <: Float32, SA <: (StaticArray{S, T, N} where S<:Tuple)}
-    StaticArrays._randn!(rng, Size(SA), A)
 end
 
 # Out of place
