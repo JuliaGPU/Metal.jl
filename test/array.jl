@@ -540,6 +540,12 @@ end
     let x = rand(Float32, 1000, 1000)
         @test findall(y->y>Float32(0.5), x) == Array(findall(y->y>Float32(0.5), MtlArray(x)))
     end
+
+    # ambiguity
+    let f = in(3)
+        x = MtlArray([1, 2, 3, 4, 5, 3])
+        @test Array(findall(f, x)) == [3, 6]
+    end
 end
 
 @testset "broadcast" begin

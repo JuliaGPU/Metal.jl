@@ -52,9 +52,12 @@ function Base.findall(bools::WrappedMtlArray{Bool})
     return ys
 end
 
-function Base.findall(f::Function, A::WrappedMtlArray)
+@inline function _findall(f, A)
     bools = map(f, A)
     ys = findall(bools)
     unsafe_free!(bools)
     return ys
 end
+
+Base.findall(f::Function, A::WrappedMtlArray) = _findall(f, A)
+Base.findall(f::Base.Fix2{typeof(in)}, A::WrappedMtlArray) = _findall(f, A)

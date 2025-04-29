@@ -83,6 +83,7 @@ function Random.rand!(rng::RNG, A::AbstractArray{T, N}) where {T <: Union{Unifor
     end
     return A
 end
+
 function Random.randn!(rng::RNG, A::AbstractArray{T, N}) where {T <: Float32, N}
     isempty(A) && return A
     if MTL.can_alloc_nocopy(pointer(A), sizeof(A))
