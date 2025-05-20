@@ -17,7 +17,13 @@ if MPS.is_supported(device())
 
         @with (Metal.matmul_alg => alg) mul!(mc,ma,mb)
 
-        return all((outT.(a)*outT.(b)) .≈ Array(mc))
+        kwargs = if inT == Float16
+            (rtol=eps(inT),)
+        else
+            ()
+        end
+
+        return all(isapprox.((outT.(a)*outT.(b)), Array(mc); kwargs...))
     end
 
     for vec_b in (true, false)
