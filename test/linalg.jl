@@ -33,21 +33,21 @@ if MPS.is_supported(device())
         # :auto
         @test test_matmul(Int32, Int32; vec_b)     # fallback to GPUArrays
         @test test_matmul(Int8, Float32; vec_b)    # should use MPS
-        @test test_matmul(Float16, Float32; vec_b) # should use MPSGraph on M1/M2
+        Metal.macos_version() >= v"14" && @test test_matmul(Float16, Float32; vec_b) # should use MPSGraph on M1/M2
 
         # :MPS
         mpsInT = vec_b ? Float32 : Int16
         @test test_matmul(mpsInT, Float32; vec_b, alg=:MPS)
-        @test test_matmul(Float16, Float32; vec_b, alg=:MPS)
+        Metal.macos_version() >= v"14" && @test test_matmul(Float16, Float32; vec_b, alg=:MPS)
 
         # :MPSGraph
         @test test_matmul(Int8, Float32; vec_b, alg=:MPSGraph)
-        @test test_matmul(Float16, Float32; vec_b, alg=:MPSGraph)
+        Metal.macos_version() >= v"14" && @test test_matmul(Float16, Float32; vec_b, alg=:MPSGraph)
 
         # :GPUArrays
         @test test_matmul(Int32, Int32; vec_b, alg=:GPUArrays)
         @test test_matmul(Int8, Float32; vec_b, alg=:GPUArrays)
-        @test test_matmul(Float16, Float32; vec_b, alg=:GPUArrays)
+        Metal.macos_version() >= v"14" && @test test_matmul(Float16, Float32; vec_b, alg=:GPUArrays)
         end
     end
 end
