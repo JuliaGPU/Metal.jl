@@ -1,3 +1,5 @@
+using Pkg
+Pkg.develop("AcceleratedKernels")
 using Distributed
 using Dates
 using Metal
