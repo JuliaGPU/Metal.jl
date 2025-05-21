@@ -3,6 +3,7 @@ uuid = "dde4c033-4e86-420c-a63e-0dd931031962"
 version = "1.5.1"
 
 [deps]
+AcceleratedKernels = "6a4ca0a5-0e36-4168-a932-d9be78d558f1"
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 BFloat16s = "ab4f0b2a-ad5b-11e8-123f-65d77653426b"
 CEnum = "fa961155-64e5-5f13-b03f-caf6b980ea82"
@@ -32,6 +33,7 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 SpecialFunctionsExt = "SpecialFunctions"
 
 [compat]
+AcceleratedKernels = "0.3.3"
 Adapt = "4"
 BFloat16s = "0.5"
 CEnum = "0.4, 0.5"
