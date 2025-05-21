@@ -170,27 +170,26 @@ end
 ## Base interface
 
 Base._accumulate!(op, output::WrappedMtlArray, input::WrappedMtlVector, dims::Nothing, init::Nothing) =
-    scan!(op, output, input; dims=1)
+    @inline AK.accumulate!(op, output, input; dims, init=AK.neutral_element(op, eltype(output)), alg=AK.ScanPrefixes())
 
 Base._accumulate!(op, output::WrappedMtlArray, input::WrappedMtlArray, dims::Integer, init::Nothing) =
-    scan!(op, output, input; dims=dims)
-
+    @inline AK.accumulate!(op, output, input; dims, init=AK.neutral_element(op, eltype(output)), alg=AK.ScanPrefixes())
 Base._accumulate!(op, output::WrappedMtlArray, input::MtlVector, dims::Nothing, init::Some) =
-    scan!(op, output, input; dims=1, init=init)
+    @inline AK.accumulate!(op, output, input; dims, init=something(init), alg=AK.ScanPrefixes())
 
 Base._accumulate!(op, output::WrappedMtlArray, input::WrappedMtlArray, dims::Integer, init::Some) =
-    scan!(op, output, input; dims=dims, init=init)
+    @inline AK.accumulate!(op, output, input; dims, init=something(init), alg=AK.ScanPrefixes())
 
-Base.accumulate_pairwise!(op, result::WrappedMtlVector, v::WrappedMtlVector) = accumulate!(op, result, v)
+Base.accumulate_pairwise!(op, result::WrappedMtlVector, v::WrappedMtlVector) = @inline AK.accumulate!(op, result, v; init=AK.neutral_element(op, eltype(result)), alg=AK.ScanPrefixes())
 
 # default behavior unless dims are specified by the user
 function Base.accumulate(op, A::WrappedMtlArray;
                          dims::Union{Nothing,Integer}=nothing, kw...)
+    nt = values(kw)
     if dims === nothing && !(A isa AbstractVector)
         # This branch takes care of the cases not handled by `_accumulate!`.
-        return reshape(accumulate(op, A[:]; kw...), size(A))
+        return reshape(AK.accumulate(op, A[:]; init = (:init in keys(kw) ? nt.init : AK.neutral_element(op, eltype(A))), alg=AK.ScanPrefixes()), size(A))
     end
-    nt = values(kw)
     if isempty(kw)
         out = similar(A, Base.promote_op(op, eltype(A), eltype(A)))
     elseif keys(nt) === (:init,)
