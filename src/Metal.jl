@@ -12,6 +12,7 @@ using ExprTools: splitdef, combinedef
 using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
 import ObjectiveC: is_macos, darwin_version, macos_version
 import KernelAbstractions
+import AcceleratedKernels as AK
 using ScopedValues
 
 include("version.jl")
