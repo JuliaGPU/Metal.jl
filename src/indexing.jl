@@ -23,9 +23,12 @@ end
 
 function Base.findall(bools::WrappedMtlArray{Bool})
     I = keytype(bools)
-    indices = cumsum(reshape(bools, prod(size(bools))))
+    boolslen = prod(size(bools))
 
-    n = @allowscalar indices[end]
+    indices = MtlVector{Int64, Metal.SharedStorage}(undef, boolslen)
+    cumsum!(indices, reshape(bools, boolslen))
+
+    n = indices[end]
     ys = similar(bools, I, n)
 
     if n > 0
