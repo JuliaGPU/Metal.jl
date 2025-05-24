@@ -67,19 +67,19 @@ importing the package:
 julia> using Metal
 
 julia> Metal.versioninfo()
-macOS 15.3.0, Darwin 24.3.0
+macOS 15.5.0, Darwin 24.5.0
 
 Toolchain:
-- Julia: 1.11.3
+- Julia: 1.11.5
 - LLVM: 16.0.6
 
 Julia packages:
-- Metal.jl: 1.5.1
-- GPUArrays: 11.2.1
-- GPUCompiler: 1.1.0
-- KernelAbstractions: 0.9.33
-- ObjectiveC: 3.3.0
-- LLVM: 9.2.0
+- Metal.jl: 1.6.0
+- GPUArrays: 11.2.2
+- GPUCompiler: 1.5.1
+- KernelAbstractions: 0.9.34
+- ObjectiveC: 3.4.1
+- LLVM: 9.4.0
 - LLVMDowngrader_jll: 0.6.0+0
 
 1 device:
@@ -96,11 +96,11 @@ without writing your own kernels:
 
 ```julia-repl
 julia> a = MtlArray([1])
-1-element MtlArray{Int64, 1}:
+1-element MtlVector{Int64, Metal.PrivateStorage}:
  1
 
 julia> a .+ 1
-1-element MtlArray{Int64, 1}:
+1-element MtlVector{Int64, Metal.PrivateStorage}:
  2
 ```
 
@@ -123,7 +123,7 @@ vadd (generic function with 1 method)
 
 julia> a = MtlArray([1,1,1,1]); b = MtlArray([2,2,2,2]); c = similar(a);
 
-julia> @metal threads=2 groups=2 vadd(a, b, c)
+julia> @metal threads=2 groups=2 vadd(a, b, c);
 
 julia> Array(c)
 4-element Vector{Int64}:
@@ -142,7 +142,9 @@ low-level API wrappers, along with some slightly higher-level Julia wrappers, ar
 in the `MTL` submodule exported by Metal.jl:
 
 ```julia-repl
-julia> dev = Metal.MTL.devices()[1]
+julia> using Metal
+
+julia> dev = device()
 <AGXG13XDevice: 0x14c17f200>
     name = Apple M1 Pro
 
