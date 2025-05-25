@@ -28,6 +28,9 @@ KA.ones(::MetalBackend, ::Type{T}, dims::Tuple) where T = Metal.ones(T, dims)
 
 KA.get_backend(::MtlArray) = MetalBackend()
 KA.synchronize(::MetalBackend) = synchronize()
+
+KA.functional(::MetalBackend) = Metal.functional()
+
 KA.supports_float64(::MetalBackend) = false
 KA.supports_atomics(::MetalBackend) = false
 
