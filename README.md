@@ -37,12 +37,8 @@ if you want to use it. PRs are very welcome!
 -  macOS 13-15
 
 These requirements are fairly strict, and are due to our limited development
-resources (manpower, hardware). Technically, they can be relaxed. If you are
-interested in contributing to this, see [this
-issue](https://github.com/JuliaGPU/Metal.jl/issues/22) for more details.
-In practice, Metal.jl will probably work on any macOS 10.15+, and other
-GPUs that are supported by Metal might also function (if only partially),
-but such combinations are unsupported for now.
+resources (manpower, hardware). Supported OS versions follow Apple's support,
+which is typically the three latest major verions.
 
 
 ## Quick start
