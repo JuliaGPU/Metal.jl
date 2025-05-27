@@ -33,7 +33,7 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 SpecialFunctionsExt = "SpecialFunctions"
 
 [compat]
-AcceleratedKernels = "0.3.3"
+AcceleratedKernels = "0.4"
 Adapt = "4"
 BFloat16s = "0.5"
 CEnum = "0.4, 0.5"
