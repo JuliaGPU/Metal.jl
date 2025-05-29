@@ -170,33 +170,34 @@ end
 ## Base interface
 
 Base._accumulate!(op, output::WrappedMtlArray, input::WrappedMtlVector, dims::Nothing, init::Nothing) =
-    scan!(op, output, input; dims=1)
+    @inline AK.accumulate!(op, output, input, MetalBackend(); dims, init=AK.neutral_element(op, eltype(output)))
 
 Base._accumulate!(op, output::WrappedMtlArray, input::WrappedMtlArray, dims::Integer, init::Nothing) =
-    scan!(op, output, input; dims=dims)
-
+    @inline AK.accumulate!(op, output, input, MetalBackend(); dims, init=AK.neutral_element(op, eltype(output)))
 Base._accumulate!(op, output::WrappedMtlArray, input::MtlVector, dims::Nothing, init::Some) =
-    scan!(op, output, input; dims=1, init=init)
+    @inline AK.accumulate!(op, output, input, MetalBackend(); dims, init=something(init))
 
 Base._accumulate!(op, output::WrappedMtlArray, input::WrappedMtlArray, dims::Integer, init::Some) =
-    scan!(op, output, input; dims=dims, init=init)
+    @inline AK.accumulate!(op, output, input, MetalBackend(); dims, init=something(init))
 
-Base.accumulate_pairwise!(op, result::WrappedMtlVector, v::WrappedMtlVector) = accumulate!(op, result, v)
+Base.accumulate_pairwise!(op, result::WrappedMtlVector, v::WrappedMtlVector) = @inline AK.accumulate!(op, result, v, MetalBackend(); init=AK.neutral_element(op, eltype(result)))
 
 # default behavior unless dims are specified by the user
 function Base.accumulate(op, A::WrappedMtlArray;
                          dims::Union{Nothing,Integer}=nothing, kw...)
+    nt = values(kw)
     if dims === nothing && !(A isa AbstractVector)
         # This branch takes care of the cases not handled by `_accumulate!`.
-        return reshape(accumulate(op, A[:]; kw...), size(A))
+        return reshape(AK.accumulate(op, A[:], MetalBackend(); init = (:init in keys(kw) ? nt.init : AK.neutral_element(op, eltype(A)))), size(A))
     end
-    nt = values(kw)
     if isempty(kw)
         out = similar(A, Base.promote_op(op, eltype(A), eltype(A)))
+        init = AK.neutral_element(op, eltype(out))
     elseif keys(nt) === (:init,)
         out = similar(A, Base.promote_op(op, typeof(nt.init), eltype(A)))
+        init = nt.init
     else
         throw(ArgumentError("accumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
     end
-    accumulate!(op, out, A; dims=dims, kw...)
+    AK.accumulate!(op, out, A, MetalBackend(); dims, init)
 end
