@@ -28,7 +28,7 @@ function Base.findall(bools::WrappedMtlArray{Bool})
     indices = MtlVector{Int64, Metal.SharedStorage}(undef, boolslen)
     cumsum!(indices, reshape(bools, boolslen))
 
-    n = indices[end]
+    n = isempty(indices) ? 0 : indices[end]
     ys = similar(bools, I, n)
 
     if n > 0

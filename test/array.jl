@@ -533,6 +533,9 @@ end
     end
 
     # ND
+    let x = rand(Bool, 0, 0)
+      @test findall(x) == Array(findall(MtlArray(x)))
+    end
     let x = rand(Bool, 1000, 1000)
         @test findall(x) == Array(findall(MtlArray(x)))
     end
