@@ -76,7 +76,7 @@ end
     afterbeta = let betatensor = constantWithScalar(graph, beta, castT)
         castplaceC = castTensor(graph, placeC, castT, "castplaceC")
         betaC = multiplicationWithPrimaryTensor(graph, betatensor, castplaceC)
-        afterbeta = additionWithPrimaryTensor(graph, afteralpha, betaC)
+        additionWithPrimaryTensor(graph, afteralpha, betaC)
     end
 
     castC = castTensor(graph, afterbeta, Tc, "castC")
