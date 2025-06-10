@@ -853,6 +853,7 @@ end
     MTLLanguageVersion3_0 = 0x0000000000030000
     MTLLanguageVersion3_1 = 0x0000000000030001
     MTLLanguageVersion3_2 = 0x0000000000030002
+    MTLLanguageVersion4_0 = 0x0000000000040000
 end
 
 @cenum MTLLibraryType::Int64 begin

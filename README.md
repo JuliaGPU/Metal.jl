@@ -70,10 +70,10 @@ Toolchain:
 - LLVM: 16.0.6
 
 Julia packages:
-- Metal.jl: 1.6.0
+- Metal.jl: 1.6.1
 - GPUArrays: 11.2.2
-- GPUCompiler: 1.5.1
-- KernelAbstractions: 0.9.34
+- GPUCompiler: 1.5.2
+- KernelAbstractions: 0.9.35
 - ObjectiveC: 3.4.1
 - LLVM: 9.4.0
 - LLVMDowngrader_jll: 0.6.0+0
