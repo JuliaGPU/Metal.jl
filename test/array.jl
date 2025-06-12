@@ -559,4 +559,22 @@ end
     @test testf(x->max.(min.(x, one(Float32)), zero(Float32)), randn(Float32, 1000))
 end
 
+@testset "preserving buffer types" begin
+    let x = Metal.zeros(Float32, 1; storage=Metal.SharedStorage)
+        y = x .+ 1
+        @test !is_private(y) && is_shared(y) && !is_managed(y)
+    end
+
+    # when storages are different, choose private
+    let x = Metal.zeros(Float32, 1; storage=Metal.SharedStorage), y = Metal.zeros(Float32, 1; storage=Metal.PrivateStorage)
+        z = x .+ y
+        @test !is_private(z) && is_shared(z) && !is_managed(z)
+    end
+
+    let x = Metal.zeros(Float32, 2, 2; storage=Metal.SharedStorage), y = Metal.zeros(Float32, 2; storage=Metal.PrivateStorage)
+        z = x .+ y
+        @test !is_private(z) && is_shared(z) && !is_managed(z)
+    end
+end
+
 end

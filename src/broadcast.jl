@@ -12,9 +12,14 @@ BroadcastStyle(W::Type{<:WrappedMtlArray{T,N}}) where {T,N} =
 
 # when we are dealing with different buffer styles, we cannot know
 # which one is better, so use shared memory
-BroadcastStyle(::MtlArrayStyle{N, S1},
-               ::MtlArrayStyle{N, S2}) where {N,S1,S2} =
-    MtlArrayStyle{N, SharedStorage}()
+BroadcastStyle(::MtlArrayStyle{N1, S1},
+               ::MtlArrayStyle{N2, S2}) where {N1,N2,S1,S2} =
+    MtlArrayStyle{max(N1, N2), SharedStorage}()
+
+# resolve ambiguity: different N, same memory type
+BroadcastStyle(::MtlArrayStyle{N1, S},
+               ::MtlArrayStyle{N2, S}) where {N1,N2,S} =
+    MtlArrayStyle{max(N1, N2), S}()
 
 # allocation of output arrays
 Base.similar(::Broadcasted{MtlArrayStyle{N, S}}, ::Type{T}, dims) where {T, N, S} =
