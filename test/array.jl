@@ -557,6 +557,24 @@ end
     @test testf(x->min.(x, one(Float32)), randn(Float32, 1000))
     @test testf(x->min.(max.(x, zero(Float32)), one(Float32)), randn(Float32, 1000))
     @test testf(x->max.(min.(x, one(Float32)), zero(Float32)), randn(Float32, 1000))
+
+    # preserving buffer types
+    let x = Metal.zeros(Float32, 1; storage=Metal.SharedStorage)
+        y = x .+ 1
+        @test is_shared(y)
+    end
+
+    # when storages are different, choose shared
+    let x = Metal.zeros(Float32, 1; storage=Metal.SharedStorage), y = Metal.zeros(Float32, 1; storage=Metal.PrivateStorage)
+        z = x .+ y
+        @test is_shared(z)
+    end
+
+    let x = Metal.zeros(Float32, 2, 2; storage=Metal.SharedStorage), y = Metal.zeros(Float32, 2; storage=Metal.PrivateStorage)
+        z = x .+ y
+        @test is_shared(z)
+    end
 end
+
 
 end
