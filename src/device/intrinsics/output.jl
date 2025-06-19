@@ -238,6 +238,9 @@ Limited string interpolation is also possible:
     @mtlprint("Hello, World ", 42, "\\n")
     @mtlprint "Hello, World \$(42)\\n"
 ```
+ 
+!!! compat "macOS 15"
+    Printing from a GPU kernel requires macOS 15 or later.
 """
 macro mtlprint(parts...)
     args = Union{Val, Expr, Symbol}[]
