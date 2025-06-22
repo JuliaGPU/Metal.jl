@@ -125,6 +125,13 @@ end
     MPSGraphExecutionStageCompleted = 0x0000000000000000
 end
 
+@cenum MPSGraphReducedPrecisionFastMath::UInt64 begin
+    MPSGraphReducedPrecisionFastMathNone = 0x0000000000000000
+    MPSGraphReducedPrecisionFastMathAllowFP16Conv2DWinogradTransformIntermediate = 0x0000000000000002
+    MPSGraphReducedPrecisionFastMathAllowFP16Intermediates = 0x0000000000000002
+    MPSGraphReducedPrecisionFastMathDefault = 0x0000000000000000
+end
+
 @objcwrapper immutable = true MPSGraphCompilationDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphCompilationDescriptor begin
@@ -134,6 +141,7 @@ end
     @autoproperty dispatchQueue::id{dispatch_queue_t} setter = setDispatchQueue
     @autoproperty optimizationProfile::MPSGraphOptimizationProfile setter = setOptimizationProfile
     @autoproperty callables::id{MPSGraphCallableMap} setter = setCallables availability = macos(v"14.1.0")
+    @autoproperty reducedPrecisionFastMath::MPSGraphReducedPrecisionFastMath setter = setReducedPrecisionFastMath availability = macos(v"26.0.0")
 end
 
 @objcwrapper immutable = true MPSGraphExecutionDescriptor <: MPSGraphObject

@@ -3,8 +3,6 @@ library_name = "libmps"
 output_file_path = "../../lib/mps/libmps.jl"
 prologue_file_path = "libmps_prologue.jl"
 
-minimum_macos_supported = "13"
-
 printer_blacklist = [
     "mt_macCatalyst",
     "mt_ios",
@@ -31,6 +29,7 @@ printer_blacklist = [
 ]
 
 [codegen]
+minimum_macos_supported = "13"
 use_ccall_macro = true
 always_NUL_terminated_string = true
 opaque_as_mutable_struct = true
