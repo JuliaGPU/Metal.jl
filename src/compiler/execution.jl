@@ -100,16 +100,17 @@ end
 
 ## argument conversion
 
-struct Adaptor
+struct Adaptor{T <: Union{Nothing,MTLComputeCommandEncoder,MTL4ArgumentTable}}
     # the current command encoder, if any.
-    cce::Union{Nothing,MTLComputeCommandEncoder}
+    cce::T
 end
 
 # convert Metal buffers to their GPU address
+function Adapt.adapt_storage(to::Adaptor{<:MTLComputeCommandEncoder}, buf::MTLBuffer)
+    MTL.use!(to.cce, buf, MTL.ReadWriteUsage)
+    reinterpret(Core.LLVMPtr{Nothing,AS.Device}, buf.gpuAddress)
+end
 function Adapt.adapt_storage(to::Adaptor, buf::MTLBuffer)
-    if to.cce !== nothing
-        MTL.use!(to.cce, buf, MTL.ReadWriteUsage)
-    end
     reinterpret(Core.LLVMPtr{Nothing,AS.Device}, buf.gpuAddress)
 end
 function Adapt.adapt_storage(to::Adaptor, ptr::MtlPtr{T}) where {T}
@@ -264,7 +265,9 @@ end
 end
 
 @autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
-                                               queue=global_queue(device()))
+                                               queue=use_metal4() ? global_queue4(device()) : global_queue(device()))
+    use_mtl4 = queue isa MTL4CommandQueue  
+
     groups = MTLSize(groups)
     threads = MTLSize(threads)
     (groups.width>0 && groups.height>0 && groups.depth>0) ||
@@ -275,16 +278,38 @@ end
     (threads.width * threads.height * threads.depth) > kernel.pipeline.maxTotalThreadsPerThreadgroup &&
         throw(ArgumentError("Number of threads in group ($(threads.width * threads.height * threads.depth)) should not exceed $(kernel.pipeline.maxTotalThreadsPerThreadgroup)"))
 
-    cmdbuf = MTLCommandBuffer(queue)
-    cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
-    cce = MTLComputeCommandEncoder(cmdbuf)
+    if use_mtl4
+        allocator = MTL4CommandAllocator(device())
+        cmdbuf = MTL4CommandBuffer(device())
+
+        # TODO: Initialize with descriptor to set label
+        # cmdbuf.label = "MTL4CommandBuffer($(nameof(kernel.f)))"
+
+        beginCommandBufferWithAllocator!(cmdbuf, allocator)
+        cce = MTL4ComputeCommandEncoder(cmdbuf)
+    else
+        cmdbuf = MTLCommandBuffer(queue)
+        cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
+        cce = MTLComputeCommandEncoder(cmdbuf)
+    end
+
     argument_buffers = try
         MTL.set_function!(cce, kernel.pipeline)
-        bufs = encode_arguments!(cce, kernel, kernel.f, args...)
+        if use_mtl4
+            argtabdesc = MTL.MTL4ArgumentTableDescriptor()
+            argtabdesc.maxBufferBindCount = min(31, length(args) + 1)
+            argtab = MTL.MTL4ArgumentTable(device(), argtabdesc)
+            bufs = encode_arguments!(argtab, kernel, kernel.f, args...)
+
+            MTL.set_argument_table!(cce, argtab)
+        else
+            bufs = encode_arguments!(cce, kernel, kernel.f, args...)
+        end
         MTL.append_current_function!(cce, groups, threads)
         bufs
     finally
         close(cce)
+        use_mtl4 && endCommandBuffer!(cmdbuf)
     end
 
     # the command buffer retains resources that are explicitly encoded (i.e. direct buffer
@@ -295,20 +320,26 @@ end
     # kernel has actually completed.
     #
     # TODO: is there a way to bind additional resources to the command buffer?
-    roots = [kernel.f, args]
-    MTL.on_completed(cmdbuf) do buf
-        empty!(roots)
-        foreach(free, argument_buffers)
+    if !use_mtl4
+        roots = [kernel.f, args]
+        MTL.on_completed(cmdbuf) do buf
+            empty!(roots)
+            foreach(free, argument_buffers)
 
-        # Check for errors
-        # XXX: we cannot do this nicely, e.g. throwing an `error` or reporting with `@error`
-        #      because we're not allowed to switch tasks from this contexts.
-        if buf.status == MTL.MTLCommandBufferStatusError
-            Core.println("ERROR: Failed to submit command buffer: $(buf.error.localizedDescription)")
+            # Check for errors
+            # XXX: we cannot do this nicely, e.g. throwing an `error` or reporting with `@error`
+            #      because we're not allowed to switch tasks from this contexts.
+            if buf.status == MTL.MTLCommandBufferStatusError
+                Core.println("ERROR: Failed to submit command buffer: $(buf.error.localizedDescription)")
+            end
         end
-
     end
-    commit!(cmdbuf)
+
+    if use_mtl4
+        commit!(queue, cmdbuf)
+    else
+        commit!(cmdbuf)
+    end
 end
 
 ## Intra-warp Helpers
