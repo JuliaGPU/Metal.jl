@@ -30,6 +30,11 @@ function dispatchThreadgroups!(cce::MTLComputeCommandEncoder, gridSize, threadGr
                                              threadsPerThreadgroup:threadGroupSize::MTLSize]::Nothing
 end
 
+function dispatchThreads!(cce::MTLComputeCommandEncoder, threadsSize::MTLSize, threadsPerThreadgroup::MTLSize)
+    @objc [cce::id{MTLComputeCommandEncoder} dispatchThreads:threadsSize::MTLSize
+                                             threadsPerThreadgroup:threadsPerThreadgroup::MTLSize]::Nothing
+end
+
 #####
 # encode in the Command Encoder
 
