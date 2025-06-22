@@ -42,6 +42,7 @@ function versioninfo(io::IO=stdout)
 
     prefs = [
         "default_storage" => load_preference(Metal, "default_storage"),
+        "force_metal3" => load_preference(Metal, "force_metal3"),
     ]
     if any(x->!isnothing(x[2]), prefs)
         println(io, "Preferences:")
