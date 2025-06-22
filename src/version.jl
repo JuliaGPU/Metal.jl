@@ -20,8 +20,10 @@ See also [`Metal.air_support`](@ref) and [`Metal.metal_support`](@ref).
 """
 function metallib_support()
     macos = macos_version()
-    if macos >= v"15"
-       v"1.2.8"
+    if macos >= v"16" # Tahoe is v"26" but can report v"16" with julia versions not compiled with the Tahoe SDK
+        v"1.2.9"
+    elseif macos >= v"15"
+        v"1.2.8"
     elseif macos >= v"13"
         v"1.2.7"
     elseif macos >= v"12"
@@ -48,7 +50,9 @@ See also [`Metal.metallib_support`](@ref) and [`Metal.metal_support`](@ref).
 """
 function air_support()
     macos = macos_version()
-    if macos >= v"15"
+    if macos >= v"16" # Tahoe is v"26" but can report v"16" with julia versions not compiled with the Tahoe SDK
+        v"2.8"
+    elseif macos >= v"15"
         v"2.7"
     elseif macos >= v"14"
         v"2.6"
@@ -78,7 +82,9 @@ See also [`Metal.metallib_support`](@ref) and [`Metal.air_support`](@ref).
 """
 function metal_support()
     macos = macos_version()
-    if macos >= v"15"
+    if macos >= v"16" # Tahoe is v"26" but can report v"16" with julia versions not compiled with the Tahoe SDK
+        v"4"
+    elseif macos >= v"15"
         v"3.2"
     elseif macos >= v"14"
         v"3.1"
