@@ -3,6 +3,9 @@
 # possible values: "private", "shared", "managed"
 #default_storage = "private"
 
+# when false, always use metal 3 even on a metal 4 platform
+#force_metal3 = false
+
 # whether to use a nonblocking synchronization mechanism,
 # making it possible to do use cooperative multitasking.
 #nonblocking_synchronization = true

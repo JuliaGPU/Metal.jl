@@ -50,6 +50,7 @@ Sets the Metal GPU device associated with the current Julia task.
 device!(dev::MTLDevice) = task_local_storage(:MTLDevice, dev)
 
 const global_queues = WeakKeyDict{Any,Nothing}()
+const global_queues4 = WeakKeyDict{MTL4CommandQueue,Nothing}()
 
 """
     global_queue(dev::MTLDevice)::BatchedCommandQueue
@@ -77,6 +78,26 @@ function global_queue(dev::MTLDevice)
             bq
         end
     end::BatchedCommandQueue
+end
+
+"""
+    global_queue4(dev::MTLDevice)::MTL4CommandQueue
+
+Return the Metal 4 command queue associated with the current Julia thread.
+"""
+function global_queue4(dev::MTLDevice)
+    get!(task_local_storage(), (:MTL4CommandQueue, dev)) do
+        @autoreleasepool begin
+            # NOTE: MTL4CommandQueue itself is manually reference-counted,
+            #       the release pool is for resources used during its construction.
+            queue = MTL4CommandQueue(dev)
+
+            # # TODO: Initialize with descriptor to set label
+            # queue.label = "global_queue4($(current_task()))"
+            global_queues4[queue] = nothing
+            queue
+        end
+    end::MTL4CommandQueue
 end
 
 # tracks the most recently launched logging-enabled cmdbuf per queue, so that
