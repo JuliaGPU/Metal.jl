@@ -308,6 +308,7 @@ end
         MTL.append_current_function!(cce, groups, threads)
         bufs
     finally
+        use_mtl4 && barrierAfterStages!(cce)
         close(cce)
         use_mtl4 && endCommandBuffer!(cmdbuf)
     end

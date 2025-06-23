@@ -13,11 +13,12 @@ function MTL4ComputeCommandEncoder(cmdbuf::MTL4CommandBuffer)
 end
 
 
-function MTL4ComputeCommandEncoder(f::Base.Callable, cmdbuf::MTL4CommandBuffer)
+function MTL4ComputeCommandEncoder(f::Base.Callable, cmdbuf::MTL4CommandBuffer, sync=false)
     encoder = MTL4ComputeCommandEncoder(cmdbuf)
     try
         f(encoder)
     finally
+        sync && barrierAfterStages!(encoder)
         close(encoder)
     end
 end

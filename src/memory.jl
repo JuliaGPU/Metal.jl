@@ -103,17 +103,24 @@ end
 
 @autoreleasepool function unsafe_fill!(dev::MTLDevice, dst::MtlPtr{T},
                                        value::Union{UInt8,Int8}, N::Integer;
-                                       queue::MTLCommandQueue=global_queue(dev),
+                                       queue=use_metal4() ? global_queue4(dev) : global_queue(dev),
                                        async::Bool=false) where T
     if N > 0
-        cmdbuf = MTLCommandBuffer(queue)
-        MTLBlitCommandEncoder(cmdbuf) do enc
-            append_fillbuffer!(enc, dst.buffer, value, N * sizeof(T), dst.offset)
+        if queue isa MTL4CommandQueue 
+            @info "4"
+            cmdbuf = MTL4CommandBuffer(dev; queue) do cmdbuf
+                MTL4ComputeCommandEncoder(cmdbuf, !async) do enc
+                    append_fillbuffer!(enc, dst.buffer, value, N * sizeof(T), dst.offset)
+                end
+            end
+        else
+            cmdbuf = MTLCommandBuffer(queue)
+            MTLBlitCommandEncoder(cmdbuf) do enc
+                append_fillbuffer!(enc, dst.buffer, value, N * sizeof(T), dst.offset)
+            end
+            commit!(cmdbuf)
+            async || wait_completed(cmdbuf)
         end
-        commit!(cmdbuf)
-        async || wait_completed(cmdbuf)
     end
     return dst
 end
-
-# TODO: Implement generic fill since mtBlitCommandEncoderFillBuffer is limiting
