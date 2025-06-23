@@ -70,7 +70,7 @@ Toolchain:
 - LLVM: 16.0.6
 
 Julia packages:
-- Metal.jl: 1.6.1
+- Metal.jl: 1.6.2
 - GPUArrays: 11.2.2
 - GPUCompiler: 1.5.2
 - KernelAbstractions: 0.9.35
