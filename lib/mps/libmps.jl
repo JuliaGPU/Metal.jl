@@ -2601,25 +2601,113 @@ function Base.setproperty!(x::Ptr{_MPSPackedFloat3}, f::Symbol, v)
     return unsafe_store!(getproperty(x, f), v)
 end
 
+function Base.propertynames(x::_MPSPackedFloat3, private::Bool = false)
+    return (
+        :x, :y, :z, :elements, if private
+            fieldnames(typeof(x))
+        else
+            ()
+        end...,
+    )
+end
+
 const MPSPackedFloat3 = _MPSPackedFloat3
 
 struct MPSRayPackedOriginDirection
-    origin::MPSPackedFloat3
-    direction::MPSPackedFloat3
+    data::NTuple{24, UInt8}
+end
+
+function Base.getproperty(x::Ptr{MPSRayPackedOriginDirection}, f::Symbol)
+    f === :origin && return Ptr{MPSPackedFloat3}(x + 0)
+    f === :direction && return Ptr{MPSPackedFloat3}(x + 12)
+    return getfield(x, f)
+end
+
+function Base.getproperty(x::MPSRayPackedOriginDirection, f::Symbol)
+    r = Ref{MPSRayPackedOriginDirection}(x)
+    ptr = Base.unsafe_convert(Ptr{MPSRayPackedOriginDirection}, r)
+    fptr = getproperty(ptr, f)
+    return GC.@preserve r unsafe_load(fptr)
+end
+
+function Base.setproperty!(x::Ptr{MPSRayPackedOriginDirection}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+function Base.propertynames(x::MPSRayPackedOriginDirection, private::Bool = false)
+    return (
+        :origin, :direction, if private
+            fieldnames(typeof(x))
+        else
+            ()
+        end...,
+    )
 end
 
 struct MPSRayOriginMinDistanceDirectionMaxDistance
-    origin::MPSPackedFloat3
-    minDistance::Cfloat
-    direction::MPSPackedFloat3
-    maxDistance::Cfloat
+    data::NTuple{32, UInt8}
+end
+
+function Base.getproperty(x::Ptr{MPSRayOriginMinDistanceDirectionMaxDistance}, f::Symbol)
+    f === :origin && return Ptr{MPSPackedFloat3}(x + 0)
+    f === :minDistance && return Ptr{Cfloat}(x + 12)
+    f === :direction && return Ptr{MPSPackedFloat3}(x + 16)
+    f === :maxDistance && return Ptr{Cfloat}(x + 28)
+    return getfield(x, f)
+end
+
+function Base.getproperty(x::MPSRayOriginMinDistanceDirectionMaxDistance, f::Symbol)
+    r = Ref{MPSRayOriginMinDistanceDirectionMaxDistance}(x)
+    ptr = Base.unsafe_convert(Ptr{MPSRayOriginMinDistanceDirectionMaxDistance}, r)
+    fptr = getproperty(ptr, f)
+    return GC.@preserve r unsafe_load(fptr)
+end
+
+function Base.setproperty!(x::Ptr{MPSRayOriginMinDistanceDirectionMaxDistance}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+function Base.propertynames(x::MPSRayOriginMinDistanceDirectionMaxDistance, private::Bool = false)
+    return (
+        :origin, :minDistance, :direction, :maxDistance, if private
+            fieldnames(typeof(x))
+        else
+            ()
+        end...,
+    )
 end
 
 struct MPSRayOriginMaskDirectionMaxDistance
-    origin::MPSPackedFloat3
-    mask::Cuint
-    direction::MPSPackedFloat3
-    maxDistance::Cfloat
+    data::NTuple{32, UInt8}
+end
+
+function Base.getproperty(x::Ptr{MPSRayOriginMaskDirectionMaxDistance}, f::Symbol)
+    f === :origin && return Ptr{MPSPackedFloat3}(x + 0)
+    f === :mask && return Ptr{Cuint}(x + 12)
+    f === :direction && return Ptr{MPSPackedFloat3}(x + 16)
+    f === :maxDistance && return Ptr{Cfloat}(x + 28)
+    return getfield(x, f)
+end
+
+function Base.getproperty(x::MPSRayOriginMaskDirectionMaxDistance, f::Symbol)
+    r = Ref{MPSRayOriginMaskDirectionMaxDistance}(x)
+    ptr = Base.unsafe_convert(Ptr{MPSRayOriginMaskDirectionMaxDistance}, r)
+    fptr = getproperty(ptr, f)
+    return GC.@preserve r unsafe_load(fptr)
+end
+
+function Base.setproperty!(x::Ptr{MPSRayOriginMaskDirectionMaxDistance}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+function Base.propertynames(x::MPSRayOriginMaskDirectionMaxDistance, private::Bool = false)
+    return (
+        :origin, :mask, :direction, :maxDistance, if private
+            fieldnames(typeof(x))
+        else
+            ()
+        end...,
+    )
 end
 
 struct MPSIntersectionDistance
