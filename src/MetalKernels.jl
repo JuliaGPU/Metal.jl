@@ -189,7 +189,7 @@ end
 ## other
 
 @device_override @inline function KA.__synchronize()
-    threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+    threadgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
 end
 
 @device_override @inline function KA.__print(args...)
