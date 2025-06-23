@@ -2151,6 +2151,16 @@ function Base.setproperty!(x::Ptr{_MTLPackedFloat3}, f::Symbol, v)
     return unsafe_store!(getproperty(x, f), v)
 end
 
+function Base.propertynames(x::_MTLPackedFloat3, private::Bool = false)
+    return (
+        :x, :y, :z, :elements, if private
+            fieldnames(typeof(x))
+        else
+            ()
+        end...,
+    )
+end
+
 const MTLPackedFloat3 = _MTLPackedFloat3
 
 function MTLPackedFloat3Make(x, y, z)
@@ -2175,18 +2185,70 @@ end
 const MTLPackedFloat4x3 = _MTLPackedFloat4x3
 
 struct _MTLAxisAlignedBoundingBox
-    min::MTLPackedFloat3
-    max::MTLPackedFloat3
+    data::NTuple{24, UInt8}
+end
+
+function Base.getproperty(x::Ptr{_MTLAxisAlignedBoundingBox}, f::Symbol)
+    f === :min && return Ptr{MTLPackedFloat3}(x + 0)
+    f === :max && return Ptr{MTLPackedFloat3}(x + 12)
+    return getfield(x, f)
+end
+
+function Base.getproperty(x::_MTLAxisAlignedBoundingBox, f::Symbol)
+    r = Ref{_MTLAxisAlignedBoundingBox}(x)
+    ptr = Base.unsafe_convert(Ptr{_MTLAxisAlignedBoundingBox}, r)
+    fptr = getproperty(ptr, f)
+    return GC.@preserve r unsafe_load(fptr)
+end
+
+function Base.setproperty!(x::Ptr{_MTLAxisAlignedBoundingBox}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+function Base.propertynames(x::_MTLAxisAlignedBoundingBox, private::Bool = false)
+    return (
+        :min, :max, if private
+            fieldnames(typeof(x))
+        else
+            ()
+        end...,
+    )
 end
 
 const MTLAxisAlignedBoundingBox = _MTLAxisAlignedBoundingBox
 
 struct MTLComponentTransform
-    scale::MTLPackedFloat3
-    shear::MTLPackedFloat3
-    pivot::MTLPackedFloat3
-    rotation::MTLPackedFloatQuaternion
-    translation::MTLPackedFloat3
+    data::NTuple{64, UInt8}
+end
+
+function Base.getproperty(x::Ptr{MTLComponentTransform}, f::Symbol)
+    f === :scale && return Ptr{MTLPackedFloat3}(x + 0)
+    f === :shear && return Ptr{MTLPackedFloat3}(x + 12)
+    f === :pivot && return Ptr{MTLPackedFloat3}(x + 24)
+    f === :rotation && return Ptr{MTLPackedFloatQuaternion}(x + 36)
+    f === :translation && return Ptr{MTLPackedFloat3}(x + 52)
+    return getfield(x, f)
+end
+
+function Base.getproperty(x::MTLComponentTransform, f::Symbol)
+    r = Ref{MTLComponentTransform}(x)
+    ptr = Base.unsafe_convert(Ptr{MTLComponentTransform}, r)
+    fptr = getproperty(ptr, f)
+    return GC.@preserve r unsafe_load(fptr)
+end
+
+function Base.setproperty!(x::Ptr{MTLComponentTransform}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+function Base.propertynames(x::MTLComponentTransform, private::Bool = false)
+    return (
+        :scale, :shear, :pivot, :rotation, :translation, if private
+            fieldnames(typeof(x))
+        else
+            ()
+        end...,
+    )
 end
 
 @cenum MTLAccelerationStructureUsage::UInt64 begin
