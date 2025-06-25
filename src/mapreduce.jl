@@ -142,6 +142,33 @@ end
 
 ## COV_EXCL_STOP
 
+Base.mapreduce(f, op, A::WrappedMtlArray;
+            dims=:, init=nothing) = _mapreduce(f, op, A, init, dims)
+            # dims=:, init=nothing) = AK.mapreduce(f, op, A, init, dims=dims isa Colon ? nothing : dims)
+Base.mapreduce(f, op, A::Broadcast.Broadcasted{<:MtlArrayStyle};
+            dims=:, init=nothing) = _mapreduce(f, op, A, init, dims)
+            # dims=:, init=nothing) = AK.mapreduce(f, op, A, init, dims=dims isa Colon ? nothing : dims)
+
+# "Borrowed" from GPUArrays
+@inline function _init_value(f, op, init, As...)
+    if init === nothing
+        ET = Broadcast.combine_eltypes(f, As)
+        ET = Base.promote_op(op, ET, ET)
+        (ET === Union{} || ET === Any) &&
+            error("mapreduce cannot figure the output element type, please pass an explicit init value")
+
+        init = AK.neutral_element(op, ET)
+    end
+    return init
+end
+
+function _mapreduce(f, op, A, init, dims::Union{Nothing, Integer})
+    init_val = _init_value(f, op, init, A)
+    AK.mapreduce(f, op, A; init=init_val, neutral=init_val, dims)
+end
+_mapreduce(f, op, A, init, ::Colon) = _mapreduce(f, op, A, init, nothing)
+_mapreduce(f, op, A, init, dims) = GPUArrays._mapreduce(f, op, A; dims, init)
+
 function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
                                  A::Union{AbstractArray,Broadcast.Broadcasted};
                                  init=nothing) where {F, OP, T}
