@@ -10,7 +10,7 @@ for (S, smname) in [(Metal.PrivateStorage,"private"), (Metal.SharedStorage,"shar
     gpu_vec = reshape(gpu_mat, length(gpu_mat))
     gpu_arr_3d = reshape(gpu_mat, (m, 40, 25))
     gpu_arr_4d = reshape(gpu_mat, (m, 10, 10, 10))
-    gpu_mat_ints = MtlMatrix{Int,S}(rand(rng, Int, m, n))
+    gpu_mat_ints = MtlMatrix{Int,S}(rand(rng, -10:10, m, n))
     gpu_vec_ints = reshape(gpu_mat_ints, length(gpu_mat_ints))
     gpu_mat_bools = MtlMatrix{Bool,S}(rand(rng, Bool, m, n))
     gpu_vec_bools = reshape(gpu_mat_bools, length(gpu_mat_bools))
@@ -58,19 +58,43 @@ for (S, smname) in [(Metal.PrivateStorage,"private"), (Metal.SharedStorage,"shar
 
     # no need to test inplace version, which performs the same operation (but with an alloc)
     let group = addgroup!(group, "accumulate")
-        group["1d"] = @benchmarkable Metal.@sync accumulate(+, $gpu_vec)
-        group["2d"] = @benchmarkable Metal.@sync accumulate(+, $gpu_mat; dims=1)
+        let group = addgroup!(group, "Float32")
+            group["1d"] = @benchmarkable Metal.@sync accumulate(+, $gpu_vec)
+            group["2d_dims_1"] = @benchmarkable Metal.@sync accumulate(+, $gpu_mat; dims=1)
+            group["2d_dims_2"] = @benchmarkable Metal.@sync accumulate(+, $gpu_mat; dims=2)
+        end
+        let group = addgroup!(group, "Int64")
+            group["1d"] = @benchmarkable Metal.@sync accumulate(+, $gpu_vec_ints)
+            group["2d_dims_1"] = @benchmarkable Metal.@sync accumulate(+, $gpu_mat_ints; dims=1)
+            group["2d_dims_2"] = @benchmarkable Metal.@sync accumulate(+, $gpu_mat_ints; dims=2)
+        end
     end
 
     let group = addgroup!(group, "reductions")
         let group = addgroup!(group, "reduce")
-            group["1d"] = @benchmarkable Metal.@sync reduce(+, $gpu_vec)
-            group["2d"] = @benchmarkable Metal.@sync reduce(+, $gpu_mat; dims=1)
+            let group = addgroup!(group, "Float32")
+                group["1d"] = @benchmarkable Metal.@sync reduce(+, $gpu_vec)
+                group["2d_dims_1"] = @benchmarkable Metal.@sync reduce(+, $gpu_mat; dims=1)
+                group["2d_dims_2"] = @benchmarkable Metal.@sync reduce(+, $gpu_mat; dims=2)
+            end
+            let group = addgroup!(group, "Int64")
+                group["1d"] = @benchmarkable Metal.@sync reduce(+, $gpu_vec_ints)
+                group["2d_dims_1"] = @benchmarkable Metal.@sync reduce(+, $gpu_mat_ints; dims=1)
+                group["2d_dims_2"] = @benchmarkable Metal.@sync reduce(+, $gpu_mat_ints; dims=2)
+            end
         end
 
         let group = addgroup!(group, "mapreduce")
-            group["1d"] = @benchmarkable Metal.@sync mapreduce(x->x+1, +, $gpu_vec)
-            group["2d"] = @benchmarkable Metal.@sync mapreduce(x->x+1, +, $gpu_mat; dims=1)
+            let group = addgroup!(group, "Float32")
+                group["1d"] = @benchmarkable Metal.@sync mapreduce(x->x+1, +, $gpu_vec)
+                group["2d_dims_1"] = @benchmarkable Metal.@sync mapreduce(x->x+1, +, $gpu_mat; dims=1)
+                group["2d_dims_2"] = @benchmarkable Metal.@sync mapreduce(x->x+1, +, $gpu_mat; dims=2)
+            end
+            let group = addgroup!(group, "Int64")
+                group["1d"] = @benchmarkable Metal.@sync mapreduce(x->x+1, +, $gpu_vec_ints)
+                group["2d_dims_1"] = @benchmarkable Metal.@sync mapreduce(x->x+1, +, $gpu_mat_ints; dims=1)
+                group["2d_dims_2"] = @benchmarkable Metal.@sync mapreduce(x->x+1, +, $gpu_mat_ints; dims=2)
+            end
         end
 
         # used by sum, prod, minimum, maximum, all, any, count
