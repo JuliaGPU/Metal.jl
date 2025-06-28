@@ -203,7 +203,9 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
         end
     end
 
-    reduce_threads = compute_threads(kernel.pipeline.maxTotalThreadsPerThreadgroup)
+    # XXX: Properly fix (issue #616)
+    # reduce_threads = compute_threads(kernel.pipeline.maxTotalThreadsPerThreadgroup)
+    reduce_threads = compute_threads(512)
 
     # how many groups should we launch?
     #
