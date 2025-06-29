@@ -151,4 +151,4 @@ steps:
       build.message =~ /\[only benchmarks\]/ ||
       build.message !~ /\[only/ && !build.pull_request.draft &&
         build.message !~ /\[skip benchmarks\]/
-    timeout_in_minutes: 30
+    timeout_in_minutes: 45
