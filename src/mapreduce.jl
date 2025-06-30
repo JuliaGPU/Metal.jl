@@ -203,7 +203,9 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
         end
     end
 
-    # XXX: Properly fix (issue #616)
+    # XXX: Properly fix (issue #616) the issue is that the maxTotalThreadsPerThreadgroup of the unlaunched
+    #         kernel above may be greater than the maxTotalThreadsPerThreadgroup of the eventually launched
+    #         kernel below, causing errors
     # reduce_threads = compute_threads(kernel.pipeline.maxTotalThreadsPerThreadgroup)
     reduce_threads = compute_threads(512)
 
