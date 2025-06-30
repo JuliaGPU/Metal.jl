@@ -166,11 +166,6 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     #       CartesianIndices object with UnitRanges that behave badly on the GPU.
     @assert length(Rall) == length(Rother) * length(Rreduce)
 
-    # allocate an additional, empty dimension to write the reduced value to.
-    # this does not affect the actual location in memory of the final values,
-    # but allows us to write a generalized kernel supporting partial reductions.
-    R′ = reshape(R, (size(R)..., 1))
-
     # when the reduction dimension is contiguous in memory, we can improve performance
     # by having each thread read multiple consecutive elements. base on experiments,
     # 16 / sizeof(T) elements is usually a good choice.
@@ -193,7 +188,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # that's why each threads also loops across their inputs, processing multiple values
     # so that we can span the entire reduction dimension using a single item group.
     kernel = @metal launch=false partial_mapreduce_device(f, op, init, Val(maxthreads), Val(Rreduce), Val(Rother),
-                                                          Val(UInt64(length(Rother))), Val(grain), Val(shuffle), R′, A)
+                                                          Val(UInt64(length(Rother))), Val(grain), Val(shuffle), R, A)
 
     # how many threads do we want?
     #
@@ -208,7 +203,11 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
         end
     end
 
-    reduce_threads = compute_threads(kernel.pipeline.maxTotalThreadsPerThreadgroup)
+    # XXX: Properly fix (issue #616) the issue is that the maxTotalThreadsPerThreadgroup of the unlaunched
+    #         kernel above may be greater than the maxTotalThreadsPerThreadgroup of the eventually launched
+    #         kernel below, causing errors
+    # reduce_threads = compute_threads(kernel.pipeline.maxTotalThreadsPerThreadgroup)
+    reduce_threads = compute_threads(512)
 
     # how many groups should we launch?
     #
@@ -225,9 +224,9 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # perform the actual reduction
     if reduce_groups == 1
         # we can cover the dimensions to reduce using a single group
-        @metal threads groups partial_mapreduce_device(
-            f, op, init, Val(threads), Val(Rreduce), Val(Rother),
-            Val(UInt64(length(Rother))), Val(grain), Val(shuffle), R′, A)
+        kernel(f, op, init, Val(maxthreads), Val(Rreduce), Val(Rother),
+               Val(UInt64(length(Rother))), Val(grain), Val(shuffle), R, A;
+               threads, groups)
     else
         # we need multiple steps to cover all values to reduce
         partial = similar(R, (size(R)..., reduce_groups))
@@ -236,11 +235,13 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
             # use broadcasting to extend singleton dimensions
             partial .= R
         end
+        # NOTE: we can't use the previously-compiled kernel, since the type of `partial`
+        #       might not match the original output container (e.g. if that was a view).
         @metal threads groups partial_mapreduce_device(
             f, op, init, Val(threads), Val(Rreduce), Val(Rother),
             Val(UInt64(length(Rother))), Val(grain), Val(shuffle), partial, A)
 
-        GPUArrays.mapreducedim!(identity, op, R′, partial; init=init)
+        GPUArrays.mapreducedim!(identity, op, R, partial; init=init)
     end
 
     return R
