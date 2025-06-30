@@ -224,9 +224,9 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # perform the actual reduction
     if reduce_groups == 1
         # we can cover the dimensions to reduce using a single group
-        @metal threads groups partial_mapreduce_device(
-            f, op, init, Val(threads), Val(Rreduce), Val(Rother),
-            Val(UInt64(length(Rother))), Val(grain), Val(shuffle), R, A)
+        kernel(f, op, init, Val(maxthreads), Val(Rreduce), Val(Rother),
+               Val(UInt64(length(Rother))), Val(grain), Val(shuffle), R, A;
+               threads, groups)
     else
         # we need multiple steps to cover all values to reduce
         partial = similar(R, (size(R)..., reduce_groups))
@@ -235,6 +235,8 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
             # use broadcasting to extend singleton dimensions
             partial .= R
         end
+        # NOTE: we can't use the previously-compiled kernel, since the type of `partial`
+        #       might not match the original output container (e.g. if that was a view).
         @metal threads groups partial_mapreduce_device(
             f, op, init, Val(threads), Val(Rreduce), Val(Rother),
             Val(UInt64(length(Rother))), Val(grain), Val(shuffle), partial, A)
