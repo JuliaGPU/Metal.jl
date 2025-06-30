@@ -74,6 +74,12 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPtr{T}, N::Int
     elseif storage_type ==  MTL.MTLStorageModeShared
         unsafe_copyto!(dst, convert(Ptr{T}, src), N)
     elseif storage_type ==  MTL.MTLStorageModeManaged
+        cmdbuf = MTLCommandBuffer(queue) do cmdbuf
+            MTLBlitCommandEncoder(cmdbuf) do enc
+                append_sync!(enc, src.buffer)
+            end
+        end
+        wait_completed(cmdbuf)
         unsafe_copyto!(dst, convert(Ptr{T}, src), N)
     end
     return dst
@@ -87,7 +93,7 @@ end
     if N > 0
         cmdbuf = MTLCommandBuffer(queue)
         MTLBlitCommandEncoder(cmdbuf) do enc
-            MTL.append_copy!(enc, dst.buffer, dst.offset, src.buffer, src.offset, N * sizeof(T))
+            append_copy!(enc, dst.buffer, dst.offset, src.buffer, src.offset, N * sizeof(T))
         end
         commit!(cmdbuf)
         async || wait_completed(cmdbuf)
@@ -102,7 +108,7 @@ end
     if N > 0
         cmdbuf = MTLCommandBuffer(queue)
         MTLBlitCommandEncoder(cmdbuf) do enc
-            MTL.append_fillbuffer!(enc, dst.buffer, value, N * sizeof(T), dst.offset)
+            append_fillbuffer!(enc, dst.buffer, value, N * sizeof(T), dst.offset)
         end
         commit!(cmdbuf)
         async || wait_completed(cmdbuf)
