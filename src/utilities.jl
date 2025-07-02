@@ -68,6 +68,33 @@ function versioninfo(io::IO=stdout)
     return
 end
 
+@static if isdefined(Base, :OncePerProcess) # VERSION >= v"1.12.0-DEV.1421"
+    const num_gpu_cores = OncePerProcess{Int64}() do
+        _num_cpu_cores = 0
+        try
+            system_prof = read(`system_profiler SPDisplaysDataType`, String)
+            _num_gpu_cores = parse(Int64, only(match(r"Total Number of Cores:\s*(\d+)", system_prof).captures))
+        catch
+            @warn "Could not determine number of GPU cores; some algorithms may not run optimally."
+        end
+        _num_cpu_cores
+    end
+else
+    const _num_gpu_cores = Ref{Int64}(-1)
+    function num_gpu_cores()
+        if _num_gpu_cores[] == -1
+            try
+                system_prof = read(`system_profiler SPDisplaysDataType`, String)
+                _num_gpu_cores[] = parse(Int64, only(match(r"Total Number of Cores:\s*(\d+)", system_prof).captures))
+            catch
+                @warn "Could not determine number of GPU cores; some algorithms may not run optimally."
+                _num_gpu_cores[] = 0
+            end
+        end
+        _num_gpu_cores[]
+    end
+end
+
 
 ## capture macro
 

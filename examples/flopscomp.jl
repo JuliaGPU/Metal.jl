@@ -17,10 +17,7 @@ Ts=[
 ]
 DEFAULT_NS = [50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024, 1500, 2000, 2048, 2500, 3000, 4000, 4096, 5000, 6000, 6144, 8000, 8192]
 
-n_gpu_cores = "??"
-# Comment this out if scary. Please mention number of cores in your comment when uploading the figure
-system_prof = read(`system_profiler SPDisplaysDataType`, String)
-n_gpu_cores = only(match(r"Total Number of Cores:\s*(\d+)", system_prof).captures)
+n_gpu_cores = Metal.num_gpu_cores()
 
 PLOT_TITLE = "Matmul peakflops for $(device().name) ($n_gpu_cores GPU cores)"
 
