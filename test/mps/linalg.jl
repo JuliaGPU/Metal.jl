@@ -22,7 +22,7 @@ if MPS.is_supported(device())
 
             buf_a = MtlArray{input_jl_type}(arr_a)
             buf_b = MtlArray{input_jl_type}(arr_b)
-            buf_c = MtlArray{accum_jl_type}(undef, (rows_c,cols_c))
+            buf_c = MtlArray{accum_jl_type}(arr_c)
 
             truth_c = (alpha .* accum_jl_type.(arr_a)) *  accum_jl_type.(arr_b) .+ (beta .* arr_c)
 

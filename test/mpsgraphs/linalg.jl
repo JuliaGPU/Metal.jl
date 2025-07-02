@@ -15,19 +15,21 @@ if MPS.is_supported(device())
     beta  = Float64(1)
 
     @testset "$(input_jl_type) => $accum_jl_type" for (input_jl_type, accum_jl_type) in MPSGraphs.MPSGRAPH_VALID_MATMUL_TYPES
+    @testset let input_jl_type = input_jl_type, accum_jl_type = accum_jl_type
         arr_a = rand(input_jl_type, (rows_a, cols_a))
         arr_b = rand(input_jl_type, (rows_b, cols_b))
         arr_c = zeros(accum_jl_type, (rows_c, cols_c))
 
         buf_a = MtlArray{input_jl_type}(arr_a)
         buf_b = MtlArray{input_jl_type}(arr_b)
-        buf_c = MtlArray{accum_jl_type}(undef, (rows_c, cols_c))
+        buf_c = MtlArray{accum_jl_type}(arr_c)
 
         truth_c = (alpha .* accum_jl_type.(arr_a)) * accum_jl_type.(arr_b) .+ (beta .* arr_c)
 
         MPSGraphs.graph_matmul!(buf_c, buf_a, buf_b, alpha, beta)
 
-        @test all(Array(buf_c) .≈ truth_c)
+        @test Array(buf_c) ≈ truth_c
+    end
     end
 end
 
