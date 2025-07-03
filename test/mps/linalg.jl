@@ -16,15 +16,15 @@ if MPS.is_supported(device())
 
     for (input_jl_type, accum_jl_type) in MPS.MPS_VALID_MATMUL_TYPES
         @testset let input_jl_type = input_jl_type, accum_jl_type = accum_jl_type
-            arr_a = rand(input_jl_type, (rows_a,cols_a))
-            arr_b = rand(input_jl_type, (rows_b,cols_b))
-            arr_c = zeros(accum_jl_type, (rows_c,cols_c))
+            arr_a = rand(input_jl_type, (rows_a, cols_a))
+            arr_b = rand(input_jl_type, (rows_b, cols_b))
+            arr_c = zeros(accum_jl_type, (rows_c, cols_c))
 
             buf_a = MtlArray{input_jl_type}(arr_a)
             buf_b = MtlArray{input_jl_type}(arr_b)
-            buf_c = MtlArray{accum_jl_type}(undef, (rows_c,cols_c))
+            buf_c = Metal.zeros(accum_jl_type, size(arr_c))
 
-            truth_c = (alpha .* accum_jl_type.(arr_a)) *  accum_jl_type.(arr_b) .+ (beta .* arr_c)
+            truth_c = (alpha .* accum_jl_type.(arr_a)) * accum_jl_type.(arr_b) .+ (beta .* arr_c)
 
             MPS.matmul!(buf_c, buf_a, buf_b, alpha, beta)
 
@@ -59,16 +59,16 @@ end
 
             buf_a = MtlArray{input_jl_type}(arr_a)
             buf_b = MtlArray{input_jl_type}(arr_b)
-            buf_c = MtlArray{accum_jl_type}(undef, (rows_c, cols_c, batch_size))
+            buf_c = Metal.zeros(accum_jl_type, (rows_c, cols_c, batch_size))
 
-            truth_c = Array{accum_jl_type}(undef, (rows_c, cols_c, batch_size))
+            truth_c = zeros(accum_jl_type, (rows_c, cols_c, batch_size))
             for i in 1:batch_size
                 @views truth_c[:, :, i] = (alpha .* accum_jl_type.(arr_a[:, :, i])) * accum_jl_type.(arr_b[:, :, i]) .+ (beta .* arr_c[:, :, i])
             end
 
             MPS.matmul!(buf_c, buf_a, buf_b, alpha, beta)
 
-            @test all(Array(buf_c) .≈ truth_c)
+            @test Array(buf_c) ≈ truth_c
         end
     end
 end
@@ -83,18 +83,18 @@ end
 
     @testset "$(input_jl_type) => $accum_jl_type" for (input_jl_type, accum_jl_type) in MPS.MPS_VALID_MATVECMUL_TYPES
         arr_a = rand(input_jl_type, (rows,cols))
-        arr_b = rand(input_jl_type, (rows))
-        arr_c = zeros(accum_jl_type, (rows))
+        arr_b = rand(input_jl_type, (rows,))
+        arr_c = zeros(accum_jl_type, (rows,))
 
         buf_a = MtlArray{input_jl_type}(arr_a)
         buf_b = MtlArray{input_jl_type}(arr_b)
-        buf_c = MtlArray{accum_jl_type}(undef, (rows))
+        buf_c = Metal.zeros(accum_jl_type, (rows,))
 
         truth_c = (alpha .* accum_jl_type.(arr_a)) *  accum_jl_type.(arr_b) .+ (beta .* arr_c)
 
         MPS.matvecmul!(buf_c, buf_a, buf_b, alpha, beta)
 
-        @test all(Array(buf_c) .≈ truth_c)
+        @test Array(buf_c) ≈ truth_c
     end
 end
 
