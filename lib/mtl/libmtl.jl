@@ -603,6 +603,8 @@ end
     @autoproperty usage::MTLTensorUsage
 end
 
+const MTLGPUAddress = UInt64
+
 @cenum MTLTextureType::UInt64 begin
     MTLTextureType1D = 0x0000000000000000
     MTLTextureType1DArray = 0x0000000000000001
@@ -1172,7 +1174,7 @@ end
 
 @objcproperties MTL4CounterHeapDescriptor begin
     @autoproperty type::MTL4CounterHeapType setter = setType
-    @autoproperty entryCount::UInt64 setter = setEntryCount
+    @autoproperty count::UInt64 setter = setCount
 end
 
 @objcwrapper immutable = true availability = macos(v"26.0.0") MTL4CounterHeap <: NSObject
@@ -1460,6 +1462,7 @@ end
     @autoproperty rasterizationRateMap::id{MTLRasterizationRateMap} setter = setRasterizationRateMap
     @autoproperty sampleBufferAttachments::id{MTLRenderPassSampleBufferAttachmentDescriptorArray}
     @autoproperty visibilityResultType::MTLVisibilityResultType setter = setVisibilityResultType availability = macos(v"26.0.0")
+    @autoproperty supportColorAttachmentMapping::Bool setter = setSupportColorAttachmentMapping availability = macos(v"26.0.0")
 end
 
 @objcwrapper immutable = true MTLBlitPassSampleBufferAttachmentDescriptor <: NSObject
@@ -2150,6 +2153,8 @@ end
     @autoproperty writeMask::MTLColorWriteMask setter = setWriteMask
 end
 
+@objcwrapper immutable = true availability = macos(v"26.0.0") MTLLogicalToPhysicalColorAttachmentMap <: NSObject
+
 @objcwrapper immutable = true MTLRenderPipelineReflection <: NSObject
 
 @objcproperties MTLRenderPipelineReflection begin
@@ -2351,6 +2356,15 @@ end
     @autoproperty gpuResourceID::MTLResourceID
 end
 
+struct MTL4BufferRange
+    bufferAddress::MTLGPUAddress
+    length::UInt64
+end
+
+function MTL4BufferRangeMake(bufferAddress, length)
+    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTL4BufferRangeMake(bufferAddress::MTLGPUAddress, length::UInt64)::MTL4BufferRange
+end
+
 struct _MTLPackedFloat3
     data::NTuple{12, UInt8}
 end
@@ -2472,15 +2486,6 @@ function Base.propertynames(x::MTLComponentTransform, private::Bool = false)
             ()
         end...,
     )
-end
-
-struct MTL4BufferRange
-    bufferAddress::UInt64
-    length::UInt64
-end
-
-function MTL4BufferRangeMake(bufferAddress, length)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTL4BufferRangeMake(bufferAddress::UInt64, length::UInt64)::MTL4BufferRange
 end
 
 @cenum MTLAccelerationStructureRefitOptions::UInt64 begin
@@ -2796,6 +2801,7 @@ end
 @cenum MTL4VisibilityOptions::Int64 begin
     MTL4VisibilityOptionNone = 0
     MTL4VisibilityOptionDevice = 1
+    MTL4VisibilityOptionResourceAlias = 2
 end
 
 @objcwrapper immutable = true availability = macos(v"26.0.0") MTL4CommandBuffer <: NSObject
@@ -3314,13 +3320,10 @@ end
     @autoproperty label::id{NSString}
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4BinaryFunctionReflection <: NSObject
-
 @objcwrapper immutable = true availability = macos(v"26.0.0") MTL4BinaryFunction <: NSObject
 
 @objcproperties MTL4BinaryFunction begin
     @autoproperty name::id{NSString}
-    @autoproperty reflection::id{MTL4BinaryFunctionReflection}
     @autoproperty functionType::MTLFunctionType
 end
 
@@ -3506,15 +3509,6 @@ end
 
 @objcwrapper immutable = false availability = macos(v"26.0.0") MTL4FunctionDescriptor <: NSObject
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4LinkedFunctions <: NSObject
-
-@objcproperties MTL4LinkedFunctions begin
-    @autoproperty functionDescriptors::id{NSArray} type = Vector{MTL4FunctionDescriptor} setter = setFunctionDescriptors
-    @autoproperty binaryFunctions::id{NSArray} type = Vector{MTL4BinaryFunction} setter = setBinaryFunctions
-    @autoproperty privateFunctionDescriptors::id{NSArray} type = Vector{MTL4FunctionDescriptor} setter = setPrivateFunctionDescriptors
-    @autoproperty groups::id{NSDictionary} setter = setGroups
-end
-
 @objcwrapper immutable = true availability = macos(v"26.0.0") MTL4LibraryFunctionDescriptor <: MTL4FunctionDescriptor
 
 @objcproperties MTL4LibraryFunctionDescriptor begin
@@ -3619,8 +3613,6 @@ end
 
 @objcwrapper immutable = true availability = macos(v"26.0.0") MTL4RenderPipelineColorAttachmentDescriptorArray <: NSObject
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTLLogicalToPhysicalColorAttachmentMap <: NSObject
-
 @objcwrapper immutable = true availability = macos(v"26.0.0") MTL4RenderPipelineBinaryFunctionsDescriptor <: NSObject
 
 @objcproperties MTL4RenderPipelineBinaryFunctionsDescriptor begin
@@ -3718,8 +3710,8 @@ end
 end
 
 @cenum MTL4PipelineDataSetSerializerConfiguration::Int64 begin
-    MTL4PipelineDataSetSerializerConfigurationCaptureDescriptors = 0
-    MTL4PipelineDataSetSerializerConfigurationCaptureBinaries = 1
+    MTL4PipelineDataSetSerializerConfigurationCaptureDescriptors = 1
+    MTL4PipelineDataSetSerializerConfigurationCaptureBinaries = 2
 end
 
 @objcwrapper immutable = true availability = macos(v"26.0.0") MTL4PipelineDataSetSerializerDescriptor <: NSObject
