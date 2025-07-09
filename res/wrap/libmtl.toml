@@ -54,6 +54,9 @@ immutable=false
 [api.MTL4CommandQueue]
 immutable=false
 
+[api.MTL4CommitOptions]
+immutable=false
+
 [api.MTLCompileOptions]
 immutable=false
     [api.MTLCompileOptions.proptype]

@@ -2880,7 +2880,7 @@ end
     MTL4CommandQueueErrorInternal = 6
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4CommitOptions <: NSObject
+@objcwrapper immutable = false availability = macos(v"26.0.0") MTL4CommitOptions <: NSObject
 
 @objcwrapper immutable = true availability = macos(v"26.0.0") MTL4CommandQueueDescriptor <: NSObject
 

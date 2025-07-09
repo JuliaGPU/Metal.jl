@@ -266,7 +266,7 @@ end
 
 @autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
                                                queue=use_metal4() ? global_queue4(device()) : global_queue(device()))
-    use_mtl4 = queue isa MTL4CommandQueue  
+    use_mtl4 = queue isa MTL4CommandQueue
 
     groups = MTLSize(groups)
     threads = MTLSize(threads)
@@ -321,7 +321,19 @@ end
     # kernel has actually completed.
     #
     # TODO: is there a way to bind additional resources to the command buffer?
-    if !use_mtl4
+    if use_mtl4
+        options = MTL.MTL4CommitOptions() do feedback
+            # TODO: RESOURCE MANAGEMENT STUFF
+
+            # Check for errors
+            # XXX: we cannot do this nicely, e.g. throwing an `error` or reporting with `@error`
+            #      because we're not allowed to switch tasks from this contexts.
+
+            if !isnothing(feedback.error)
+                Core.println("ERROR: Failed to submit command buffer: $(feedback.error.localizedDescription)")
+            end
+        end
+    else
         roots = [kernel.f, args]
         MTL.on_completed(cmdbuf) do buf
             empty!(roots)
@@ -337,7 +349,7 @@ end
     end
 
     if use_mtl4
-        commit!(queue, cmdbuf)
+        commit!(queue, cmdbuf, options)
     else
         commit!(cmdbuf)
     end

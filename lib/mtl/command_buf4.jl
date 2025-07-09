@@ -39,7 +39,13 @@ function endCommandBuffer!(cmdbuf::MTL4CommandBuffer)
 end
 
 function commit!(cmdqueue::MTL4CommandQueue, cmdbuf::MTL4CommandBuffer)
-    cmdbuff = Ref{MTL4CommandBuffer}(cmdbuf)
-    @objc [cmdqueue::id{MTL4CommandQueue} commit:cmdbuff::Ref{MTL4CommandBuffer}
+    cmdbufRef = Ref{MTL4CommandBuffer}(cmdbuf)
+    @objc [cmdqueue::id{MTL4CommandQueue} commit:cmdbufRef::Ref{MTL4CommandBuffer}
                                     count:1::NSUInteger]::Nothing
+end
+function commit!(cmdqueue::MTL4CommandQueue, cmdbuf::MTL4CommandBuffer, options::MTL4CommitOptions)
+    cmdbufRef = Ref{MTL4CommandBuffer}(cmdbuf)
+    @objc [cmdqueue::id{MTL4CommandQueue} commit:cmdbufRef::Ref{MTL4CommandBuffer}
+                                    count:1::NSUInteger
+                                    options:options::id{MTL4CommitOptions}]::Nothing
 end
