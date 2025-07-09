@@ -51,6 +51,9 @@ immutable=false
 [api.MTLCommandQueue]
 immutable=false
 
+[api.MTL4CommandQueueDescriptor]
+immutable=false
+
 [api.MTL4CommandQueue]
 immutable=false
 
@@ -66,6 +69,9 @@ immutable=false
 immutable=false
 
 [api.MTL4ComputeCommandEncoder]
+immutable=false
+
+[api.MTL4CommandAllocatorDescriptor]
 immutable=false
 
 [api.MTL4CommandAllocator]

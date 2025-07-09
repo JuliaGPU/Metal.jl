@@ -2882,7 +2882,7 @@ end
 
 @objcwrapper immutable = false availability = macos(v"26.0.0") MTL4CommitOptions <: NSObject
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4CommandQueueDescriptor <: NSObject
+@objcwrapper immutable = false availability = macos(v"26.0.0") MTL4CommandQueueDescriptor <: NSObject
 
 @objcproperties MTL4CommandQueueDescriptor begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -3327,7 +3327,7 @@ end
     @autoproperty functionType::MTLFunctionType
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4CommandAllocatorDescriptor <: NSObject
+@objcwrapper immutable = false availability = macos(v"26.0.0") MTL4CommandAllocatorDescriptor <: NSObject
 
 @objcproperties MTL4CommandAllocatorDescriptor begin
     @autoproperty label::id{NSString} setter = setLabel
