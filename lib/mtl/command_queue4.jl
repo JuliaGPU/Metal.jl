@@ -36,12 +36,36 @@ end
 
 
 
+export MTL4CommandQueueDescriptor
+
+function MTL4CommandQueueDescriptor()
+    handle = @objc [MTL4CommandQueueDescriptor new]::id{MTL4CommandQueueDescriptor}
+    obj = MTL4CommandQueueDescriptor(handle)
+    finalizer(release, obj)
+    return obj
+end
+function MTL4CommandQueueDescriptor(label)
+    desc = MTL4CommandQueueDescriptor()
+    desc.label = label
+    return desc
+end
+
+
 export MTL4CommandQueue
 
 # @objcwrapper immutable=false MTL4CommandQueue <: NSObject
 
 function MTL4CommandQueue(dev::MTLDevice)
     handle = @objc [dev::id{MTLDevice} newMTL4CommandQueue]::id{MTL4CommandQueue}
+    obj = MTL4CommandQueue(handle)
+    finalizer(release, obj)
+    return obj
+end
+
+function MTL4CommandQueue(dev::MTLDevice, descriptor::MTL4CommandQueueDescriptor)
+    err = Ref{id{NSError}}(nil)
+    handle = @objc [dev::id{MTLDevice} newMTL4CommandQueueWithDescriptor:descriptor::id{MTL4CommandQueueDescriptor}
+                                        error:err::Ptr{id{NSError}}]::id{MTL4CommandQueue}
     obj = MTL4CommandQueue(handle)
     finalizer(release, obj)
     return obj

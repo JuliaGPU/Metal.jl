@@ -281,9 +281,7 @@ end
     if use_mtl4
         allocator = MTL4CommandAllocator(device())
         cmdbuf = MTL4CommandBuffer(device())
-
-        # TODO: Initialize with descriptor to set label
-        # cmdbuf.label = "MTL4CommandBuffer($(nameof(kernel.f)))"
+        cmdbuf.label = "MTL4CommandBuffer($(nameof(kernel.f)))"
 
         beginCommandBufferWithAllocator!(cmdbuf, allocator)
         cce = MTL4ComputeCommandEncoder(cmdbuf)
