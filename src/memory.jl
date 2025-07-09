@@ -31,7 +31,7 @@ Base.convert(::Type{Ptr{T}}, ptr::MtlPtr) where {T} =
 
 # CPU -> GPU
 function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T}, src::Ptr{T}, N::Integer;
-                             queue::MTLCommandQueue=global_queue(dev), async::Bool=false) where T
+                             queue=use_metal4() ? global_queue4(dev) : global_queue(dev), async::Bool=false) where T
     storage_type = dst.buffer.storageMode
     if storage_type == MTL.MTLStorageModePrivate
         # stage through a shared buffer
@@ -53,7 +53,7 @@ end
 
 # GPU -> CPU
 function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPtr{T}, N::Integer;
-                             queue::MTLCommandQueue=global_queue(dev), async::Bool=false) where T
+                             queue=use_metal4() ? global_queue4(dev) : global_queue(dev), async::Bool=false) where T
     storage_type = src.buffer.storageMode
     if storage_type == MTL.MTLStorageModePrivate
         # stage through a shared buffer
@@ -88,15 +88,25 @@ end
 # GPU -> GPU
 @autoreleasepool function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
                                               src::MtlPtr{T}, N::Integer;
-                                              queue::MTLCommandQueue=global_queue(dev),
+                                              queue=use_metal4() ? global_queue4(dev) : global_queue(dev),
                                               async::Bool=false) where T
     if N > 0
-        cmdbuf = MTLCommandBuffer(queue)
-        MTLBlitCommandEncoder(cmdbuf) do enc
-            append_copy!(enc, dst.buffer, dst.offset, src.buffer, src.offset, N * sizeof(T))
+        if queue isa MTL4CommandQueue
+            @info "MTL4"
+            cmdbuf = MTL4CommandBuffer(dev; queue) do cmdbuf
+                MTL4ComputeCommandEncoder(cmdbuf, !async) do enc
+                    append_copy!(enc, dst.buffer, dst.offset, src.buffer, src.offset, N * sizeof(T))
+                end
+            end
+        else
+            @info "MTL3"
+            cmdbuf = MTLCommandBuffer(queue)
+            MTLBlitCommandEncoder(cmdbuf) do enc
+                append_copy!(enc, dst.buffer, dst.offset, src.buffer, src.offset, N * sizeof(T))
+            end
+            commit!(cmdbuf)
+            async || wait_completed(cmdbuf)
         end
-        commit!(cmdbuf)
-        async || wait_completed(cmdbuf)
     end
     return dst
 end
