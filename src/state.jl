@@ -95,7 +95,6 @@ First-In-First-Out manner, this synchronizes the GPU.
 end
 @autoreleasepool function synchronize(queue::MTL4CommandQueue)
     cmdbuf, allocator = get(global_queues4, queue) do
-        @info "hello"
         dev = queue.device
         MTL4CommandBuffer(dev), MTL4CommandAllocator(dev)
     end
