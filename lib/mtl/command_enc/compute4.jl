@@ -44,14 +44,14 @@ function dispatchThreads!(cce::MTL4ComputeCommandEncoder, threadsSize::MTLSize, 
 end
 
 # Copy Operations (Blit functionality integrated into compute encoder in Metal 4)
-# function append_copy!(cce::MTL4ComputeCommandEncoder, dst::MTLBuffer, dstOffset::Integer,
-#                       src::MTLBuffer, srcOffset::Integer, size::Integer)
-#     @objc [cce::id{MTL4ComputeCommandEncoder} copyFromBuffer:src::id{MTLBuffer}
-#                                              sourceOffset:srcOffset::NSUInteger
-#                                              toBuffer:dst::id{MTLBuffer}
-#                                              destinationOffset:dstOffset::NSUInteger
-#                                              size:size::NSUInteger]::Nothing
-# end
+function append_copy!(cce::MTL4ComputeCommandEncoder, dst::MTLBuffer, dstOffset::Integer,
+                      src::MTLBuffer, srcOffset::Integer, size::Integer)
+    @objc [cce::id{MTL4ComputeCommandEncoder} copyFromBuffer:src::id{MTLBuffer}
+                                             sourceOffset:srcOffset::NSUInteger
+                                             toBuffer:dst::id{MTLBuffer}
+                                             destinationOffset:dstOffset::NSUInteger
+                                             size:size::NSUInteger]::Nothing
+end
 
 # function append_copy!(cce::MTL4ComputeCommandEncoder, dst::MTLTexture, dstSlice::Integer, dstLevel::Integer, dstOrigin::MTLOrigin,
 #                       src::MTLBuffer, srcOffset::Integer, srcBytesPerRow::Integer, srcBytesPerImage::Integer,

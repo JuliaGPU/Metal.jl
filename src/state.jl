@@ -100,7 +100,9 @@ end
     end
 
     cmdbuf = commit!(cmdbuf, queue, allocator) do cmdbuf
-        MTL4ComputeCommandEncoder(identity, cmdbuf, #=sync=#true)
+        encoder = MTL4ComputeCommandEncoder(cmdbuf)
+        MTL.barrierAfterQueueStages!(encoder)
+        close(encoder)
     end
     return
 end
