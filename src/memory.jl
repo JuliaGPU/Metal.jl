@@ -106,8 +106,8 @@ end
                                        queue=use_metal4() ? global_queue4(dev) : global_queue(dev),
                                        async::Bool=false) where T
     if N > 0
-        if queue isa MTL4CommandQueue 
-            @info "4"
+        if queue isa MTL4CommandQueue
+            @info "MTL4"
             cmdbuf = MTL4CommandBuffer(dev; queue) do cmdbuf
                 MTL4ComputeCommandEncoder(cmdbuf, !async) do enc
                     append_fillbuffer!(enc, dst.buffer, value, N * sizeof(T), dst.offset)
