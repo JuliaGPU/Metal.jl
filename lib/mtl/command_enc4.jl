@@ -1,6 +1,17 @@
-export endEncoding!, barrierAfterStages!
+export endEncoding!, updateFence!, waitForFence
+export barrierAfterEncoderStages!, barrierAfterQueueStages!, barrierAfterStages!
 
 # @objcwrapper immutable=true MTL4CommandEncoder <: NSObject
+
+function updateFence!(encoder::MTL4CommandEncoder, fence::MTLFence, afterEncoderStages::MTLStages=MTLStageAll)
+    @objc [encoder::id{MTL4CommandEncoder} updateFence:fence::id{MTLFence}
+                                            afterEncoderStages:afterEncoderStages::MTLStages]::Nothing
+end
+
+function waitForFence(encoder::MTL4CommandEncoder, fence::MTLFence, beforeEncoderStages::MTLStages=MTLStageAll)
+    @objc [encoder::id{MTL4CommandEncoder} waitForFence:fence::id{MTLFence}
+                                            beforeEncoderStages:afterEncoderStages::MTLStages]::Nothing
+end
 
 function barrierAfterEncoderStages!(encoder::MTL4CommandEncoder, afterEncoderStages::MTLStages=MTLStageAll, beforeEncoderStages::MTLStages=MTLStageAll, visibilityOptions::MTL4VisibilityOptions=MTL4VisibilityOptionResourceAlias)
     @objc [encoder::id{MTL4CommandEncoder} barrierAfterEncoderStages:afterEncoderStages::MTLStages

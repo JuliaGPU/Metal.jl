@@ -1,5 +1,6 @@
 export MTL4ComputeCommandEncoder
 export set_function!, set_buffer!, set_bytes!, set_texture!, set_sampler_state!
+export stages
 export dispatchThreadgroups!, dispatchThreads!, endEncoding!
 export use!, memoryBarrier!, append_copy!, append_fillbuffer!, append_sync!
 
@@ -66,6 +67,10 @@ end
 #                                              destinationLevel:dstLevel::NSUInteger
 #                                              destinationOrigin:dstOrigin::MTLOrigin]::Nothing
 # end
+
+function stages(cce::MTL4ComputeCommandEncoder)
+    @objc [cce::id{MTL4ComputeCommandEncoder} stages]::MTLStages
+end
 
 # Fill Buffer
 function append_fillbuffer!(cce::MTL4ComputeCommandEncoder, buffer::MTLBuffer, range::NSRange, value::UInt8)
