@@ -36,8 +36,8 @@ function __init__()
     if macos_version() < v"13"
         @error "Metal.jl requires macOS 13 or later"
         return
-    elseif macos_version() >= v"16"
-        @warn "Metal.jl has not been tested on macOS 16 or later, you may run into issues."
+    elseif macos_version() >= v"27"
+        @warn "Metal.jl has not been tested on macOS 27 or later, you may run into issues."
     end
 
     if Base.JLOptions().debug_level >= 2
