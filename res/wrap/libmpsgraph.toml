@@ -27,3 +27,6 @@ macro_mode = "disable"
 
 [api.MPSGraphTensorData]
 immutable=false
+
+[api.MPSGraphShapedType]
+immutable=false
