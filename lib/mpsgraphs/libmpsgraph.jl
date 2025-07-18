@@ -12,7 +12,7 @@ const MPSGraphTensorDataDictionary = NSDictionary
 
 @objcwrapper immutable = true MPSGraphType <: MPSGraphObject
 
-@objcwrapper immutable = true MPSGraphShapedType <: MPSGraphType
+@objcwrapper immutable = false MPSGraphShapedType <: MPSGraphType
 
 @objcproperties MPSGraphShapedType begin
     @autoproperty shape::id{MPSShape} setter = setShape
