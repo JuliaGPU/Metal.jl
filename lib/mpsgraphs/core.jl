@@ -1,5 +1,8 @@
 # Contains definitions for api from MPSGraphCore.h, MPSGraphDevice.h
 
+MPSGraphDevice(dev) = MPSGraphDevice(@objc [MPSGraphDevice deviceWithMTLDevice:dev::id{MTLDevice}]::id{MPSGraphDevice})
+
+
 ## MPSGraphCore.h
 # @objcwrapper MPSGraphObject <: NSObject
 # @objcwrapper MPSGraphType <: MPSGraphObject
