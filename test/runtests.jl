@@ -10,6 +10,9 @@ if parse(Bool, get(ENV, "BUILDKITE", "false"))
     end
 end
 
+using Pkg
+Pkg.add(url="https://github.com/christiangnrd/GPUArrays.jl", rev="accumulatetests")
+
 # Quit without erroring if Metal loaded without issues on unsupported platforms
 if !Sys.isapple()
     @warn """Metal.jl succesfully loaded on non-macOS system.
