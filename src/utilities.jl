@@ -62,7 +62,7 @@ function versioninfo(io::IO=stdout)
         println(io, length(devs), " devices:")
     end
     for (i, dev) in enumerate(devs)
-        println(io, "- $(dev.name) ($(Base.format_bytes(dev.currentAllocatedSize)) allocated)")
+        println(io, "- $(dev.name) $(num_gpu_cores()) GPU cores ($(Base.format_bytes(dev.currentAllocatedSize)) allocated)")
     end
 
     return
