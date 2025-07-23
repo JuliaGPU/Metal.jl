@@ -73,7 +73,7 @@ Julia packages:
 - Metal.jl: 1.6.3
 - GPUArrays: 11.2.3
 - GPUCompiler: 1.6.1
-- KernelAbstractions: 0.9.37
+- KernelAbstractions: 0.9.39
 - ObjectiveC: 3.4.2
 - LLVM: 9.4.2
 - LLVMDowngrader_jll: 0.6.0+1
