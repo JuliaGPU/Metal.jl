@@ -63,3 +63,11 @@ function use!(cce::MTLComputeCommandEncoder, buf::Vector{MTLBuffer}, mode::MTLRe
                                              count:length(buf)::Csize_t
                                              usage:mode::MTLResourceUsage]::Nothing
 end
+
+# fence stuff
+function waitForFence(cce::MTLComputeCommandEncoder, fence)
+    @objc [cce::id{MTLComputeCommandEncoder} waitForFence:fence::id{MTLFence}]::Nothing
+end
+function updateFence!(cce::MTLComputeCommandEncoder, fence)
+    @objc [cce::id{MTLComputeCommandEncoder} updateFence:fence::id{MTLFence}]::Nothing
+end

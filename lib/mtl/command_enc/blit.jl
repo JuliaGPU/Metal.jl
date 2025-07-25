@@ -15,6 +15,15 @@ function MTLBlitCommandEncoder(f::Base.Callable, cmdbuf::MTLCommandBuffer)
     return encoder
 end
 
+# fence stuff
+function waitForFence(cce::MTLBlitCommandEncoder, fence)
+    @objc [cce::id{MTLBlitCommandEncoder} waitForFence:fence::id{MTLFence}]::Nothing
+end
+function updateFence!(cce::MTLBlitCommandEncoder, fence)
+    @objc [cce::id{MTLBlitCommandEncoder} updateFence:fence::id{MTLFence}]::Nothing
+end
+
+
 ##
 # Copy from device to device
 function append_copy!(enc::MTLBlitCommandEncoder, dst::MTLBuffer, doff,
