@@ -8,8 +8,6 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
     # TODO: make these tests actually write to the overlapping memory locations
 
     atomic_store_load_exch_cmpexch_types = (Int32, UInt32, Float32)
-    # The Metal Shading Language spec states: "Metal 3 supports the atomic_float for device memory only"
-    local_atomic_store_load_exch_cmpexch_types = setdiff(atomic_store_load_exch_cmpexch_types, [Float32])
 
     @testset "store_explicit" begin
         function global_kernel(a, val)
@@ -32,7 +30,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in local_atomic_store_load_exch_cmpexch_types
+        @testset for T in atomic_store_load_exch_cmpexch_types
             a = Metal.zeros(T, n)
             @metal threads=n local_kernel(a, T(42))
             @test all(isequal(42), Array(a))
@@ -66,7 +64,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in local_atomic_store_load_exch_cmpexch_types
+        @testset for T in atomic_store_load_exch_cmpexch_types
             a = MtlArray(rand(T, n))
             b = Metal.zeros(T, n)
             @metal threads=n local_kernel(a, b)
@@ -95,7 +93,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in local_atomic_store_load_exch_cmpexch_types
+        @testset for T in atomic_store_load_exch_cmpexch_types
             a = Metal.zeros(T, n)
             @metal threads=n local_kernel(a, T(42))
             @test all(isequal(42), Array(a))
@@ -134,7 +132,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in local_atomic_store_load_exch_cmpexch_types
+        @testset for T in atomic_store_load_exch_cmpexch_types
             a = Metal.zeros(T, n)
             expected = copy(a)
             desired = T(42)

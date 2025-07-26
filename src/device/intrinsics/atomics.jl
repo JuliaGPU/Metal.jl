@@ -20,12 +20,10 @@ const atomic_type_names = Dict(
 
 
 ## low-level functions
-
-# NOTE: Float32 atomics are only available on Metal 3.0, but we can't check that at runtime
-
-for typ in (:Int32, :UInt32, :Float32), as in (AS.Device, AS.ThreadGroup)
+for typ in (:Int32, :UInt32), as in (AS.Device, AS.ThreadGroup)
     typnam = atomic_type_names[typ]
     memnam, memid = atomic_memory_names[as]
+
     @eval begin
         function atomic_store_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ)
             @typed_ccall($"air.atomic.$memnam.store.$typnam", llvmcall, Nothing,
@@ -58,6 +56,23 @@ for typ in (:Int32, :UInt32, :Float32), as in (AS.Device, AS.ThreadGroup)
             expected_box[]
         end
     end
+end
+
+# Float32 atomics are only available on Metal 3.0, and additionally only for
+# device memory, so we just skip them and reinterpret. That should be safe?
+atomic_store_explicit(ptr::LLVMPtr{Float32,AS}, desired::Float32) where {AS} =
+    atomic_store_explicit(reinterpret(LLVMPtr{UInt32,AS}, ptr), reinterpret(UInt32, desired))
+atomic_load_explicit(ptr::LLVMPtr{Float32,AS}) where {AS} =
+    reinterpret(Float32, atomic_load_explicit(reinterpret(LLVMPtr{UInt32,AS}, ptr)))
+atomic_exchange_explicit(ptr::LLVMPtr{Float32,AS}, desired::Float32) where {AS} =
+    reinterpret(Float32, atomic_exchange_explicit(reinterpret(LLVMPtr{UInt32,AS}, ptr),
+                                                  reinterpret(UInt32, desired)))
+function atomic_compare_exchange_weak_explicit(ptr::LLVMPtr{Float32,AS}, expected::Float32,
+                                               desired::Float32) where {AS}
+    ptr′ = reinterpret(LLVMPtr{UInt32,AS}, ptr)
+    expected′ = reinterpret(UInt32, expected)
+    desired′ = reinterpret(UInt32, desired)
+    return reinterpret(Float32, atomic_compare_exchange_weak_explicit(ptr′, expected′, desired′))
 end
 
 const atomic_fetch_and_modify = [
