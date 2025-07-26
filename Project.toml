@@ -1,6 +1,6 @@
 name = "Metal"
 uuid = "dde4c033-4e86-420c-a63e-0dd931031962"
-version = "1.6.3"
+version = "1.6.4"
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
