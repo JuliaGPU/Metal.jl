@@ -52,8 +52,6 @@ Note that `PrivateStorage` buffers can't be directly accessed from the CPU, ther
 use this option if you pass a ptr to initialize the memory.
 """
 function alloc(dev::Union{MTLDevice,MTLHeap}, sz::Integer, args...; kwargs...)
-    @signpost_event log=log_array() "Allocate" "Size=$(Base.format_bytes(sz))"
-
     time = Base.@elapsed begin
         buf = @autoreleasepool MTLBuffer(dev, sz, args...; kwargs...)
     end
@@ -73,7 +71,6 @@ This does not protect against double-freeing of the same buffer!
 """
 function free(buf::MTLBuffer)
     sz::Int = buf.length
-    @signpost_event log=log_array() "Free" "Size=$(Base.format_bytes(sz))"
 
     time = Base.@elapsed begin
         @autoreleasepool unsafe=true release(buf)
