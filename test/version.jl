@@ -8,4 +8,6 @@
 @test Metal.air_support() isa VersionNumber
 @test Metal.metal_support() isa VersionNumber
 
+@test Metal.num_gpu_cores() isa Int64
+
 end # testset "version"
