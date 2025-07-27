@@ -278,9 +278,10 @@ end
     cmdbuf = MTLCommandBuffer(queue)
     cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
     cce = MTLComputeCommandEncoder(cmdbuf)
+    kernel_state = MtlRefValue(KernelState(make_seed(kernel)))
     argument_buffers = try
         MTL.set_function!(cce, kernel.pipeline)
-        bufs = encode_arguments!(cce, kernel, kernel.f, args...)
+        bufs = encode_arguments!(cce, kernel, kernel.f, kernel_state, args...)
         MTL.append_current_function!(cce, groups, threads)
         bufs
     finally
@@ -295,7 +296,7 @@ end
     # kernel has actually completed.
     #
     # TODO: is there a way to bind additional resources to the command buffer?
-    roots = [kernel.f, args]
+    roots = [kernel.f, kernel_state, args]
     MTL.on_completed(cmdbuf) do buf
         empty!(roots)
         foreach(free, argument_buffers)

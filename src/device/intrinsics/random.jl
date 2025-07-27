@@ -1,3 +1,4 @@
+# Copied from CUDA.jl/src/device/random.jl
 # Copied from AMDGPU.jl/src/device/random.jl
 
 
@@ -52,6 +53,17 @@ end
 @inline function global_random_counters()
     ptr = emit_global_random_values(Val{:counters}())::LLVMPtr{UInt32,AS.ThreadGroup}
     return MtlDeviceArray{UInt32,1,AS.ThreadGroup}((32,), ptr)
+end
+
+# initialization function, called automatically at the start of each kernel because
+# there's no reliable way to detect uninitialized shared memory (see JuliaGPU/CUDA.jl#2008)
+function initialize_rng_state()
+    threadId = thread_position_in_threadgroup_3d().x + (thread_position_in_threadgroup_3d().y - UInt32(1)) * threads_per_threadgroup_3d().x +
+                                                       (thread_position_in_threadgroup_3d().z - UInt32(1)) * threads_per_threadgroup_3d().x * threads_per_threadgroup_3d().y
+    warpId = (threadId - UInt32(1)) >> 0x5 + UInt32(1)  # fld1
+
+    @inbounds global_random_keys()[warpId] = kernel_state().random_seed
+    @inbounds global_random_counters()[warpId] = 0
 end
 
 # generators
