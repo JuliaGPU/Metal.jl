@@ -1,7 +1,7 @@
 module MetalKernels
 
 using ..Metal
-using ..Metal: @device_override
+using ..Metal: @device_override, DefaultStorageMode, SharedStorage
 
 import KernelAbstractions as KA
 
@@ -22,9 +22,9 @@ The `KernelAbstractions` backend for running on Metal GPUs.
 struct MetalBackend <: KA.GPU
 end
 
-KA.allocate(::MetalBackend, ::Type{T}, dims::Tuple) where T = MtlArray{T}(undef, dims)
-KA.zeros(::MetalBackend, ::Type{T}, dims::Tuple) where T = Metal.zeros(T, dims)
-KA.ones(::MetalBackend, ::Type{T}, dims::Tuple) where T = Metal.ones(T, dims)
+KA.allocate(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = MtlArray{T, length(dims), unified ? SharedStorage : DefaultStorageMode}(undef, dims)
+KA.zeros(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.zeros(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
+KA.ones(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.ones(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
 
 KA.get_backend(::MtlArray) = MetalBackend()
 KA.synchronize(::MetalBackend) = synchronize()
@@ -33,6 +33,7 @@ KA.functional(::MetalBackend) = Metal.functional()
 
 KA.supports_float64(::MetalBackend) = false
 KA.supports_atomics(::MetalBackend) = false
+KA.supports_unified(::MetalBackend) = true
 
 Adapt.adapt_storage(::MetalBackend, a::Array) = Adapt.adapt(MtlArray, a)
 Adapt.adapt_storage(::MetalBackend, a::MtlArray) = a
