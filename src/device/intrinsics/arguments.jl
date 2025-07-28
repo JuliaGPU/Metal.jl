@@ -128,6 +128,10 @@ Return the index of the current thread in its threadgroup.
     thread_execution_width()::UInt32
 
 Return the execution width of the compute unit.
+
+This function has been deprecated as of Metal 3.
+
+Use [`threads_per_simdgroup`](@ref) instead.
 """ thread_execution_width
 
 @doc """
