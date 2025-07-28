@@ -117,7 +117,7 @@ julia> Base.mapreducedim!(identity, +, b, a)
 
 Base's convenience functions for generating random numbers are available in Metal as well:
 
-```jldoctest
+```jldoctest; filter = r"\d+\.\d+" => s"*.*"
 julia> Metal.rand(2)
 2-element MtlVector{Float32, Metal.PrivateStorage}:
  0.89025915
@@ -134,7 +134,7 @@ Behind the scenes, these random numbers come from two different generators: one 
 another by using the GPUArrays.jl random methods. Operations on these generators are implemented using methods from the Random
 standard library:
 
-```jldoctest
+```jldoctest; filter = r"\d+\.\d+" => s"*.*"
 julia> using Random, GPUArrays
 
 julia> a = Random.rand(MPS.default_rng(), Float32, 1)
