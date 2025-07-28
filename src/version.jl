@@ -12,7 +12,7 @@
 #                  or air.language_version in the embedded bitcode
 
 """
-    Metal.metallib_support() -> VersionNumber
+    Metal.metallib_support()::VersionNumber
 
 Returns the highest supported version for the metallib file format.
 
@@ -42,7 +42,7 @@ function metallib_support()
 end
 
 """
-    Metal.air_support() -> VersionNumber
+    Metal.air_support()::VersionNumber
 
 Returns the highest supported version for the embedded AIR bitcode format.
 
@@ -74,7 +74,7 @@ function air_support()
 end
 
 """
-    Metal.metal_support() -> VersionNumber
+    Metal.metal_support()::VersionNumber
 
 Returns the highest supported version for the Metal Shading Language.
 
