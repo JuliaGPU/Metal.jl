@@ -112,7 +112,7 @@ end
         cmp = old
         new = convert(T, op(old, val))
         old = atomic_compare_exchange_weak_explicit(ptr, cmp, new)
-        isequal(old, cmp) && return new
+        isequal(old, cmp) && return old
     end
 end
 
