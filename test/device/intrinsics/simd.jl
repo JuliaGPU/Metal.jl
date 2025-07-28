@@ -60,17 +60,17 @@ end
     N = 16
     midN = N ÷ 2
 
-    a = Array{typ}(1:N)
-    mtla = MtlArray(a)
-    mtlb = MtlArray(a)
+    data = Array{typ}(1:N)
+    mtldata = MtlArray(data)
+    mtlfilling = MtlArray(data)
 
-    Metal.@sync @metal threads=N kernel_mod(mtla, mtlb, N)
-    @test Array(mtla) == circshift(a,nshift)
+    Metal.@sync @metal threads=N kernel_mod(mtldata, mtlfilling, N)
+    @test Array(mtldata) == circshift(data,nshift)
 
-    mtlc = MtlArray(a)
+    mtlfilling2 = MtlArray(data)
 
-    Metal.@sync @metal threads=N kernel_mod(mtlc, mtlb, midN)
-    @test Array(mtlc) == [circshift(a[1:midN],nshift);circshift(a[midN+1:end],nshift)]
+    Metal.@sync @metal threads=N kernel_mod(mtlfilling2, mtlfilling, midN)
+    @test Array(mtlfilling2) == [circshift(data[1:midN],nshift);circshift(data[midN+1:end],nshift)]
 end
 @testset "matrix functions" begin
     @testset "load_store($typ)" for typ in [Float16, Float32]
