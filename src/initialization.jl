@@ -8,11 +8,17 @@
             return false
         end
     end
+
+    const use_metal4 = OncePerProcess{Bool}() do
+        dev = device()
+        force_metal3 = @load_preference("force_metal3", false)
+        return functional() && !force_metal3 && supports_family(dev, MTL.MTLGPUFamilyMetal4)
+    end
 else
     # Becomes `nothing` once it has been determined that the device is on macOS
     const _functional = Ref{Union{Nothing,Bool}}(false)
 
-    function functional()
+    function functional()::Bool
         if isnothing(_functional[])
             dev = device()
 
@@ -21,6 +27,16 @@ else
                 supports_family(dev, MTL.MTLGPUFamilyMetal3)
         end
         _functional[]
+    end
+
+    const _use_metal4 = Ref{Union{Nothing,Bool}}(nothing)
+    function use_metal4()::Bool
+        if isnothing(_use_metal4[])
+            dev = device()
+            force_metal3 = @load_preference("force_metal3", false)
+            _use_metal4[] =  functional() && !force_metal3 && supports_family(dev, MTL.MTLGPUFamilyMetal4)
+        end
+        _use_metal4[]
     end
 end
 
