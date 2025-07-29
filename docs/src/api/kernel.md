@@ -10,7 +10,6 @@ This is made possible by interfacing with the Metal libraries by wrapping a subs
 ## Indexing and dimensions
 
 ```@docs
-thread_execution_width
 thread_index_in_quadgroup
 thread_index_in_simdgroup
 thread_index_in_threadgroup
@@ -27,6 +26,7 @@ quadgroup_index_in_threadgroup
 quadgroups_per_threadgroup
 grid_size_1d
 grid_origin_1d
+thread_execution_width
 ```
 
 

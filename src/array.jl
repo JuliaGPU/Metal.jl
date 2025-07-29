@@ -127,7 +127,7 @@ storagemode(x::MtlArray) = storagemode(typeof(x))
 storagemode(::Type{<:MtlArray{<:Any,<:Any,S}}) where {S} = S
 
 """
-    is_shared(A::MtlArray) -> Bool
+    is_shared(A::MtlArray)::Bool
 
 Returns true if `A` has storage mode [`Metal.SharedStorage`](@ref).
 
@@ -136,7 +136,7 @@ See also [`is_private`](@ref) and [`is_managed`](@ref).
 is_shared(A::MtlArray) = storagemode(A) == SharedStorage
 
 """
-    is_managed(A::MtlArray) -> Bool
+    is_managed(A::MtlArray)::Bool
 
 Returns true if `A` has storage mode [`Metal.ManagedStorage`](@ref).
 
@@ -145,7 +145,7 @@ See also [`is_shared`](@ref) and [`is_private`](@ref).
 is_managed(A::MtlArray) = storagemode(A) == ManagedStorage
 
 """
-    is_private(A::MtlArray) -> Bool
+    is_private(A::MtlArray)::Bool
 
 Returns true if `A` has storage mode [`Metal.PrivateStorage`](@ref).
 
