@@ -3,7 +3,7 @@ module Metal
 using GPUArrays
 using Adapt
 using GPUCompiler
-using GPUToolbox: SimpleVersion, @sv_str
+using GPUToolbox
 using LLVM
 using LLVM.Interop
 import LLVMDowngrader_jll
