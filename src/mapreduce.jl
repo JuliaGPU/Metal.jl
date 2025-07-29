@@ -140,7 +140,33 @@ function partial_mapreduce_device(f, op, neutral, maxthreads, ::Val{Rreduce},
     return
 end
 
+function big_mapreduce_kernel(f, op, neutral, ::Val{Rreduce}, ::Val{Rother}, R, As) where {Rreduce, Rother}
+    grid_idx = thread_position_in_threadgroup_1d() + (threadgroup_position_in_grid_1d() - 1u32) * threadgroups_per_grid_1d()
+
+    @inbounds if grid_idx <= length(Rother)
+        Iother = Rother[grid_idx]
+
+        # load the neutral value
+        neutral = if neutral === nothing
+            R[Iother]
+        else
+            neutral
+        end
+
+        val = op(neutral, neutral)
+
+        Ibegin = Rreduce[1]
+        for Ireduce in Rreduce
+            val = op(val, f(As[Iother + Ireduce - Ibegin]))
+        end
+        R[Iother] = val
+    end
+    return
+end
+
 ## COV_EXCL_STOP
+
+_big_mapreduce_threshold(dev) = dev.maxThreadsPerThreadgroup.width * num_gpu_cores()
 
 function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
                                  A::Union{AbstractArray,Broadcast.Broadcasted};
@@ -165,6 +191,15 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # NOTE: we hard-code `OneTo` (`first.(axes(A))` would work too) or we get a
     #       CartesianIndices object with UnitRanges that behave badly on the GPU.
     @assert length(Rall) == length(Rother) * length(Rreduce)
+    @assert length(Rother) > 0
+
+    # If `Rother` is large enough, then a naive loop is more efficient than partial reductions.
+    if length(Rother) >= _big_mapreduce_threshold(device(R))
+        threads = min(length(Rreduce), 512)
+        groups = cld(length(Rother), threads)
+        kernel = @metal threads groups big_mapreduce_kernel(f, op, init, Val(Rreduce), Val(Rother), R, A)
+        return R
+    end
 
     # when the reduction dimension is contiguous in memory, we can improve performance
     # by having each thread read multiple consecutive elements. base on experiments,
