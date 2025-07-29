@@ -65,7 +65,10 @@ gpu_vec_ints = reshape(gpu_mat_ints, length(gpu_mat_ints))
 #     group["1d_inplace"] = @benchmarkable Metal.@sync reverse!($gpu_vec)
 #     group["2d_inplace"] = @benchmarkable Metal.@sync reverse!($gpu_mat; dims=1)
 # end
-group["construct"] = @benchmarkable MtlArray{Int,1}(undef, 1)
+
+# 'evals=1' added to prevent hang when running benchmarks of CI
+# TODO: Investigate cause and properly fix.
+group["construct"] = @benchmarkable MtlArray{Int,1}(undef, 1) evals=1
 
 group["broadcast"] = @benchmarkable Metal.@sync $gpu_mat .= 0f0
 
