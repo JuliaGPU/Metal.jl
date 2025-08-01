@@ -32,3 +32,27 @@ function run(graph::MPSGraph, commandQueue::MTLCommandQueue, feeds::MPSGraphTens
                                          targetOperations:nil::id{Object}]::id{MPSGraphTensorDataDictionary}
     MPSGraphTensorDataDictionary(obj)
 end
+
+const MPSGraphTensorShapedTypeDictionary = NSDictionary#{MPSGraphTensor, MPSGraphTensorShapedType}
+
+compile(graph::MPSGraph, dev::MTLDevice, feeds::MPSGraphTensorShapedTypeDictionary, targetTensors::NSArray, targetOperations=nil, compilationDescriptor=nil) = compile(graph, MPSGraphDevice(dev), feeds, targetTensors, targetOperations, compilationDescriptor)
+function compile(graph::MPSGraph, dev::MPSGraphDevice, feeds::MPSGraphTensorShapedTypeDictionary, targetTensors::NSArray, targetOperations=nil, compilationDescriptor=nil)
+    exec = @objc [graph::id{MPSGraph} compileWithDevice:dev::id{MPSGraphDevice}
+                                     feeds:feeds::id{MPSGraphTensorShapedTypeDictionary}
+                             targetTensors:targetTensors::id{NSArray}
+                          targetOperations:targetOperations::id{Object}
+                     compilationDescriptor:compilationDescriptor::id{Object}]::id{MPSGraphExecutable}
+    return MPSGraphExecutable(exec)
+end
+
+function MPSGraphExecutableSerializationDescriptor()
+    tmp = @objc [MPSGraphExecutableSerializationDescriptor alloc]::id{MPSGraphExecutableSerializationDescriptor}
+    obj = MPSGraphExecutableSerializationDescriptor(tmp)
+    return obj
+end
+
+serialize(graphExe::MPSGraphExecutable, url, descriptor=MPSGraphExecutableSerializationDescriptor()) = serialize(graphExe, NSFileURL(url), descriptor)
+function serialize(graphExe::MPSGraphExecutable, url::NSURL, descriptor=MPSGraphExecutableSerializationDescriptor())
+    @objc [graphExe::id{MPSGraphExecutable} serializeToMPSGraphPackageAtURL:url::id{NSURL}
+                              descriptor:descriptor::id{MPSGraphExecutableSerializationDescriptor}]::Nothing
+end
