@@ -59,7 +59,7 @@ function MTLCaptureDescriptor()
 end
 
 # TODO: Add capture state
-function MTLCaptureDescriptor(obj::Union{MTLDevice,MTLCommandQueue, MTLCaptureScope},
+function MTLCaptureDescriptor(obj::Union{MTLDevice,MTLCommandQueue,MTLCaptureScope},
                               destination::MTLCaptureDestination;
                               folder::String=nothing)
     desc = MTLCaptureDescriptor()
@@ -110,7 +110,7 @@ end
 
 Start GPU frame capture using the default capture object and specifying capture descriptor parameters directly.
 """
-function startCapture(obj::Union{MTLDevice,MTLCommandQueue, MTLCaptureScope},
+function startCapture(obj::Union{MTLDevice,MTLCommandQueue,MTLCaptureScope},
                       destination::MTLCaptureDestination=MTLCaptureDestinationGPUTraceDocument;
                       folder::String=nothing)
     if destination == MTLCaptureDestinationGPUTraceDocument && folder === nothing
