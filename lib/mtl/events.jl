@@ -29,10 +29,6 @@ function MTLSharedEvent(dev::MTLDevice)
     return obj
 end
 
-function waitUntilSignaledValue(ev::MTLSharedEvent, value, timeoutMS=typemax(UInt64))
-    @objc [ev::id{MTLSharedEvent} waitUntilSignaledValue:value::UInt64
-                        timeoutMS:timeoutMS::UInt64]::Bool
-end
 
 ## shared event handle
 
