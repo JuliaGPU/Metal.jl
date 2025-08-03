@@ -148,11 +148,23 @@ let group = addgroup!(group, "random")
     end
 end
 
-# let group = addgroup!(group, "sorting")
-#     group["1d"] = @benchmarkable Metal.@sync sort($gpu_vec)
-#     group["2d"] = @benchmarkable Metal.@sync sort($gpu_mat; dims=1)
-#     group["by"] = @benchmarkable Metal.@sync sort($gpu_vec; by=sin)
-# end
+let group = addgroup!(group, "sorting")
+    let group = addgroup!(group, "Float32")
+        group["1d"] = @benchmarkable Metal.@sync sort($gpu_vec)
+        group["by=sin"] = @benchmarkable Metal.@sync sort($gpu_vec; by=sin)
+    #     group["dims=1"] = @benchmarkable Metal.@sync sort($gpu_mat; dims=1)
+    #     group["dims=2"] = @benchmarkable Metal.@sync sort($gpu_mat; dims=2)
+    #     group["dims=1L"] = @benchmarkable Metal.@sync sort($gpu_mat_long; dims=1)
+    #     group["dims=2L"] = @benchmarkable Metal.@sync sort($gpu_mat_long; dims=2)
+    end
+    let group = addgroup!(group, "Int64")
+        group["1d"] = @benchmarkable Metal.@sync sort($gpu_vec_ints)
+    #     group["dims=1"] = @benchmarkable Metal.@sync sort($gpu_mat_ints; dims=1)
+    #     group["dims=2"] = @benchmarkable Metal.@sync sort($gpu_mat_ints; dims=2)
+    #     group["dims=1L"] = @benchmarkable Metal.@sync sort($gpu_mat_long_ints; dims=1)
+    #     group["dims=2L"] = @benchmarkable Metal.@sync sort($gpu_mat_long_ints; dims=2)
+    end
+end
 
 let group = addgroup!(group, "permutedims")
     group["2d"] = @benchmarkable Metal.@sync permutedims($gpu_mat, (2,1))
