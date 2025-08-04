@@ -59,12 +59,18 @@ gpu_mat_ints = MtlMatrix{Int64}(rand(rng, -10:10, m, n))
 gpu_mat_long_ints = MtlMatrix{Int64}(rand(rng, -10:10, m_long, n_long))
 gpu_vec_ints = reshape(gpu_mat_ints, length(gpu_mat_ints))
 
-# let group = addgroup!(group, "reverse")
-#     group["1d"] = @benchmarkable Metal.@sync reverse($gpu_vec)
-#     group["2d"] = @benchmarkable Metal.@sync reverse($gpu_mat; dims=1)
-#     group["1d_inplace"] = @benchmarkable Metal.@sync reverse!($gpu_vec)
-#     group["2d_inplace"] = @benchmarkable Metal.@sync reverse!($gpu_mat; dims=1)
-# end
+let group = addgroup!(group, "reverse")
+    group["1d"] = @benchmarkable Metal.@sync reverse($gpu_vec)
+    group["dims=1"] = @benchmarkable Metal.@sync reverse($gpu_mat; dims=1)
+    group["dims=2"] = @benchmarkable Metal.@sync reverse($gpu_mat; dims=2)
+    group["dims=1L"] = @benchmarkable Metal.@sync reverse($gpu_mat_long; dims=1)
+    group["dims=2L"] = @benchmarkable Metal.@sync reverse($gpu_mat_long; dims=2)
+    group["1d_inplace"] = @benchmarkable Metal.@sync reverse!($gpu_vec)
+    group["dims=1_inplace"] = @benchmarkable Metal.@sync reverse!($gpu_mat; dims=1)
+    group["dims=2_inplace"] = @benchmarkable Metal.@sync reverse!($gpu_mat; dims=2)
+    group["dims=1L_inplace"] = @benchmarkable Metal.@sync reverse!($gpu_mat_long; dims=1)
+    group["dims=2L_inplace"] = @benchmarkable Metal.@sync reverse!($gpu_mat_long; dims=2)
+end
 
 # 'evals=1' added to prevent hang when running benchmarks of CI
 # TODO: Investigate cause and properly fix.
