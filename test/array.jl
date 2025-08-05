@@ -1,4 +1,4 @@
-STORAGEMODES = [Metal.PrivateStorage, Metal.SharedStorage, Metal.ManagedStorage]
+STORAGEMODES = [Metal.PrivateStorage, Metal.SharedStorage]
 
 @testset "array" begin
 
@@ -158,7 +158,7 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
     # private storage errors.
     if SM == Metal.PrivateStorage
         let arr_mtl = Metal.zeros(Float32, dim...; storage=Metal.PrivateStorage)
-            @test is_private(arr_mtl) && !is_shared(arr_mtl) && !is_managed(arr_mtl)
+            @test is_private(arr_mtl) && !is_shared(arr_mtl)
             @test_throws "Cannot access the contents of a private buffer" arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, dim)
         end
 
@@ -169,22 +169,12 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
         end
     elseif SM == Metal.SharedStorage
         let arr_mtl = Metal.zeros(Float32, dim...; storage=Metal.SharedStorage)
-            @test !is_private(arr_mtl) && is_shared(arr_mtl) && !is_managed(arr_mtl)
+            @test !is_private(arr_mtl) && is_shared(arr_mtl)
             @test unsafe_wrap(Array{Float32}, arr_mtl) isa Array{Float32}
         end
 
         let b = rand(Float32, 10)
             arr_mtl = mtl(b; storage=Metal.SharedStorage)
-            @test arr_mtl[1] == b[1]
-        end
-    elseif SM == Metal.ManagedStorage
-        let arr_mtl = Metal.zeros(Float32, dim...; storage=Metal.ManagedStorage)
-            @test !is_private(arr_mtl) && !is_shared(arr_mtl) && is_managed(arr_mtl)
-            @test unsafe_wrap(Array{Float32}, arr_mtl) isa Array{Float32}
-        end
-
-        let b = rand(Float32, 10)
-            arr_mtl = mtl(b; storage=Metal.ManagedStorage)
             @test arr_mtl[1] == b[1]
         end
     end

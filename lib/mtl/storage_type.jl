@@ -5,7 +5,7 @@ export ReadUsage, WriteUsage, ReadWriteUsage
 # SharedStorage  -> Buffer in Host memory, accessed by the GPU. Requires no sync
 # ManagedStorage -> Mirrored memory buffers in host and GPU. Requires syncing
 # PrivateStorage -> Memory in Device, not accessible by Host.
-# Memoryless -> iOS stuff. ignore it
+# Memoryless -> render pipeline stuff. ignore it (for now)
 
 abstract type StorageMode end
 
@@ -16,7 +16,7 @@ Used to indicate that the resource is stored using `MTLStorageModeShared` in mem
 
 For more information on Metal storage modes, refer to the official Metal documentation.
 
-See also [`Metal.PrivateStorage`](@ref) and [`Metal.ManagedStorage`](@ref).
+See also [`Metal.PrivateStorage`](@ref).
 """
 struct SharedStorage  <: StorageMode end
 
@@ -26,6 +26,9 @@ struct SharedStorage  <: StorageMode end
 Used to indicate that the resource is stored using `MTLStorageModeManaged` in memory.
 
 For more information on Metal storage modes, refer to the official Metal documentation.
+
+!!! warning
+    `ManagedStorage` is no longer supported with `MtlArray`s. Instead, use `SharedStorage` or use the Metal api directly from `Metal.MTL`.
 
 See also [`Metal.SharedStorage`](@ref) and [`Metal.PrivateStorage`](@ref).
 """
@@ -38,7 +41,7 @@ Used to indicate that the resource is stored using `MTLStorageModePrivate` in me
 
 For more information on Metal storage modes, refer to the official Metal documentation.
 
-See also [`Metal.SharedStorage`](@ref) and [`Metal.ManagedStorage`](@ref).
+See also [`Metal.SharedStorage`](@ref).
 """
 struct PrivateStorage <: StorageMode end
 struct Memoryless     <: StorageMode end
@@ -46,7 +49,6 @@ struct Memoryless     <: StorageMode end
 # Remove the ".MTL" when printing
 Base.show(io::IO, ::Type{<:PrivateStorage}) = print(io, "Metal.PrivateStorage")
 Base.show(io::IO, ::Type{<:SharedStorage}) = print(io, "Metal.SharedStorage")
-Base.show(io::IO, ::Type{<:ManagedStorage}) = print(io, "Metal.ManagedStorage")
 
 """
     MTL.CPUStorage

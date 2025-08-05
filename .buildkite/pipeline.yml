@@ -37,10 +37,10 @@ steps:
               soft_fail: true
 
   # special tests
-  - group: ":floppy_disk: Storage Modes"
+  - group: ":floppy_disk: Shared (unified) Storage"
     depends_on: "julia"
     steps:
-      - label: "{{matrix.storage}} array storage"
+      - label: "shared array storage"
         plugins:
           - JuliaCI/julia#v1:
               version: "1.11"
@@ -57,13 +57,8 @@ steps:
             build.message !~ /\[skip tests\]/ &&
             build.message !~ /\[skip storage\]/
         timeout_in_minutes: 60
-        matrix:
-          setup:
-            storage:
-              - "shared"
-              - "managed"
         commands: |
-          echo -e "[Metal]\ndefault_storage = \"{{matrix.storage}}\"" >LocalPreferences.toml
+          echo -e "[Metal]\ndefault_storage = \"shared\"" >LocalPreferences.toml
 
   # special tests
   - group: ":eyes: Special"
