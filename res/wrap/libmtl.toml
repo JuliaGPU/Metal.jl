@@ -1,6 +1,7 @@
 [general]
 library_name = "Symbol(\"/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib\")"
 output_file_path = "../../lib/mtl/libmtl.jl"
+prologue_file_path = "libmtl_prologue.jl"
 
 minimum_macos_supported = "13"
 
@@ -50,12 +51,30 @@ immutable=false
 [api.MTLCommandQueue]
 immutable=false
 
+[api.MTL4CommandQueueDescriptor]
+immutable=false
+
+[api.MTL4CommandQueue]
+immutable=false
+
+[api.MTL4CommitOptions]
+immutable=false
+
 [api.MTLCompileOptions]
 immutable=false
     [api.MTLCompileOptions.proptype]
     languageVersion="VersionNumber"
 
 [api.MTLComputeCommandEncoder]
+immutable=false
+
+[api.MTL4ComputeCommandEncoder]
+immutable=false
+
+[api.MTL4CommandAllocatorDescriptor]
+immutable=false
+
+[api.MTL4CommandAllocator]
 immutable=false
 
 [api.MTLComputePipelineDescriptor]
@@ -74,6 +93,9 @@ immutable=false
 immutable=false
 
 [api.MTLFunctionDescriptor]
+immutable=false
+
+[api.MTL4FunctionDescriptor]
 immutable=false
 
 [api.MTLHeap]
