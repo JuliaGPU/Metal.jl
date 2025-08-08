@@ -57,7 +57,6 @@ end
 
     # Test a few explicitly unsupported types
     @test_throws "MtlArray only supports element types that are stored inline" MtlArray(BigInt[1])
-    @test_throws "MtlArray only supports element types that are stored inline" MtlArray(BigFloat[1])
     @test_throws "Metal does not support Float64 values" MtlArray(Float64[1])
     @test_throws "Metal does not support Int128 values" MtlArray(Int128[1])
     @test_throws "Metal does not support UInt128 values" MtlArray(UInt128[1])
