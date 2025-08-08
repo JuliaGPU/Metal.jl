@@ -35,7 +35,7 @@ const alloc_stats = AllocStats()
     alloc(device, bytesize, [ptr=nothing];
           storage=Default, hazard_tracking=Default, cache_mode=Default)
 
-Allocates a Metal buffer on `device` of`bytesize` bytes. If a CPU-pointer is passed as last
+Allocates a Metal buffer on `device` of `bytesize` bytes. If a CPU-pointer is passed as last
 argument, then the buffer is initialized with the content of the memory starting at `ptr`,
 otherwise it's zero-initialized.
 
@@ -44,9 +44,7 @@ otherwise it's zero-initialized.
 The storage kwarg controls where the buffer is stored. Possible values are:
  - PrivateStorage : Residing on the device
  - SharedStorage  : Residing on the host
- - ManagedStorage : Keeps two copies of the buffer, on device and on host. Explicit calls must be
-   given to syncronize the two
- - Memoryless : an iOS specific thing that won't work on Mac.
+ - Memoryless : A render pipeline exclusive mode. Render pipelines are not yet supported on Metal.jl.
 
 Note that `PrivateStorage` buffers can't be directly accessed from the CPU, therefore you cannot
 use this option if you pass a ptr to initialize the memory.
