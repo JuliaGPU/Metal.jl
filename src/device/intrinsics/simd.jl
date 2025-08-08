@@ -105,7 +105,6 @@ for (jltype, suffix) in simd_shuffle_map
             ccall($"extern air.simd_shuffle_up.$suffix",
                 llvmcall, $jltype, ($jltype, Int16), data, delta)
 
-        # TODO: Emulate or disallow on M1 (Apple7)
         @device_function simd_shuffle_and_fill_down(data::$jltype, filling_data::$jltype, delta::Integer, modulo::Integer=threads_per_simdgroup()) =
             ccall($"extern air.simd_shuffle_and_fill_down.$suffix",
                 llvmcall, $jltype, ($jltype, $jltype, Int16, Int16), data, filling_data, delta, modulo)
@@ -159,9 +158,6 @@ The `modulo` parameter defines the vector width that splits the SIMD-group into 
  and must be 2, 4, 8, 16, or 32.
 
 T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
-
-!!! note
-    `simd_shuffle_and_fill_down` is only available on Apple8+ GPUs (M2 and newer)
 """
 simd_shuffle_and_fill_down
 
@@ -180,8 +176,5 @@ The `modulo` parameter defines the vector width that splits the SIMD-group into 
  and must be 2, 4, 8, 16, or 32.
 
 T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
-
-!!! note
-    `simd_shuffle_and_fill_up` is only available on Apple8+ GPUs (M2 and newer)
 """
 simd_shuffle_and_fill_up

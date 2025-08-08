@@ -65,12 +65,12 @@ end
     mtlfilling = MtlArray(data)
 
     Metal.@sync @metal threads=N kernel_mod(mtldata, mtlfilling, N)
-    @test Array(mtldata) == circshift(data,nshift)
+    @test Array(mtldata) == circshift(data, nshift)
 
     mtlfilling2 = MtlArray(data)
 
     Metal.@sync @metal threads=N kernel_mod(mtlfilling2, mtlfilling, midN)
-    @test Array(mtlfilling2) == [circshift(data[1:midN],nshift);circshift(data[midN+1:end],nshift)]
+    @test Array(mtlfilling2) == [circshift(data[1:midN], nshift); circshift(data[midN+1:end], nshift)]
 end
 @testset "matrix functions" begin
     @testset "load_store($typ)" for typ in [Float16, Float32]
