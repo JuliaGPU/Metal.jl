@@ -1,5 +1,6 @@
 export MTL4ComputeCommandEncoder
 export set_function!, set_buffer!, set_bytes!, set_texture!, set_sampler_state!
+export stages
 export dispatchThreadgroups!, dispatchThreads!, endEncoding!
 export use!, memoryBarrier!, append_copy!, append_fillbuffer!, append_sync!
 
@@ -13,11 +14,12 @@ function MTL4ComputeCommandEncoder(cmdbuf::MTL4CommandBuffer)
 end
 
 
-function MTL4ComputeCommandEncoder(f::Base.Callable, cmdbuf::MTL4CommandBuffer)
+function MTL4ComputeCommandEncoder(f::Base.Callable, cmdbuf::MTL4CommandBuffer, sync=false)
     encoder = MTL4ComputeCommandEncoder(cmdbuf)
     try
         f(encoder)
     finally
+        sync && barrierAfterStages!(encoder)
         close(encoder)
     end
 end
@@ -43,14 +45,14 @@ function dispatchThreads!(cce::MTL4ComputeCommandEncoder, threadsSize::MTLSize, 
 end
 
 # Copy Operations (Blit functionality integrated into compute encoder in Metal 4)
-# function append_copy!(cce::MTL4ComputeCommandEncoder, dst::MTLBuffer, dstOffset::Integer,
-#                       src::MTLBuffer, srcOffset::Integer, size::Integer)
-#     @objc [cce::id{MTL4ComputeCommandEncoder} copyFromBuffer:src::id{MTLBuffer}
-#                                              sourceOffset:srcOffset::NSUInteger
-#                                              toBuffer:dst::id{MTLBuffer}
-#                                              destinationOffset:dstOffset::NSUInteger
-#                                              size:size::NSUInteger]::Nothing
-# end
+function append_copy!(cce::MTL4ComputeCommandEncoder, dst::MTLBuffer, dstOffset::Integer,
+                      src::MTLBuffer, srcOffset::Integer, size::Integer)
+    @objc [cce::id{MTL4ComputeCommandEncoder} copyFromBuffer:src::id{MTLBuffer}
+                                             sourceOffset:srcOffset::NSUInteger
+                                             toBuffer:dst::id{MTLBuffer}
+                                             destinationOffset:dstOffset::NSUInteger
+                                             size:size::NSUInteger]::Nothing
+end
 
 # function append_copy!(cce::MTL4ComputeCommandEncoder, dst::MTLTexture, dstSlice::Integer, dstLevel::Integer, dstOrigin::MTLOrigin,
 #                       src::MTLBuffer, srcOffset::Integer, srcBytesPerRow::Integer, srcBytesPerImage::Integer,
@@ -65,6 +67,10 @@ end
 #                                              destinationLevel:dstLevel::NSUInteger
 #                                              destinationOrigin:dstOrigin::MTLOrigin]::Nothing
 # end
+
+function stages(cce::MTL4ComputeCommandEncoder)
+    @objc [cce::id{MTL4ComputeCommandEncoder} stages]::MTLStages
+end
 
 # Fill Buffer
 function append_fillbuffer!(cce::MTL4ComputeCommandEncoder, buffer::MTLBuffer, range::NSRange, value::UInt8)

@@ -104,14 +104,14 @@ end
 
 ## argument conversion
 
-struct Adaptor
+struct Adaptor{T <: Union{Nothing,MTLComputeCommandEncoder,MTL4ArgumentTable}}
     # the current command encoder, if any.
-    cce::Union{Nothing,MTLComputeCommandEncoder}
+    cce::T
 end
 
 # convert Metal buffers to their GPU address
 function Adapt.adapt_storage(to::Adaptor, buf::MTLBuffer)
-    if to.cce !== nothing
+    if to.cce isa MTLComputeCommandEncoder
         MTL.use!(to.cce, buf, MTL.ReadWriteUsage)
     end
     reinterpret(Core.LLVMPtr{Nothing,AS.Device}, buf.gpuAddress)
@@ -386,7 +386,9 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
         encode_arguments_nospec!(cce, kernel, kernel_state, kernel.f, args)
         MTL.append_current_function!(cce, gs, ts)
     finally
+        use_mtl4 && barrierAfterStages!(cce)
         close(cce)
+        use_mtl4 && endCommandBuffer!(cmdbuf)
     end
 
     commit!(cmdbuf, queue)

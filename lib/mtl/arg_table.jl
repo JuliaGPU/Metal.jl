@@ -21,15 +21,21 @@ function MTL4ArgumentTable(device::MTLDevice, desc::MTL4ArgumentTableDescriptor)
 end
 
 # Buffer Arguments
-function set_address!(cce::MTL4ArgumentTable, address, bindingIndex)
-    @objc [cce::id{MTL4ArgumentTable} setAddress:address::NSUInteger
-                                         atIndex:(bindingIndex-1)::NSUInteger]::Nothing
+function set_address!(argtab::MTL4ArgumentTable, address, bindingIndex)
+    @objc [argtab::id{MTL4ArgumentTable} setAddress:address::NSUInteger
+                                         atIndex:(bindingIndex)::NSUInteger]::Nothing
 end
 
-function set_address!(cce::MTL4ArgumentTable, buf::MTLBuffer, bindingIndex)
-    @objc [cce::id{MTL4ArgumentTable} setAddress:contents(buf)::NSUInteger
-                                         atIndex:(bindingIndex-1)::NSUInteger]::Nothing
+function set_address!(argtab::MTL4ArgumentTable, buf::MTLBuffer, bindingIndex)
+    @objc [argtab::id{MTL4ArgumentTable} setAddress:contents(buf)::NSUInteger
+                                         atIndex:(bindingIndex)::NSUInteger]::Nothing
 end
+
+function set_resource!(argtab::MTL4ArgumentTable, resourceID, bindingIndex)
+    @objc [argtab::id{MTL4ArgumentTable} setResource:resourceID::NSUInteger
+                                         atBufferIndex:bindingIndex::NSUInteger]::Nothing
+end
+
 
 function set_buffer!(argtab::MTL4ArgumentTable, buf::MTLBuffer, offset, index)
     @inline set_address!(argtab, contents(buf)+offset, index)
