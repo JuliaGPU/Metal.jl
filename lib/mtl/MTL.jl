@@ -54,6 +54,7 @@ include("command_enc/blit.jl")
 include("command_enc/compute.jl")
 include("command_enc/compute4.jl")
 include("binary_archive.jl")
+include("compiler4.jl")
 include("capture.jl")
 include("texture.jl")
 
