@@ -68,24 +68,45 @@ function versioninfo(io::IO=stdout)
     return
 end
 
+const _iokitlib = Symbol("/System/Library/Frameworks/IOKit.framework/Resources/BridgeSupport/IOKit.dylib")
+const _cflib = Symbol("/System/Library/Frameworks/CoreFoundation.framework/Resources/BridgeSupport/CoreFoundation.dylib")
+
 @static if isdefined(Base, :OncePerProcess) # VERSION >= v"1.12.0-DEV.1421"
     const num_gpu_cores = OncePerProcess{Int64}() do
-        _num_cpu_cores = 0
+        _num_gpu_cores = Ref{Int64}(0)
         try
-            system_prof = read(`system_profiler SPDisplaysDataType`, String)
-            _num_gpu_cores = parse(Int64, only(match(r"Total Number of Cores:\s*(\d+)", system_prof).captures))
+            serv_match = @ccall _iokitlib.IOServiceMatching("AGXAccelerator"::Cstring)::Ptr{Cvoid}
+            serv = @ccall _iokitlib.IOServiceGetMatchingService(C_NULL::Ptr{Nothing}, serv_match::Ptr{Cvoid})::UInt
+
+            gpuCoreCountNumber = @ccall _iokitlib.IORegistryEntrySearchCFProperty(serv::UInt, "IOService"::Ptr{Cchar}, "gpu-core-count"::id{NSString}, C_NULL::Ptr{Nothing}, UInt32(0)::UInt32)::id{Object}
+            gpuCoreCountNumber != nil || error()
+
+            type = @ccall _cflib.CFNumberGetType(gpuCoreCountNumber::id{Object})::Int64
+            type == 4 || error()
+
+            success = @ccall _cflib.CFNumberGetValue(gpuCoreCountNumber::id{Object}, type::Int64, _num_gpu_cores::Ptr{Int64})::Bool
+            success || error()
         catch
             @warn "Could not determine number of GPU cores; some algorithms may not run optimally."
         end
-        _num_cpu_cores
+        _num_gpu_cores[]
     end
 else
     const _num_gpu_cores = Ref{Int64}(-1)
     function num_gpu_cores()
         if _num_gpu_cores[] == -1
             try
-                system_prof = read(`system_profiler SPDisplaysDataType`, String)
-                _num_gpu_cores[] = parse(Int64, only(match(r"Total Number of Cores:\s*(\d+)", system_prof).captures))
+                serv_match = @ccall _iokitlib.IOServiceMatching("AGXAccelerator"::Cstring)::Ptr{Cvoid}
+                serv = @ccall _iokitlib.IOServiceGetMatchingService(C_NULL::Ptr{Nothing}, serv_match::Ptr{Cvoid})::UInt
+
+                gpuCoreCountNumber = @ccall _iokitlib.IORegistryEntrySearchCFProperty(serv::UInt, "IOService"::Ptr{Cchar}, "gpu-core-count"::id{NSString}, C_NULL::Ptr{Nothing}, UInt32(0)::UInt32)::id{Object}
+                gpuCoreCountNumber != nil || error()
+
+                type = @ccall _cflib.CFNumberGetType(gpuCoreCountNumber::id{Object})::Int64
+                type == 4 || error()
+
+                success = @ccall _cflib.CFNumberGetValue(gpuCoreCountNumber::id{Object}, type::Int64, _num_gpu_cores::Ptr{Int64})::Bool
+                success || error()
             catch
                 @warn "Could not determine number of GPU cores; some algorithms may not run optimally."
                 _num_gpu_cores[] = 0
