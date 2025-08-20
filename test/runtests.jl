@@ -5,6 +5,9 @@ using Printf: @sprintf
 import REPL
 using Test
 
+using Pkg
+Pkg.add(url="https://github.com/christiangnrd/GPUArrays.jl", rev="akreduce")
+
 # Quit without erroring if Metal loaded without issues on unsupported platforms
 if !Sys.isapple()
     @warn """Metal.jl succesfully loaded on non-macOS system.
