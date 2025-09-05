@@ -8,7 +8,7 @@ GPUCompiler.runtime_module(::MetalCompilerJob) = Metal
 
 GPUCompiler.method_table(::MetalCompilerJob) = method_table
 
-GPUCompiler.kernel_state_type(job::MetalCompilerJob) = MtlRefValue{KernelState}
+GPUCompiler.kernel_state_type(job::MetalCompilerJob) = KernelState
 
 function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
                                     mod::LLVM.Module, entry::LLVM.Function)
