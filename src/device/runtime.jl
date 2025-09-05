@@ -39,5 +39,4 @@ struct KernelState
     random_seed::UInt32
 end
 
-#@inline @generated kernel_state() = GPUCompiler.kernel_state_value(KernelState)
-@inline @generated kernel_state() = GPUCompiler.kernel_state_value(MtlRefValue{KernelState})[]
+@inline @generated kernel_state() = GPUCompiler.kernel_state_value(KernelState)

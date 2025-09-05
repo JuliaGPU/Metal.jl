@@ -30,6 +30,9 @@ UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 [weakdeps]
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
+[sources]
+GPUCompiler = {rev = "tb/kernel_state_reference", url = "https://github.com/JuliaGPU/GPUCompiler.jl.git"}
+
 [extensions]
 SpecialFunctionsExt = "SpecialFunctions"
 
