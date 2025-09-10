@@ -108,4 +108,12 @@ using Metal: storagemode
     @test storagemode(lua.factors) == storagemode(lua.ipiv) == storagemode(A)
 end
 
+@testset "transpose" begin
+    A = MtlMatrix(rand(Float32, 0, 1024))
+    B = Metal.zeros(Float32, 1024, 0)
+
+    # Issue #656
+    @test isempty(transpose!(B, A))
+end
+
 end
