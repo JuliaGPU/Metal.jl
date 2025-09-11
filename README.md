@@ -34,7 +34,7 @@ if you want to use it. PRs are very welcome!
 
 -  Mac device with M-series chip
 -  Julia 1.10-1.11
--  macOS 13-15
+-  macOS 13-26
 
 These requirements are fairly strict, and are due to our limited development
 resources (manpower, hardware). Supported OS versions follow Apple's support,
@@ -63,23 +63,23 @@ importing the package:
 julia> using Metal
 
 julia> Metal.versioninfo()
-macOS 15.5.0, Darwin 24.5.0
+macOS 26.0.0, Darwin 25.0.0
 
 Toolchain:
 - Julia: 1.11.6
 - LLVM: 16.0.6
 
 Julia packages:
-- Metal.jl: 1.6.3
+- Metal.jl: 1.7.0
 - GPUArrays: 11.2.3
 - GPUCompiler: 1.6.1
-- KernelAbstractions: 0.9.37
+- KernelAbstractions: 0.9.38
 - ObjectiveC: 3.4.2
 - LLVM: 9.4.2
 - LLVMDowngrader_jll: 0.6.0+1
 
 1 device:
-- Apple M2 Max (64.000 KiB allocated)
+- Apple M2 Max 30 GPU cores (64.000 KiB allocated)
 ```
 
 
@@ -133,9 +133,10 @@ julia> Array(c)
 ## Metal API wrapper
 
 Finally, all of the above functionality is made possible by interfacing with the Metal
-libraries through [ObjectiveC.jl](https://github.com/JuliaInterop/ObjectiveC.jl). We provide low-level objects and functions that map  These
-low-level API wrappers, along with some slightly higher-level Julia wrappers, are available
-in the `MTL` submodule exported by Metal.jl:
+libraries through [ObjectiveC.jl](https://github.com/JuliaInterop/ObjectiveC.jl). We provide
+low-level objects and functions that map to the Objective-C Metal API. These low-level API
+wrappers, along with some slightly higher-level Julia wrappers, are available in the `MTL`
+submodule exported by Metal.jl:
 
 ```julia-repl
 julia> using Metal
