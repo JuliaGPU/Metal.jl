@@ -138,7 +138,7 @@ function create_objc_context(headers::Vector, args::Vector=String[], options::Di
         if haskey(options, "general") && haskey(options["general"], "extra_target_headers")
             append!(dep_headers, options["general"]["extra_target_headers"])
         end
-        regen || JLD2.@save dep_headers_fname dep_headers
+        # regen || JLD2.@save dep_headers_fname dep_headers
         dep_headers
     end
     Base.CoreLogging._min_enabled_level[] = Logging.Debug
