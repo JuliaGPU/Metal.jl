@@ -245,6 +245,8 @@ end
                                                    A::MtlMatrix{T}) where {T}
     axes(B, 2) == axes(A, 1) && axes(B, 1) == axes(A, 2) || throw(DimensionMismatch("transpose"))
 
+    isempty(B) && return B
+
     M, N = size(A)
     dev = device()
     queue = global_queue(dev)
