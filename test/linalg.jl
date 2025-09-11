@@ -38,21 +38,21 @@ using LinearAlgebra, ScopedValues
         # :auto
         @test test_matmul(Int32, Int32; vec_b)     # fallback to GPUArrays
         @test test_matmul(Int8, Float32; vec_b)    # should use MPS
-        Metal.macos_version() >= v"14" && @test test_matmul(Float16, Float32; vec_b) skip=virtual # should use MPSGraph on M1/M2
+        @test test_matmul(Float16, Float32; vec_b) skip=virtual # should use MPSGraph on M1/M2
 
         # :MPS
         mpsInT = vec_b ? Float32 : Int16
         @test test_matmul(mpsInT, Float32; vec_b, alg=:MPS)
-        Metal.macos_version() >= v"14" && @test test_matmul(Float16, Float32; vec_b, alg=:MPS)
+        @test test_matmul(Float16, Float32; vec_b, alg=:MPS)
 
         # :MPSGraph
         @test test_matmul(Int8, Float32; vec_b, alg=:MPSGraph)
-        Metal.macos_version() >= v"14" && @test test_matmul(Float16, Float32; vec_b, alg=:MPSGraph) skip=virtual
+        @test test_matmul(Float16, Float32; vec_b, alg=:MPSGraph) skip=virtual
 
         # :GPUArrays
         @test test_matmul(Int32, Int32; vec_b, alg=:GPUArrays)
         @test test_matmul(Int8, Float32; vec_b, alg=:GPUArrays)
-        Metal.macos_version() >= v"14" && @test test_matmul(Float16, Float32; vec_b, alg=:GPUArrays)
+        @test test_matmul(Float16, Float32; vec_b, alg=:GPUArrays)
         end
     end
 end

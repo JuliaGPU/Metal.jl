@@ -8,7 +8,7 @@ const MPSGraphCallableMap = NSDictionary
 const MPSGraphTensorDataDictionary = NSDictionary
 
 
-@objcwrapper immutable = true availability = macos(v"14.0.0") MPSGraphObject <: NSObject
+@objcwrapper immutable = true MPSGraphObject <: NSObject
 
 @objcwrapper immutable = true MPSGraphType <: MPSGraphObject
 
@@ -169,7 +169,7 @@ end
     MPSGraphDeploymentPlatformVisionOS = 0x0000000000000003
 end
 
-@objcwrapper immutable = true availability = macos(v"14.0.0") MPSGraphExecutableSerializationDescriptor <: MPSGraphObject
+@objcwrapper immutable = true MPSGraphExecutableSerializationDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphExecutableSerializationDescriptor begin
     @autoproperty append::Bool setter = setAppend
@@ -202,7 +202,7 @@ end
     @autoproperty groups::UInt64 setter = setGroups
 end
 
-@objcwrapper immutable = true availability = macos(v"13.2.0") MPSGraphConvolution3DOpDescriptor <: MPSGraphObject
+@objcwrapper immutable = true MPSGraphConvolution3DOpDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphConvolution3DOpDescriptor begin
     @autoproperty strideInX::UInt64 setter = setStrideInX
@@ -255,7 +255,7 @@ end
     MPSGraphFFTScalingModeUnitary = 0x0000000000000002
 end
 
-@objcwrapper immutable = true availability = macos(v"14.0.0") MPSGraphFFTDescriptor <: MPSGraphObject
+@objcwrapper immutable = true MPSGraphFFTDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphFFTDescriptor begin
     @autoproperty inverse::Bool setter = setInverse
@@ -263,7 +263,7 @@ end
     @autoproperty roundToOddHermitean::Bool setter = setRoundToOddHermitean
 end
 
-@objcwrapper immutable = true availability = macos(v"14.0.0") MPSGraphImToColOpDescriptor <: MPSGraphObject
+@objcwrapper immutable = true MPSGraphImToColOpDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphImToColOpDescriptor begin
     @autoproperty kernelWidth::UInt64 setter = setKernelWidth

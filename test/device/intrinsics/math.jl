@@ -640,18 +640,6 @@ end
             ir = sprint(io->(@device_code_llvm io=io dump_module=true @metal nextafter_out_test()))
             @test occursin(Regex("@air\\.nextafter\\.f$(8*sizeof(T))"), ir)
         end
-
-        # test for metal < 3.1
-        buffer2 = MtlArray(arr)
-        Metal.@sync @metal threads = N metal = v"3.0" nextafter_test(buffer2, typemax(T))
-        @test Array(buffer2) == nextfloat.(arr)
-        Metal.@sync @metal threads = N metal = v"3.0" nextafter_test(buffer2, typemin(T))
-        @test Array(buffer2) == arr
-
-        # before macOS 14 there is no air.nextafter; the software fallback must be used
-        # (it no longer emits air.sign since that override was dropped in favor of Base)
-        ir = sprint(io->(@device_code_llvm io=io dump_module=true @metal metal = v"3.0" nextafter_out_test()))
-        @test !occursin(Regex("@air\\.nextafter\\.f$(8*sizeof(T))"), ir)
     end
 
     # Borrowed from the Julia "Irrationals compared with Rationals and Floats" testset

@@ -1,5 +1,4 @@
 using .MPSGraphs: MPSGraphRandomOpDescriptor, MPSGraphRandomDistributionNormal, MPSGraphRandomDistributionTruncatedNormal, MPSGraphRandomDistributionUniform
-
 # determined by looking at the error message when trying to construct
 #  an invalid distribution/type combination
 OP_TYPES = [(MPSGraphRandomDistributionNormal, Float32),
@@ -10,14 +9,10 @@ OP_TYPES = [(MPSGraphRandomDistributionNormal, Float32),
                     (MPSGraphRandomDistributionUniform, Int32),
                     (MPSGraphRandomDistributionUniform, Float32),
                     (MPSGraphRandomDistributionUniform, Float16),
+                    (MPSGraphRandomDistributionNormal, BFloat16),
+                    (MPSGraphRandomDistributionTruncatedNormal, BFloat16),
+                    (MPSGraphRandomDistributionUniform, BFloat16),
                     ]
-
-if Metal.macos_version() >= v"14"
-    append!(OP_TYPES, [(MPSGraphRandomDistributionNormal, BFloat16),
-                        (MPSGraphRandomDistributionTruncatedNormal, BFloat16),
-                        (MPSGraphRandomDistributionUniform, BFloat16),]
-    )
-end
 
 for (dist, T) in OP_TYPES
     @test MPSGraphRandomOpDescriptor(dist, T) isa MPSGraphRandomOpDescriptor
