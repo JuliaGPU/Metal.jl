@@ -83,3 +83,12 @@ end
     end
     ρ, k
 end
+
+@static if VERSION >= v"1.12.0-DEV.1736" # Partially reverts JuliaLang/julia PR #56750
+    let BitInteger64 = Union{Int64,UInt64}
+        @device_override function Base.checkbounds(::Type{Bool}, v::StepRange{<:BitInteger64, <:BitInteger64}, i::BitInteger64)
+            @inline
+            return checkindex(Bool, eachindex(IndexLinear(), v), i)
+        end
+    end
+end
