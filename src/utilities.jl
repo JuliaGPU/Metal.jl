@@ -22,7 +22,7 @@ function versioninfo(io::IO=stdout)
     println(io, "- LLVM: $(LLVM.version())")
     println(io)
 
-    println(io, "Julia packages: ")
+    println(io, "Julia packages:")
     println(io, "- Metal.jl: $(Base.pkgversion(Metal))")
     for name in [:GPUArrays, :GPUCompiler, :KernelAbstractions, :ObjectiveC,
                  :LLVM, :LLVMDowngrader_jll]

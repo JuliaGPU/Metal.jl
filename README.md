@@ -66,11 +66,11 @@ julia> Metal.versioninfo()
 macOS 26.0.0, Darwin 25.0.0
 
 Toolchain:
-- Julia: 1.11.6
+- Julia: 1.11.7
 - LLVM: 16.0.6
 
 Julia packages:
-- Metal.jl: 1.8.0
+- Metal.jl: 1.8.1
 - GPUArrays: 11.2.5
 - GPUCompiler: 1.6.1
 - KernelAbstractions: 0.9.38
