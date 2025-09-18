@@ -568,3 +568,39 @@ end
 
 
 end
+
+@testset "large map reduce" begin
+  dev = device()
+
+  big_size = Metal.serial_mapreduce_threshold(dev) + 5
+  a = rand(Float32, big_size, 31)
+  c = MtlArray(a)
+
+  expected = minimum(a, dims=2)
+  actual = minimum(c, dims=2)
+  @test expected == Array(actual)
+
+  expected = findmax(a, dims=2)
+  actual = findmax(c, dims=2)
+  @test expected == map(Array, actual)
+
+  expected = sum(a, dims=2)
+  actual = sum(c, dims=2)
+  @test expected == Array(actual)
+
+  a = rand(Int, big_size, 31)
+  c = MtlArray(a)
+
+  expected = minimum(a, dims=2)
+  actual = minimum(c, dims=2)
+  @test expected == Array(actual)
+
+  expected = findmax(a, dims=2)
+  actual = findmax(c, dims=2)
+  @test expected == map(Array, actual)
+
+  expected = sum(a, dims=2)
+  actual = sum(c, dims=2)
+  @test expected == Array(actual)
+end
+
