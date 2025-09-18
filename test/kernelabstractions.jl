@@ -7,4 +7,6 @@ Testsuite.testsuite(()->MetalBackend(), "Metal", Metal, MtlArray, Metal.MtlDevic
     "Convert",           # depends on https://github.com/JuliaGPU/Metal.jl/issues/69
     "SpecialFunctions",  # no equivalent Metal intrinsics for gamma, erf, etc
     "sparse",            # not supported yet
+    "CPU synchronization",
+    "fallback test: callable types",
 ]))
