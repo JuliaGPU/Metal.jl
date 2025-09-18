@@ -141,7 +141,7 @@ function partial_mapreduce_device(f, op, neutral, maxthreads, ::Val{Rreduce},
 end
 
 function big_mapreduce_kernel(f, op, neutral, ::Val{Rreduce}, ::Val{Rother}, R, As) where {Rreduce, Rother}
-    grid_idx = thread_position_in_threadgroup_1d() + (threadgroup_position_in_grid_1d() - 1u32) * threadgroups_per_grid_1d()
+    grid_idx = thread_position_in_grid_1d()
 
     @inbounds if grid_idx <= length(Rother)
         Iother = Rother[grid_idx]
