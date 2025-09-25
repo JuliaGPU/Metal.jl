@@ -57,9 +57,11 @@ end
 
 # initialization function, called automatically at the start of each kernel because
 # there's no reliable way to detect uninitialized shared memory (see JuliaGPU/CUDA.jl#2008)
-function initialize_rng_state()
-    threadId = thread_position_in_threadgroup_3d().x + (thread_position_in_threadgroup_3d().y - UInt32(1)) * threads_per_threadgroup_3d().x +
-                                                       (thread_position_in_threadgroup_3d().z - UInt32(1)) * threads_per_threadgroup_3d().x * threads_per_threadgroup_3d().y
+function initialize_rng_state(thread_position_in_threadgroup::NTuple{3, Core.VecElement{UInt32}},
+                              threads_per_threadgroup::NTuple{3, Core.VecElement{UInt32}})
+    threadId = thread_position_in_threadgroup[1].value +
+               (thread_position_in_threadgroup[2].value - UInt32(1)) * threads_per_threadgroup[1].value +
+               (thread_position_in_threadgroup[3].value - UInt32(1)) * threads_per_threadgroup[1].value * threads_per_threadgroup[2].value
     warpId = (threadId - UInt32(1)) >> 0x5 + UInt32(1)  # fld1
 
     @inbounds global_random_keys()[warpId] = kernel_state().random_seed
@@ -140,7 +142,7 @@ function Random.seed!(rng::Philox2x32, seed::Integer, counter::Integer=UInt32(0)
 end
 
 # seeding the implicit default RNG
-if VERSION >= v"1.11-"
+@static if VERSION >= v"1.11-"
     @device_override Random.seed!(seed) =
         Random.seed!(Random.default_rng(), seed)
 else
@@ -149,7 +151,7 @@ else
 end
 
 @warn "FIXME: need a cycle counter for seeding" maxlog=1
-if VERSION >= v"1.11-"
+@static if VERSION >= v"1.11-"
     # `Random.seed!(::AbstractRNG)` now passes a `nothing` seed value
     #Random.seed!(rng::Philox2x32, seed::Nothing) =
     #    Random.seed!(rng, Base.unsafe_trunc(UInt32, readcyclecounter()))
