@@ -59,31 +59,17 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
             end
             fptr = call!(builder, deferred_codegen_ft, deferred_codegen, [ConstantInt(id)])
 
-            fthread_position_in_threadgroup = if haskey(functions(mod), "julia.air.thread_position_in_threadgroup.v3i32")
-                functions(mod)["julia.air.thread_position_in_threadgroup.v3i32"]
-            else
-                LLVM.Function(mod, "julia.air.thread_position_in_threadgroup.v3i32",
-                              LLVM.FunctionType(LLVM.VectorType(LLVM.Int32Type(), 3)))
-            end
-            fthreads_per_threadgroup = if haskey(functions(mod), "julia.air.threads_per_threadgroup.v3i32")
-                functions(mod)["julia.air.threads_per_threadgroup.v3i32"]
-            else
-                LLVM.Function(mod, "julia.air.threads_per_threadgroup.v3i32",
-                              LLVM.FunctionType(LLVM.VectorType(LLVM.Int32Type(), 3)))
-            end
+            thread_position_in_threadgroup = parameters(entry)[findfirst(param -> LLVM.name(param) == "thread_position_in_threadgroup", parameters(entry))]
+            threads_per_threadgroup = parameters(entry)[findfirst(param -> LLVM.name(param) == "threads_per_threadgroup", parameters(entry))]
 
             # call the `initialize_rng_state` function
             rt = Core.Compiler.return_type(f, tt)
             llvm_rt = convert(LLVMType, rt)
             llvm_ft = LLVM.FunctionType(llvm_rt)
             fptr = inttoptr!(builder, fptr, LLVM.PointerType(llvm_ft))
-            thread_position_in_threadgroup = call!(builder, LLVM.FunctionType(LLVM.VectorType(LLVM.Int32Type(), 3)), fthread_position_in_threadgroup)
-            threads_per_threadgroup = call!(builder, LLVM.FunctionType(LLVM.VectorType(LLVM.Int32Type(), 3)), fthreads_per_threadgroup)
             call!(builder, llvm_ft, fptr, [thread_position_in_threadgroup, threads_per_threadgroup])
             br!(builder, top_bb)
         end
-
-        entry = GPUCompiler.add_input_arguments!(job, mod, entry, GPUCompiler.kernel_intrinsics)
 
         # XXX: put some of the above behind GPUCompiler abstractions
         #      (e.g., a compile-time version of `deferred_codegen`)
