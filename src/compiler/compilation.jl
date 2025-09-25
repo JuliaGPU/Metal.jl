@@ -18,15 +18,10 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
 
     # if this kernel uses our RNG, we should prime the shared state.
     # XXX: these transformations should really happen at the Julia IR level...
-    if haskey(globals(mod), "global_random_keys")
+    if job.config.kernel && haskey(globals(mod), "global_random_keys")
         f = initialize_rng_state
         ft = typeof(f)
-        tt = Tuple{}
-
-        # don't recurse into `initialize_rng_state()` itself
-        if job.source.specTypes.parameters[1] == ft
-            return entry
-        end
+        tt = NTuple{2, NTuple{3, Core.VecElement{UInt32}}}
 
         # create a deferred compilation job for `initialize_rng_state()`
         src = methodinstance(ft, tt, GPUCompiler.tls_world_age())
@@ -64,14 +59,31 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
             end
             fptr = call!(builder, deferred_codegen_ft, deferred_codegen, [ConstantInt(id)])
 
+            fthread_position_in_threadgroup = if haskey(functions(mod), "julia.air.thread_position_in_threadgroup.v3i32")
+                functions(mod)["julia.air.thread_position_in_threadgroup.v3i32"]
+            else
+                LLVM.Function(mod, "julia.air.thread_position_in_threadgroup.v3i32",
+                              LLVM.FunctionType(LLVM.VectorType(LLVM.Int32Type(), 3)))
+            end
+            fthreads_per_threadgroup = if haskey(functions(mod), "julia.air.threads_per_threadgroup.v3i32")
+                functions(mod)["julia.air.threads_per_threadgroup.v3i32"]
+            else
+                LLVM.Function(mod, "julia.air.threads_per_threadgroup.v3i32",
+                              LLVM.FunctionType(LLVM.VectorType(LLVM.Int32Type(), 3)))
+            end
+
             # call the `initialize_rng_state` function
             rt = Core.Compiler.return_type(f, tt)
             llvm_rt = convert(LLVMType, rt)
             llvm_ft = LLVM.FunctionType(llvm_rt)
             fptr = inttoptr!(builder, fptr, LLVM.PointerType(llvm_ft))
-            call!(builder, llvm_ft, fptr)
+            thread_position_in_threadgroup = call!(builder, LLVM.FunctionType(LLVM.VectorType(LLVM.Int32Type(), 3)), fthread_position_in_threadgroup)
+            threads_per_threadgroup = call!(builder, LLVM.FunctionType(LLVM.VectorType(LLVM.Int32Type(), 3)), fthreads_per_threadgroup)
+            call!(builder, llvm_ft, fptr, [thread_position_in_threadgroup, threads_per_threadgroup])
             br!(builder, top_bb)
         end
+
+        entry = GPUCompiler.add_input_arguments!(job, mod, entry, GPUCompiler.kernel_intrinsics)
 
         # XXX: put some of the above behind GPUCompiler abstractions
         #      (e.g., a compile-time version of `deferred_codegen`)
