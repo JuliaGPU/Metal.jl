@@ -22,7 +22,7 @@ import RandomNumbers
         # create a global memory global variable
         T_global = LLVM.ArrayType(T_val, 32)
         gv = GlobalVariable(mod, T_global, "global_random_$(name)", AS.ThreadGroup)
-        linkage!(gv, LLVM.API.LLVMInternalLinkage)
+        linkage!(gv, LLVM.API.LLVMLinkOnceAnyLinkage)
         initializer!(gv, LLVM.null(T_global))
         unnamed_addr!(gv, true)
         alignment!(gv, 4)
