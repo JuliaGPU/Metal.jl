@@ -275,10 +275,11 @@ end
     (threads.width * threads.height * threads.depth) > kernel.pipeline.maxTotalThreadsPerThreadgroup &&
         throw(ArgumentError("Number of threads in group ($(threads.width * threads.height * threads.depth)) should not exceed $(kernel.pipeline.maxTotalThreadsPerThreadgroup)"))
 
+    kernel_state = MtlRefValue(KernelState(rand(UInt32)))
+
     cmdbuf = MTLCommandBuffer(queue)
     cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
     cce = MTLComputeCommandEncoder(cmdbuf)
-    kernel_state = MtlRefValue(KernelState(make_seed(kernel)))
     argument_buffers = try
         MTL.set_function!(cce, kernel.pipeline)
         bufs = encode_arguments!(cce, kernel, kernel.f, kernel_state, args...)
