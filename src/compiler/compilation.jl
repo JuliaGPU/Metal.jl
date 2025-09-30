@@ -65,7 +65,7 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
             # call the `initialize_rng_state` function
             rt = Core.Compiler.return_type(f, tt)
             llvm_rt = convert(LLVMType, rt)
-            llvm_ft = LLVM.FunctionType(llvm_rt)
+            llvm_ft = LLVM.FunctionType(llvm_rt, [convert(LLVMType, NTuple{3, Core.VecElement{UInt32}}) for _ in 1:2])
             fptr = inttoptr!(builder, fptr, LLVM.PointerType(llvm_ft))
             call!(builder, llvm_ft, fptr, [thread_position_in_threadgroup, threads_per_threadgroup])
             br!(builder, top_bb)
