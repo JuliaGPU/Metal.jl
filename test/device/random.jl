@@ -6,7 +6,7 @@
     end
 
     n = 128
-    a = Metal.fill!(-1f0, n)
+    a = Metal.fill(-1f0, n)
     @metal threads=n rand_kernel!(a)
     @test all(0 .<= a .< 1)
     @test length(unique(Array(a))) == n
