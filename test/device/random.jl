@@ -10,4 +10,8 @@
     @metal threads=n rand_kernel!(a)
     @test all(0 .<= a .< 1)
     @test length(unique(Array(a))) == n
+
+    b = Metal.fill(-1f0, n)
+    @metal threads=n rand_kernel!(b)
+    @test Array(a) != Array(b)
 end
