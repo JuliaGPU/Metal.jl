@@ -140,8 +140,8 @@ function partial_mapreduce_device(f, op, neutral, maxthreads, ::Val{Rreduce},
     return
 end
 
-function big_mapreduce_kernel(f, op, neutral, ::Val{Rreduce}, ::Val{Rother}, R, As) where {Rreduce, Rother}
-    grid_idx = thread_position_in_threadgroup_1d() + (threadgroup_position_in_grid_1d() - 1u32) * threadgroups_per_grid_1d()
+function serial_mapreduce_kernel(f, op, neutral, ::Val{Rreduce}, ::Val{Rother}, R, As) where {Rreduce, Rother}
+    grid_idx = thread_position_in_grid_1d()
 
     @inbounds if grid_idx <= length(Rother)
         Iother = Rother[grid_idx]
@@ -166,7 +166,7 @@ end
 
 ## COV_EXCL_STOP
 
-_big_mapreduce_threshold(dev) = dev.maxThreadsPerThreadgroup.width * num_gpu_cores()
+serial_mapreduce_threshold(dev) = dev.maxThreadsPerThreadgroup.width * num_gpu_cores()
 
 function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
                                  A::Union{AbstractArray,Broadcast.Broadcasted};
@@ -194,10 +194,11 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     @assert length(Rother) > 0
 
     # If `Rother` is large enough, then a naive loop is more efficient than partial reductions.
-    if length(Rother) >= _big_mapreduce_threshold(device(R))
-        threads = min(length(Rreduce), 512)
+    if length(Rother) >= serial_mapreduce_threshold(device(R))
+        kernel = @metal launch=false serial_mapreduce_kernel(f, op, init, Val(Rreduce), Val(Rother), R, A)
+        threads = min(length(Rother), kernel.pipeline.maxTotalThreadsPerThreadgroup)
         groups = cld(length(Rother), threads)
-        kernel = @metal threads groups big_mapreduce_kernel(f, op, init, Val(Rreduce), Val(Rother), R, A)
+        kernel(f, op, init, Val(Rreduce), Val(Rother), R, A; threads, groups)
         return R
     end
 
