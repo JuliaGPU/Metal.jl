@@ -59,10 +59,11 @@ end
 # there's no reliable way to detect uninitialized shared memory (see JuliaGPU/CUDA.jl#2008)
 function initialize_rng_state(thread_position_in_threadgroup::NTuple{3, Core.VecElement{UInt32}},
                               threads_per_threadgroup::NTuple{3, Core.VecElement{UInt32}})
-    threadId = thread_position_in_threadgroup[1].value +
-               (thread_position_in_threadgroup[2].value - UInt32(1)) * threads_per_threadgroup[1].value +
-               (thread_position_in_threadgroup[3].value - UInt32(1)) * threads_per_threadgroup[1].value * threads_per_threadgroup[2].value
-    warpId = (threadId - UInt32(1)) >> 0x5 + UInt32(1)  # fld1
+    # thread_position_in_threadgroup uses 0-based indexing
+    threadId = thread_position_in_threadgroup[1].value + Int32(1) +
+               thread_position_in_threadgroup[2].value * threads_per_threadgroup[1].value +
+               thread_position_in_threadgroup[3].value * threads_per_threadgroup[1].value * threads_per_threadgroup[2].value
+    warpId = (threadId - Int32(1)) >> 0x5 + Int32(1)  # fld1
 
     @inbounds global_random_keys()[warpId] = kernel_state().random_seed
     @inbounds global_random_counters()[warpId] = 0
