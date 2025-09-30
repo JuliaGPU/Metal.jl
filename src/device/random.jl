@@ -76,17 +76,7 @@ using Random123: philox2x_round, philox2x_bumpkey
 # GPU-compatible/optimized version of the generator from Random123.jl
 struct Philox2x32{R} <: RandomNumbers.AbstractRNG{UInt64}
     @inline function Philox2x32{R}() where R
-        rng = new{R}()
-        if rng.key == 0
-            # initialize the key. this happens when first accessing
-            # the (0-initialized) shared memory key from each block.
-            @static if VERSION >= v"1.11-"
-                Random.seed!(rng, nothing)
-            else
-                rng.key = Random.make_seed()
-            end
-        end
-        return rng
+        return new{R}()
     end
 end
 
