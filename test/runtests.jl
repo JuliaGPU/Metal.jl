@@ -12,11 +12,34 @@ if !Sys.isapple()
              Skipping tests."""
     Sys.exit()
 else # if Sys.isapple()
-    cmd = pipeline(Cmd(`xcrun -f metal-arch`, ignorestatus = true), stdout = devnull, stderr = devnull)
-    is_xcode_present = run(cmd).exitcode == 0
+    # Skip tests on older unsupported versions
+    if !Metal.is_macos(v"13")
+        @warn """Metal.jl succesfully loaded on unsupported macOS version (v$(Metal.macos_version())).
+                This system is unsupported but should still load.
+                Skipping tests."""
+        Sys.exit()
+    end
 
-    if is_xcode_present
-        archchecker = occursin(read(`xcrun metal-arch --name`, String))
+    archname = if Metal.is_macos(v"14")
+        arch = device().architecture
+        if !isnothing(arch)
+            string(arch.name)
+        else
+            ""
+        end
+    end
+
+    # device.architecture returns null on Intel graphics devices so use Xcode
+    if isempty(archname)
+        cmd = pipeline(Cmd(`xcrun -f metal-arch`, ignorestatus = true), stdout = devnull, stderr = devnull)
+
+        if run(cmd).exitcode == 0 # Check that Xcode is installed
+            archname = read(`xcrun metal-arch --name`, String)
+        end
+    end
+
+    if !isempty(archname)
+        archchecker = occursin(archname)
         if archchecker("Paravirtual") # Virtualized graphics (probably Github Actions runners)
             @warn """Metal.jl succesfully loaded on macOS system with unsupported Paravirtual graphics.
                     This system is unsupported but should still load.
