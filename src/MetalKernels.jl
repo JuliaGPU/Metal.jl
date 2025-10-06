@@ -22,7 +22,9 @@ The `KernelAbstractions` backend for running on Metal GPUs.
 struct MetalBackend <: KA.GPU
 end
 
-KA.allocate(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = MtlArray{T, length(dims), unified ? SharedStorage : DefaultStorageMode}(undef, dims)
+# Ensure type stability. See JuliaGPU/KernelAbstractions#634
+_allocate(T, dims, N, S) = MtlArray{T, N, S}(undef, dims)
+KA.allocate(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = _allocate(T, dims, length(dims), unified ? SharedStorage : DefaultStorageMode)
 KA.zeros(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.zeros(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
 KA.ones(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.ones(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
 
