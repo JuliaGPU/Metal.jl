@@ -57,12 +57,9 @@ end
 
 # initialization function, called automatically at the start of each kernel because
 # there's no reliable way to detect uninitialized shared memory (see JuliaGPU/CUDA.jl#2008)
-function initialize_rng_state(thread_position_in_threadgroup::NTuple{3, Core.VecElement{UInt32}},
-                              threads_per_threadgroup::NTuple{3, Core.VecElement{UInt32}})
+function initialize_rng_state(thread_position_in_grid::UInt32)
     # thread_position_in_threadgroup uses 0-based indexing
-    threadId = thread_position_in_threadgroup[1].value + Int32(1) +
-               thread_position_in_threadgroup[2].value * threads_per_threadgroup[1].value +
-               thread_position_in_threadgroup[3].value * threads_per_threadgroup[1].value * threads_per_threadgroup[2].value
+    threadId = thread_position_in_grid  # XXX: make this an intrinsic call
     warpId = (threadId - Int32(1)) >> 0x5 + Int32(1)  # fld1
 
     @inbounds global_random_keys()[warpId] = kernel_state().random_seed
@@ -84,9 +81,7 @@ end
 @inline Philox2x32() = Philox2x32{7}()
 
 @inline function Base.getproperty(rng::Philox2x32, field::Symbol)
-    threadId = thread_position_in_threadgroup_3d().x +
-        (thread_position_in_threadgroup_3d().y - Int32(1)) * threads_per_threadgroup_3d().x +
-        (thread_position_in_threadgroup_3d().z - Int32(1)) * threads_per_threadgroup_3d().x * threads_per_threadgroup_3d().y
+    threadId = thread_position_in_threadgroup_1d()
     warpId = (threadId - Int32(1)) >> 0x5 + Int32(1)  # fld1 by 32
 
     if field === :seed
@@ -96,19 +91,13 @@ end
     elseif field === :ctr1
         @inbounds global_random_counters()[warpId]
     elseif field === :ctr2
-        blockId = threadgroup_position_in_grid_3d().x +
-            (threadgroup_position_in_grid_3d().y - Int32(1)) * threadgroups_per_grid_3d().x +
-            (threadgroup_position_in_grid_3d().z - Int32(1)) * threadgroups_per_grid_3d().x * threadgroups_per_grid_3d().y
-        globalId = threadId + (blockId - Int32(1)) *
-            (threads_per_threadgroup_3d().x * threads_per_threadgroup_3d().y * threads_per_threadgroup_3d().z)
+        globalId = thread_position_in_grid_1d()
         globalId % UInt32
     end::UInt32
 end
 
 @inline function Base.setproperty!(rng::Philox2x32, field::Symbol, x)
-    threadId = thread_position_in_threadgroup_3d().x +
-        (thread_position_in_threadgroup_3d().y - Int32(1)) * threads_per_threadgroup_3d().x +
-        (thread_position_in_threadgroup_3d().z - Int32(1)) * threads_per_threadgroup_3d().x * threads_per_threadgroup_3d().y
+    threadId = thread_position_in_threadgroup_1d()
     warpId = (threadId - Int32(1)) >> 0x5 + Int32(1)  # fld1 by 32
 
     if field === :key

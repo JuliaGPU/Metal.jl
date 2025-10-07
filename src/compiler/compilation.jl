@@ -21,7 +21,7 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
     if job.config.kernel && haskey(globals(mod), "global_random_keys")
         f = initialize_rng_state
         ft = typeof(f)
-        tt = NTuple{2, NTuple{3, Core.VecElement{UInt32}}}
+        tt = Tuple{UInt32}
 
         # create a deferred compilation job for `initialize_rng_state()`
         src = methodinstance(ft, tt, GPUCompiler.tls_world_age())
@@ -59,15 +59,15 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
             end
             fptr = call!(builder, deferred_codegen_ft, deferred_codegen, [ConstantInt(id)])
 
-            thread_position_in_threadgroup = parameters(entry)[findfirst(param -> LLVM.name(param) == "thread_position_in_threadgroup", parameters(entry))]
-            threads_per_threadgroup = parameters(entry)[findfirst(param -> LLVM.name(param) == "threads_per_threadgroup", parameters(entry))]
+            thread_position_in_grid = parameters(entry)[findfirst(param -> LLVM.name(param) == "thread_position_in_grid", parameters(entry))]
 
             # call the `initialize_rng_state` function
+            # XXX: use intrinsics in here, move transformation from intrinsics to arguments later
             rt = Core.Compiler.return_type(f, tt)
             llvm_rt = convert(LLVMType, rt)
-            llvm_ft = LLVM.FunctionType(llvm_rt, [convert(LLVMType, NTuple{3, Core.VecElement{UInt32}}) for _ in 1:2])
+            llvm_ft = LLVM.FunctionType(llvm_rt, [convert(LLVMType, UInt32)])
             fptr = inttoptr!(builder, fptr, LLVM.PointerType(llvm_ft))
-            call!(builder, llvm_ft, fptr, [thread_position_in_threadgroup, threads_per_threadgroup])
+            call!(builder, llvm_ft, fptr, [thread_position_in_grid])
             br!(builder, top_bb)
         end
 
