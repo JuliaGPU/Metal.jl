@@ -30,9 +30,6 @@ UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 [weakdeps]
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
-[sources]
-GPUCompiler = {rev = "tb/kernel_state_reference", url = "https://github.com/JuliaGPU/GPUCompiler.jl.git"}
-
 [extensions]
 SpecialFunctionsExt = "SpecialFunctions"
 
@@ -43,7 +40,7 @@ CEnum = "0.4, 0.5"
 CodecBzip2 = "0.8.5"
 ExprTools = "0.1"
 GPUArrays = "11.2.1"
-GPUCompiler = "0.26, 0.27, 1"
+GPUCompiler = "1.7"
 GPUToolbox = "0.1, 0.2, 0.3, 1"
 KernelAbstractions = "0.9.38"
 LLVM = "7.2, 8, 9"
