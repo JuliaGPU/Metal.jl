@@ -445,15 +445,27 @@ const popcount = count_ones
 @device_override Base.bitreverse(x::UInt8)  = ccall("extern air.reverse_bits.i8", llvmcall, UInt8, (UInt8,), x)
 const reverse_bits = bitreverse
 
-@device_override Base.MultiplicativeInverses._mul_high(x::Int64, y::Int64)   = ccall("extern air.mul_hi.s.i64", llvmcall, Int64, (Int64, Int64), x, y)
-@device_override Base.MultiplicativeInverses._mul_high(x::UInt64, y::UInt64) = ccall("extern air.mul_hi.u.i64", llvmcall, UInt64, (UInt64, UInt64), x, y)
-@device_override Base.MultiplicativeInverses._mul_high(x::Int32, y::Int32)   = ccall("extern air.mul_hi.s.i32", llvmcall, Int32, (Int32, Int32), x, y)
-@device_override Base.MultiplicativeInverses._mul_high(x::UInt32, y::UInt32) = ccall("extern air.mul_hi.u.i32", llvmcall, UInt32, (UInt32, UInt32), x, y)
-@device_override Base.MultiplicativeInverses._mul_high(x::Int16, y::Int16)   = ccall("extern air.mul_hi.s.i16", llvmcall, Int16, (Int16, Int16), x, y)
-@device_override Base.MultiplicativeInverses._mul_high(x::UInt16, y::UInt16) = ccall("extern air.mul_hi.u.i16", llvmcall, UInt16, (UInt16, UInt16), x, y)
-@device_override Base.MultiplicativeInverses._mul_high(x::Int8, y::Int8)     = ccall("extern air.mul_hi.s.i8", llvmcall, Int8, (Int8, Int8), x, y)
-@device_override Base.MultiplicativeInverses._mul_high(x::UInt8, y::UInt8)   = ccall("extern air.mul_hi.u.i8", llvmcall, UInt8, (UInt8, UInt8), x, y)
-const mulhi = Base.MultiplicativeInverses._mul_high
+@static if isdefined(Base, :mul_hi) # VERSION >= v"1.13.0-"
+    @device_override Base.mul_hi(x::Int64, y::Int64)   = ccall("extern air.mul_hi.s.i64", llvmcall, Int64, (Int64, Int64), x, y)
+    @device_override Base.mul_hi(x::UInt64, y::UInt64) = ccall("extern air.mul_hi.u.i64", llvmcall, UInt64, (UInt64, UInt64), x, y)
+    @device_override Base.mul_hi(x::Int32, y::Int32)   = ccall("extern air.mul_hi.s.i32", llvmcall, Int32, (Int32, Int32), x, y)
+    @device_override Base.mul_hi(x::UInt32, y::UInt32) = ccall("extern air.mul_hi.u.i32", llvmcall, UInt32, (UInt32, UInt32), x, y)
+    @device_override Base.mul_hi(x::Int16, y::Int16)   = ccall("extern air.mul_hi.s.i16", llvmcall, Int16, (Int16, Int16), x, y)
+    @device_override Base.mul_hi(x::UInt16, y::UInt16) = ccall("extern air.mul_hi.u.i16", llvmcall, UInt16, (UInt16, UInt16), x, y)
+    @device_override Base.mul_hi(x::Int8, y::Int8)     = ccall("extern air.mul_hi.s.i8", llvmcall, Int8, (Int8, Int8), x, y)
+    @device_override Base.mul_hi(x::UInt8, y::UInt8)   = ccall("extern air.mul_hi.u.i8", llvmcall, UInt8, (UInt8, UInt8), x, y)
+    const mulhi = Base.mul_hi
+else
+    @device_override Base.MultiplicativeInverses._mul_high(x::Int64, y::Int64)   = ccall("extern air.mul_hi.s.i64", llvmcall, Int64, (Int64, Int64), x, y)
+    @device_override Base.MultiplicativeInverses._mul_high(x::UInt64, y::UInt64) = ccall("extern air.mul_hi.u.i64", llvmcall, UInt64, (UInt64, UInt64), x, y)
+    @device_override Base.MultiplicativeInverses._mul_high(x::Int32, y::Int32)   = ccall("extern air.mul_hi.s.i32", llvmcall, Int32, (Int32, Int32), x, y)
+    @device_override Base.MultiplicativeInverses._mul_high(x::UInt32, y::UInt32) = ccall("extern air.mul_hi.u.i32", llvmcall, UInt32, (UInt32, UInt32), x, y)
+    @device_override Base.MultiplicativeInverses._mul_high(x::Int16, y::Int16)   = ccall("extern air.mul_hi.s.i16", llvmcall, Int16, (Int16, Int16), x, y)
+    @device_override Base.MultiplicativeInverses._mul_high(x::UInt16, y::UInt16) = ccall("extern air.mul_hi.u.i16", llvmcall, UInt16, (UInt16, UInt16), x, y)
+    @device_override Base.MultiplicativeInverses._mul_high(x::Int8, y::Int8)     = ccall("extern air.mul_hi.s.i8", llvmcall, Int8, (Int8, Int8), x, y)
+    @device_override Base.MultiplicativeInverses._mul_high(x::UInt8, y::UInt8)   = ccall("extern air.mul_hi.u.i8", llvmcall, UInt8, (UInt8, UInt8), x, y)
+    const mulhi = Base.MultiplicativeInverses._mul_high
+end
 
 # From: https://forums.developer.nvidia.com/t/a-faster-and-more-accurate-implementation-of-expm1f/48085/2
 # Original license copied below:
