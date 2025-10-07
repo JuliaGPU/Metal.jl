@@ -57,10 +57,9 @@ end
 
 # initialization function, called automatically at the start of each kernel because
 # there's no reliable way to detect uninitialized shared memory (see JuliaGPU/CUDA.jl#2008)
-function initialize_rng_state(thread_position_in_grid::UInt32)
-    # thread_position_in_threadgroup uses 0-based indexing
-    threadId = thread_position_in_grid  # XXX: make this an intrinsic call
-    warpId = (threadId - Int32(1)) >> 0x5 + Int32(1)  # fld1
+function initialize_rng_state()
+    threadId = thread_position_in_threadgroup_1d()
+    warpId = (threadId - Int32(1)) >> 0x5 + Int32(1)  # fld1 by 32
 
     @inbounds global_random_keys()[warpId] = kernel_state().random_seed
     @inbounds global_random_counters()[warpId] = 0
