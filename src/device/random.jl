@@ -129,19 +129,6 @@ else
         Random.seed!(Random.default_rng(), seed)
 end
 
-@warn "FIXME: need a cycle counter for seeding" maxlog=1
-@static if VERSION >= v"1.11-"
-    # `Random.seed!(::AbstractRNG)` now passes a `nothing` seed value
-    #Random.seed!(rng::Philox2x32, seed::Nothing) =
-    #    Random.seed!(rng, Base.unsafe_trunc(UInt32, readcyclecounter()))
-    Random.seed!(rng::Philox2x32, seed::Nothing) =
-        Random.seed!(rng, 0xdeadbeef)
-else
-    # ... where it used to call `Random_make_seed()`
-    #@device_override Random.make_seed() = Base.unsafe_trunc(UInt32, readcyclecounter())
-    @device_override Random.make_seed() = 0xdeadbeef
-end
-
 """
     Random.rand(rng::Philox2x32, UInt32)
 
