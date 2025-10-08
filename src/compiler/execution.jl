@@ -275,12 +275,14 @@ end
     (threads.width * threads.height * threads.depth) > kernel.pipeline.maxTotalThreadsPerThreadgroup &&
         throw(ArgumentError("Number of threads in group ($(threads.width * threads.height * threads.depth)) should not exceed $(kernel.pipeline.maxTotalThreadsPerThreadgroup)"))
 
+    kernel_state = KernelState(rand(UInt32))
+
     cmdbuf = MTLCommandBuffer(queue)
     cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
     cce = MTLComputeCommandEncoder(cmdbuf)
     argument_buffers = try
         MTL.set_function!(cce, kernel.pipeline)
-        bufs = encode_arguments!(cce, kernel, kernel.f, args...)
+        bufs = encode_arguments!(cce, kernel, kernel_state, kernel.f, args...)
         MTL.append_current_function!(cce, groups, threads)
         bufs
     finally
@@ -295,7 +297,7 @@ end
     # kernel has actually completed.
     #
     # TODO: is there a way to bind additional resources to the command buffer?
-    roots = [kernel.f, args]
+    roots = [kernel.f, kernel_state, args]
     MTL.on_completed(cmdbuf) do buf
         empty!(roots)
         foreach(free, argument_buffers)

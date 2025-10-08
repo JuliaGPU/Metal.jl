@@ -32,3 +32,11 @@ function report_exception_frame(idx, func, file, line)
     # @cuprintf(" [%i] %s at %s:%i\n", idx, func, file, line)
     return
 end
+
+## kernel state
+
+struct KernelState
+    random_seed::UInt32
+end
+
+@inline @generated kernel_state() = GPUCompiler.kernel_state_value(KernelState)
