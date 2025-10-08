@@ -34,7 +34,7 @@ The resulting trace can be opened with the Instruments app, part of Xcode.
 julia> using Metal
 
 julia> function vadd(a, b, c)
-           i = thread_position_in_grid_1d()
+           i = thread_position_in_grid().x
            c[i] = a[i] + b[i]
            return
        end
@@ -78,7 +78,7 @@ $ METAL_CAPTURE_ENABLED=1 julia
 julia> using Metal
 
 julia> function vadd(a, b, c)
-           i = thread_position_in_grid_1d()
+           i = thread_position_in_grid().x
            c[i] = a[i] + b[i]
            return
        end

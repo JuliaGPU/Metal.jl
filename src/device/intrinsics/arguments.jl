@@ -154,6 +154,7 @@ macro doc_dim(docs, base_name)
     _3d_name = Symbol(string(base_name) * "_3d")
 
     expr = quote
+        @doc $docs $base_name
         @doc $docs $_1d_name
         @doc $docs $_2d_name
         @doc $docs $_3d_name
@@ -162,6 +163,7 @@ macro doc_dim(docs, base_name)
 end
 
 @doc_dim """
+    dispatch_threads_per_threadgroup()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
     dispatch_threads_per_threadgroup_1d()::UInt32
     dispatch_threads_per_threadgroup_2d()::@NamedTuple{x::UInt32, y::UInt32}
     dispatch_threads_per_threadgroup_3d()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
@@ -170,6 +172,7 @@ Return the thread execution width specified at dispatch for a threadgroup.
 """ dispatch_threads_per_threadgroup
 
 @doc_dim """
+    grid_origin()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
     grid_origin_1d()::UInt32
     grid_origin_2d()::@NamedTuple{x::UInt32, y::UInt32}
     grid_origin_3d()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
@@ -178,6 +181,7 @@ Return the origin offset of the grid for threads that read per-thread stage-in d
 """ grid_origin
 
 @doc_dim """
+    grid_size()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
     grid_size_1d()::UInt32
     grid_size_2d()::@NamedTuple{x::UInt32, y::UInt32}
     grid_size_3d()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
@@ -186,6 +190,7 @@ Return maximum size of the grid for threads that read per-thread stage-in data.
 """ grid_size
 
 @doc_dim """
+    thread_position_in_threadgroup()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
     thread_position_in_threadgroup_1d()::UInt32
     thread_position_in_threadgroup_2d()::@NamedTuple{x::UInt32, y::UInt32}
     thread_position_in_threadgroup_3d()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
@@ -194,6 +199,7 @@ Return the current thread's unique position within a threadgroup.
 """ thread_position_in_threadgroup
 
 @doc_dim """
+    thread_position_in_grid()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
     thread_position_in_grid_1d()::UInt32
     thread_position_in_grid_2d()::@NamedTuple{x::UInt32, y::UInt32}
     thread_position_in_grid_3d()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
@@ -202,6 +208,7 @@ Return the current thread's position in an N-dimensional grid of threads.
 """ thread_position_in_grid
 
 @doc_dim """
+    threadgroup_position_in_grid()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
     threadgroup_position_in_grid_1d()::UInt32
     threadgroup_position_in_grid_2d()::@NamedTuple{x::UInt32, y::UInt32}
     threadgroup_position_in_grid_3d()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
@@ -210,6 +217,7 @@ Return the current threadgroup's unique position within the grid.
 """ threadgroup_position_in_grid
 
 @doc_dim """
+    threadgroups_per_grid()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
     threadgroups_per_grid_1d()::UInt32
     threadgroups_per_grid_2d()::@NamedTuple{x::UInt32, y::UInt32}
     threadgroups_per_grid_3d()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
@@ -218,6 +226,7 @@ Return the number of threadgroups per grid.
 """ threadgroups_per_grid
 
 @doc_dim """
+    threads_per_grid()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
     threads_per_grid_1d()::UInt32
     threads_per_grid_2d()::@NamedTuple{x::UInt32, y::UInt32}
     threads_per_grid_3d()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
@@ -226,6 +235,8 @@ Return the grid size.
 """ threads_per_grid
 
 @doc_dim """
+    threads_per_threadgroup()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
+
     threads_per_threadgroup_1d()::UInt32
     threads_per_threadgroup_2d()::@NamedTuple{x::UInt32, y::UInt32}
     threads_per_threadgroup_3d()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
