@@ -207,10 +207,9 @@ const _kernel_instances = Dict{UInt, Any}()
 
 ## kernel launching and argument encoding
 
-@inline @generated function encode_arguments!(cce, kernel, args...)
-    ex = quote
-        bufs = MTLBuffer[]
-    end
+@inline @generated function encode_arguments!(cce, kernel, args::Vararg{Any,N}) where {N}
+    ex = quote end
+    buffers = []
 
     # the arguments passed into this function have not been `mtlconvert`ed, because we need
     # to retain the top-level MTLBuffer and MtlPtr objects. eager conversion of nested
@@ -230,17 +229,18 @@ const _kernel_instances = Dict{UInt, Any}()
             continue
         else
             # everything else is passed by reference, in an argument buffer
+            buf = gensym("buffer")
             append!(ex.args, (quote
-                buf = encode_argument!(kernel, mtlconvert($(argex), cce))
-                set_buffer!(cce, buf, 0, $idx)
-                push!(bufs, buf)
+                $buf = encode_argument!(kernel, mtlconvert($(argex), cce))
+                set_buffer!(cce, $buf, 0, $idx)
             end).args)
+            push!(buffers, buf)
         end
         idx += 1
     end
 
     append!(ex.args, (quote
-        return bufs
+        return ($(buffers...),)
     end).args)
 
     ex
