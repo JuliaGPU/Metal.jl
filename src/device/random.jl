@@ -1,7 +1,3 @@
-# Copied from CUDA.jl/src/device/random.jl
-# Copied from AMDGPU.jl/src/device/random.jl
-
-
 ## random number generation
 
 using Random
