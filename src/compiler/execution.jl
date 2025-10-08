@@ -297,7 +297,7 @@ end
     # kernel has actually completed.
     #
     # TODO: is there a way to bind additional resources to the command buffer?
-    roots = [kernel.f, kernel_state, args]
+    roots = [kernel.f, args]
     MTL.on_completed(cmdbuf) do buf
         empty!(roots)
         foreach(free, argument_buffers)
@@ -308,8 +308,8 @@ end
         if buf.status == MTL.MTLCommandBufferStatusError
             Core.println("ERROR: Failed to submit command buffer: $(buf.error.localizedDescription)")
         end
-
     end
+
     commit!(cmdbuf)
 end
 
