@@ -166,100 +166,17 @@ function Random.rand(rng::Philox2x32{R},::Type{UInt64}) where {R}
 end
 
 
+# normally distributed
 
-# normally distributed random numbers using Ziggurat algorithm
-#
-# copied from Base because we don't support its global tables
-
-# a hacky method of exposing constant tables as constant GPU memory
-function emit_constant_array(name::Symbol, data::AbstractArray{T}) where {T}
-    @dispose ctx=Context() begin
-        T_val = convert(LLVMType, T)
-        T_ptr = convert(LLVMType, LLVMPtr{T,AS.Constant})
-
-        # define function and get LLVM module
-        llvm_f, _ = create_function(T_ptr)
-        mod = LLVM.parent(llvm_f)
-
-        # create a global memory global variable
-        # TODO: global_var alignment?
-        T_global = LLVM.ArrayType(T_val, length(data))
-        # XXX: why can't we use a single name like emit_shmem
-        gv = GlobalVariable(mod, T_global, "gpu_$(name)_data", AS.Constant)
-        linkage!(gv, LLVM.API.LLVMInternalLinkage)
-        initializer!(gv, ConstantArray(data))
-        alignment!(gv, 16)
-
-        # generate IR
-        @dispose builder=IRBuilder() begin
-            entry = BasicBlock(llvm_f, "entry")
-            position!(builder, entry)
-
-            ptr = gep!(builder, T_global, gv, [ConstantInt(0), ConstantInt(0)])
-
-            untyped_ptr = bitcast!(builder, ptr, T_ptr)
-
-            ret!(builder, untyped_ptr)
-        end
-
-        call_function(llvm_f, LLVMPtr{T,AS.Constant})
-    end
+# use the AbstractFloat fallback from Base, which doesn't widen and only relies on `rand()`
+@device_override @inline function Random.randn(rng::Philox2x32, ::Type{T}) where {T <: AbstractFloat}
+    @invoke Random.randn(rng::AbstractRNG, T::Type{<:AbstractFloat})
 end
 
-for var in [:ki, :wi, :fi, :ke, :we, :fe]
-    val = getfield(Random, var)
-    gpu_var = Symbol("gpu_$var")
-    arr_typ = :(MtlDeviceArray{$(eltype(val)),$(ndims(val)),AS.Constant})
-    @eval @inline @generated function $gpu_var()
-        ptr = emit_constant_array($(QuoteNode(var)), $val)
-        Expr(:call, $arr_typ, $(size(val)), ptr)
-    end
-end
 
-## randn
+# exponentially distributed
 
-@device_override @inline function Random.randn(rng::AbstractRNG)
-    @label retry
-    r = Random.rand(rng, Random.UInt52Raw())
-    @inbounds begin
-        r &= 0x000fffffffffffff
-        rabs = Int64(r >> 1) # One bit for the sign
-        idx = rabs & 0xFF
-        x = ifelse(r % Bool, -rabs, rabs)*gpu_wi()[idx+1]
-        rabs < gpu_ki()[idx+1] && return x # 99.3% of the time we return here 1st try
-        # TODO: This code could be outlined once LLVM supports LDS access in recursively-called functions
-        @inbounds if idx == 0
-            while true
-                xx = -Random.ziggurat_nor_inv_r*log(Random.rand(rng))
-                yy = -log(Random.rand(rng))
-                yy+yy > xx*xx &&
-                    return (rabs >> 8) % Bool ? -Random.ziggurat_nor_r-xx : Random.ziggurat_nor_r+xx
-            end
-        elseif (gpu_fi()[idx] - gpu_fi()[idx+1])*Random.rand(rng) + gpu_fi()[idx+1] < exp(-0.5*x*x)
-            return x # return from the triangular area
-        else
-            @goto retry
-        end
-    end
-end
-
-## randexp
-
-@device_override @inline function Random.randexp(rng::AbstractRNG)
-    @label retry
-    ri = Random.rand(rng, Random.UInt52Raw())
-    @inbounds begin
-        ri &= 0x000fffffffffffff
-        idx = ri & 0xFF
-        x = ri*gpu_we()[idx+1]
-        ri < gpu_ke()[idx+1] && return x # 98.9% of the time we return here 1st try
-        # TODO: This code could be outlined once LLVM supports LDS access in recursively-called functions
-        @inbounds if idx == 0
-            return Random.ziggurat_exp_r - log(Random.rand(rng))
-        elseif (gpu_fe()[idx] - gpu_fe()[idx+1])*Random.rand(rng) + gpu_fe()[idx+1] < exp(-x)
-            return x # return from the triangular area
-        else
-            @goto retry
-        end
-    end
+# use the AbstractFloat fallback from Base, which doesn't widen and only relies on `rand()`
+@device_override @inline function Random.randexp(rng::Philox2x32, ::Type{T}) where {T <: AbstractFloat}
+    @invoke Random.randexp(rng::AbstractRNG, T::Type{<:AbstractFloat})
 end
