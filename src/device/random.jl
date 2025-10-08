@@ -164,7 +164,8 @@ end
 
 # normally distributed
 
-# use the AbstractFloat fallback from Base, which doesn't widen and only relies on `rand()`
+# use the AbstractFloat fallback from Base, which doesn't widen and only relies on `rand()`.
+# the Ziggurat method used by other back-ends relies on Float64 support.
 @device_override @inline function Random.randn(rng::Philox2x32, ::Type{T}) where {T <: AbstractFloat}
     @invoke Random.randn(rng::AbstractRNG, T::Type{<:AbstractFloat})
 end
@@ -172,7 +173,8 @@ end
 
 # exponentially distributed
 
-# use the AbstractFloat fallback from Base, which doesn't widen and only relies on `rand()`
+# use the AbstractFloat fallback from Base, which doesn't widen and only relies on `rand()`.
+# the Ziggurat method used by other back-ends relies on Float64 support.
 @device_override @inline function Random.randexp(rng::Philox2x32, ::Type{T}) where {T <: AbstractFloat}
     @invoke Random.randexp(rng::AbstractRNG, T::Type{<:AbstractFloat})
 end
