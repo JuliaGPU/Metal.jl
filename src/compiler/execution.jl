@@ -282,7 +282,7 @@ end
     cce = MTLComputeCommandEncoder(cmdbuf)
     argument_buffers = try
         MTL.set_function!(cce, kernel.pipeline)
-        bufs = encode_arguments!(cce, kernel, kernel.f, kernel_state, args...)
+        bufs = encode_arguments!(cce, kernel, kernel_state, kernel.f, args...)
         MTL.append_current_function!(cce, groups, threads)
         bufs
     finally
