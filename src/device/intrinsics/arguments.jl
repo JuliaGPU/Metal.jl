@@ -41,22 +41,9 @@ const dim_intr = [
 for (intr, offset) in dim_intr
     # XXX: these are also available as UInt16 (ushort)
     @eval begin
-        export $(Symbol(intr * "_1d"))
-        export $(Symbol(intr * "_2d"))
-        export $(Symbol(intr * "_3d"))
+        export $(Symbol(intr))
 
-        @device_function function $(Symbol(intr * "_1d"))()
-            ccall($"extern julia.air.$intr.i32", llvmcall, UInt32, ()) + UInt32($offset)
-        end
-
-        @device_function function $(Symbol(intr * "_2d"))()
-            vec = ccall($"extern julia.air.$intr.v2i32", llvmcall,
-                        NTuple{2, VecElement{UInt32}}, ())
-            (x = vec[1].value + UInt32($offset),
-             y = vec[2].value + UInt32($offset))
-        end
-
-        @device_function function $(Symbol(intr * "_3d"))()
+        @device_function function $(Symbol(intr))()
             vec = ccall($"extern julia.air.$intr.v3i32", llvmcall,
                         NTuple{3, VecElement{UInt32}}, ())
             (x = vec[1].value + UInt32($offset),
@@ -64,11 +51,28 @@ for (intr, offset) in dim_intr
              z = vec[3].value + UInt32($offset))
         end
     end
+    @eval begin
+        export $(Symbol(intr * "_1d"))
+        export $(Symbol(intr * "_2d"))
+        export $(Symbol(intr * "_3d"))
+
+        @device_function function $(Symbol(intr * "_1d"))()
+            $(Symbol(intr))().x
+        end
+
+        @device_function function $(Symbol(intr * "_2d"))()
+            vec = $(Symbol(intr))()
+            (x = vec.x,
+             y = vec.y)
+        end
+
+        @device_function  $(Symbol(intr * "_3d"))() = $(Symbol(intr))()
+    end
 end
 
 ## Documentation
 
-# Dimsionless intrinsics
+# Dimensionless intrinsics
 
 @doc """
     dispatch_quadgroups_per_threadgroup()::UInt32
