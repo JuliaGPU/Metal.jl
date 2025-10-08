@@ -207,10 +207,9 @@ const _kernel_instances = Dict{UInt, Any}()
 
 ## kernel launching and argument encoding
 
-@inline @generated function encode_arguments!(cce, kernel, args...)
-    ex = quote
-        bufs = MTLBuffer[]
-    end
+@inline @generated function encode_arguments!(cce, kernel, args::Vararg{Any,N}) where {N}
+    ex = quote end
+    buffers = []
 
     # the arguments passed into this function have not been `mtlconvert`ed, because we need
     # to retain the top-level MTLBuffer and MtlPtr objects. eager conversion of nested
@@ -230,17 +229,18 @@ const _kernel_instances = Dict{UInt, Any}()
             continue
         else
             # everything else is passed by reference, in an argument buffer
+            buf = gensym("buffer")
             append!(ex.args, (quote
-                buf = encode_argument!(kernel, mtlconvert($(argex), cce))
-                set_buffer!(cce, buf, 0, $idx)
-                push!(bufs, buf)
+                $buf = encode_argument!(kernel, mtlconvert($(argex), cce))
+                set_buffer!(cce, $buf, 0, $idx)
             end).args)
+            push!(buffers, buf)
         end
         idx += 1
     end
 
     append!(ex.args, (quote
-        return bufs
+        return ($(buffers...),)
     end).args)
 
     ex
@@ -275,7 +275,7 @@ end
     (threads.width * threads.height * threads.depth) > kernel.pipeline.maxTotalThreadsPerThreadgroup &&
         throw(ArgumentError("Number of threads in group ($(threads.width * threads.height * threads.depth)) should not exceed $(kernel.pipeline.maxTotalThreadsPerThreadgroup)"))
 
-    kernel_state = KernelState(rand(UInt32))
+    kernel_state = KernelState(Random.rand(UInt32))
 
     cmdbuf = MTLCommandBuffer(queue)
     cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
@@ -297,7 +297,7 @@ end
     # kernel has actually completed.
     #
     # TODO: is there a way to bind additional resources to the command buffer?
-    roots = [kernel.f, kernel_state, args]
+    roots = [kernel.f, args]
     MTL.on_completed(cmdbuf) do buf
         empty!(roots)
         foreach(free, argument_buffers)
@@ -308,8 +308,8 @@ end
         if buf.status == MTL.MTLCommandBufferStatusError
             Core.println("ERROR: Failed to submit command buffer: $(buf.error.localizedDescription)")
         end
-
     end
+
     commit!(cmdbuf)
 end
 
