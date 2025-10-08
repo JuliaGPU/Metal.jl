@@ -65,7 +65,7 @@ end
     @testset "across threads" for active_dim in 1:6
         function kernel(A::AbstractArray{T}, seed) where {T}
             apply_seed(seed)
-            id = thread_position_in_grid().x
+            id = prod(thread_position_in_grid())
             A[id] = rand(T)
             return nothing
         end
