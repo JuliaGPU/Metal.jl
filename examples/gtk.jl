@@ -19,7 +19,7 @@ end
 
 function generate(img, pos)
     r, c = Int32.(size(img))
-    i,j = thread_position_in_grid_2d()
+    i,j,_ = thread_position_in_grid()
     @inbounds if i <= r && j <= c
         img[i,j] = pos < j < pos + 10 ? colorant"red" : colorant"thistle"
     end

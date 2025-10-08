@@ -33,7 +33,7 @@ function Base.findall(bools::WrappedMtlArray{Bool})
 
     if n > 0
         function kernel(ys::MtlDeviceArray, bools, indices)
-            i = (threadgroup_position_in_grid_1d() - Int32(1)) * threads_per_threadgroup_1d() + thread_position_in_threadgroup_1d()
+            i = (threadgroup_position_in_grid().x - Int32(1)) * threads_per_threadgroup().x + thread_position_in_threadgroup().x
 
             @inbounds if i <= length(bools) && bools[i]
                 i′ = CartesianIndices(bools)[i]

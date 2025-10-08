@@ -101,9 +101,9 @@ function volumerhs!(rhs, Q, vgeo, gravity, D, nelem)
     r_rhsW = MArray{Tuple{Nq}, eltype(rhs)}(undef)
     r_rhsE = MArray{Tuple{Nq}, eltype(rhs)}(undef)
 
-    e = threadgroup_position_in_grid_2d().x
-    j = thread_position_in_threadgroup_2d().y
-    i = thread_position_in_threadgroup_2d().x
+    e = threadgroup_position_in_grid().x
+    j = thread_position_in_threadgroup().y
+    i = thread_position_in_threadgroup().x
 
     @inbounds begin
         for k in 1:Nq

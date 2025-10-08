@@ -15,7 +15,7 @@ using LinearAlgebra
 # This document is meant to showcase potential use cases allowed by unified memory.
 
 function simple_kernel(arr)
-    idx = thread_position_in_grid_1d()
+    idx = thread_position_in_grid().x
     arr[idx] = cos(arr[idx])
     return
 end
@@ -60,7 +60,7 @@ svd(arr_cpu)
 # TODO: Come up with simultaneous launch of GPU and CPU work that results in undesired behavior
 
 function long_kernel(arr, dummy)
-    idx = thread_position_in_grid_1d()
+    idx = thread_position_in_grid().x
     for i in 1:100000
         dummy[1] += Float32(0.3)
     end

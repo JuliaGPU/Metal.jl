@@ -85,7 +85,7 @@ FLOAT_MATH_INTR_FUNCS_3_ARG = [
     mtlout = fill!(similar(mtlarr), 0)
 
     function kernel(res, arr)
-        idx = thread_position_in_grid_1d()
+        idx = thread_position_in_grid().x
         res[idx] = fun(arr[idx])
         return nothing
     end
@@ -103,7 +103,7 @@ end
     mtlout = fill!(similar(mtlarr1), 0)
 
     function kernel(res, x, y)
-        idx = thread_position_in_grid_1d()
+        idx = thread_position_in_grid().x
         res[idx] = fun(x[idx], y[idx])
         return nothing
     end
@@ -124,7 +124,7 @@ end
     mtlout = fill!(similar(mtlarr1), 0)
 
     function kernel(res, x, y, z)
-        idx = thread_position_in_grid_1d()
+        idx = thread_position_in_grid().x
         res[idx] = fun(x[idx], y[idx], z[idx])
         return nothing
     end
@@ -148,7 +148,7 @@ end
         bufferA = MtlArray(arr)
         bufferB = MtlArray(arr)
         function intr_test3(arr_sin, arr_cos)
-            idx = thread_position_in_grid_1d()
+            idx = thread_position_in_grid().x
             sinres, cosres = sincos(arr_cos[idx])
             arr_sin[idx] = sinres
             arr_cos[idx] = cosres
@@ -173,7 +173,7 @@ end
         mtlout = fill!(similar(mtlin), 0)
 
         function kernel(res, x, y, z)
-            idx = thread_position_in_grid_1d()
+            idx = thread_position_in_grid().x
             res[idx] = clamp(x[idx], y[idx], z[idx])
             return nothing
         end
@@ -191,7 +191,7 @@ end
         mtlout = fill!(similar(mtlarr1), 0)
 
         function kernel(res, x, y)
-            idx = thread_position_in_grid_1d()
+            idx = thread_position_in_grid().x
             res[idx] = x[idx]^y[idx]
             return nothing
         end
@@ -209,7 +209,7 @@ end
         mtlout = fill!(similar(mtlarr1), 0)
 
         function kernel(res, x, y)
-            idx = thread_position_in_grid_1d()
+            idx = thread_position_in_grid().x
             res[idx] = x[idx]^y[idx]
             return nothing
         end
@@ -227,7 +227,7 @@ end
         mtlout = fill!(similar(mtlarr1), 0)
 
         function kernel(res, x, y)
-            idx = thread_position_in_grid_1d()
+            idx = thread_position_in_grid().x
             res[idx] = Metal.powr(x[idx], y[idx])
             return nothing
         end
@@ -273,7 +273,7 @@ end
 
     let # nextafter
         function nextafter_test(X, y)
-            idx = thread_position_in_grid_1d()
+            idx = thread_position_in_grid().x
             X[idx] = Metal.nextafter(X[idx], y)
             return nothing
         end
@@ -370,7 +370,7 @@ INT_MATH_INTR_FUNCS_3_ARG = [
     mtlout = fill!(similar(mtlarr), 0)
 
     function kernel(res, arr)
-        idx = thread_position_in_grid_1d()
+        idx = thread_position_in_grid().x
         res[idx] = fun(arr[idx])
         return nothing
     end
@@ -388,7 +388,7 @@ end
     mtlout = fill!(similar(mtlarr1), 0)
 
     function kernel(res, x, y)
-        idx = thread_position_in_grid_1d()
+        idx = thread_position_in_grid().x
         res[idx] = fun(x[idx], y[idx])
         return nothing
     end
@@ -409,7 +409,7 @@ end
     mtlout = fill!(similar(mtlarr1), 0)
 
     function kernel(res, x, y, z)
-        idx = thread_position_in_grid_1d()
+        idx = thread_position_in_grid().x
         res[idx] = fun(x[idx], y[idx], z[idx])
         return nothing
     end

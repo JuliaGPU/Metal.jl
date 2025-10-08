@@ -6,7 +6,7 @@ const threads = 256
 
 # simple add matrixes kernel
 function kernel_add_mat(n, x1, x2, y)
-    i = thread_position_in_grid_1d()
+    i = thread_position_in_grid().x
     if i <= n
         @inbounds y[i] = x1[i] + x2[i]
     end
@@ -19,8 +19,8 @@ end
 
 # add arrays of matrixes kernel
 function kernel_add_mat_z_slices(n, vararg...)
-    x1, x2, y = get_inputs3(threadgroup_position_in_grid_2d().y, vararg...)
-    i = thread_position_in_grid_1d()
+    x1, x2, y = get_inputs3(threadgroup_position_in_grid().y, vararg...)
+    i = thread_position_in_grid().x
     if i <= n
         @inbounds y[i] = x1[i] + x2[i]
     end

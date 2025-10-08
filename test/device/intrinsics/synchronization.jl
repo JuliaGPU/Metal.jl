@@ -2,7 +2,7 @@
     # host/device synchronization
     let
         function sync_test_kernel(buf)
-            idx = thread_position_in_grid_1d()
+            idx = thread_position_in_grid().x
             @inbounds buf[idx] += 1
             return nothing
         end
@@ -16,15 +16,15 @@
     # thread synchronization
     let
         function barrier_test_kernel(buf)
-            idx = thread_position_in_grid_1d()
-            if thread_position_in_threadgroup_1d() != 1
+            idx = thread_position_in_grid().x
+            if thread_position_in_threadgroup().x != 1
                 @inbounds buf[idx] = 1
             end
 
             threadgroup_barrier(Metal.MemoryFlagThreadGroup)
 
-            if thread_position_in_threadgroup_1d() == 1
-                for i in 2:threads_per_threadgroup_1d()
+            if thread_position_in_threadgroup().x == 1
+                for i in 2:threads_per_threadgroup().x
                     @inbounds buf[idx] += buf[i]
                 end
             end
@@ -69,7 +69,7 @@ end
 
 @testset "statically typed" begin
     function kernel(d, n)
-        t = thread_position_in_threadgroup_1d()
+        t = thread_position_in_threadgroup().x
         tr = n-t+1
 
         s = MtlThreadGroupArray(Float32, 1024)
@@ -94,7 +94,7 @@ end
     typs = [Int32, Int64, Float32]
     @testset for typ in typs
         function kernel(d::MtlDeviceArray{T}, n) where {T}
-            t = thread_position_in_threadgroup_1d()
+            t = thread_position_in_threadgroup().x
             tr = n-t+1
 
             s = MtlThreadGroupArray(T, 1024)

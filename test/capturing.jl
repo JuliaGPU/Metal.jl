@@ -14,7 +14,7 @@ cd(tmpdir) do
 @test ENV["METAL_CAPTURE_ENABLED"]=="1"
 
 function tester(A)
-    idx = thread_position_in_grid_1d()
+    idx = thread_position_in_grid().x
     A[idx] = Int(5)
     return nothing
 end

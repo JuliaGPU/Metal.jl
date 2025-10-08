@@ -37,7 +37,7 @@ end
     threadgroup_barrier(MemoryFlagThreadGroup)
 
     # read from shared memory only if that warp existed
-    val = if thread_index_in_threadgroup() <= fld1(threads_per_threadgroup_1d(), 32)
+    val = if thread_index_in_threadgroup() <= fld1(threads_per_threadgroup().x, 32)
         @inbounds shared[lane]
     else
         neutral
@@ -52,8 +52,8 @@ end
 
 # Reduce a value across a group, using local memory for communication
 @inline function reduce_group(op, val::T, neutral, shuffle::Val{false}, ::Val{maxthreads}) where {T, maxthreads}
-    threads = threads_per_threadgroup_1d()
-    thread = thread_position_in_threadgroup_1d()
+    threads = threads_per_threadgroup().x
+    thread = thread_position_in_threadgroup().x
 
     # local mem for a complete reduction
     shared = MtlThreadGroupArray(T, (maxthreads,))
@@ -94,9 +94,9 @@ function partial_mapreduce_device(f, op, neutral, maxthreads, ::Val{Rreduce},
     ::Val{Rother}, ::Val{Rlen}, ::Val{grain}, shuffle, R, As...) where {Rreduce, Rother, Rlen, grain}
     # decompose the 1D hardware indices into separate ones for reduction (across items
     # and possibly groups if it doesn't fit) and other elements (remaining groups)
-    localIdx_reduce = thread_position_in_threadgroup_1d()
-    localDim_reduce = threads_per_threadgroup_1d() * grain
-    groupIdx_reduce, groupIdx_other = fldmod1(threadgroup_position_in_grid_1d(), Rlen)
+    localIdx_reduce = thread_position_in_threadgroup().x
+    localDim_reduce = threads_per_threadgroup().x * grain
+    groupIdx_reduce, groupIdx_other = fldmod1(threadgroup_position_in_grid().x, Rlen)
 
     # group-based indexing into the values outside of the reduction dimension
     # (that means we can safely synchronize items within this group)
@@ -141,7 +141,7 @@ function partial_mapreduce_device(f, op, neutral, maxthreads, ::Val{Rreduce},
 end
 
 function serial_mapreduce_kernel(f, op, neutral, ::Val{Rreduce}, ::Val{Rother}, R, As) where {Rreduce, Rother}
-    grid_idx = thread_position_in_grid_1d()
+    grid_idx = thread_position_in_grid().x
 
     @inbounds if grid_idx <= length(Rother)
         Iother = Rother[grid_idx]
