@@ -6,9 +6,9 @@ const threads = 256
 #simple add matrix and vector kernel
 function kernel_add_mat_vec(m, x1, x2, y)
     # one block per column
-    offset = (threadgroup_position_in_grid_2d().x-1) * m
-    @inbounds xtmp = x2[threadgroup_position_in_grid_2d().x]
-    for i = thread_position_in_threadgroup_2d().x : threadgroups_per_grid_2d().x : m
+    offset = (threadgroup_position_in_grid().x-1) * m
+    @inbounds xtmp = x2[threadgroup_position_in_grid().x]
+    for i = thread_position_in_threadgroup().x : threadgroups_per_grid().x : m
         @inbounds y[offset + i] = x1[offset + i] + xtmp
     end
     return

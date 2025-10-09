@@ -2,7 +2,7 @@ using Metal
 using BenchmarkTools
 
 function kernel_fma(a, b, c, out)
-    i = thread_position_in_grid_1d()
+    i = thread_position_in_grid().x
     a_val = a[i]
     b_val = b[i]
     c_val = c[i]

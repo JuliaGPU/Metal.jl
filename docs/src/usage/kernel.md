@@ -43,21 +43,26 @@ also query what the grid and threadgroup sizes are as well.
 For Metal.jl, these values are accessed via the following functions:
 
 - `thread_index_in_threadgroup()`
-- `grid_size_Xd()`
-- `thread_position_in_grid_Xd()`
-- `thread_position_in_threadgroup_Xd()`
-- `threadgroup_position_in_grid_Xd()`
-- `threadgroups_per_grid_Xd()`
-- `threads_per_grid_Xd()`
-- `threads_per_threadgroup_Xd()`
+- `grid_size()`
+- `thread_position_in_grid()`
+- `thread_position_in_threadgroup()`
+- `threadgroup_position_in_grid()`
+- `threadgroups_per_grid()`
+- `threads_per_grid()`
+- `threads_per_threadgroup()`
 
-*Where 'X' is 1, 2, or 3 according to the number of dimensions requested.*
+!!! note
+    Prior to Metal.jl v1.9, the aforementioned indexing intrinsics had a `_Xd` suffix,
+    where 'X' was 1, 2, or 3 according to the number of dimensions requested.
+
+    These methods are deprecated and it is now recommended to use the version without a suffix,
+    which behaves like the `_3d` version.
 
 Using these in a kernel (taken directly from the [vadd example](https://github.com/JuliaGPU/Metal.jl/blob/main/examples/vadd.jl)):
 
 ```julia
 function vadd(a, b, c)
-    i = thread_position_in_grid_1d()
+    i = thread_position_in_grid().x
     c[i] = a[i] + b[i]
     return
 end

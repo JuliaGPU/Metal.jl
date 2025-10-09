@@ -54,7 +54,7 @@ end
 # initialization function, called automatically at the start of each kernel because
 # there's no reliable way to detect uninitialized shared memory (see JuliaGPU/CUDA.jl#2008)
 function initialize_rng_state()
-    threadId = thread_position_in_threadgroup_1d()
+    threadId = thread_position_in_threadgroup().x
     warpId = (threadId - Int32(1)) >> 0x5 + Int32(1)  # fld1 by 32
 
     @inbounds global_random_keys()[warpId] = kernel_state().random_seed
@@ -76,7 +76,7 @@ end
 @inline Philox2x32() = Philox2x32{7}()
 
 @inline function Base.getproperty(rng::Philox2x32, field::Symbol)
-    threadId = thread_position_in_threadgroup_1d()
+    threadId = thread_position_in_threadgroup().x
     warpId = (threadId - Int32(1)) >> 0x5 + Int32(1)  # fld1 by 32
 
     if field === :seed
@@ -86,13 +86,13 @@ end
     elseif field === :ctr1
         @inbounds global_random_counters()[warpId]
     elseif field === :ctr2
-        globalId = thread_position_in_grid_1d()
+        globalId = thread_position_in_grid().x
         globalId % UInt32
     end::UInt32
 end
 
 @inline function Base.setproperty!(rng::Philox2x32, field::Symbol, x)
-    threadId = thread_position_in_threadgroup_1d()
+    threadId = thread_position_in_threadgroup().x
     warpId = (threadId - Int32(1)) >> 0x5 + Int32(1)  # fld1 by 32
 
     if field === :key

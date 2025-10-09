@@ -25,7 +25,7 @@ end
     @testset "across launches" begin
         function kernel(A::AbstractArray{T}, seed) where {T}
             apply_seed(seed)
-            tid = thread_position_in_grid_1d()
+            tid = thread_position_in_grid().x
             A[tid] = rand(T)
             return nothing
         end
@@ -47,7 +47,7 @@ end
     @testset "across calls" begin
         function kernel(A::AbstractArray{T}, B::AbstractArray{T}, seed) where {T}
             apply_seed(seed)
-            tid = thread_position_in_grid_1d()
+            tid = thread_position_in_grid().x
             A[tid] = rand(T)
             B[tid] = rand(T)
             return nothing
@@ -65,7 +65,7 @@ end
     @testset "across threads" for active_dim in 1:6
         function kernel(A::AbstractArray{T}, seed) where {T}
             apply_seed(seed)
-            id = thread_position_in_grid_1d()
+            id = thread_position_in_grid().x
             A[id] = rand(T)
             return nothing
         end
@@ -86,7 +86,7 @@ end
                                            seed in (nothing, #=missing,=# 1234)
     function kernel(A::AbstractArray{T}, seed) where {T}
         apply_seed(seed)
-        tid = thread_position_in_grid_1d()
+        tid = thread_position_in_grid().x
         A[tid] = randn(T)
         return
     end
@@ -108,7 +108,7 @@ end
                                            seed in (nothing, #=missing,=# 1234)
     function kernel(A::AbstractArray{T}, seed) where {T}
         apply_seed(seed)
-        tid = thread_position_in_grid_1d()
+        tid = thread_position_in_grid().x
         A[tid] = randexp(T)
         return
     end

@@ -111,7 +111,7 @@ are supported, etc):
 
 ```julia-repl
 julia> function vadd(a, b, c)
-           i = thread_position_in_grid_1d()
+           i = thread_position_in_grid().x
            c[i] = a[i] + b[i]
            return
        end

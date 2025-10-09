@@ -66,8 +66,8 @@ end
     if _broadcast_shapes[Is] > BROADCAST_SPECIALIZATION_THRESHOLD
         ## COV_EXCL_START
         function broadcast_cartesian_static(dest, bc, Is)
-             i = thread_position_in_grid_1d()
-             stride = threads_per_grid_1d()
+             i = thread_position_in_grid().x
+             stride = threads_per_grid().x
              while 1 <= i <= length(dest)
                 I = @inbounds Is[i]
                 @inbounds dest[I] = bc[I]
@@ -91,8 +91,8 @@ end
        (isa(IndexStyle(dest), IndexLinear) && isa(IndexStyle(bc), IndexLinear))
         ## COV_EXCL_START
         function broadcast_linear(dest, bc)
-             i = thread_position_in_grid_1d()
-             stride = threads_per_grid_1d()
+             i = thread_position_in_grid().x
+             stride = threads_per_grid().x
              while 1 <= i <= length(dest)
                  @inbounds dest[i] = bc[i]
                  i += stride
@@ -150,8 +150,8 @@ end
     else
         ## COV_EXCL_START
         function broadcast_cartesian(dest, bc)
-             i = thread_position_in_grid_1d()
-             stride = threads_per_grid_1d()
+             i = thread_position_in_grid().x
+             stride = threads_per_grid().x
              while 1 <= i <= length(dest)
                 I = @inbounds CartesianIndices(dest)[i]
                 @inbounds dest[I] = bc[I]

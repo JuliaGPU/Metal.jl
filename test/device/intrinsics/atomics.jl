@@ -11,7 +11,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
 
     @testset "store_explicit" begin
         function global_kernel(a, val)
-            i = thread_position_in_grid_1d()
+            i = thread_position_in_grid().x
             Metal.atomic_store_explicit(pointer(a, i), val)
             return
         end
@@ -23,7 +23,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         end
 
         function local_kernel(a, val::T) where T
-            i = thread_position_in_grid_1d()
+            i = thread_position_in_grid().x
             b = MtlThreadGroupArray(T, 128)
             Metal.atomic_store_explicit(pointer(b, i), val)
             a[i] = b[i]
@@ -39,7 +39,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
 
     @testset "load_explicit" begin
         function global_kernel(a, b)
-            i = thread_position_in_grid_1d()
+            i = thread_position_in_grid().x
             val = Metal.atomic_load_explicit(pointer(a, i))
             b[i] = val
             return
@@ -53,7 +53,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         end
 
         function local_kernel(a::AbstractArray{T}, b::AbstractArray{T}) where T
-            i = thread_position_in_grid_1d()
+            i = thread_position_in_grid().x
             c = MtlThreadGroupArray(T, 128)
             #c[i] = a[i]
             val = Metal.atomic_load_explicit(pointer(a, i))
@@ -74,7 +74,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
 
     @testset "exchange_explicit" begin
         function global_kernel(a, val)
-            i = thread_position_in_grid_1d()
+            i = thread_position_in_grid().x
             Metal.atomic_exchange_explicit(pointer(a, i), val)
             return
         end
@@ -86,7 +86,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         end
 
         function local_kernel(a, val::T) where T
-            i = thread_position_in_grid_1d()
+            i = thread_position_in_grid().x
             b = MtlThreadGroupArray(T, 128)
             Metal.atomic_exchange_explicit(pointer(b, i), val)
             a[i] = b[i]
@@ -102,7 +102,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
 
     @testset "compare_exchange_weak_explicit" begin
         function global_kernel(a, expected, desired)
-            i = thread_position_in_grid_1d()
+            i = thread_position_in_grid().x
             while Metal.atomic_compare_exchange_weak_explicit(pointer(a, i), expected[i], desired) != expected[i]
                 # keep on trying
             end
@@ -118,7 +118,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         end
 
         function local_kernel(a, expected::AbstractArray{T}, desired::T) where T
-            i = thread_position_in_grid_1d()
+            i = thread_position_in_grid().x
             b = MtlThreadGroupArray(T, 128)
             #b[i] = a[i]
             val = Metal.atomic_load_explicit(pointer(a, i))
@@ -153,13 +153,13 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
                                         (-,   Metal.atomic_fetch_sub_explicit, add_sub_types)
                                     ]
             function global_kernel(f, a, arg)
-                i = thread_position_in_grid_1d()
+                i = thread_position_in_grid().x
                 f(pointer(a, i), arg)
                 return
             end
 
             function local_kernel(f, a, arg::T) where T
-                i = thread_position_in_grid_1d()
+                i = thread_position_in_grid().x
                 b = MtlThreadGroupArray(T, 128)
                 #b[i] = a[i]
                 val = Metal.atomic_load_explicit(pointer(a, i))
@@ -196,7 +196,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         f(a::T, b::T) where {T} = a + b + one(T)
 
         function global_kernel(a, op, arg)
-            i = thread_position_in_grid_1d()
+            i = thread_position_in_grid().x
             Metal.atomic_fetch_op_explicit(pointer(a, i), op, arg)
             return
         end
@@ -210,7 +210,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         end
 
         function local_kernel(a, op, arg::T) where T
-            i = thread_position_in_grid_1d()
+            i = thread_position_in_grid().x
             b = MtlThreadGroupArray(T, 128)
             #b[i] = a[i]
             val = Metal.atomic_load_explicit(pointer(a, i))
@@ -240,7 +240,7 @@ end
         types = [Int32, UInt32, Float32]
 
         function kernel(a, b)
-            i = thread_position_in_grid_1d()
+            i = thread_position_in_grid().x
             a[i] = Metal.@atomic b[i]
             return
         end
@@ -257,7 +257,7 @@ end
         types = [Int32, UInt32, Float32]
 
         function kernel(a, b)
-            i = thread_position_in_grid_1d()
+            i = thread_position_in_grid().x
             val = b[i]
             Metal.@atomic a[i] = val
             return

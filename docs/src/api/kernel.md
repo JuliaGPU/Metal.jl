@@ -13,19 +13,19 @@ This is made possible by interfacing with the Metal libraries by wrapping a subs
 thread_index_in_quadgroup
 thread_index_in_simdgroup
 thread_index_in_threadgroup
-thread_position_in_grid_1d
-thread_position_in_threadgroup_1d
-threadgroup_position_in_grid_1d
-threadgroups_per_grid_1d
-threads_per_grid_1d
+thread_position_in_grid
+thread_position_in_threadgroup
+threadgroup_position_in_grid
+threadgroups_per_grid
+threads_per_grid
 threads_per_simdgroup
-threads_per_threadgroup_1d
+threads_per_threadgroup
 simdgroups_per_threadgroup
 simdgroup_index_in_threadgroup
 quadgroup_index_in_threadgroup
 quadgroups_per_threadgroup
-grid_size_1d
-grid_origin_1d
+grid_size
+grid_origin
 thread_execution_width
 ```
 

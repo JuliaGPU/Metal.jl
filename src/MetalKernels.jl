@@ -138,36 +138,36 @@ end
 
 ## COV_EXCL_START
 @device_override @inline function KA.__index_Local_Linear(ctx)
-    return thread_position_in_threadgroup_1d()
+    return thread_position_in_threadgroup().x
 end
 
 @device_override @inline function KA.__index_Group_Linear(ctx)
-    return threadgroup_position_in_grid_1d()
+    return threadgroup_position_in_grid().x
 end
 
 @device_override @inline function KA.__index_Global_Linear(ctx)
-    I =  @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid_1d(), thread_position_in_threadgroup_1d())
+    I =  @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid().x, thread_position_in_threadgroup().x)
     # TODO: This is unfortunate, can we get the linear index cheaper
     @inbounds LinearIndices(KA.__ndrange(ctx))[I]
 end
 
 @device_override @inline function KA.__index_Local_Cartesian(ctx)
-    @inbounds KA.workitems(KA.__iterspace(ctx))[thread_position_in_threadgroup_1d()]
+    @inbounds KA.workitems(KA.__iterspace(ctx))[thread_position_in_threadgroup().x]
 end
 
 @device_override @inline function KA.__index_Group_Cartesian(ctx)
-    @inbounds KA.blocks(KA.__iterspace(ctx))[threadgroup_position_in_grid_1d()]
+    @inbounds KA.blocks(KA.__iterspace(ctx))[threadgroup_position_in_grid().x]
 end
 
 @device_override @inline function KA.__index_Global_Cartesian(ctx)
-    return @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid_1d(),
-                               thread_position_in_threadgroup_1d())
+    return @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid().x,
+                               thread_position_in_threadgroup().x)
 end
 
 @device_override @inline function KA.__validindex(ctx)
     if KA.__dynamic_checkbounds(ctx)
-        I = @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid_1d(),
-                                thread_position_in_threadgroup_1d())
+        I = @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid().x,
+                                thread_position_in_threadgroup().x)
         return I in KA.__ndrange(ctx)
     else
         return true

@@ -2,7 +2,7 @@
 
 @testset "$f($typ)" for typ in [Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8], (f,res_idx) in [(simd_shuffle_down, 1), (simd_shuffle_up, 32)]
     function kernel(a::MtlDeviceVector{T}, b::MtlDeviceVector{T}) where T
-        idx = thread_position_in_grid_1d()
+        idx = thread_position_in_grid().x
         idx_in_simd = thread_index_in_simdgroup()
         simd_idx = simdgroup_index_in_threadgroup()
 
@@ -36,7 +36,7 @@
 end
 @testset "$f($typ)" for typ in [Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8], (f,nshift) in [(simd_shuffle_and_fill_down, -4), (simd_shuffle_and_fill_up, 2)]
     function kernel_mod(data::MtlDeviceVector{T}, filling_data::MtlDeviceVector{T}, modulo) where T
-        idx = thread_position_in_grid_1d()
+        idx = thread_position_in_grid().x
         idx_in_simd = thread_index_in_simdgroup() #simd_lane_id
         simd_idx = simdgroup_index_in_threadgroup() #simd_group_id
 
@@ -98,7 +98,7 @@ end
 
     @testset "load_store_tg($typ)" for typ in [Float16, Float32]
         function kernel(a::MtlDeviceArray{T}, b::MtlDeviceArray{T}) where {T}
-            pos = thread_position_in_threadgroup_2d()
+            pos = thread_position_in_threadgroup()
 
             tg_a = MtlThreadGroupArray(T, (8, 8))
             tg_a[pos.x, pos.y] = a[pos.x, pos.y]
