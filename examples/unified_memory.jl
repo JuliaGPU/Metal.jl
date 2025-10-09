@@ -64,8 +64,11 @@ function long_kernel(arr, dummy)
     for i in 1:100000
         dummy[1] += Float32(0.3)
     end
-    arr[idx] = Float32(pi)
-    arr[idx] = cos(arr[idx])
+
+    if idx <= length(arr)
+        arr[idx] = Float32(pi)
+        arr[idx] = cos(arr[idx])
+    end
     return
 end
 
@@ -78,7 +81,13 @@ dummy_mtl = MtlArray{Float32}(undef, 1)
 
 rand!(arr_cpu)
 # Now launch a kernel altering the Metal array
-@metal threads=1024 groups=1024 long_kernel(arr_mtl, dummy_mtl)
+# @metal threads=1024 groups=1024 long_kernel(arr_mtl, dummy_mtl)
+
+long_kern = @metal launch=false long_kernel(arr_mtl, dummy_mtl)
+threads = long_kern.pipeline.maxTotalThreadsPerThreadgroup
+groups = cld(length(arr_mtl), threads)
+
+long_kern(arr_mtl, dummy_mtl; threads, groups)
 
 # we need to synchronize the device as the kernel may not have finished yet
 synchronize()
