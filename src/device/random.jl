@@ -6,6 +6,10 @@ import RandomNumbers
 
 # global state
 
+# 16 is the lower bound for `threads_per_simdgroup()`, 1024 is the upper bound
+# for `threads_per_threadgroup()`, so we can have 64 simdgroups per threadgroup
+const max_simdgroups_per_threadgroup = 64
+
 @inline @generated function emit_global_random_values(::Val{name}) where name
     @dispose ctx=Context() begin
         T_val = convert(LLVMType, UInt32)
@@ -16,7 +20,7 @@ import RandomNumbers
         mod = LLVM.parent(llvm_f)
 
         # create a global memory global variable
-        T_global = LLVM.ArrayType(T_val, 32)
+        T_global = LLVM.ArrayType(T_val, max_simdgroups_per_threadgroup)
         gv = GlobalVariable(mod, T_global, "global_random_$(name)", AS.ThreadGroup)
         linkage!(gv, LLVM.API.LLVMLinkOnceAnyLinkage)
         initializer!(gv, LLVM.null(T_global))
@@ -39,26 +43,25 @@ import RandomNumbers
     end
 end
 
-# shared memory with the actual seed, per warp, loaded lazily or overridden by calling `seed!`
+# shared memory with the actual seed, per simdgroup, loaded lazily or overridden by calling `seed!`
 @inline function global_random_keys()
     ptr = emit_global_random_values(Val{:keys}())::LLVMPtr{UInt32,AS.ThreadGroup}
-    return MtlDeviceArray{UInt32,1,AS.ThreadGroup}((32,), ptr)
+    return MtlDeviceArray{UInt32,1,AS.ThreadGroup}((max_simdgroups_per_threadgroup,), ptr)
 end
 
-# shared memory with per-warp counters, incremented when generating numbers
+# shared memory with per-simdgroup counters, incremented when generating numbers
 @inline function global_random_counters()
     ptr = emit_global_random_values(Val{:counters}())::LLVMPtr{UInt32,AS.ThreadGroup}
-    return MtlDeviceArray{UInt32,1,AS.ThreadGroup}((32,), ptr)
+    return MtlDeviceArray{UInt32,1,AS.ThreadGroup}((max_simdgroups_per_threadgroup,), ptr)
 end
 
 # initialization function, called automatically at the start of each kernel because
 # there's no reliable way to detect uninitialized shared memory (see JuliaGPU/CUDA.jl#2008)
 function initialize_rng_state()
-    threadId = thread_position_in_threadgroup().x
-    warpId = (threadId - Int32(1)) >> 0x5 + Int32(1)  # fld1 by 32
+    simdgroupId = simdgroup_index_in_threadgroup()
 
-    @inbounds global_random_keys()[warpId] = kernel_state().random_seed
-    @inbounds global_random_counters()[warpId] = 0
+    @inbounds global_random_keys()[simdgroupId] = kernel_state().random_seed
+    @inbounds global_random_counters()[simdgroupId] = 0
 end
 
 # generators
@@ -76,29 +79,29 @@ end
 @inline Philox2x32() = Philox2x32{7}()
 
 @inline function Base.getproperty(rng::Philox2x32, field::Symbol)
-    threadId = thread_position_in_threadgroup().x
-    warpId = (threadId - Int32(1)) >> 0x5 + Int32(1)  # fld1 by 32
+    simdgroupId = simdgroup_index_in_threadgroup()
 
     if field === :seed
         @inbounds global_random_seed()[1]
     elseif field === :key
-        @inbounds global_random_keys()[warpId]
+        @inbounds global_random_keys()[simdgroupId]
     elseif field === :ctr1
-        @inbounds global_random_counters()[warpId]
+        @inbounds global_random_counters()[simdgroupId]
     elseif field === :ctr2
-        globalId = thread_position_in_grid().x
+        globalId = thread_position_in_grid().x +
+                   (thread_position_in_grid().y - 1i32) * threads_per_grid().x +
+                   (thread_position_in_grid().z - 1i32) * threads_per_grid().x * threads_per_grid().y
         globalId % UInt32
     end::UInt32
 end
 
 @inline function Base.setproperty!(rng::Philox2x32, field::Symbol, x)
-    threadId = thread_position_in_threadgroup().x
-    warpId = (threadId - Int32(1)) >> 0x5 + Int32(1)  # fld1 by 32
+    simdgroupId = simdgroup_index_in_threadgroup()
 
     if field === :key
-        @inbounds global_random_keys()[warpId] = x
+        @inbounds global_random_keys()[simdgroupId] = x
     elseif field === :ctr1
-        @inbounds global_random_counters()[warpId] = x
+        @inbounds global_random_counters()[simdgroupId] = x
     end
 end
 
@@ -108,7 +111,7 @@ end
     Random.seed!(rng::Philox2x32, seed::Integer, [counter::Integer=0])
 
 Seed the on-device Philox2x32 generator with an UInt32 number.
-Should be called by at least one thread per warp.
+Should be called by at least one thread per simdgroup.
 """
 function Random.seed!(rng::Philox2x32, seed::Integer, counter::Integer=UInt32(0))
     rng.key = seed % UInt32
@@ -128,7 +131,7 @@ end
 """
     Random.rand(rng::Philox2x32, UInt32)
 
-Generate a byte of random data using the on-device Tausworthe generator.
+Generate a byte of random data using the on-device Philox generator.
 """
 function Random.rand(rng::Philox2x32{R},::Type{UInt64}) where {R}
     ctr1, ctr2, key = rng.ctr1, rng.ctr2, rng.key
@@ -150,9 +153,9 @@ function Random.rand(rng::Philox2x32{R},::Type{UInt64}) where {R}
     if R > 14 key = philox2x_bumpkey(key); ctr1, ctr2 = philox2x_round(ctr1, ctr2, key); end
     if R > 15 key = philox2x_bumpkey(key); ctr1, ctr2 = philox2x_round(ctr1, ctr2, key); end
 
-    # update the warp counter
-    # NOTE: this performs the same update on every thread in the warp, but each warp writes
-    #       to a unique location so the duplicate writes are innocuous
+    # update the simdgroup counter
+    # NOTE: this performs the same update on every thread in the simdgroup, but each
+    #       simdgroup writes to a unique location so the duplicate writes are innocuous
     # XXX: what if this overflows? we can't increment ctr2. bump the key?
     rng.ctr1 += Int32(1)
 
