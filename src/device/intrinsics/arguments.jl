@@ -51,22 +51,24 @@ for (intr, offset) in dim_intr
              z = vec[3].value + UInt32($offset))
         end
     end
+
+    # deprecated aliases
     @eval begin
         export $(Symbol(intr * "_1d"))
         export $(Symbol(intr * "_2d"))
         export $(Symbol(intr * "_3d"))
 
-        @device_function function $(Symbol(intr * "_1d"))()
+        function $(Symbol(intr * "_1d"))()
             $(Symbol(intr))().x
         end
 
-        @device_function function $(Symbol(intr * "_2d"))()
+        function $(Symbol(intr * "_2d"))()
             vec = $(Symbol(intr))()
             (x = vec.x,
              y = vec.y)
         end
 
-        @device_function  $(Symbol(intr * "_3d"))() = $(Symbol(intr))()
+        $(Symbol(intr * "_3d"))() = $(Symbol(intr))()
     end
 end
 
