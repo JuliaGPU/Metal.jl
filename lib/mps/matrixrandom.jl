@@ -93,12 +93,6 @@ synchronize_state(kern::MPSMatrixRandomMTGP32, cmdbuf::MTLCommandBuffer) =
     byteoffset = dest.offset * sizeof(T)
     bytesize = sizeof(dest)
 
-    # Even though `append_copy`` seems to work with any size or offset values, the documentation at
-    # https://developer.apple.com/documentation/metal/mtlblitcommandencoder/1400767-copyfrombuffer?language=objc
-    # mentions that both must be multiples of 4 bytes in MacOS so error when they are not
-    (bytesize % 4 == 0) || error(lazy"Destination buffer bytesize ($(bytesize)) must be a multiple of 4.")
-    (byteoffset % 4 == 0) || error(lazy"Destination buffer offset ($(byteoffset)) must be a multiple of 4.")
-
     cmdbuf = if bytesize % 16 == 0 && dest.offset == 0
         MTLCommandBuffer(queue) do cmdbuf
             vecDesc = MPSVectorDescriptor(bytesize ÷ sizeof(T2), T2)
