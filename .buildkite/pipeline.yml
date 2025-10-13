@@ -44,7 +44,7 @@ steps:
       - label: "shared array storage"
         plugins:
           - JuliaCI/julia#v1:
-              version: "1.11"
+              version: "1.12"
           - JuliaCI/julia-test#v1:
               test_args: "--quickfail"
         agents:
@@ -68,7 +68,7 @@ steps:
       - label: "API validation"
         plugins:
           - JuliaCI/julia#v1:
-              version: "1.11"
+              version: "1.12"
           - JuliaCI/julia-test#v1:
               # test_args: "--quickfail"
               test_args: ""
@@ -102,7 +102,7 @@ steps:
   - label: ":racehorse: Benchmarks"
     plugins:
       - JuliaCI/julia#v1:
-          version: "1.11"
+          version: "1.12"
     command: |
       julia --project=perf -e '
         using Pkg
