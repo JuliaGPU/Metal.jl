@@ -4,14 +4,13 @@ if shader_validation
     @warn "Skipping capturing tests; capturing is not supported with Metal Shader Validation enabled"
 else
 
+# Verify Metal capture is enabled via environment variable
+@test capturing
+
 @testset "capturing" begin
 
 mktempdir() do tmpdir
 cd(tmpdir) do
-
-# Verify Metal capture is enabled via environment variable
-@test haskey(ENV, "METAL_CAPTURE_ENABLED")
-@test ENV["METAL_CAPTURE_ENABLED"]=="1"
 
 function tester(A)
     idx = thread_position_in_grid().x
