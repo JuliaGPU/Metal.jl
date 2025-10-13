@@ -265,15 +265,15 @@ end
 
 @autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
                                                queue=global_queue(device()))
-    groups = MTLSize(groups)
-    threads = MTLSize(threads)
-    (groups.width>0 && groups.height>0 && groups.depth>0) ||
+    threadgroupsPerGrid = MTLSize(groups)
+    threadsPerThreadgroup = MTLSize(threads)
+    (threadgroupsPerGrid.width>0 && threadgroupsPerGrid.height>0 && threadgroupsPerGrid.depth>0) ||
         throw(ArgumentError("All group dimensions should be non-zero"))
-    (threads.width>0 && threads.height>0 && threads.depth>0) ||
+    (threadsPerThreadgroup.width>0 && threadsPerThreadgroup.height>0 && threadsPerThreadgroup.depth>0) ||
         throw(ArgumentError("All thread dimensions should be non-zero"))
 
-    (threads.width * threads.height * threads.depth) > kernel.pipeline.maxTotalThreadsPerThreadgroup &&
-        throw(ArgumentError("Number of threads in group ($(threads.width * threads.height * threads.depth)) should not exceed $(kernel.pipeline.maxTotalThreadsPerThreadgroup)"))
+    (threadsPerThreadgroup.width * threadsPerThreadgroup.height * threadsPerThreadgroup.depth) > kernel.pipeline.maxTotalThreadsPerThreadgroup &&
+        throw(ArgumentError("Number of threads in group ($(threadsPerThreadgroup.width * threadsPerThreadgroup.height * threadsPerThreadgroup.depth)) should not exceed $(kernel.pipeline.maxTotalThreadsPerThreadgroup)"))
 
     kernel_state = KernelState(Random.rand(UInt32))
 
@@ -283,7 +283,7 @@ end
     argument_buffers = try
         MTL.set_function!(cce, kernel.pipeline)
         bufs = encode_arguments!(cce, kernel, kernel_state, kernel.f, args...)
-        MTL.append_current_function!(cce, groups, threads)
+        MTL.append_current_function!(cce, threadgroupsPerGrid, threadsPerThreadgroup)
         bufs
     finally
         close(cce)
