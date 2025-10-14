@@ -24,12 +24,9 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
                 # specified MPS rng
                 if T != Float16
                     fill!(A, T(0))
-                    if Metal.can_use_mpsrandom(A)
-                        f(rng, A)
-                        @test !iszero(collect(A))
-                    else
-                        @test_throws "Destination buffer" f(rng, A)
-                    end
+
+                    f(rng, A)
+                    @test !iszero(collect(A))
                 end
             end
 
@@ -44,12 +41,9 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
                 # specified MPS rng
                 if T != Float16
                     fill!(A, T(0))
-                    if Metal.can_use_mpsrandom(A)
-                        f(rng, A)
-                        @test Array(A) == fill(1, 0)
-                    else
-                        @test_throws "Destination buffer" f(rng, A)
-                    end
+
+                    f(rng, A)
+                    @test Array(A) == fill(1, 0)
                 end
             end
         end
@@ -131,30 +125,22 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
                 idx = 4:50
                 view_A = @view A[idx]
 
-                # Errors in Julia before crashing whole process
-                if Metal.can_use_mpsrandom(view_A)
-                    f(rng, view_A)
+                f(rng, view_A)
 
-                    cpuA = collect(A)
-                    @test !iszero(cpuA[idx])
-                    @test iszero(cpuA[1:100 .∉ Ref(idx)]) broken=(sizeof(view_A) % 4 != 0)
-                else
-                    @test_throws "Destination buffer" f(rng, view_A)
-                end
+                cpuA = collect(A)
+                @test !iszero(cpuA[idx])
+                @test iszero(cpuA[1:100 .∉ Ref(idx)])
 
                 ## Offset == 0
                 fill!(A, T(0))
                 idx = 1:51
                 view_A = @view A[idx]
-                if Metal.can_use_mpsrandom(view_A)
-                    f(rng, view_A)
 
-                    cpuA = collect(A)
-                    @test !iszero(cpuA[idx])
-                    @test iszero(cpuA[1:100 .∉ Ref(idx)])
-                else
-                    @test_throws "Destination buffer" f(rng, view_A)
-                end
+                f(rng, view_A)
+
+                cpuA = collect(A)
+                @test !iszero(cpuA[idx])
+                @test iszero(cpuA[1:100 .∉ Ref(idx)])
             end
         end
     end
@@ -200,12 +186,8 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
 
                 # specified MPS rng
                 if T != Float16
-                    if length(zeros(args...)) * sizeof(T) % 4 == 0
-                        B = fr(rng, args...)
-                        @test eltype(B) == T
-                    else
-                        @test_throws "Destination buffer" fr(rng, args...)
-                    end
+                    B = fr(rng, args...)
+                    @test eltype(B) == T
                 end
             end
 
@@ -228,12 +210,9 @@ const OOPLACE_TUPLES = [[(Metal.rand, rand, T) for T in RAND_TYPES];
             # d == 2 and d == 3 are to hit the test cases where sizeof(A) <= 4
             @testset "$d" for d in (2, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000), 16384, 16385)
                 A = zeros(T, d)
-                if (prod(d) * sizeof(T)) % 4 == 0
-                    f(rng, A)
-                    @test !iszero(A)
-                else
-                    @test_throws "Destination buffer" f(rng, A)
-                end
+
+                f(rng, A)
+                @test !iszero(A)
             end
         end
     end
