@@ -1,5 +1,5 @@
 [general]
-library_name = "Symbol(\"/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib\")"
+library_name = "libmtl"
 output_file_path = "../../lib/mtl/libmtl.jl"
 prologue_file_path = "libmtl_prologue.jl"
 
