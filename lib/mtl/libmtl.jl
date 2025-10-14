@@ -3,7 +3,7 @@
 
 using CEnum: CEnum, @cenum
 
-const libmtl = Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")
+const libmtl = Symbol("/System/Library/Frameworks/Metal.framework/Metal")
 
 const _NSRange = NSRange
 
