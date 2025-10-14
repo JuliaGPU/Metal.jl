@@ -68,8 +68,8 @@ function versioninfo(io::IO=stdout)
     return
 end
 
-const _iokitlib = Symbol("/System/Library/Frameworks/IOKit.framework/Resources/BridgeSupport/IOKit.dylib")
-const _cflib = Symbol("/System/Library/Frameworks/CoreFoundation.framework/Resources/BridgeSupport/CoreFoundation.dylib")
+const _iokitlib = Symbol("/System/Library/Frameworks/IOKit.framework/IOKit")
+const _cflib = Symbol("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
 
 @static if isdefined(Base, :OncePerProcess) # VERSION >= v"1.12.0-DEV.1421"
     const num_gpu_cores = OncePerProcess{Int64}() do

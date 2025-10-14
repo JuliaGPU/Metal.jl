@@ -3,6 +3,8 @@
 
 using CEnum: CEnum, @cenum
 
+const libmtl = Symbol("/System/Library/Frameworks/Metal.framework/Metal")
+
 const _NSRange = NSRange
 
 
@@ -23,7 +25,7 @@ struct MTLTextureSwizzleChannels
 end
 
 function MTLTextureSwizzleChannelsMake(r, g, b, a)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLTextureSwizzleChannelsMake(r::MTLTextureSwizzle, g::MTLTextureSwizzle, b::MTLTextureSwizzle, a::MTLTextureSwizzle)::MTLTextureSwizzleChannels
+    return @ccall libmtl.MTLTextureSwizzleChannelsMake(r::MTLTextureSwizzle, g::MTLTextureSwizzle, b::MTLTextureSwizzle, a::MTLTextureSwizzle)::MTLTextureSwizzleChannels
 end
 
 struct MTLOrigin
@@ -33,7 +35,7 @@ struct MTLOrigin
 end
 
 function MTLOriginMake(x, y, z)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLOriginMake(x::NSUInteger, y::NSUInteger, z::NSUInteger)::MTLOrigin
+    return @ccall libmtl.MTLOriginMake(x::NSUInteger, y::NSUInteger, z::NSUInteger)::MTLOrigin
 end
 
 struct MTLSize
@@ -43,7 +45,7 @@ struct MTLSize
 end
 
 function MTLSizeMake(width, height, depth)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLSizeMake(width::NSUInteger, height::NSUInteger, depth::NSUInteger)::MTLSize
+    return @ccall libmtl.MTLSizeMake(width::NSUInteger, height::NSUInteger, depth::NSUInteger)::MTLSize
 end
 
 struct MTLRegion
@@ -52,15 +54,15 @@ struct MTLRegion
 end
 
 function MTLRegionMake1D(x, width)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake1D(x::NSUInteger, width::NSUInteger)::MTLRegion
+    return @ccall libmtl.MTLRegionMake1D(x::NSUInteger, width::NSUInteger)::MTLRegion
 end
 
 function MTLRegionMake2D(x, y, width, height)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake2D(x::NSUInteger, y::NSUInteger, width::NSUInteger, height::NSUInteger)::MTLRegion
+    return @ccall libmtl.MTLRegionMake2D(x::NSUInteger, y::NSUInteger, width::NSUInteger, height::NSUInteger)::MTLRegion
 end
 
 function MTLRegionMake3D(x, y, z, width, height, depth)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLRegionMake3D(x::NSUInteger, y::NSUInteger, z::NSUInteger, width::NSUInteger, height::NSUInteger, depth::NSUInteger)::MTLRegion
+    return @ccall libmtl.MTLRegionMake3D(x::NSUInteger, y::NSUInteger, z::NSUInteger, width::NSUInteger, height::NSUInteger, depth::NSUInteger)::MTLRegion
 end
 
 struct MTLSamplePosition
@@ -69,13 +71,13 @@ struct MTLSamplePosition
 end
 
 function MTLSamplePositionMake(x, y)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLSamplePositionMake(x::Cfloat, y::Cfloat)::MTLSamplePosition
+    return @ccall libmtl.MTLSamplePositionMake(x::Cfloat, y::Cfloat)::MTLSamplePosition
 end
 
 const MTLCoordinate2D = MTLSamplePosition
 
 function MTLCoordinate2DMake(x, y)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLCoordinate2DMake(x::Cfloat, y::Cfloat)::MTLCoordinate2D
+    return @ccall libmtl.MTLCoordinate2DMake(x::Cfloat, y::Cfloat)::MTLCoordinate2D
 end
 
 struct MTLResourceID
@@ -1346,7 +1348,7 @@ struct MTLClearColor
 end
 
 function MTLClearColorMake(red, green, blue, alpha)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLClearColorMake(red::Cdouble, green::Cdouble, blue::Cdouble, alpha::Cdouble)::MTLClearColor
+    return @ccall libmtl.MTLClearColorMake(red::Cdouble, green::Cdouble, blue::Cdouble, alpha::Cdouble)::MTLClearColor
 end
 
 @cenum MTLLoadAction::UInt64 begin
@@ -2373,7 +2375,7 @@ struct MTL4BufferRange
 end
 
 function MTL4BufferRangeMake(bufferAddress, length)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTL4BufferRangeMake(bufferAddress::MTLGPUAddress, length::UInt64)::MTL4BufferRange
+    return @ccall libmtl.MTL4BufferRangeMake(bufferAddress::MTLGPUAddress, length::UInt64)::MTL4BufferRange
 end
 
 struct _MTLPackedFloat3
@@ -2412,7 +2414,7 @@ end
 const MTLPackedFloat3 = _MTLPackedFloat3
 
 function MTLPackedFloat3Make(x, y, z)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLPackedFloat3Make(x::Cfloat, y::Cfloat, z::Cfloat)::MTLPackedFloat3
+    return @ccall libmtl.MTLPackedFloat3Make(x::Cfloat, y::Cfloat, z::Cfloat)::MTLPackedFloat3
 end
 
 struct MTLPackedFloatQuaternion
@@ -2423,7 +2425,7 @@ struct MTLPackedFloatQuaternion
 end
 
 function MTLPackedFloatQuaternionMake(x, y, z, w)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLPackedFloatQuaternionMake(x::Cfloat, y::Cfloat, z::Cfloat, w::Cfloat)::MTLPackedFloatQuaternion
+    return @ccall libmtl.MTLPackedFloatQuaternionMake(x::Cfloat, y::Cfloat, z::Cfloat, w::Cfloat)::MTLPackedFloatQuaternion
 end
 
 struct _MTLPackedFloat4x3
@@ -2991,7 +2993,7 @@ struct MTLIndirectCommandBufferExecutionRange
 end
 
 function MTLIndirectCommandBufferExecutionRangeMake(location, length)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIndirectCommandBufferExecutionRangeMake(location::UInt32, length::UInt32)::MTLIndirectCommandBufferExecutionRange
+    return @ccall libmtl.MTLIndirectCommandBufferExecutionRangeMake(location::UInt32, length::UInt32)::MTLIndirectCommandBufferExecutionRange
 end
 
 @objcwrapper immutable = true MTLIndirectCommandBufferDescriptor <: NSObject
@@ -3269,19 +3271,19 @@ end
 const MTLIOCompressionContext = Ptr{Cvoid}
 
 function MTLIOCompressionContextDefaultChunkSize()
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOCompressionContextDefaultChunkSize()::Csize_t
+    return @ccall libmtl.MTLIOCompressionContextDefaultChunkSize()::Csize_t
 end
 
 function MTLIOCreateCompressionContext(path, type, chunkSize)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOCreateCompressionContext(path::Cstring, type::MTLIOCompressionMethod, chunkSize::Csize_t)::MTLIOCompressionContext
+    return @ccall libmtl.MTLIOCreateCompressionContext(path::Cstring, type::MTLIOCompressionMethod, chunkSize::Csize_t)::MTLIOCompressionContext
 end
 
 function MTLIOCompressionContextAppendData(context, data, size)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOCompressionContextAppendData(context::MTLIOCompressionContext, data::Ptr{Cvoid}, size::Csize_t)::Cvoid
+    return @ccall libmtl.MTLIOCompressionContextAppendData(context::MTLIOCompressionContext, data::Ptr{Cvoid}, size::Csize_t)::Cvoid
 end
 
 function MTLIOFlushAndDestroyCompressionContext(context)
-    return @ccall (Symbol("/System/Library/Frameworks/Metal.framework/Resources/BridgeSupport/Metal.dylib")).MTLIOFlushAndDestroyCompressionContext(context::MTLIOCompressionContext)::MTLIOCompressionStatus
+    return @ccall libmtl.MTLIOFlushAndDestroyCompressionContext(context::MTLIOCompressionContext)::MTLIOCompressionStatus
 end
 
 @objcwrapper immutable = true availability = macos(v"15.0.0") MTLResidencySetDescriptor <: NSObject
