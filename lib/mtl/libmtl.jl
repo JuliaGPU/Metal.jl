@@ -1048,6 +1048,7 @@ end
 
 @objcproperties MTLFunctionReflection begin
     @autoproperty bindings::id{NSArray} type = Vector{MTLBinding}
+    @autoproperty userAnnotation::id{NSString}
 end
 
 @cenum MTLLibraryError::UInt64 begin
