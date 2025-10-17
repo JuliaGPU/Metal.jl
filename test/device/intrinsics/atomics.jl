@@ -16,7 +16,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in atomic_store_load_exch_cmpexch_types
+        @testset "global $T" for T in atomic_store_load_exch_cmpexch_types
             a = Metal.zeros(T, n)
             @metal threads=n global_kernel(a, T(42))
             @test all(isequal(42), Array(a))
@@ -30,7 +30,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in atomic_store_load_exch_cmpexch_types
+        @testset "local $T" for T in atomic_store_load_exch_cmpexch_types
             a = Metal.zeros(T, n)
             @metal threads=n local_kernel(a, T(42))
             @test all(isequal(42), Array(a))
@@ -45,7 +45,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in atomic_store_load_exch_cmpexch_types
+        @testset "global $T" for T in atomic_store_load_exch_cmpexch_types
             a = MtlArray(rand(T, n))
             b = Metal.zeros(T, n)
             @metal threads=n global_kernel(a, b)
@@ -64,7 +64,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in atomic_store_load_exch_cmpexch_types
+        @testset "local $T" for T in atomic_store_load_exch_cmpexch_types
             a = MtlArray(rand(T, n))
             b = Metal.zeros(T, n)
             @metal threads=n local_kernel(a, b)
@@ -79,7 +79,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in atomic_store_load_exch_cmpexch_types
+        @testset "global $T" for T in atomic_store_load_exch_cmpexch_types
             a = MtlArray(rand(T, n))
             @metal threads=n global_kernel(a, T(42))
             @test all(isequal(42), Array(a))
@@ -93,7 +93,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in atomic_store_load_exch_cmpexch_types
+        @testset "local $T" for T in atomic_store_load_exch_cmpexch_types
             a = Metal.zeros(T, n)
             @metal threads=n local_kernel(a, T(42))
             @test all(isequal(42), Array(a))
@@ -109,7 +109,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in atomic_store_load_exch_cmpexch_types
+        @testset "global $T" for T in atomic_store_load_exch_cmpexch_types
             a = MtlArray(rand(T, n))
             expected = copy(a)
             desired = T(42)
@@ -132,7 +132,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in atomic_store_load_exch_cmpexch_types
+        @testset "local $T" for T in atomic_store_load_exch_cmpexch_types
             a = Metal.zeros(T, n)
             expected = copy(a)
             desired = T(42)
@@ -201,7 +201,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in (Int32, UInt32, Float32)
+        @testset"global $T" for T in (Int32, UInt32, Float32)
             a = rand(T, n)
             b = MtlArray(a)
             val = rand(T)
@@ -222,7 +222,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset for T in (Int32, UInt32)
+        @testset "local $T" for T in (Int32, UInt32)
             a = rand(T, n)
             b = MtlArray(a)
             val = rand(T)
@@ -236,26 +236,20 @@ end
     # NOTE: this doesn't test threadgroup atomics, as those are assumed to have been
     #       covered by the low-level tests above, but only the atomic macro functionality.
 
-    @testset "load" begin
-        types = [Int32, UInt32, Float32]
-
+    @testset "load $T" for T in [Int32, UInt32, Float32]
         function kernel(a, b)
             i = thread_position_in_grid().x
             a[i] = Metal.@atomic b[i]
             return
         end
 
-        @testset for T in types
-            a = Metal.zeros(T, n)
-            b = MtlArray(rand(T, n))
-            @metal threads=n kernel(a, b)
-            @test Array(a) == Array(b)
-        end
+        a = Metal.zeros(T, n)
+        b = MtlArray(rand(T, n))
+        @metal threads=n kernel(a, b)
+        @test Array(a) == Array(b)
     end
 
-    @testset "store" begin
-        types = [Int32, UInt32, Float32]
-
+    @testset "store $T" for T in [Int32, UInt32, Float32]
         function kernel(a, b)
             i = thread_position_in_grid().x
             val = b[i]
@@ -263,44 +257,34 @@ end
             return
         end
 
-        @testset for T in types
-            a = Metal.zeros(T, n)
-            b = MtlArray(rand(T, n))
-            @metal threads=n kernel(a, b)
-            @test Array(a) == Array(b)
-        end
+        a = Metal.zeros(T, n)
+        b = MtlArray(rand(T, n))
+        @metal threads=n kernel(a, b)
+        @test Array(a) == Array(b)
     end
 
-    @testset "add" begin
-        types = [Int32, UInt32, Float32]
-
+    @testset "add $T" for T in [Int32, UInt32, Float32]
         function kernel(a)
             Metal.@atomic a[1] = a[1] + 1
             Metal.@atomic a[1] += 1
             return
         end
 
-        @testset for T in types
-            a = Metal.zeros(T)
-            @metal threads=n kernel(a)
-            @test Array(a)[1] == 2*n
-        end
+        a = Metal.zeros(T)
+        @metal threads=n kernel(a)
+        @test Array(a)[1] == 2*n
     end
 
-    @testset "sub" begin
-        types = [Int32, UInt32, Float32]
-
+    @testset "sub $T" for T in [Int32, UInt32, Float32]
         function kernel(a)
             Metal.@atomic a[1] = a[1] - 1
             Metal.@atomic a[1] -= 1
             return
         end
 
-        @testset for T in types
-            a = MtlArray(T[2n])
-            @metal threads=n kernel(a)
-            @test Array(a)[1] == 0
-        end
+        a = MtlArray(T[2n])
+        @metal threads=n kernel(a)
+        @test Array(a)[1] == 0
     end
 end
 
