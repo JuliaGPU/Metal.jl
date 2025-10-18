@@ -7,9 +7,13 @@ function kernel_fma(a, b, c, out)
     is_inbounds = i < length(a)
 
     if is_inbounds
-        a_val = is_inbounds ? a[i] : 0f0
-        b_val = is_inbounds ? b[i] : 0f0
-        c_val = is_inbounds ? c[i] : 0f0
+        a_val = a[i]
+        b_val = b[i]
+        c_val = c[i]
+    else
+        a_val = 0f0
+        b_val = 0f0
+        c_val = 0f0
     end
 
     for j in 1:99
