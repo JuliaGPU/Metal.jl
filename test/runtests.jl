@@ -1,6 +1,15 @@
 using Metal
 using ParallelTestRunner
 
+# Force 3 workers if running on the 8GB buildkite mac minis
+#  until ParallelTestRunner.jl interface to determine # workers
+if parse(Bool, get(ENV, "BUILDKITE", "false"))
+    jobs_pos = findfirst(arg -> startswith(arg, "--jobs"), ARGS)
+    if isnothing(jobs_pos) && (Sys.total_memory() == 8*2^30)
+        push!(ARGS, "--jobs=3")
+    end
+end
+
 # Quit without erroring if Metal loaded without issues on unsupported platforms
 if !Sys.isapple()
     @warn """Metal.jl succesfully loaded on non-macOS system.

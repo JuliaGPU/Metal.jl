@@ -38,10 +38,10 @@ steps:
               soft_fail: true
 
   # special tests
-  - group: ":floppy_disk: Shared (unified) Storage"
+  - group: ":eyes: Special"
     depends_on: "julia"
     steps:
-      - label: "shared array storage"
+      - label: ":floppy_disk: Shared Storage"
         plugins:
           - JuliaCI/julia#v1:
               version: "1.12"
@@ -53,19 +53,14 @@ steps:
           arch: "aarch64"
         if: |
           build.message =~ /\[only tests\]/ ||
-          build.message =~ /\[only storage\]/ ||
+          build.message =~ /\[only special\]/ ||
           build.message !~ /\[only/ && !build.pull_request.draft &&
             build.message !~ /\[skip tests\]/ &&
-            build.message !~ /\[skip storage\]/
+            build.message !~ /\[skip special\]/
         timeout_in_minutes: 60
         commands: |
           echo -e "[Metal]\ndefault_storage = \"shared\"" >LocalPreferences.toml
-
-  # special tests
-  - group: ":eyes: Special"
-    depends_on: "julia"
-    steps:
-      - label: "API validation"
+      - label: ":mag: API validation"
         plugins:
           - JuliaCI/julia#v1:
               version: "1.12"
