@@ -489,6 +489,105 @@ end
     end
 end
 
+if Metal.is_macos(v"15")
+@testset "residency sets" begin
+
+dev = first(devices())
+
+let desc = MTLResidencySetDescriptor()
+    @test isnothing(desc.label)
+    desc.label = "Test MTLResidencySetDescriptor"
+    @test desc.label == "Test MTLResidencySetDescriptor"
+
+    @test desc.initialCapacity == 0
+    desc.initialCapacity = 2
+    @test desc.initialCapacity == 2
+end
+
+desc = MTLResidencySetDescriptor()
+desc.initialCapacity = 2
+let rset = MTLResidencySet(dev, desc)
+    alloc1 = MTL.MTLBuffer(dev, 400)
+    alloc2 = MTL.MTLBuffer(dev, 1024)
+    allocs = [alloc1, alloc2]
+
+    # default parameters
+
+    @test isnothing(rset.label)
+    @test rset.device == dev
+    @test rset.allocationCount == 0
+    @test rset.allocatedSize == 0
+    @test isempty(rset.allAllocations)
+    @test rset.retainCount == 1
+    @test contains(rset.description, "ResidencySet")
+    @test !MTL.contains_allocation(rset, alloc1)
+    # @test contains(String(rset.description), "ResidencySet")
+
+    # one allocation
+    MTL.add_allocation!(rset, alloc1)
+    @test MTL.contains_allocation(rset, alloc1)
+    @test alloc1 in rset.allAllocations
+    @test rset.allocationCount == 1
+    @test rset.allocatedSize == 0 # Updated after it's committed
+    commit!(rset)
+    @test rset.allocationCount == 1
+    @test rset.allocatedSize > 0
+    MTL.remove_allocation!(rset, alloc1)
+    @test !MTL.contains_allocation(rset, alloc1)
+    @test rset.allocationCount == 1
+    @test rset.allocatedSize > 0
+    commit!(rset)
+    @test rset.allocationCount == 0
+    @test rset.allocatedSize == 0
+
+    # two allocations
+
+    MTL.add_allocations!(rset, allocs)
+    @test MTL.contains_allocation(rset, alloc2)
+    @test MTL.contains_allocation(rset, alloc2)
+    @test alloc1 in rset.allAllocations
+    @test alloc2 in rset.allAllocations
+    @test rset.allocationCount == 2
+    @test rset.allocatedSize == 0 # Updated after it's committed
+    commit!(rset)
+    @test rset.allocationCount == 2
+    @test rset.allocatedSize > 0
+    MTL.remove_allocations!(rset, allocs)
+    @test !MTL.contains_allocation(rset, alloc1)
+    @test !MTL.contains_allocation(rset, alloc2)
+    @test rset.allocationCount == 2
+    @test rset.allocatedSize > 0
+    commit!(rset)
+    @test rset.allocationCount == 0
+    @test rset.allocatedSize == 0
+
+    # two allocations but different
+
+    MTL.add_allocations!(rset, allocs, 2)
+    @test MTL.contains_allocation(rset, alloc2)
+    @test MTL.contains_allocation(rset, alloc2)
+    @test alloc1 in rset.allAllocations
+    @test alloc2 in rset.allAllocations
+    @test rset.allocationCount == 2
+    @test rset.allocatedSize == 0 # Updated after it's committed
+    commit!(rset)
+    MTL.request_residency!(rset) # ensure no crash
+    @test rset.allocationCount == 2
+    @test rset.allocatedSize > 0
+    MTL.end_residency!(rset) # ensure no crash
+    MTL.remove_all_allocations!(rset)
+    @test !MTL.contains_allocation(rset, alloc1)
+    @test !MTL.contains_allocation(rset, alloc2)
+    @test rset.allocationCount == 2
+    @test rset.allocatedSize > 0
+    commit!(rset)
+    @test rset.allocationCount == 0
+    @test rset.allocatedSize == 0
+end
+
+end # @testset "residency sets" begin
+end # if Metal.is_macos(v"15")
+
 # TODO: continue adding tests
 
 end # @autoreleasepool begin
