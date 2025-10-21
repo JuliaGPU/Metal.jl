@@ -62,16 +62,16 @@ function alloc(dev::Union{MTLDevice,MTLHeap}, sz::Integer, args...; kwargs...)
 end
 
 """
-    free(buffer::MTLBuffer)
+    free(buffer::Metal.MTLAllocation)
 
-Frees the buffer if the handle is valid.
+Frees the resource if the handle is valid.
 This does not protect against double-freeing of the same buffer!
 """
-function free(buf::MTLBuffer)
-    sz::Int = buf.length
+function free(alloc::MTL.MTLAllocation)
+    sz::Int = sizeof(alloc)
 
     time = Base.@elapsed begin
-        @autoreleasepool unsafe=true release(buf)
+        @autoreleasepool unsafe=true release(alloc)
     end
 
     Base.@atomic alloc_stats.free_count + 1

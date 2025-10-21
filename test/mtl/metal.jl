@@ -238,7 +238,8 @@ let desc = MTLHeapDescriptor()
 end
 
 desc = MTLHeapDescriptor()
-desc.size = 0x4000 # TODO: use heapBufferSizeAndAlign
+sizeAndAlign = MTL.heapBufferSizeAndAlign(dev, 0x4000, desc.resourceOptions)
+desc.size = sizeAndAlign.size + (sizeAndAlign.size & (sizeAndAlign.align - 1)) + sizeAndAlign.align
 let heap = MTLHeap(dev, desc)
     @test heap.label === nothing
     heap.label = "MyHeap"
@@ -246,7 +247,7 @@ let heap = MTLHeap(dev, desc)
 
     @test heap.type == desc.type
 
-    @test heap.size == desc.size
+    @test heap.size == nextpow(2, desc.size)
 
     # NOTE: these checks are fragile, as the heap options seems to depend on the requested size
 

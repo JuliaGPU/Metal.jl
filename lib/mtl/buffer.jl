@@ -5,7 +5,7 @@ export MTLBuffer, contents
 
 # @objcwrapper MTLBuffer <: MTLResource
 
-Base.sizeof(buf::MTLBuffer) = Int(buf.length)
+Base.sizeof(alloc::MTLAllocation) = Int(alloc.allocatedSize)
 
 contents(buf::MTLBuffer) = @objc [buf::id{MTLBuffer} contents]::Ptr{Cvoid}
 
@@ -17,12 +17,21 @@ end
 
 ## allocation
 
+@inline function _check_res_size(dev::MTLDevice, bytesize, _)
+    0 < bytesize <= dev.maxBufferLength
+end
+@inline function _check_res_size(heap::MTLHeap, bytesize, opts)
+    dev = heap.device
+    sizeAndAlign = MTL.heapBufferSizeAndAlign(dev, bytesize, opts)
+    0 < sizeAndAlign.size < maxAvailableSizeWithAlignment(heap, sizeAndAlign.align)
+end
+
 function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer;
                    storage=PrivateStorage, hazard_tracking=DefaultTracking,
                    cache_mode=DefaultCPUCache)
     opts = convert(MTLResourceOptions, storage) | hazard_tracking | cache_mode
 
-    @assert 0 < bytesize <= dev.maxBufferLength # XXX: not supported by MTLHeap
+    @assert _check_res_size(dev, bytesize, opts)
     ptr = alloc_buffer(dev, bytesize, opts)
 
     return MTLBuffer(ptr)
@@ -90,8 +99,8 @@ function alloc_buffer_nocopy(dev::MTLDevice, bytesize, opts, ptr::Ptr)
 end
 
 # from heap
-alloc_buffer(dev::MTLHeap, bytesize, opts) =
-    @objc [dev::id{MTLHeap} newBufferWithLength:bytesize::NSUInteger
+alloc_buffer(heap::MTLHeap, bytesize, opts) =
+    @objc [heap::id{MTLHeap} newBufferWithLength:bytesize::NSUInteger
                             options:opts::MTLResourceOptions]::id{MTLBuffer}
 
 """

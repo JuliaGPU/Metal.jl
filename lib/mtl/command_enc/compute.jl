@@ -64,6 +64,16 @@ function use!(cce::MTLComputeCommandEncoder, buf::Vector{MTLBuffer}, mode::MTLRe
                                              usage:mode::MTLResourceUsage]::Nothing
 end
 
+function use!(cce::MTLComputeCommandEncoder, heap::MTLHeap)
+    @objc [cce::id{MTLComputeCommandEncoder} useHeap:heap::id{MTLHeap}]::Nothing
+end
+
+function use!(cce::MTLComputeCommandEncoder, heaps::Vector{MTLHeap})
+    @objc [cce::id{MTLComputeCommandEncoder} useHeaps:heaps::Ptr{id{MTLHeap}}
+                                             count:length(heaps)::NSUInteger]::Nothing
+end
+
+
 # fence stuff
 function waitForFence(cce::MTLComputeCommandEncoder, fence)
     @objc [cce::id{MTLComputeCommandEncoder} waitForFence:fence::id{MTLFence}]::Nothing
