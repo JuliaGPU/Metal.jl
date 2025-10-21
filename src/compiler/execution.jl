@@ -269,12 +269,13 @@ const _kernel_instances = Dict{UInt, Any}()
 
         append!(ex.args, (quote
             MTL.use!(cce, $heap[])
+            return $heap[]
+        end).args)
+    else
+        append!(ex.args, (quote
+            return
         end).args)
     end
-
-    append!(ex.args, (quote
-        return $heap
-    end).args)
 
     ex
 end
@@ -317,6 +318,7 @@ end
         MTL.set_function!(cce, kernel.pipeline)
         heap = encode_arguments!(cce, kernel, kernel_state, kernel.f, args...)
         MTL.append_current_function!(cce, threadgroupsPerGrid, threadsPerThreadgroup)
+        # retain(heap)
         heap
     finally
         close(cce)
@@ -330,9 +332,13 @@ end
     # kernel has actually completed.
     #
     # TODO: is there a way to bind additional resources to the command buffer?
-    roots = [kernel.f, args, argument_buffers_heap]
+    roots = [kernel.f, args]
     MTL.on_completed(cmdbuf) do buf
         empty!(roots)
+        if !isnothing(argument_buffers_heap)
+            MTL.setPurgeableState!(argument_buffers_heap, MTL.MTLPurgeableStateEmpty)
+            free(argument_buffers_heap)
+        end
 
         # Check for errors
         # XXX: we cannot do this nicely, e.g. throwing an `error` or reporting with `@error`

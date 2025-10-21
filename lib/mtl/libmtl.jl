@@ -269,7 +269,7 @@ end
     MTLHeapTypeSparse = 2
 end
 
-@objcwrapper immutable = false MTLHeap <: MTLAllocation
+@objcwrapper immutable = true MTLHeap <: MTLAllocation
 
 @objcproperties MTLHeap begin
     @autoproperty label::id{NSString} setter = setLabel

@@ -25,11 +25,18 @@ Base.sizeof(heap::MTLHeap) = Int(heap.size)
 
 # @objcwrapper immutable=false MTLHeap <: MTLAllocation
 
-function MTLHeap(dev::MTLDevice, desc::MTLHeapDescriptor=MTLHeapDescriptor())
+function MTLHeap(dev::MTLDevice, desc::MTLHeapDescriptor)
     handle = @objc [dev::id{MTLDevice} newHeapWithDescriptor:desc::id{MTLHeapDescriptor}]::id{MTLHeap}
     obj = MTLHeap(handle)
-    finalizer(release, obj)
     return obj
+end
+
+function setPurgeableState!(heap::MTLHeap, state)
+    @objc [heap::id{MTLHeap} setPurgeableState:state::MTLPurgeableState]::MTLPurgeableState
+end
+
+function getPurgeableState(heap::MTLHeap)
+    setPurgeableState!(heap::MTLHeap, MTLPurgeableStateKeepCurrent)
 end
 
 function heapBufferSizeAndAlign(dev::MTLDevice, length, options)
