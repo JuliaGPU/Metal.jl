@@ -25,13 +25,13 @@ function set_buffer!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, offset, inde
                                              atIndex:(index-1)::NSUInteger]::Nothing
 end
 
-function dispatchThreadgroups!(cce::MTLComputeCommandEncoder, gridSize, threadGroupSize)
-    @objc [cce::id{MTLComputeCommandEncoder} dispatchThreadgroups:gridSize::MTLSize
-                                             threadsPerThreadgroup:threadGroupSize::MTLSize]::Nothing
+function dispatchThreadgroups!(cce::MTLComputeCommandEncoder, threadgroupsPerGrid, threadsPerThreadgroup)
+    @objc [cce::id{MTLComputeCommandEncoder} dispatchThreadgroups:threadgroupsPerGrid::MTLSize
+                                             threadsPerThreadgroup:threadsPerThreadgroup::MTLSize]::Nothing
 end
 
-function dispatchThreads!(cce::MTLComputeCommandEncoder, threadsSize::MTLSize, threadsPerThreadgroup::MTLSize)
-    @objc [cce::id{MTLComputeCommandEncoder} dispatchThreads:threadsSize::MTLSize
+function dispatchThreads!(cce::MTLComputeCommandEncoder, threadsPerGrid::MTLSize, threadsPerThreadgroup::MTLSize)
+    @objc [cce::id{MTLComputeCommandEncoder} dispatchThreads:threadsPerGrid::MTLSize
                                              threadsPerThreadgroup:threadsPerThreadgroup::MTLSize]::Nothing
 end
 
@@ -47,8 +47,8 @@ function MTLComputeCommandEncoder(f::Base.Callable, cmdbuf::MTLCommandBuffer; kw
     end
 end
 
-function append_current_function!(cce::MTLComputeCommandEncoder, gridSize, threadGroupSize)
-    dispatchThreadgroups!(cce, gridSize, threadGroupSize)
+function append_current_function!(cce::MTLComputeCommandEncoder, threadgroupsPerGrid, threadsPerThreadgroup)
+    dispatchThreadgroups!(cce, threadgroupsPerGrid, threadsPerThreadgroup)
 end
 
 #### use

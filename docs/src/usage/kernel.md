@@ -17,9 +17,10 @@ barriers
 - Grid: A collection of threadgroups
 
 The threadgroup and grid sizes are set by the user when launching the GPU kernel. There are
-upper limits determined by the targeted hardware, and the sizes can be 1, 2, or 3-dimensional. For
-Metal.jl, these sizes are set using the `@metal` macro's keyword arguments. The `grid`
-keyword determines the grid size while the `threads` keyword determines the threadgroup size.
+upper limits determined by the targeted hardware, and the sizes can be 1, 2, or 3-dimensional
+For Metal.jl, these sizes are set using the `@metal` macro's keyword arguments. The `groups`
+keyword determines the number of threadgroups per grid while the `threads` keyword determines
+the threadgroup size.
 
 For example, given a 10x10x3 image that you want to run a function independently on each pixel,
 the kernel launch code might look like the following:
