@@ -209,7 +209,11 @@ const _kernel_instances = Dict{UInt, Any}()
 
 @inline @generated function encode_arguments!(cce, kernel, args::Vararg{Any,N}) where {N}
     ex = quote end
-    buffers = []
+    heap = Ref{MTLHeap}()
+    heapdesc = Ref{MTLHeapDescriptor}()
+    have_heapdesc = false
+
+    heap_idxs = Tuple{Int,Int}[]
 
     # the arguments passed into this function have not been `mtlconvert`ed, because we need
     # to retain the top-level MTLBuffer and MtlPtr objects. eager conversion of nested
@@ -228,25 +232,54 @@ const _kernel_instances = Dict{UInt, Any}()
         elseif isghosttype(argtyp) || Core.Compiler.isconstType(argtyp)
             continue
         else
-            # everything else is passed by reference, in an argument buffer
-            buf = gensym("buffer")
+            push!(heap_idxs, (argidx,idx))
+            # Calculate heap size for the remaining arguments
+            if !have_heapdesc
+                append!(ex.args, (quote
+                    $heapdesc[] = MTLHeapDescriptor()
+                    $heapdesc[].hazardTrackingMode = MTL.MTLHazardTrackingModeTracked
+                    $heapdesc[].storageMode = Metal.SharedStorage
+                    $heapdesc[].size = 0
+                end).args)
+                have_heapdesc = true
+            end
             append!(ex.args, (quote
-                $buf = encode_argument!(kernel, mtlconvert($(argex), cce))
-                set_buffer!(cce, $buf, 0, $idx)
+                # https://developer.apple.com/documentation/metal/using-argument-buffers-with-resource-heaps?language=objc#Combine-Argument-Buffers-with-Resource-Heaps
+                sizeAndAlign = MTL.heapBufferSizeAndAlign(kernel.pipeline.device, sizeof($argtyp), $heapdesc[].resourceOptions)
+                $heapdesc[].size += sizeAndAlign.size + (sizeAndAlign.size & (sizeAndAlign.align - 1)) + sizeAndAlign.align
             end).args)
-            push!(buffers, buf)
         end
         idx += 1
     end
 
+    # Only set this up if necessary
+    if have_heapdesc
+        append!(ex.args, (quote
+            $heap[] = MTLHeap(kernel.pipeline.device, $heapdesc[])
+        end).args)
+
+        for (heap_arg_idx, heap_buf_idx) in heap_idxs
+            argex = :(args[$heap_arg_idx])
+            # everything else is passed by reference, in a heap-allocated argument buffer
+            append!(ex.args, (quote
+                buf = encode_argument!($heap[], mtlconvert($(argex), cce))
+                set_buffer!(cce, buf, 0, $heap_buf_idx)
+            end).args)
+        end
+
+        append!(ex.args, (quote
+            MTL.use!(cce, $heap[])
+        end).args)
+    end
+
     append!(ex.args, (quote
-        return ($(buffers...),)
+        return $heap
     end).args)
 
     ex
 end
 
-@inline function encode_argument!(kernel, arg)
+@inline function encode_argument!(mtlres, arg)
     argtyp = typeof(arg)
 
     # replace non-isbits arguments (they should be unused, or compilation
@@ -257,7 +290,7 @@ end
     end
 
     # pass by reference, in an argument buffer
-    argument_buffer = alloc(kernel.pipeline.device, sizeof(argtyp); storage=SharedStorage)
+    argument_buffer = alloc(mtlres, sizeof(argtyp); storage=SharedStorage)
     argument_buffer.label = "MTLBuffer for kernel argument"
     unsafe_store!(convert(Ptr{argtyp}, argument_buffer), arg)
     return argument_buffer
@@ -280,11 +313,11 @@ end
     cmdbuf = MTLCommandBuffer(queue)
     cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
     cce = MTLComputeCommandEncoder(cmdbuf)
-    argument_buffers = try
+    argument_buffers_heap = try
         MTL.set_function!(cce, kernel.pipeline)
-        bufs = encode_arguments!(cce, kernel, kernel_state, kernel.f, args...)
+        heap = encode_arguments!(cce, kernel, kernel_state, kernel.f, args...)
         MTL.append_current_function!(cce, threadgroupsPerGrid, threadsPerThreadgroup)
-        bufs
+        heap
     finally
         close(cce)
     end
@@ -297,10 +330,9 @@ end
     # kernel has actually completed.
     #
     # TODO: is there a way to bind additional resources to the command buffer?
-    roots = [kernel.f, args]
+    roots = [kernel.f, args, argument_buffers_heap]
     MTL.on_completed(cmdbuf) do buf
         empty!(roots)
-        foreach(free, argument_buffers)
 
         # Check for errors
         # XXX: we cannot do this nicely, e.g. throwing an `error` or reporting with `@error`
