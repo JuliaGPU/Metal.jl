@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Array programming · Metal.jl</title><meta name="title" content="Array programming · Metal.jl"/><meta property="og:title" content="Array programming · Metal.jl"/><meta property="twitter:title" content="Array programming · Metal.jl"/><meta name="description" content="Documentation for Metal.jl."/><meta property="og:description" content="Documentation for Metal.jl."/><meta property="twitter:description" content="Documentation for Metal.jl."/><meta property="og:url" content="https://metal.juliagpu.org/stable/usage/array/"/><meta property="twitter:url" content="https://metal.juliagpu.org/stable/usage/array/"/><link rel="canonical" href="https://metal.juliagpu.org/stable/usage/array/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="Metal.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">Metal.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Usage</span><ul><li><a class="tocitem" href="../overview/">Overview</a></li><li class="is-active"><a class="tocitem" href>Array programming</a><ul class="internal"><li><a class="tocitem" href="#Construction-and-Initialization"><span>Construction and Initialization</span></a></li><li><a class="tocitem" href="#Higher-order-abstractions"><span>Higher-order abstractions</span></a></li><li><a class="tocitem" href="#Random-numbers"><span>Random numbers</span></a></li></ul></li><li><a class="tocitem" href="../kernel/">Kernel programming</a></li></ul></li><li><a class="tocitem" href="../../profiling/">Profiling</a></li><li><span class="tocitem">API reference</span><ul><li><a class="tocitem" href="../../api/essentials/">Essentials</a></li><li><a class="tocitem" href="../../api/compiler/">Compiler</a></li><li><a class="tocitem" href="../../api/kernel/">Kernel programming</a></li><li><a class="tocitem" href="../../api/array/">Array programming</a></li><li><a class="tocitem" href="../../api/mps/">Metal Performance Shaders</a></li></ul></li><li><span class="tocitem">FAQ</span><ul><li><a class="tocitem" href="../../faq/faq/">Frequently Asked Questions</a></li><li><a class="tocitem" href="../../faq/contributing/">Contributing</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Usage</a></li><li class="is-active"><a href>Array programming</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Array programming</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/JuliaGPU/Metal.jl/blob/main/docs/src/usage/array.md#" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Array-programming"><a class="docs-heading-anchor" href="#Array-programming">Array programming</a><a id="Array-programming-1"></a><a class="docs-heading-anchor-permalink" href="#Array-programming" title="Permalink"></a></h1><p>The easiest way to use the GPU&#39;s massive parallelism, is by expressing operations in terms of arrays: Metal.jl provides an array type, <code>MtlArray</code>, and many specialized array operations that execute efficiently on the GPU hardware. In this section, we will briefly demonstrate use of the <code>MtlArray</code> type. Since we expose Metal&#39;s functionality by implementing existing Julia interfaces on the <code>MtlArray</code> type, you should refer to the <a href="https://docs.julialang.org">upstream Julia documentation</a> for more information on these operations.</p><p>If you encounter missing functionality, or are running into operations that trigger so-called &quot;scalar iteration&quot;, have a look at the <a href="https://github.com/JuliaGPU/Metal.jl/issues">issue tracker</a> and file a new issue if there&#39;s none. Do note that you can always access the underlying Metal APIs by calling into the relevant submodule.</p><h2 id="Construction-and-Initialization"><a class="docs-heading-anchor" href="#Construction-and-Initialization">Construction and Initialization</a><a id="Construction-and-Initialization-1"></a><a class="docs-heading-anchor-permalink" href="#Construction-and-Initialization" title="Permalink"></a></h2><p>The <code>MtlArray</code> type aims to implement the <code>AbstractArray</code> interface, and provide implementations of methods that are commonly used when working with arrays. That means you can construct <code>MtlArray</code>s in the same way as regular <code>Array</code> objects:</p><pre><code class="language-julia-repl hljs">julia&gt; MtlArray{Int}(undef, 2)
+2-element MtlVector{Int64, Metal.PrivateStorage}:
+ 0
+ 0
+
+julia&gt; MtlArray{Int}(undef, (1,2))
+1×2 MtlMatrix{Int64, Metal.PrivateStorage}:
+ 0  0
+
+julia&gt; similar(ans)
+1×2 MtlMatrix{Int64, Metal.PrivateStorage}:
+ 0  0</code></pre><p>Copying memory to or from the GPU can be expressed using constructors as well, or by calling <code>copyto!</code>:</p><pre><code class="language-julia-repl hljs">julia&gt; a = MtlArray([1,2])
+2-element MtlVector{Int64, Metal.PrivateStorage}:
+ 1
+ 2
+
+julia&gt; b = Array(a)
+2-element Vector{Int64}:
+ 1
+ 2
+
+julia&gt; copyto!(b, a)
+2-element Vector{Int64}:
+ 1
+ 2</code></pre><h2 id="Higher-order-abstractions"><a class="docs-heading-anchor" href="#Higher-order-abstractions">Higher-order abstractions</a><a id="Higher-order-abstractions-1"></a><a class="docs-heading-anchor-permalink" href="#Higher-order-abstractions" title="Permalink"></a></h2><p>The real power of programming GPUs with arrays comes from Julia&#39;s higher-order array abstractions: Operations that take user code as an argument, and specialize execution on it. With these functions, you can often avoid having to write custom kernels. For example, to perform simple element-wise operations you can use <code>map</code> or <code>broadcast</code>:</p><pre><code class="language-julia-repl hljs">julia&gt; a = MtlArray{Float32}(undef, (1,2));
+
+julia&gt; a .= 5
+1×2 MtlMatrix{Float32, Metal.PrivateStorage}:
+ 5.0  5.0
+
+julia&gt; map(sin, a)
+1×2 MtlMatrix{Float32, Metal.PrivateStorage}:
+ -0.958924  -0.958924</code></pre><p>To reduce the dimensionality of arrays, Metal.jl implements the various flavours of <code>(map)reduce(dim)</code>:</p><pre><code class="language-julia-repl hljs">julia&gt; a = Metal.ones(2,3)
+2×3 MtlMatrix{Float32, Metal.PrivateStorage}:
+ 1.0  1.0  1.0
+ 1.0  1.0  1.0
+
+julia&gt; reduce(+, a)
+6.0f0
+
+julia&gt; mapreduce(sin, *, a; dims=2)
+2×1 MtlMatrix{Float32, Metal.PrivateStorage}:
+ 0.59582335
+ 0.59582335
+
+julia&gt; b = Metal.zeros(1)
+1-element MtlVector{Float32, Metal.PrivateStorage}:
+ 0.0
+
+julia&gt; Base.mapreducedim!(identity, +, b, a)
+1×1 MtlMatrix{Float32, Metal.PrivateStorage}:
+ 6.0</code></pre><h2 id="Random-numbers"><a class="docs-heading-anchor" href="#Random-numbers">Random numbers</a><a id="Random-numbers-1"></a><a class="docs-heading-anchor-permalink" href="#Random-numbers" title="Permalink"></a></h2><p>Base&#39;s convenience functions for generating random numbers are available in Metal as well:</p><pre><code class="language-julia-repl hljs">julia&gt; Metal.rand(2)
+2-element MtlVector{Float32, Metal.PrivateStorage}:
+ 0.89025915
+ 0.8946847
+
+julia&gt; Metal.randn(Float32, 2, 1)
+2×1 MtlMatrix{Float32, Metal.PrivateStorage}:
+ 1.2279074
+ 1.2518331</code></pre><p>Behind the scenes, these random numbers come from two different generators: one backed by <a href="https://developer.apple.com/documentation/metalperformanceshaders/mpsmatrixrandom?language=objc">Metal Performance Shaders</a>, another by using the GPUArrays.jl random methods. Operations on these generators are implemented using methods from the Random standard library:</p><pre><code class="language-julia-repl hljs">julia&gt; using Random, GPUArrays
+
+julia&gt; a = Random.rand(MPS.default_rng(), Float32, 1)
+1-element MtlVector{Float32, Metal.PrivateStorage}:
+ 0.89025915
+
+julia&gt; a = Random.rand!(GPUArrays.default_rng(MtlArray), a)
+1-element MtlVector{Float32, Metal.PrivateStorage}:
+ 0.0705002</code></pre><div class="admonition is-info"><header class="admonition-header">Note</header><div class="admonition-body"><p><code>MPSMatrixRandom</code> functionality requires Metal.jl &gt;= v1.4</p></div></div><div class="admonition is-warning"><header class="admonition-header">Warning</header><div class="admonition-body"><p><code>Random.rand!(::MPS.RNG, args...)</code> and <code>Random.randn!(::MPS.RNG, args...)</code> have a framework limitation that requires the byte offset and byte size of the destination array to be a multiple of 4.</p></div></div></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../overview/">« Overview</a><a class="docs-footer-nextpage" href="../kernel/">Kernel programming »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.8.0 on <span class="colophon-date" title="Monday 20 October 2025 20:18">Monday 20 October 2025</span>. Using Julia version 1.10.10.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
