@@ -68,6 +68,15 @@ function commit!(f::Base.Callable, cmdbuf::MTLCommandBuffer)
     return ret
 end
 
+function use_residency_set!(cmdbuf::MTLCommandBuffer, resset::MTLResidencySet)
+    @objc [cmdbuf::id{MTLCommandBuffer} useResidencySet:resset::id{MTLResidencySet}]::Nothing
+end
+
+function use_residency_sets!(cmdbuf::MTLCommandBuffer, ressets, count)
+    @objc [cmdbuf::id{MTLCommandBuffer} useResidencySets:resset::Ptr{id{MTLResidencySet}}
+                                                count:count::NSUInteger]::Nothing
+end
+
 """
     wait_scheduled(commandBuffer)
 

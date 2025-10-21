@@ -106,6 +106,9 @@ immutable=false
 [api.MTLLibrary]
 immutable=false
 
+[api.MTLResidencySet]
+immutable=false
+
 [api.MTLSharedEvent]
 immutable=false
 

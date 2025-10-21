@@ -3294,7 +3294,7 @@ end
     @autoproperty initialCapacity::UInt64 setter = setInitialCapacity
 end
 
-@objcwrapper immutable = true availability = macos(v"15.0.0") MTLResidencySet <: NSObject
+@objcwrapper immutable = false availability = macos(v"15.0.0") MTLResidencySet <: NSObject
 
 @objcproperties MTLResidencySet begin
     @autoproperty device::id{MTLDevice}
