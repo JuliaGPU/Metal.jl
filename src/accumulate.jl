@@ -2,13 +2,13 @@
 function partial_scan(op::Function, output::AbstractArray{T}, input::AbstractArray,
                       Rdim, Rpre, Rpost, Rother, neutral, init,
                       ::Val{maxthreads}, ::Val{inclusive}=Val(true)) where {T, maxthreads, inclusive}
-    threads = get_local_size().x
-    thread = get_local_id().x
+    threads = KI.get_local_size().x
+    thread = KI.get_local_id().x
 
     temp = KI.localmemory(T, (Int32(2) * maxthreads,))
 
-    i = (get_group_id().x - Int32(1)) * get_local_size().x + get_local_id().x
-    j = (get_group_id().z - Int32(1)) * get_num_groups().y + get_group_id().y
+    i = (KI.get_group_id().x - Int32(1)) * KI.get_local_size().x + KI.get_local_id().x
+    j = (KI.get_group_id().z - Int32(1)) * KI.get_num_groups().y + KI.get_group_id().y
 
     if j > length(Rother)
         return
@@ -76,10 +76,10 @@ function partial_scan(op::Function, output::AbstractArray{T}, input::AbstractArr
 end
 
 function aggregate_partial_scan(op::Function, output::AbstractArray, aggregates::AbstractArray, Rdim, Rpre, Rpost, Rother, init)
-    block = get_group_id().x
+    block = KI.get_group_id().x
 
-    i = (get_group_id().x - Int32(1)) * get_local_size().x + get_local_id().x
-    j = (get_group_id().z - Int32(1)) * get_num_groups().y + get_group_id().y
+    i = (KI.get_group_id().x - Int32(1)) * KI.get_local_size().x + KI.get_local_id().x
+    j = (KI.get_group_id().z - Int32(1)) * KI.get_num_groups().y + KI.get_group_id().y
 
     @inbounds if i <= length(Rdim) && j <= length(Rother)
         I = Rother[j]
