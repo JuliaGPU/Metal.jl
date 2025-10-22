@@ -26,10 +26,9 @@ function checked_indexing_kernel(dest, src)
 end
 group["indexing_checked"] = @async_benchmarkable @metal threads=size(src,1) groups=size(src,2) $checked_indexing_kernel($dest, $src)
 
-## DELETE
-# function rand_kernel(dest::AbstractArray{T}) where {T}
-#     i = thread_position_in_grid().x
-#     dest[i] = Metal.rand(T)
-#     return
-# end
-# group["rand"] = @async_benchmarkable @metal threads=size(src,1) groups=size(src,2) $rand_kernel($dest)
+function rand_kernel(dest::AbstractArray{T}) where {T}
+    i = thread_position_in_grid().x
+    dest[i] = rand(T)
+    return
+end
+group["rand"] = @async_benchmarkable @metal threads=size($dest,1) groups=size($dest,2) $rand_kernel($dest)
