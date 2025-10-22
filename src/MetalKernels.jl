@@ -141,11 +141,11 @@ function KI.KIKernel(::MetalBackend, f, args...; kwargs...)
     KI.KIKernel{MetalBackend, typeof(kern)}(MetalBackend(), kern)
 end
 
-function (obj::KI.KIKernel{MetalBackend})(args...; numworkgroups=nothing, workgroupsize=nothing)
+function (obj::KI.KIKernel{MetalBackend})(args...; numworkgroups=nothing, workgroupsize=nothing, kwargs...)
     threadsPerThreadgroup = isnothing(workgroupsize) ? 1 : workgroupsize
     threadgroupsPerGrid = isnothing(numworkgroups) ? 1 : numworkgroups
 
-    obj.kern(args...; threads=threadsPerThreadgroup, groups=threadgroupsPerGrid)
+    obj.kern(args...; threads=threadsPerThreadgroup, groups=threadgroupsPerGrid, kwargs...)
 end
 
 
