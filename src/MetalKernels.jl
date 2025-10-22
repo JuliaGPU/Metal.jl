@@ -149,13 +149,13 @@ function (obj::KI.KIKernel{MetalBackend})(args...; numworkgroups=nothing, workgr
 end
 
 
-function KI.kernel_max_work_group_size(::B, kikern::KI.KIKernel{B}; max_work_items::Int=typemax(Int)) where B<:MetalBackend
-    min(kikern.kern.pipeline.maxTotalThreadsPerThreadgroup, max_work_items)
+function KI.kernel_max_work_group_size(::MetalBackend, kikern::KI.KIKernel{<:MetalBackend}; max_work_items::Int=typemax(Int))::Int
+    Int(min(kikern.kern.pipeline.maxTotalThreadsPerThreadgroup, max_work_items))
 end
-function KI.max_work_group_size(::MetalBackend)
-    device().maxThreadsPerThreadgroup.width
+function KI.max_work_group_size(::MetalBackend)::Int
+    Int(device().maxThreadsPerThreadgroup.width)
 end
-function KI.multiprocessor_count(::MetalBackend)
+function KI.multiprocessor_count(::MetalBackend)::Int
     Metal.num_gpu_cores()
 end
 
