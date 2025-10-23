@@ -12,6 +12,15 @@ Use [`beginScope()`](@ref) and [`endScope()`](@ref) to set the boundaries for a 
 """
 MTLCaptureScope
 
+function MTLCaptureScope(queue::MTLDevice, manager=MTLCaptureManager())
+    handle = @objc [manager::id{MTLCaptureManager} newCaptureScopeWithDevice:queue::id{MTLDevice}]::id{MTLCaptureScope}
+    MTLCaptureScope(handle)
+end
+function MTLCaptureScope(queue::MTLCommandQueue, manager=MTLCaptureManager())
+    handle = @objc [manager::id{MTLCaptureManager} newCaptureScopeWithCommandQueue:queue::id{MTLCommandQueue}]::id{MTLCaptureScope}
+    MTLCaptureScope(handle)
+end
+
 # @objcwrapper MTLCaptureScope <: NSObject
 
 """
@@ -59,7 +68,7 @@ function MTLCaptureDescriptor()
 end
 
 # TODO: Add capture state
-function MTLCaptureDescriptor(obj::Union{MTLDevice,MTLCommandQueue, MTLCaptureScope},
+function MTLCaptureDescriptor(obj::Union{MTLDevice, MTLCommandQueue, MTLCaptureScope},
                               destination::MTLCaptureDestination;
                               folder::String=nothing)
     desc = MTLCaptureDescriptor()
@@ -110,7 +119,7 @@ end
 
 Start GPU frame capture using the default capture object and specifying capture descriptor parameters directly.
 """
-function startCapture(obj::Union{MTLDevice,MTLCommandQueue, MTLCaptureScope},
+function startCapture(obj::Union{MTLDevice, MTLCommandQueue, MTLCaptureScope},
                       destination::MTLCaptureDestination=MTLCaptureDestinationGPUTraceDocument;
                       folder::String=nothing)
     if destination == MTLCaptureDestinationGPUTraceDocument && folder === nothing
@@ -141,8 +150,17 @@ Stop GPU frame capture.
 """
 function stopCapture(manager::MTLCaptureManager=MTLCaptureManager())
     @objc [manager::id{MTLCaptureManager} stopCapture]::Nothing
+    # Spinlock until capture is fully complete. Otherwise, `stopCapture`
+    #  sometimes returns while the capture manager is still capturing,
+    #  causing test failures and potentially corrupted captures.
+    while manager.isCapturing
+    end
 end
 
+"""
+    supports_destination(manager::MTLCaptureManager, destination::MTLCaptureDestination)
+Checks if a given capture destination is supported.
+"""
 function supports_destination(manager::MTLCaptureManager, destination::MTLCaptureDestination)
     @objc [manager::id{MTLCaptureManager} supportsDestination:destination::MTLCaptureDestination]::Bool
 end

@@ -7,8 +7,6 @@ else
 # Verify Metal capture is enabled via environment variable
 @test capturing
 
-@testset "capturing" begin
-
 mktempdir() do tmpdir
 cd(tmpdir) do
 
@@ -37,6 +35,10 @@ desc.captureObject = dev
 @test desc.destination == MTL.MTLCaptureDestinationDeveloperTools
 desc.destination = MTL.MTLCaptureDestinationGPUTraceDocument
 @test desc.destination == MTL.MTLCaptureDestinationGPUTraceDocument
+
+# Capture Manager supports destination
+@test !supports_destination(manager, MTL.MTLCaptureDestinationDeveloperTools)
+@test supports_destination(manager, MTL.MTLCaptureDestinationGPUTraceDocument)
 
 # Output URL
 @test desc.outputURL === nothing
@@ -67,7 +69,7 @@ bufferA = MtlArray{Float32,1,SharedStorage}(undef, tuple(4))
 @test manager.isCapturing == false
 startCapture(manager, desc)
 @test manager.isCapturing
-@test_throws ErrorException startCapture(manager, desc)
+@test_throws "Capture manager is already capturing." startCapture(manager, desc)
 Metal.@sync @metal threads=4 tester(bufferA)
 stopCapture(manager)
 @test manager.isCapturing == false
@@ -85,5 +87,4 @@ end
 end # cd(tmpdir) do
 end # mktempdir() do tmpdir
 
-end # @testset "capturing" begin
 end # if shader_validation (else branch)
