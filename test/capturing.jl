@@ -7,8 +7,6 @@ else
 # Verify Metal capture is enabled via environment variable
 @test capturing
 
-@testset "capturing" begin
-
 mktempdir() do tmpdir
 cd(tmpdir) do
 
@@ -85,5 +83,4 @@ end
 end # cd(tmpdir) do
 end # mktempdir() do tmpdir
 
-end # @testset "capturing" begin
 end # if shader_validation (else branch)

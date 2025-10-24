@@ -141,6 +141,8 @@ Stop GPU frame capture.
 """
 function stopCapture(manager::MTLCaptureManager=MTLCaptureManager())
     @objc [manager::id{MTLCaptureManager} stopCapture]::Nothing
+    while manager.isCapturing
+    end
 end
 
 function supports_destination(manager::MTLCaptureManager, destination::MTLCaptureDestination)
