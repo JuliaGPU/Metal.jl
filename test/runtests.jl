@@ -67,7 +67,7 @@ Metal.functional() || error("Metal.jl is not functional on this system. This is 
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
 
 # register custom tests that do not correspond to files in the test directory
-custom_tests = Dict{String, Expr}()
+testsuite = find_tests(@__DIR__)
 ## GPUArrays test suite
 import GPUArrays
 gpuarrays = pathof(GPUArrays)
@@ -75,23 +75,23 @@ gpuarrays_root = dirname(dirname(gpuarrays))
 gpuarrays_testsuite = joinpath(gpuarrays_root, "test", "testsuite.jl")
 include(gpuarrays_testsuite)
 for name in keys(TestSuite.tests)
-    custom_tests["gpuarrays/$name"] = :(TestSuite.tests[$name](MtlArray))
+    testsuite["gpuarrays/$name"] = :(TestSuite.tests[$name](MtlArray))
 end
 
+args = parse_args(ARGS)
+
 # filter out certain tests depending on the exact testing conditions
-function test_filter(name)
-    if Metal.DefaultStorageMode != Metal.PrivateStorage && name == "gpuarrays/indexing scalar"
+if filter_tests!(testsuite, args)
+    if Metal.DefaultStorageMode != Metal.PrivateStorage
         # GPUArrays' scalar indexing tests assume that indexing is not supported
-        return false
+        delete!(testsuite, "gpuarrays/indexing scalar")
     end
 
     # for some reason, the environment shenanigans done by the scripts only work when
     # invoked from the Metal.jl CI, and not from GPUArrays.jl' reverse CI
-    if get(ENV, "BUILDKITE_PIPELINE_NAME", "") != "Metal.jl" && name == "scripts"
-        return false
+    if get(ENV, "BUILDKITE_PIPELINE_NAME", "") != "Metal.jl"
+        delete!(testsuite, "scripts")
     end
-
-    return true
 end
 
 # workers to run tests on
@@ -157,4 +157,4 @@ init_code = quote
     end
 end
 
-runtests(Metal, ARGS; custom_tests, test_filter, init_code, test_worker)
+runtests(Metal, args; testsuite, init_code, test_worker)
