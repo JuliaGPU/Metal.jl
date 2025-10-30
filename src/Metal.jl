@@ -10,7 +10,7 @@ import LLVMDowngrader_jll
 using Preferences: @load_preference, load_preference
 using ExprTools: splitdef, combinedef
 using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
-import ObjectiveC: is_macos, darwin_version, macos_version
+import ObjectiveC: is_macos
 import KernelAbstractions
 using ScopedValues
 
