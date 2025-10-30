@@ -106,7 +106,7 @@ function anepeakflops(; kwargs...)
     return res
 end
 
-function compare(Ns, Fs, inT, outT=inT; n_batch=1, ntrials)
+function compare(Ns, Fs, inT, outT=inT; n_batch=1, ntrials, verbose=true)
     results = Dict()
 
     newFs = if (outT == Float16 || (outT == Float32 && inT == Float16))
@@ -125,12 +125,12 @@ function compare(Ns, Fs, inT, outT=inT; n_batch=1, ntrials)
             verify = (n < maxintfloat(outT) && (inT != Float16 || (n < maxintfloat(inT))))
             n_str = "$n: "
             for (f, info_str) in newFs
-                print(prefixstr, n_str, info_str)
+                verbose && print(prefixstr, n_str, info_str)
                 push!(results[info_str], f(; inT, outT, n, n_batch, ntrials, verify))
-                GC.gc()
+                GC.gc(false)
             end
         end
-        print("\33[2K\r")
+        verbose && print("\33[2K\r")
     end
     return results
 end
@@ -144,10 +144,10 @@ DEFAULT_FS = [
     # (cpupeakflops, "CPU (AppleAccelerate)"), # Uncomment to test CPU performance
 ]
 
-function runcomparison(; Ns=DEFAULT_NS, Fs=DEFAULT_FS, n_batch=1, ntrials=5)
+function runcomparison(; Ns=DEFAULT_NS, Fs=DEFAULT_FS, n_batch=1, ntrials=5, verbose=true)
     res = Dict()
     for (inT, outT) in Ts
-        res[(inT,outT)] = (n_batch, Ns, compare(Ns, Fs, inT, outT; n_batch, ntrials))
+        res[(inT,outT)] = (n_batch, Ns, compare(Ns, Fs, inT, outT; n_batch, ntrials, verbose))
     end
     return res
 end
@@ -190,7 +190,7 @@ function plot_results(res, Fs=DEFAULT_FS; outpath=nothing, outtype="svg", plt_ti
 end
 
 if testing
-    runcomparison(Ns=[50, 64, 100, 128, 250, 256, 500, 512])
+    runcomparison(;Ns=[50, 64, 100, 128, 250, 256, 500, 512], verbose=false)
 elseif abspath(PROGRAM_FILE) == @__FILE__
     res = runcomparison()
     plot_results(res; outpath=".")
