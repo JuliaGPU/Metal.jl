@@ -1,3 +1,22 @@
+export macos_version, darwin_version
+
+"""
+    macos_version()::VersionNumber
+
+Returns the host macOS version.
+
+See also [`Metal.darwin_version`](@ref).
+"""
+const macos_version = ObjectiveC.macos_version
+
+"""
+    darwin_version()::VersionNumber
+
+Returns the host Darwin kernel version.
+
+See also [`Metal.macos_version`](@ref).
+"""
+const darwin_version = ObjectiveC.darwin_version
 
 ## support queries
 
