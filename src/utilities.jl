@@ -137,10 +137,13 @@ function captured(f; dest=MTL.MTLCaptureDestinationGPUTraceDocument,
     end
 
     folder = capture_dir()
-    startCapture(object, dest; folder)
+    scope = MTLCaptureScope(object)
+    startCapture(scope, dest; folder)
     try
-       f()
-       synchronize()
+        beginScope(scope)
+        f()
+        endScope(scope)
+        synchronize()
     finally
         @info "GPU frame capture saved to $folder; open the resulting trace in Xcode"
         stopCapture()
