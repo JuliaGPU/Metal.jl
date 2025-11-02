@@ -31,6 +31,7 @@ UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [sources]
+GPUArrays = {rev = "reverse", url = "https://github.com/christiangnrd/GPUArrays.jl"}
 KernelAbstractions = {rev = "intrinsics", url = "https://github.com/christiangnrd/KernelAbstractions.jl"}
 
 [extensions]
