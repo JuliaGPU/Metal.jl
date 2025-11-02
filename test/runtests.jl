@@ -1,3 +1,8 @@
+@static if VERSION < v"1.11"
+    using Pkg
+    Pkg.add(url="https://github.com/christiangnrd/KernelAbstractions.jl", rev="intrinsics")
+end
+
 using Metal
 using ParallelTestRunner
 
