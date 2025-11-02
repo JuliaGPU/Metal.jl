@@ -1,6 +1,7 @@
 @static if VERSION < v"1.11" && get(ENV, "BUILDKITE_PIPELINE_NAME", "Metal.jl") == "Metal.jl"
     using Pkg
     Pkg.add(url="https://github.com/JuliaGPU/KernelAbstractions.jl", rev="main")
+    Pkg.add(url="https://github.com/christiangnrd/GPUArrays.jl", rev="reverse")
 end
 
 using Metal
