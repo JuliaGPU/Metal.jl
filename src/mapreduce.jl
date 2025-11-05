@@ -230,20 +230,17 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     #
     # threads in a group work together to reduce values across the reduction dimensions;
     # we want as many as possible to improve algorithm efficiency and execution occupancy.
-    wanted_threads = shuffle ? nextwarp(kernel.pipeline, length(Rreduce)) : length(Rreduce)
-    function compute_threads(max_threads)
+    function compute_threads(kern)
+        max_threads = kern.pipeline.maxTotalThreadsPerThreadgroup
+        wanted_threads = shuffle ? nextwarp(kern.pipeline, length(Rreduce)) : length(Rreduce)
         if wanted_threads > max_threads
-            shuffle ? prevwarp(kernel.pipeline, max_threads) : max_threads
+            shuffle ? prevwarp(kern.pipeline, max_threads) : max_threads
         else
             wanted_threads
         end
     end
 
-    # XXX: Properly fix (issue #616) the issue is that the maxTotalThreadsPerThreadgroup of the unlaunched
-    #         kernel above may be greater than the maxTotalThreadsPerThreadgroup of the eventually launched
-    #         kernel below, causing errors
-    # reduce_threads = compute_threads(kernel.pipeline.maxTotalThreadsPerThreadgroup)
-    reduce_threads = compute_threads(512)
+    reduce_threads = compute_threads(kernel)
 
     # how many groups should we launch?
     #
@@ -264,18 +261,32 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
                Val(UInt64(length(Rother))), Val(grain), Val(shuffle), R, A;
                threads, groups)
     else
-        # we need multiple steps to cover all values to reduce
-        partial = similar(R, (size(R)..., reduce_groups))
+        # temporary empty array whose type will match the final partial array
+	    partial = similar(R, ntuple(_ -> 0, Val(ndims(R)+1)))
+
+        # NOTE: we can't use the previously-compiled kernel, or its launch configuration,
+        #       since the type of `partial` might not match the original output container
+        #       (e.g. if that was a view).
+        partial_kernel = @metal launch=false partial_mapreduce_device(
+                                    f, op, init, Val(threads), Val(Rreduce),
+                                    Val(Rother), Val(UInt64(length(Rother))),
+                                    Val(grain), Val(shuffle), partial, A)
+        partial_reduce_threads = compute_threads(partial_kernel)
+        partial_reduce_groups = cld(length(Rreduce), partial_reduce_threads * grain)
+
+        partial_threads = partial_reduce_threads
+        partial_groups = partial_reduce_groups*other_groups
+
+        partial = similar(R, (size(R)..., partial_reduce_groups))
         if init === nothing
             # without an explicit initializer we need to copy from the output container
             # use broadcasting to extend singleton dimensions
             partial .= R
         end
-        # NOTE: we can't use the previously-compiled kernel, since the type of `partial`
-        #       might not match the original output container (e.g. if that was a view).
-        @metal threads groups partial_mapreduce_device(
-            f, op, init, Val(threads), Val(Rreduce), Val(Rother),
-            Val(UInt64(length(Rother))), Val(grain), Val(shuffle), partial, A)
+        partial_kernel(f, op, init, Val(threads), Val(Rreduce),
+                        Val(Rother), Val(UInt64(length(Rother))),
+                        Val(grain), Val(shuffle), partial, A;
+                        groups=partial_groups, threads=partial_threads)
 
         GPUArrays.mapreducedim!(identity, op, R, partial; init=init)
     end
