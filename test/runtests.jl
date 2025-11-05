@@ -65,6 +65,7 @@ end
 Metal.functional() || error("Metal.jl is not functional on this system. This is unexpected; please file an issue.")
 
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
+@info sprint(io->versioninfo(io))
 
 # register custom tests that do not correspond to files in the test directory
 testsuite = find_tests(@__DIR__)
