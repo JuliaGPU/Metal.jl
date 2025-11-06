@@ -3,12 +3,19 @@
     let
         function sync_test_kernel(buf)
             idx = thread_position_in_grid().x
-            @inbounds buf[idx] += 1
+            if idx <= length(buf)
+                @inbounds buf[idx] += 1
+            end
             return nothing
         end
         buf = Metal.zeros(Int, 1024; storage=Metal.SharedStorage)
         vec = unsafe_wrap(Vector{Int}, pointer(buf), size(buf))
-        @metal threads=length(buf) sync_test_kernel(buf)
+
+        sync_test = @metal launch=false sync_test_kernel(buf)
+        threads = sync_test.pipeline.maxTotalThreadsPerThreadgroup
+        groups = cld(length(buf), threads)
+
+        sync_test(buf; threads, groups)
         synchronize()
         @test all(vec .== 1)
     end
@@ -17,13 +24,13 @@
     let
         function barrier_test_kernel(buf)
             idx = thread_position_in_grid().x
-            if thread_position_in_threadgroup().x != 1
+            if thread_position_in_threadgroup().x != 1 && idx <= length(buf)
                 @inbounds buf[idx] = 1
             end
 
             threadgroup_barrier(Metal.MemoryFlagThreadGroup)
 
-            if thread_position_in_threadgroup().x == 1
+            if thread_position_in_threadgroup().x == 1 && idx <= length(buf)
                 for i in 2:threads_per_threadgroup().x
                     @inbounds buf[idx] += buf[i]
                 end
@@ -31,9 +38,16 @@
             return nothing
         end
 
-        buf = Metal.zeros(Int, 1000)
-        @metal threads=length(buf) barrier_test_kernel(buf)
-        @test Array(buf)[1] == 999
+        n = 1000
+        buf = Metal.zeros(Int, n)
+
+        barrier_test = @metal launch=false barrier_test_kernel(buf)
+        threads = min(n, barrier_test.pipeline.maxTotalThreadsPerThreadgroup)
+        groups = cld(length(buf), threads)
+
+        barrier_test(buf; threads, groups)
+
+        @test Array(buf)[1] == threads - 1
     end
 
     # TODO: simdgroup barrier test
