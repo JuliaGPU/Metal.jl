@@ -3,32 +3,45 @@ using BenchmarkTools
 
 function kernel_fma(a, b, c, out)
     i = thread_position_in_grid().x
-    a_val = a[i]
-    b_val = b[i]
-    c_val = c[i]
+
+    is_inbounds = i < length(a)
+
+    if is_inbounds
+        a_val = a[i]
+        b_val = b[i]
+        c_val = c[i]
+    else
+        a_val = 0f0
+        b_val = 0f0
+        c_val = 0f0
+    end
 
     for j in 1:99
         a_val = fma(a_val, b_val, c_val)
         b_val = fma(a_val, b_val, c_val)
         c_val = fma(a_val, b_val, c_val)
     end
-    out[i] = fma(a_val, b_val, c_val)
+
+    if is_inbounds
+        out[i] = fma(a_val, b_val, c_val)
+    end
 
     return
 end
 
-"Return calculated TFLOPS of Metal device"
+# Return calculated TFLOPS of Metal device
 function peakflops(len=1024*1024*100)
     a = MtlArray(rand(Float32, len))
     b = MtlArray(rand(Float32, len))
     c = MtlArray(rand(Float32, len))
     out = similar(a)
 
-    threads = 1024
+    fma_kernel = @metal launch=false kernel_fma(a, b, c, out)
+    threads = fma_kernel.pipeline.maxTotalThreadsPerThreadgroup
     grid = cld(len, threads)
 
     bench = @benchmark Metal.@sync begin
-        @metal threads=$threads groups=$grid kernel_fma($a, $b, $c, $out)
+        $fma_kernel($a, $b, $c, $out; threads=$threads, groups=$grid)
     end
 
     # Cleanup memory
