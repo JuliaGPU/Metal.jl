@@ -134,14 +134,14 @@ function (obj::KA.Kernel{MetalBackend})(args...; ndrange=nothing, workgroupsize=
     return nothing
 end
 
-KI.kiconvert(::MetalBackend, arg) = mtlconvert(arg)
+KI.argconvert(::MetalBackend, arg) = mtlconvert(arg)
 
 function KI.kifunction(::MetalBackend, f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
     kern = mtlfunction(f, tt; name, kwargs...)
-    KI.KIKernel{MetalBackend, typeof(kern)}(MetalBackend(), kern)
+    KI.Kernel{MetalBackend, typeof(kern)}(MetalBackend(), kern)
 end
 
-function (obj::KI.KIKernel{MetalBackend})(args...; numworkgroups=nothing, workgroupsize=nothing)
+function (obj::KI.Kernel{MetalBackend})(args...; numworkgroups=nothing, workgroupsize=nothing)
     threadsPerThreadgroup = isnothing(workgroupsize) ? 1 : workgroupsize
     threadgroupsPerGrid = isnothing(numworkgroups) ? 1 : numworkgroups
 
@@ -149,7 +149,7 @@ function (obj::KI.KIKernel{MetalBackend})(args...; numworkgroups=nothing, workgr
 end
 
 
-function KI.kernel_max_work_group_size(::MetalBackend, kikern::KI.KIKernel{<:MetalBackend}; max_work_items::Int=typemax(Int))::Int
+function KI.kernel_max_work_group_size(kikern::KI.Kernel{<:MetalBackend}; max_work_items::Int=typemax(Int))::Int
     Int(min(kikern.kern.pipeline.maxTotalThreadsPerThreadgroup, max_work_items))
 end
 function KI.max_work_group_size(::MetalBackend)::Int

@@ -232,7 +232,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # threads in a group work together to reduce values across the reduction dimensions;
     # we want as many as possible to improve algorithm efficiency and execution occupancy.
     function compute_threads(kern)
-        max_threads = KI.kernel_max_work_group_size(backend, kern)
+        max_threads = KI.kernel_max_work_group_size(kern)
         wanted_threads = shuffle ? nextwarp(kern.kern.pipeline, length(Rreduce)) : length(Rreduce)
         if wanted_threads > max_threads
             shuffle ? prevwarp(kern.kern.pipeline, max_threads) : max_threads
