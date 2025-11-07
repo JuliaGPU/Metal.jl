@@ -4,7 +4,7 @@ using ..Metal
 using ..Metal: @device_override, DefaultStorageMode, SharedStorage, mtlfunction, mtlconvert
 
 import KernelAbstractions as KA
-import KernelAbstractions: KernelIntrinsics as KI
+import KernelAbstractions: KI
 
 using StaticArrays: MArray
 
@@ -136,7 +136,7 @@ end
 
 KI.argconvert(::MetalBackend, arg) = mtlconvert(arg)
 
-function KI.gpufunction(::MetalBackend, f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
+function KI.kernel_function(::MetalBackend, f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
     kern = mtlfunction(f, tt; name, kwargs...)
     KI.Kernel{MetalBackend, typeof(kern)}(MetalBackend(), kern)
 end

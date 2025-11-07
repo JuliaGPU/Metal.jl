@@ -11,8 +11,7 @@ using Preferences: @load_preference, load_preference
 using ExprTools: splitdef, combinedef
 using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
 import ObjectiveC: is_macos
-import KernelAbstractions
-import KernelAbstractions: KernelIntrinsics as KI
+import KernelAbstractions: KernelAbstractions, KI
 using ScopedValues
 
 include("version.jl")
