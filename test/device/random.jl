@@ -125,3 +125,24 @@ end
         @test Array(a) == Array(b)
     end
 end
+
+@testset "rand(::AbstractRange{$T}), seed $seed" for T in (Int32, Int64, UInt32, UInt64), seed in (nothing, #=missing,=# 1234)
+    function kernel(A::AbstractArray{T}, seed) where {T}
+        apply_seed(seed)
+        tid = thread_position_in_grid().x
+        A[tid] = rand(T(10):T(20))
+        return
+    end
+
+    a = Metal.zeros(T, n)
+    b = Metal.zeros(T, n)
+
+    @metal threads=n kernel(a, seed)
+    @metal threads=n kernel(b, seed)
+
+    if seed === nothing || seed === missing
+        @test Array(a) != Array(b)
+    else
+        @test Array(a) == Array(b)
+    end
+end
