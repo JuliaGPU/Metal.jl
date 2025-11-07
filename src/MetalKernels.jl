@@ -136,7 +136,7 @@ end
 
 KI.argconvert(::MetalBackend, arg) = mtlconvert(arg)
 
-function KI.kifunction(::MetalBackend, f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
+function KI.gpufunction(::MetalBackend, f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
     kern = mtlfunction(f, tt; name, kwargs...)
     KI.Kernel{MetalBackend, typeof(kern)}(MetalBackend(), kern)
 end
