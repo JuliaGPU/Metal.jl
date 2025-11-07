@@ -196,7 +196,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
 
     # If `Rother` is large enough, then a naive loop is more efficient than partial reductions.
     if length(Rother) >= serial_mapreduce_threshold(device(R))
-        kernel = KI.@kikernel backend launch = false serial_mapreduce_kernel(f, op, init, Val(Rreduce), Val(Rother), R, A)
+        kernel = KI.@kernel backend launch = false serial_mapreduce_kernel(f, op, init, Val(Rreduce), Val(Rother), R, A)
         threads = min(length(Rother), kernel.kern.pipeline.maxTotalThreadsPerThreadgroup)
         groups = cld(length(Rother), threads)
         kernel(f, op, init, Val(Rreduce), Val(Rother), R, A; workgroupsize = threads, numworkgroups = groups)
@@ -224,7 +224,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # we might not be able to launch all those threads to reduce each slice in one go.
     # that's why each threads also loops across their inputs, processing multiple values
     # so that we can span the entire reduction dimension using a single item group.
-    kernel = KI.@kikernel backend launch = false partial_mapreduce_device(f, op, init, Val(maxthreads), Val(Rreduce), Val(Rother),
+    kernel = KI.@kernel backend launch = false partial_mapreduce_device(f, op, init, Val(maxthreads), Val(Rreduce), Val(Rother),
                                                           Val(UInt64(length(Rother))), Val(grain), Val(shuffle), R, A)
 
     # how many threads do we want?
@@ -268,7 +268,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
         # NOTE: we can't use the previously-compiled kernel, or its launch configuration,
         #       since the type of `partial` might not match the original output container
         #       (e.g. if that was a view).
-        partial_kernel = KI.@kikernel backend launch = false partial_mapreduce_device(
+        partial_kernel = KI.@kernel backend launch = false partial_mapreduce_device(
                                     f, op, init, Val(threads), Val(Rreduce),
                                     Val(Rother), Val(UInt64(length(Rother))),
                                     Val(grain), Val(shuffle), partial, A)
