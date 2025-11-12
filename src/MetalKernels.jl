@@ -141,11 +141,10 @@ function KI.kernel_function(::MetalBackend, f::F, tt::TT=Tuple{}; name=nothing, 
     KI.Kernel{MetalBackend, typeof(kern)}(MetalBackend(), kern)
 end
 
-function (obj::KI.Kernel{MetalBackend})(args...; numworkgroups=nothing, workgroupsize=nothing)
-    threadsPerThreadgroup = isnothing(workgroupsize) ? 1 : workgroupsize
-    threadgroupsPerGrid = isnothing(numworkgroups) ? 1 : numworkgroups
+function (obj::KI.Kernel{MetalBackend})(args...; numworkgroups=1, workgroupsize=1)
+    KI.check_launch_args(numworkgroups, workgroupsize)
 
-    obj.kern(args...; threads=threadsPerThreadgroup, groups=threadgroupsPerGrid)
+    obj.kern(args...; threads=workgroupsize, groups=numworkgroups)
 end
 
 
