@@ -28,12 +28,7 @@ jobs:
           - 'ubuntu-latest'
           - 'macOS-15-intel'
           - 'windows-latest'
-        arch:
-          - x64
-        include:
-          - os: macOS-latest
-            version: '1'
-            arch: aarch64
+          - 'macOS-latest'
 
     steps:
       - uses: actions/checkout@v5
