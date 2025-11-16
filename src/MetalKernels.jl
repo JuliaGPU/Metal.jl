@@ -195,7 +195,7 @@ end
 end
 
 @device_override @inline function KA.__print(args...)
-    # TODO
+    Metal._mtlprint(args...)
 end
 ## COV_EXCL_STOP
 
