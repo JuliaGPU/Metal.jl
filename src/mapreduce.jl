@@ -20,7 +20,7 @@ end
 @inline function reduce_group(op, val::T, neutral, shuffle::Val{true}, ::Val{maxthreads}) where {T, maxthreads}
     # shared mem for partial sums
     assume(threads_per_simdgroup() == 32)
-    shared = MtlThreadGroupArray(T, 32)
+    shared = KI.localmemory(T, 32)
 
     wid  = simdgroup_index_in_threadgroup()
     lane = thread_index_in_simdgroup()
@@ -34,10 +34,10 @@ end
     end
 
     # wait for all partial reductions
-    threadgroup_barrier(MemoryFlagThreadGroup)
+    KI.barrier()
 
     # read from shared memory only if that warp existed
-    val = if thread_index_in_threadgroup() <= fld1(threads_per_threadgroup().x, 32)
+    val = if KI.get_local_id().x <= fld1(KI.get_local_size().x, 32)
         @inbounds shared[lane]
     else
         neutral
@@ -52,17 +52,17 @@ end
 
 # Reduce a value across a group, using local memory for communication
 @inline function reduce_group(op, val::T, neutral, shuffle::Val{false}, ::Val{maxthreads}) where {T, maxthreads}
-    threads = threads_per_threadgroup().x
-    thread = thread_position_in_threadgroup().x
+    threads = KI.get_local_size().x
+    thread = KI.get_local_id().x
 
     # local mem for a complete reduction
-    shared = MtlThreadGroupArray(T, (maxthreads,))
+    shared = KI.localmemory(T, (maxthreads,))
     @inbounds shared[thread] = val
 
     # perform a reduction
     d = 1
     while d < threads
-        threadgroup_barrier(MemoryFlagThreadGroup)
+        KI.barrier()
         index = 2 * d * (thread-1) + 1
         @inbounds if index <= threads
             other_val = if index + d <= threads
@@ -94,9 +94,9 @@ function partial_mapreduce_device(f, op, neutral, maxthreads, ::Val{Rreduce},
     ::Val{Rother}, ::Val{Rlen}, ::Val{grain}, shuffle, R, As...) where {Rreduce, Rother, Rlen, grain}
     # decompose the 1D hardware indices into separate ones for reduction (across items
     # and possibly groups if it doesn't fit) and other elements (remaining groups)
-    localIdx_reduce = thread_position_in_threadgroup().x
-    localDim_reduce = threads_per_threadgroup().x * grain
-    groupIdx_reduce, groupIdx_other = fldmod1(threadgroup_position_in_grid().x, Rlen)
+    localIdx_reduce = KI.get_local_id().x
+    localDim_reduce = KI.get_local_size().x * grain
+    groupIdx_reduce, groupIdx_other = fldmod1(KI.get_group_id().x, Rlen)
 
     # group-based indexing into the values outside of the reduction dimension
     # (that means we can safely synchronize items within this group)
@@ -141,7 +141,7 @@ function partial_mapreduce_device(f, op, neutral, maxthreads, ::Val{Rreduce},
 end
 
 function serial_mapreduce_kernel(f, op, neutral, ::Val{Rreduce}, ::Val{Rother}, R, As) where {Rreduce, Rother}
-    grid_idx = thread_position_in_grid().x
+    grid_idx = KI.get_global_id().x
 
     @inbounds if grid_idx <= length(Rother)
         Iother = Rother[grid_idx]
@@ -166,11 +166,12 @@ end
 
 ## COV_EXCL_STOP
 
-serial_mapreduce_threshold(dev) = dev.maxThreadsPerThreadgroup.width * num_gpu_cores()
+serial_mapreduce_threshold(dev) = KI.max_work_group_size(MetalBackend()) * KI.multiprocessor_count(MetalBackend())
 
 function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
                                  A::Union{AbstractArray,Broadcast.Broadcasted};
                                  init=nothing) where {F, OP, T}
+    backend = MetalBackend()
     Base.check_reducedims(R, A)
     length(A) == 0 && return R # isempty(::Broadcasted) iterates
 
@@ -195,10 +196,10 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
 
     # If `Rother` is large enough, then a naive loop is more efficient than partial reductions.
     if length(Rother) >= serial_mapreduce_threshold(device(R))
-        kernel = @metal launch=false serial_mapreduce_kernel(f, op, init, Val(Rreduce), Val(Rother), R, A)
-        threads = min(length(Rother), kernel.pipeline.maxTotalThreadsPerThreadgroup)
+        kernel = KI.@kernel backend launch = false serial_mapreduce_kernel(f, op, init, Val(Rreduce), Val(Rother), R, A)
+        threads = min(length(Rother), kernel.kern.pipeline.maxTotalThreadsPerThreadgroup)
         groups = cld(length(Rother), threads)
-        kernel(f, op, init, Val(Rreduce), Val(Rother), R, A; threads, groups)
+        kernel(f, op, init, Val(Rreduce), Val(Rother), R, A; workgroupsize = threads, numworkgroups = groups)
         return R
     end
 
@@ -223,7 +224,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # we might not be able to launch all those threads to reduce each slice in one go.
     # that's why each threads also loops across their inputs, processing multiple values
     # so that we can span the entire reduction dimension using a single item group.
-    kernel = @metal launch=false partial_mapreduce_device(f, op, init, Val(maxthreads), Val(Rreduce), Val(Rother),
+    kernel = KI.@kernel backend launch = false partial_mapreduce_device(f, op, init, Val(maxthreads), Val(Rreduce), Val(Rother),
                                                           Val(UInt64(length(Rother))), Val(grain), Val(shuffle), R, A)
 
     # how many threads do we want?
@@ -231,10 +232,10 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # threads in a group work together to reduce values across the reduction dimensions;
     # we want as many as possible to improve algorithm efficiency and execution occupancy.
     function compute_threads(kern)
-        max_threads = kern.pipeline.maxTotalThreadsPerThreadgroup
-        wanted_threads = shuffle ? nextwarp(kern.pipeline, length(Rreduce)) : length(Rreduce)
+        max_threads = KI.kernel_max_work_group_size(kern)
+        wanted_threads = shuffle ? nextwarp(kern.kern.pipeline, length(Rreduce)) : length(Rreduce)
         if wanted_threads > max_threads
-            shuffle ? prevwarp(kern.pipeline, max_threads) : max_threads
+            shuffle ? prevwarp(kern.kern.pipeline, max_threads) : max_threads
         else
             wanted_threads
         end
@@ -259,7 +260,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
         # we can cover the dimensions to reduce using a single group
         kernel(f, op, init, Val(maxthreads), Val(Rreduce), Val(Rother),
                Val(UInt64(length(Rother))), Val(grain), Val(shuffle), R, A;
-               threads, groups)
+               workgroupsize = threads, numworkgroups = groups)
     else
         # temporary empty array whose type will match the final partial array
 	    partial = similar(R, ntuple(_ -> 0, Val(ndims(R)+1)))
@@ -267,7 +268,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
         # NOTE: we can't use the previously-compiled kernel, or its launch configuration,
         #       since the type of `partial` might not match the original output container
         #       (e.g. if that was a view).
-        partial_kernel = @metal launch=false partial_mapreduce_device(
+        partial_kernel = KI.@kernel backend launch = false partial_mapreduce_device(
                                     f, op, init, Val(threads), Val(Rreduce),
                                     Val(Rother), Val(UInt64(length(Rother))),
                                     Val(grain), Val(shuffle), partial, A)
@@ -286,7 +287,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
         partial_kernel(f, op, init, Val(threads), Val(Rreduce),
                         Val(Rother), Val(UInt64(length(Rother))),
                         Val(grain), Val(shuffle), partial, A;
-                        groups=partial_groups, threads=partial_threads)
+                        numworkgroups = partial_groups, workgroupsize = partial_threads)
 
         GPUArrays.mapreducedim!(identity, op, R, partial; init=init)
     end
