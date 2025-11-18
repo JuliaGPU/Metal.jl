@@ -14,6 +14,7 @@ using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
 import ObjectiveC: is_macos
 import KernelAbstractions
 import KernelInterface
+const KI = KernelInterface
 using BFloat16s: BFloat16
 using ScopedValues
 
