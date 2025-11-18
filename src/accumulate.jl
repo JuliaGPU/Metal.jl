@@ -2,13 +2,13 @@
 function partial_scan(op::Function, output::AbstractArray{T}, input::AbstractArray,
                       Rdim, Rpre, Rpost, Rother, neutral, init,
                       ::Val{maxthreads}, ::Val{inclusive}=Val(true)) where {T, maxthreads, inclusive}
-    threads = threads_per_threadgroup_3d().x
-    thread = thread_position_in_threadgroup_3d().x
+    threads = UInt32(KI.get_local_size().x)
+    thread = UInt32(KI.get_local_id().x)
 
-    temp = MtlThreadGroupArray(T, (Int32(2) * maxthreads,))
+    temp = KI.localmemory(T, (UInt32(2) * maxthreads,))
 
-    i = (threadgroup_position_in_grid_3d().x - Int32(1)) * threads_per_threadgroup_3d().x + thread_position_in_threadgroup_3d().x
-    j = (threadgroup_position_in_grid_3d().z - Int32(1)) * threadgroups_per_grid_3d().y + threadgroup_position_in_grid_3d().y
+    i = UInt32((UInt32(KI.get_group_id().x) - UInt32(1)) * UInt32(KI.get_local_size().x) + UInt32(KI.get_local_id().x))
+    j = UInt32((UInt32(KI.get_group_id().z) - UInt32(1)) * UInt32(KI.get_num_groups().y) + UInt32(KI.get_group_id().y))
 
     if j > length(Rother)
         return
@@ -29,7 +29,7 @@ function partial_scan(op::Function, output::AbstractArray{T}, input::AbstractArr
     offset = one(thread)
     d = threads >> 0x1
     while d > zero(d)
-        threadgroup_barrier(MemoryFlagThreadGroup)
+        KI.barrier()
         @inbounds if thread <= d
             ai = offset * (thread << 0x1 - 0x1)
             bi = offset * (thread << 0x1)
@@ -46,7 +46,7 @@ function partial_scan(op::Function, output::AbstractArray{T}, input::AbstractArr
     d = one(thread)
     while d < threads
         offset >>= 0x1
-        threadgroup_barrier(MemoryFlagThreadGroup)
+        KI.barrier()
         @inbounds if thread <= d
             ai = offset * (thread << 0x1 - 0x1)
             bi = offset * (thread << 0x1)
@@ -58,7 +58,7 @@ function partial_scan(op::Function, output::AbstractArray{T}, input::AbstractArr
         d <<= 0x1
     end
 
-    threadgroup_barrier(MemoryFlagThreadGroup)
+    KI.barrier()
 
     @inbounds if i <= length(Rdim)
         val = if inclusive
@@ -76,10 +76,10 @@ function partial_scan(op::Function, output::AbstractArray{T}, input::AbstractArr
 end
 
 function aggregate_partial_scan(op::Function, output::AbstractArray, aggregates::AbstractArray, Rdim, Rpre, Rpost, Rother, init)
-    block = threadgroup_position_in_grid_3d().x
+    block = UInt32(KI.get_group_id().x)
 
-    i = (threadgroup_position_in_grid_3d().x - Int32(1)) * threads_per_threadgroup_3d().x + thread_position_in_threadgroup_3d().x
-    j = (threadgroup_position_in_grid_3d().z - Int32(1)) * threadgroups_per_grid_3d().y + threadgroup_position_in_grid_3d().y
+    i = UInt32((UInt32(KI.get_group_id().x) - UInt32(1)) * UInt32(KI.get_local_size().x) + UInt32(KI.get_local_id().x))
+    j = UInt32((UInt32(KI.get_group_id().z) - UInt32(1)) * UInt32(KI.get_num_groups().y) + UInt32(KI.get_group_id().y))
 
     @inbounds if i <= length(Rdim) && j <= length(Rother)
         I = Rother[j]
