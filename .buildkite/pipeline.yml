@@ -31,10 +31,14 @@ steps:
               - "1.10"
               - "1.11"
               - "1.12"
+              - "1.13-nightly"
               - "nightly"
           adjustments:
             - with:
                 julia: "nightly"
+              soft_fail: true
+            - with:
+                julia: "1.13-nightly"
               soft_fail: true
 
   # special tests
