@@ -220,7 +220,7 @@ end
 @testset "Seeding $L" for (f,T,L) in [(Metal.rand,UInt32,"Uniform Integers MPS"),
                                         (Metal.rand,Float32,"Uniform Float32 MPS"),
                                         (Metal.randn,Float32,"Normal Float32 MPS"),
-                                        (Metal.randn,Float16,"Float16 GPUArrays")]
+                                        (Metal.randn,Float16,"Float16 Native")]
     @testset "$d" for d in (1, 3, (3, 3, 3), 16, (16, 16), (16, 16, 16), (1000,), (1000,1000))
         Metal.seed!(1)
         a = f(T, d)
@@ -359,4 +359,3 @@ end
     rand!(rng, c)
     randn!(rng, c)
 end
-
