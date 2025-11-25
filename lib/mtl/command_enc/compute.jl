@@ -25,6 +25,12 @@ function set_buffer!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, offset, inde
                                              atIndex:(index-1)::NSUInteger]::Nothing
 end
 
+function set_bytes!(cce::MTLComputeCommandEncoder, bytes, index)
+    @objc [cce::id{MTLComputeCommandEncoder} setBytes:bytes::Ptr{Cvoid}
+                                             length:(length(bytes)*sizeof(eltype(bytes)))::NSUInteger
+                                             atIndex:(index-1)::NSUInteger]::Nothing
+end
+
 function dispatchThreadgroups!(cce::MTLComputeCommandEncoder, threadgroupsPerGrid, threadsPerThreadgroup)
     @objc [cce::id{MTLComputeCommandEncoder} dispatchThreadgroups:threadgroupsPerGrid::MTLSize
                                              threadsPerThreadgroup:threadsPerThreadgroup::MTLSize]::Nothing
