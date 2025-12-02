@@ -30,12 +30,12 @@ using Metal
         cpu_data = randn(ComplexF32, n)
 
         # Put in Shared storage first
-        gpu_shared = MtlArray{ComplexF32,1,Metal.SharedStorage}(undef, n)
+        gpu_shared = MtlArray{ComplexF32, 1, Metal.SharedStorage}(undef, n)
         copyto!(gpu_shared, cpu_data)
         Metal.synchronize()
 
         # Copy to Private storage
-        gpu_private = MtlArray{ComplexF32,1,Metal.PrivateStorage}(undef, n)
+        gpu_private = MtlArray{ComplexF32, 1, Metal.PrivateStorage}(undef, n)
         copyto!(gpu_private, gpu_shared)
         Metal.synchronize()
 

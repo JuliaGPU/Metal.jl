@@ -103,8 +103,10 @@ const MAX_BLIT_SIZE = Int(2^31 - 1)  # Just under 2GB per blit operation
             chunk_size = min(remaining, MAX_BLIT_SIZE)
             cmdbuf = MTLCommandBuffer(queue)
             MTLBlitCommandEncoder(cmdbuf) do enc
-                append_copy!(enc, dst.buffer, dst.offset + offset,
-                            src.buffer, src.offset + offset, chunk_size)
+                append_copy!(
+                    enc, dst.buffer, dst.offset + offset,
+                    src.buffer, src.offset + offset, chunk_size
+                )
             end
             commit!(cmdbuf)
             wait_completed(cmdbuf)  # Must wait for each chunk to complete
