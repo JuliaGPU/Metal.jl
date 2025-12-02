@@ -92,6 +92,11 @@ if filter_tests!(testsuite, args)
     if get(ENV, "BUILDKITE_PIPELINE_NAME", "") != "Metal.jl"
         delete!(testsuite, "scripts")
     end
+
+    # only run large copy test on machines with >12GiB memory
+    if Sys.total_memory() < 12 * 2^30
+        delete!(testsuite, "largecopy")
+    end
 end
 
 # workers to run tests on
