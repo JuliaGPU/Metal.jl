@@ -75,17 +75,42 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPtr{T}, N::Int
 end
 
 # GPU -> GPU
+# Note: Metal's blit encoder has issues with copies >= 2^31 bytes, so we chunk large copies
+const MAX_BLIT_SIZE = Int(2^31 - 1)  # Just under 2GB per blit operation
+
 @autoreleasepool function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
                                               src::MtlPtr{T}, N::Integer;
                                               queue::MTLCommandQueue=global_queue(dev),
                                               async::Bool=false) where T
-    if N > 0
+    total_bytes = N * sizeof(T)
+    if total_bytes <= 0
+        return dst
+    end
+
+    if total_bytes <= MAX_BLIT_SIZE
+        # Single blit for small copies
         cmdbuf = MTLCommandBuffer(queue)
         MTLBlitCommandEncoder(cmdbuf) do enc
-            append_copy!(enc, dst.buffer, dst.offset, src.buffer, src.offset, N * sizeof(T))
+            append_copy!(enc, dst.buffer, dst.offset, src.buffer, src.offset, total_bytes)
         end
         commit!(cmdbuf)
         async || wait_completed(cmdbuf)
+    else
+        # Chunked blit for large copies to work around Metal's 32-bit size limitation
+        remaining = total_bytes
+        offset = 0
+        while remaining > 0
+            chunk_size = min(remaining, MAX_BLIT_SIZE)
+            cmdbuf = MTLCommandBuffer(queue)
+            MTLBlitCommandEncoder(cmdbuf) do enc
+                append_copy!(enc, dst.buffer, dst.offset + offset,
+                            src.buffer, src.offset + offset, chunk_size)
+            end
+            commit!(cmdbuf)
+            wait_completed(cmdbuf)  # Must wait for each chunk to complete
+            offset += chunk_size
+            remaining -= chunk_size
+        end
     end
     return dst
 end
