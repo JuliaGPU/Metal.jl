@@ -157,6 +157,26 @@ if MPS.is_supported(device())
         @test_throws ArgumentError plan_fft(x, 3)  # Only 2 dimensions
         @test_throws ArgumentError plan_fft(x, 0)  # Invalid dimension
     end
+
+    @testset "1D FFT" begin
+        x_cpu = randn(ComplexF32, 64)
+        x_gpu = MtlArray(x_cpu)
+
+        y_cpu = fft(x_cpu)
+        y_gpu = Array(fft(x_gpu))
+
+        @test size(y_gpu) == (64,)
+        @test isapprox(y_cpu, y_gpu, rtol=1e-4)
+    end
+
+    @testset "1D ifft roundtrip" begin
+        x_cpu = randn(ComplexF32, 128)
+        x_gpu = MtlArray(x_cpu)
+
+        y_gpu = ifft(fft(x_gpu))
+
+        @test isapprox(x_cpu, Array(y_gpu), rtol=1e-4)
+    end
 end
 
 # ============================================================================
@@ -253,13 +273,34 @@ end
     end
 
     @testset "type restrictions" begin
-        # Float64 should error
-        x64 = MtlArray(randn(Float64, 32, 32))
-        @test_throws ArgumentError plan_rfft(x64)
-
         # Float32 should work
         x32 = MtlArray(randn(Float32, 32, 32))
         @test plan_rfft(x32) isa MPSGraphs.MtlRFFTPlan
+
+        # Float16 should also work
+        x16 = MtlArray(Float16.(randn(Float32, 32, 32)))
+        @test plan_rfft(x16) isa MPSGraphs.MtlRFFTPlan
+    end
+
+    @testset "1D rfft" begin
+        x_cpu = randn(Float32, 64)
+        x_gpu = MtlArray(x_cpu)
+
+        y_cpu = rfft(x_cpu)
+        y_gpu = Array(rfft(x_gpu))
+
+        @test size(y_gpu) == (33,)  # n÷2+1
+        @test isapprox(y_cpu, y_gpu, rtol=1e-4)
+    end
+
+    @testset "1D rfft -> irfft roundtrip" begin
+        x_cpu = randn(Float32, 128)
+        x_gpu = MtlArray(x_cpu)
+
+        y_gpu = rfft(x_gpu)
+        z_gpu = irfft(y_gpu, 128)
+
+        @test isapprox(x_cpu, Array(z_gpu), rtol=1e-4)
     end
 end
 
