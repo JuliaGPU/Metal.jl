@@ -1,13 +1,6 @@
 using FFTW
 using AbstractFFTs
 using LinearAlgebra: mul!
-# Alias for GPU fft with shift support
-const mtl_fft = Metal.MPSGraphs.fft
-const mtl_ifft = Metal.MPSGraphs.ifft
-const mtl_bfft = Metal.MPSGraphs.bfft
-const mtl_fft! = Metal.MPSGraphs.fft!
-const mtl_ifft! = Metal.MPSGraphs.ifft!
-const mtl_bfft! = Metal.MPSGraphs.bfft!
 
 if MPS.is_supported(device())
 
@@ -383,7 +376,7 @@ if MPS.is_supported(device())
             x_gpu = MtlArray(x_cpu)
 
             expected = fftshift(fft(x_cpu))
-            result_gpu = Array(mtl_fft(x_gpu; shift = true))
+            result_gpu = Array(fft(x_gpu; shift = true))
 
             @test isapprox(expected, result_gpu, rtol = 1.0e-4)
 
@@ -392,7 +385,7 @@ if MPS.is_supported(device())
             x_gpu_2d = MtlArray(x_cpu_2d)
 
             expected_2d = fftshift(fft(x_cpu_2d))
-            result_gpu_2d = Array(mtl_fft(x_gpu_2d; shift = true))
+            result_gpu_2d = Array(fft(x_gpu_2d; shift = true))
 
             @test isapprox(expected_2d, result_gpu_2d, rtol = 1.0e-4)
         end
@@ -403,12 +396,12 @@ if MPS.is_supported(device())
 
             # FFT along axis 1 with shift
             expected_1 = fftshift(fft(x_cpu, 1), 1)
-            result_1 = Array(mtl_fft(x_gpu, 1; shift = true))
+            result_1 = Array(fft(x_gpu, 1; shift = true))
             @test isapprox(expected_1, result_1, rtol = 1.0e-4)
 
             # FFT along axis 2 with shift
             expected_2 = fftshift(fft(x_cpu, 2), 2)
-            result_2 = Array(mtl_fft(x_gpu, 2; shift = true))
+            result_2 = Array(fft(x_gpu, 2; shift = true))
             @test isapprox(expected_2, result_2, rtol = 1.0e-4)
         end
 
@@ -419,7 +412,7 @@ if MPS.is_supported(device())
 
             # ifft with shift should apply ifftshift before the transform
             expected = ifft(ifftshift(x_cpu))
-            result_gpu = Array(mtl_ifft(x_gpu; shift = true))
+            result_gpu = Array(ifft(x_gpu; shift = true))
 
             @test isapprox(expected, result_gpu, rtol = 1.0e-4)
         end
@@ -429,10 +422,10 @@ if MPS.is_supported(device())
             x_gpu = MtlArray(x_cpu)
 
             # Forward FFT with shift
-            y_gpu = mtl_fft(x_gpu; shift = true)
+            y_gpu = fft(x_gpu; shift = true)
 
             # Inverse FFT with shift should recover the original
-            z_gpu = mtl_ifft(y_gpu; shift = true)
+            z_gpu = ifft(y_gpu; shift = true)
 
             @test isapprox(x_cpu, Array(z_gpu), rtol = 1.0e-4)
         end
@@ -443,7 +436,7 @@ if MPS.is_supported(device())
 
             # shift=false should give same result as default
             result_default = Array(fft(x_gpu))
-            result_explicit = Array(mtl_fft(x_gpu; shift = false))
+            result_explicit = Array(fft(x_gpu; shift = false))
 
             @test isapprox(result_default, result_explicit, rtol = 1.0e-6)
         end
@@ -453,7 +446,7 @@ if MPS.is_supported(device())
             x_gpu = MtlArray(copy(x_cpu))
 
             expected = fftshift(fft(x_cpu))
-            mtl_fft!(x_gpu; shift = true)
+            fft!(x_gpu; shift = true)
 
             @test isapprox(expected, Array(x_gpu), rtol = 1.0e-4)
         end
@@ -463,7 +456,7 @@ if MPS.is_supported(device())
             x_gpu = MtlArray(x_cpu)
 
             expected = bfft(ifftshift(x_cpu))
-            result_gpu = Array(mtl_bfft(x_gpu; shift = true))
+            result_gpu = Array(bfft(x_gpu; shift = true))
 
             @test isapprox(expected, result_gpu, rtol = 1.0e-4)
         end
@@ -474,7 +467,7 @@ if MPS.is_supported(device())
             x_gpu = MtlArray(x_cpu)
 
             expected = fftshift(fft(x_cpu))
-            result_gpu = Array(mtl_fft(x_gpu; shift = true))
+            result_gpu = Array(fft(x_gpu; shift = true))
 
             @test isapprox(expected, result_gpu, rtol = 1.0e-4)
         end
@@ -502,7 +495,7 @@ if MPS.is_supported(device())
             x_gpu = MtlArray(x_cpu)
 
             expected = fftshift(fft(x_cpu))
-            result_gpu = Array(mtl_fft(x_gpu; shift = true))
+            result_gpu = Array(fft(x_gpu; shift = true))
 
             @test isapprox(expected, result_gpu, rtol = 1.0e-4)
         end
@@ -513,7 +506,7 @@ if MPS.is_supported(device())
 
             # Lower tolerance for Float16
             expected = fftshift(fft(ComplexF32.(x_cpu)))
-            result_gpu = ComplexF32.(Array(mtl_fft(x_gpu; shift = true)))
+            result_gpu = ComplexF32.(Array(fft(x_gpu; shift = true)))
 
             @test isapprox(expected, result_gpu, rtol = 1.0e-2)
         end
