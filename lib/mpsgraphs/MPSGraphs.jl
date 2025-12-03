@@ -47,5 +47,6 @@ include("operations.jl")
 include("random.jl")
 
 include("matmul.jl")
+include("fft.jl")
 
 end
