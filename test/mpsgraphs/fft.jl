@@ -131,13 +131,25 @@ if MPS.is_supported(device())
     end
 
     @testset "type restrictions" begin
-        # ComplexF64 should error
-        x64 = MtlArray(randn(ComplexF64, 32, 32))
-        @test_throws ArgumentError plan_fft(x64)
-
         # ComplexF32 should work
         x32 = MtlArray(randn(ComplexF32, 32, 32))
         @test plan_fft(x32) isa MPSGraphs.MtlFFTPlan
+
+        # ComplexF16 should also work
+        x16 = MtlArray(ComplexF16.(randn(ComplexF32, 32, 32)))
+        @test plan_fft(x16) isa MPSGraphs.MtlFFTPlan
+    end
+
+    @testset "ComplexF16 correctness" begin
+        # ComplexF16 FFT should produce reasonable results
+        x16 = MtlArray(ComplexF16.(randn(ComplexF32, 32, 32)))
+        x32 = MtlArray(ComplexF32.(Array(x16)))
+
+        y16 = Array(fft(x16))
+        y32 = Array(fft(x32))
+
+        # Float16 has ~3 decimal digits precision, so allow larger tolerance
+        @test isapprox(ComplexF32.(y16), y32, rtol=0.1)
     end
 
     @testset "invalid dimension" begin
