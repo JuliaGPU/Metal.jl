@@ -766,11 +766,8 @@ end
 # Convenience Functions
 # ============================================================================
 
-# AbstractFFTs provides default implementations, but we override them to support
-# the shift keyword argument for fused fftshift operations.
-
-# Export our convenience functions (these override AbstractFFTs versions for MtlArray)
-export fft, ifft, bfft, fft!, ifft!, bfft!
+# Extend AbstractFFTs functions with shift keyword for fused fftshift support.
+# This allows users to call fft(x; shift=true) directly.
 
 """
     fft(x::MtlArray; shift=false)
@@ -781,11 +778,11 @@ Compute the FFT of a Metal array.
 When `shift=true`, fuses fftshift into the transform, avoiding a separate memory operation.
 This is equivalent to `fftshift(fft(x))` but more efficient.
 """
-function fft(x::MtlArray{T, N}; shift::Bool = false) where {T <: Complex, N}
+function AbstractFFTs.fft(x::MtlArray{T, N}; shift::Bool = false) where {T <: Complex, N}
     return plan_fft(x; shift = shift) * x
 end
 
-function fft(x::MtlArray{T, N}, dims; shift::Bool = false) where {T <: Complex, N}
+function AbstractFFTs.fft(x::MtlArray{T, N}, dims; shift::Bool = false) where {T <: Complex, N}
     return plan_fft(x, dims; shift = shift) * x
 end
 
@@ -798,11 +795,11 @@ Compute the inverse FFT of a Metal array.
 When `shift=true`, fuses ifftshift into the transform (applied before the inverse FFT),
 avoiding a separate memory operation. This is equivalent to `ifft(ifftshift(x))` but more efficient.
 """
-function ifft(x::MtlArray{T, N}; shift::Bool = false) where {T <: Complex, N}
+function AbstractFFTs.ifft(x::MtlArray{T, N}; shift::Bool = false) where {T <: Complex, N}
     return plan_ifft(x; shift = shift) * x
 end
 
-function ifft(x::MtlArray{T, N}, dims; shift::Bool = false) where {T <: Complex, N}
+function AbstractFFTs.ifft(x::MtlArray{T, N}, dims; shift::Bool = false) where {T <: Complex, N}
     return plan_ifft(x, dims; shift = shift) * x
 end
 
@@ -814,11 +811,11 @@ Compute the unnormalized inverse FFT of a Metal array.
 
 When `shift=true`, fuses ifftshift into the transform (applied before the inverse FFT).
 """
-function bfft(x::MtlArray{T, N}; shift::Bool = false) where {T <: Complex, N}
+function AbstractFFTs.bfft(x::MtlArray{T, N}; shift::Bool = false) where {T <: Complex, N}
     return plan_bfft(x; shift = shift) * x
 end
 
-function bfft(x::MtlArray{T, N}, dims; shift::Bool = false) where {T <: Complex, N}
+function AbstractFFTs.bfft(x::MtlArray{T, N}, dims; shift::Bool = false) where {T <: Complex, N}
     return plan_bfft(x, dims; shift = shift) * x
 end
 
@@ -830,11 +827,11 @@ Compute the in-place FFT of a Metal array.
 
 When `shift=true`, fuses fftshift into the transform.
 """
-function fft!(x::MtlArray{T, N}; shift::Bool = false) where {T <: Complex, N}
+function AbstractFFTs.fft!(x::MtlArray{T, N}; shift::Bool = false) where {T <: Complex, N}
     return plan_fft!(x; shift = shift) * x
 end
 
-function fft!(x::MtlArray{T, N}, dims; shift::Bool = false) where {T <: Complex, N}
+function AbstractFFTs.fft!(x::MtlArray{T, N}, dims; shift::Bool = false) where {T <: Complex, N}
     return plan_fft!(x, dims; shift = shift) * x
 end
 
@@ -846,11 +843,11 @@ Compute the in-place inverse FFT of a Metal array.
 
 When `shift=true`, fuses ifftshift into the transform (applied before the inverse FFT).
 """
-function ifft!(x::MtlArray{T, N}; shift::Bool = false) where {T <: Complex, N}
+function AbstractFFTs.ifft!(x::MtlArray{T, N}; shift::Bool = false) where {T <: Complex, N}
     return plan_ifft!(x; shift = shift) * x
 end
 
-function ifft!(x::MtlArray{T, N}, dims; shift::Bool = false) where {T <: Complex, N}
+function AbstractFFTs.ifft!(x::MtlArray{T, N}, dims; shift::Bool = false) where {T <: Complex, N}
     return plan_ifft!(x, dims; shift = shift) * x
 end
 
@@ -862,10 +859,10 @@ Compute the in-place unnormalized inverse FFT of a Metal array.
 
 When `shift=true`, fuses ifftshift into the transform (applied before the inverse FFT).
 """
-function bfft!(x::MtlArray{T, N}; shift::Bool = false) where {T <: Complex, N}
+function AbstractFFTs.bfft!(x::MtlArray{T, N}; shift::Bool = false) where {T <: Complex, N}
     return plan_bfft!(x; shift = shift) * x
 end
 
-function bfft!(x::MtlArray{T, N}, dims; shift::Bool = false) where {T <: Complex, N}
+function AbstractFFTs.bfft!(x::MtlArray{T, N}, dims; shift::Bool = false) where {T <: Complex, N}
     return plan_bfft!(x, dims; shift = shift) * x
 end
