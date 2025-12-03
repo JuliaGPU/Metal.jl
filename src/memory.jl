@@ -75,14 +75,26 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPtr{T}, N::Int
 end
 
 # GPU -> GPU
+# Split up copies > 2GiB to avoid silent failures when copying buffers > 4Gib
+# to fix JuliaGPU/Metal.jl#710. Solution inspired by
+# https://github.com/pytorch/pytorch/pull/126104
 @autoreleasepool function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
                                               src::MtlPtr{T}, N::Integer;
                                               queue::MTLCommandQueue=global_queue(dev),
                                               async::Bool=false) where T
     if N > 0
+        chunk_size = 2^31
         cmdbuf = MTLCommandBuffer(queue)
         MTLBlitCommandEncoder(cmdbuf) do enc
-            append_copy!(enc, dst.buffer, dst.offset, src.buffer, src.offset, N * sizeof(T))
+            nbytes = N * sizeof(T)
+            offset = 0
+
+            while nbytes > 0
+                transfer_bytes = min(nbytes, chunk_size)
+                append_copy!(enc, dst.buffer, dst.offset + offset, src.buffer, src.offset + offset, transfer_bytes)
+                offset += transfer_bytes
+                nbytes -= transfer_bytes
+            end
         end
         commit!(cmdbuf)
         async || wait_completed(cmdbuf)
