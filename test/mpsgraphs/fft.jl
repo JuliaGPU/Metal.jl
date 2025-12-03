@@ -1,5 +1,6 @@
 using FFTW
 using AbstractFFTs
+using LinearAlgebra: mul!
 
 if MPS.is_supported(device())
 
