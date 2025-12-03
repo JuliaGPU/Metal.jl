@@ -180,6 +180,66 @@ if MPS.is_supported(device())
 end
 
 # ============================================================================
+# In-Place FFT Tests
+# ============================================================================
+
+@testset "In-Place FFT" begin
+    @testset "fft! basic" begin
+        x_cpu = randn(ComplexF32, 64, 64)
+        x_gpu = MtlArray(copy(x_cpu))
+
+        plan = plan_fft!(x_gpu)
+        result = plan * x_gpu
+
+        @test result === x_gpu  # Should return the same array
+        @test isapprox(fft(x_cpu), Array(x_gpu), rtol=1e-4)
+    end
+
+    @testset "ifft!" begin
+        x_cpu = randn(ComplexF32, 64, 64)
+        x_gpu = MtlArray(copy(x_cpu))
+
+        plan = plan_ifft!(x_gpu)
+        plan * x_gpu
+
+        @test isapprox(ifft(x_cpu), Array(x_gpu), rtol=1e-4)
+    end
+
+    @testset "bfft!" begin
+        x_cpu = randn(ComplexF32, 64, 64)
+        x_gpu = MtlArray(copy(x_cpu))
+
+        plan = plan_bfft!(x_gpu)
+        plan * x_gpu
+
+        @test isapprox(bfft(x_cpu), Array(x_gpu), rtol=1e-3)
+    end
+
+    @testset "fft! -> ifft! roundtrip" begin
+        x_orig = randn(ComplexF32, 64, 64)
+        x_gpu = MtlArray(copy(x_orig))
+
+        plan_fwd = plan_fft!(x_gpu)
+        plan_fwd * x_gpu
+
+        plan_inv = plan_ifft!(x_gpu)
+        plan_inv * x_gpu
+
+        @test isapprox(x_orig, Array(x_gpu), rtol=1e-4)
+    end
+
+    @testset "single axis fft!" begin
+        x_cpu = randn(ComplexF32, 64, 128)
+        x_gpu = MtlArray(copy(x_cpu))
+
+        plan = plan_fft!(x_gpu, 2)
+        plan * x_gpu
+
+        @test isapprox(fft(x_cpu, 2), Array(x_gpu), rtol=1e-4)
+    end
+end
+
+# ============================================================================
 # Real FFT Tests
 # ============================================================================
 

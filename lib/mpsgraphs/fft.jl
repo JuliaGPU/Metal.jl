@@ -17,6 +17,7 @@ using AbstractFFTs
 import LinearAlgebra: mul!
 
 export plan_fft, plan_ifft, plan_bfft, plan_rfft, plan_irfft, plan_brfft
+export plan_fft!, plan_ifft!, plan_bfft!
 
 # Supported complex types for FFT
 const FFTComplexTypes = Union{ComplexF32, ComplexF16}
@@ -201,6 +202,102 @@ function mul!(y::MtlArray{T,N}, p::MtlFFTPlan{T,K,N}, x::MtlArray{T,N}) where {T
 
     return y
 end
+
+# ============================================================================
+# In-Place FFT Plans
+# ============================================================================
+
+"""
+    MtlFFTInplacePlan{T,K,N} <: AbstractFFTs.Plan{T}
+
+In-place GPU FFT plan. The input array is modified directly.
+
+Use `plan_fft!`, `plan_ifft!`, or `plan_bfft!` to create these plans.
+"""
+struct MtlFFTInplacePlan{T,K<:FFTDirection,N} <: AbstractFFTs.Plan{T}
+    sz::NTuple{N,Int}
+    region::Tuple{Vararg{Int}}
+end
+
+function MtlFFTInplacePlan{T,K}(sz::NTuple{N,Int}, region) where {T,K<:FFTDirection,N}
+    normalized_region = region isa Integer ? (Int(region),) : Tuple(Int.(region))
+    for r in normalized_region
+        1 <= r <= N || throw(ArgumentError("Invalid FFT dimension $r for array with $N dimensions"))
+    end
+    MtlFFTInplacePlan{T,K,N}(sz, normalized_region)
+end
+
+# In-place plan creation
+function AbstractFFTs.plan_fft!(x::MtlArray{T,N}, region; kwargs...) where {T<:Complex,N}
+    _check_fft_type(T)
+    MtlFFTInplacePlan{T,Forward}(size(x), region)
+end
+
+function AbstractFFTs.plan_fft!(x::MtlArray{T,N}; kwargs...) where {T<:Complex,N}
+    plan_fft!(x, 1:N; kwargs...)
+end
+
+function AbstractFFTs.plan_ifft!(x::MtlArray{T,N}, region; kwargs...) where {T<:Complex,N}
+    _check_fft_type(T)
+    MtlFFTInplacePlan{T,Inverse}(size(x), region)
+end
+
+function AbstractFFTs.plan_ifft!(x::MtlArray{T,N}; kwargs...) where {T<:Complex,N}
+    plan_ifft!(x, 1:N; kwargs...)
+end
+
+function AbstractFFTs.plan_bfft!(x::MtlArray{T,N}, region; kwargs...) where {T<:Complex,N}
+    _check_fft_type(T)
+    MtlFFTInplacePlan{T,Backward}(size(x), region)
+end
+
+function AbstractFFTs.plan_bfft!(x::MtlArray{T,N}; kwargs...) where {T<:Complex,N}
+    plan_bfft!(x, 1:N; kwargs...)
+end
+
+# Plan properties for in-place plans
+Base.size(p::MtlFFTInplacePlan) = p.sz
+AbstractFFTs.fftdims(p::MtlFFTInplacePlan) = p.region
+
+# In-place plan execution - modifies input directly
+function Base.:*(p::MtlFFTInplacePlan{T,K,N}, x::MtlArray{T,N}) where {T,K,N}
+    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
+    mul!(x, p, x)
+    return x
+end
+
+function mul!(y::MtlArray{T,N}, p::MtlFFTInplacePlan{T,K,N}, x::MtlArray{T,N}) where {T,K,N}
+    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
+    @assert y === x "In-place plan requires output === input"
+
+    inverse = K <: Inverse || K <: Backward
+    needs_scaling = K <: Inverse
+
+    @autoreleasepool begin
+        _execute_fft_inplace!(x, p.region, inverse)
+    end
+
+    if needs_scaling
+        scale_factor = T(1 / prod(p.sz[d] for d in p.region))
+        x .*= scale_factor
+    end
+
+    return x
+end
+
+"""
+Execute in-place FFT - input buffer is modified directly.
+"""
+function _execute_fft_inplace!(buf::MtlArray{T,N}, region::Tuple, inverse::Bool) where {T,N}
+    for axis in region
+        _execute_single_axis_fft!(buf, axis, inverse)
+    end
+    return buf
+end
+
+# ============================================================================
+# FFT Internal Execution
+# ============================================================================
 
 """
 Internal FFT execution - processes one axis at a time for multi-axis FFT.
