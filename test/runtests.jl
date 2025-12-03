@@ -82,6 +82,11 @@ function test_filter(name)
         return false
     end
 
+    # only run large copy test on machines with >12GiB memory
+    if Sys.total_memory() < 12 * 2^30 && name == "largecopy"
+        return false
+    end
+
     return true
 end
 
