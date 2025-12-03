@@ -1,10 +1,26 @@
 # FFT operations using MPSGraph
 # Implements AbstractFFTs.jl interface for MtlArray
+#
+# Supported types:
+#   - ComplexF32 (Complex{Float32}) - full support
+#   - ComplexF16 (Complex{Float16}) - full support
+#   - Float32 - for rfft/irfft
+#   - Float16 - for rfft/irfft
+#
+# NOT supported (MPSGraph limitation):
+#   - ComplexF64 (Complex{Float64}) - Metal does not support double precision FFT
+#   - Float64 - Metal does not support double precision FFT
+#
+# For double precision, use FFTW.jl on CPU or convert to Float32.
 
 using AbstractFFTs
 import LinearAlgebra: mul!
 
 export plan_fft, plan_ifft, plan_bfft, plan_rfft, plan_irfft, plan_brfft
+
+# Supported complex types for FFT
+const FFTComplexTypes = Union{ComplexF32, ComplexF16}
+const FFTRealTypes = Union{Float32, Float16}
 
 # ============================================================================
 # FFT Direction Enum
@@ -25,7 +41,7 @@ struct Backward <: FFTDirection end  # unnormalized inverse
 GPU FFT plan for Metal using MPSGraph's fastFourierTransformWithTensor.
 
 # Type Parameters
-- `T`: Element type (e.g., ComplexF32)
+- `T`: Element type (ComplexF32 or ComplexF16)
 - `K`: Direction type (Forward, Inverse, or Backward)
 - `N`: Number of dimensions
 
@@ -33,8 +49,13 @@ GPU FFT plan for Metal using MPSGraph's fastFourierTransformWithTensor.
 - `sz`: Size of the input array
 - `region`: Dimensions along which to perform FFT (normalized to Tuple)
 
-# Notes
-MPSGraph FFT only supports ComplexF32. Other types will error.
+# Supported Types
+- `ComplexF32` (Complex{Float32}) - recommended for most use cases
+- `ComplexF16` (Complex{Float16}) - lower precision, faster on some hardware
+
+# Not Supported
+- `ComplexF64` - Metal/MPSGraph does not support double precision FFT.
+  Use FFTW.jl on CPU for double precision.
 """
 struct MtlFFTPlan{T,K<:FFTDirection,N} <: AbstractFFTs.Plan{T}
     sz::NTuple{N,Int}
@@ -56,8 +77,20 @@ end
 # AbstractFFTs Interface Implementation
 # ============================================================================
 
+function _check_fft_type(::Type{T}) where {T<:Complex}
+    T <: FFTComplexTypes || throw(ArgumentError(
+        "Metal FFT only supports ComplexF32 and ComplexF16, got $T. " *
+        "For ComplexF64, use FFTW.jl on CPU."))
+end
+
+function _check_rfft_type(::Type{T}) where {T<:Real}
+    T <: FFTRealTypes || throw(ArgumentError(
+        "Metal rfft only supports Float32 and Float16, got $T. " *
+        "For Float64, use FFTW.jl on CPU."))
+end
+
 function AbstractFFTs.plan_fft(x::MtlArray{T,N}, region; kwargs...) where {T<:Complex,N}
-    T == ComplexF32 || throw(ArgumentError("Metal FFT only supports ComplexF32, got $T"))
+    _check_fft_type(T)
     MtlFFTPlan{T,Forward}(size(x), region)
 end
 
@@ -66,7 +99,7 @@ function AbstractFFTs.plan_fft(x::MtlArray{T,N}; kwargs...) where {T<:Complex,N}
 end
 
 function AbstractFFTs.plan_ifft(x::MtlArray{T,N}, region; kwargs...) where {T<:Complex,N}
-    T == ComplexF32 || throw(ArgumentError("Metal FFT only supports ComplexF32, got $T"))
+    _check_fft_type(T)
     MtlFFTPlan{T,Inverse}(size(x), region)
 end
 
@@ -75,7 +108,7 @@ function AbstractFFTs.plan_ifft(x::MtlArray{T,N}; kwargs...) where {T<:Complex,N
 end
 
 function AbstractFFTs.plan_bfft(x::MtlArray{T,N}, region; kwargs...) where {T<:Complex,N}
-    T == ComplexF32 || throw(ArgumentError("Metal FFT only supports ComplexF32, got $T"))
+    _check_fft_type(T)
     MtlFFTPlan{T,Backward}(size(x), region)
 end
 
@@ -285,7 +318,7 @@ end
 # ============================================================================
 
 function AbstractFFTs.plan_rfft(x::MtlArray{T,N}, region; kwargs...) where {T<:Real,N}
-    T == Float32 || throw(ArgumentError("Metal rfft only supports Float32, got $T"))
+    _check_rfft_type(T)
     MtlRFFTPlan{T,Forward}(size(x), region)
 end
 
@@ -294,7 +327,7 @@ function AbstractFFTs.plan_rfft(x::MtlArray{T,N}; kwargs...) where {T<:Real,N}
 end
 
 function AbstractFFTs.plan_irfft(x::MtlArray{T,N}, d::Int, region; kwargs...) where {T<:Complex,N}
-    T == ComplexF32 || throw(ArgumentError("Metal irfft only supports ComplexF32, got $T"))
+    _check_fft_type(T)
     MtlRFFTPlan{T,Inverse}(size(x), d, region)
 end
 
@@ -303,7 +336,7 @@ function AbstractFFTs.plan_irfft(x::MtlArray{T,N}, d::Int; kwargs...) where {T<:
 end
 
 function AbstractFFTs.plan_brfft(x::MtlArray{T,N}, d::Int, region; kwargs...) where {T<:Complex,N}
-    T == ComplexF32 || throw(ArgumentError("Metal brfft only supports ComplexF32, got $T"))
+    _check_fft_type(T)
     MtlRFFTPlan{T,Backward}(size(x), d, region)
 end
 
