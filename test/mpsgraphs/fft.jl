@@ -5,29 +5,29 @@ using LinearAlgebra: mul!
 # FFTW does not support Float16, so we provide shims for CPU reference
 
 function AbstractFFTs.fft(x::Array{ComplexF16}, dims...)
-    Array{ComplexF16}(fft(Array{ComplexF32}(x), dims...))
+    return Array{ComplexF16}(fft(Array{ComplexF32}(x), dims...))
 end
 function AbstractFFTs.ifft(x::Array{ComplexF16}, dims...)
-    Array{ComplexF16}(ifft(Array{ComplexF32}(x), dims...))
+    return Array{ComplexF16}(ifft(Array{ComplexF32}(x), dims...))
 end
 function AbstractFFTs.bfft(x::Array{ComplexF16}, dims...)
-    Array{ComplexF16}(bfft(Array{ComplexF32}(x), dims...))
+    return Array{ComplexF16}(bfft(Array{ComplexF32}(x), dims...))
 end
 function AbstractFFTs.rfft(x::Array{Float16}, dims...)
-    Array{ComplexF16}(rfft(Array{Float32}(x), dims...))
+    return Array{ComplexF16}(rfft(Array{Float32}(x), dims...))
 end
 function AbstractFFTs.irfft(x::Array{ComplexF16}, d::Integer, dims...)
-    Array{Float16}(irfft(Array{ComplexF32}(x), d, dims...))
+    return Array{Float16}(irfft(Array{ComplexF32}(x), d, dims...))
 end
 function AbstractFFTs.brfft(x::Array{ComplexF16}, d::Integer, dims...)
-    Array{Float16}(brfft(Array{ComplexF32}(x), d, dims...))
+    return Array{Float16}(brfft(Array{ComplexF32}(x), d, dims...))
 end
 
 # Tolerance functions based on type precision
-rtol(::Type{Float16}) = 1e-2
-rtol(::Type{Float32}) = 1e-4
-rtol(::Type{ComplexF16}) = 1e-2
-rtol(::Type{ComplexF32}) = 1e-4
+rtol(::Type{Float16}) = 1.0e-2
+rtol(::Type{Float32}) = 1.0e-4
+rtol(::Type{ComplexF16}) = 1.0e-2
+rtol(::Type{ComplexF32}) = 1.0e-4
 
 # Test dimensions
 N1 = 8
@@ -60,7 +60,7 @@ if MPS.is_supported(device())
         pinvb = @inferred plan_bfft(d_Y)
         d_Z = pinvb * d_Y
         Z = Array(d_Z) ./ length(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T))
+        return @test isapprox(Z, X, rtol = rtol(T))
     end
 
     function test_complex_in_place(X::AbstractArray{T, N}) where {T <: Complex, N}
@@ -84,7 +84,7 @@ if MPS.is_supported(device())
         pinvb = @inferred plan_bfft!(d_X)
         pinvb * d_X
         Z = Array(d_X) ./ length(X)
-        @test isapprox(Z, X, rtol = rtol(T))
+        return @test isapprox(Z, X, rtol = rtol(T))
     end
 
     function test_complex_batched(X::AbstractArray{T, N}, region) where {T <: Complex, N}
@@ -99,7 +99,7 @@ if MPS.is_supported(device())
         pinv = plan_ifft(d_Y, region)
         d_Z = pinv * d_Y
         Z = Array(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T))
+        return @test isapprox(Z, X, rtol = rtol(T))
     end
 
     @testset "Complex FFT" begin
@@ -180,7 +180,7 @@ if MPS.is_supported(device())
         pinvb = @inferred plan_brfft(d_Y, size(X, 1))
         d_Z = pinvb * d_Y
         Z = Array(d_Z) ./ length(X)
-        @test isapprox(Z, X, rtol = rtol(T))
+        return @test isapprox(Z, X, rtol = rtol(T))
     end
 
     function test_real_batched(X::AbstractArray{T, N}, region) where {T <: Real, N}
@@ -195,7 +195,7 @@ if MPS.is_supported(device())
         pinv = plan_irfft(d_Y, size(X, region[1]), region)
         d_Z = pinv * d_Y
         Z = Array(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T))
+        return @test isapprox(Z, X, rtol = rtol(T))
     end
 
     @testset "Real FFT" begin
@@ -256,14 +256,14 @@ if MPS.is_supported(device())
         y = similar(x)
         p = plan_fft(x)
         mul!(y, p, x)
-        @test isapprox(Array(y), fft(Array(x)), rtol = 1e-4)
+        @test isapprox(Array(y), fft(Array(x)), rtol = 1.0e-4)
 
         # Real FFT mul!
         xr = MtlArray(randn(Float32, 32, 32))
         yr = MtlArray{ComplexF32}(undef, 17, 32)
         pr = plan_rfft(xr)
         mul!(yr, pr, xr)
-        @test isapprox(Array(yr), rfft(Array(xr)), rtol = 1e-4)
+        @test isapprox(Array(yr), rfft(Array(xr)), rtol = 1.0e-4)
     end
 
     @testset "Plan Reuse" begin
@@ -274,8 +274,8 @@ if MPS.is_supported(device())
         y1 = p * x1
         y2 = p * x2
 
-        @test isapprox(Array(y1), fft(Array(x1)), rtol = 1e-4)
-        @test isapprox(Array(y2), fft(Array(x2)), rtol = 1e-4)
+        @test isapprox(Array(y1), fft(Array(x1)), rtol = 1.0e-4)
+        @test isapprox(Array(y2), fft(Array(x2)), rtol = 1.0e-4)
     end
 
     @testset "Type Restrictions" begin
@@ -312,7 +312,7 @@ if MPS.is_supported(device())
         z_gpu = Array(irfft(y_gpu, 63, 1))
 
         @test size(z_gpu) == (63, 64)
-        @test isapprox(z_cpu, z_gpu, rtol = 1e-4)
+        @test isapprox(z_cpu, z_gpu, rtol = 1.0e-4)
     end
 
 end # MPS.is_supported(device())
