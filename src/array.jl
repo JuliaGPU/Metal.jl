@@ -440,12 +440,13 @@ function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::MtlA
     end
     return dest
 end
+const GPU_COPY_THRESH = 32 * 2^20  # 32 MiB threshold. Factored out for testing
 function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T, <:Any, Metal.SharedStorage}, doffs, src::MtlArray{T, <:Any, Metal.SharedStorage}, soffs, n) where {T}
     synchronize()
     bytes = n * sizeof(T)
-    # Use GPU blit for large copies (>32MB) where it's faster than CPU memcpy.
+    # Use GPU blit for large copies (>32MiB) where it's faster than CPU memcpy.
     # For small copies, CPU memcpy avoids GPU command buffer overhead.
-    if bytes > 32 * 1024 * 1024  # 32 MB threshold
+    if bytes >= GPU_COPY_THRESH
         GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
         if Base.isbitsunion(T)
             error("Not implemented")
