@@ -440,10 +440,19 @@ function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::MtlA
     end
     return dest
 end
-function Base.unsafe_copyto!(::MTLDevice, dest::MtlArray{T,<:Any,Metal.SharedStorage}, doffs, src::MtlArray{T,<:Any,Metal.SharedStorage}, soffs, n) where T
-    # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
+function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T,<:Any,Metal.SharedStorage}, doffs, src::MtlArray{T,<:Any,Metal.SharedStorage}, soffs, n) where T
     synchronize()
-    GC.@preserve src dest unsafe_copyto!(pointer(unsafe_wrap(Array,dest), doffs), pointer(unsafe_wrap(Array,src), soffs), n)
+    bytes = n * sizeof(T)
+    # Use GPU blit for large copies (>32MB) where it's faster than CPU memcpy.
+    # For small copies, CPU memcpy avoids GPU command buffer overhead.
+    if bytes > 32 * 1024 * 1024  # 32 MB threshold
+        GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
+        if Base.isbitsunion(T)
+            error("Not implemented")
+        end
+    else
+        GC.@preserve src dest unsafe_copyto!(pointer(unsafe_wrap(Array,dest), doffs), pointer(unsafe_wrap(Array,src), soffs), n)
+    end
     return dest
 end
 
