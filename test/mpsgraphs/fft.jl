@@ -2,241 +2,157 @@ using FFTW
 using AbstractFFTs
 using LinearAlgebra: mul!
 
+# FFTW does not support Float16, so we provide shims for CPU reference
+
+function AbstractFFTs.fft(x::Array{ComplexF16}, dims...)
+    Array{ComplexF16}(fft(Array{ComplexF32}(x), dims...))
+end
+function AbstractFFTs.ifft(x::Array{ComplexF16}, dims...)
+    Array{ComplexF16}(ifft(Array{ComplexF32}(x), dims...))
+end
+function AbstractFFTs.bfft(x::Array{ComplexF16}, dims...)
+    Array{ComplexF16}(bfft(Array{ComplexF32}(x), dims...))
+end
+function AbstractFFTs.rfft(x::Array{Float16}, dims...)
+    Array{ComplexF16}(rfft(Array{Float32}(x), dims...))
+end
+function AbstractFFTs.irfft(x::Array{ComplexF16}, d::Integer, dims...)
+    Array{Float16}(irfft(Array{ComplexF32}(x), d, dims...))
+end
+function AbstractFFTs.brfft(x::Array{ComplexF16}, d::Integer, dims...)
+    Array{Float16}(brfft(Array{ComplexF32}(x), d, dims...))
+end
+
+# Tolerance functions based on type precision
+rtol(::Type{Float16}) = 1e-2
+rtol(::Type{Float32}) = 1e-4
+rtol(::Type{ComplexF16}) = 1e-2
+rtol(::Type{ComplexF32}) = 1e-4
+
+# Test dimensions
+N1 = 8
+N2 = 32
+N3 = 16
+
 if MPS.is_supported(device())
 
     # ============================================================================
     # Complex FFT Tests
     # ============================================================================
 
-    @testset "FFT" begin
-        @testset "plan_fft basic" begin
-            x_cpu = randn(ComplexF32, 64, 64)
-            x_gpu = MtlArray(x_cpu)
+    function test_complex_out_of_place(X::AbstractArray{T, N}) where {T <: Complex, N}
+        fftw_X = fft(X)
+        d_X = MtlArray(X)
 
-            plan = plan_fft(x_gpu)
-            y_gpu = plan * x_gpu
+        # Forward FFT with @inferred
+        p = @inferred plan_fft(d_X)
+        d_Y = p * d_X
+        Y = Array(d_Y)
+        @test isapprox(Y, fftw_X, rtol = rtol(T))
 
-            @test y_gpu isa MtlArray{ComplexF32}
-            @test size(y_gpu) == size(x_gpu)
-        end
+        # Inverse FFT
+        pinv = plan_ifft(d_Y)
+        d_Z = pinv * d_Y
+        Z = Array(d_Z)
+        @test isapprox(Z, X, rtol = rtol(T))
 
-        @testset "fft correctness vs FFTW" begin
-            # 2D FFT
-            for sz in [(32, 32), (64, 64), (128, 128), (64, 128)]
-                @testset "size $sz" begin
-                    x_cpu = randn(ComplexF32, sz...)
-                    x_gpu = MtlArray(x_cpu)
-
-                    y_cpu = fft(x_cpu)
-                    y_gpu = Array(fft(x_gpu))
-
-                    @test isapprox(y_cpu, y_gpu, rtol = 1.0e-4)
-                end
-            end
-        end
-
-        @testset "ifft correctness vs FFTW" begin
-            for sz in [(32, 32), (64, 64)]
-                @testset "size $sz" begin
-                    x_cpu = randn(ComplexF32, sz...)
-                    x_gpu = MtlArray(x_cpu)
-
-                    y_cpu = ifft(x_cpu)
-                    y_gpu = Array(ifft(x_gpu))
-
-                    @test isapprox(y_cpu, y_gpu, rtol = 1.0e-4)
-                end
-            end
-        end
-
-        @testset "bfft correctness vs FFTW" begin
-            for sz in [(32, 32), (64, 64)]
-                @testset "size $sz" begin
-                    x_cpu = randn(ComplexF32, sz...)
-                    x_gpu = MtlArray(x_cpu)
-
-                    y_cpu = bfft(x_cpu)
-                    y_gpu = Array(bfft(x_gpu))
-
-                    @test isapprox(y_cpu, y_gpu, rtol = 1.0e-4)
-                end
-            end
-        end
-
-        @testset "single axis FFT" begin
-            x_cpu = randn(ComplexF32, 64, 128)
-            x_gpu = MtlArray(x_cpu)
-
-            # FFT along dimension 1
-            y_cpu_1 = fft(x_cpu, 1)
-            y_gpu_1 = Array(fft(x_gpu, 1))
-            @test isapprox(y_cpu_1, y_gpu_1, rtol = 1.0e-4)
-
-            # FFT along dimension 2
-            y_cpu_2 = fft(x_cpu, 2)
-            y_gpu_2 = Array(fft(x_gpu, 2))
-            @test isapprox(y_cpu_2, y_gpu_2, rtol = 1.0e-4)
-        end
-
-        @testset "multi-axis FFT" begin
-            x_cpu = randn(ComplexF32, 32, 32, 8)
-            x_gpu = MtlArray(x_cpu)
-
-            # FFT along dimensions (1,2)
-            y_cpu = fft(x_cpu, (1, 2))
-            y_gpu = Array(fft(x_gpu, (1, 2)))
-
-            @test isapprox(y_cpu, y_gpu, rtol = 1.0e-4)
-        end
-
-        @testset "3D FFT" begin
-            x_cpu = randn(ComplexF32, 16, 16, 16)
-            x_gpu = MtlArray(x_cpu)
-
-            y_cpu = fft(x_cpu)
-            y_gpu = Array(fft(x_gpu))
-
-            @test isapprox(y_cpu, y_gpu, rtol = 1.0e-4)
-        end
-
-        @testset "roundtrip fft -> ifft" begin
-            x_cpu = randn(ComplexF32, 64, 64)
-            x_gpu = MtlArray(x_cpu)
-
-            y_gpu = ifft(fft(x_gpu))
-
-            @test isapprox(x_cpu, Array(y_gpu), rtol = 1.0e-4)
-        end
-
-        @testset "plan reuse" begin
-            x1 = MtlArray(randn(ComplexF32, 64, 64))
-            x2 = MtlArray(randn(ComplexF32, 64, 64))
-
-            plan = plan_fft(x1)
-
-            y1 = plan * x1
-            y2 = plan * x2
-
-            @test isapprox(Array(y1), fft(Array(x1)), rtol = 1.0e-4)
-            @test isapprox(Array(y2), fft(Array(x2)), rtol = 1.0e-4)
-        end
-
-        @testset "mul! interface" begin
-            x = MtlArray(randn(ComplexF32, 64, 64))
-            y = similar(x)
-
-            plan = plan_fft(x)
-            mul!(y, plan, x)
-
-            @test isapprox(Array(y), fft(Array(x)), rtol = 1.0e-4)
-        end
-
-        @testset "type restrictions" begin
-            # ComplexF32 should work
-            x32 = MtlArray(randn(ComplexF32, 32, 32))
-            @test plan_fft(x32) isa MPSGraphs.MtlFFTPlan
-
-            # ComplexF16 should also work
-            x16 = MtlArray(ComplexF16.(randn(ComplexF32, 32, 32)))
-            @test plan_fft(x16) isa MPSGraphs.MtlFFTPlan
-        end
-
-        @testset "ComplexF16 correctness" begin
-            # ComplexF16 FFT should produce reasonable results
-            x16 = MtlArray(ComplexF16.(randn(ComplexF32, 32, 32)))
-            x32 = MtlArray(ComplexF32.(Array(x16)))
-
-            y16 = Array(fft(x16))
-            y32 = Array(fft(x32))
-
-            # Float16 has ~3 decimal digits precision, so allow larger tolerance
-            @test isapprox(ComplexF32.(y16), y32, rtol = 0.1)
-        end
-
-        @testset "invalid dimension" begin
-            x = MtlArray(randn(ComplexF32, 32, 32))
-            @test_throws ArgumentError plan_fft(x, 3)  # Only 2 dimensions
-            @test_throws ArgumentError plan_fft(x, 0)  # Invalid dimension
-        end
-
-        @testset "1D FFT" begin
-            x_cpu = randn(ComplexF32, 64)
-            x_gpu = MtlArray(x_cpu)
-
-            y_cpu = fft(x_cpu)
-            y_gpu = Array(fft(x_gpu))
-
-            @test size(y_gpu) == (64,)
-            @test isapprox(y_cpu, y_gpu, rtol = 1.0e-4)
-        end
-
-        @testset "1D ifft roundtrip" begin
-            x_cpu = randn(ComplexF32, 128)
-            x_gpu = MtlArray(x_cpu)
-
-            y_gpu = ifft(fft(x_gpu))
-
-            @test isapprox(x_cpu, Array(y_gpu), rtol = 1.0e-4)
-        end
+        # Backward FFT (unnormalized inverse)
+        pinvb = @inferred plan_bfft(d_Y)
+        d_Z = pinvb * d_Y
+        Z = Array(d_Z) ./ length(d_Z)
+        @test isapprox(Z, X, rtol = rtol(T))
     end
 
-    # ============================================================================
-    # In-Place FFT Tests
-    # ============================================================================
+    function test_complex_in_place(X::AbstractArray{T, N}) where {T <: Complex, N}
+        fftw_X = fft(X)
+        d_X = MtlArray(copy(X))
 
-    @testset "In-Place FFT" begin
-        @testset "fft! basic" begin
-            x_cpu = randn(ComplexF32, 64, 64)
-            x_gpu = MtlArray(copy(x_cpu))
+        # In-place forward FFT
+        p = @inferred plan_fft!(d_X)
+        p * d_X
+        Y = Array(d_X)
+        @test isapprox(Y, fftw_X, rtol = rtol(T))
 
-            plan = plan_fft!(x_gpu)
-            result = plan * x_gpu
+        # In-place inverse FFT
+        pinv = plan_ifft!(d_X)
+        pinv * d_X
+        Z = Array(d_X)
+        @test isapprox(Z, X, rtol = rtol(T))
 
-            @test result === x_gpu  # Should return the same array
-            @test isapprox(fft(x_cpu), Array(x_gpu), rtol = 1.0e-4)
-        end
+        # Reset and test bfft!
+        p * d_X
+        pinvb = @inferred plan_bfft!(d_X)
+        pinvb * d_X
+        Z = Array(d_X) ./ length(X)
+        @test isapprox(Z, X, rtol = rtol(T))
+    end
 
-        @testset "ifft!" begin
-            x_cpu = randn(ComplexF32, 64, 64)
-            x_gpu = MtlArray(copy(x_cpu))
+    function test_complex_batched(X::AbstractArray{T, N}, region) where {T <: Complex, N}
+        fftw_X = fft(X, region)
+        d_X = MtlArray(X)
 
-            plan = plan_ifft!(x_gpu)
-            plan * x_gpu
+        p = plan_fft(d_X, region)
+        d_Y = p * d_X
+        Y = Array(d_Y)
+        @test isapprox(Y, fftw_X, rtol = rtol(T))
 
-            @test isapprox(ifft(x_cpu), Array(x_gpu), rtol = 1.0e-4)
-        end
+        pinv = plan_ifft(d_Y, region)
+        d_Z = pinv * d_Y
+        Z = Array(d_Z)
+        @test isapprox(Z, X, rtol = rtol(T))
+    end
 
-        @testset "bfft!" begin
-            x_cpu = randn(ComplexF32, 64, 64)
-            x_gpu = MtlArray(copy(x_cpu))
+    @testset "Complex FFT" begin
+        @testset for T in [ComplexF16, ComplexF32]
+            @testset "1D" begin
+                X = rand(T, N1)
+                test_complex_out_of_place(X)
+            end
 
-            plan = plan_bfft!(x_gpu)
-            plan * x_gpu
+            @testset "1D in-place" begin
+                X = rand(T, N1)
+                test_complex_in_place(X)
+            end
 
-            @test isapprox(bfft(x_cpu), Array(x_gpu), rtol = 1.0e-3)
-        end
+            @testset "2D" begin
+                X = rand(T, N1, N2)
+                test_complex_out_of_place(X)
+            end
 
-        @testset "fft! -> ifft! roundtrip" begin
-            x_orig = randn(ComplexF32, 64, 64)
-            x_gpu = MtlArray(copy(x_orig))
+            @testset "2D in-place" begin
+                X = rand(T, N1, N2)
+                test_complex_in_place(X)
+            end
 
-            plan_fwd = plan_fft!(x_gpu)
-            plan_fwd * x_gpu
+            @testset "3D" begin
+                X = rand(T, N1, N2, N3)
+                test_complex_out_of_place(X)
+            end
 
-            plan_inv = plan_ifft!(x_gpu)
-            plan_inv * x_gpu
+            @testset "3D in-place" begin
+                X = rand(T, N1, N2, N3)
+                test_complex_in_place(X)
+            end
 
-            @test isapprox(x_orig, Array(x_gpu), rtol = 1.0e-4)
-        end
+            @testset "Batch 1D" begin
+                dims = (N1, N2)
+                X = rand(T, dims)
+                test_complex_batched(X, 1)
 
-        @testset "single axis fft!" begin
-            x_cpu = randn(ComplexF32, 64, 128)
-            x_gpu = MtlArray(copy(x_cpu))
+                X = rand(T, dims)
+                test_complex_batched(X, 2)
 
-            plan = plan_fft!(x_gpu, 2)
-            plan * x_gpu
+                X = rand(T, dims)
+                test_complex_batched(X, (1, 2))
+            end
 
-            @test isapprox(fft(x_cpu, 2), Array(x_gpu), rtol = 1.0e-4)
+            @testset "Batch 2D (in 3D)" begin
+                dims = (N1, N2, N3)
+                for region in [(1, 2), (2, 3), (1, 3)]
+                    X = rand(T, dims)
+                    test_complex_batched(X, region)
+                end
+            end
         end
     end
 
@@ -244,125 +160,159 @@ if MPS.is_supported(device())
     # Real FFT Tests
     # ============================================================================
 
+    function test_real_out_of_place(X::AbstractArray{T, N}) where {T <: Real, N}
+        fftw_X = rfft(X)
+        d_X = MtlArray(X)
+
+        # Forward rfft with @inferred
+        p = @inferred plan_rfft(d_X)
+        d_Y = p * d_X
+        Y = Array(d_Y)
+        @test isapprox(Y, fftw_X, rtol = rtol(T))
+
+        # Inverse rfft
+        pinv = plan_irfft(d_Y, size(X, 1))
+        d_Z = pinv * d_Y
+        Z = Array(d_Z)
+        @test isapprox(Z, X, rtol = rtol(T))
+
+        # Backward rfft (unnormalized)
+        pinvb = @inferred plan_brfft(d_Y, size(X, 1))
+        d_Z = pinvb * d_Y
+        Z = Array(d_Z) ./ length(X)
+        @test isapprox(Z, X, rtol = rtol(T))
+    end
+
+    function test_real_batched(X::AbstractArray{T, N}, region) where {T <: Real, N}
+        fftw_X = rfft(X, region)
+        d_X = MtlArray(X)
+
+        p = plan_rfft(d_X, region)
+        d_Y = p * d_X
+        Y = Array(d_Y)
+        @test isapprox(Y, fftw_X, rtol = rtol(T))
+
+        pinv = plan_irfft(d_Y, size(X, region[1]), region)
+        d_Z = pinv * d_Y
+        Z = Array(d_Z)
+        @test isapprox(Z, X, rtol = rtol(T))
+    end
+
     @testset "Real FFT" begin
-        @testset "rfft basic" begin
-            x_cpu = randn(Float32, 64, 32)
-            x_gpu = MtlArray(x_cpu)
+        @testset for T in [Float16, Float32]
+            @testset "1D" begin
+                X = rand(T, N1)
+                test_real_out_of_place(X)
+            end
 
-            y_gpu = rfft(x_gpu)
+            @testset "2D" begin
+                X = rand(T, N1, N2)
+                test_real_out_of_place(X)
+            end
 
-            @test y_gpu isa MtlArray{ComplexF32}
-            @test size(y_gpu) == (33, 32)  # First dim reduced to n÷2+1
-        end
+            @testset "3D" begin
+                X = rand(T, N1, N2, N3)
+                test_real_out_of_place(X)
+            end
 
-        @testset "rfft correctness vs FFTW" begin
-            for sz in [(64, 64), (128, 64), (64, 128)]
-                @testset "size $sz" begin
-                    x_cpu = randn(Float32, sz...)
-                    x_gpu = MtlArray(x_cpu)
+            @testset "Batch 1D" begin
+                dims = (N1, N2)
+                X = rand(T, dims)
+                test_real_batched(X, 1)
 
-                    y_cpu = rfft(x_cpu)
-                    y_gpu = Array(rfft(x_gpu))
+                X = rand(T, dims)
+                test_real_batched(X, 2)
 
-                    @test size(y_gpu) == size(y_cpu)
-                    @test isapprox(y_cpu, y_gpu, rtol = 1.0e-4)
+                X = rand(T, dims)
+                test_real_batched(X, (1, 2))
+            end
+
+            @testset "Batch 2D (in 3D)" begin
+                dims = (N1, N2, N3)
+                for region in [(1, 2), (2, 3), (1, 3)]
+                    X = rand(T, dims)
+                    test_real_batched(X, region)
                 end
             end
         end
+    end
 
-        @testset "rfft single axis" begin
-            x_cpu = randn(Float32, 64, 128)
-            x_gpu = MtlArray(x_cpu)
+    # ============================================================================
+    # Additional Tests
+    # ============================================================================
 
-            # rfft along dimension 1
-            y_cpu_1 = rfft(x_cpu, 1)
-            y_gpu_1 = Array(rfft(x_gpu, 1))
-            @test size(y_gpu_1) == size(y_cpu_1)
-            @test isapprox(y_cpu_1, y_gpu_1, rtol = 1.0e-4)
+    @testset "Plan Properties" begin
+        x = MtlArray(randn(ComplexF32, 64, 64))
+        p = plan_fft(x)
+        @test size(p) == (64, 64)
+        @test fftdims(p) == (1, 2)
 
-            # rfft along dimension 2
-            y_cpu_2 = rfft(x_cpu, 2)
-            y_gpu_2 = Array(rfft(x_gpu, 2))
-            @test size(y_gpu_2) == size(y_cpu_2)
-            @test isapprox(y_cpu_2, y_gpu_2, rtol = 1.0e-4)
-        end
+        p2 = plan_fft(x, 1)
+        @test fftdims(p2) == (1,)
+    end
 
-        @testset "irfft correctness vs FFTW" begin
-            x_cpu = randn(Float32, 64, 64)
-            y_cpu = rfft(x_cpu)
-            y_gpu = MtlArray(y_cpu)
+    @testset "mul! Interface" begin
+        x = MtlArray(randn(ComplexF32, 32, 32))
+        y = similar(x)
+        p = plan_fft(x)
+        mul!(y, p, x)
+        @test isapprox(Array(y), fft(Array(x)), rtol = 1e-4)
 
-            z_cpu = irfft(y_cpu, 64)
-            z_gpu = Array(irfft(y_gpu, 64))
+        # Real FFT mul!
+        xr = MtlArray(randn(Float32, 32, 32))
+        yr = MtlArray{ComplexF32}(undef, 17, 32)
+        pr = plan_rfft(xr)
+        mul!(yr, pr, xr)
+        @test isapprox(Array(yr), rfft(Array(xr)), rtol = 1e-4)
+    end
 
-            @test size(z_gpu) == size(z_cpu)
-            @test isapprox(z_cpu, z_gpu, rtol = 1.0e-4)
-        end
+    @testset "Plan Reuse" begin
+        x1 = MtlArray(randn(ComplexF32, 64, 64))
+        x2 = MtlArray(randn(ComplexF32, 64, 64))
 
-        @testset "roundtrip rfft -> irfft" begin
-            x_cpu = randn(Float32, 64, 64)
-            x_gpu = MtlArray(x_cpu)
+        p = plan_fft(x1)
+        y1 = p * x1
+        y2 = p * x2
 
-            y_gpu = rfft(x_gpu)
-            z_gpu = irfft(y_gpu, 64)
+        @test isapprox(Array(y1), fft(Array(x1)), rtol = 1e-4)
+        @test isapprox(Array(y2), fft(Array(x2)), rtol = 1e-4)
+    end
 
-            @test isapprox(x_cpu, Array(z_gpu), rtol = 1.0e-4)
-        end
+    @testset "Type Restrictions" begin
+        # ComplexF32 should work
+        x32 = MtlArray(randn(ComplexF32, 32, 32))
+        @test plan_fft(x32) isa MPSGraphs.MtlFFTPlan
 
-        @testset "brfft correctness vs FFTW" begin
-            # Single axis
-            x_cpu = randn(Float32, 64, 32)
-            y_cpu = rfft(x_cpu, 1)
-            y_gpu = MtlArray(y_cpu)
+        # ComplexF16 should work
+        x16 = MtlArray(ComplexF16.(randn(ComplexF32, 32, 32)))
+        @test plan_fft(x16) isa MPSGraphs.MtlFFTPlan
 
-            z_cpu = brfft(y_cpu, 64, 1)
-            z_gpu = Array(brfft(y_gpu, 64, 1))
+        # Float32 rfft should work
+        xr32 = MtlArray(randn(Float32, 32, 32))
+        @test plan_rfft(xr32) isa MPSGraphs.MtlRFFTPlan
 
-            @test isapprox(z_cpu, z_gpu, rtol = 1.0e-3)
-        end
+        # Float16 rfft should work
+        xr16 = MtlArray(Float16.(randn(Float32, 32, 32)))
+        @test plan_rfft(xr16) isa MPSGraphs.MtlRFFTPlan
+    end
 
-        @testset "irfft odd output size" begin
-            x_cpu = randn(Float32, 63, 64)  # odd first dimension
-            y_cpu = rfft(x_cpu, 1)
-            y_gpu = MtlArray(y_cpu)
+    @testset "Invalid Dimensions" begin
+        x = MtlArray(randn(ComplexF32, 32, 32))
+        @test_throws ArgumentError plan_fft(x, 3)  # Only 2 dimensions
+        @test_throws ArgumentError plan_fft(x, 0)  # Invalid dimension
+    end
 
-            z_cpu = irfft(y_cpu, 63, 1)
-            z_gpu = Array(irfft(y_gpu, 63, 1))
+    @testset "Odd Sizes" begin
+        # Odd-sized irfft
+        x_cpu = randn(Float32, 63, 64)
+        y_cpu = rfft(x_cpu, 1)
+        y_gpu = MtlArray(y_cpu)
 
-            @test size(z_gpu) == (63, 64)
-            @test isapprox(z_cpu, z_gpu, rtol = 1.0e-4)
-        end
+        z_cpu = irfft(y_cpu, 63, 1)
+        z_gpu = Array(irfft(y_gpu, 63, 1))
 
-        @testset "type restrictions" begin
-            # Float32 should work
-            x32 = MtlArray(randn(Float32, 32, 32))
-            @test plan_rfft(x32) isa MPSGraphs.MtlRFFTPlan
-
-            # Float16 should also work
-            x16 = MtlArray(Float16.(randn(Float32, 32, 32)))
-            @test plan_rfft(x16) isa MPSGraphs.MtlRFFTPlan
-        end
-
-        @testset "1D rfft" begin
-            x_cpu = randn(Float32, 64)
-            x_gpu = MtlArray(x_cpu)
-
-            y_cpu = rfft(x_cpu)
-            y_gpu = Array(rfft(x_gpu))
-
-            @test size(y_gpu) == (33,)  # n÷2+1
-            @test isapprox(y_cpu, y_gpu, rtol = 1.0e-4)
-        end
-
-        @testset "1D rfft -> irfft roundtrip" begin
-            x_cpu = randn(Float32, 128)
-            x_gpu = MtlArray(x_cpu)
-
-            y_gpu = rfft(x_gpu)
-            z_gpu = irfft(y_gpu, 128)
-
-            @test isapprox(x_cpu, Array(z_gpu), rtol = 1.0e-4)
-        end
+        @test size(z_gpu) == (63, 64)
+        @test isapprox(z_cpu, z_gpu, rtol = 1e-4)
     end
 
 end # MPS.is_supported(device())
