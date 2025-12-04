@@ -197,13 +197,18 @@ const MtlVecOrMat{T, S} = Union{MtlVector{T, S}, MtlMatrix{T, S}}
 # default storage mode: "auto" selects based on unified memory architecture
 # - UMA devices (Apple Silicon): SharedStorage (zero-copy CPU access)
 # - Non-UMA devices (Intel discrete GPU): PrivateStorage
+# - Non-Apple platforms: PrivateStorage (Metal not available)
 const DefaultStorageMode = let str = @load_preference("default_storage", "auto")
     if str == "private"
         PrivateStorage
     elseif str == "shared"
         SharedStorage
     elseif str == "auto"
-        MTLDevice(1).hasUnifiedMemory ? SharedStorage : PrivateStorage
+        if Sys.isapple() && !isempty(devices())
+            MTLDevice(1).hasUnifiedMemory ? SharedStorage : PrivateStorage
+        else
+            PrivateStorage
+        end
     else
         error("unknown default storage mode: $str")
     end
