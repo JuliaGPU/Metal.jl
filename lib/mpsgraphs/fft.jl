@@ -162,31 +162,6 @@ function create_fft_descriptor(; inverse::Bool = false, scaling::Symbol = :none)
 end
 
 # ============================================================================
-# FFT Operation Wrapper
-# ============================================================================
-
-"""
-    fastFourierTransformWithTensor(graph, tensor, axes, descriptor, name="fft")
-
-Wrap Apple's MPSGraph fastFourierTransformWithTensor method.
-"""
-function fastFourierTransformWithTensor(
-        graph::MPSGraph,
-        tensor::MPSGraphTensor,
-        axes::NSArray,
-        descriptor::MPSGraphFFTDescriptor,
-        name::String = "fft"
-    )
-    obj = @objc [
-        graph::id{MPSGraph} fastFourierTransformWithTensor:tensor::id{MPSGraphTensor}
-        axes:axes::id{NSArray}
-        descriptor:descriptor::id{MPSGraphFFTDescriptor}
-        name:name::id{NSString}
-    ]::id{MPSGraphTensor}
-    return MPSGraphTensor(obj)
-end
-
-# ============================================================================
 # Plan Execution
 # ============================================================================
 
@@ -436,34 +411,16 @@ function _apply_fftshift_to_tensor(
     second_half_size = shift_amount  # Elements [split_point : end]
 
     # Slice first half: tensor[..., 0:split_point, ...]
-    first_half = @objc [
-        graph::id{MPSGraph} sliceTensor:tensor::id{MPSGraphTensor}
-        dimension:metal_axis::NSInteger
-        start:0::NSInteger
-        length:first_half_size::NSInteger
-        name:"fftshift_first_half"::id{NSString}
-    ]::id{MPSGraphTensor}
-    first_half = MPSGraphTensor(first_half)
+    first_half = sliceTensor(graph, tensor, metal_axis, 0, first_half_size, "fftshift_first_half")
 
     # Slice second half: tensor[..., split_point:end, ...]
-    second_half = @objc [
-        graph::id{MPSGraph} sliceTensor:tensor::id{MPSGraphTensor}
-        dimension:metal_axis::NSInteger
-        start:split_point::NSInteger
-        length:second_half_size::NSInteger
-        name:"fftshift_second_half"::id{NSString}
-    ]::id{MPSGraphTensor}
-    second_half = MPSGraphTensor(second_half)
+    second_half = sliceTensor(graph, tensor, metal_axis, split_point, second_half_size, "fftshift_second_half")
 
     # Concat: [second_half, first_half] along axis = fftshift result
     tensors_array = NSArray([second_half, first_half])
-    shifted = @objc [
-        graph::id{MPSGraph} concatTensors:tensors_array::id{NSArray}
-        dimension:metal_axis::NSInteger
-        name:"fftshift"::id{NSString}
-    ]::id{MPSGraphTensor}
+    shifted = concatTensors(graph, tensors_array, metal_axis, "fftshift")
 
-    return MPSGraphTensor(shifted)
+    return shifted
 end
 
 # ============================================================================
@@ -552,54 +509,6 @@ end
 # Plan properties for real FFT
 Base.size(p::MtlRFFTPlan) = p.sz
 AbstractFFTs.fftdims(p::MtlRFFTPlan) = p.region
-
-# ============================================================================
-# Real FFT Operation Wrappers
-# ============================================================================
-
-"""
-    realToHermiteanFFTWithTensor(graph, tensor, axes, descriptor, name="rfft")
-
-Wrap Apple's MPSGraph realToHermiteanFFTWithTensor method.
-Input: Real tensor, Output: Complex tensor with size n÷2+1 in last transformed axis.
-"""
-function realToHermiteanFFTWithTensor(
-        graph::MPSGraph,
-        tensor::MPSGraphTensor,
-        axes::NSArray,
-        descriptor::MPSGraphFFTDescriptor,
-        name::String = "rfft"
-    )
-    obj = @objc [
-        graph::id{MPSGraph} realToHermiteanFFTWithTensor:tensor::id{MPSGraphTensor}
-        axes:axes::id{NSArray}
-        descriptor:descriptor::id{MPSGraphFFTDescriptor}
-        name:name::id{NSString}
-    ]::id{MPSGraphTensor}
-    return MPSGraphTensor(obj)
-end
-
-"""
-    HermiteanToRealFFTWithTensor(graph, tensor, axes, descriptor, name="irfft")
-
-Wrap Apple's MPSGraph HermiteanToRealFFTWithTensor method.
-Input: Complex tensor (Hermitian), Output: Real tensor.
-"""
-function HermiteanToRealFFTWithTensor(
-        graph::MPSGraph,
-        tensor::MPSGraphTensor,
-        axes::NSArray,
-        descriptor::MPSGraphFFTDescriptor,
-        name::String = "irfft"
-    )
-    obj = @objc [
-        graph::id{MPSGraph} HermiteanToRealFFTWithTensor:tensor::id{MPSGraphTensor}
-        axes:axes::id{NSArray}
-        descriptor:descriptor::id{MPSGraphFFTDescriptor}
-        name:name::id{NSString}
-    ]::id{MPSGraphTensor}
-    return MPSGraphTensor(obj)
-end
 
 # ============================================================================
 # Real FFT Plan Execution
