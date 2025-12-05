@@ -24,6 +24,10 @@ else
     end
 end
 
+# Async warmup system to reduce first-kernel JIT compilation latency
+const _warmup_task = Ref{Union{Nothing, Task}}(nothing)
+const _warmup_enabled = @load_preference("warmup", true)
+
 function __init__()
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     precompiling && return
@@ -71,6 +75,11 @@ function __init__()
     # because displaying values happens on a different task
     if isdefined(Base, :active_repl_backend) && !isnothing(Base.active_repl_backend)
         push!(Base.active_repl_backend.ast_transforms, synchronize_metal_tasks)
+    end
+
+    # start async warmup to reduce first-kernel JIT compilation latency
+    if functional() && _warmup_enabled
+        _warmup_task[] = errormonitor(@async _warmup_compilation())
     end
 end
 
