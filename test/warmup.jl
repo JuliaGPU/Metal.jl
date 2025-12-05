@@ -7,11 +7,11 @@
 
     @testset "warmup API" begin
         # Non-blocking call should return immediately
-        @test Metal.warmup(blocking=false) === nothing
+        @test Metal.warmup(blocking = false) === nothing
 
         # Blocking call should wait and return nothing
         @test Metal.warmup() === nothing
-        @test Metal.warmup(blocking=true) === nothing
+        @test Metal.warmup(blocking = true) === nothing
     end
 
     @testset "warmup task completion" begin
@@ -35,7 +35,7 @@
         end
 
         a = MtlArray{Float32}(undef, 256)
-        t = @elapsed @metal launch=false test_kernel!(a)
+        t = @elapsed @metal launch = false test_kernel!(a)
 
         # After warmup, compilation should be under 0.5s
         # (without warmup it would be ~1.7s)
@@ -57,8 +57,8 @@
 
         a = MtlArray{Float32}(undef, 1)
 
-        t1 = @async @metal launch=false k1!(a)
-        t2 = @async @metal launch=false k2!(a)
+        t1 = @async @metal launch = false k1!(a)
+        t2 = @async @metal launch = false k2!(a)
 
         # Should complete without deadlock (with timeout)
         @test timedwait(() -> istaskdone(t1) && istaskdone(t2), 10.0) == :ok

@@ -22,7 +22,7 @@ function _warmup_compilation()
         # Minimal allocation - just need to trigger compilation
         arr = MtlArray{Float32}(undef, 1)
         # launch=false compiles but doesn't execute - fastest warmup path
-        @metal launch=false _warmup_kernel!(arr)
+        @metal launch = false _warmup_kernel!(arr)
         unsafe_free!(arr)
     catch
         # Silently ignore warmup failures - this is a non-critical optimization
@@ -58,7 +58,7 @@ You never need to call this function for correctness—only for consistent timin
 Most users will never need to call this explicitly, as the background warmup will
 complete during normal program setup (loading data, preprocessing, etc.).
 """
-function warmup(; blocking::Bool=true)
+function warmup(; blocking::Bool = true)
     task = _warmup_task[]
     if task === nothing
         # Warmup wasn't started (non-functional GPU or disabled)
