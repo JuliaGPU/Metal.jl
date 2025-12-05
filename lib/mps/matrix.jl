@@ -132,16 +132,16 @@ function encode!(cmdbuf::MTLCommandBuffer, matmul::MPSMatrixMultiplication, left
 end
 
 """
-    matmul!(a::MtlMatrix, b::MtlMatrix, c::MtlMatrix, alpha=1, beta=1,
+    matmul!(c::MtlMatrix, a::MtlMatrix, b::MtlMatrix, alpha=1, beta=0,
               transpose_left=false, transpose_right=false)
 A `MPSMatrixMultiplication` kernel that computes:
-`c = alpha * op(a) * op(b) + beta * C`
+`c = alpha * a * b + beta * c`
 
 This function should not typically be used. Rather, use the normal `LinearAlgebra` interface
 with any `MtlArray` and it should be accelerated using Metal Performance Shaders.
 """
 function matmul!(c::MtlArray{T1,N}, a::MtlArray{T2,N}, b::MtlArray{T3,N},
-                 alpha::Number=true, beta::Number=true,
+                 alpha::Number=true, beta::Number=false,
                  transpose_a=false, transpose_b=false) where {T1, T2, T3, N}
     # NOTE: MPS uses row major, while Julia is col-major. Instead of transposing
     #       the inputs (by passing !transpose_[ab]) and afterwards transposing
