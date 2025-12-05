@@ -4,8 +4,10 @@
 # compilation of GPUCompiler internals. By starting a minimal kernel compilation
 # in the background during __init__(), we can reduce this to 0.035-0.20s for the
 # user's first actual kernel—a 9-50x improvement.
-
-export warmup
+#
+# NOTE: Warmup only runs when multiple threads are available (Threads.nthreads() > 1).
+# With a single thread, async warmup would block the main thread due to Julia's
+# cooperative task runtime, potentially hurting perceived latency.
 
 # Minimal kernel that triggers the full compilation pipeline
 function _warmup_kernel!(a)
@@ -31,20 +33,21 @@ function _warmup_compilation()
 end
 
 """
-    warmup(; blocking::Bool=true)
+    Metal.warmup(; blocking::Bool=true)
 
 Ensure the GPU compilation pipeline is warmed up.
 
 The first GPU kernel in a Metal.jl session incurs a one-time JIT compilation overhead
-of ~1.7 seconds. Metal.jl automatically starts warming up in the background when the
-package is loaded. This function allows you to explicitly wait for warmup to complete.
+of ~1.7 seconds. When running with multiple threads (`julia -t auto`), Metal.jl
+automatically starts warming up in the background when the package is loaded.
+This function allows you to explicitly wait for warmup to complete.
 
 If `blocking=true` (default), waits for warmup to complete before returning.
 If `blocking=false`, returns immediately while warmup continues in background.
 
 # When to use
 
-Call `warmup()` before timing-sensitive code to ensure consistent benchmark results:
+Call `Metal.warmup()` before timing-sensitive code to ensure consistent benchmark results:
 
 ```julia
 using Metal
@@ -54,9 +57,11 @@ Metal.warmup()  # wait for warmup to complete
 
 # Note
 
-You never need to call this function for correctness—only for consistent timing.
-Most users will never need to call this explicitly, as the background warmup will
-complete during normal program setup (loading data, preprocessing, etc.).
+- Background warmup only runs with multiple threads. With a single thread, async
+  warmup would block the main thread due to Julia's cooperative task runtime.
+- You never need to call this function for correctness—only for consistent timing.
+- Most users will never need to call this explicitly, as the background warmup will
+  complete during normal program setup (loading data, preprocessing, etc.).
 """
 function warmup(; blocking::Bool = true)
     task = _warmup_task[]

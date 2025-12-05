@@ -77,8 +77,10 @@ function __init__()
         push!(Base.active_repl_backend.ast_transforms, synchronize_metal_tasks)
     end
 
-    # start async warmup to reduce first-kernel JIT compilation latency
-    return if functional() && _warmup_enabled
+    # Start async warmup to reduce first-kernel JIT compilation latency.
+    # Only run with multiple threads - with a single thread, the async task would
+    # block the main thread due to Julia's cooperative task runtime.
+    return if functional() && _warmup_enabled && Threads.nthreads() > 1
         _warmup_task[] = errormonitor(@async _warmup_compilation())
     end
 end
