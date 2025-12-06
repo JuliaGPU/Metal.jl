@@ -37,9 +37,11 @@ steps:
             - with:
                 julia: "nightly"
               soft_fail: true
+              timeout_in_minutes: 30
             - with:
                 julia: "1.13-nightly"
               soft_fail: true
+              timeout_in_minutes: 30
 
   # special tests
   - group: ":eyes: Special"
