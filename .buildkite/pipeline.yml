@@ -31,7 +31,7 @@ steps:
               - "1.10"
               - "1.11"
               - "1.12"
-      - label: "Julia pre-rellease {{matrix.julia}}"
+      - label: "Julia pre-release {{matrix.julia}}"
         plugins:
           - JuliaCI/julia#v1:
               version: "{{matrix.julia}}"
