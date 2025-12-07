@@ -258,7 +258,7 @@ end
         randn!(rng, A)
 
         B = Array{T}(undef, dims)
-        Metal.@allowscalar rand!(rng, B)
+        Metal.@allowscalar randn!(rng, B)
     end
 
     ## out-of-place
