@@ -66,14 +66,14 @@ end
     if _broadcast_shapes[Is] > BROADCAST_SPECIALIZATION_THRESHOLD
         ## COV_EXCL_START
         function broadcast_cartesian_static(dest, bc, Is)
-             i = thread_position_in_grid().x
-             stride = threads_per_grid().x
-             while 1 <= i <= length(dest)
+            i = Int(thread_position_in_grid().x)
+            stride = threads_per_grid().x
+            while 1 <= i <= length(dest)
                 I = @inbounds Is[i]
                 @inbounds dest[I] = bc[I]
                 i += stride
-             end
-             return
+            end
+            return
         end
         ## COV_EXCL_STOP
 
@@ -91,13 +91,13 @@ end
        (isa(IndexStyle(dest), IndexLinear) && isa(IndexStyle(bc), IndexLinear))
         ## COV_EXCL_START
         function broadcast_linear(dest, bc)
-             i = thread_position_in_grid().x
-             stride = threads_per_grid().x
-             while 1 <= i <= length(dest)
-                 @inbounds dest[i] = bc[i]
-                 i += stride
-             end
-             return
+            i = Int(thread_position_in_grid().x)
+            stride = threads_per_grid().x
+            while 1 <= i <= length(dest)
+                @inbounds dest[i] = bc[i]
+                i += stride
+            end
+            return
         end
         ## COV_EXCL_STOP
 
@@ -108,56 +108,74 @@ end
     elseif ndims(dest) == 2
         ## COV_EXCL_START
         function broadcast_2d(dest, bc)
-             is = Tuple(thread_position_in_grid_2d())
-             stride = threads_per_grid_2d()
-             while 1 <= is[1] <= size(dest, 1) && 1 <= is[2] <= size(dest, 2)
-                I = CartesianIndex(is)
-                @inbounds dest[I] = bc[I]
-                is = (is[1] + stride[1], is[2] + stride[2])
-             end
-             return
+            i = Int(thread_position_in_grid().x)
+            y = Int(thread_position_in_grid().y)
+            @inbounds stride1, stride2, _ = threads_per_grid()
+            @inbounds dim1, dim2 = size(dest)
+            while 1 <= i <= dim1
+                j = y
+                while 1 <= j <= dim2
+                    I = CartesianIndex(i, j)
+                    @inbounds dest[I] = bc[I]
+                    j += stride2
+                end
+                i += stride1
+            end
+            return
         end
         ## COV_EXCL_STOP
 
         kernel = @metal launch=false broadcast_2d(dest, bc)
-        w = min(size(dest, 1), kernel.pipeline.threadExecutionWidth)
-        h = min(size(dest, 2), kernel.pipeline.maxTotalThreadsPerThreadgroup ÷ w)
+
+        maxThreads = prevwarp(kernel.pipeline, kernel.pipeline.maxTotalThreadsPerThreadgroup - 1)
+        w = min(size(dest, 1), maxThreads)
+        h = min(size(dest, 2), maxThreads ÷ w)
         threads = (w, h)
         groups = cld.(size(dest), threads)
     elseif ndims(dest) == 3
         ## COV_EXCL_START
         function broadcast_3d(dest, bc)
-             is = Tuple(thread_position_in_grid_3d())
-             stride = threads_per_grid_3d()
-             while 1 <= is[1] <= size(dest, 1) &&
-                   1 <= is[2] <= size(dest, 2) &&
-                   1 <= is[3] <= size(dest, 3)
-                I = CartesianIndex(is)
-                @inbounds dest[I] = bc[I]
-                is = (is[1] + stride[1], is[2] + stride[2], is[3] + stride[3])
-             end
-             return
+            i = Int(thread_position_in_grid().x)
+            y = Int(thread_position_in_grid().y)
+            z = Int(thread_position_in_grid().z)
+            @inbounds stride1, stride2, stride3 = threads_per_grid()
+            @inbounds dim1, dim2, dim3 = size(dest)
+            while 1 <= i <= dim1
+                j = y
+                while 1 <= j <= dim2
+                    k = z
+                    while 1 <= k <= dim3
+                        I = CartesianIndex(i, j, k)
+                        @inbounds dest[I] = bc[I]
+                        k += stride3
+                    end
+                    j += stride2
+                end
+                i += stride1
+            end
+            return
         end
         ## COV_EXCL_STOP
 
         kernel = @metal launch=false broadcast_3d(dest, bc)
-        w = min(size(dest, 1), kernel.pipeline.threadExecutionWidth)
-        h = min(size(dest, 2), kernel.pipeline.threadExecutionWidth,
-                               kernel.pipeline.maxTotalThreadsPerThreadgroup ÷ w)
-        d = min(size(dest, 3), kernel.pipeline.maxTotalThreadsPerThreadgroup ÷ (w*h))
+
+        maxThreads = prevwarp(kernel.pipeline, kernel.pipeline.maxTotalThreadsPerThreadgroup - 1)
+        w = min(size(dest, 1), maxThreads)
+        h = min(size(dest, 2), maxThreads ÷ w)
+        d = min(size(dest, 3), maxThreads ÷ (w*h))
         threads = (w, h, d)
         groups = cld.(size(dest), threads)
     else
         ## COV_EXCL_START
         function broadcast_cartesian(dest, bc)
-             i = thread_position_in_grid().x
-             stride = threads_per_grid().x
-             while 1 <= i <= length(dest)
+            i = Int(thread_position_in_grid().x)
+            stride = threads_per_grid().x
+            while 1 <= i <= length(dest)
                 I = @inbounds CartesianIndices(dest)[i]
                 @inbounds dest[I] = bc[I]
                 i += stride
-             end
-             return
+            end
+            return
         end
         ## COV_EXCL_STOP
 
