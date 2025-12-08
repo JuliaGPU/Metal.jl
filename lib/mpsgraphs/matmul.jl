@@ -35,7 +35,7 @@ MPSGraph caching infrastructure.
 
 Creating an MPSGraph takes ~2ms per call, which dominates matmul time for small-medium
 matrices. By caching graphs keyed by their structural parameters (shapes, types, flags),
-we achieve 3-7x speedup for repeated operations with the same configuration.
+we achieve significant speedup for repeated operations with the same configuration.
 
 The cache key includes all parameters that affect graph structure:
 - Input/output shapes and element types
@@ -52,18 +52,18 @@ struct MatmulGraphKey
     eltype_c::DataType
     ndims_a::Int
     ndims_b::Int
-    transpose_a::Bool
-    transpose_b::Bool
     alpha::Float64  # Normalized to Float64 for hashing
     beta::Float64
+    transpose_a::Bool
+    transpose_b::Bool
 end
 
 # Cached graph with all tensors needed for execution
 struct CachedMatmulGraph
     graph::MPSGraph
+    place_c::MPSGraphTensor
     place_a::MPSGraphTensor
     place_b::MPSGraphTensor
-    place_c::MPSGraphTensor
     result::MPSGraphTensor
 end
 
@@ -79,8 +79,8 @@ function _make_matmul_key(a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb}, c::MtlArra
         size(a), size(b), size(c),
         Tab, Tc,
         Na, Nb,
-        transpose_a, transpose_b,
-        Float64(alpha), Float64(beta)
+        Float64(alpha), Float64(beta),
+        transpose_a, transpose_b
     )
 end
 
@@ -104,34 +104,16 @@ function _build_matmul_graph(size_a::Tuple, size_b::Tuple, size_c::Tuple,
     transA = transpose_a ? transposeTensor(graph, castA, Na-2, Na-1, "transpose_a") : castA
     transB = transpose_b ? transposeTensor(graph, castB, Nb-2, Nb-1, "transpose_b") : castB
 
-    # Compute batch sizes for broadcasting
-    # For transposed tensors, we need to compute the shape after transpose
-    function get_batch_size(tensor, ndims, transposed)
-        if ndims == 2
-            return 1
-        else
-            # For N-dimensional arrays, batch is first dimension
-            # The placeholder has the original shape, transpose swaps last two dims
-            return size_a[1]  # Batch dimension doesn't change with transpose
-        end
-    end
-
     nBatchA = Na == 2 ? 1 : size_a[1]
     nBatchB = Nb == 2 ? 1 : size_b[1]
 
     # for batched matmul between different sized tensors
     broadcastA, broadcastB = if nBatchA == nBatchB
         transA, transB
-    elseif nBatchA == 1
-        # Need to broadcast A to match B's batch size
-        # After transpose, shape is (batch, rows, cols) or (rows, cols)
-        trans_shape_a = transpose_a ? (size_a[1:end-2]..., size_a[end], size_a[end-1]) : size_a
-        new_shape = (nBatchB, trans_shape_a[max(1,end-1):end]...)
-        broadcastTensor(graph, transA, convert(MPSShape, collect(new_shape))), transB
-    elseif nBatchB == 1
-        trans_shape_b = transpose_b ? (size_b[1:end-2]..., size_b[end], size_b[end-1]) : size_b
-        new_shape = (nBatchA, trans_shape_b[max(1,end-1):end]...)
-        transA, broadcastTensor(graph, transB, convert(MPSShape, collect(new_shape)))
+    elseif Na == 1
+        broadcastTensor(graph, transA, convert(MPSShape, [nBatchB, size(transA)[2:end]...])), transB
+    elseif Nb == 1
+        transA, broadcastTensor(graph, transB, convert(MPSShape, [nBatchA, size(transB)[2:end]...]))
     else
         transA, transB
     end
@@ -150,7 +132,7 @@ function _build_matmul_graph(size_a::Tuple, size_b::Tuple, size_c::Tuple,
 
     castC = castTensor(graph, afterbeta, Tc, "castC")
 
-    CachedMatmulGraph(graph, placeA, placeB, placeC, castC)
+    CachedMatmulGraph(graph, placeC, placeA, placeB, castC)
 end
 
 # Get or create cached graph
