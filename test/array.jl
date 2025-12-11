@@ -92,7 +92,7 @@ end
         end
 
         # Large array, only test Float32
-        A = rand(Float32, Metal.GPU_COPY_THRESH)
+        A = rand(Float32, 32 * 2^20)
         mtlA = mtl(A; storage = S)
         res = similar(A)
         copyto!(res, mtlA)
