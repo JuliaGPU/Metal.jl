@@ -44,7 +44,7 @@ function Random.rand!(rng::RNG, A::WrappedMtlArray)
 
         # grid-stride loop
         threadId = thread_position_in_threadgroup().x
-        window = widemul(threads_per_threadgroup().x, threads_per_grid().x)
+        window = widemul(threads_per_threadgroup().x, threadgroups_per_grid().x)
         offset = widemul(threadgroup_position_in_grid().x - 1i32, threads_per_threadgroup().x)
         while offset < length(A)
             i = threadId + offset
@@ -90,7 +90,7 @@ function Random.randn!(rng::RNG, A::WrappedMtlArray{<:Union{AbstractFloat,Comple
 
         # grid-stride loop
         threadId = thread_position_in_threadgroup().x
-        window = widemul(threads_per_threadgroup().x, threads_per_grid().x)
+        window = widemul(threads_per_threadgroup().x, threadgroups_per_grid().x)
         offset = widemul(threadgroup_position_in_grid().x - 1i32, threads_per_threadgroup().x)
         while offset < length(A)
             i = threadId + offset
@@ -123,7 +123,7 @@ function Random.randn!(rng::RNG, A::WrappedMtlArray{<:Union{AbstractFloat,Comple
 
         # grid-stride loop
         threadId = thread_position_in_threadgroup().x
-        window = widemul(threads_per_threadgroup().x, threads_per_grid().x)
+        window = widemul(threads_per_threadgroup().x, threadgroups_per_grid().x)
         offset = widemul(threadgroup_position_in_grid().x - 1i32, threads_per_threadgroup().x)
         while offset < length(A)
             i = threadId + offset
