@@ -69,25 +69,33 @@ end
 end
 
 @testset "copyto!" begin
-    @testset "$T, $S" for S in [Metal.PrivateStorage, Metal.SharedStorage],
-                          T in [Float16, Float32, Bool, Int16, Int32, Int64, Int8, UInt16, UInt32, UInt64, UInt8]
-        dim = (1000,17,10)
-        A = rand(T,dim)
-        mtlA = mtl(A;storage=S)
+    @testset "$S" for S in [Metal.PrivateStorage, Metal.SharedStorage]
+        @testset "$T" for T in [Float16, Float32, Bool, Int16, Int32, Int64, Int8, UInt16, UInt32, UInt64, UInt8]
+            dim = (1000, 17, 10)
+            A = rand(T, dim)
+            mtlA = mtl(A; storage = S)
 
-        #cpu -> gpu
-        res = Metal.zeros(T,dim;storage=S)
-        copyto!(res,A)
-        @test Array(res) == Array(A)
+            #cpu -> gpu
+            res = Metal.zeros(T, dim; storage = S)
+            copyto!(res, A)
+            @test Array(res) == Array(A)
 
-        #gpu -> cpu
-        res = zeros(T,dim)
-        copyto!(res,mtlA)
-        @test Array(res) == Array(mtlA)
+            #gpu -> cpu
+            res = zeros(T, dim)
+            copyto!(res, mtlA)
+            @test Array(res) == Array(mtlA)
 
-        #gpu -> gpu
-        res = Metal.zeros(T,dim;storage=S)
-        copyto!(res,mtlA)
+            #gpu -> gpu
+            res = Metal.zeros(T, dim; storage = S)
+            copyto!(res, mtlA)
+            @test Array(res) == Array(mtlA)
+        end
+
+        # Large array, only test Float32
+        A = rand(Float32, 32 * 2^20)
+        mtlA = mtl(A; storage = S)
+        res = similar(A)
+        copyto!(res, mtlA)
         @test Array(res) == Array(mtlA)
     end
 end
