@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1764987073347,
+  "lastUpdate": 1765458534791,
   "repoUrl": "https://github.com/JuliaGPU/Metal.jl",
   "entries": {
     "Metal Benchmarks": [
@@ -35650,6 +35650,504 @@ window.BENCHMARK_DATA = {
           {
             "name": "metal/synchronization/context",
             "value": 20083,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=320\nallocs=15\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "28689358+christiangnrd@users.noreply.github.com",
+            "name": "Christian Guinard",
+            "username": "christiangnrd"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b7efdc6ebf605aebca2b8d37b8003479ba6c7286",
+          "message": "Add host RNG based on the native kernel RNG (#705)",
+          "timestamp": "2025-12-11T07:58:55-04:00",
+          "tree_id": "63c12128b9b8e091d7744f0c34126751554f23d8",
+          "url": "https://github.com/JuliaGPU/Metal.jl/commit/b7efdc6ebf605aebca2b8d37b8003479ba6c7286"
+        },
+        "date": 1765458530870,
+        "tool": "julia",
+        "benches": [
+          {
+            "name": "latency/precompile",
+            "value": 25204916250,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1344\nallocs=45\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":60,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "latency/ttfp",
+            "value": 2300434458,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1344\nallocs=45\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":60,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "latency/import",
+            "value": 1455905125,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1344\nallocs=45\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":30,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "integration/metaldevrt",
+            "value": 836542,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1984\nallocs=80\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "integration/byval/slices=1",
+            "value": 1579334,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=2448\nallocs=92\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "integration/byval/slices=3",
+            "value": 19308791.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4224\nallocs=164\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "integration/byval/reference",
+            "value": 1574083,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1984\nallocs=80\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "integration/byval/slices=2",
+            "value": 2742209,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=3296\nallocs=128\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "kernel/indexing",
+            "value": 510083,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1616\nallocs=65\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "kernel/indexing_checked",
+            "value": 515458,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1616\nallocs=65\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "kernel/launch",
+            "value": 12541,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=640\nallocs=21\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "kernel/rand",
+            "value": 505541.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1056\nallocs=45\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/construct",
+            "value": 6333,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1040\nallocs=30\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/broadcast",
+            "value": 555562.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1776\nallocs=63\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/random/randn/Float32",
+            "value": 914292,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1328\nallocs=45\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/random/randn!/Float32",
+            "value": 586625,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=256\nallocs=13\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/random/rand!/Int64",
+            "value": 539833,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=256\nallocs=13\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/random/rand!/Float32",
+            "value": 544250,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=256\nallocs=13\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/random/rand/Int64",
+            "value": 831520.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1328\nallocs=45\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/random/rand/Float32",
+            "value": 779875,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1328\nallocs=45\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/accumulate/Int64/1d",
+            "value": 1305333.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=14912\nallocs=512\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/accumulate/Int64/dims=1",
+            "value": 1859416,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4096\nallocs=146\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/accumulate/Int64/dims=2",
+            "value": 2215708,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4096\nallocs=146\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/accumulate/Int64/dims=1L",
+            "value": 12247270.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4032\nallocs=142\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/accumulate/Int64/dims=2L",
+            "value": 9843437,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=16608\nallocs=551\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/accumulate/Float32/1d",
+            "value": 1070625,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=15040\nallocs=520\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/accumulate/Float32/dims=1",
+            "value": 1606500,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4128\nallocs=148\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/accumulate/Float32/dims=2",
+            "value": 1964417,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4128\nallocs=148\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/accumulate/Float32/dims=1L",
+            "value": 10342500,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4064\nallocs=144\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/accumulate/Float32/dims=2L",
+            "value": 7498854,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=16800\nallocs=563\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/reduce/Int64/1d",
+            "value": 1287958.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=8096\nallocs=290\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/reduce/Int64/dims=1",
+            "value": 1115521,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=3200\nallocs=117\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/reduce/Int64/dims=2",
+            "value": 1158708,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=3232\nallocs=119\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/reduce/Int64/dims=1L",
+            "value": 1997583,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=3008\nallocs=108\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/reduce/Int64/dims=2L",
+            "value": 4174875,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=8096\nallocs=275\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/reduce/Float32/1d",
+            "value": 781333,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=8224\nallocs=298\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/reduce/Float32/dims=1",
+            "value": 800500,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=3216\nallocs=118\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/reduce/Float32/dims=2",
+            "value": 830042,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=3296\nallocs=123\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/reduce/Float32/dims=1L",
+            "value": 1311458.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=3040\nallocs=110\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/reduce/Float32/dims=2L",
+            "value": 1808500,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=8240\nallocs=284\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/mapreduce/Int64/1d",
+            "value": 1304000,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=8096\nallocs=290\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/mapreduce/Int64/dims=1",
+            "value": 1119750,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=3200\nallocs=117\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/mapreduce/Int64/dims=2",
+            "value": 1145542,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=3232\nallocs=119\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/mapreduce/Int64/dims=1L",
+            "value": 2007645.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=3008\nallocs=108\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/mapreduce/Int64/dims=2L",
+            "value": 3591687.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=8096\nallocs=275\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/mapreduce/Float32/1d",
+            "value": 765625,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=8224\nallocs=298\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/mapreduce/Float32/dims=1",
+            "value": 804833,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=3216\nallocs=118\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/mapreduce/Float32/dims=2",
+            "value": 822354,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=3296\nallocs=123\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/mapreduce/Float32/dims=1L",
+            "value": 1347396,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=3040\nallocs=110\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/reductions/mapreduce/Float32/dims=2L",
+            "value": 1816666.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=8240\nallocs=284\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/private/copyto!/gpu_to_gpu",
+            "value": 536625,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=624\nallocs=31\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/private/copyto!/cpu_to_gpu",
+            "value": 677875,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=624\nallocs=33\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/private/copyto!/gpu_to_cpu",
+            "value": 738541.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=624\nallocs=33\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/private/iteration/findall/int",
+            "value": 1578541,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=20768\nallocs=721\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/private/iteration/findall/bool",
+            "value": 1457334,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=17632\nallocs=615\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/private/iteration/findfirst/int",
+            "value": 2096875,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=11888\nallocs=409\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/private/iteration/findfirst/bool",
+            "value": 2027187.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=11888\nallocs=409\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/private/iteration/scalar",
+            "value": 2667229.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4912\nallocs=243\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/private/iteration/logical",
+            "value": 2681834,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=32352\nallocs=1134\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/private/iteration/findmin/1d",
+            "value": 2267708.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=11648\nallocs=402\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/private/iteration/findmin/2d",
+            "value": 1541604,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=13472\nallocs=424\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/private/copy",
+            "value": 829250,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1824\nallocs=65\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/shared/copyto!/gpu_to_gpu",
+            "value": 86958,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=672\nallocs=30\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/shared/copyto!/cpu_to_gpu",
+            "value": 84208,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=464\nallocs=21\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/shared/copyto!/gpu_to_cpu",
+            "value": 84375,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=464\nallocs=21\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/shared/iteration/findall/int",
+            "value": 1576895.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=20816\nallocs=724\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/shared/iteration/findall/bool",
+            "value": 1482917,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=17616\nallocs=614\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/shared/iteration/findfirst/int",
+            "value": 1701229.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=11536\nallocs=392\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/shared/iteration/findfirst/bool",
+            "value": 1639854,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=11536\nallocs=392\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/shared/iteration/scalar",
+            "value": 208645.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1872\nallocs=93\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/shared/iteration/logical",
+            "value": 2264375,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=32016\nallocs=1117\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/shared/iteration/findmin/1d",
+            "value": 1886687.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=11312\nallocs=386\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/shared/iteration/findmin/2d",
+            "value": 1545854,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=13472\nallocs=424\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/shared/copy",
+            "value": 213416,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1872\nallocs=64\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/permutedims/4d",
+            "value": 2474791.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=6352\nallocs=163\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/permutedims/2d",
+            "value": 1194499.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4800\nallocs=153\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "array/permutedims/3d",
+            "value": 1771062.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=5360\nallocs=155\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "metal/synchronization/stream",
+            "value": 19583,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=144\nallocs=7\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
+          },
+          {
+            "name": "metal/synchronization/context",
+            "value": 20333,
             "unit": "ns",
             "extra": "gctime=0\nmemory=320\nallocs=15\nparams={\"gctrial\":true,\"time_tolerance\":0.05,\"evals_set\":false,\"samples\":10000,\"evals\":1,\"gcsample\":false,\"seconds\":5,\"overhead\":0,\"memory_tolerance\":0.01}"
           }
