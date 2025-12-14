@@ -81,7 +81,7 @@ function __init__()
     # Only run with multiple threads - with a single thread, the async task would
     # block the main thread due to Julia's cooperative task runtime.
     return if functional() && _warmup_enabled && Threads.nthreads() > 1
-        _warmup_task[] = errormonitor(@async _warmup_compilation())
+        _warmup_task[] = errormonitor(Threads.@spawn _warmup_compilation())
     end
 end
 
