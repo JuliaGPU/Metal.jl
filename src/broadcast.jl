@@ -81,7 +81,7 @@ end
         kernel = @metal launch=false broadcast_cartesian_static(dest, bc, Is)
         elements = cld(length(dest), 4)
         threads = min(elements, kernel.pipeline.maxTotalThreadsPerThreadgroup)
-        groups = cld(elements, threads)
+        groups = cld(min(elements, typemax(UInt32).-threads), threads)
         kernel(dest, bc, Is; threads, groups)
         return dest
     end
@@ -104,7 +104,7 @@ end
         kernel = @metal launch=false broadcast_linear(dest, bc)
         elements = cld(length(dest), 4)
         threads = min(elements, kernel.pipeline.maxTotalThreadsPerThreadgroup)
-        groups = cld(elements, threads)
+        elements = size(dest)
     elseif ndims(dest) == 2
         ## COV_EXCL_START
         function broadcast_2d(dest, bc)
@@ -127,11 +127,11 @@ end
 
         kernel = @metal launch=false broadcast_2d(dest, bc)
 
-        maxThreads = prevwarp(kernel.pipeline, kernel.pipeline.maxTotalThreadsPerThreadgroup - 1)
+        maxThreads = kernel.pipeline.maxTotalThreadsPerThreadgroup
         w = min(size(dest, 1), maxThreads)
         h = min(size(dest, 2), maxThreads ÷ w)
         threads = (w, h)
-        groups = cld.(size(dest), threads)
+        elements = size(dest)
     elseif ndims(dest) == 3
         ## COV_EXCL_START
         function broadcast_3d(dest, bc)
@@ -159,12 +159,12 @@ end
 
         kernel = @metal launch=false broadcast_3d(dest, bc)
 
-        maxThreads = prevwarp(kernel.pipeline, kernel.pipeline.maxTotalThreadsPerThreadgroup - 1)
+        maxThreads = kernel.pipeline.maxTotalThreadsPerThreadgroup
         w = min(size(dest, 1), maxThreads)
         h = min(size(dest, 2), maxThreads ÷ w)
         d = min(size(dest, 3), maxThreads ÷ (w*h))
         threads = (w, h, d)
-        groups = cld.(size(dest), threads)
+        elements = size(dest)
     else
         ## COV_EXCL_START
         function broadcast_cartesian(dest, bc)
@@ -182,8 +182,10 @@ end
         kernel = @metal launch=false broadcast_cartesian(dest, bc)
         elements = cld(length(dest), 4)
         threads = min(elements, kernel.pipeline.maxTotalThreadsPerThreadgroup)
-        groups = cld(elements, threads)
     end
+
+    groups = cld.(min.(elements, typemax(UInt32).-threads), threads)
+
     kernel(dest, bc; threads, groups)
 
     return dest
