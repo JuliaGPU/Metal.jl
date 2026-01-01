@@ -144,23 +144,14 @@ function _get_cached_graph(key::MatmulGraphKey)
     end
 
     # Slow path: acquire lock and build graph
-    lock(_matmul_graph_cache_lock) do
-        # Double-check after acquiring lock
-        cached = get(_matmul_graph_cache, key, nothing)
-        if cached !== nothing
-            return cached
-        end
-
-        # Build new graph
-        cached = _build_matmul_graph(
+    @lock _matmul_graph_cache_lock get!(_matmul_graph_cache, key) do
+        _build_matmul_graph(
             key.size_a, key.size_b, key.size_c,
             key.eltype_ab, key.eltype_c,
             key.ndims_a, key.ndims_b,
             key.transpose_a, key.transpose_b,
             key.alpha, key.beta
         )
-        _matmul_graph_cache[key] = cached
-        return cached
     end
 end
 
