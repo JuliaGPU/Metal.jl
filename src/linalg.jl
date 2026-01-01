@@ -21,15 +21,6 @@ end
         C.offset == 0
 end
 
-# Assumes support for MPS matrix multiplication has been verified elsewhere
-@inline function should_use_MPS(A, _, C)
-    rows = size(C,1)
-    cols = size(C,2)
-    # TODO: matvecmul different?
-    (eltype(A) <: Integer && rows <= 2000 && cols <= 2000 ) ||
-    eltype(A) <: AbstractFloat && rows <= 6000 && cols <= 6000 && Metal.supports_family(device(C), MTL.MTLGPUFamilyApple9)
-end
-
 # Supported values are :auto, :MPS, :MPSGraph, and :GPUArrays
 const matmul_alg = ScopedValue(:auto)
 matmul_alg_error(alg, inT, outT, vec) = error("Matrix-$(vec ? "Vector" : "Matrix") multiplication algorithm `:$alg` is not supported for input eltype $inT and output eltype $outT.")
@@ -63,7 +54,7 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     mps_supported = supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES)
     mpsgraph_supported = supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATMUL_TYPES)
     # If possible, dispatch to MPSGraphs, then performance shaders
-    if alg === :MPSGraph || (alg === :auto && mpsgraph_supported && !should_use_MPS(A, B, C))
+    if alg === :MPSGraph || (alg === :auto && mpsgraph_supported)
         mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C), false)
         graph_matmul!(C, A, B, alpha, beta, transA, transB)
     elseif alg === :MPS || (alg === :auto && mps_supported)
