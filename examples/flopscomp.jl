@@ -1,4 +1,4 @@
-using Metal, GPUArrays, LinearAlgebra, Printf#, AppleAccelerate
+using Metal, GPUArrays, LinearAlgebra, Printf, ScopedValues#, AppleAccelerate
 
 testing = (@isdefined TESTING) && TESTING
 
@@ -54,16 +54,10 @@ function _peakflops(f, n, n_batch, inT, outT, ntrials; verify=true)
 
     return n_batch*2*Float64(n)^3 / minimum(t)
 end
-function gpuarrpeakflops(; n::Integer=4096,
-                           n_batch::Integer=1,
-                           inT::DataType=Float32,
-                           outT::DataType=inT,
-                           ntrials::Integer=3,
-                           verify=true)
+function gpuarrpeakflops(; n_batch::Integer=1,
+                           kwargs...)
     n_batch == 1 || @warn "n_batch > 1 not supported for `GPUArrays.generic_matmatmul!`, running with n_batch=1"
-    _peakflops(n, 1, inT, outT, ntrials; verify) do c, a, b
-        GPUArrays.generic_matmatmul!(c, LinearAlgebra.wrap(a, 'N'), LinearAlgebra.wrap(b, 'N'), 1, 0)
-    end
+    @with (Metal.matmul_alg => :GPUArrays) defaultpeakflops(; n_batch, kwargs...)
 end
 function defaultpeakflops(; n::Integer=4096,
                            n_batch::Integer=1,
@@ -71,25 +65,15 @@ function defaultpeakflops(; n::Integer=4096,
                            outT::DataType=inT,
                            ntrials::Integer=3,
                            verify=true)
-    _peakflops(n, 1, inT, outT, ntrials; verify) do c, a, b
+    _peakflops(n, n_batch, inT, outT, ntrials; verify) do c, a, b
         LinearAlgebra.generic_matmatmul!(c, 'N', 'N', a, b, 1, 0)
     end
 end
-function mpspeakflops(; n::Integer=4096,
-                        n_batch::Integer=1,
-                        inT::DataType=Float32,
-                        outT::DataType=inT,
-                        ntrials::Integer=3,
-                        verify=true)
-    _peakflops(MPS.matmul!, n, n_batch, inT, outT, ntrials; verify)
+function mpspeakflops(; kwargs...)
+    @with (Metal.matmul_alg => :MPS) defaultpeakflops(; kwargs...)
 end
-function graphpeakflops(; n::Integer=4096,
-                          n_batch::Integer=1,
-                          inT::DataType=Float32,
-                          outT::DataType=inT,
-                          ntrials::Integer=3,
-                          verify=true)
-    _peakflops(MPSGraphs.graph_matmul!, n, n_batch, inT, outT, ntrials; verify)
+function graphpeakflops(; kwargs...)
+    @with (Metal.matmul_alg => :MPSGraph) defaultpeakflops(; kwargs...)
 end
 function anepeakflops(; kwargs...)
     # VERY HACKY
@@ -139,9 +123,9 @@ DEFAULT_FS = [
     (mpspeakflops, "MPS"),
     (graphpeakflops, "MPSGraph"),
     (defaultpeakflops, "Default"),
-    # (anepeakflops, "MPSGraph (ANE)"),
-    # (gpuarrpeakflops, "GPUArrays"),
+    (gpuarrpeakflops, "GPUArrays"),
     # (cpupeakflops, "CPU (AppleAccelerate)"), # Uncomment to test CPU performance
+    # (anepeakflops, "MPSGraph (ANE)"), # Run last to prevent different line colours
 ]
 
 function runcomparison(; Ns=DEFAULT_NS, Fs=DEFAULT_FS, n_batch=1, ntrials=5, verbose=true)
@@ -152,7 +136,7 @@ function runcomparison(; Ns=DEFAULT_NS, Fs=DEFAULT_FS, n_batch=1, ntrials=5, ver
     return res
 end
 
-function plot_results(res, Fs=DEFAULT_FS; outpath=nothing, outtype="svg", plt_title=PLOT_TITLE)
+function plot_results(res, Fs=DEFAULT_FS; outpath=nothing, fileext="svg", plt_title=PLOT_TITLE)
     Fs = get.(Fs, 2, "You shouldn't be reading this")
     ylim_upper = 9e12
     resplts = []
@@ -184,7 +168,7 @@ function plot_results(res, Fs=DEFAULT_FS; outpath=nothing, outtype="svg", plt_ti
                      bottommargin=15pt,
                      size=(2000,1200))
     if !isnothing(outpath)
-        savefig(plot(finalplot, dpi=500), joinpath(outpath, "bench_all_$(first(n_batches)).$outtype"))
+        savefig(plot(finalplot, dpi=500), joinpath(outpath, "bench_all_$(first(n_batches)).$fileext"))
     end
     return finalplot
 end
