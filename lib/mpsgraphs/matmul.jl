@@ -52,7 +52,7 @@ struct MatmulGraphKey
     eltype_c::DataType
     ndims_a::Int
     ndims_b::Int
-    alpha::Float64  # Normalized to Float64 for hashing
+    alpha::Float64
     beta::Float64
     transpose_a::Bool
     transpose_b::Bool
@@ -78,12 +78,6 @@ struct CachedMatmulGraph
     place_b::MPSGraphTensor
     result::MPSGraphTensor
 end
-
-# Thread-safe graph cache with lock
-const _matmul_graph_cache = Dict{MatmulGraphKey, CachedMatmulGraph}()
-const _matmul_graph_cache_lock = ReentrantLock()
-
-
 # Build a new matmul graph (called only on cache miss)
 function CachedMatmulGraph(key::MatmulGraphKey)
     graph = MPSGraph()
@@ -132,25 +126,28 @@ function CachedMatmulGraph(key::MatmulGraphKey)
 end
 
 # Get or create cached graph
-function _get_cached_graph(key::MatmulGraphKey)
+function _get_cached_graph!(graph_cache_lock, graph_cache, key::MatmulGraphKey)
     # Fast path: check cache without lock (safe for reads)
-    cached = get(_matmul_graph_cache, key, nothing)
+    cached = get(graph_cache, key, nothing)
     if cached !== nothing
         return cached
     end
 
     # Slow path: acquire lock and build graph
-    @lock _matmul_graph_cache_lock get!(_matmul_graph_cache, key) do
+    @lock graph_cache_lock get!(graph_cache, key) do
         CachedMatmulGraph(key)
     end
 end
 
+# Thread-safe graph cache with lock
+const _matmul_graph_cache = Dict{MatmulGraphKey, CachedMatmulGraph}()
+const _matmul_graph_cache_lock = ReentrantLock()
 @autoreleasepool function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb},
                                    alpha::Number, beta::Number,
                                    transpose_a, transpose_b) where {Tc, Tab, Na, Nb}
     # Get or create cached graph
     key = MatmulGraphKey(a, b, c, alpha, beta, transpose_a, transpose_b)
-    cached = _get_cached_graph(key)
+    cached = _get_cached_graph!(_matmul_graph_cache_lock, _matmul_graph_cache, key)
 
     # Build feed and result dictionaries with current data
     feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
