@@ -85,34 +85,30 @@ function _make_matmul_key(a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb}, c::MtlArra
 end
 
 # Build a new matmul graph (called only on cache miss)
-function _build_matmul_graph(size_a::Tuple, size_b::Tuple, size_c::Tuple,
-                             Tab::DataType, Tc::DataType,
-                             Na::Int, Nb::Int,
-                             transpose_a::Bool, transpose_b::Bool,
-                             alpha::Number, beta::Number)
+function _build_matmul_graph(key::MatmulGraphKey)
     graph = MPSGraph()
 
-    placeA = placeholderTensor(graph, size_a, Tab)
-    placeB = placeholderTensor(graph, size_b, Tab)
-    placeC = placeholderTensor(graph, size_c, Tc)
+    placeA = placeholderTensor(graph, key.size_a, key.eltype_ab)
+    placeB = placeholderTensor(graph, key.size_b, key.eltype_ab)
+    placeC = placeholderTensor(graph, key.size_c, key.eltype_c)
 
     # cast to output eltype if input type is an integer type
-    castT = Tab <: Integer ? Tc : Tab
+    castT = key.eltype_ab <: Integer ? key.eltype_c : key.eltype_ab
     castA = castTensor(graph, placeA, castT, "castA")
     castB = castTensor(graph, placeB, castT, "castB")
 
-    transA = transpose_a ? transposeTensor(graph, castA, Na-2, Na-1, "transpose_a") : castA
-    transB = transpose_b ? transposeTensor(graph, castB, Nb-2, Nb-1, "transpose_b") : castB
+    transA = key.transpose_a ? transposeTensor(graph, castA, key.ndims_a - 2, key.ndims_a - 1, "transpose_a") : castA
+    transB = key.transpose_b ? transposeTensor(graph, castB, key.ndims_b - 2, key.ndims_b - 1, "transpose_b") : castB
 
-    nBatchA = Na == 2 ? 1 : size_a[1]
-    nBatchB = Nb == 2 ? 1 : size_b[1]
+    nBatchA = key.ndims_a == 2 ? 1 : key.size_a[1]
+    nBatchB = key.ndims_b == 2 ? 1 : key.size_b[1]
 
     # for batched matmul between different sized tensors
     broadcastA, broadcastB = if nBatchA == nBatchB
         transA, transB
-    elseif Na == 1
+    elseif key.ndims_a == 1
         broadcastTensor(graph, transA, convert(MPSShape, [nBatchB, size(transA)[2:end]...])), transB
-    elseif Nb == 1
+    elseif key.ndims_b == 1
         transA, broadcastTensor(graph, transB, convert(MPSShape, [nBatchA, size(transB)[2:end]...]))
     else
         transA, transB
@@ -120,17 +116,17 @@ function _build_matmul_graph(size_a::Tuple, size_b::Tuple, size_c::Tuple,
 
     matmul = matrixMultiplicationWithPrimaryTensor(graph, broadcastB, broadcastA)
 
-    afteralpha = let alphatensor = constantWithScalar(graph, alpha, castT)
+    afteralpha = let alphatensor = constantWithScalar(graph, key.alpha, castT)
         multiplicationWithPrimaryTensor(graph, alphatensor, matmul)
     end
 
-    afterbeta = let betatensor = constantWithScalar(graph, beta, castT)
+    afterbeta = let betatensor = constantWithScalar(graph, key.beta, castT)
         castplaceC = castTensor(graph, placeC, castT, "castplaceC")
         betaC = multiplicationWithPrimaryTensor(graph, betatensor, castplaceC)
         additionWithPrimaryTensor(graph, afteralpha, betaC)
     end
 
-    castC = castTensor(graph, afterbeta, Tc, "castC")
+    castC = castTensor(graph, afterbeta, key.eltype_c, "castC")
 
     CachedMatmulGraph(graph, placeC, placeA, placeB, castC)
 end
@@ -145,13 +141,7 @@ function _get_cached_graph(key::MatmulGraphKey)
 
     # Slow path: acquire lock and build graph
     @lock _matmul_graph_cache_lock get!(_matmul_graph_cache, key) do
-        _build_matmul_graph(
-            key.size_a, key.size_b, key.size_c,
-            key.eltype_ab, key.eltype_c,
-            key.ndims_a, key.ndims_b,
-            key.transpose_a, key.transpose_b,
-            key.alpha, key.beta
-        )
+        _build_matmul_graph(key)
     end
 end
 
