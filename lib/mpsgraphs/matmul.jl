@@ -57,6 +57,18 @@ struct MatmulGraphKey
     transpose_a::Bool
     transpose_b::Bool
 end
+# Build graph key from matmul parameters
+function MatmulGraphKey(a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb}, c::MtlArray{Tc},
+                          alpha::Number, beta::Number,
+                          transpose_a::Bool, transpose_b::Bool) where {Tc, Tab, Na, Nb}
+    MatmulGraphKey(
+        size(a), size(b), size(c),
+        Tab, Tc,
+        Na, Nb,
+        Float64(alpha), Float64(beta),
+        transpose_a, transpose_b
+    )
+end
 
 # Cached graph with all tensors needed for execution
 struct CachedMatmulGraph
@@ -71,21 +83,9 @@ end
 const _matmul_graph_cache = Dict{MatmulGraphKey, CachedMatmulGraph}()
 const _matmul_graph_cache_lock = ReentrantLock()
 
-# Build graph key from matmul parameters
-function _make_matmul_key(a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb}, c::MtlArray{Tc},
-                          alpha::Number, beta::Number,
-                          transpose_a::Bool, transpose_b::Bool) where {Tc, Tab, Na, Nb}
-    MatmulGraphKey(
-        size(a), size(b), size(c),
-        Tab, Tc,
-        Na, Nb,
-        Float64(alpha), Float64(beta),
-        transpose_a, transpose_b
-    )
-end
 
 # Build a new matmul graph (called only on cache miss)
-function _build_matmul_graph(key::MatmulGraphKey)
+function CachedMatmulGraph(key::MatmulGraphKey)
     graph = MPSGraph()
 
     placeA = placeholderTensor(graph, key.size_a, key.eltype_ab)
@@ -141,7 +141,7 @@ function _get_cached_graph(key::MatmulGraphKey)
 
     # Slow path: acquire lock and build graph
     @lock _matmul_graph_cache_lock get!(_matmul_graph_cache, key) do
-        _build_matmul_graph(key)
+        CachedMatmulGraph(key)
     end
 end
 
@@ -149,7 +149,7 @@ end
                                    alpha::Number, beta::Number,
                                    transpose_a, transpose_b) where {Tc, Tab, Na, Nb}
     # Get or create cached graph
-    key = _make_matmul_key(a, b, c, alpha, beta, transpose_a, transpose_b)
+    key = MatmulGraphKey(a, b, c, alpha, beta, transpose_a, transpose_b)
     cached = _get_cached_graph(key)
 
     # Build feed and result dictionaries with current data
