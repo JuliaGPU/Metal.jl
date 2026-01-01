@@ -170,7 +170,7 @@ end
     )
 
     resultdict = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => MPSGraphTensorData(c)
+        cached.result => feeds[cached.place_c]
     )
 
     cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
