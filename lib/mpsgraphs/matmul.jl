@@ -33,9 +33,9 @@ end
 #=
 MPSGraph caching infrastructure.
 
-Creating an MPSGraph takes ~2ms per call, which dominates matmul time for small-medium
-matrices. By caching graphs keyed by their structural parameters (shapes, types, flags),
-we achieve significant speedup for repeated operations with the same configuration.
+The overhead of creating an MPSGraph dominates matmul time for small-medium matrices.
+By caching graphs keyed by their structural parameters (shapes, types, flags), we
+achieve significant speedup for repeated operations with the same configuration.
 
 The cache key includes all parameters that affect graph structure:
 - Input/output shapes and element types
