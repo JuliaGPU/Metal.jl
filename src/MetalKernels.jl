@@ -161,6 +161,8 @@ function KI.multiprocessor_count(::MetalBackend)::Int
     Metal.num_gpu_cores()
 end
 
+KI.shfl_down_types(::MetalBackend) = DataType[Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8]
+
 
 
 ## indexing
@@ -230,6 +232,10 @@ end
 end
 @device_override @inline function KI.sub_group_barrier()
     simdgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
+end
+
+@device_override function KI.shfl_down(val::T, offset::Integer)::T where T
+    simd_shuffle_down(val, offset)
 end
 
 @device_override @inline function KI._print(args...)
