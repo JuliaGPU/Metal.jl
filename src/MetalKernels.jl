@@ -234,7 +234,7 @@ end
     simdgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
 end
 
-@device_override function KI.shfl_down(val::T, offset::Integer)::T where T
+@device_override function @inline KI.shfl_down(val::T, offset::Integer)::T where T
     simd_shuffle_down(val, offset)
 end
 
