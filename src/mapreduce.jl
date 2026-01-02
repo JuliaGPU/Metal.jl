@@ -6,10 +6,10 @@
 
 # Reduce a value across a warp using shuffle down intrinsic
 @inline function reduce_warp(op, val)
-    assume(threads_per_simdgroup() == 32)
+    assume(KI.get_sub_group_size() == 32)
     offset = 0x00000001
-    while offset < 32
-        val = op(val, simd_shuffle_down(val, offset))
+    while offset < KI.get_sub_group_size()
+        val = op(val, KI.shfl_down(val, offset))
         offset <<= 1
     end
 
@@ -19,11 +19,11 @@ end
 # Reduce a value across a threadgroup, using shared memory for communication and shuffle intrinsics
 @inline function reduce_group(op, val::T, neutral, shuffle::Val{true}, ::Val{maxthreads}) where {T, maxthreads}
     # shared mem for partial sums
-    assume(threads_per_simdgroup() == 32)
+    assume(KI.get_sub_group_size() == 32)
     shared = KI.localmemory(T, 32)
 
-    wid  = simdgroup_index_in_threadgroup()
-    lane = thread_index_in_simdgroup()
+    wid  = KI.get_sub_group_id()
+    lane = KI.get_sub_group_local_id()
 
     # each warp performs partial reduction
     val = reduce_warp(op, val)
@@ -176,7 +176,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     length(A) == 0 && return R # isempty(::Broadcasted) iterates
 
     # be conservative about using shuffle instructions
-    shuffle = T <: Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
+    shuffle = T in KI.shfl_down_types(backend)
 
     # add singleton dimensions to the output container, if needed
     if ndims(R) < ndims(A)
