@@ -228,6 +228,9 @@ end
 @device_override @inline function KI.barrier()
     threadgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
 end
+@device_override @inline function KI.sub_group_barrier()
+    simdgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
+end
 
 @device_override @inline function KI._print(args...)
     # TODO
