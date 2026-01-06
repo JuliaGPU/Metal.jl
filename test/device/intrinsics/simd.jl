@@ -1,5 +1,50 @@
 @testset "simd intrinsics" begin
 
+@testset "shuffle idx" begin
+    function shuffle_kernel(d)
+        i = thread_index_in_simdgroup()
+        j = threads_per_simdgroup() - i + 0x1
+
+        d[i] = simd_shuffle(d[i], j)
+        return
+    end
+
+    threadsPerSimdgroup = 32
+
+    @testset for T in [UInt8, UInt16, UInt32,
+                       Int8, Int16, Int32,
+                       Float16, Float32]
+        a = rand(T, threadsPerSimdgroup)
+        d_a = MtlArray(a)
+        Metal.@sync @metal threads=threadsPerSimdgroup shuffle_kernel(d_a)
+        @test Array(d_a) == reverse(a)
+    end
+end
+
+@testset "shuffle xor" begin
+    function xor_kernel(in)
+        i = thread_index_in_simdgroup()
+
+        new_val = simd_shuffle_xor(in[i], 1)
+
+        in[i] = new_val
+        return
+    end
+
+    threadsPerSimdgroup = 32
+
+    # tests that each pair of values a get swapped using sub_group_shuffle_xor
+    @testset for T in [UInt8, UInt16, UInt32,
+                       Int8, Int16, Int32,
+                       Float16, Float32]
+        in = rand(T, threadsPerSimdgroup)
+        idxs = xor.(0:(threadsPerSimdgroup - 1), 1) .+ 1
+        d_in = MtlArray(in)
+        Metal.@sync @metal threads=threadsPerSimdgroup xor_kernel(d_in)
+        @test Array(d_in) == in[idxs]
+    end
+end
+
 @testset "$f($typ)" for typ in [Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8], (f,res_idx) in [(simd_shuffle_down, 1), (simd_shuffle_up, 32)]
     function kernel(a::MtlDeviceVector{T}, b::MtlDeviceVector{T}) where T
         idx = thread_position_in_grid().x
