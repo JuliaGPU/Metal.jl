@@ -1,5 +1,26 @@
 @testset "simd intrinsics" begin
 
+@testset "shuffle idx" begin
+    function kernel(d)
+        i = thread_index_in_simdgroup()
+        j = 32 - i + 1
+
+        d[i] = simd_shuffle(d[i], j)
+        return
+    end
+
+    threadsPerSimdgroup = 32
+
+    @testset for T in [UInt8, UInt16, UInt32,
+                       Int8, Int16, Int32,
+                       Float16, Float32]
+        a = rand(T, threadsPerSimdgroup)
+        d_a = MtlArray(a)
+        Metal.@sync @metal threads=threadsPerSimdgroup kernel(d_a)
+        @test Array(d_a) == reverse(a)
+    end
+end
+
 @testset "$f($typ)" for typ in [Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8], (f,res_idx) in [(simd_shuffle_down, 1), (simd_shuffle_up, 32)]
     function kernel(a::MtlDeviceVector{T}, b::MtlDeviceVector{T}) where T
         idx = thread_position_in_grid().x

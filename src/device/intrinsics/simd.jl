@@ -1,5 +1,6 @@
 export simdgroup_load, simdgroup_store, simdgroup_multiply, simdgroup_multiply_accumulate,
-        simd_shuffle_down, simd_shuffle_up, simd_shuffle_and_fill_down, simd_shuffle_and_fill_up
+        simd_shuffle_down, simd_shuffle_up, simd_shuffle_and_fill_down, simd_shuffle_and_fill_up,
+        simd_shuffle
 
 using Core: LLVMPtr
 
@@ -97,6 +98,10 @@ simd_shuffle_map = ((Float32, "f32"),
 
 for (jltype, suffix) in simd_shuffle_map
     @eval begin
+        @device_function simd_shuffle(data::$jltype, simd_lane_id::Integer) =
+            ccall($"extern air.simd_shuffle.$suffix",
+                llvmcall, $jltype, ($jltype, Int16), data, simd_lane_id - 0x1)
+
         @device_function simd_shuffle_down(data::$jltype, delta::Integer) =
             ccall($"extern air.simd_shuffle_down.$suffix",
                 llvmcall, $jltype, ($jltype, Int16), data, delta)
@@ -116,6 +121,17 @@ for (jltype, suffix) in simd_shuffle_map
 end
 
 ## Documentation
+
+@doc """
+    simd_shuffle(data::T, simd_lane_id::Integer)
+
+Return `data` from the thread whose SIMD lane ID is `simd_lane_id`. The `simd_lane_id`
+needs to be a validSIMD lane ID but doesn't have to be the same for all threads in the
+SIMD-group
+
+T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+"""
+simd_shuffle
 
 @doc """
     simd_shuffle_down(data::T, delta::Integer)
