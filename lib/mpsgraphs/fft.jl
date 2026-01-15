@@ -96,31 +96,31 @@ function _check_rfft_type(::Type{T}) where {T <: Real}
     )
 end
 
-function AbstractFFTs.plan_fft(x::MtlArray{T, N}, region; kwargs...) where {T <: Complex, N}
+function AbstractFFTs.plan_fft(x::MtlArray{T, N}, region) where {T <: Complex, N}
     _check_fft_type(T)
     return MtlFFTPlan{T, Forward}(size(x), region)
 end
 
-function AbstractFFTs.plan_fft(x::MtlArray{T, N}; kwargs...) where {T <: Complex, N}
-    return plan_fft(x, 1:N; kwargs...)
+function AbstractFFTs.plan_fft(x::MtlArray{T, N}) where {T <: Complex, N}
+    return plan_fft(x, 1:N)
 end
 
-function AbstractFFTs.plan_ifft(x::MtlArray{T, N}, region; kwargs...) where {T <: Complex, N}
+function AbstractFFTs.plan_ifft(x::MtlArray{T, N}, region) where {T <: Complex, N}
     _check_fft_type(T)
     return MtlFFTPlan{T, Inverse}(size(x), region)
 end
 
-function AbstractFFTs.plan_ifft(x::MtlArray{T, N}; kwargs...) where {T <: Complex, N}
-    return plan_ifft(x, 1:N; kwargs...)
+function AbstractFFTs.plan_ifft(x::MtlArray{T, N}) where {T <: Complex, N}
+    return plan_ifft(x, 1:N)
 end
 
-function AbstractFFTs.plan_bfft(x::MtlArray{T, N}, region; kwargs...) where {T <: Complex, N}
+function AbstractFFTs.plan_bfft(x::MtlArray{T, N}, region) where {T <: Complex, N}
     _check_fft_type(T)
     return MtlFFTPlan{T, Backward}(size(x), region)
 end
 
-function AbstractFFTs.plan_bfft(x::MtlArray{T, N}; kwargs...) where {T <: Complex, N}
-    return plan_bfft(x, 1:N; kwargs...)
+function AbstractFFTs.plan_bfft(x::MtlArray{T, N}) where {T <: Complex, N}
+    return plan_bfft(x, 1:N)
 end
 
 # Plan properties
@@ -213,31 +213,31 @@ function MtlFFTInplacePlan{T, K}(sz::NTuple{N, Int}, region) where {T, K <: FFTD
 end
 
 # In-place plan creation
-function AbstractFFTs.plan_fft!(x::MtlArray{T, N}, region; kwargs...) where {T <: Complex, N}
+function AbstractFFTs.plan_fft!(x::MtlArray{T, N}, region) where {T <: Complex, N}
     _check_fft_type(T)
     return MtlFFTInplacePlan{T, Forward}(size(x), region)
 end
 
-function AbstractFFTs.plan_fft!(x::MtlArray{T, N}; kwargs...) where {T <: Complex, N}
-    return plan_fft!(x, 1:N; kwargs...)
+function AbstractFFTs.plan_fft!(x::MtlArray{T, N}) where {T <: Complex, N}
+    return plan_fft!(x, 1:N)
 end
 
-function AbstractFFTs.plan_ifft!(x::MtlArray{T, N}, region; kwargs...) where {T <: Complex, N}
+function AbstractFFTs.plan_ifft!(x::MtlArray{T, N}, region) where {T <: Complex, N}
     _check_fft_type(T)
     return MtlFFTInplacePlan{T, Inverse}(size(x), region)
 end
 
-function AbstractFFTs.plan_ifft!(x::MtlArray{T, N}; kwargs...) where {T <: Complex, N}
-    return plan_ifft!(x, 1:N; kwargs...)
+function AbstractFFTs.plan_ifft!(x::MtlArray{T, N}) where {T <: Complex, N}
+    return plan_ifft!(x, 1:N)
 end
 
-function AbstractFFTs.plan_bfft!(x::MtlArray{T, N}, region; kwargs...) where {T <: Complex, N}
+function AbstractFFTs.plan_bfft!(x::MtlArray{T, N}, region) where {T <: Complex, N}
     _check_fft_type(T)
     return MtlFFTInplacePlan{T, Backward}(size(x), region)
 end
 
-function AbstractFFTs.plan_bfft!(x::MtlArray{T, N}; kwargs...) where {T <: Complex, N}
-    return plan_bfft!(x, 1:N; kwargs...)
+function AbstractFFTs.plan_bfft!(x::MtlArray{T, N}) where {T <: Complex, N}
+    return plan_bfft!(x, 1:N)
 end
 
 # Plan properties for in-place plans
@@ -407,31 +407,31 @@ end
 # Real FFT AbstractFFTs Interface
 # ============================================================================
 
-function AbstractFFTs.plan_rfft(x::MtlArray{T, N}, region; kwargs...) where {T <: Real, N}
+function AbstractFFTs.plan_rfft(x::MtlArray{T, N}, region) where {T <: Real, N}
     _check_rfft_type(T)
     return MtlRFFTPlan{T, Forward}(size(x), region)
 end
 
-function AbstractFFTs.plan_rfft(x::MtlArray{T, N}; kwargs...) where {T <: Real, N}
-    return plan_rfft(x, 1:N; kwargs...)
+function AbstractFFTs.plan_rfft(x::MtlArray{T, N}) where {T <: Real, N}
+    return plan_rfft(x, 1:N)
 end
 
-function AbstractFFTs.plan_irfft(x::MtlArray{T, N}, d::Int, region; kwargs...) where {T <: Complex, N}
+function AbstractFFTs.plan_irfft(x::MtlArray{T, N}, d::Int, region) where {T <: Complex, N}
     _check_fft_type(T)
     return MtlRFFTPlan{T, Inverse}(size(x), d, region)
 end
 
-function AbstractFFTs.plan_irfft(x::MtlArray{T, N}, d::Int; kwargs...) where {T <: Complex, N}
-    return plan_irfft(x, d, 1:N; kwargs...)
+function AbstractFFTs.plan_irfft(x::MtlArray{T, N}, d::Int) where {T <: Complex, N}
+    return plan_irfft(x, d, 1:N)
 end
 
-function AbstractFFTs.plan_brfft(x::MtlArray{T, N}, d::Int, region; kwargs...) where {T <: Complex, N}
+function AbstractFFTs.plan_brfft(x::MtlArray{T, N}, d::Int, region) where {T <: Complex, N}
     _check_fft_type(T)
     return MtlRFFTPlan{T, Backward}(size(x), d, region)
 end
 
-function AbstractFFTs.plan_brfft(x::MtlArray{T, N}, d::Int; kwargs...) where {T <: Complex, N}
-    return plan_brfft(x, d, 1:N; kwargs...)
+function AbstractFFTs.plan_brfft(x::MtlArray{T, N}, d::Int) where {T <: Complex, N}
+    return plan_brfft(x, d, 1:N)
 end
 
 # Plan properties for real FFT
