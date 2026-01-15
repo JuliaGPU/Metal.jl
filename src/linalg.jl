@@ -77,7 +77,7 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
     mC = length(C)
 
     if nA != mB
-        throw(DimensionMismatch("A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
+        throw(DimensionMismatch("A has dimensions ($mA,$nA) but B is a vector of length ($mB)"))
     end
 
     if B === C
@@ -171,7 +171,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{<:Any, MTL.CPUStorage}, maxi::Integer) =
 
     wait_completed(cmdbuf)
 
-    status = convert(LinearAlgebra.BlasInt, status[])
+    status = convert(LinearAlgebra.BlasInt, status[]::MPS.MPSMatrixDecompositionStatus)
     check && checknonsingular(status)
 
     return LinearAlgebra.LU(B, p, status)

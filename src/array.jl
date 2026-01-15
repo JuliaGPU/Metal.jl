@@ -101,7 +101,7 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
         elseif storagemode == MTL.MTLStorageModePrivate
             new{T,N,PrivateStorage}(copy(data), maxsize, offset, dims)
         elseif storagemode == MTL.MTLStorageModeMemoryless
-            new{T,N,Memoryless}(copy(data), maxsize, offset, dims)
+            new{T,N,MTL.Memoryless}(copy(data), maxsize, offset, dims)
         end
         finalizer(unsafe_free!, obj)
     end
@@ -157,7 +157,7 @@ See also [`is_shared`](@ref).
 """
 is_private(A::MtlArray) = storagemode(A) == PrivateStorage
 
-is_memoryless(A::MtlArray) = storagemode(A) == Memoryless
+is_memoryless(A::MtlArray) = storagemode(A) == MTL.Memoryless
 
 ## convenience constructors
 """
