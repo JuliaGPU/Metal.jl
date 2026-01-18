@@ -66,9 +66,9 @@ end
 # @objcwrapper immutable=false MPSTemporaryNDArray <: MPSNDArray
 
 function MPSTemporaryNDArray(cmdbuf::MTLCommandBuffer, descriptor::MPSNDArrayDescriptor)
-    @objc [MPSTemporaryNDArray temporaryNDArrayWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+    obj = @objc [MPSTemporaryNDArray temporaryNDArrayWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                  descriptor:descriptor::id{MPSNDArrayDescriptor}]::id{MPSTemporaryNDArray}
-    return obj
+    return MPSTemporaryNDArray(obj)
 end
 
 """

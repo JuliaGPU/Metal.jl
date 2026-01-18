@@ -73,7 +73,7 @@ function use_residency_set!(cmdbuf::MTLCommandBuffer, resset::MTLResidencySet)
 end
 
 function use_residency_sets!(cmdbuf::MTLCommandBuffer, ressets, count)
-    @objc [cmdbuf::id{MTLCommandBuffer} useResidencySets:resset::Ptr{id{MTLResidencySet}}
+    @objc [cmdbuf::id{MTLCommandBuffer} useResidencySets:ressets::Ptr{id{MTLResidencySet}}
                                                 count:count::NSUInteger]::Nothing
 end
 
