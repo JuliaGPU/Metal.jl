@@ -116,9 +116,9 @@ Base.@kwdef struct MetalLib
 end
 
 function Base.show(io::IO, lib::MetalLib)
-    println("MetalLib(")
+    println(io, "MetalLib(")
 
-    print("  file: $(lib.file_type) v$(lib.file_version)")
+    print(io, "  file: $(lib.file_type) v$(lib.file_version)")
     file_flags = []
     if lib.is_macos
         push!(file_flags, "macOS")
@@ -127,27 +127,27 @@ function Base.show(io::IO, lib::MetalLib)
         push!(file_flags, "stub")
     end
     if !isempty(file_flags)
-        print(" [$(join(file_flags, ", "))]")
+        print(io, " [$(join(file_flags, ", "))]")
     end
-    println()
+    println(io)
 
-    print("  platform: $(lib.platform_type) v$(lib.platform_version)")
+    print(io, "  platform: $(lib.platform_type) v$(lib.platform_version)")
     platform_flags = []
     if lib.is_64bit
         push!(platform_flags, "64-bit")
     end
     if !isempty(platform_flags)
-        print(" [$(join(platform_flags, ", "))]")
+        print(io, " [$(join(platform_flags, ", "))]")
     end
-    println()
+    println(io)
 
-    println("  functions:")
+    println(io, "  functions:")
 
     for fun in lib.functions
-        println("    $(fun.name) [AIR v$(fun.air_version), Metal v$(fun.metal_version)]")
+        println(io, "    $(fun.name) [AIR v$(fun.air_version), Metal v$(fun.metal_version)]")
     end
 
-    print(")")
+    print(io, ")")
 end
 
 
