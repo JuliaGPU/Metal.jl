@@ -1,9 +1,10 @@
 module MetalKernels
 
 using ..Metal
-using ..Metal: @device_override, DefaultStorageMode, SharedStorage
+using ..Metal: @device_override, DefaultStorageMode, SharedStorage, mtlfunction, mtlconvert
 
 import KernelAbstractions as KA
+import KernelAbstractions: KI
 
 using StaticArrays: MArray
 
@@ -133,35 +134,57 @@ function (obj::KA.Kernel{MetalBackend})(args...; ndrange=nothing, workgroupsize=
     return nothing
 end
 
+KI.argconvert(::MetalBackend, arg) = mtlconvert(arg)
+
+function KI.kernel_function(::MetalBackend, f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
+    kern = mtlfunction(f, tt; name, kwargs...)
+    KI.Kernel{MetalBackend, typeof(kern)}(MetalBackend(), kern)
+end
+
+function (obj::KI.Kernel{MetalBackend})(args...; numworkgroups=1, workgroupsize=1)
+    KI.check_launch_args(numworkgroups, workgroupsize)
+
+    obj.kern(args...; threads=workgroupsize, groups=numworkgroups)
+end
+
+
+function KI.kernel_max_work_group_size(kikern::KI.Kernel{<:MetalBackend}; max_work_items::Int=typemax(Int))::Int
+    Int(min(kikern.kern.pipeline.maxTotalThreadsPerThreadgroup, max_work_items))
+end
+function KI.max_work_group_size(::MetalBackend)::Int
+    Int(device().maxThreadsPerThreadgroup.width)
+end
+function KI.multiprocessor_count(::MetalBackend)::Int
+    Metal.num_gpu_cores()
+end
+
+
 
 ## indexing
 
 ## COV_EXCL_START
-@device_override @inline function KA.__index_Local_Linear(ctx)
-    return thread_position_in_threadgroup().x
+@device_override @inline function KI.get_local_id()
+    return (; x = Int(thread_position_in_threadgroup().x), y = Int(thread_position_in_threadgroup().y), z = Int(thread_position_in_threadgroup().z))
 end
 
-@device_override @inline function KA.__index_Group_Linear(ctx)
-    return threadgroup_position_in_grid().x
+@device_override @inline function KI.get_group_id()
+    return (; x = Int(threadgroup_position_in_grid().x), y = Int(threadgroup_position_in_grid().y), z = Int(threadgroup_position_in_grid().z))
 end
 
-@device_override @inline function KA.__index_Global_Linear(ctx)
-    I =  @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid().x, thread_position_in_threadgroup().x)
-    # TODO: This is unfortunate, can we get the linear index cheaper
-    @inbounds LinearIndices(KA.__ndrange(ctx))[I]
+@device_override @inline function KI.get_global_id()
+    return (; x = Int(thread_position_in_grid().x), y = Int(thread_position_in_grid().y), z = Int(thread_position_in_grid().z))
 end
 
-@device_override @inline function KA.__index_Local_Cartesian(ctx)
-    @inbounds KA.workitems(KA.__iterspace(ctx))[thread_position_in_threadgroup().x]
+@device_override @inline function KI.get_local_size()
+    return (; x = Int(threads_per_threadgroup().x), y = Int(threads_per_threadgroup().y), z = Int(threads_per_threadgroup().z))
 end
 
-@device_override @inline function KA.__index_Group_Cartesian(ctx)
-    @inbounds KA.blocks(KA.__iterspace(ctx))[threadgroup_position_in_grid().x]
+@device_override @inline function KI.get_num_groups()
+    return (; x = Int(threadgroups_per_grid().x), y = Int(threadgroups_per_grid().y), z = Int(threadgroups_per_grid().z))
 end
 
-@device_override @inline function KA.__index_Global_Cartesian(ctx)
-    return @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid().x,
-                               thread_position_in_threadgroup().x)
+@device_override @inline function KI.get_global_size()
+    return (; x = Int(threads_per_grid().x), y = Int(threads_per_grid().y), z = Int(threads_per_grid().z))
 end
 
 @device_override @inline function KA.__validindex(ctx)
@@ -177,8 +200,7 @@ end
 
 ## shared memory
 
-@device_override @inline function KA.SharedMemory(::Type{T}, ::Val{Dims},
-                                                  ::Val{Id}) where {T, Dims, Id}
+@device_override @inline function KI.localmemory(::Type{T}, ::Val{Dims}) where {T, Dims}
     ptr = Metal.emit_threadgroup_memory(T, Val(prod(Dims)))
     MtlDeviceArray(Dims, ptr)
 end
@@ -190,11 +212,11 @@ end
 
 ## other
 
-@device_override @inline function KA.__synchronize()
+@device_override @inline function KI.barrier()
     threadgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
 end
 
-@device_override @inline function KA.__print(args...)
+@device_override @inline function KI._print(args...)
     # TODO
 end
 ## COV_EXCL_STOP
