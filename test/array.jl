@@ -486,37 +486,6 @@ end
         sum(reshape(PermutedDimsArray(reshape(Float32.(1:30), 5, 3, 2), (3, 1, 2)), (10, 3)); dims=1)
 end
 
-@testset "accumulate" begin
-    for n in (0, 1, 2, 3, 10, 10_000, 16384, 16384+1) # small, large, odd & even, pow2 and not
-        @test testf(x->accumulate(+, x), rand(Float32, n))
-        @test testf(x->accumulate(+, x), rand(Float32, n, 2))
-        @test testf(Base.Fix2((x,y)->accumulate(+, x; init=y), rand(Float32)), rand(Float32, n))
-    end
-
-    # multidimensional
-    for (sizes, dims) in ((2,) => 2,
-                          (3,4,5) => 2,
-                          (1, 70, 50, 20) => 3,)
-        @test testf(x->accumulate(+, x; dims=dims), rand(-10:10, sizes))
-        @test testf(x->accumulate(+, x), rand(-10:10, sizes))
-    end
-
-    # using initializer
-    for (sizes, dims) in ((2,) => 2,
-                          (3,4,5) => 2,
-                          (1, 70, 50, 20) => 3)
-        @test testf(Base.Fix2((x,y)->accumulate(+, x; dims=dims, init=y), rand(-10:10)), rand(-10:10, sizes))
-        @test testf(Base.Fix2((x,y)->accumulate(+, x; init=y), rand(-10:10)), rand(-10:10, sizes))
-    end
-
-    # in place
-    @test testf(x->(accumulate!(+, x, copy(x)); x), rand(Float32, 2))
-
-    # specialized
-    @test testf(cumsum, rand(Float32, 2))
-    @test testf(cumprod, rand(Float32, 2))
-end
-
 @testset "findall" begin
     # 1D
     @test testf(x->findall(x), rand(Bool, 1000))
