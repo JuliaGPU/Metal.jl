@@ -1,3 +1,8 @@
+@static if VERSION < v"1.11" && get(ENV, "BUILDKITE_PIPELINE_NAME", "Metal.jl") == "Metal.jl"
+    using Pkg
+    Pkg.add(url="https://github.com/JuliaGPU/KernelAbstractions.jl", rev="main")
+end
+
 using Metal
 using ParallelTestRunner
 
@@ -89,7 +94,7 @@ if filter_tests!(testsuite, args)
 
     # for some reason, the environment shenanigans done by the scripts only work when
     # invoked from the Metal.jl CI, and not from GPUArrays.jl' reverse CI
-    if get(ENV, "BUILDKITE_PIPELINE_NAME", "") != "Metal.jl"
+    if get(ENV, "BUILDKITE_PIPELINE_NAME", "") != "Metal.jl" || VERSION < v"1.11"
         delete!(testsuite, "scripts")
     end
 
