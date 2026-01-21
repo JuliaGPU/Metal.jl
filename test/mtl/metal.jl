@@ -265,6 +265,9 @@ end
 
 dev = first(devices())
 
+# JuliaGPU/Metal.jl#732
+@test_throws TypeError MTLBuffer(dev, 8; storage=2)
+
 buf = MTLBuffer(dev, 8; storage=SharedStorage)
 
 @test buf.length == 8
