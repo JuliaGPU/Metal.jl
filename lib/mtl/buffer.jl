@@ -18,7 +18,7 @@ end
 ## allocation
 
 function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer;
-                   storage=PrivateStorage, hazard_tracking=DefaultTracking,
+                   storage::Type{<:StorageMode}=PrivateStorage, hazard_tracking=DefaultTracking,
                    cache_mode=DefaultCPUCache)
     opts = convert(MTLResourceOptions, storage) | hazard_tracking | cache_mode
 
@@ -29,7 +29,7 @@ function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer;
 end
 
 function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
-                   nocopy=false, storage=SharedStorage, hazard_tracking=DefaultTracking,
+                   nocopy=false, storage::Type{<:StorageMode}=SharedStorage, hazard_tracking=DefaultTracking,
                    cache_mode=DefaultCPUCache)
     storage == PrivateStorage && error("Cannot allocate-and-initialize a PrivateStorage buffer")
     opts =  convert(MTLResourceOptions, storage) | hazard_tracking | cache_mode
