@@ -1618,7 +1618,7 @@ end
     @autoproperty dispatchType::MTLDispatchType
 end
 
-@objcwrapper immutable = true availability = macos(v"15.0.0") MTLCommandQueueDescriptor <: NSObject
+@objcwrapper immutable = false availability = macos(v"15.0.0") MTLCommandQueueDescriptor <: NSObject
 
 @objcproperties MTLCommandQueueDescriptor begin
     @autoproperty maxCommandBufferCount::UInt64 setter = setMaxCommandBufferCount
@@ -3101,7 +3101,7 @@ end
     MTLLogLevelFault = 5
 end
 
-@objcwrapper immutable = true availability = macos(v"15.0.0") MTLLogStateDescriptor <: NSObject
+@objcwrapper immutable = false availability = macos(v"15.0.0") MTLLogStateDescriptor <: NSObject
 
 @objcproperties MTLLogStateDescriptor begin
     @autoproperty level::MTLLogLevel setter = setLevel
