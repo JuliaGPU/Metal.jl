@@ -227,21 +227,37 @@ Random.randn(rng::RNG, T::Type=Float32) = Random.randn(rng, T, 1)[]
 # resolve ambiguities
 Random.randn(rng::RNG, T::Random.BitFloatType) = Random.randn(rng, T, 1)[]
 
-################
-# RNG-less API #
-################
+############################################
+#            RNG-less API                  #
+# Use MPS for uniformly distributed RNG,   #
+# but native rand for normally distributed #
+# to work around JuliaGPU/Metal.jl#474     #
+############################################
 
 # GPUArrays in-place
 Random.rand!(A::MtlArray) = Random.rand!(mtl_rng(), A)
 Random.randn!(A::MtlArray) = Random.randn!(mtl_rng(), A)
 
+# Use MPS random functionality where possible for uniformly distributed RNG
+function Random.rand!(A::MPS.UniformArray)
+    return Random.rand!(mpsrand_rng(), A)
+end
+
 # GPUArrays out-of-place
+function rand(T::MPS.UniformType, dims::Dims; storage=DefaultStorageMode)
+    return Random.rand!(mpsrand_rng(), MtlArray{T,length(dims),storage}(undef, dims...))
+end
+
 rand(T::Type, dims::Dims; storage=DefaultStorageMode) =
     Random.rand!(mtl_rng(), MtlArray{T,length(dims),storage}(undef, dims...))
 randn(T::Type, dims::Dims; storage=DefaultStorageMode) =
     Random.randn!(mtl_rng(), MtlArray{T,length(dims),storage}(undef, dims...))
 
 # support all dimension specifications
+function rand(T::MPS.UniformType, dim1::Integer, dims::Integer...; storage=DefaultStorageMode)
+    return Random.rand!(mpsrand_rng(), MtlArray{T,length(dims) + 1,storage}(undef, dim1, dims...))
+end
+
 rand(T::Type, dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
     Random.rand!(mtl_rng(), MtlArray{T,length(dims) + 1,storage}(undef, dim1, dims...))
 randn(T::Type, dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
@@ -249,7 +265,7 @@ randn(T::Type, dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
 
 # untyped out-of-place
 rand(dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
-    Random.rand!(mtl_rng(), MtlArray{Float32,length(dims) + 1,storage}(undef, dim1, dims...))
+    Random.rand!(mpsrand_rng(), MtlArray{Float32,length(dims) + 1,storage}(undef, dim1, dims...))
 randn(dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
     Random.randn!(mtl_rng(), MtlArray{Float32,length(dims) + 1,storage}(undef, dim1, dims...))
 
