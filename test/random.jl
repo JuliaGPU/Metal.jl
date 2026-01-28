@@ -359,3 +359,40 @@ end
     rand!(rng, c)
     randn!(rng, c)
 end
+
+@testset "randn NaN (Issue #474)" begin
+    SEED = 1234
+    N=100000000
+
+    # randn!
+    let X = Metal.zeros(Float32, N)
+        Metal.seed!(SEED)
+        randn!(X)
+        nans = findall(isnan, Array(X))
+        @test isempty(nans)
+    end
+
+    # randn(T, dims::Dims)
+    let
+        Metal.seed!(SEED)
+        X = Metal.randn(Float32, Dims(N))
+        nans = findall(isnan, Array(X))
+        @test isempty(nans)
+    end
+
+    # randn(T, dim1::Integer, dims...)
+    let
+        Metal.seed!(SEED)
+        X = Metal.randn(Float32, N)
+        nans = findall(isnan, Array(X))
+        @test isempty(nans)
+    end
+
+    # randn(dim1)
+    let
+        Metal.seed!(SEED)
+        X = Metal.randn(N)
+        nans = findall(isnan, Array(X))
+        @test isempty(nans)
+    end
+end
