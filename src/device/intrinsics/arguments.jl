@@ -17,11 +17,16 @@ const nodim_intr = [
 ]
 
 for (intr, offset) in nodim_intr
-    # XXX: these are also available as UInt16 (ushort)
+    intr_i16 = Symbol(intr, :_i16)
+    intr = Symbol(intr)
     @eval begin
-        export $(Symbol(intr))
+        # UInt32
+        export $(intr)
+        @device_function $(intr)() = ccall($"extern julia.air.$intr.i32", llvmcall, UInt32, ()) + UInt32($offset)
 
-        @device_function $(Symbol(intr))() = ccall($"extern julia.air.$intr.i32", llvmcall, UInt32, ()) + UInt32($offset)
+        # UInt16
+        export $(intr_i16)
+        @device_function $(intr_i16)() = ccall($"extern julia.air.$intr.i16", llvmcall, UInt16, ()) + UInt16($offset)
     end
 end
 
@@ -39,36 +44,47 @@ const dim_intr = [
 ]
 
 for (intr, offset) in dim_intr
-    # XXX: these are also available as UInt16 (ushort)
+    intr_i16 = Symbol(intr, :_i16)
+    intr = Symbol(intr)
     @eval begin
-        export $(Symbol(intr))
-
-        @device_function function $(Symbol(intr))()
+        # UInt32
+        export $(intr)
+        @device_function function $(intr)()
             vec = ccall($"extern julia.air.$intr.v3i32", llvmcall,
                         NTuple{3, VecElement{UInt32}}, ())
             (x = vec[1].value + UInt32($offset),
              y = vec[2].value + UInt32($offset),
              z = vec[3].value + UInt32($offset))
         end
+
+        # UInt16
+        export $(intr_i16)
+        @device_function function $(intr_i16)()
+            vec = ccall($"extern julia.air.$intr.v3i16", llvmcall,
+                        NTuple{3, VecElement{UInt16}}, ())
+            (x = vec[1].value + UInt16($offset),
+             y = vec[2].value + UInt16($offset),
+             z = vec[3].value + UInt16($offset))
+        end
     end
 
     # deprecated aliases
     @eval begin
-        export $(Symbol(intr * "_1d"))
-        export $(Symbol(intr * "_2d"))
-        export $(Symbol(intr * "_3d"))
+        export $(Symbol(intr, "_1d"))
+        export $(Symbol(intr, "_2d"))
+        export $(Symbol(intr, "_3d"))
 
-        function $(Symbol(intr * "_1d"))()
-            $(Symbol(intr))().x
+        function $(Symbol(intr, "_1d"))()
+            $(intr)().x
         end
 
-        function $(Symbol(intr * "_2d"))()
-            vec = $(Symbol(intr))()
+        function $(Symbol(intr, "_2d"))()
+            vec = $(intr)()
             (x = vec.x,
              y = vec.y)
         end
 
-        $(Symbol(intr * "_3d"))() = $(Symbol(intr))()
+        $(Symbol(intr, "_3d"))() = $(intr)()
     end
 end
 
