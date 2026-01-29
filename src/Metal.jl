@@ -76,6 +76,8 @@ export MetalBackend
 
 include("deprecated.jl")
 
+include("warmup.jl")
+
 include("precompile.jl")
 
 end # module
