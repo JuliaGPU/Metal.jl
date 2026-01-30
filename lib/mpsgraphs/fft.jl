@@ -38,25 +38,15 @@ struct Backward <: FFTDirection end  # unnormalized inverse
 # ============================================================================
 
 """
-    create_fft_descriptor(; inverse=false, scaling=:none)
+    MPSGraphFFTDescriptor(; inverse=false, scalingMode=MPSGraphFFTScalingModeNone)
 
 Create an MPSGraphFFTDescriptor with the specified parameters.
 """
-function create_fft_descriptor(; inverse::Bool = false, scaling::Symbol = :none)
-    scaling_mode = if scaling == :none
-        MPSGraphFFTScalingModeNone
-    elseif scaling == :size
-        MPSGraphFFTScalingModeSize
-    elseif scaling == :unitary
-        MPSGraphFFTScalingModeUnitary
-    else
-        error("Unknown scaling mode: $scaling. Use :none, :size, or :unitary")
-    end
-
+function MPSGraphFFTDescriptor(; inverse::Bool = false, scalingMode::MPSGraphFFTScalingMode = MPSGraphFFTScalingModeNone)
     obj = @objc [MPSGraphFFTDescriptor alloc]::id{MPSGraphFFTDescriptor}
     desc = MPSGraphFFTDescriptor(obj)
     desc.inverse = inverse
-    desc.scalingMode = scaling_mode
+    desc.scalingMode = scalingMode
     return desc
 end
 
@@ -298,7 +288,7 @@ function _execute_single_axis_fft!(
     placeholder = placeholderTensor(graph, size(buf), T)
 
     # Create FFT descriptor - never use MPSGraph scaling, we handle it ourselves
-    fft_desc = create_fft_descriptor(inverse = inverse, scaling = :none)
+    fft_desc = MPSGraphFFTDescriptor(; inverse)
 
     # Convert Julia 1-indexed axis to Metal 0-indexed axis
     # Due to shape reversal in placeholderTensor, we need to compute the correct axis
@@ -338,7 +328,7 @@ function _execute_rfft!(y::MtlArray{Complex{T}, N}, x::MtlArray{T, N}, region::T
     placeholder = placeholderTensor(graph, size(x), T)
 
     # Create FFT descriptor
-    fft_desc = create_fft_descriptor(inverse = false, scaling = :none)
+    fft_desc = MPSGraphFFTDescriptor(; inverse = false)
 
     # Convert all region axes to Metal axes
     # Julia axis i -> Metal axis (N - i) for N-dimensional array
@@ -383,7 +373,7 @@ function _execute_irfft!(
     first_dim = minimum(region)
     round_to_odd = isodd(output_size[first_dim])
 
-    fft_desc = create_fft_descriptor(inverse = true, scaling = :none)
+    fft_desc = MPSGraphFFTDescriptor(; inverse = true)
     fft_desc.roundToOddHermitean = round_to_odd
 
     # Convert all region axes to Metal axes
