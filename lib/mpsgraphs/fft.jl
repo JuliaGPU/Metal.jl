@@ -14,7 +14,8 @@
 # For double precision, use FFTW.jl on CPU or convert to Float32.
 
 using AbstractFFTs
-import LinearAlgebra: mul!
+import AbstractFFTs: plan_fft, plan_ifft, plan_bfft, plan_rfft, plan_irfft, plan_brfft
+import AbstractFFTs: plan_fft!, plan_ifft!, plan_bfft!
 
 export plan_fft, plan_ifft, plan_bfft, plan_rfft, plan_irfft, plan_brfft
 export plan_fft!, plan_ifft!, plan_bfft!
@@ -33,8 +34,33 @@ struct Inverse <: FFTDirection end
 struct Backward <: FFTDirection end  # unnormalized inverse
 
 # ============================================================================
-# MtlFFTPlan - AbstractFFTs-compatible plan
+# FFT Descriptor Creation
 # ============================================================================
+
+"""
+    create_fft_descriptor(; inverse=false, scaling=:none)
+
+Create an MPSGraphFFTDescriptor with the specified parameters.
+"""
+function create_fft_descriptor(; inverse::Bool = false, scaling::Symbol = :none)
+    scaling_mode = if scaling == :none
+        MPSGraphFFTScalingModeNone
+    elseif scaling == :size
+        MPSGraphFFTScalingModeSize
+    elseif scaling == :unitary
+        MPSGraphFFTScalingModeUnitary
+    else
+        error("Unknown scaling mode: $scaling. Use :none, :size, or :unitary")
+    end
+
+    obj = @objc [MPSGraphFFTDescriptor alloc]::id{MPSGraphFFTDescriptor}
+    desc = MPSGraphFFTDescriptor(obj)
+    desc.inverse = inverse
+    desc.scalingMode = scaling_mode
+    return desc
+end
+
+## plan structure
 
 """
     MtlFFTPlan{T,K,N} <: AbstractFFTs.Plan{T}
@@ -73,6 +99,86 @@ function MtlFFTPlan{T, K}(sz::NTuple{N, Int}, region) where {T, K <: FFTDirectio
     end
     return MtlFFTPlan{T, K, N}(sz, normalized_region)
 end
+
+# Plan properties
+Base.size(p::MtlFFTPlan) = p.sz
+AbstractFFTs.fftdims(p::MtlFFTPlan) = p.region
+
+"""
+    MtlFFTInplacePlan{T,K,N} <: AbstractFFTs.Plan{T}
+
+In-place GPU FFT plan. The input array is modified directly.
+
+Use `plan_fft!`, `plan_ifft!`, or `plan_bfft!` to create these plans.
+"""
+struct MtlFFTInplacePlan{T, K <: FFTDirection, N} <: AbstractFFTs.Plan{T}
+    sz::NTuple{N, Int}
+    region::Tuple{Vararg{Int}}
+end
+
+function MtlFFTInplacePlan{T, K}(sz::NTuple{N, Int}, region) where {T, K <: FFTDirection, N}
+    normalized_region = region isa Integer ? (Int(region),) : Tuple(Int.(region))
+    for r in normalized_region
+        1 <= r <= N || throw(ArgumentError("Invalid FFT dimension $r for array with $N dimensions"))
+    end
+    return MtlFFTInplacePlan{T, K, N}(sz, normalized_region)
+end
+
+# Plan properties for in-place plans
+Base.size(p::MtlFFTInplacePlan) = p.sz
+AbstractFFTs.fftdims(p::MtlFFTInplacePlan) = p.region
+
+"""
+    MtlRFFTPlan{T,K,N} <: AbstractFFTs.Plan{T}
+
+GPU Real FFT plan for Metal using MPSGraph's realToHermiteanFFTWithTensor.
+
+For rfft: Real input → Complex output with size n÷2+1 in the first transformed dimension.
+For irfft/brfft: Complex input → Real output.
+
+# Type Parameters
+- `T`: Element type of the *input* (Float32 for rfft, ComplexF32 for irfft)
+- `K`: Direction type (Forward for rfft, Inverse for irfft, Backward for brfft)
+- `N`: Number of dimensions
+
+# Fields
+- `sz`: Size of the input array
+- `osz`: Size of the output array
+- `region`: Dimensions along which to perform FFT (normalized to Tuple)
+"""
+struct MtlRFFTPlan{T, K <: FFTDirection, N} <: AbstractFFTs.Plan{T}
+    sz::NTuple{N, Int}   # input size
+    osz::NTuple{N, Int}  # output size
+    region::Tuple{Vararg{Int}}
+end
+
+# Constructor for rfft (real → complex)
+function MtlRFFTPlan{T, Forward}(sz::NTuple{N, Int}, region) where {T <: Real, N}
+    normalized_region = region isa Integer ? (Int(region),) : Tuple(Int.(region))
+    for r in normalized_region
+        1 <= r <= N || throw(ArgumentError("Invalid FFT dimension $r for array with $N dimensions"))
+    end
+    # Output size: FIRST transformed dimension becomes n÷2+1 (FFTW convention)
+    first_dim = minimum(normalized_region)
+    osz = ntuple(i -> i == first_dim ? sz[i] ÷ 2 + 1 : sz[i], N)
+    return MtlRFFTPlan{T, Forward, N}(sz, osz, normalized_region)
+end
+
+# Constructor for irfft/brfft (complex → real)
+function MtlRFFTPlan{T, K}(sz::NTuple{N, Int}, d::Int, region) where {T <: Complex, K <: Union{Inverse, Backward}, N}
+    normalized_region = region isa Integer ? (Int(region),) : Tuple(Int.(region))
+    for r in normalized_region
+        1 <= r <= N || throw(ArgumentError("Invalid FFT dimension $r for array with $N dimensions"))
+    end
+    # Output size: FIRST transformed dimension is d (the original real size) - FFTW convention
+    first_dim = minimum(normalized_region)
+    osz = ntuple(i -> i == first_dim ? d : sz[i], N)
+    return MtlRFFTPlan{T, K, N}(sz, osz, normalized_region)
+end
+
+# Plan properties for real FFT
+Base.size(p::MtlRFFTPlan) = p.sz
+AbstractFFTs.fftdims(p::MtlRFFTPlan) = p.region
 
 # ============================================================================
 # AbstractFFTs Interface Implementation
@@ -123,95 +229,6 @@ function AbstractFFTs.plan_bfft(x::MtlArray{T, N}) where {T <: Complex, N}
     return plan_bfft(x, 1:N)
 end
 
-# Plan properties
-Base.size(p::MtlFFTPlan) = p.sz
-AbstractFFTs.fftdims(p::MtlFFTPlan) = p.region
-
-# ============================================================================
-# FFT Descriptor Creation
-# ============================================================================
-
-"""
-    create_fft_descriptor(; inverse=false, scaling=:none)
-
-Create an MPSGraphFFTDescriptor with the specified parameters.
-"""
-function create_fft_descriptor(; inverse::Bool = false, scaling::Symbol = :none)
-    scaling_mode = if scaling == :none
-        MPSGraphFFTScalingModeNone
-    elseif scaling == :size
-        MPSGraphFFTScalingModeSize
-    elseif scaling == :unitary
-        MPSGraphFFTScalingModeUnitary
-    else
-        error("Unknown scaling mode: $scaling. Use :none, :size, or :unitary")
-    end
-
-    obj = @objc [MPSGraphFFTDescriptor alloc]::id{MPSGraphFFTDescriptor}
-    desc = MPSGraphFFTDescriptor(obj)
-    desc.inverse = inverse
-    desc.scalingMode = scaling_mode
-    return desc
-end
-
-# ============================================================================
-# Plan Execution
-# ============================================================================
-
-function Base.:*(p::MtlFFTPlan{T, K, N}, x::MtlArray{T, N}) where {T, K, N}
-    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
-    y = similar(x)
-    mul!(y, p, x)
-    return y
-end
-
-function mul!(y::MtlArray{T, N}, p::MtlFFTPlan{T, K, N}, x::MtlArray{T, N}) where {T, K, N}
-    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
-    @assert size(y) == size(x) "Output size $(size(y)) does not match input size $(size(x))"
-
-    # Determine if this is an inverse transform
-    inverse = K <: Inverse || K <: Backward
-    # For Inverse, we need to scale by the total FFT size (product of all FFT dimensions)
-    # For Backward (bfft), no scaling
-    needs_scaling = K <: Inverse
-
-    @autoreleasepool begin
-        _execute_fft!(y, x, p.region, inverse)
-    end
-
-    # Apply scaling for ifft: divide by product of FFT dimension sizes
-    if needs_scaling
-        scale_factor = T(1 / prod(p.sz[d] for d in p.region))
-        y .*= scale_factor
-    end
-
-    return y
-end
-
-# ============================================================================
-# In-Place FFT Plans
-# ============================================================================
-
-"""
-    MtlFFTInplacePlan{T,K,N} <: AbstractFFTs.Plan{T}
-
-In-place GPU FFT plan. The input array is modified directly.
-
-Use `plan_fft!`, `plan_ifft!`, or `plan_bfft!` to create these plans.
-"""
-struct MtlFFTInplacePlan{T, K <: FFTDirection, N} <: AbstractFFTs.Plan{T}
-    sz::NTuple{N, Int}
-    region::Tuple{Vararg{Int}}
-end
-
-function MtlFFTInplacePlan{T, K}(sz::NTuple{N, Int}, region) where {T, K <: FFTDirection, N}
-    normalized_region = region isa Integer ? (Int(region),) : Tuple(Int.(region))
-    for r in normalized_region
-        1 <= r <= N || throw(ArgumentError("Invalid FFT dimension $r for array with $N dimensions"))
-    end
-    return MtlFFTInplacePlan{T, K, N}(sz, normalized_region)
-end
-
 # In-place plan creation
 function AbstractFFTs.plan_fft!(x::MtlArray{T, N}, region) where {T <: Complex, N}
     _check_fft_type(T)
@@ -240,49 +257,41 @@ function AbstractFFTs.plan_bfft!(x::MtlArray{T, N}) where {T <: Complex, N}
     return plan_bfft!(x, 1:N)
 end
 
-# Plan properties for in-place plans
-Base.size(p::MtlFFTInplacePlan) = p.sz
-AbstractFFTs.fftdims(p::MtlFFTInplacePlan) = p.region
-
-# In-place plan execution - modifies input directly
-function Base.:*(p::MtlFFTInplacePlan{T, K, N}, x::MtlArray{T, N}) where {T, K, N}
-    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
-    mul!(x, p, x)
-    return x
+function AbstractFFTs.plan_rfft(x::MtlArray{T, N}, region) where {T <: Real, N}
+    _check_rfft_type(T)
+    return MtlRFFTPlan{T, Forward}(size(x), region)
 end
 
-function mul!(y::MtlArray{T, N}, p::MtlFFTInplacePlan{T, K, N}, x::MtlArray{T, N}) where {T, K, N}
-    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
-    @assert y === x "In-place plan requires output === input"
-
-    inverse = K <: Inverse || K <: Backward
-    needs_scaling = K <: Inverse
-
-    @autoreleasepool begin
-        _execute_fft_inplace!(x, p.region, inverse)
-    end
-
-    if needs_scaling
-        scale_factor = T(1 / prod(p.sz[d] for d in p.region))
-        x .*= scale_factor
-    end
-
-    return x
+function AbstractFFTs.plan_rfft(x::MtlArray{T, N}) where {T <: Real, N}
+    return plan_rfft(x, 1:N)
 end
 
-"""
-Execute in-place FFT - input buffer is modified directly.
-"""
+function AbstractFFTs.plan_irfft(x::MtlArray{T, N}, d::Int, region) where {T <: Complex, N}
+    _check_fft_type(T)
+    return MtlRFFTPlan{T, Inverse}(size(x), d, region)
+end
+
+function AbstractFFTs.plan_irfft(x::MtlArray{T, N}, d::Int) where {T <: Complex, N}
+    return plan_irfft(x, d, 1:N)
+end
+
+function AbstractFFTs.plan_brfft(x::MtlArray{T, N}, d::Int, region) where {T <: Complex, N}
+    _check_fft_type(T)
+    return MtlRFFTPlan{T, Backward}(size(x), d, region)
+end
+
+function AbstractFFTs.plan_brfft(x::MtlArray{T, N}, d::Int) where {T <: Complex, N}
+    return plan_brfft(x, d, 1:N)
+end
+
+## plan execution
+
 function _execute_fft_inplace!(buf::MtlArray{T, N}, region::Tuple, inverse::Bool) where {T, N}
     for axis in region
         _execute_single_axis_fft!(buf, axis, inverse)
     end
     return buf
 end
-
-# ============================================================================
-# FFT Internal Execution
-# ============================================================================
 
 """
 Internal FFT execution - processes one axis at a time for multi-axis FFT.
@@ -329,184 +338,23 @@ function _execute_single_axis_fft!(
     fft_result = fastFourierTransformWithTensor(graph, placeholder, axes, fft_desc, "fft")
 
     # Create feed dictionary
-    feeds = NSDictionary(
-        Dict{MPSGraphTensor, MPSGraphTensorData}(
-            placeholder => MPSGraphTensorData(buf)
-        )
+    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
+        placeholder => MPSGraphTensorData(buf)
     )
 
     # Create result dictionary (in-place output)
-    results = NSDictionary(
-        Dict{MPSGraphTensor, MPSGraphTensorData}(
-            fft_result => MPSGraphTensorData(buf)
-        )
+    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
+        fft_result => MPSGraphTensorData(buf)
     )
 
     # Execute
     cmdbuf = MPS.MPSCommandBuffer(Metal.global_queue(Metal.device()))
-    MPS.encode!(cmdbuf, graph, feeds, results, nil, default_exec_desc())
+    MPS.encode!(cmdbuf, graph, NSDictionary(feeds), NSDictionary(results), nil, default_exec_desc())
     Metal.commit!(cmdbuf)
     Metal.wait_completed(cmdbuf)
 
     return buf
 end
-
-# ============================================================================
-# Real FFT Plan Types
-# ============================================================================
-
-"""
-    MtlRFFTPlan{T,K,N} <: AbstractFFTs.Plan{T}
-
-GPU Real FFT plan for Metal using MPSGraph's realToHermiteanFFTWithTensor.
-
-For rfft: Real input → Complex output with size n÷2+1 in the first transformed dimension.
-For irfft/brfft: Complex input → Real output.
-
-# Type Parameters
-- `T`: Element type of the *input* (Float32 for rfft, ComplexF32 for irfft)
-- `K`: Direction type (Forward for rfft, Inverse for irfft, Backward for brfft)
-- `N`: Number of dimensions
-
-# Fields
-- `sz`: Size of the input array
-- `osz`: Size of the output array
-- `region`: Dimensions along which to perform FFT (normalized to Tuple)
-"""
-struct MtlRFFTPlan{T, K <: FFTDirection, N} <: AbstractFFTs.Plan{T}
-    sz::NTuple{N, Int}   # input size
-    osz::NTuple{N, Int}  # output size
-    region::Tuple{Vararg{Int}}
-end
-
-# Constructor for rfft (real → complex)
-function MtlRFFTPlan{T, Forward}(sz::NTuple{N, Int}, region) where {T <: Real, N}
-    normalized_region = region isa Integer ? (Int(region),) : Tuple(Int.(region))
-    for r in normalized_region
-        1 <= r <= N || throw(ArgumentError("Invalid FFT dimension $r for array with $N dimensions"))
-    end
-    # Output size: FIRST transformed dimension becomes n÷2+1 (FFTW convention)
-    first_dim = minimum(normalized_region)
-    osz = ntuple(i -> i == first_dim ? sz[i] ÷ 2 + 1 : sz[i], N)
-    return MtlRFFTPlan{T, Forward, N}(sz, osz, normalized_region)
-end
-
-# Constructor for irfft/brfft (complex → real)
-function MtlRFFTPlan{T, K}(sz::NTuple{N, Int}, d::Int, region) where {T <: Complex, K <: Union{Inverse, Backward}, N}
-    normalized_region = region isa Integer ? (Int(region),) : Tuple(Int.(region))
-    for r in normalized_region
-        1 <= r <= N || throw(ArgumentError("Invalid FFT dimension $r for array with $N dimensions"))
-    end
-    # Output size: FIRST transformed dimension is d (the original real size) - FFTW convention
-    first_dim = minimum(normalized_region)
-    osz = ntuple(i -> i == first_dim ? d : sz[i], N)
-    return MtlRFFTPlan{T, K, N}(sz, osz, normalized_region)
-end
-
-# ============================================================================
-# Real FFT AbstractFFTs Interface
-# ============================================================================
-
-function AbstractFFTs.plan_rfft(x::MtlArray{T, N}, region) where {T <: Real, N}
-    _check_rfft_type(T)
-    return MtlRFFTPlan{T, Forward}(size(x), region)
-end
-
-function AbstractFFTs.plan_rfft(x::MtlArray{T, N}) where {T <: Real, N}
-    return plan_rfft(x, 1:N)
-end
-
-function AbstractFFTs.plan_irfft(x::MtlArray{T, N}, d::Int, region) where {T <: Complex, N}
-    _check_fft_type(T)
-    return MtlRFFTPlan{T, Inverse}(size(x), d, region)
-end
-
-function AbstractFFTs.plan_irfft(x::MtlArray{T, N}, d::Int) where {T <: Complex, N}
-    return plan_irfft(x, d, 1:N)
-end
-
-function AbstractFFTs.plan_brfft(x::MtlArray{T, N}, d::Int, region) where {T <: Complex, N}
-    _check_fft_type(T)
-    return MtlRFFTPlan{T, Backward}(size(x), d, region)
-end
-
-function AbstractFFTs.plan_brfft(x::MtlArray{T, N}, d::Int) where {T <: Complex, N}
-    return plan_brfft(x, d, 1:N)
-end
-
-# Plan properties for real FFT
-Base.size(p::MtlRFFTPlan) = p.sz
-AbstractFFTs.fftdims(p::MtlRFFTPlan) = p.region
-
-# ============================================================================
-# Real FFT Plan Execution
-# ============================================================================
-
-# rfft: Real → Complex
-function Base.:*(p::MtlRFFTPlan{T, Forward, N}, x::MtlArray{T, N}) where {T <: Real, N}
-    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
-    y = MtlArray{Complex{T}}(undef, p.osz)
-    mul!(y, p, x)
-    return y
-end
-
-function mul!(y::MtlArray{Complex{T}, N}, p::MtlRFFTPlan{T, Forward, N}, x::MtlArray{T, N}) where {T <: Real, N}
-    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
-    @assert size(y) == p.osz "Output size $(size(y)) does not match expected size $(p.osz)"
-
-    @autoreleasepool begin
-        _execute_rfft!(y, x, p.region)
-    end
-
-    return y
-end
-
-# irfft: Complex → Real (normalized)
-function Base.:*(p::MtlRFFTPlan{T, Inverse, N}, x::MtlArray{T, N}) where {T <: Complex, N}
-    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
-    y = MtlArray{real(T)}(undef, p.osz)
-    mul!(y, p, x)
-    return y
-end
-
-function mul!(y::MtlArray{R, N}, p::MtlRFFTPlan{Complex{R}, Inverse, N}, x::MtlArray{Complex{R}, N}) where {R <: Real, N}
-    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
-    @assert size(y) == p.osz "Output size $(size(y)) does not match expected size $(p.osz)"
-
-    @autoreleasepool begin
-        _execute_irfft!(y, x, p.region, p.osz)
-    end
-
-    # Apply scaling for irfft: divide by product of output FFT dimension sizes
-    scale_factor = R(1 / prod(p.osz[d] for d in p.region))
-    y .*= scale_factor
-
-    return y
-end
-
-# brfft: Complex → Real (unnormalized)
-function Base.:*(p::MtlRFFTPlan{T, Backward, N}, x::MtlArray{T, N}) where {T <: Complex, N}
-    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
-    y = MtlArray{real(T)}(undef, p.osz)
-    mul!(y, p, x)
-    return y
-end
-
-function mul!(y::MtlArray{R, N}, p::MtlRFFTPlan{Complex{R}, Backward, N}, x::MtlArray{Complex{R}, N}) where {R <: Real, N}
-    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
-    @assert size(y) == p.osz "Output size $(size(y)) does not match expected size $(p.osz)"
-
-    @autoreleasepool begin
-        _execute_irfft!(y, x, p.region, p.osz)
-    end
-
-    # No scaling for brfft
-    return y
-end
-
-# ============================================================================
-# Real FFT Internal Execution
-# ============================================================================
 
 """
 Execute rfft (real to complex) - processes all axes at once.
@@ -525,25 +373,21 @@ function _execute_rfft!(y::MtlArray{Complex{T}, N}, x::MtlArray{T, N}, region::T
     metal_axes = NSArray([NSNumber(Int32(N - ax)) for ax in region])
 
     # Create rfft operation
-    fft_result = realToHermiteanFFTWithTensor(graph, placeholder, metal_axes, fft_desc, "rfft")
+    fft_result = realToHermiteanFFTWithTensor(graph, placeholder, metal_axes, fft_desc)
 
     # Create feed dictionary
-    feeds = NSDictionary(
-        Dict{MPSGraphTensor, MPSGraphTensorData}(
-            placeholder => MPSGraphTensorData(x)
-        )
+    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
+        placeholder => MPSGraphTensorData(x)
     )
 
     # Create result dictionary
-    results = NSDictionary(
-        Dict{MPSGraphTensor, MPSGraphTensorData}(
-            fft_result => MPSGraphTensorData(y)
-        )
+    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
+        fft_result => MPSGraphTensorData(y)
     )
 
     # Execute
     cmdbuf = MPS.MPSCommandBuffer(Metal.global_queue(Metal.device()))
-    MPS.encode!(cmdbuf, graph, feeds, results, nil, default_exec_desc())
+    MPS.encode!(cmdbuf, graph, NSDictionary(feeds), NSDictionary(results), nil, default_exec_desc())
     Metal.commit!(cmdbuf)
     Metal.wait_completed(cmdbuf)
 
@@ -574,27 +418,147 @@ function _execute_irfft!(
     metal_axes = NSArray([NSNumber(Int32(N - ax)) for ax in region])
 
     # Create irfft operation
-    fft_result = HermiteanToRealFFTWithTensor(graph, placeholder, metal_axes, fft_desc, "irfft")
+    fft_result = HermiteanToRealFFTWithTensor(graph, placeholder, metal_axes, fft_desc)
 
     # Create feed dictionary
-    feeds = NSDictionary(
-        Dict{MPSGraphTensor, MPSGraphTensorData}(
-            placeholder => MPSGraphTensorData(x)
-        )
+    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
+        placeholder => MPSGraphTensorData(x)
     )
 
     # Create result dictionary
-    results = NSDictionary(
-        Dict{MPSGraphTensor, MPSGraphTensorData}(
-            fft_result => MPSGraphTensorData(y)
-        )
+    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
+        fft_result => MPSGraphTensorData(y)
     )
 
     # Execute
     cmdbuf = MPS.MPSCommandBuffer(Metal.global_queue(Metal.device()))
-    MPS.encode!(cmdbuf, graph, feeds, results, nil, default_exec_desc())
+    MPS.encode!(cmdbuf, graph, NSDictionary(feeds), NSDictionary(results), nil, default_exec_desc())
     Metal.commit!(cmdbuf)
     Metal.wait_completed(cmdbuf)
 
+    return y
+end
+
+## high-level integrations
+
+function LinearAlgebra.mul!(y::MtlArray{T, N}, p::MtlFFTPlan{T, K, N}, x::MtlArray{T, N}) where {T, K, N}
+    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
+    @assert size(y) == size(x) "Output size $(size(y)) does not match input size $(size(x))"
+
+    # Determine if this is an inverse transform
+    inverse = K <: Inverse || K <: Backward
+    # For Inverse, we need to scale by the total FFT size (product of all FFT dimensions)
+    # For Backward (bfft), no scaling
+    needs_scaling = K <: Inverse
+
+    @autoreleasepool begin
+        _execute_fft!(y, x, p.region, inverse)
+    end
+
+    # Apply scaling for ifft: divide by product of FFT dimension sizes
+    if needs_scaling
+        scale_factor = T(1 / prod(p.sz[d] for d in p.region))
+        y .*= scale_factor
+    end
+
+    return y
+end
+
+function Base.:(*)(p::MtlFFTPlan{T, K, N}, x::MtlArray{T, N}) where {T, K, N}
+    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
+    y = similar(x)
+    mul!(y, p, x)
+    return y
+end
+
+## In-place High-level Integrations
+
+# In-place plan execution - modifies input directly
+function Base.:(*)(p::MtlFFTInplacePlan{T, K, N}, x::MtlArray{T, N}) where {T, K, N}
+    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
+    mul!(x, p, x)
+    return x
+end
+
+function LinearAlgebra.mul!(y::MtlArray{T, N}, p::MtlFFTInplacePlan{T, K, N}, x::MtlArray{T, N}) where {T, K, N}
+    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
+    @assert y === x "In-place plan requires output === input"
+
+    inverse = K <: Inverse || K <: Backward
+    needs_scaling = K <: Inverse
+
+    @autoreleasepool begin
+        _execute_fft_inplace!(x, p.region, inverse)
+    end
+
+    if needs_scaling
+        scale_factor = T(1 / prod(p.sz[d] for d in p.region))
+        x .*= scale_factor
+    end
+
+    return x
+end
+
+## real high-level integrations
+
+# rfft: Real → Complex
+function Base.:(*)(p::MtlRFFTPlan{T, Forward, N}, x::MtlArray{T, N}) where {T <: Real, N}
+    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
+    y = MtlArray{Complex{T}}(undef, p.osz)
+    mul!(y, p, x)
+    return y
+end
+
+function LinearAlgebra.mul!(y::MtlArray{Complex{T}, N}, p::MtlRFFTPlan{T, Forward, N}, x::MtlArray{T, N}) where {T <: Real, N}
+    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
+    @assert size(y) == p.osz "Output size $(size(y)) does not match expected size $(p.osz)"
+
+    @autoreleasepool begin
+        _execute_rfft!(y, x, p.region)
+    end
+
+    return y
+end
+
+# irfft: Complex → Real (normalized)
+function Base.:(*)(p::MtlRFFTPlan{T, Inverse, N}, x::MtlArray{T, N}) where {T <: Complex, N}
+    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
+    y = MtlArray{real(T)}(undef, p.osz)
+    mul!(y, p, x)
+    return y
+end
+
+function LinearAlgebra.mul!(y::MtlArray{R, N}, p::MtlRFFTPlan{Complex{R}, Inverse, N}, x::MtlArray{Complex{R}, N}) where {R <: Real, N}
+    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
+    @assert size(y) == p.osz "Output size $(size(y)) does not match expected size $(p.osz)"
+
+    @autoreleasepool begin
+        _execute_irfft!(y, x, p.region, p.osz)
+    end
+
+    # Apply scaling for irfft: divide by product of output FFT dimension sizes
+    scale_factor = R(1 / prod(p.osz[d] for d in p.region))
+    y .*= scale_factor
+
+    return y
+end
+
+# brfft: Complex → Real (unnormalized)
+function Base.:(*)(p::MtlRFFTPlan{T, Backward, N}, x::MtlArray{T, N}) where {T <: Complex, N}
+    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
+    y = MtlArray{real(T)}(undef, p.osz)
+    mul!(y, p, x)
+    return y
+end
+
+function LinearAlgebra.mul!(y::MtlArray{R, N}, p::MtlRFFTPlan{Complex{R}, Backward, N}, x::MtlArray{Complex{R}, N}) where {R <: Real, N}
+    @assert size(x) == p.sz "Input size $(size(x)) does not match plan size $(p.sz)"
+    @assert size(y) == p.osz "Output size $(size(y)) does not match expected size $(p.osz)"
+
+    @autoreleasepool begin
+        _execute_irfft!(y, x, p.region, p.osz)
+    end
+
+    # No scaling for brfft
     return y
 end
