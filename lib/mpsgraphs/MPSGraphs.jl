@@ -16,6 +16,8 @@ using .MPS: MPSDataType, MPSShape, exportDataWithCommandBuffer
 using CEnum
 using ObjectiveC, .Foundation, .Dispatch
 
+using LinearAlgebra
+
 # Valid combination of input (A and B matrices) and output (C) types
 #   The commented type combinations work but are slower than with MPSMatrixMultiplicatiom
 const MPSGRAPH_VALID_MATMUL_TYPES =
