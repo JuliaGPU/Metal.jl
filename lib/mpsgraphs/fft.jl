@@ -248,6 +248,48 @@ end
 
 ## plan execution
 
+function assert_applicable(p::MtlFFTPlan{T}, X::MtlArray{T}) where {T}
+    (size(X) == p.input_size) ||
+        throw(ArgumentError("MtlFFT plan applied to wrong-size input"))
+end
+
+function assert_applicable(p::MtlFFTPlan{T, K, inplace}, X::MtlArray{S},
+                           Y::MtlArray{T}) where {T, S, K, inplace}
+# function assert_applicable(p::MtlFFTPlan{T, K}, X::MtlArray{S},
+#                            Y::MtlArray{T}) where {T, S, K}
+#     inplace = false
+    assert_applicable(p, X)
+    # if size(Y) != p.output_size
+    #     throw(ArgumentError("MtlFFT plan applied to wrong-size output"))
+    # elseif inplace != (pointer(X) == pointer(Y))
+    if inplace != (pointer(X) == pointer(Y))
+        throw(ArgumentError(string("MtlFFT ",
+                                   inplace ? "in-place" : "out-of-place",
+                                   " plan applied to ",
+                                   inplace ? "out-of-place" : "in-place",
+                                   " data")))
+    end
+end
+
+function assert_applicable(p::MtlRFFTPlan, X::MtlArray)
+    (size(X) == p.input_size) ||
+        throw(ArgumentError("MtlFFT plan applied to wrong-size input"))
+end
+function assert_applicable(p::MtlRFFTPlan, X::MtlArray,
+                           Y::MtlArray)
+    inplace = false
+    assert_applicable(p, X)
+    if size(Y) != p.output_size
+        throw(ArgumentError("MtlFFT plan applied to wrong-size output"))
+    elseif inplace != (pointer(X) == pointer(Y))
+        throw(ArgumentError(string("MtlFFT ",
+                                   inplace ? "in-place" : "out-of-place",
+                                   " plan applied to ",
+                                   inplace ? "out-of-place" : "in-place",
+                                   " data")))
+    end
+end
+
 function _execute_fft_inplace!(buf::MtlArray{T, N}, region::Tuple, inverse::Bool) where {T, N}
     for axis in region
         _execute_single_axis_fft!(buf, axis, inverse)
@@ -404,8 +446,7 @@ end
 ## high-level integrations
 
 function LinearAlgebra.mul!(y::MtlArray{T, N}, p::MtlFFTPlan{T, K, N}, x::MtlArray{T, N}) where {T, K, N}
-    @assert size(x) == p.input_size "Input size $(size(x)) does not match plan size $(p.input_size)"
-    @assert size(y) == size(x) "Output size $(size(y)) does not match input size $(size(x))"
+    assert_applicable(p, x, y)
 
     # Determine if this is an inverse transform
     inverse = K <: Inverse || K <: Backward
@@ -427,7 +468,8 @@ function LinearAlgebra.mul!(y::MtlArray{T, N}, p::MtlFFTPlan{T, K, N}, x::MtlArr
 end
 
 function Base.:(*)(p::MtlFFTPlan{T, K, N}, x::MtlArray{T, N}) where {T, K, N}
-    @assert size(x) == p.input_size "Input size $(size(x)) does not match plan size $(p.input_size)"
+    assert_applicable(p, x)
+
     y = similar(x)
     mul!(y, p, x)
     return y
@@ -465,15 +507,15 @@ end
 
 # rfft: Real → Complex
 function Base.:(*)(p::MtlRFFTPlan{T, Forward, N}, x::MtlArray{T, N}) where {T <: Real, N}
-    @assert size(x) == p.input_size "Input size $(size(x)) does not match plan size $(p.input_size)"
+    assert_applicable(p, x)
+
     y = MtlArray{Complex{T}}(undef, p.output_size)
     mul!(y, p, x)
     return y
 end
 
 function LinearAlgebra.mul!(y::MtlArray{Complex{T}, N}, p::MtlRFFTPlan{T, Forward, N}, x::MtlArray{T, N}) where {T <: Real, N}
-    @assert size(x) == p.input_size "Input size $(size(x)) does not match plan size $(p.input_size)"
-    @assert size(y) == p.output_size "Output size $(size(y)) does not match expected size $(p.output_size)"
+    assert_applicable(p, x, y)
 
     @autoreleasepool begin
         _execute_rfft!(y, x, p.region)
@@ -484,15 +526,15 @@ end
 
 # irfft: Complex → Real (normalized)
 function Base.:(*)(p::MtlRFFTPlan{T, Inverse, N}, x::MtlArray{T, N}) where {T <: Complex, N}
-    @assert size(x) == p.input_size "Input size $(size(x)) does not match plan size $(p.input_size)"
+    assert_applicable(p, x)
+
     y = MtlArray{real(T)}(undef, p.output_size)
     mul!(y, p, x)
     return y
 end
 
 function LinearAlgebra.mul!(y::MtlArray{R, N}, p::MtlRFFTPlan{Complex{R}, Inverse, N}, x::MtlArray{Complex{R}, N}) where {R <: Real, N}
-    @assert size(x) == p.input_size "Input size $(size(x)) does not match plan size $(p.input_size)"
-    @assert size(y) == p.output_size "Output size $(size(y)) does not match expected size $(p.output_size)"
+    assert_applicable(p, x, y)
 
     @autoreleasepool begin
         _execute_irfft!(y, x, p.region, p.output_size)
@@ -507,15 +549,15 @@ end
 
 # brfft: Complex → Real (unnormalized)
 function Base.:(*)(p::MtlRFFTPlan{T, Backward, N}, x::MtlArray{T, N}) where {T <: Complex, N}
-    @assert size(x) == p.input_size "Input size $(size(x)) does not match plan size $(p.input_size)"
+    assert_applicable(p, x)
+
     y = MtlArray{real(T)}(undef, p.output_size)
     mul!(y, p, x)
     return y
 end
 
 function LinearAlgebra.mul!(y::MtlArray{R, N}, p::MtlRFFTPlan{Complex{R}, Backward, N}, x::MtlArray{Complex{R}, N}) where {R <: Real, N}
-    @assert size(x) == p.input_size "Input size $(size(x)) does not match plan size $(p.input_size)"
-    @assert size(y) == p.output_size "Output size $(size(y)) does not match expected size $(p.output_size)"
+    assert_applicable(p, x, y)
 
     @autoreleasepool begin
         _execute_irfft!(y, x, p.region, p.output_size)
