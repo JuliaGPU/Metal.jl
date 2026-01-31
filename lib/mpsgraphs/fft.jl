@@ -53,25 +53,25 @@ end
 ## plan structure
 
 """
-    MtlFFTPlan{T,K,N} <: AbstractFFTs.Plan{T}
+    MtlFFTPlan{T, K, inplace, N, R} <: AbstractFFTs.Plan{T}
 
 GPU FFT plan for Metal using MPSGraph's fastFourierTransformWithTensor.
 
 """
-struct MtlFFTPlan{T, K <: FFTDirection, N} <: AbstractFFTs.Plan{T}
+struct MtlFFTPlan{T, K <: FFTDirection, inplace, N, R} <: AbstractFFTs.Plan{T}
     input_size::NTuple{N, Int}
-    region::Tuple{Vararg{Int}}
-end
+    output_size::NTuple{N, Int}
+    region::NTuple{R, Int}
 
-# Convenience constructors
-function MtlFFTPlan{T, K}(input_size::NTuple{N, Int}, region) where {T, K <: FFTDirection, N}
-    # Normalize region to tuple
-    normalized_region = region isa Integer ? (Int(region),) : Tuple(Int.(region))
-    # Validate region
-    for r in normalized_region
-        1 <= r <= N || throw(ArgumentError("Invalid FFT dimension $r for array with $N dimensions"))
+    function MtlFFTPlan{T, K, inplace, N, R}(input_size::NTuple{N, Int}, output_size::NTuple{N, Int}, region::NTuple{R, Int}) where {T, K <: FFTDirection, inplace, N, R}
+        # Validate region
+        for r in region
+            1 <= r <= N || throw(ArgumentError("Invalid FFT dimension $r for array with $N dimensions"))
+        end
+        inplace isa Bool || throw(ArgumentError("FFT inplace argument must be a Bool"))
+
+        return new{T, K, inplace, N, R}(input_size, output_size, region)
     end
-    return MtlFFTPlan{T, K, N}(input_size, normalized_region)
 end
 
 # Plan properties
@@ -87,6 +87,7 @@ Use `plan_fft!`, `plan_ifft!`, or `plan_bfft!` to create these plans.
 """
 struct MtlFFTInplacePlan{T, K <: FFTDirection, N} <: AbstractFFTs.Plan{T}
     input_size::NTuple{N, Int}
+    output_size::NTuple{N, Int}
     region::Tuple{Vararg{Int}}
 end
 
@@ -95,7 +96,7 @@ function MtlFFTInplacePlan{T, K}(input_size::NTuple{N, Int}, region) where {T, K
     for r in normalized_region
         1 <= r <= N || throw(ArgumentError("Invalid FFT dimension $r for array with $N dimensions"))
     end
-    return MtlFFTInplacePlan{T, K, N}(input_size, normalized_region)
+    return MtlFFTInplacePlan{T, K, N}(input_size, input_size, normalized_region)
 end
 
 # Plan properties for in-place plans
@@ -103,12 +104,12 @@ Base.size(p::MtlFFTInplacePlan) = p.input_size
 AbstractFFTs.fftdims(p::MtlFFTInplacePlan) = p.region
 
 """
-    MtlRFFTPlan{T,K,N} <: AbstractFFTs.Plan{T}
+    MtlRFFTPlan{T,K,inplace,N} <: AbstractFFTs.Plan{T}
 
 GPU Real FFT plan for Metal using MPSGraph's realToHermiteanFFTWithTensor.
 
 """
-struct MtlRFFTPlan{T, K <: FFTDirection, N} <: AbstractFFTs.Plan{T}
+struct MtlRFFTPlan{T, K <: FFTDirection, inplace, N} <: AbstractFFTs.Plan{T}
     input_size::NTuple{N, Int}
     output_size::NTuple{N, Int}
     region::Tuple{Vararg{Int}}
@@ -123,7 +124,7 @@ function MtlRFFTPlan{T, Forward}(input_size::NTuple{N, Int}, region) where {T <:
     # Output size: FIRST transformed dimension becomes n÷2+1 (FFTW convention)
     first_dim = minimum(normalized_region)
     output_size = ntuple(i -> i == first_dim ? input_size[i] ÷ 2 + 1 : input_size[i], N)
-    return MtlRFFTPlan{T, Forward, N}(input_size, output_size, normalized_region)
+    return MtlRFFTPlan{T, Forward, false, N}(input_size, output_size, normalized_region)
 end
 
 # Constructor for irfft/brfft (complex → real)
@@ -135,7 +136,7 @@ function MtlRFFTPlan{T, K}(input_size::NTuple{N, Int}, d::Int, region) where {T 
     # Output size: FIRST transformed dimension is d (the original real size) - FFTW convention
     first_dim = minimum(normalized_region)
     output_size = ntuple(i -> i == first_dim ? d : input_size[i], N)
-    return MtlRFFTPlan{T, K, N}(input_size, output_size, normalized_region)
+    return MtlRFFTPlan{T, K, false, N}(input_size, output_size, normalized_region)
 end
 
 # Plan properties for real FFT
@@ -164,31 +165,36 @@ function _check_rfft_type(::Type{T}) where {T <: Real}
     )
 end
 
-function AbstractFFTs.plan_fft(x::MtlArray{T, N}, region) where {T <: Complex, N}
+# for f in (:plan_fft!, :plan_bfft!, :plan_ifft!, :plan_fft, :plan_bfft, :plan_ifft)
+for f in (:plan_fft, :plan_bfft, :plan_ifft)
+    @eval begin
+        Base.@constprop :aggressive function $f(X::MtlArray{T, N}, region) where {T <: Complex, N}
+            R = length(region)
+            region = NTuple{R,Int}(region)
+            $f(X, region)
+        end
+    end
+end
+
+function AbstractFFTs.plan_fft(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: Complex, N, R}
     _check_fft_type(T)
-    return MtlFFTPlan{T, Forward}(size(x), region)
+    K = Forward
+    inplace = false
+    return MtlFFTPlan{T, K, inplace, N, R}(size(x), size(x), region)
 end
 
-function AbstractFFTs.plan_fft(x::MtlArray{T, N}) where {T <: Complex, N}
-    return plan_fft(x, 1:N)
-end
-
-function AbstractFFTs.plan_ifft(x::MtlArray{T, N}, region) where {T <: Complex, N}
+function AbstractFFTs.plan_ifft(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: Complex, N, R}
     _check_fft_type(T)
-    return MtlFFTPlan{T, Inverse}(size(x), region)
+    K = Inverse
+    inplace = false
+    return MtlFFTPlan{T, K, inplace, N, R}(size(x), size(x), region)
 end
 
-function AbstractFFTs.plan_ifft(x::MtlArray{T, N}) where {T <: Complex, N}
-    return plan_ifft(x, 1:N)
-end
-
-function AbstractFFTs.plan_bfft(x::MtlArray{T, N}, region) where {T <: Complex, N}
+function AbstractFFTs.plan_bfft(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: Complex, N, R}
     _check_fft_type(T)
-    return MtlFFTPlan{T, Backward}(size(x), region)
-end
-
-function AbstractFFTs.plan_bfft(x::MtlArray{T, N}) where {T <: Complex, N}
-    return plan_bfft(x, 1:N)
+    K = Backward
+    inplace = false
+    return MtlFFTPlan{T, K, inplace, N, R}(size(x), size(x), region)
 end
 
 # In-place plan creation
@@ -255,14 +261,10 @@ end
 
 function assert_applicable(p::MtlFFTPlan{T, K, inplace}, X::MtlArray{S},
                            Y::MtlArray{T}) where {T, S, K, inplace}
-# function assert_applicable(p::MtlFFTPlan{T, K}, X::MtlArray{S},
-#                            Y::MtlArray{T}) where {T, S, K}
-#     inplace = false
     assert_applicable(p, X)
-    # if size(Y) != p.output_size
-    #     throw(ArgumentError("MtlFFT plan applied to wrong-size output"))
-    # elseif inplace != (pointer(X) == pointer(Y))
-    if inplace != (pointer(X) == pointer(Y))
+    if size(Y) != p.output_size
+        throw(ArgumentError("MtlFFT plan applied to wrong-size output"))
+    elseif inplace != (pointer(X) == pointer(Y))
         throw(ArgumentError(string("MtlFFT ",
                                    inplace ? "in-place" : "out-of-place",
                                    " plan applied to ",
@@ -445,7 +447,7 @@ end
 
 ## high-level integrations
 
-function LinearAlgebra.mul!(y::MtlArray{T, N}, p::MtlFFTPlan{T, K, N}, x::MtlArray{T, N}) where {T, K, N}
+function LinearAlgebra.mul!(y::MtlArray{T, N}, p::MtlFFTPlan{T, K, inplace, N}, x::MtlArray{T, N}) where {T, K, inplace, N}
     assert_applicable(p, x, y)
 
     # Determine if this is an inverse transform
@@ -467,7 +469,7 @@ function LinearAlgebra.mul!(y::MtlArray{T, N}, p::MtlFFTPlan{T, K, N}, x::MtlArr
     return y
 end
 
-function Base.:(*)(p::MtlFFTPlan{T, K, N}, x::MtlArray{T, N}) where {T, K, N}
+function Base.:(*)(p::MtlFFTPlan{T, K, false, N}, x::MtlArray{T, N}) where {T, K, N}
     assert_applicable(p, x)
 
     y = similar(x)
@@ -506,7 +508,7 @@ end
 ## real high-level integrations
 
 # rfft: Real → Complex
-function Base.:(*)(p::MtlRFFTPlan{T, Forward, N}, x::MtlArray{T, N}) where {T <: Real, N}
+function Base.:(*)(p::MtlRFFTPlan{T, Forward, false, N}, x::MtlArray{T, N}) where {T <: Real, N}
     assert_applicable(p, x)
 
     y = MtlArray{Complex{T}}(undef, p.output_size)
@@ -514,7 +516,7 @@ function Base.:(*)(p::MtlRFFTPlan{T, Forward, N}, x::MtlArray{T, N}) where {T <:
     return y
 end
 
-function LinearAlgebra.mul!(y::MtlArray{Complex{T}, N}, p::MtlRFFTPlan{T, Forward, N}, x::MtlArray{T, N}) where {T <: Real, N}
+function LinearAlgebra.mul!(y::MtlArray{Complex{T}, N}, p::MtlRFFTPlan{T, Forward, false, N}, x::MtlArray{T, N}) where {T <: Real, N}
     assert_applicable(p, x, y)
 
     @autoreleasepool begin
@@ -525,7 +527,7 @@ function LinearAlgebra.mul!(y::MtlArray{Complex{T}, N}, p::MtlRFFTPlan{T, Forwar
 end
 
 # irfft: Complex → Real (normalized)
-function Base.:(*)(p::MtlRFFTPlan{T, Inverse, N}, x::MtlArray{T, N}) where {T <: Complex, N}
+function Base.:(*)(p::MtlRFFTPlan{T, Inverse, false, N}, x::MtlArray{T, N}) where {T <: Complex, N}
     assert_applicable(p, x)
 
     y = MtlArray{real(T)}(undef, p.output_size)
@@ -533,7 +535,7 @@ function Base.:(*)(p::MtlRFFTPlan{T, Inverse, N}, x::MtlArray{T, N}) where {T <:
     return y
 end
 
-function LinearAlgebra.mul!(y::MtlArray{R, N}, p::MtlRFFTPlan{Complex{R}, Inverse, N}, x::MtlArray{Complex{R}, N}) where {R <: Real, N}
+function LinearAlgebra.mul!(y::MtlArray{R, N}, p::MtlRFFTPlan{Complex{R}, Inverse, false, N}, x::MtlArray{Complex{R}, N}) where {R <: Real, N}
     assert_applicable(p, x, y)
 
     @autoreleasepool begin
@@ -548,7 +550,7 @@ function LinearAlgebra.mul!(y::MtlArray{R, N}, p::MtlRFFTPlan{Complex{R}, Invers
 end
 
 # brfft: Complex → Real (unnormalized)
-function Base.:(*)(p::MtlRFFTPlan{T, Backward, N}, x::MtlArray{T, N}) where {T <: Complex, N}
+function Base.:(*)(p::MtlRFFTPlan{T, Backward, false, N}, x::MtlArray{T, N}) where {T <: Complex, N}
     assert_applicable(p, x)
 
     y = MtlArray{real(T)}(undef, p.output_size)
@@ -556,7 +558,7 @@ function Base.:(*)(p::MtlRFFTPlan{T, Backward, N}, x::MtlArray{T, N}) where {T <
     return y
 end
 
-function LinearAlgebra.mul!(y::MtlArray{R, N}, p::MtlRFFTPlan{Complex{R}, Backward, N}, x::MtlArray{Complex{R}, N}) where {R <: Real, N}
+function LinearAlgebra.mul!(y::MtlArray{R, N}, p::MtlRFFTPlan{Complex{R}, Backward, false, N}, x::MtlArray{Complex{R}, N}) where {R <: Real, N}
     assert_applicable(p, x, y)
 
     @autoreleasepool begin
