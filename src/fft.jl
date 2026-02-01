@@ -24,8 +24,9 @@ export plan_fft, plan_ifft, plan_bfft, plan_rfft, plan_irfft, plan_brfft
 export plan_fft!, plan_ifft!, plan_bfft!
 
 # Supported complex types for FFT
-const FFTComplexTypes = Union{ComplexF32, ComplexF16}
-const FFTRealTypes = Union{Float32, Float16}
+const FFTComplex = Union{ComplexF32, ComplexF16}
+const FFTReal = Union{Float32, Float16}
+const FFTNumber = Union{FFTReal, FFTComplex}
 
 # ============================================================================
 # FFT Direction Enum
@@ -44,12 +45,12 @@ struct Backward <: FFTDirection end  # unnormalized inverse
 GPU FFT plan for Metal using MPSGraph's fastFourierTransformWithTensor.
 
 """
-struct MtlFFTPlan{T, K <: FFTDirection, inplace, N, R} <: AbstractFFTs.Plan{T}
+struct MtlFFTPlan{T <: FFTNumber, K <: FFTDirection, inplace, N, R} <: AbstractFFTs.Plan{T}
     input_size::NTuple{N, Int}
     output_size::NTuple{N, Int}
     region::NTuple{R, Int}
 
-    function MtlFFTPlan{T, K, inplace, N, R}(input_size::NTuple{N, Int}, output_size::NTuple{N, Int}, region::NTuple{R, Int}) where {T, K <: FFTDirection, inplace, N, R}
+    function MtlFFTPlan{T, K, inplace, N, R}(input_size::NTuple{N, Int}, output_size::NTuple{N, Int}, region::NTuple{R, Int}) where {T <: FFTNumber, K <: FFTDirection, inplace, N, R}
         # Validate region
         for r in region
             1 <= r <= N || throw(ArgumentError("Invalid FFT dimension $r for array with $N dimensions"))
@@ -109,27 +110,9 @@ AbstractFFTs.fftdims(p::MtlRFFTPlan) = p.region
 # AbstractFFTs Interface Implementation
 # ============================================================================
 
-function _check_fft_type(::Type{T}) where {T <: Complex}
-    return T <: FFTComplexTypes || throw(
-        ArgumentError(
-            "Metal FFT only supports ComplexF32 and ComplexF16, got $T. " *
-                "For ComplexF64, use FFTW.jl on CPU."
-        )
-    )
-end
-
-function _check_rfft_type(::Type{T}) where {T <: Real}
-    return T <: FFTRealTypes || throw(
-        ArgumentError(
-            "Metal rfft only supports Float32 and Float16, got $T. " *
-                "For Float64, use FFTW.jl on CPU."
-        )
-    )
-end
-
 for f in (:plan_fft!, :plan_bfft!, :plan_ifft!, :plan_fft, :plan_bfft, :plan_ifft)
     @eval begin
-        Base.@constprop :aggressive function $f(X::MtlArray{T, N}, region) where {T <: Complex, N}
+        Base.@constprop :aggressive function $f(X::MtlArray{T, N}, region) where {T <: FFTComplex, N}
             R = length(region)
             region = NTuple{R,Int}(region)
             $f(X, region)
@@ -137,51 +120,44 @@ for f in (:plan_fft!, :plan_bfft!, :plan_ifft!, :plan_fft, :plan_bfft, :plan_iff
     end
 end
 
-function AbstractFFTs.plan_fft(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: Complex, N, R}
-    _check_fft_type(T)
+function AbstractFFTs.plan_fft(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
     K = Forward
     inplace = false
     return MtlFFTPlan{T, K, inplace, N, R}(size(x), size(x), region)
 end
 
-function AbstractFFTs.plan_ifft(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: Complex, N, R}
-    _check_fft_type(T)
+function AbstractFFTs.plan_ifft(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
     K = Inverse
     inplace = false
     return MtlFFTPlan{T, K, inplace, N, R}(size(x), size(x), region)
 end
 
-function AbstractFFTs.plan_bfft(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: Complex, N, R}
-    _check_fft_type(T)
+function AbstractFFTs.plan_bfft(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
     K = Backward
     inplace = false
     return MtlFFTPlan{T, K, inplace, N, R}(size(x), size(x), region)
 end
 
 # In-place plan creation
-function AbstractFFTs.plan_fft!(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: Complex, N, R}
-    _check_fft_type(T)
+function AbstractFFTs.plan_fft!(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
     K = Forward
     inplace = true
     return MtlFFTPlan{T, K, inplace, N, R}(size(x), size(x), region)
 end
 
-function AbstractFFTs.plan_ifft!(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: Complex, N, R}
-    _check_fft_type(T)
+function AbstractFFTs.plan_ifft!(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
     K = Inverse
     inplace = true
     return MtlFFTPlan{T, K, inplace, N, R}(size(x), size(x), region)
 end
 
-function AbstractFFTs.plan_bfft!(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: Complex, N, R}
-    _check_fft_type(T)
+function AbstractFFTs.plan_bfft!(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
     K = Backward
     inplace = true
     return MtlFFTPlan{T, K, inplace, N, R}(size(x), size(x), region)
 end
 
-function AbstractFFTs.plan_rfft(x::MtlArray{T, N}, region) where {T <: Real, N}
-    _check_rfft_type(T)
+function AbstractFFTs.plan_rfft(x::MtlArray{T, N}, region) where {T <: FFTReal, N}
     return MtlRFFTPlan{T, Forward}(size(x), region)
 end
 
@@ -189,21 +165,19 @@ function AbstractFFTs.plan_rfft(x::MtlArray{T, N}) where {T <: Real, N}
     return plan_rfft(x, 1:N)
 end
 
-function AbstractFFTs.plan_irfft(x::MtlArray{T, N}, d::Int, region) where {T <: Complex, N}
-    _check_fft_type(T)
+function AbstractFFTs.plan_irfft(x::MtlArray{T, N}, d::Int, region) where {T <: FFTComplex, N}
     return MtlRFFTPlan{T, Inverse}(size(x), d, region)
 end
 
-function AbstractFFTs.plan_irfft(x::MtlArray{T, N}, d::Int) where {T <: Complex, N}
+function AbstractFFTs.plan_irfft(x::MtlArray{T, N}, d::Int) where {T <: FFTComplex, N}
     return plan_irfft(x, d, 1:N)
 end
 
-function AbstractFFTs.plan_brfft(x::MtlArray{T, N}, d::Int, region) where {T <: Complex, N}
-    _check_fft_type(T)
+function AbstractFFTs.plan_brfft(x::MtlArray{T, N}, d::Int, region) where {T <: FFTComplex, N}
     return MtlRFFTPlan{T, Backward}(size(x), d, region)
 end
 
-function AbstractFFTs.plan_brfft(x::MtlArray{T, N}, d::Int) where {T <: Complex, N}
+function AbstractFFTs.plan_brfft(x::MtlArray{T, N}, d::Int) where {T <: FFTComplex, N}
     return plan_brfft(x, d, 1:N)
 end
 
