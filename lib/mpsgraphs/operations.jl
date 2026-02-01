@@ -81,30 +81,6 @@ function concatTensors(graph::MPSGraph, tensors::NSArray, dimension::Int, name =
     MPSGraphTensor(obj)
 end
 
-function fastFourierTransformWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, axes::NSArray, descriptor::MPSGraphFFTDescriptor, name = "fft")
-    obj = @objc [graph::id{MPSGraph} fastFourierTransformWithTensor:tensor::id{MPSGraphTensor}
-                                axes:axes::id{NSArray}
-                                descriptor:descriptor::id{MPSGraphFFTDescriptor}
-                                name:name::id{NSString}]::id{MPSGraphTensor}
-    MPSGraphTensor(obj)
-end
-
-function realToHermiteanFFTWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, axes::NSArray, descriptor::MPSGraphFFTDescriptor, name = "rfft")
-    obj = @objc [graph::id{MPSGraph} realToHermiteanFFTWithTensor:tensor::id{MPSGraphTensor}
-                                axes:axes::id{NSArray}
-                                descriptor:descriptor::id{MPSGraphFFTDescriptor}
-                                name:name::id{NSString}]::id{MPSGraphTensor}
-    MPSGraphTensor(obj)
-end
-
-function HermiteanToRealFFTWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, axes::NSArray, descriptor::MPSGraphFFTDescriptor, name = "irfft")
-    obj = @objc [graph::id{MPSGraph} HermiteanToRealFFTWithTensor:tensor::id{MPSGraphTensor}
-                                axes:axes::id{NSArray}
-                                descriptor:descriptor::id{MPSGraphFFTDescriptor}
-                                name:name::id{NSString}]::id{MPSGraphTensor}
-    MPSGraphTensor(obj)
-end
-
 """
     dump_graph(graph::MPSGraph)
 
