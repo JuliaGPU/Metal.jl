@@ -68,6 +68,7 @@ include("accumulate.jl")
 include("indexing.jl")
 include("random.jl")
 include("gpuarrays.jl")
+include("fft.jl")
 
 # KernelAbstractions
 include("MetalKernels.jl")

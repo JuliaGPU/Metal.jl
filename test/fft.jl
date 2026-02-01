@@ -405,19 +405,19 @@ if MPS.is_supported(device())
     @testset "Type Restrictions" begin
         # ComplexF32 should work
         x32 = MtlArray(randn(ComplexF32, 32, 32))
-        @test plan_fft(x32) isa MPSGraphs.MtlFFTPlan
+        @test plan_fft(x32) isa Metal.MtlFFTPlan
 
         # ComplexF16 should work
         x16 = MtlArray(ComplexF16.(randn(ComplexF32, 32, 32)))
-        @test plan_fft(x16) isa MPSGraphs.MtlFFTPlan
+        @test plan_fft(x16) isa Metal.MtlFFTPlan
 
         # Float32 rfft should work
         xr32 = MtlArray(randn(Float32, 32, 32))
-        @test plan_rfft(xr32) isa MPSGraphs.MtlRFFTPlan
+        @test plan_rfft(xr32) isa Metal.MtlRFFTPlan
 
         # Float16 rfft should work
         xr16 = MtlArray(Float16.(randn(Float32, 32, 32)))
-        @test plan_rfft(xr16) isa MPSGraphs.MtlRFFTPlan
+        @test plan_rfft(xr16) isa Metal.MtlRFFTPlan
     end
 
     @testset "Invalid Dimensions" begin
