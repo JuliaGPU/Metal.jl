@@ -85,55 +85,26 @@ end
 Base.size(p::MtlFFTPlan) = p.input_size
 AbstractFFTs.fftdims(p::MtlFFTPlan) = p.region
 
-# ============================================================================
-# AbstractFFTs Interface Implementation
-# ============================================================================
+## AbstractFFTs Interface Implementation
 
-for f in (:plan_fft!, :plan_bfft!, :plan_ifft!, :plan_fft, :plan_bfft, :plan_ifft)
+## forward plans are `plan_fft`, inverse plans are `plan_ifft`, and backward (unnormalized ) plans are `plan_bfft`
+## inplace functions have a "!",
+for inplace in (true, false), dir in (Forward, Inverse, Backward)
+    dir_str = dir === Forward ? "" : dir === Backward ? "b" : "i"
+    inplace_str = inplace ? "!" : ""
+    f = Symbol(:plan_, dir_str, :fft, inplace_str)
+
     @eval begin
+        # untyped `region` argument
         Base.@constprop :aggressive function $f(x::MtlArray{T, N}, region) where {T <: FFTComplex, N}
             R = length(region)
             region = NTuple{R,Int}(region)
             $f(x, region)
         end
+
+        # actually create the MtlFFTPlan
+        $f(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: FFTComplex, N, R} = MtlFFTPlan{T, T, $dir, $inplace, N, R}(size(x), size(x), region)
     end
-end
-
-function AbstractFFTs.plan_fft(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
-    K = Forward
-    inplace = false
-    return MtlFFTPlan{T, T, K, inplace, N, R}(size(x), size(x), region)
-end
-
-function AbstractFFTs.plan_ifft(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
-    K = Inverse
-    inplace = false
-    return MtlFFTPlan{T, T, K, inplace, N, R}(size(x), size(x), region)
-end
-
-function AbstractFFTs.plan_bfft(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
-    K = Backward
-    inplace = false
-    return MtlFFTPlan{T, T, K, inplace, N, R}(size(x), size(x), region)
-end
-
-# In-place plan creation
-function AbstractFFTs.plan_fft!(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
-    K = Forward
-    inplace = true
-    return MtlFFTPlan{T, T, K, inplace, N, R}(size(x), size(x), region)
-end
-
-function AbstractFFTs.plan_ifft!(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
-    K = Inverse
-    inplace = true
-    return MtlFFTPlan{T, T, K, inplace, N, R}(size(x), size(x), region)
-end
-
-function AbstractFFTs.plan_bfft!(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
-    K = Backward
-    inplace = true
-    return MtlFFTPlan{T, T, K, inplace, N, R}(size(x), size(x), region)
 end
 
 # out-of-place real-to-complex
