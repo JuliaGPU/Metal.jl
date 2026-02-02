@@ -17,20 +17,18 @@ using .MPSGraphs: MPSGraph, MPSGraphFFTDescriptor, HermiteanToRealFFTWithTensor,
                   fastFourierTransformWithTensor, placeholderTensor, MPSGraphTensorData, MPSGraphTensor
 
 using AbstractFFTs
-import AbstractFFTs: plan_fft, plan_ifft, plan_bfft, plan_rfft, plan_irfft, plan_brfft
-import AbstractFFTs: plan_fft!, plan_ifft!, plan_bfft!
+import AbstractFFTs: plan_fft, plan_ifft, plan_bfft, plan_rfft, plan_irfft, plan_brfft,
+                     plan_fft!, plan_ifft!, plan_bfft!
 
-export plan_fft, plan_ifft, plan_bfft, plan_rfft, plan_irfft, plan_brfft
-export plan_fft!, plan_ifft!, plan_bfft!
+export plan_fft, plan_ifft, plan_bfft, plan_rfft, plan_irfft, plan_brfft,
+       plan_fft!, plan_ifft!, plan_bfft!
 
 # Supported complex types for FFT
 const FFTComplex = Union{ComplexF32, ComplexF16}
 const FFTReal = Union{Float32, Float16}
 const FFTNumber = Union{FFTReal, FFTComplex}
 
-# ============================================================================
-# FFT Direction Enum
-# ============================================================================
+## FFT Direction Enum
 
 abstract type FFTDirection end
 struct Forward <: FFTDirection end
@@ -87,8 +85,8 @@ AbstractFFTs.fftdims(p::MtlFFTPlan) = p.region
 
 ## AbstractFFTs Interface Implementation
 
-## forward plans are `plan_fft`, inverse plans are `plan_ifft`, and backward (unnormalized ) plans are `plan_bfft`
-## inplace functions have a "!",
+# forward plans are `plan_fft`, inverse plans are `plan_ifft`, and backward (unnormalized ) plans are `plan_bfft`
+# inplace functions have a "!",
 for inplace in (true, false), dir in (Forward, Inverse, Backward)
     dir_str = dir === Forward ? "" : dir === Backward ? "b" : "i"
     inplace_str = inplace ? "!" : ""
@@ -108,31 +106,30 @@ for inplace in (true, false), dir in (Forward, Inverse, Backward)
 end
 
 # out-of-place real-to-complex
-Base.@constprop :aggressive function AbstractFFTs.plan_rfft(x::MtlArray{T, N}, region) where {T <: FFTReal, N}
+Base.@constprop :aggressive function plan_rfft(x::MtlArray{T, N}, region) where {T <: FFTReal, N}
     R = length(region)
     region = NTuple{R,Int}(region)
-    AbstractFFTs.plan_rfft(x, region)
+
+    plan_rfft(x, region)
 end
 
-function AbstractFFTs.plan_rfft(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: FFTReal, N, R}
+function plan_rfft(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: FFTReal, N, R}
     K = Forward
     inplace = false
-
-    sizex = size(x)[1:N]
 
     xdims = size(x)
     ydims = Base.setindex(xdims, div(xdims[region[1]], 2) + 1, region[1])
     MtlFFTPlan{complex(T), T, K, inplace, N, R}(size(x), (ydims...,), region)
 end
 
-Base.@constprop :aggressive function AbstractFFTs.plan_irfft(x::MtlArray{T, N}, d::Int, region) where {T <: FFTComplex, N}
+Base.@constprop :aggressive function plan_irfft(x::MtlArray{T, N}, d::Int, region) where {T <: FFTComplex, N}
     R = length(region)
     region = NTuple{R,Int}(region)
 
-    AbstractFFTs.plan_irfft(x, d, region)
+    plan_irfft(x, d, region)
 end
 
-function AbstractFFTs.plan_irfft(x::MtlArray{T, N}, d::Int, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
+function plan_irfft(x::MtlArray{T, N}, d::Int, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
     K = Inverse
     inplace = false
 
@@ -143,14 +140,14 @@ function AbstractFFTs.plan_irfft(x::MtlArray{T, N}, d::Int, region::NTuple{R, In
 end
 
 # out-of-place complex-to-real
-Base.@constprop :aggressive function AbstractFFTs.plan_brfft(x::MtlArray{T, N}, d::Int, region) where {T <: FFTComplex, N}
+Base.@constprop :aggressive function plan_brfft(x::MtlArray{T, N}, d::Int, region) where {T <: FFTComplex, N}
     R = length(region)
     region = NTuple{R,Int}(region)
 
     plan_brfft(x, d, region)
 end
 
-function AbstractFFTs.plan_brfft(x::MtlArray{T, N}, d::Int, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
+function plan_brfft(x::MtlArray{T, N}, d::Int, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
     K = Backward
     inplace = false
 
