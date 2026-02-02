@@ -76,7 +76,7 @@ function Base.show(io::IO, p::MtlFFTPlan{T, S, K, inplace}) where {T, S, K, inpl
     print(io, "MPSGraph FFT ",
           inplace ? "in-place " : "",
           S == T ? "$T " : "$(S)-to-$(T) ",
-          K == Forward ? "forward " : "backward ",
+          K == Forward ? "forward " : K === Backward ? "backward " : "inverse ",
           "plan for ")
     showfftdims(io, p.input_size, S)
 end
