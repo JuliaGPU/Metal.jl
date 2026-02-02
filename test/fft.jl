@@ -413,11 +413,11 @@ if MPS.is_supported(device())
 
         # Float32 rfft should work
         xr32 = MtlArray(randn(Float32, 32, 32))
-        @test plan_rfft(xr32) isa Metal.MtlRFFTPlan
+        @test plan_rfft(xr32) isa Metal.MtlFFTPlan
 
         # Float16 rfft should work
         xr16 = MtlArray(Float16.(randn(Float32, 32, 32)))
-        @test plan_rfft(xr16) isa Metal.MtlRFFTPlan
+        @test plan_rfft(xr16) isa Metal.MtlFFTPlan
     end
 
     @testset "Invalid Dimensions" begin
