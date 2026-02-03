@@ -17,8 +17,9 @@ using .MPSGraphs: MPSGraph, MPSGraphFFTDescriptor, HermiteanToRealFFTWithTensor,
                   fastFourierTransformWithTensor, placeholderTensor, MPSGraphTensorData, MPSGraphTensor
 
 using AbstractFFTs
-import AbstractFFTs: plan_fft, plan_ifft, plan_bfft, plan_rfft, plan_irfft, plan_brfft,
-                     plan_fft!, plan_ifft!, plan_bfft!, plan_inv, ScaledPlan, Plan, normalization
+import AbstractFFTs: plan_fft, plan_fft!, plan_bfft, plan_bfft!, plan_ifft,
+    plan_rfft, plan_brfft, plan_inv, normalization, fft, bfft, ifft, rfft, irfft,
+    Plan, ScaledPlan
 
 export plan_fft, plan_ifft, plan_bfft, plan_rfft, plan_irfft, plan_brfft,
        plan_fft!, plan_ifft!, plan_bfft!, plan_inv
@@ -28,12 +29,30 @@ const FFTComplex = Union{ComplexF32, ComplexF16}
 const FFTReal = Union{Float32, Float16}
 const FFTNumber = Union{FFTReal, FFTComplex}
 
-## FFT Direction Enum
+mtlfloat(x) = float(x)
+mtlFloat(x::Integer) = Float32(x)
+mtlFloat(x::Complex{<:Integer}) = ComplexF32(x)
+mtlFloat(::Type{<:Integer}) = Float32
+mtlFloat(::Type{Complex{<:Integer}}) = ComplexF32
 
-abstract type FFTDirection end
-struct Forward <: FFTDirection end
-struct Inverse <: FFTDirection end
-struct Backward <: FFTDirection end  # unnormalized inverse
+mtlfftfloat(x) = _mtlfftfloat(mtlfloat(x))
+_mtlfftfloat(::Type{T}) where {T<:FFTNumber} = T
+_mtlfftfloat(::Type{T}) where {T} = error("type $T not supported")
+_mtlfftfloat(x::T) where {T} = _mtlfftfloat(T)(x)
+
+realfloat(x::MtlArray{<:FFTReal}) = x
+realfloat(x::MtlArray{T}) where {T<:Real} = copy1(mtlfftfloat(T), x)
+realfloat(x::MtlArray{T}) where {T} = error("type $T not supported")
+
+complexfloat(x::MtlArray{<:FFTComplex}) = x
+complexfloat(x::MtlArray{T}) where {T<:Complex} = copy1(mtlfftfloat(T), x)
+complexfloat(x::MtlArray{T}) where {T<:Real} = copy1(mtlfftfloat(complex(T)), x)
+complexfloat(x::MtlArray{T}) where {T} = error("type $T not supported")
+
+function copy1(::Type{T}, x) where T
+    y = MtlArray{T}(undef, map(length, axes(x)))
+    y .= broadcast(xi->convert(T,xi),x)
+end
 
 ## plan structure
 
@@ -94,6 +113,25 @@ Base.size(p::MtlFFTPlan) = p.input_size
 AbstractFFTs.fftdims(p::MtlFFTPlan) = p.region
 
 ## AbstractFFTs Interface Implementation
+
+# promote to a complex floating-point type (out-of-place only),
+# so implementations only need Complex{Float} methods
+for f in (:fft, :bfft, :ifft)
+    pf = Symbol("plan_", f)
+    @eval begin
+        $f(x::MtlArray{<:Real}, region=1:ndims(x)) = $f(complexfloat(x), region)
+        $pf(x::MtlArray{<:Real}, region) = $pf(complexfloat(x), region)
+        $f(x::MtlArray{<:Complex{<:Union{Integer,Rational}}}, region=1:ndims(x)) = $f(complexfloat(x), region)
+        $pf(x::MtlArray{<:Complex{<:Union{Integer,Rational}}}, region) = $pf(complexfloat(x), region)
+    end
+end
+rfft(x::MtlArray{<:Union{Integer,Rational}}, region=1:ndims(x)) = rfft(realfloat(x), region)
+plan_rfft(x::MtlArray{<:Real}, region) = plan_rfft(realfloat(x), region)
+
+function irfft(x::MtlArray{<:Union{Real,Integer,Rational}}, d::Integer, region=1:ndims(x))
+    irfft(complexfloat(x), d, region)
+end
+
 
 # forward plans are `plan_fft`, inverse plans are `plan_ifft`, and backward (unnormalized ) plans are `plan_bfft`
 # inplace functions have a "!",
