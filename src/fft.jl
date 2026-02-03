@@ -220,15 +220,15 @@ function assert_applicable(p::MtlFFTPlan{T, S, backward, inplace}, X::MtlArray{S
 end
 
 function unsafe_execute!(p::MtlFFTPlan{T, S, backward, inplace, N}, x::MtlArray{T, N}, y::MtlArray{T, N}) where {T <: FFTComplex, S <: FFTComplex, N, backward, inplace}
-    _unsafe_execute!(fastFourierTransformWithTensor, p, x, y)
+    @autoreleasepool _unsafe_execute!(fastFourierTransformWithTensor, p, x, y)
 end
 
 function unsafe_execute!(p::MtlFFTPlan{T, S, backward, inplace, N}, x::MtlArray{S, N}, y::MtlArray{T, N}) where {S <: FFTReal, T <: Complex{S}, N, backward, inplace}
-    _unsafe_execute!(realToHermiteanFFTWithTensor, p, x, y)
+    @autoreleasepool _unsafe_execute!(realToHermiteanFFTWithTensor, p, x, y)
 end
 
 function unsafe_execute!(p::MtlFFTPlan{T, S, backward, inplace, N}, x::MtlArray{S, N}, y::MtlArray{T, N}) where {T <: FFTReal, S <: Complex{T}, N, backward, inplace}
-    _unsafe_execute!(HermiteanToRealFFTWithTensor, p, x, y)
+    @autoreleasepool _unsafe_execute!(HermiteanToRealFFTWithTensor, p, x, y)
 end
 
 @inline function _unsafe_execute!(f, p::MtlFFTPlan{T, S, backward, inplace, N}, x, y) where {T <: FFTNumber, S <: FFTNumber, N, backward, inplace}
@@ -272,10 +272,7 @@ end
 function LinearAlgebra.mul!(y::MtlArray{T, N}, p::MtlFFTPlan{T, S, backward, inplace, N}, x::MtlArray{S, N}) where {T, S, backward, inplace, N}
     assert_applicable(p, x, y)
 
-    @autoreleasepool begin
-        unsafe_execute!(p, x, y)
-    end
-
+    unsafe_execute!(p, x, y)
     return y
 end
 
