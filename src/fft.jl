@@ -78,8 +78,11 @@ mutable struct MtlFFTPlan{T <: FFTNumber, S <: FFTNumber, backward, inplace, N, 
 
     function MtlFFTPlan{T, S, backward, inplace, N, R}(input_size::NTuple{N, Int}, output_size::NTuple{N, Int}, region::NTuple{R, Int}) where {T <: FFTNumber, S <: FFTNumber, backward, inplace, N, R}
         # Validate region
-        for r in region
-            1 <= r <= N || throw(ArgumentError("Invalid FFT dimension $r for array with $N dimensions"))
+        if any(diff(collect(region)) .< 1)
+            throw(ArgumentError("region must be an increasing sequence"))
+        end
+        if any(region .< 1 .|| region .> N)
+            throw(ArgumentError("region can only refer to valid dimensions"))
         end
         backward isa Bool || throw(ArgumentError("FFT backward argument must be a Bool"))
         inplace isa Bool || throw(ArgumentError("FFT inplace argument must be a Bool"))
@@ -277,14 +280,15 @@ function LinearAlgebra.mul!(y::MtlArray{T, N}, p::MtlFFTPlan{T, S, backward, inp
 end
 
 function Base.:(*)(p::MtlFFTPlan{T, S, backward, true}, x::MtlArray{S}) where {T, S, backward}
-    # assert_applicable(p, x)
-    LinearAlgebra.mul!(x, p, x)
+    assert_applicable(p, x)
+
+    unsafe_execute!(p, x, x)
     return x
 end
 function Base.:(*)(p::MtlFFTPlan{T, S, backward, false}, x::MtlArray{S}) where {T, S, backward}
-    # assert_applicable(p, x)
+    assert_applicable(p, x)
 
     y = MtlArray{T}(undef, p.output_size)
-    LinearAlgebra.mul!(y, p, x)
+    unsafe_execute!(p, x, y)
     return y
 end

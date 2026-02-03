@@ -159,8 +159,8 @@ if MPS.is_supported(device())
 
         p = plan_fft(d_X, region)
         d_Y = p * d_X
-        # d_X2 = reshape(d_X, (size(d_X)..., 1))
-        # @test_throws ArgumentError p * d_X2
+        d_X2 = reshape(d_X, (size(d_X)..., 1))
+        @test_throws ArgumentError p * d_X2
 
         Y = Array(d_Y)
         @test isapprox(Y, fftw_X, rtol = rtol(T), atol = atol(T))
@@ -238,8 +238,8 @@ if MPS.is_supported(device())
                     test_complex_batched(X, region)
                 end
 
-                # X = rand(T, dims)
-                # @test_throws ArgumentError test_complex_batched(X, (3, 1))
+                X = rand(T, dims)
+                @test_throws ArgumentError test_complex_batched(X, (3, 1))
             end
             @testset "Batch 2D (in 4D)" begin
                 dims = (N1, N2, N3, N4)
@@ -247,10 +247,8 @@ if MPS.is_supported(device())
                     X = rand(T, dims)
                     test_complex_batched(X, region)
                 end
-                # for region in [(2, 4)]
-                #     X = rand(T, dims)
-                #     @test_throws ArgumentError test_complex_batched(X, region)
-                # end
+                X = rand(T, dims)
+                test_complex_batched(X, (2, 4))
             end
         end
     end
@@ -338,8 +336,8 @@ if MPS.is_supported(device())
                     test_real_batched(X, region)
                 end
 
-            #     X = rand(T, dims)
-            #     @test_throws ArgumentError test_real_batched(X, (3, 1))
+                X = rand(T, dims)
+                @test_throws ArgumentError test_real_batched(X, (3, 1))
             end
 
             @testset "Batch 2D (in 4D)" begin
@@ -348,10 +346,8 @@ if MPS.is_supported(device())
                     X = rand(T, dims)
                     test_real_batched(X, region)
                 end
-            #     for region in [(2,4)]
-            #         X = rand(T, dims)
-            #         @test_throws ArgumentError test_real_batched(X, region)
-            #     end
+                X = rand(T, dims)
+                test_real_batched(X, (2, 4))
             end
 
             @testset "3D" begin
