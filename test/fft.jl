@@ -117,10 +117,10 @@ if MPS.is_supported(device())
         Z = Array(d_Z)
         @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
 
-        # pinv2 = inv(p)
-        # d_Z = pinv2 * d_Y
-        # Z = Array(d_Z)
-        # @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
+        pinv2 = inv(p)
+        d_Z = pinv2 * d_Y
+        Z = Array(d_Z)
+        @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
 
         # Backward FFT (unnormalized inverse)
         pinvb = @inferred plan_bfft(d_Y)
@@ -170,9 +170,9 @@ if MPS.is_supported(device())
         Z = Array(d_Z)
         @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
 
-        # ldiv!(d_Z, p, d_Y)
-        # Z = collect(d_Z)
-        # @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
+        ldiv!(d_Z, p, d_Y)
+        Z = collect(d_Z)
+        @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
     end
 
     @testset "Complex FFT" begin
@@ -275,15 +275,15 @@ if MPS.is_supported(device())
         Z = Array(d_Z)
         @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
 
-        # pinv2 = inv(p)
-        # d_Z = pinv2 * d_Y
-        # Z = Array(d_Z)
-        # @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
+        pinv2 = inv(p)
+        d_Z = pinv2 * d_Y
+        Z = Array(d_Z)
+        @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
 
-        # pinv3 = inv(pinv)
-        # d_W = pinv3 * d_X
-        # W = Array(d_W)
-        # @test isapprox(W, Y, rtol = rtol(T), atol = atol(T))
+        pinv3 = inv(pinv)
+        d_W = pinv3 * d_X
+        W = Array(d_W)
+        @test isapprox(W, Y, rtol = rtol(T), atol = atol(T))
 
         # Backward rfft (unnormalized)
         pinvb = @inferred plan_brfft(d_Y, size(X, 1))
