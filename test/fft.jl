@@ -82,11 +82,11 @@ end
 rtol(::Type{Float16}) = 1.0e-2
 rtol(::Type{Float32}) = 1.0e-5
 rtol(::Type{Float64}) = 1.0e-12
-rtol(::Type{I}) where {I<:Integer} = rtol(float(I))
+rtol(::Type{I}) where {I<:Integer} = rtol(Metal.mtlfloat(I))
 atol(::Type{Float16}) = 1.0e-3
 atol(::Type{Float32}) = 1.0e-8
 atol(::Type{Float64}) = 1.0e-15
-atol(::Type{I}) where {I<:Integer} = atol(float(I))
+atol(::Type{I}) where {I<:Integer} = atol(Metal.mtlfloat(I))
 rtol(::Type{Complex{T}}) where {T} = rtol(T)
 atol(::Type{Complex{T}}) where {T} = atol(T)
 # Test dimensions
@@ -359,7 +359,7 @@ if MPS.is_supported(device())
 
     ## complex integer
     function out_of_place(X::AbstractArray{T,N}) where {T <: Complex{<:Integer},N}
-        fftw_X = fft(X)
+        fftw_X = fft(ComplexF32.(X))
         d_X = MtlArray(X)
         p = plan_fft(d_X)
         d_Y = p * d_X
@@ -371,19 +371,17 @@ if MPS.is_supported(device())
         @test isapprox(Y, fftw_X, rtol = rtol(T), atol = atol(T))
     end
 
-    @testset for T in [Complex{Int32}, Complex{Int64}]
-        @testset "1D" begin
-            dims = (N1,)
-            X = rand(T, dims)
-            out_of_place(X)
-        end
+    @testset "1D $T" for T in [Complex{Int32}, Complex{Int64}]
+        dims = (N1,)
+        X = rand(T, dims)
+        out_of_place(X)
     end
 
 
     ## real integer
 
     function out_of_place(X::AbstractArray{T,N}) where {T <: Integer,N}
-        fftw_X = rfft(X)
+        fftw_X = rfft(Float32.(X))
         d_X = MtlArray(X)
         p = plan_rfft(d_X)
         d_Y = p * d_X
@@ -395,11 +393,9 @@ if MPS.is_supported(device())
         @test isapprox(Y, fftw_X, rtol = rtol(T), atol = atol(T))
     end
 
-    @testset for T in [Int32, Int64]
-        @testset "1D" begin
-            X = rand(T, N1)
-            out_of_place(X)
-        end
+    @testset "1D $T" for T in [Int32, Int64]
+        X = rand(T, N1)
+        out_of_place(X)
     end
 
 
