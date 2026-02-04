@@ -30,10 +30,10 @@ const FFTReal = Union{Float32, Float16}
 const FFTNumber = Union{FFTReal, FFTComplex}
 
 mtlfloat(x) = float(x)
-mtlFloat(x::Integer) = Float32(x)
-mtlFloat(x::Complex{<:Integer}) = ComplexF32(x)
-mtlFloat(::Type{<:Integer}) = Float32
-mtlFloat(::Type{Complex{<:Integer}}) = ComplexF32
+mtlfloat(x::Integer) = Float32(x)
+mtlfloat(x::Complex{<:Integer}) = ComplexF32(x)
+mtlfloat(::Type{<:Integer}) = Float32
+mtlfloat(::Type{<:Complex{<:Integer}}) = ComplexF32
 
 mtlfftfloat(x) = _mtlfftfloat(mtlfloat(x))
 _mtlfftfloat(::Type{T}) where {T<:FFTNumber} = T
@@ -42,16 +42,16 @@ _mtlfftfloat(x::T) where {T} = _mtlfftfloat(T)(x)
 
 realfloat(x::MtlArray{<:FFTReal}) = x
 realfloat(x::MtlArray{T}) where {T<:Real} = copy1(mtlfftfloat(T), x)
-realfloat(x::MtlArray{T}) where {T} = error("type $T not supported")
+realfloat(::MtlArray{T}) where {T} = error("type $T not supported")
 
 complexfloat(x::MtlArray{<:FFTComplex}) = x
 complexfloat(x::MtlArray{T}) where {T<:Complex} = copy1(mtlfftfloat(T), x)
 complexfloat(x::MtlArray{T}) where {T<:Real} = copy1(mtlfftfloat(complex(T)), x)
-complexfloat(x::MtlArray{T}) where {T} = error("type $T not supported")
+complexfloat(::MtlArray{T}) where {T} = error("type $T not supported")
 
-function copy1(::Type{T}, x) where T
-    y = MtlArray{T}(undef, map(length, axes(x)))
-    y .= broadcast(xi->convert(T,xi),x)
+function copy1(::Type{T}, x::MtlArray{<:Any, N, S}) where {T, N, S}
+    y = MtlArray{T, N, S}(undef, map(length, axes(x)))
+    y .= broadcast(xi -> convert(T, xi), x)
 end
 
 ## plan structure
@@ -136,8 +136,8 @@ function irfft(x::MtlArray{<:Union{Real,Integer,Rational}}, d::Integer, region=1
 end
 
 
-# forward plans are `plan_fft`, inverse plans are `plan_ifft`, and backward (unnormalized ) plans are `plan_bfft`
-# inplace functions have a "!",
+# forward plans are `plan_fft`, and backward (unnormalized) plans are `plan_bfft`
+# inplace functions have a "!", inverse (normalized) plans are handled via plan_inv
 for inplace in (true, false), backward in (true, false)
     dir_str = backward ? "b" : ""
     inplace_str = inplace ? "!" : ""
@@ -285,10 +285,16 @@ function Base.:(*)(p::MtlFFTPlan{T, S, backward, true}, x::MtlArray{S}) where {T
     unsafe_execute!(p, x, x)
     return x
 end
-function Base.:(*)(p::MtlFFTPlan{T, S, backward, false}, x::MtlArray{S}) where {T, S, backward}
-    assert_applicable(p, x)
+function Base.:(*)(p::MtlFFTPlan{T, S, backward, false}, x::MtlArray{S1, M}) where {T, S, backward, S1, M}
+    z = if S1 != S
+        # Convert to the expected input type.
+        copy1(S, x)
+    else
+        x
+    end
+    assert_applicable(p, z)
 
-    y = MtlArray{T}(undef, p.output_size)
-    unsafe_execute!(p, x, y)
+    y = MtlArray{T, M}(undef, p.output_size)
+    unsafe_execute!(p, z, y)
     return y
 end
