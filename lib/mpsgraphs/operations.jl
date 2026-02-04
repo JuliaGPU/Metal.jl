@@ -129,3 +129,20 @@ function scaledDotProductAttentionWithQueryTensor(graph::MPSGraph, Q::MPSGraphTe
                                                                   scale:scale::Cfloat
                                                                    name:name::id{NSString}]::MPSGraphTensor
 end
+
+
+function sliceTensor(graph::MPSGraph, tensor::MPSGraphTensor, dimension::Int, start::Int, length::Int, name = "slice")
+    obj = @objc [graph::id{MPSGraph} sliceTensor:tensor::id{MPSGraphTensor}
+                                dimension:dimension::NSInteger
+                                start:start::NSInteger
+                                length:length::NSInteger
+                                name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+
+function concatTensors(graph::MPSGraph, tensors::NSArray, dimension::Int, name = "concat")
+    obj = @objc [graph::id{MPSGraph} concatTensors:tensors::id{NSArray}
+                                dimension:dimension::NSInteger
+                                name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
