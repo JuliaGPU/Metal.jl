@@ -101,7 +101,7 @@ if MPS.is_supported(device())
     # Complex FFT Tests
     # ============================================================================
 
-    function test_complex_out_of_place(X::AbstractArray{T, N}) where {T <: Complex, N}
+    function complex_out_of_place(X::AbstractArray{T, N}) where {T <: Complex, N}
         fftw_X = fft(X)
         d_X = MtlArray(X)
 
@@ -129,7 +129,7 @@ if MPS.is_supported(device())
         @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
     end
 
-    function test_complex_in_place(X::AbstractArray{T, N}) where {T <: Complex, N}
+    function complex_in_place(X::AbstractArray{T, N}) where {T <: Complex, N}
         fftw_X = fft(X)
         d_X = MtlArray(copy(X))
 
@@ -153,7 +153,7 @@ if MPS.is_supported(device())
         @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
     end
 
-    function test_complex_batched(X::AbstractArray{T, N}, region) where {T <: Complex, N}
+    function complex_batched(X::AbstractArray{T, N}, region) where {T <: Complex, N}
         fftw_X = fft(X, region)
         d_X = MtlArray(X)
 
@@ -191,64 +191,64 @@ if MPS.is_supported(device())
 
             @testset "1D" begin
                 X = rand(T, N1)
-                test_complex_out_of_place(X)
+                complex_out_of_place(X)
             end
 
             @testset "1D in-place" begin
                 X = rand(T, N1)
-                test_complex_in_place(X)
+                complex_in_place(X)
             end
 
             @testset "2D" begin
                 X = rand(T, N1, N2)
-                test_complex_out_of_place(X)
+                complex_out_of_place(X)
             end
 
             @testset "2D in-place" begin
                 X = rand(T, N1, N2)
-                test_complex_in_place(X)
+                complex_in_place(X)
             end
 
             @testset "3D" begin
                 X = rand(T, N1, N2, N3)
-                test_complex_out_of_place(X)
+                complex_out_of_place(X)
             end
 
             @testset "3D in-place" begin
                 X = rand(T, N1, N2, N3)
-                test_complex_in_place(X)
+                complex_in_place(X)
             end
 
             @testset "Batch 1D" begin
                 dims = (N1, N2)
                 X = rand(T, dims)
-                test_complex_batched(X, 1)
+                complex_batched(X, 1)
 
                 X = rand(T, dims)
-                test_complex_batched(X, 2)
+                complex_batched(X, 2)
 
                 X = rand(T, dims)
-                test_complex_batched(X, (1, 2))
+                complex_batched(X, (1, 2))
             end
 
             @testset "Batch 2D (in 3D)" begin
                 dims = (N1, N2, N3)
                 for region in [(1, 2), (2, 3), (1, 3)]
                     X = rand(T, dims)
-                    test_complex_batched(X, region)
+                    complex_batched(X, region)
                 end
 
                 X = rand(T, dims)
-                @test_throws ArgumentError test_complex_batched(X, (3, 1))
+                @test_throws ArgumentError complex_batched(X, (3, 1))
             end
             @testset "Batch 2D (in 4D)" begin
                 dims = (N1, N2, N3, N4)
                 for region in [(1, 2), (1, 4), (3, 4), (1, 3), (2, 3), (2,), (3,)]
                     X = rand(T, dims)
-                    test_complex_batched(X, region)
+                    complex_batched(X, region)
                 end
                 X = rand(T, dims)
-                test_complex_batched(X, (2, 4))
+                complex_batched(X, (2, 4))
             end
         end
     end
@@ -257,7 +257,7 @@ if MPS.is_supported(device())
     # Real FFT Tests
     # ============================================================================
 
-    function test_real_out_of_place(X::AbstractArray{T, N}) where {T <: Real, N}
+    function real_out_of_place(X::AbstractArray{T, N}) where {T <: Real, N}
         fftw_X = rfft(X)
         d_X = MtlArray(X)
 
@@ -290,7 +290,7 @@ if MPS.is_supported(device())
         @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
     end
 
-    function test_real_batched(X::AbstractArray{T, N}, region) where {T <: Real, N}
+    function real_batched(X::AbstractArray{T, N}, region) where {T <: Real, N}
         fftw_X = rfft(X, region)
         d_X = MtlArray(X)
 
@@ -309,53 +309,99 @@ if MPS.is_supported(device())
         @testset for T in [Float16, Float32]
             @testset "1D" begin
                 X = rand(T, N1)
-                test_real_out_of_place(X)
+                real_out_of_place(X)
             end
 
             @testset "Batch 1D" begin
                 dims = (N1, N2)
                 X = rand(T, dims)
-                test_real_batched(X, 1)
+                real_batched(X, 1)
 
                 X = rand(T, dims)
-                test_real_batched(X, 2)
+                real_batched(X, 2)
 
                 X = rand(T, dims)
-                test_real_batched(X, (1, 2))
+                real_batched(X, (1, 2))
             end
 
             @testset "2D" begin
                 X = rand(T, N1, N2)
-                test_real_out_of_place(X)
+                real_out_of_place(X)
             end
 
             @testset "Batch 2D (in 3D)" begin
                 dims = (N1, N2, N3)
                 for region in [(1, 2), (2, 3), (1, 3)]
                     X = rand(T, dims)
-                    test_real_batched(X, region)
+                    real_batched(X, region)
                 end
 
                 X = rand(T, dims)
-                @test_throws ArgumentError test_real_batched(X, (3, 1))
+                @test_throws ArgumentError real_batched(X, (3, 1))
             end
 
             @testset "Batch 2D (in 4D)" begin
                 dims = (N1,N2,N3,N4)
                 for region in [(1,2),(1,4),(3,4),(1,3),(2,3)]
                     X = rand(T, dims)
-                    test_real_batched(X, region)
+                    real_batched(X, region)
                 end
                 X = rand(T, dims)
-                test_real_batched(X, (2, 4))
+                real_batched(X, (2, 4))
             end
 
             @testset "3D" begin
                 X = rand(T, N1, N2, N3)
-                test_real_out_of_place(X)
+                real_out_of_place(X)
             end
         end
     end
+
+    ## complex integer
+    function out_of_place(X::AbstractArray{T,N}) where {T <: Complex{<:Integer},N}
+        fftw_X = fft(X)
+        d_X = MtlArray(X)
+        p = plan_fft(d_X)
+        d_Y = p * d_X
+        Y = collect(d_Y)
+        @test isapprox(Y, fftw_X, rtol = rtol(T), atol = atol(T))
+
+        d_Y = fft(d_X)
+        Y = collect(d_Y)
+        @test isapprox(Y, fftw_X, rtol = rtol(T), atol = atol(T))
+    end
+
+    @testset for T in [Complex{Int32}, Complex{Int64}]
+        @testset "1D" begin
+            dims = (N1,)
+            X = rand(T, dims)
+            out_of_place(X)
+        end
+    end
+
+
+    ## real integer
+
+    function out_of_place(X::AbstractArray{T,N}) where {T <: Integer,N}
+        fftw_X = rfft(X)
+        d_X = MtlArray(X)
+        p = plan_rfft(d_X)
+        d_Y = p * d_X
+        Y = collect(d_Y)
+        @test isapprox(Y, fftw_X, rtol = rtol(T), atol = atol(T))
+
+        d_Y = rfft(d_X)
+        Y = collect(d_Y)
+        @test isapprox(Y, fftw_X, rtol = rtol(T), atol = atol(T))
+    end
+
+    @testset for T in [Int32, Int64]
+        @testset "1D" begin
+            X = rand(T, N1)
+            out_of_place(X)
+        end
+    end
+
 
     # ============================================================================
     # Additional Tests
