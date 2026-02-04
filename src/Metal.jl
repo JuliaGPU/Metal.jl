@@ -14,6 +14,8 @@ import ObjectiveC: is_macos
 import KernelAbstractions
 using ScopedValues
 
+using Reexport: @reexport
+
 include("version.jl")
 
 # core library

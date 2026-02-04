@@ -97,10 +97,7 @@ N4 = 8
 
 if MPS.is_supported(device())
 
-    # ============================================================================
-    # Complex FFT Tests
-    # ============================================================================
-
+    ## complex FFT tests
     function complex_out_of_place(X::AbstractArray{T, N}) where {T <: Complex, N}
         fftw_X = fft(X)
         d_X = MtlArray(X)
@@ -253,10 +250,7 @@ if MPS.is_supported(device())
         end
     end
 
-    # ============================================================================
-    # Real FFT Tests
-    # ============================================================================
-
+    ## real FFT tests
     function real_out_of_place(X::AbstractArray{T, N}) where {T <: Real, N}
         fftw_X = rfft(X)
         d_X = MtlArray(X)
@@ -379,7 +373,6 @@ if MPS.is_supported(device())
 
 
     ## real integer
-
     function out_of_place(X::AbstractArray{T,N}) where {T <: Integer,N}
         fftw_X = rfft(Float32.(X))
         d_X = MtlArray(X)
@@ -399,10 +392,7 @@ if MPS.is_supported(device())
     end
 
 
-    # ============================================================================
-    # Additional Tests
-    # ============================================================================
-
+    ## Additional Tests
     @testset "Plan Properties" begin
         x = MtlArray(randn(ComplexF32, 64, 64))
         p = plan_fft(x)
