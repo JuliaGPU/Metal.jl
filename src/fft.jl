@@ -1,28 +1,13 @@
 # FFT operations using MPSGraph
 # Implements AbstractFFTs.jl interface for MtlArray
-#
-# Supported types:
-#   - ComplexF32 (Complex{Float32}) - full support
-#   - ComplexF16 (Complex{Float16}) - full support
-#   - Float32 - for rfft/irfft
-#   - Float16 - for rfft/irfft
-#
-# NOT supported (MPSGraph limitation):
-#   - ComplexF64 (Complex{Float64}) - Metal does not support double precision FFT
-#   - Float64 - Metal does not support double precision FFT
-#
-# For double precision, use FFTW.jl on CPU or convert to Float32.
 
 using .MPSGraphs: MPSGraph, MPSGraphFFTDescriptor, HermiteanToRealFFTWithTensor, realToHermiteanFFTWithTensor,
                   fastFourierTransformWithTensor, placeholderTensor, MPSGraphTensorData, MPSGraphTensor
 
-using AbstractFFTs
+@reexport using AbstractFFTs
 import AbstractFFTs: plan_fft, plan_fft!, plan_bfft, plan_bfft!, plan_ifft,
     plan_rfft, plan_brfft, plan_inv, normalization, fft, bfft, ifft, rfft, irfft,
     Plan, ScaledPlan
-
-export plan_fft, plan_ifft, plan_bfft, plan_rfft, plan_irfft, plan_brfft,
-       plan_fft!, plan_ifft!, plan_bfft!, plan_inv
 
 # Supported complex types for FFT
 const FFTComplex = Union{ComplexF32, ComplexF16}
