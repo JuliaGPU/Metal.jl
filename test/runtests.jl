@@ -96,16 +96,16 @@ if filter_tests!(testsuite, args)
 end
 
 # workers to run tests on
-function test_worker(name)
+function test_worker(name, init_worker_code)
     if name == "capturing"
-        return addworker(env=["METAL_CAPTURE_ENABLED"=>"1"])
+        return addworker(; env=["METAL_CAPTURE_ENABLED"=>"1"], init_worker_code)
     end
 
     return nothing
 end
 
 # code to run in each test's sandbox module before running the test
-init_code = quote
+init_worker_code = quote
     using Metal, Adapt, ObjectiveC, ObjectiveC.Foundation, BFloat16s
 
     # XXX: expose this as --validate
@@ -158,4 +158,12 @@ init_code = quote
     end
 end
 
-runtests(Metal, args; testsuite, init_code, test_worker)
+init_code = quote
+    using Metal, Adapt, ObjectiveC, ObjectiveC.Foundation, BFloat16s
+
+    # bring used symbols into the temporary module
+    import ..TestSuite, ..testf
+    import ..runtime_validation, ..shader_validation, ..capturing, ..@grab_output, ..@on_device
+end
+
+runtests(Metal, args; testsuite, init_code, init_worker_code, test_worker)
