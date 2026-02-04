@@ -9,11 +9,13 @@ import AbstractFFTs: plan_fft, plan_fft!, plan_bfft, plan_bfft!, plan_ifft,
     plan_rfft, plan_brfft, plan_inv, normalization, fft, bfft, ifft, rfft, irfft,
     Plan, ScaledPlan
 
-# Supported complex types for FFT
+# supported types for FFT using MPSGraphs
 const FFTComplex = Union{ComplexF32, ComplexF16}
 const FFTReal = Union{Float32, Float16}
 const FFTNumber = Union{FFTReal, FFTComplex}
 
+# mtlfloat is like Base.float but converts Integers to Float32 instead
+# of to Float64 which is unsupported on all Apple Silicon GPUs
 mtlfloat(x) = float(x)
 mtlfloat(x::Integer) = Float32(x)
 mtlfloat(x::Complex{<:Integer}) = ComplexF32(x)
@@ -53,7 +55,6 @@ end
 `N` is the number of dimensions
 
 GPU FFT plan for Metal using MPSGraph's fastFourierTransformWithTensor.
-
 """
 mutable struct MtlFFTPlan{T <: FFTNumber, S <: FFTNumber, backward, inplace, N, R} <: Plan{S}
     input_size::NTuple{N, Int}
@@ -96,11 +97,11 @@ function Base.show(io::IO, p::MtlFFTPlan{T, S, backward, inplace}) where {T, S, 
     showfftdims(io, p.input_size, S)
 end
 
-# Plan properties
+# plan properties
 Base.size(p::MtlFFTPlan) = p.input_size
 AbstractFFTs.fftdims(p::MtlFFTPlan) = p.region
 
-## AbstractFFTs Interface Implementation
+## AbstractFFTs interface implementation
 
 # promote to a complex floating-point type (out-of-place only),
 # so implementations only need Complex{Float} methods
@@ -225,7 +226,7 @@ end
     # Create placeholder tensor
     placeholder = placeholderTensor(graph, size(x), S)
 
-    # Create FFT descriptor - never use MPSGraph scaling, we handle it ourselves
+    # Create FFT descriptor - don't use MPSGraph scaling, AbstractFFTs handles it for us
     fft_desc = MPSGraphFFTDescriptor(; inverse = backward)
 
     # Convert Julia 1-indexed axis to Metal 0-indexed axis
@@ -236,12 +237,12 @@ end
     # Create FFT operation
     fft_result = f(graph, placeholder, axes, fft_desc)
 
-    # Create feed dictionary
+    # feed dictionary
     feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
         placeholder => MPSGraphTensorData(x)
     )
 
-    # Create result dictionary (in-place output)
+    # result dictionary
     results = Dict{MPSGraphTensor, MPSGraphTensorData}(
         fft_result => MPSGraphTensorData(y)
     )
