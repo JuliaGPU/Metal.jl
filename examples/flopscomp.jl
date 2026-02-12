@@ -110,7 +110,7 @@ function compare(Ns, Fs, inT, outT=inT; n_batch=1, ntrials, verbose=true)
             n_str = "$n: "
             for (f, info_str) in newFs
                 verbose && print(prefixstr, n_str, info_str)
-                push!(results[info_str], f(; inT, outT, n, n_batch, ntrials, verify))
+                push!(results[info_str], f(; inT, outT, n, n_batch, ntrials, verify=(verify && (f != mpspeakflops))))
                 GC.gc(false)
             end
         end
