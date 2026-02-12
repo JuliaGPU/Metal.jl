@@ -54,7 +54,7 @@ const sb3  =  4.72810211f+01
 const sb4  =  8.93033314f+00
 
 
-# Implementation of `erf(::Float32)` from openlibm's `erfcf`
+# Implementation of `erf(::Float32)` from openlibm's `erff`
 # https://github.com/JuliaMath/openlibm/blob/12f5ffcc990e16f4120d4bf607185243f5affcb8/src/s_erff.c
 Metal.@device_override function SpecialFunctions.erf(x::Float32)
     hx = reinterpret(Int32, x)
@@ -120,6 +120,8 @@ Metal.@device_override function SpecialFunctions.erf(x::Float32)
         return r / x - 1.0f0
     end
 end
+# TODO: real implementation
+Metal.@device_override SpecialFunctions.erf(x::Float16) = Float16(SpecialFunctions.erf(Float32(x)))
 
 # Implementation of `erfc(::Float32)` from openlibm's `erfcf`
 # https://github.com/JuliaMath/openlibm/blob/12f5ffcc990e16f4120d4bf607185243f5affcb8/src/s_erff.c
@@ -192,6 +194,8 @@ Metal.@device_override function SpecialFunctions.erfc(x::Float32)
         end
     end
 end
+# TODO: real implementation
+Metal.@device_override SpecialFunctions.erfc(x::Float16) = Float16(SpecialFunctions.erfc(Float32(x)))
 
 #
 #  Approximation to the error function.
