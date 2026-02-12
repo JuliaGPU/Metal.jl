@@ -201,7 +201,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        @testset"global $T" for T in (Int32, UInt32, Float32)
+        @testset "global $T" for T in (Int32, UInt32, Float32)
             a = rand(T, n)
             b = MtlArray(a)
             val = rand(T)
