@@ -154,9 +154,14 @@ end
 function KI.max_work_group_size(::MetalBackend)::Int
     Int(device().maxThreadsPerThreadgroup.width)
 end
+function KI.sub_group_size(::MetalBackend)::Int
+    32
+end
 function KI.multiprocessor_count(::MetalBackend)::Int
     Metal.num_gpu_cores()
 end
+
+KI.shfl_down_types(::MetalBackend) = DataType[Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8]
 
 
 
@@ -187,6 +192,16 @@ end
     return (; x = Int(threads_per_grid().x), y = Int(threads_per_grid().y), z = Int(threads_per_grid().z))
 end
 
+@device_override KI.get_sub_group_size() = threads_per_simdgroup()
+
+@device_override KI.get_max_sub_group_size() = threads_per_simdgroup()
+
+@device_override KI.get_num_sub_groups() = simdgroups_per_threadgroup()
+
+@device_override KI.get_sub_group_id() = simdgroup_index_in_threadgroup()
+
+@device_override KI.get_sub_group_local_id() = thread_index_in_simdgroup()
+
 @device_override @inline function KA.__validindex(ctx)
     if KA.__dynamic_checkbounds(ctx)
         I = @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid().x,
@@ -214,6 +229,13 @@ end
 
 @device_override @inline function KI.barrier()
     threadgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
+end
+@device_override @inline function KI.sub_group_barrier()
+    simdgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
+end
+
+@device_override function KI.shfl_down(val::T, offset::Integer) where T
+    simd_shuffle_down(val, offset)
 end
 
 @device_override @inline function KI._print(args...)
