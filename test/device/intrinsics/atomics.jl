@@ -1,5 +1,3 @@
-@testset "atomics" begin
-
 n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
 
 # JuliaGPU/Metal.jl#217: threadgroup atomics seem to requires all-atomic operations
@@ -286,6 +284,4 @@ end
         @metal threads=n kernel(a)
         @test Array(a)[1] == 0
     end
-end
-
 end

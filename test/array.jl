@@ -1,7 +1,5 @@
 STORAGEMODES = [Metal.PrivateStorage, Metal.SharedStorage]
 
-@testset "array" begin
-
 let arr = MtlVector{Int}(undef, 1)
     @test sizeof(arr) == 8
     @test length(arr) == 1
@@ -571,9 +569,6 @@ end
         z = x .+ y
         @test is_shared(z)
     end
-end
-
-
 end
 
 @testset "large map reduce" begin

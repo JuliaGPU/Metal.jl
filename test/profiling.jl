@@ -1,5 +1,3 @@
-@testset "profiling" begin
-
 # determine if we can even run these tests
 run_tests = false
 if parse(Bool, get(ENV, "CI", "false"))
@@ -33,5 +31,3 @@ end
 end # cd(tmpdir) do
 end # mktempdir() do tmpdir
 end # if run_tests
-
-end

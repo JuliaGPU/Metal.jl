@@ -1,5 +1,3 @@
-@testset "simd intrinsics" begin
-
 @testset "shuffle idx" begin
     function shuffle_kernel(d)
         i = thread_index_in_simdgroup()
@@ -200,5 +198,3 @@ end
         @test Array(a) * Array(b) + Array(c) ≈ Array(d)
     end
 end # End Matrix Functions
-
-end # End SIMD Intrinsics

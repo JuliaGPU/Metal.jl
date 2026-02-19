@@ -1,10 +1,9 @@
 dummy() = return
 
 @testset "@metal" begin
-
-@test_throws UndefVarError @metal undefined()
-@test_throws MethodError @metal dummy(1)
-
+    @test_throws UndefVarError @metal undefined()
+    @test_throws MethodError @metal dummy(1)
+end
 
 @testset "launch configuration" begin
     @metal dummy()
@@ -165,8 +164,6 @@ end
     @test_throws InexactError @metal groups=(-2) tester(bufferA)
     @test_throws ArgumentError @metal threads=(1025) tester(bufferA)
     @test_throws ArgumentError @metal threads=(1000,2) tester(bufferA)
-end
-
 end
 
 ############################################################################################

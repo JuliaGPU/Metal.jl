@@ -130,10 +130,8 @@ end
     end
 end
 
-end
+end # static
 
-end
+end # threadgroup memory
 
-end
-
-############################################################################################
+end # memory
