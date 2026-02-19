@@ -159,9 +159,7 @@ function compare(ref_path)
     end
 end
 
-
-@testset "metallib" begin
-
+## tests begin
 metallib_dir = joinpath(@__DIR__, "metallib")
 metallibs = String[]
 for file in readdir(metallib_dir)
@@ -172,6 +170,4 @@ end
 
 @testset for metallib in metallibs
     @test compare(joinpath(metallib_dir, metallib))
-end
-
 end

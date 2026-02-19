@@ -1,7 +1,5 @@
 using LLVM
 
-@testset "scripts" begin
-
 mktempdir() do dir
     metallib_as = joinpath(dirname(@__DIR__), "bin", "metallib-as")
     metallib_dis = joinpath(dirname(@__DIR__), "bin", "metallib-dis")
@@ -38,6 +36,4 @@ mktempdir() do dir
     @test success(pipeline(`$metallib_dis -S -o - $dummy kernel_1`,
                            `$metallib_as -o - -`,
                            `$metallib_load -`))
-end
-
 end

@@ -1,5 +1,3 @@
-@testset "MTL" begin
-
 using .MTL
 
 @autoreleasepool begin
@@ -594,5 +592,3 @@ end # if Metal.is_macos(v"15")
 # TODO: continue adding tests
 
 end # @autoreleasepool begin
-
-end # @testset "MTL" begin

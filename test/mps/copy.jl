@@ -28,23 +28,21 @@ function copytest(src, srctrans, dsttrans)
     return dst
 end
 
-@testset "MPSMatrixCopy" begin
-    Ts = collect(values(MPS.jl_mps_to_typ))
-    for T in Ts, dim in ((16,16), (10,500), (500,10), (256,512))
-        @testset let T = T, dim = dim
-            srcMat = MtlArray(rand(T, dim))
+Ts = collect(values(MPS.jl_mps_to_typ))
+for T in Ts, dim in ((16,16), (10,500), (500,10), (256,512))
+    @testset let T = T, dim = dim
+        srcMat = MtlArray(rand(T, dim))
 
-            dstMat = copytest(srcMat, false, false)
-            @test Array(dstMat) == Array(srcMat) broken=copy_is_broken(T)
+        dstMat = copytest(srcMat, false, false)
+        @test Array(dstMat) == Array(srcMat) broken=copy_is_broken(T)
 
-            dstMat = copytest(srcMat, true, false)
-            @test Array(dstMat) == Array(transpose(srcMat)) broken=copy_is_broken(T)
+        dstMat = copytest(srcMat, true, false)
+        @test Array(dstMat) == Array(transpose(srcMat)) broken=copy_is_broken(T)
 
-            dstMat = copytest(srcMat, false, true)
-            @test Array(dstMat) == Array(transpose(srcMat)) broken=copy_is_broken(T)
+        dstMat = copytest(srcMat, false, true)
+        @test Array(dstMat) == Array(transpose(srcMat)) broken=copy_is_broken(T)
 
-            dstMat = copytest(srcMat, true, true)
-            @test Array(dstMat) == Array(srcMat) broken=copy_is_broken(T)
-        end
+        dstMat = copytest(srcMat, true, true)
+        @test Array(dstMat) == Array(srcMat) broken=copy_is_broken(T)
     end
 end
