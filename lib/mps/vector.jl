@@ -93,7 +93,7 @@ function encode!(cmdbuf::MTLCommandBuffer, matvecmul::MPSMatrixVectorMultiplicat
 end
 
 """
-    matvecmul!(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha=1, beta=1, transpose=false)
+    matvecmul!(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha=1, beta=0, transpose=false)
 
 A `MPSMatrixVectorMultiplication` kernel thay computes:
     `c = alpha * op(a) * b + beta * c`
