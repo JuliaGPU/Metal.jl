@@ -5,7 +5,7 @@ export @metal
 
 const MACRO_KWARGS = [:launch]
 const COMPILER_KWARGS = [:kernel, :name, :always_inline, :macos, :air, :metal]
-const LAUNCH_KWARGS = [:groups, :threads, :queue]
+const LAUNCH_KWARGS = [:groups, :threads, :queue, :shmem]
 
 """
     @metal threads=... groups=... [kwargs...] func(args...)
@@ -264,6 +264,7 @@ end
 end
 
 @autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
+                                               shmem::Union{Integer, Tuple}=0,
                                                queue=global_queue(device()))
     gs = MTLSize(groups)
     ts = MTLSize(threads)
@@ -290,6 +291,13 @@ end
     argument_buffers = try
         MTL.set_function!(cce, kernel.pipeline)
         bufs = encode_arguments!(cce, kernel, kernel_state, kernel.f, args...)
+
+        if prod(shmem) > 0
+            for (i, n) in enumerate(shmem)
+                MTL.set_threadgroup_memory_length!(cce, n, i)
+            end
+        end
+
         MTL.append_current_function!(cce, gs, ts)
         bufs
     finally
