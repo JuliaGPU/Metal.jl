@@ -115,6 +115,97 @@ end
     Metal.@sync @metal threads=N kernel_mod(mtlfilling2, mtlfilling, midN)
     @test Array(mtlfilling2) == [circshift(data[1:midN], nshift); circshift(data[midN+1:end], nshift)]
 end
+
+@testset "simd_ballot" begin
+    function ballot_kernel(output, threshold)
+        idx = thread_position_in_grid().x
+        lane = thread_index_in_simdgroup()
+
+        # Each thread votes true if its lane index is ≤ threshold
+        predicate = lane ≤ threshold
+        ballot = simd_ballot(predicate)
+
+        output[idx] = ballot
+        return
+    end
+
+    threads_per_simdgroup = 32
+
+    @testset "threshold=$threshold" for threshold in [0, 1, 8, 16, 31, 32]
+        output = MtlArray(zeros(UInt64, threads_per_simdgroup))
+        Metal.@sync @metal threads = threads_per_simdgroup ballot_kernel(output, UInt32(threshold))
+
+        # Expected: bits 0..(threshold-1) are set (1-indexed threshold means bits 0 to threshold-1)
+        expected_ballot = threshold == 0 ? UInt64(0) : (UInt64(1) << threshold) - 1
+        result = Array(output)
+
+        # All threads should see the same ballot result
+        @test all(result .== expected_ballot)
+    end
+end
+
+@testset "simd_all" begin
+    function all_kernel(output, threshold)
+        idx = thread_position_in_grid().x
+        lane = thread_index_in_simdgroup()
+
+        # First get a ballot mask based on threshold
+        predicate = lane ≤ threshold
+        ballot = simd_ballot(predicate)
+
+        # simd_all checks if all bits in the mask are set
+        result = simd_all(ballot)
+
+        output[idx] = result
+        return
+    end
+
+    threads_per_simdgroup = 32
+
+    # simd_all returns true only when all bits in the ballot mask are set
+    @testset "threshold=$threshold" for threshold in [0, 16, 31, 32, 33]
+        output = MtlArray(zeros(UInt8, threads_per_simdgroup))
+        Metal.@sync @metal threads = threads_per_simdgroup all_kernel(output, UInt32(threshold))
+
+        result = Array(output)
+        # All bits set means threshold ≥ 32 (all 32 lanes voted true)
+        expected = threshold ≥ threads_per_simdgroup
+
+        @test all(result .== expected)
+    end
+end
+
+@testset "simd_any" begin
+    function any_kernel(output, threshold)
+        idx = thread_position_in_grid().x
+        lane = thread_index_in_simdgroup()
+
+        # First get a ballot mask based on threshold
+        predicate = lane ≤ threshold
+        ballot = simd_ballot(predicate)
+
+        # simd_any checks if any bit in the mask is set
+        result = simd_any(ballot)
+
+        output[idx] = result
+        return
+    end
+
+    threads_per_simdgroup = 32
+
+    # simd_any returns true when any bit in the ballot mask is set
+    @testset "threshold=$threshold" for threshold in [0, 1, 16, 32]
+        output = MtlArray(zeros(UInt8, threads_per_simdgroup))
+        Metal.@sync @metal threads = threads_per_simdgroup any_kernel(output, UInt32(threshold))
+
+        result = Array(output)
+        # Any bit set means threshold ≥ 1 (at least lane 1 voted true)
+        expected = threshold ≥ 1
+
+        @test all(result .== expected)
+    end
+end
+
 @testset "matrix functions" begin
     @testset "load_store($typ)" for typ in [Float16, Float32]
         function kernel(a::MtlDeviceArray{T}, b::MtlDeviceArray{T},

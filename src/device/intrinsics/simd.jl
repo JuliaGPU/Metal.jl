@@ -1,6 +1,6 @@
 export simdgroup_load, simdgroup_store, simdgroup_multiply, simdgroup_multiply_accumulate,
         simd_shuffle_down, simd_shuffle_up, simd_shuffle_and_fill_down, simd_shuffle_and_fill_up,
-        simd_shuffle, simd_shuffle_xor
+    simd_shuffle, simd_shuffle_xor, simd_ballot, simd_all, simd_any
 
 using Core: LLVMPtr
 
@@ -124,6 +124,18 @@ for (jltype, suffix) in simd_shuffle_map
     end
 end
 
+## SIMD Voting Functions
+
+@device_function simd_ballot(predicate::Bool) =
+    ccall("extern air.simd_ballot.i64", llvmcall, UInt64, (Bool,), predicate)
+
+@device_function simd_all(bitmask::UInt64) =
+    ccall("extern air.simd_vote_all.i64", llvmcall, Bool, (UInt64,), bitmask)
+
+@device_function simd_any(bitmask::UInt64) =
+    ccall("extern air.simd_vote_any.i64", llvmcall, Bool, (UInt64,), bitmask)
+
+
 ## Documentation
 
 @doc """
@@ -209,3 +221,26 @@ The `modulo` parameter defines the vector width that splits the SIMD-group into 
 T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
 """
 simd_shuffle_and_fill_up
+
+@doc """
+    simd_ballot(predicate::Bool)
+
+Returns a UInt64 bitmask of the evaluation of the Boolean expression for all active
+threads in the SIMD-group for which `predicate` is true. The function sets the bits that correspond
+to inactive threads to 0.
+"""
+simd_ballot
+
+@doc """
+    simd_all(bitmask::UInt64)
+
+Returns true if all bits in `bitmask` are set.
+"""
+simd_all
+
+@doc """
+    simd_any(bitmask::UInt64)
+
+Returns true if any bits in  `bitmask` are set.
+"""
+simd_any
