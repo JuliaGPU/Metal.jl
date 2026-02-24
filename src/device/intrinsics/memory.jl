@@ -17,7 +17,7 @@ end
 @generated function emit_dynamic_threadgroup_memory(::Type{T}) where {T}
     Context() do ctx
         T_val = convert(LLVMType, T)
-# Define the pointer type: float addrspace(3)*
+        # Define the pointer type: float addrspace(3)*
         # This is the type of the VALUE stored in the global variable.
         T_ptr_at_3 = LLVM.PointerType(T_val, AS.ThreadGroup)
 

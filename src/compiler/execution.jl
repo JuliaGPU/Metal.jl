@@ -5,7 +5,7 @@ export @metal
 
 const MACRO_KWARGS = [:launch]
 const COMPILER_KWARGS = [:kernel, :name, :always_inline, :debug_level, :opt_level, :macos, :air, :metal]
-const LAUNCH_KWARGS = [:groups, :threads, :queue, :submit]
+const LAUNCH_KWARGS = [:groups, :threads, :queue, :submit, :shmem]
 
 """
     @metal threads=... groups=... [kwargs...] func(args...)
@@ -276,20 +276,21 @@ end
 
 # wraps a single function call, keeping its closure body small.
 @autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
+                                               shmem::Union{Integer, Tuple}=0,
                                                queue=nothing, submit::Bool=false)
     # function barrier to avoid capturing the `@autoreleasepool` in the generated code
-    launch_with_queue(kernel, queue, MTLSize(groups), MTLSize(threads), args, submit)
+    launch_with_queue(kernel, queue, MTLSize(groups), MTLSize(threads), shmem, args, submit)
 end
 
 @inline function launch_with_queue(@nospecialize(kernel::HostKernel), ::Nothing,
-                                   gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple),
-                                   submit::Bool)
+                                    shmem, gs::MTLSize, ts::MTLSize,
+                                    @nospecialize(args::Tuple), submit::Bool)
     launch(kernel, gs, ts, global_queue(device()), args, submit)
 end
 
 @inline function launch_with_queue(@nospecialize(kernel::HostKernel), queue,
-                                   gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple),
-                                   submit::Bool)
+                                   shmem, gs::MTLSize, ts::MTLSize,
+                                   @nospecialize(args::Tuple), submit::Bool)
     launch(kernel, gs, ts, batched_queue(queue), args, submit)
 end
 
@@ -347,6 +348,13 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
             MTL.use!(cce, exc, MTL.ReadWriteUsage)
         end
         encode_arguments_nospec!(cce, kernel, kernel_state, kernel.f, args)
+
+        if prod(shmem) > 0
+            for (i, n) in enumerate(shmem)
+                MTL.set_threadgroup_memory_length!(cce, n, i)
+            end
+        end
+
         MTL.append_current_function!(cce, gs, ts)
     finally
         close(cce)
