@@ -41,4 +41,5 @@ end
 # GPUCompiler macro-expansion utilities (compiled at every @metal callsite).
 # split_kwargs is called with 3 Vector{Symbol} groups (MACRO/COMPILER/LAUNCH_KWARGS).
 precompile(Tuple{typeof(GPUCompiler.split_kwargs), Tuple{Expr}, Vector{Symbol}, Vector{Symbol}, Vector{Symbol}})
+precompile(Tuple{typeof(GPUCompiler.split_kwargs), Tuple{}, Vector{Symbol}, Vector{Symbol}, Vector{Symbol}})
 precompile(Tuple{typeof(GPUCompiler.assign_args!), Expr, Vector{Any}})
