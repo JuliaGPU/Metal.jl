@@ -144,7 +144,7 @@ end
     end
 end
 
-@testset "simd_all" begin
+@testset "simd_vote_all" begin
     function all_kernel(output, threshold)
         idx = thread_position_in_grid().x
         lane = thread_index_in_simdgroup()
@@ -153,8 +153,8 @@ end
         predicate = lane ≤ threshold
         ballot = simd_ballot(predicate)
 
-        # simd_all checks if all bits in the mask are set
-        result = simd_all(ballot)
+        # simd_vote_all checks if all bits in the mask are set
+        result = simd_vote_all(ballot)
 
         output[idx] = result
         return
@@ -162,7 +162,7 @@ end
 
     threads_per_simdgroup = 32
 
-    # simd_all returns true only when all bits in the ballot mask are set
+    # simd_vote_all returns true only when all bits in the ballot mask are set
     @testset "threshold=$threshold" for threshold in [0, 16, 31, 32, 33]
         output = MtlArray(zeros(UInt8, threads_per_simdgroup))
         Metal.@sync @metal threads = threads_per_simdgroup all_kernel(output, UInt32(threshold))
@@ -175,7 +175,7 @@ end
     end
 end
 
-@testset "simd_any" begin
+@testset "simd_vote_any" begin
     function any_kernel(output, threshold)
         idx = thread_position_in_grid().x
         lane = thread_index_in_simdgroup()
@@ -184,8 +184,8 @@ end
         predicate = lane ≤ threshold
         ballot = simd_ballot(predicate)
 
-        # simd_any checks if any bit in the mask is set
-        result = simd_any(ballot)
+        # simd_vote_any checks if any bit in the mask is set
+        result = simd_vote_any(ballot)
 
         output[idx] = result
         return
@@ -193,7 +193,7 @@ end
 
     threads_per_simdgroup = 32
 
-    # simd_any returns true when any bit in the ballot mask is set
+    # simd_vote_any returns true when any bit in the ballot mask is set
     @testset "threshold=$threshold" for threshold in [0, 1, 16, 32]
         output = MtlArray(zeros(UInt8, threads_per_simdgroup))
         Metal.@sync @metal threads = threads_per_simdgroup any_kernel(output, UInt32(threshold))

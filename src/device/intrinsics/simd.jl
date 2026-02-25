@@ -1,6 +1,6 @@
 export simdgroup_load, simdgroup_store, simdgroup_multiply, simdgroup_multiply_accumulate,
         simd_shuffle_down, simd_shuffle_up, simd_shuffle_and_fill_down, simd_shuffle_and_fill_up,
-    simd_shuffle, simd_shuffle_xor, simd_ballot, simd_all, simd_any
+    simd_shuffle, simd_shuffle_xor, simd_ballot, simd_vote_all, simd_vote_any
 
 using Core: LLVMPtr
 
@@ -129,10 +129,10 @@ end
 @device_function simd_ballot(predicate::Bool) =
     ccall("extern air.simd_ballot.i64", llvmcall, UInt64, (Bool,), predicate)
 
-@device_function simd_all(bitmask::UInt64) =
+@device_function simd_vote_all(bitmask::UInt64) =
     ccall("extern air.simd_vote_all.i64", llvmcall, Bool, (UInt64,), bitmask)
 
-@device_function simd_any(bitmask::UInt64) =
+@device_function simd_vote_any(bitmask::UInt64) =
     ccall("extern air.simd_vote_any.i64", llvmcall, Bool, (UInt64,), bitmask)
 
 
@@ -232,15 +232,17 @@ to inactive threads to 0.
 simd_ballot
 
 @doc """
-    simd_all(bitmask::UInt64)
+    simd_vote_all(bitmask::UInt64)
 
-Returns true if all bits in `bitmask` are set.
+Returns true if all bits corresponding to threads in the SIMD-group are set. The input is a
+voting `bitmask`, such as the one returned by `simd_ballot`.
 """
-simd_all
+simd_vote_all
 
 @doc """
-    simd_any(bitmask::UInt64)
+    simd_vote_any(bitmask::UInt64)
 
-Returns true if any bits in  `bitmask` are set.
+Returns true if any bits corresponding to threads in the SIMD-group are set. The input is a
+voting `bitmask`, such as the one returned by `simd_ballot`.
 """
-simd_any
+simd_vote_any
