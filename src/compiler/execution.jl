@@ -289,6 +289,13 @@ end
         close(cce)
     end
 
+    # during precompilation, skip GPU submission (which hangs) but keep the
+    # encoding path above to cache compilation of the argument encoding pipeline
+    if ccall(:jl_generating_output, Cint, ()) != 0
+        foreach(free, argument_buffers)
+        return
+    end
+
     # the command buffer retains resources that are explicitly encoded (i.e. direct buffer
     # arguments, or the buffers allocated for each other argument), but that doesn't keep
     # other resources alive for which we've encoded the GPU address ourselves. since it's
