@@ -490,7 +490,7 @@ Recursively adapt element types for Metal compatibility:
 
 Types that do not contain `Float64` are returned unchanged.
 """
-function _mtl_adapt_eltype(::Type{T}) where T
+function _mtl_adapt_eltype(::Type{T}) where {T}
     T === Float64 && return Float32
     T === Complex{Float64} && return ComplexF32
     !contains_eltype(T, Float64) && return T
@@ -507,8 +507,8 @@ function _mtl_adapt_eltype(::Type{T}) where T
     return T
 end
 
-Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T,N,S} =
-    isbits(xs) ? xs : MtlArray{_mtl_adapt_eltype(T),N,S}(xs)
+Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T, N}) where {T, N, S} =
+    isbits(xs) ? xs : MtlArray{_mtl_adapt_eltype(T), N, S}(xs)
 
 """
     mtl(A; storage=Metal.PrivateStorage)
