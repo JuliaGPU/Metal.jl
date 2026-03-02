@@ -73,6 +73,7 @@ jobs:
           issue-number: ${{ github.event.pull_request.number }}
           body: |
             <!-- runic-format-summary -->
+            Note: Please ignore this comment unless asked otherwise by a reviewer.
 
             Your PR requires formatting changes to meet the project's style guidelines.
             Please consider running [Runic](https://github.com/fredrikekre/Runic.jl) (`git runic ${{ github.base_ref }}`) to apply these changes.
