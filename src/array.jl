@@ -480,35 +480,32 @@ Adapt.adapt_storage(::Type{<:MtlArray{T,N,S}}, xs::AT) where {T,N,S,AT<:Abstract
 
 struct MtlArrayAdaptor{S} end
 
-"""
-    Metal._mtl_adapt_eltype(::Type{T})
+# scalar conversions
+Adapt.adapt_storage(::MtlArrayAdaptor, x::Float64) = Float32(x)
+Adapt.adapt_storage(::MtlArrayAdaptor, x::Complex{Float64}) = ComplexF32(x)
 
-Recursively adapt element types for Metal compatibility:
-- `Float64` → `Float32`
-- `Complex{Float64}` → `ComplexF32`
-- Parameterized composite types (e.g. `SVector{2,Float64}`)
+# AbstractFloat → Float32
+Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:AbstractFloat,N,S} =
+    isbits(xs) ? xs : MtlArray{Float32,N,S}(xs)
 
-Types that do not contain `Float64` are returned unchanged.
-"""
-function _mtl_adapt_eltype(::Type{T}) where {T}
-    T === Float64 && return Float32
-    T === Complex{Float64} && return ComplexF32
-    !contains_eltype(T, Float64) && return T
-    if T isa DataType && !isempty(T.parameters)
-        new_params = map(T.parameters) do p
-            p isa Type ? _mtl_adapt_eltype(p) : p
-        end
-        try
-            return T.name.wrapper{new_params...}
-        catch
-            # let check_eltype catch it later
-        end
-    end
-    return T
+# Float16 — preserve (more specific)
+Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Float16,N,S} =
+    isbits(xs) ? xs : MtlArray{T,N,S}(xs)
+
+# Complex{AbstractFloat} → ComplexF32
+Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Complex{<:AbstractFloat},N,S} =
+    isbits(xs) ? xs : MtlArray{ComplexF32,N,S}(xs)
+
+# Complex{Float16} — preserve
+Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T<:Complex{Float16},N,S} =
+    isbits(xs) ? xs : MtlArray{T,N,S}(xs)
+
+# Generic — descend via adapt to handle composite types
+function Adapt.adapt_storage(to::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) where {T,N,S}
+    isbits(xs) && return xs
+    adapted = map(x -> adapt(to, x), xs)
+    MtlArray{eltype(adapted),N,S}(adapted)
 end
-
-Adapt.adapt_storage(::MtlArrayAdaptor{S}, xs::AbstractArray{T, N}) where {T, N, S} =
-    isbits(xs) ? xs : MtlArray{_mtl_adapt_eltype(T), N, S}(xs)
 
 """
     mtl(A; storage=Metal.PrivateStorage)
@@ -519,8 +516,8 @@ Opinionated GPU array adaptor, which may alter the element type `T` of arrays:
 * For `T<:AbstractFloat`, it makes a `MtlArray{Float32}` for performance and compatibility
   reasons (except for `Float16`).
 * For `T<:Complex{<:AbstractFloat}` it makes a `MtlArray{ComplexF32}`.
-* For composite `isbitstype(T)` whose type parameters contain `Float64`
-  (e.g. `SVector{2,Float64}`), every `Float64` parameter is recursively converted to `Float32`.
+* For composite element types (e.g. `SVector{2,Float64}`), Adapt.jl recursively converts
+  `Float64` scalars to `Float32` via `adapt_structure`/`adapt_storage` dispatch.
 * For other `isbitstype(T)`, it makes a `MtlArray{T}`.
 
 By contrast, `MtlArray(A)` never changes the element type.
