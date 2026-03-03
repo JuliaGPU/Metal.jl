@@ -164,6 +164,10 @@ end
     @test_throws InexactError @metal groups=(-2) tester(bufferA)
     @test_throws ArgumentError @metal threads=(1025) tester(bufferA)
     @test_throws ArgumentError @metal threads=(1000,2) tester(bufferA)
+
+    @test_throws ArgumentError @metal threads=(1024,1,1) groups=(4194304,1,1) tester(bufferA)
+    @test_throws ArgumentError @metal threads=(1,1024,1) groups=(1,4194304,1) tester(bufferA)
+    @test_throws ArgumentError @metal threads=(1,1,1024) groups=(1,1,4194304) tester(bufferA)
 end
 
 ############################################################################################
