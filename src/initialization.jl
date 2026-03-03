@@ -3,14 +3,14 @@
         try
             dev = device()
             return supports_family(dev, MTL.MTLGPUFamilyApple7) &&
-            supports_family(dev, MTL.MTLGPUFamilyMetal3)
+                supports_family(dev, MTL.MTLGPUFamilyMetal3)
         catch
             return false
         end
     end
 else
     # Becomes `nothing` once it has been determined that the device is on macOS
-    const _functional = Ref{Union{Nothing,Bool}}(false)
+    const _functional = Ref{Union{Nothing, Bool}}(false)
 
     function functional()
         if isnothing(_functional[])
@@ -23,6 +23,10 @@ else
         _functional[]
     end
 end
+
+# Async warmup system to reduce first-kernel JIT compilation latency
+const _warmup_task = Ref{Union{Nothing, Task}}(nothing)
+const _warmup_enabled = @load_preference("warmup", true)
 
 function __init__()
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
@@ -63,7 +67,7 @@ function __init__()
             _functional[] = nothing  # VERSION <= v"1.12.0-DEV.1421"
         end
     catch err
-        @error "Failed to load Metal" exception=(err,catch_backtrace())
+        @error "Failed to load Metal" exception = (err, catch_backtrace())
         return
     end
 
@@ -72,10 +76,17 @@ function __init__()
     if isdefined(Base, :active_repl_backend) && !isnothing(Base.active_repl_backend)
         push!(Base.active_repl_backend.ast_transforms, synchronize_metal_tasks)
     end
+
+    # Start async warmup to reduce first-kernel JIT compilation latency.
+    # Only run with multiple threads - with a single thread, the async task would
+    # block the main thread due to Julia's cooperative task runtime.
+    return if functional() && _warmup_enabled && Threads.nthreads() > 1
+        _warmup_task[] = errormonitor(Threads.@spawn _warmup_compilation())
+    end
 end
 
 function synchronize_metal_tasks(ex)
-    quote
+    return quote
         try
             $(ex)
         finally
