@@ -64,6 +64,15 @@ end
 
     @test collect(Metal.fill(0, 2, 2)) == zeros(Float32, 2, 2)
     @test collect(Metal.fill(1, 2, 2)) == ones(Float32, 2, 2)
+
+    @testset "mtl composite eltype conversion" begin
+        using StaticArrays
+        @test mtl(fill(SVector{2, Float64}(1.0, 2.0), 10)) isa MtlArray{SVector{2, Float32}}
+        @test mtl(fill(SVector{2, Float32}(1.0f0, 2.0f0), 10)) isa MtlArray{SVector{2, Float32}}
+
+        # No implicit conversion for MtlArray constructor, only for mtl
+        @test_throws "Metal does not support Float64 values" MtlArray(fill(SVector{2, Float64}(1.0, 2.0), 10))
+    end
 end
 
 @testset "copyto!" begin
