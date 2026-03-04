@@ -1,6 +1,12 @@
-using Metal, GPUArrays, LinearAlgebra, Printf, ScopedValues, AppleAccelerate
-using Plots
-using Plots.Measures
+using Metal, GPUArrays, LinearAlgebra, Printf, ScopedValues
+
+testing = get(ENV, "TESTING", "false") == "true"
+
+@static if !testing
+    using AppleAccelerate
+    using Plots
+    using Plots.Measures
+end
 
 Ts=[
     (Int8, Float16),
@@ -11,7 +17,6 @@ Ts=[
     (Float32, Float32),
 ]
 
-testing = get(ENV, "TESTING", "false") == "true"
 DEFAULT_NS = if testing
     [50, 64, 100, 128, 250, 256, 500, 512]
 else
@@ -175,4 +180,5 @@ function plot_results(res, Fs=DEFAULT_FS; outpath=nothing, fileext="svg", plt_ti
 end
 
 res = runcomparison()
-plot_results(res; outpath=testing ? nothing : ".")
+
+testing || plot_results(res; outpath=".")
