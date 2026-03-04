@@ -1,10 +1,12 @@
 # Automated wrapper generation
 
-This directory contains scripts to generate Julia wrappers for Metal and MetalPerformanceShaders.
+This directory contains scripts to generate Julia wrappers for
+the Metal, Metal Performance Shaders, and Metal Performance Shaders Graph
+frameworks.
 
 Objective-C methods are not yet supported.
 
-The scripts are meant to be run from this directory, and at the moment, [this Clang.jl branch](https://github.com/christiangnrd/Clang.jl/tree/objectiveC2) must be used.
+The scripts are meant to be run from this directory.
 
 --------
 
