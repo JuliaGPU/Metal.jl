@@ -1,6 +1,6 @@
 # Not necessary, but removes some errors that don't seem to affect the output
-using Clang_jll
-Clang_jll.libclang = "/Applications/Xcode.app/Contents/Frameworks/libclang.dylib"
+using Clang_unified_jll
+Clang_unified_jll.libclang = "/Applications/Xcode.app/Contents/Frameworks/libclang.dylib"
 
 using Clang.Generators
 using Clang
