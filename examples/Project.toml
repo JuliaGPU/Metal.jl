@@ -1,0 +1,9 @@
+[deps]
+AppleAccelerate = "13e28ba4-7ad8-5781-acae-3021b1ed3924"
+Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
+FixedPointNumbers = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
+GPUArrays = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
+Gtk4 = "9db2cae5-386f-4011-9d63-a5602296539b"
+Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+ScopedValues = "7e506255-f358-4e82-b7e4-beb19740aa63"

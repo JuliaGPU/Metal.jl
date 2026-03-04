@@ -68,6 +68,40 @@ include(gpuarrays_testsuite)
 for name in keys(TestSuite.tests)
     testsuite["gpuarrays/$name"] = :(TestSuite.tests[$name](MtlArray))
 end
+## examples
+function find_examples(dir, examples=String[])
+    if VERSION < v"1.12"
+        # we rely on workspaces to add dependencies to examples
+        return examples
+    end
+    for entry in readdir(dir; join=true)
+        if isfile(entry) && endswith(entry, ".jl") && readline(entry) != "# EXCLUDE FROM TESTING"
+            push!(examples, entry)
+        elseif isdir(entry)
+            find_examples(entry, examples)
+        end
+    end
+    return examples
+end
+for example in find_examples(joinpath(@__DIR__, "..", "examples"))
+    name = splitext(basename(example))[1]
+    dir = dirname(example)
+    testsuite["examples/$name"] = quote
+        cd($dir) do
+            project = Base.active_project()
+            Base.set_active_project($dir)
+            try
+                withenv("TESTING" => "true") do
+                redirect_stdout(devnull) do
+                    include($example)
+                end
+                end
+            finally
+                Base.set_active_project(project)
+            end
+        end
+    end
+end
 
 args = parse_args(ARGS)
 
