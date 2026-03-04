@@ -1,19 +1,12 @@
-# EXCLUDE FROM TESTING
 """
 This example demonstrates how to integrate Metal and Gtk4.
 An image is generated using a Metal kernel and efficiently displayed using Gtk4
 """
 
-using Pkg, Metal
-metal_dir = dirname(@__DIR__)
+using Metal, Colors, FixedPointNumbers, Gtk4, Metal
 
-Pkg.activate(; temp=true)
-Pkg.add(["Gtk4", "Colors", "FixedPointNumbers"])
-Pkg.develop(path=metal_dir)
-
-using Colors, FixedPointNumbers, Gtk4, Metal
-
-if !isinteractive()
+testing = get(ENV, "TESTING", "false") == "true"
+if !testing
     Gtk4.GLib.start_main_loop()
 end
 
@@ -50,6 +43,6 @@ for i=1:400
     win.visible || break
 end
 
-if !isinteractive()
+if !testing
     !win.visible || Gtk4.GLib.waitforsignal(win,:close_request)
 end

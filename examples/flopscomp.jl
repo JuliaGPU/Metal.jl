@@ -1,11 +1,6 @@
-using Metal, GPUArrays, LinearAlgebra, Printf, ScopedValues#, AppleAccelerate
-
-testing = (@isdefined TESTING) && TESTING
-
-@static if !testing
-    using Plots
-    using Plots.Measures
-end
+using Metal, GPUArrays, LinearAlgebra, Printf, ScopedValues, AppleAccelerate
+using Plots
+using Plots.Measures
 
 Ts=[
     (Int8, Float16),
@@ -15,7 +10,13 @@ Ts=[
     (Float16, Float32),
     (Float32, Float32),
 ]
-DEFAULT_NS = [50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024, 1500, 2000, 2048, 2500, 3000, 4000, 4096, 5000, 6000, 6144, 8000, 8192]
+
+testing = get(ENV, "TESTING", "false") == "true"
+DEFAULT_NS = if testing
+    [50, 64, 100, 128, 250, 256, 500, 512]
+else
+    [50, 64, 100, 128, 250, 256, 500, 512, 1000, 1024, 1500, 2000, 2048, 2500, 3000, 4000, 4096, 5000, 6000, 6144, 8000, 8192]
+end
 
 n_gpu_cores = Metal.num_gpu_cores()
 
@@ -90,7 +91,7 @@ function anepeakflops(; kwargs...)
     return res
 end
 
-function compare(Ns, Fs, inT, outT=inT; n_batch=1, ntrials, verbose=true)
+function compare(Ns, Fs, inT, outT=inT; n_batch=1, ntrials, verbose=!testing)
     results = Dict()
 
     newFs = if (outT == Float16 || (outT == Float32 && inT == Float16))
@@ -124,7 +125,7 @@ DEFAULT_FS = [
     (graphpeakflops, "MPSGraph"),
     (defaultpeakflops, "Default"),
     (gpuarrpeakflops, "GPUArrays"),
-    # (cpupeakflops, "CPU (AppleAccelerate)"), # Uncomment to test CPU performance
+    (cpupeakflops, "CPU (AppleAccelerate)"),
     # (anepeakflops, "MPSGraph (ANE)"), # Run last to prevent different line colours
 ]
 
@@ -173,9 +174,5 @@ function plot_results(res, Fs=DEFAULT_FS; outpath=nothing, fileext="svg", plt_ti
     return finalplot
 end
 
-if testing
-    runcomparison(;Ns=[50, 64, 100, 128, 250, 256, 500, 512], verbose=false)
-elseif abspath(PROGRAM_FILE) == @__FILE__
-    res = runcomparison()
-    plot_results(res; outpath=".")
-end
+res = runcomparison()
+plot_results(res; outpath=testing ? nothing : ".")

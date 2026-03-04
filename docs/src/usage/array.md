@@ -125,8 +125,8 @@ julia> Metal.rand(2)
 
 julia> Metal.randn(Float32, 2, 1)
 2×1 MtlMatrix{Float32, Metal.PrivateStorage}:
- 1.2279074
- 1.2518331
+ -1.4323475
+ -1.8173797
 ```
 
 Behind the scenes, these random numbers come from two different generators: one backed by
@@ -143,7 +143,7 @@ julia> a = Random.rand(MPS.default_rng(), Float32, 1)
 
 julia> a = Random.rand!(GPUArrays.default_rng(MtlArray), a)
 1-element MtlVector{Float32, Metal.PrivateStorage}:
- 0.0705002
+ 0.34963223
 ```
 
 !!! note

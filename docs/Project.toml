@@ -2,6 +2,10 @@
 Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
+Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
+
+[extras]
+Git_jll = "f8c6e375-362e-5223-8a59-34ff63f689eb"
 
 [compat]
 Documenter = "1"
