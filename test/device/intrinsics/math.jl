@@ -181,6 +181,22 @@ end
         @test Array(mtlout) == clamp.(in, minval, maxval)
     end
 
+    let
+        N = 10
+
+        x = rand(ComplexF32, N)
+        y = rand(ComplexF32, N)
+
+        dx = MtlArray(x)
+        dy = MtlArray(y)
+
+
+        z = x ./ y
+        dz = dx ./ dy
+
+        @test Array(dz) ≈ z
+    end
+
     let #pow
         N = 4
         arr1 = rand(T, N)
