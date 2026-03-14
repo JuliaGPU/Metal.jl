@@ -63,19 +63,19 @@ importing the package:
 julia> using Metal
 
 julia> Metal.versioninfo()
-macOS 26.0.0, Darwin 25.0.0
+macOS 26.3.1, Darwin 25.3.0
 
 Toolchain:
-- Julia: 1.11.7
-- LLVM: 16.0.6
+- Julia: 1.12.5
+- LLVM: 18.1.7
 
 Julia packages:
-- Metal.jl: 1.8.1
-- GPUArrays: 11.2.5
-- GPUCompiler: 1.6.1
-- KernelAbstractions: 0.9.38
+- Metal.jl: 1.9.3
+- GPUArrays: 11.4.1
+- GPUCompiler: 1.8.2
+- KernelAbstractions: 0.9.40
 - ObjectiveC: 3.4.2
-- LLVM: 9.4.2
+- LLVM: 9.4.6
 - LLVMDowngrader_jll: 0.6.0+1
 
 1 device:
