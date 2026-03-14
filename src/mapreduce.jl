@@ -173,6 +173,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
                                  init=nothing) where {F, OP, T}
     Base.check_reducedims(R, A)
     length(A) == 0 && return R # isempty(::Broadcasted) iterates
+    dev = device()
 
     # be conservative about using shuffle instructions
     shuffle = T <: Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
@@ -194,7 +195,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     @assert length(Rother) > 0
 
     # If `Rother` is large enough, then a naive loop is more efficient than partial reductions.
-    if length(Rother) >= serial_mapreduce_threshold(device(R))
+    if length(Rother) >= serial_mapreduce_threshold(dev)
         kernel = @metal launch=false serial_mapreduce_kernel(f, op, init, Val(Rreduce), Val(Rother), R, A)
         threads = min(length(Rother), kernel.pipeline.maxTotalThreadsPerThreadgroup)
         groups = cld(length(Rother), threads)
@@ -210,7 +211,6 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     grain = contiguous ? prevpow(2, cld(16, sizeof(T))) : 1
 
     # the maximum number of threads is limited by the hardware
-    dev = device()
     maxthreads = min(Int(dev.maxThreadsPerThreadgroup.width),
                      Int(dev.maxThreadgroupMemoryLength) ÷ sizeof(T))
 
