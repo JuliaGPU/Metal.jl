@@ -153,7 +153,7 @@ end
     if air === nothing
         # we support down to macOS 13, which supports AIR 2.5
         # so always target that version for now
-        air = v"2.5"
+        air = v"2.7"
         @assert air <= air_support()
     end
 
