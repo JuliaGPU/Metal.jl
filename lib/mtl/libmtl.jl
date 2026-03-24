@@ -185,6 +185,7 @@ end
     @autoproperty counterSets::id{NSArray} type = Vector{MTLCounterSet}
     @autoproperty supportsDynamicLibraries::Bool
     @autoproperty supportsRenderDynamicLibraries::Bool
+    @autoproperty supportsPlacementSparse::Bool availability = macos(v"26.4.0")
     @autoproperty supportsRaytracing::Bool
     @autoproperty supportsFunctionPointers::Bool
     @autoproperty supportsFunctionPointersFromRender::Bool
@@ -552,6 +553,8 @@ end
     MTLTensorDataTypeUInt16 = 41
     MTLTensorDataTypeInt32 = 29
     MTLTensorDataTypeUInt32 = 33
+    MTLTensorDataTypeInt4 = 143
+    MTLTensorDataTypeUInt4 = 144
 end
 
 @objcwrapper immutable = true availability = macos(v"26.0.0") MTLTensorExtents <: NSObject
@@ -1280,6 +1283,11 @@ end
     MTLCounterSamplingPointAtDispatchBoundary = 0x0000000000000002
     MTLCounterSamplingPointAtTileDispatchBoundary = 0x0000000000000003
     MTLCounterSamplingPointAtBlitBoundary = 0x0000000000000004
+end
+
+@cenum MTLDeviceError::Int64 begin
+    MTLDeviceErrorNone = 0
+    MTLDeviceErrorNotSupported = 1
 end
 
 struct MTLSizeAndAlign
