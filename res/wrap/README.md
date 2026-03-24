@@ -6,7 +6,8 @@ frameworks.
 
 Objective-C methods are not yet supported.
 
-The scripts are meant to be run from this directory.
+The scripts are meant to be run from this directory, with the latest
+Julia release supported by Metal.jl.
 
 --------
 
