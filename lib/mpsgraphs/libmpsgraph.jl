@@ -128,6 +128,7 @@ end
 @cenum MPSGraphReducedPrecisionFastMath::UInt64 begin
     MPSGraphReducedPrecisionFastMathNone = 0x0000000000000000
     MPSGraphReducedPrecisionFastMathAllowFP16Conv2DWinogradTransformIntermediate = 0x0000000000000002
+    MPSGraphReducedPrecisionFastMathAllowConvertingOperandsFromFP32ToFP19 = 0x0000000000000004
     MPSGraphReducedPrecisionFastMathAllowFP16Intermediates = 0x0000000000000002
     MPSGraphReducedPrecisionFastMathDefault = 0x0000000000000000
 end

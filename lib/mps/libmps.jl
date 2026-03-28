@@ -71,6 +71,7 @@ end
     MPSDataTypeAlternateEncodingBit = 0x0000000080000000
     MPSDataTypeBool = 0x0000000080000008
     MPSDataTypeBFloat16 = 0x0000000090000010
+    MPSDataTypeComplexBFloat16 = 0x0000000091000020
     MPSDataTypeNormalizedBit = 0x0000000040000000
     MPSDataTypeUnorm1 = 0x0000000040000001
     MPSDataTypeUnorm8 = 0x0000000040000008
