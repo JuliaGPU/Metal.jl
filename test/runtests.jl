@@ -200,4 +200,4 @@ init_code = quote
     import ..runtime_validation, ..shader_validation, ..capturing, ..@grab_output, ..@on_device
 end
 
-runtests(Metal, args; testsuite, init_code, init_worker_code, test_worker)
+runtests(Metal, args; testsuite, init_code, init_worker_code, test_worker, serial=["largecopy", "largebroadcast"])
