@@ -1,4 +1,6 @@
-using Metal
+using Pkg
+Pkg.add(url="https://github.com/christiangnrd/GPUArrays.jl", rev="accumulatetests")using Metal
+
 using ParallelTestRunner
 
 # Quit without erroring if Metal loaded without issues on unsupported platforms
