@@ -425,4 +425,21 @@ end
     bufferA = MtlArray(a)
     vecA = Array(sqrt.(bufferA))
     @test vecA ≈ sqrt.(a)
+
+    # Division
+    let
+        N = 10
+
+        x = rand(ComplexF32, N)
+        y = rand(ComplexF32, N)
+
+        dx = MtlArray(x)
+        dy = MtlArray(y)
+
+
+        z = x ./ y
+        dz = dx ./ dy
+
+        @test Array(dz) ≈ z
+    end
 end
