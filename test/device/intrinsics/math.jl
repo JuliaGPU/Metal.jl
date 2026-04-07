@@ -425,4 +425,25 @@ end
     bufferA = MtlArray(a)
     vecA = Array(sqrt.(bufferA))
     @test vecA ≈ sqrt.(a)
+
+    # Division
+    let
+        N = 10
+
+        x = rand(ComplexF32, N)
+        y = rand(ComplexF32, N)
+
+        dx = MtlArray(x)
+        dy = MtlArray(y)
+
+
+        z = x ./ y
+        dz = dx ./ dy
+
+        @test Array(dz) ≈ z
+
+        # Over/Underflow tests
+        as = MtlArray([Complex{Float32}(2.0e20, 2.0e20), Complex{Float32}(1.0e-25, 1.0e-25)])
+        @test all(Array(as ./ as) .≈ Complex{Float32}(1.0, 0.0))
+    end
 end
