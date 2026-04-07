@@ -48,6 +48,25 @@ end
 @device_override Base.max(x::Float32, y::Float32, z::Float32) = ccall("extern air.fmax3.f32", llvmcall, Cfloat, (Cfloat, Cfloat, Cfloat), x, y, z)
 @device_override Base.max(x::Float16, y::Float16, z::Float16) = ccall("extern air.fmax3.f16", llvmcall, Float16, (Float16, Float16, Float16), x, y, z)
 
+@device_override function Base.:(/)(a::Complex{Float32}, b::Complex{Float32})
+    are = real(a); aim = imag(a); bre = real(b); bim = imag(b)
+    if (isinf(bre) | isinf(bim))
+        if isfinite(a)
+            return complex(zero(Float32)*sign(are)*sign(bre), -zero(Float32)*sign(aim)*sign(bim))
+        end
+        return NaN32+NaN32*im
+    end
+    if abs(bre) <= abs(bim)
+        r = bre / bim
+        den = bim + r*bre
+        Complex((are*r + aim)/den, (aim*r - are)/den)
+    else
+        r = bim / bre
+        den = bre + r*bim
+        Complex((are + aim*r)/den, (aim - are*r)/den)
+    end
+end
+
 @device_override FastMath.acos_fast(x::Float32) = ccall("extern air.fast_acos.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.acos(x::Float32) = ccall("extern air.acos.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.acos(x::Float16) = ccall("extern air.acos.f16", llvmcall, Float16, (Float16,), x)
