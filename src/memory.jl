@@ -78,26 +78,34 @@ end
 # Split up copies > 2GiB to avoid silent failures when copying buffers > 4Gib
 # to fix JuliaGPU/Metal.jl#710. Solution inspired by
 # https://github.com/pytorch/pytorch/pull/126104
-@autoreleasepool function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
+function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
                                               src::MtlPtr{T}, N::Integer;
                                               queue::MTLCommandQueue=global_queue(dev),
                                               async::Bool=false) where T
     if N > 0
-        chunk_size = 2^31
-        cmdbuf = MTLCommandBuffer(queue)
-        MTLBlitCommandEncoder(cmdbuf) do enc
-            nbytes = N * sizeof(T)
-            offset = 0
+        nbytes = N * sizeof(T)
+        # For small copies of Shared memory arrays, CPU memcpy avoids GPU command buffer overhead.
+        # Otherwise, use GPU blit for large copies (>32MiB) where it's faster than CPU memcpy.
+        if dst.buffer.storageMode == src.buffer.storageMode == MTL.MTLStorageModeShared && nbytes < 2^25
+            unsafe_copyto!(convert(Ptr{T}, dst), convert(Ptr{T}, src), N)
+        else
+            @autoreleasepool begin
+                chunk_size = 2^31
+                cmdbuf = MTLCommandBuffer(queue)
+                MTLBlitCommandEncoder(cmdbuf) do enc
+                    offset = 0
 
-            while nbytes > 0
-                transfer_bytes = min(nbytes, chunk_size)
-                append_copy!(enc, dst.buffer, dst.offset + offset, src.buffer, src.offset + offset, transfer_bytes)
-                offset += transfer_bytes
-                nbytes -= transfer_bytes
+                    while nbytes > 0
+                        transfer_bytes = min(nbytes, chunk_size)
+                        append_copy!(enc, dst.buffer, dst.offset + offset, src.buffer, src.offset + offset, transfer_bytes)
+                        offset += transfer_bytes
+                        nbytes -= transfer_bytes
+                    end
+                end
+                commit!(cmdbuf)
+                async || wait_completed(cmdbuf)
             end
         end
-        commit!(cmdbuf)
-        async || wait_completed(cmdbuf)
     end
     return dst
 end

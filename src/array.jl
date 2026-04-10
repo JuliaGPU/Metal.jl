@@ -422,23 +422,6 @@ function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::MtlA
     end
     return dest
 end
-function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T, <:Any, Metal.SharedStorage}, doffs, src::MtlArray{T, <:Any, Metal.SharedStorage}, soffs, n) where {T}
-    synchronize()
-    bytes = n * sizeof(T)
-    # Use GPU blit for large copies (>32MiB) where it's faster than CPU memcpy.
-    # For small copies, CPU memcpy avoids GPU command buffer overhead.
-    if bytes >= 32 * 2^20 # If changed, also change in tests
-        GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
-        if Base.isbitsunion(T)
-            error("Not implemented")
-        end
-    else
-        # use the raw CPU pointers directly so this also works with non-aligned offsets
-        # (which can arise from e.g. reinterpret of a view); unsafe_wrap would refuse them
-        GC.@preserve src dest unsafe_copyto!(pointer(dest, doffs; storage=SharedStorage), pointer(src, soffs; storage=SharedStorage), n)
-    end
-    return dest
-end
 
 
 ## regular gpu array adaptor
