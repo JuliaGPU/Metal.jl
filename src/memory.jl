@@ -21,7 +21,7 @@ Base.eltype(::Type{<:MtlPtr{T}}) where {T} = T
 # limited arithmetic
 Base.:(+)(x::MtlPtr{T}, y::Integer) where {T} = MtlPtr{T}(x.buffer, x.offset+y)
 Base.:(-)(x::MtlPtr{T}, y::Integer) where {T} = MtlPtr{T}(x.buffer, x.offset-y)
-Base.:(+)(x::Integer, y::MtlPtr{T}) where {T} = MtlPtr{T}(x.buffer, y+x.offset)
+Base.:(+)(x::Integer, y::MtlPtr{T}) where {T} = y + x
 
 Base.convert(::Type{Ptr{T}}, ptr::MtlPtr) where {T} =
     convert(Ptr{T}, ptr.buffer) + ptr.offset

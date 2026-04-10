@@ -19,6 +19,9 @@ end
     @test xs2.data[].length == 6
     @test pointer(xs2) != pointer(xs)
 
+    @test (pointer(xs2) + 3) == (3 + pointer(xs2))
+    @test (pointer(xs2) + 3) - 3 == pointer(xs2)
+
     @test collect(MtlArray([1 2; 3 4])) == [1 2; 3 4]
     @test collect(mtl([1, 2, 3])) == [1, 2, 3]
     @test testf(vec, rand(Float32, 5,3))
