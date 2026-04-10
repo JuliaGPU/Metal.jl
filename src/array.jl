@@ -146,7 +146,7 @@ Returns true if `A` has storage mode [`Metal.ManagedStorage`](@ref).
 
 See also [`is_shared`](@ref) and [`is_private`](@ref).
 """
-is_managed(A::MtlArray) = storagemode(A) == ManagedStorage
+is_managed(A::MtlArray) = storagemode(A) == ManagedStorage # COV_EXCL_LINE
 
 """
     is_private(A::MtlArray)::Bool
@@ -157,7 +157,7 @@ See also [`is_shared`](@ref).
 """
 is_private(A::MtlArray) = storagemode(A) == PrivateStorage
 
-is_memoryless(A::MtlArray) = storagemode(A) == MTL.Memoryless
+is_memoryless(A::MtlArray) = storagemode(A) == MTL.Memoryless # COV_EXCL_LINE
 
 ## convenience constructors
 """
