@@ -264,9 +264,6 @@ function Base.unsafe_convert(::Type{MtlPtr{T}}, x::MtlArray) where {T}
 end
 
 function Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S,T}
-    if is_private(x)
-        throw(ArgumentError("cannot take the CPU address of a $(typeof(x))"))
-    end
     synchronize()
     buf = x.data[]
     convert(Ptr{T}, buf) + x.offset
