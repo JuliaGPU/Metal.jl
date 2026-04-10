@@ -495,11 +495,8 @@ end
 
 @testset "reinterpret of view with non-aligned offset" begin
     # reinterpreting a view to a larger element type where the byte offset
-    # is not a multiple of the new element size. PrivateStorage is required
-    # because the SharedStorage Array conversion goes through unsafe_wrap,
-    # which requires the buffer pointer to be aligned to the element size.
-    a = MtlArray{Int16,1,Metal.PrivateStorage}(undef, 9)
-    copyto!(a, Int16[1,2,3,4,5,6,7,8,9])
+    # is not a multiple of the new element size
+    a = MtlArray(Int16[1,2,3,4,5,6,7,8,9])
     v = view(a, 2:7)  # offset of 1 Int16 = 2 bytes
     r = reinterpret(Int32, v)  # Int32 = 4 bytes; 2 is not a multiple of 4
     @test Array(r) == reinterpret(Int32, @view Array(a)[2:7])

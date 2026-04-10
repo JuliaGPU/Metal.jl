@@ -407,7 +407,9 @@ end
 function Base.unsafe_copyto!(::MTLDevice, dest::MtlArray{T,<:Any,Metal.SharedStorage}, doffs, src::Array{T}, soffs, n) where T
     # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
     synchronize()
-    GC.@preserve src dest unsafe_copyto!(pointer(unsafe_wrap(Array,dest), doffs), pointer(src, soffs), n)
+    # use the raw CPU pointer directly so this also works with non-aligned offsets
+    # (which can arise from e.g. reinterpret of a view); unsafe_wrap would refuse them
+    GC.@preserve src dest unsafe_copyto!(pointer(dest, doffs; storage=SharedStorage), pointer(src, soffs), n)
     return dest
 end
 
@@ -425,7 +427,9 @@ end
 function Base.unsafe_copyto!(::MTLDevice, dest::Array{T}, doffs, src::MtlArray{T,<:Any,Metal.SharedStorage}, soffs, n) where T
     # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
     synchronize()
-    GC.@preserve src dest unsafe_copyto!(pointer(dest, doffs), pointer(unsafe_wrap(Array,src), soffs), n)
+    # use the raw CPU pointer directly so this also works with non-aligned offsets
+    # (which can arise from e.g. reinterpret of a view); unsafe_wrap would refuse them
+    GC.@preserve src dest unsafe_copyto!(pointer(dest, doffs), pointer(src, soffs; storage=SharedStorage), n)
     return dest
 end
 
@@ -451,7 +455,9 @@ function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T, <:Any, Metal.Shar
             error("Not implemented")
         end
     else
-        GC.@preserve src dest unsafe_copyto!(pointer(unsafe_wrap(Array, dest), doffs), pointer(unsafe_wrap(Array, src), soffs), n)
+        # use the raw CPU pointers directly so this also works with non-aligned offsets
+        # (which can arise from e.g. reinterpret of a view); unsafe_wrap would refuse them
+        GC.@preserve src dest unsafe_copyto!(pointer(dest, doffs; storage=SharedStorage), pointer(src, soffs; storage=SharedStorage), n)
     end
     return dest
 end
