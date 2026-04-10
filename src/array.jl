@@ -325,9 +325,6 @@ Base.convert(::Type{T}, x::T) where T <: MtlArray = x
 
 ## interop with C libraries
 
-Base.unsafe_convert(::Type{<:Ptr}, x::MtlArray) =
-    throw(ArgumentError("cannot take the host address of a $(typeof(x))"))
-
 Base.unsafe_convert(::Type{MTL.MTLBuffer}, x::MtlArray) = x.data[]
 
 
