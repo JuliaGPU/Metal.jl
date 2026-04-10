@@ -69,9 +69,12 @@ end
         using StaticArrays
         @test mtl(fill(SVector{2, Float64}(1.0, 2.0), 10)) isa MtlArray{SVector{2, Float32}}
         @test mtl(fill(SVector{2, Float32}(1.0f0, 2.0f0), 10)) isa MtlArray{SVector{2, Float32}}
+        @test mtl(fill(SVector{2, ComplexF64}(1.0+1.0im, 2.0+2.0im), 10)) isa MtlArray{SVector{2, ComplexF32}}
+        @test mtl(fill(SVector{2, ComplexF32}(1.0f0+1.0f0im, 2.0f0+2.0f0im), 10)) isa MtlArray{SVector{2, ComplexF32}}
 
         # No implicit conversion for MtlArray constructor, only for mtl
         @test_throws "Metal does not support Float64 values" MtlArray(fill(SVector{2, Float64}(1.0, 2.0), 10))
+        @test_throws "Metal does not support Float64 values" MtlArray(fill(SVector{2, ComplexF64}(1.0, 2.0), 10))
     end
 end
 
@@ -123,7 +126,7 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
     let arr = MtlArray{Int,3,SM}(undef, dim[1],dim[2],dim[3])
         @test check_storagemode(arr, SM)
     end
-    let arr = MtlArray{Int,2,SM}(undef, dim[1],dim[2])
+    let arr = MtlArray{Int,2,SM}(undef, (dim[1],dim[2]))
         @test check_storagemode(arr, SM)
     end
 
