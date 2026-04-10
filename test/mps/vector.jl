@@ -69,7 +69,7 @@ using .MPS: MPSVector
     @test vbufmat.vectorBytes == vvectorBytes
     @test vbufmat.vectors == 1
     @test vbufmat.dataType == DT
-    @test vbufmat.offset == vvec.offset * sizeof(T)
+    @test vbufmat.offset == vvec.offset
     @test vbufmat.data == vvec.data[]
 end
 

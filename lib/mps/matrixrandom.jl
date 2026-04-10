@@ -90,7 +90,7 @@ synchronize_state(kern::MPSMatrixRandomMTGP32, cmdbuf::MTLCommandBuffer) =
 @inline function _mpsmat_rand!(randkern::MPSMatrixRandom, dest::MtlArray{T}, ::Type{T2};
                         queue::MTLCommandQueue = global_queue(randkern.device),
                         async::Bool=false) where {T,T2}
-    byteoffset = dest.offset * sizeof(T)
+    byteoffset = dest.offset
     bytesize = sizeof(dest)
 
     cmdbuf = if bytesize % 16 == 0 && dest.offset == 0

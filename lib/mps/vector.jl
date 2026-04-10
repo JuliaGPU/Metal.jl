@@ -53,7 +53,7 @@ Metal vector representation used in Performance Shaders.
 """
 function MPSVector(arr::MtlVector{T}) where T
     desc = MPSVectorDescriptor(length(arr), T)
-    offset = arr.offset * sizeof(T)
+    offset = arr.offset
     return MPSVector(arr, desc, offset)
 end
 

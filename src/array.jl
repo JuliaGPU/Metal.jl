@@ -47,7 +47,7 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
     data::DataRef{<:MTLBuffer}
 
     maxsize::Int  # maximum data size in bytes; excluding any selector bytes
-    offset::Int   # offset of the data in the buffer, in number of elements
+    offset::Int   # offset of the data in the buffer, in bytes
     dims::Dims{N}
 
     function MtlArray{T,N,S}(::UndefInitializer, dims::Dims{N}) where {T,N,S}
@@ -260,7 +260,7 @@ end
 
 function Base.unsafe_convert(::Type{MtlPtr{T}}, x::MtlArray) where {T}
     buf = x.data[]
-    MtlPtr{T}(buf, x.offset * Base.elsize(x))
+    MtlPtr{T}(buf, x.offset)
 end
 
 function Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S,T}
@@ -269,7 +269,7 @@ function Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S,T}
     end
     synchronize()
     buf = x.data[]
-    convert(Ptr{T}, buf) + x.offset * Base.elsize(x)
+    convert(Ptr{T}, buf) + x.offset
 end
 
 
@@ -571,7 +571,7 @@ end
 ## derived arrays
 
 function GPUArrays.derive(::Type{T}, a::MtlArray{<:Any,<:Any,S}, dims::Dims{N}, offset::Int) where {T,N,S}
-    offset = (a.offset * Base.elsize(a)) ÷ sizeof(T) + offset
+    offset = a.offset + offset * sizeof(T)
     MtlArray{T,N,S}(a.data, dims; a.maxsize, offset)
 end
 
