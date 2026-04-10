@@ -493,6 +493,15 @@ end
         sum(reshape(PermutedDimsArray(reshape(Float32.(1:30), 5, 3, 2), (3, 1, 2)), (10, 3)); dims=1)
 end
 
+@testset "reinterpret of view with non-aligned offset" begin
+    # reinterpreting a view to a larger element type where the byte offset
+    # is not a multiple of the new element size
+    a = MtlArray(Int16[1,2,3,4,5,6,7,8,9])
+    v = view(a, 2:7)  # offset of 1 Int16 = 2 bytes
+    r = reinterpret(Int32, v)  # Int32 = 4 bytes; 2 is not a multiple of 4
+    @test Array(r) == reinterpret(Int32, @view Array(a)[2:7])
+end
+
 @testset "accumulate" begin
     for n in (0, 1, 2, 3, 10, 10_000, 16384, 16384+1) # small, large, odd & even, pow2 and not
         @test testf(x->accumulate(+, x), rand(Float32, n))

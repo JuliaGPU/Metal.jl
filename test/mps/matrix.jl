@@ -86,7 +86,7 @@ using .MPS: MPSMatrix
         @test vbufmat.matrices == 1
         @test vbufmat.dataType == DT
         @test vbufmat.matrixBytes == vrowBytes * vrows
-        @test vbufmat.offset == vmat.offset * sizeof(T)
+        @test vbufmat.offset == vmat.offset
         @test vbufmat.data == vmat.data[]
     end
 

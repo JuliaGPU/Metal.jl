@@ -59,7 +59,7 @@ as Metal stores matrices row-major instead of column-major.
 function MPSMatrix(mat::MtlMatrix{T}) where T
     n_cols, n_rows = size(mat)
     desc = MPSMatrixDescriptor(n_rows, n_cols, sizeof(T)*n_cols, T)
-    offset = mat.offset * sizeof(T)
+    offset = mat.offset
     return MPSMatrix(mat, desc, offset)
 end
 
@@ -74,7 +74,7 @@ as Metal stores matrices row-major instead of column-major.
 function MPSMatrix(vec::MtlVector{T}) where T
     n_cols, n_rows = length(vec), 1
     desc = MPSMatrixDescriptor(n_rows, n_cols, sizeof(T)*n_cols, T)
-    offset = vec.offset * sizeof(T)
+    offset = vec.offset
     return MPSMatrix(vec, desc, offset)
 end
 
@@ -90,7 +90,7 @@ function MPSMatrix(arr::MtlArray{T,3}) where T
     n_cols, n_rows, n_matrices = size(arr)
     row_bytes = sizeof(T)*n_cols
     desc = MPSMatrixDescriptor(n_rows, n_cols, n_matrices, row_bytes, row_bytes * n_rows, T)
-    offset = arr.offset * sizeof(T)
+    offset = arr.offset
     return MPSMatrix(arr, desc, offset)
 end
 

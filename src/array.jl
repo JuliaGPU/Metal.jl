@@ -47,7 +47,7 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
     data::DataRef{<:MTLBuffer}
 
     maxsize::Int  # maximum data size in bytes; excluding any selector bytes
-    offset::Int   # offset of the data in the buffer, in number of elements
+    offset::Int   # offset of the data in the buffer, in bytes
     dims::Dims{N}
 
     function MtlArray{T,N,S}(::UndefInitializer, dims::Dims{N}) where {T,N,S}
@@ -260,7 +260,7 @@ end
 
 function Base.unsafe_convert(::Type{MtlPtr{T}}, x::MtlArray) where {T}
     buf = x.data[]
-    MtlPtr{T}(buf, x.offset * Base.elsize(x))
+    MtlPtr{T}(buf, x.offset)
 end
 
 function Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S,T}
@@ -269,7 +269,7 @@ function Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S,T}
     end
     synchronize()
     buf = x.data[]
-    convert(Ptr{T}, buf) + x.offset * Base.elsize(x)
+    convert(Ptr{T}, buf) + x.offset
 end
 
 
@@ -407,7 +407,9 @@ end
 function Base.unsafe_copyto!(::MTLDevice, dest::MtlArray{T,<:Any,Metal.SharedStorage}, doffs, src::Array{T}, soffs, n) where T
     # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
     synchronize()
-    GC.@preserve src dest unsafe_copyto!(pointer(unsafe_wrap(Array,dest), doffs), pointer(src, soffs), n)
+    # use the raw CPU pointer directly so this also works with non-aligned offsets
+    # (which can arise from e.g. reinterpret of a view); unsafe_wrap would refuse them
+    GC.@preserve src dest unsafe_copyto!(pointer(dest, doffs; storage=SharedStorage), pointer(src, soffs), n)
     return dest
 end
 
@@ -425,7 +427,9 @@ end
 function Base.unsafe_copyto!(::MTLDevice, dest::Array{T}, doffs, src::MtlArray{T,<:Any,Metal.SharedStorage}, soffs, n) where T
     # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
     synchronize()
-    GC.@preserve src dest unsafe_copyto!(pointer(dest, doffs), pointer(unsafe_wrap(Array,src), soffs), n)
+    # use the raw CPU pointer directly so this also works with non-aligned offsets
+    # (which can arise from e.g. reinterpret of a view); unsafe_wrap would refuse them
+    GC.@preserve src dest unsafe_copyto!(pointer(dest, doffs), pointer(src, soffs; storage=SharedStorage), n)
     return dest
 end
 
@@ -451,7 +455,9 @@ function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T, <:Any, Metal.Shar
             error("Not implemented")
         end
     else
-        GC.@preserve src dest unsafe_copyto!(pointer(unsafe_wrap(Array, dest), doffs), pointer(unsafe_wrap(Array, src), soffs), n)
+        # use the raw CPU pointers directly so this also works with non-aligned offsets
+        # (which can arise from e.g. reinterpret of a view); unsafe_wrap would refuse them
+        GC.@preserve src dest unsafe_copyto!(pointer(dest, doffs; storage=SharedStorage), pointer(src, soffs; storage=SharedStorage), n)
     end
     return dest
 end
@@ -571,7 +577,7 @@ end
 ## derived arrays
 
 function GPUArrays.derive(::Type{T}, a::MtlArray{<:Any,<:Any,S}, dims::Dims{N}, offset::Int) where {T,N,S}
-    offset = (a.offset * Base.elsize(a)) ÷ sizeof(T) + offset
+    offset = a.offset + offset * sizeof(T)
     MtlArray{T,N,S}(a.data, dims; a.maxsize, offset)
 end
 
