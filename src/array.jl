@@ -266,7 +266,7 @@ end
 function Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S,T}
     synchronize()
     buf = x.data[]
-    convert(Ptr{T}, buf) + x.offset
+    convert(Ptr{S}, buf) + x.offset
 end
 
 

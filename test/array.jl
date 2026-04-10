@@ -174,6 +174,7 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
         let arr_mtl = Metal.zeros(Float32, dim...; storage=Metal.PrivateStorage)
             @test is_private(arr_mtl) && !is_shared(arr_mtl)
             @test_throws "Cannot access the contents of a private buffer" arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, dim)
+            @test_throws "Cannot access the contents of a private buffer" Base.unsafe_convert(Ptr{Float32}, arr_mtl)
         end
 
         let b = rand(Float32, 10)
@@ -185,6 +186,8 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
         let arr_mtl = Metal.zeros(Float32, dim...; storage=Metal.SharedStorage)
             @test !is_private(arr_mtl) && is_shared(arr_mtl)
             @test unsafe_wrap(Array{Float32}, arr_mtl) isa Array{Float32}
+            @test Base.unsafe_convert(Ptr{Float32}, arr_mtl) isa Ptr{Float32}
+            @test Base.unsafe_convert(Ptr{Float16}, arr_mtl) isa Ptr{Float16}
         end
 
         let b = rand(Float32, 10)
@@ -623,4 +626,3 @@ end
   actual = sum(c, dims=2)
   @test expected == Array(actual)
 end
-
