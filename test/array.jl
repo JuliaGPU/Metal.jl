@@ -199,6 +199,10 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
         let b = rand(Float32, 10)
             arr_mtl = mtl(b; storage=Metal.SharedStorage)
             @test arr_mtl[1] == b[1]
+
+            # test setting values with shared storage
+            arr_mtl[2] = 3
+            @test arr_mtl[2] == 3
         end
     end
 end
