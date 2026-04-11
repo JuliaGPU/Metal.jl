@@ -146,7 +146,7 @@ Returns true if `A` has storage mode [`Metal.ManagedStorage`](@ref).
 
 See also [`is_shared`](@ref) and [`is_private`](@ref).
 """
-is_managed(A::MtlArray) = storagemode(A) == ManagedStorage
+is_managed(A::MtlArray) = storagemode(A) == ManagedStorage # COV_EXCL_LINE
 
 """
     is_private(A::MtlArray)::Bool
@@ -157,7 +157,7 @@ See also [`is_shared`](@ref).
 """
 is_private(A::MtlArray) = storagemode(A) == PrivateStorage
 
-is_memoryless(A::MtlArray) = storagemode(A) == MTL.Memoryless
+is_memoryless(A::MtlArray) = storagemode(A) == MTL.Memoryless # COV_EXCL_LINE
 
 ## convenience constructors
 """
@@ -264,12 +264,9 @@ function Base.unsafe_convert(::Type{MtlPtr{T}}, x::MtlArray) where {T}
 end
 
 function Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S,T}
-    if is_private(x)
-        throw(ArgumentError("cannot take the CPU address of a $(typeof(x))"))
-    end
     synchronize()
     buf = x.data[]
-    convert(Ptr{T}, buf) + x.offset
+    convert(Ptr{S}, buf) + x.offset
 end
 
 
@@ -324,9 +321,6 @@ Base.convert(::Type{T}, x::T) where T <: MtlArray = x
 
 
 ## interop with C libraries
-
-Base.unsafe_convert(::Type{<:Ptr}, x::MtlArray) =
-    throw(ArgumentError("cannot take the host address of a $(typeof(x))"))
 
 Base.unsafe_convert(::Type{MTL.MTLBuffer}, x::MtlArray) = x.data[]
 
@@ -404,14 +398,6 @@ function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::Arra
     end
     return dest
 end
-function Base.unsafe_copyto!(::MTLDevice, dest::MtlArray{T,<:Any,Metal.SharedStorage}, doffs, src::Array{T}, soffs, n) where T
-    # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
-    synchronize()
-    # use the raw CPU pointer directly so this also works with non-aligned offsets
-    # (which can arise from e.g. reinterpret of a view); unsafe_wrap would refuse them
-    GC.@preserve src dest unsafe_copyto!(pointer(dest, doffs; storage=SharedStorage), pointer(src, soffs), n)
-    return dest
-end
 
 # GPU -> CPU
 function Base.unsafe_copyto!(dev::MTLDevice, dest::Array{T}, doffs, src::MtlArray{T}, soffs, n) where T
@@ -424,14 +410,6 @@ function Base.unsafe_copyto!(dev::MTLDevice, dest::Array{T}, doffs, src::MtlArra
     end
     return dest
 end
-function Base.unsafe_copyto!(::MTLDevice, dest::Array{T}, doffs, src::MtlArray{T,<:Any,Metal.SharedStorage}, soffs, n) where T
-    # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
-    synchronize()
-    # use the raw CPU pointer directly so this also works with non-aligned offsets
-    # (which can arise from e.g. reinterpret of a view); unsafe_wrap would refuse them
-    GC.@preserve src dest unsafe_copyto!(pointer(dest, doffs), pointer(src, soffs; storage=SharedStorage), n)
-    return dest
-end
 
 # GPU -> GPU
 function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::MtlArray{T}, soffs, n) where T
@@ -441,23 +419,6 @@ function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::MtlA
     if Base.isbitsunion(T)
         # copy selector bytes
         error("Not implemented")
-    end
-    return dest
-end
-function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T, <:Any, Metal.SharedStorage}, doffs, src::MtlArray{T, <:Any, Metal.SharedStorage}, soffs, n) where {T}
-    synchronize()
-    bytes = n * sizeof(T)
-    # Use GPU blit for large copies (>32MiB) where it's faster than CPU memcpy.
-    # For small copies, CPU memcpy avoids GPU command buffer overhead.
-    if bytes >= 32 * 2^20 # If changed, also change in tests
-        GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
-        if Base.isbitsunion(T)
-            error("Not implemented")
-        end
-    else
-        # use the raw CPU pointers directly so this also works with non-aligned offsets
-        # (which can arise from e.g. reinterpret of a view); unsafe_wrap would refuse them
-        GC.@preserve src dest unsafe_copyto!(pointer(dest, doffs; storage=SharedStorage), pointer(src, soffs; storage=SharedStorage), n)
     end
     return dest
 end

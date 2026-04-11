@@ -90,7 +90,6 @@ synchronize_state(kern::MPSMatrixRandomMTGP32, cmdbuf::MTLCommandBuffer) =
 @inline function _mpsmat_rand!(randkern::MPSMatrixRandom, dest::MtlArray{T}, ::Type{T2};
                         queue::MTLCommandQueue = global_queue(randkern.device),
                         async::Bool=false) where {T,T2}
-    byteoffset = dest.offset
     bytesize = sizeof(dest)
 
     cmdbuf = if bytesize % 16 == 0 && dest.offset == 0
@@ -106,7 +105,7 @@ synchronize_state(kern::MPSMatrixRandomMTGP32, cmdbuf::MTLCommandBuffer) =
             tempVec = MPSTemporaryVector(cmdbuf, vecDesc)
             encode!(cmdbuf, randkern, tempVec)
             MTLBlitCommandEncoder(cmdbuf) do enc
-                MTL.append_copy!(enc, dest.data[], byteoffset, tempVec.data, tempVec.offset, bytesize)
+                MTL.append_copy!(enc, dest.data[], dest.offset, tempVec.data, tempVec.offset, bytesize)
             end
         end
     end

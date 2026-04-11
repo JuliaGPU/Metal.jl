@@ -19,6 +19,9 @@ end
     @test xs2.data[].length == 6
     @test pointer(xs2) != pointer(xs)
 
+    @test (pointer(xs2) + 3) == (3 + pointer(xs2))
+    @test (pointer(xs2) + 3) - 3 == pointer(xs2)
+
     @test collect(MtlArray([1 2; 3 4])) == [1 2; 3 4]
     @test collect(mtl([1, 2, 3])) == [1, 2, 3]
     @test testf(vec, rand(Float32, 5,3))
@@ -69,9 +72,12 @@ end
         using StaticArrays
         @test mtl(fill(SVector{2, Float64}(1.0, 2.0), 10)) isa MtlArray{SVector{2, Float32}}
         @test mtl(fill(SVector{2, Float32}(1.0f0, 2.0f0), 10)) isa MtlArray{SVector{2, Float32}}
+        @test mtl(fill(SVector{2, ComplexF64}(1.0+1.0im, 2.0+2.0im), 10)) isa MtlArray{SVector{2, ComplexF32}}
+        @test mtl(fill(SVector{2, ComplexF32}(1.0f0+1.0f0im, 2.0f0+2.0f0im), 10)) isa MtlArray{SVector{2, ComplexF32}}
 
         # No implicit conversion for MtlArray constructor, only for mtl
         @test_throws "Metal does not support Float64 values" MtlArray(fill(SVector{2, Float64}(1.0, 2.0), 10))
+        @test_throws "Metal does not support Float64 values" MtlArray(fill(SVector{2, ComplexF64}(1.0, 2.0), 10))
     end
 end
 
@@ -123,7 +129,7 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
     let arr = MtlArray{Int,3,SM}(undef, dim[1],dim[2],dim[3])
         @test check_storagemode(arr, SM)
     end
-    let arr = MtlArray{Int,2,SM}(undef, dim[1],dim[2])
+    let arr = MtlArray{Int,2,SM}(undef, (dim[1],dim[2]))
         @test check_storagemode(arr, SM)
     end
 
@@ -174,6 +180,7 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
         let arr_mtl = Metal.zeros(Float32, dim...; storage=Metal.PrivateStorage)
             @test is_private(arr_mtl) && !is_shared(arr_mtl)
             @test_throws "Cannot access the contents of a private buffer" arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, dim)
+            @test_throws "Cannot access the contents of a private buffer" Base.unsafe_convert(Ptr{Float32}, arr_mtl)
         end
 
         let b = rand(Float32, 10)
@@ -185,11 +192,17 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
         let arr_mtl = Metal.zeros(Float32, dim...; storage=Metal.SharedStorage)
             @test !is_private(arr_mtl) && is_shared(arr_mtl)
             @test unsafe_wrap(Array{Float32}, arr_mtl) isa Array{Float32}
+            @test Base.unsafe_convert(Ptr{Float32}, arr_mtl) isa Ptr{Float32}
+            @test Base.unsafe_convert(Ptr{Float16}, arr_mtl) isa Ptr{Float16}
         end
 
         let b = rand(Float32, 10)
             arr_mtl = mtl(b; storage=Metal.SharedStorage)
             @test arr_mtl[1] == b[1]
+
+            # test setting values with shared storage
+            arr_mtl[2] = 3
+            @test arr_mtl[2] == 3
         end
     end
 end
@@ -623,4 +636,3 @@ end
   actual = sum(c, dims=2)
   @test expected == Array(actual)
 end
-
