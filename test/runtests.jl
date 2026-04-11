@@ -119,12 +119,14 @@ if filter_tests!(testsuite, args)
     end
 
     # only run large copy test on machines with >12GiB memory
-    if parse(Bool, get(ENV, "CI", "false")) || Sys.total_memory() < 12 * 2^30
+    # if parse(Bool, get(ENV, "CI", "false")) || Sys.total_memory() < 12 * 2^30
+    if Sys.total_memory() < 12 * 2^30
         delete!(testsuite, "largecopy")
     end
 
     # only run large broadcast test on machines with >12GiB memory
-    if parse(Bool, get(ENV, "CI", "false")) || Sys.total_memory() < 12 * 2^30
+    # if parse(Bool, get(ENV, "CI", "false")) || Sys.total_memory() < 12 * 2^30
+    if Sys.total_memory() < 12 * 2^30
         delete!(testsuite, "largebroadcast")
     end
 end
@@ -200,4 +202,4 @@ init_code = quote
     import ..runtime_validation, ..shader_validation, ..capturing, ..@grab_output, ..@on_device
 end
 
-runtests(Metal, args; testsuite, init_code, init_worker_code, test_worker)
+runtests(Metal, args; testsuite, init_code, init_worker_code, test_worker, serial=["largecopy", "largebroadcast"])
