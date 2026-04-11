@@ -208,50 +208,97 @@ function assert_applicable(p::MtlFFTPlan{T, S, backward, inplace}, X::MtlArray{S
     end
 end
 
-function unsafe_execute!(p::MtlFFTPlan{T, S, backward, inplace, N}, x::MtlArray{T, N}, y::MtlArray{T, N}) where {T <: FFTComplex, S <: FFTComplex, N, backward, inplace}
-    @autoreleasepool _unsafe_execute!(fastFourierTransformWithTensor, p, x, y)
+# Cache key for FFT graphs - includes all structural parameters
+struct FFTGraphKey
+    input_size::Tuple{Vararg{Int}}
+    output_size::Tuple{Vararg{Int}}
+    eltype_input::DataType
+    eltype_output::DataType
+    ndims::Int
+    region::Tuple{Vararg{Int}}
+    backward::Bool
+end
+# Build graph key from FFT plan parameters
+function FFTGraphKey(p::MtlFFTPlan{T, S, backward, inplace, N, R}) where {T, S, backward, inplace, N, R}
+    FFTGraphKey(
+        p.input_size, p.output_size,
+        S, T,
+        N, p.region,
+        backward
+    )
 end
 
-function unsafe_execute!(p::MtlFFTPlan{T, S, backward, inplace, N}, x::MtlArray{S, N}, y::MtlArray{T, N}) where {S <: FFTReal, T <: Complex{S}, N, backward, inplace}
-    @autoreleasepool _unsafe_execute!(realToHermiteanFFTWithTensor, p, x, y)
+# Cached graph with all tensors needed for execution
+struct CachedFFTGraph
+    graph::MPSGraph
+    placeholder::MPSGraphTensor
+    result::MPSGraphTensor
 end
-
-function unsafe_execute!(p::MtlFFTPlan{T, S, backward, inplace, N}, x::MtlArray{S, N}, y::MtlArray{T, N}) where {T <: FFTReal, S <: Complex{T}, N, backward, inplace}
-    @autoreleasepool _unsafe_execute!(HermiteanToRealFFTWithTensor, p, x, y)
-end
-
-@inline function _unsafe_execute!(f, p::MtlFFTPlan{T, S, backward, inplace, N}, x, y) where {T <: FFTNumber, S <: FFTNumber, N, backward, inplace}
+function CachedFFTGraph(key::FFTGraphKey)
     graph = MPSGraph()
 
-    # Create placeholder tensor
-    placeholder = placeholderTensor(graph, size(x), S)
+    # Create symbolic placeholder with the input shape and type
+    placeholder = placeholderTensor(graph, key.input_size, key.eltype_input)
 
     # Create FFT descriptor - don't use MPSGraph scaling, AbstractFFTs handles it for us
-    fft_desc = MPSGraphFFTDescriptor(; inverse = backward)
+    fft_desc = MPSGraphFFTDescriptor(; inverse = key.backward)
 
     # Convert Julia 1-indexed axis to Metal 0-indexed axis
     # Due to shape reversal in placeholderTensor, we need to compute the correct axis
     # Julia axis i -> Metal axis (N - i) for N-dimensional array
-    axes = NSArray([NSNumber(Int(N - ax)) for ax in p.region])
+    axes = NSArray([NSNumber(Int(key.ndims - ax)) for ax in key.region])
+
+    # Select the MPSGraph FFT operation based on input/output element types
+    fft_fn = if key.eltype_input <: Complex && key.eltype_output <: Complex
+        fastFourierTransformWithTensor
+    elseif key.eltype_input <: Real && key.eltype_output <: Complex
+        realToHermiteanFFTWithTensor
+    else # complex input, real output
+        HermiteanToRealFFTWithTensor
+    end
 
     # Create FFT operation
-    fft_result = f(graph, placeholder, axes, fft_desc)
+    result = fft_fn(graph, placeholder, axes, fft_desc)
 
-    # feed dictionary
+    CachedFFTGraph(graph, placeholder, result)
+end
+
+# Get or create cached graph
+function _get_cached_graph!(graph_cache_lock, graph_cache, key::FFTGraphKey)
+    # Fast path: check cache without lock (safe for reads)
+    cached = get(graph_cache, key, nothing)
+    if cached !== nothing
+        return cached
+    end
+
+    # Slow path: acquire lock and build graph
+    @lock graph_cache_lock get!(graph_cache, key) do
+        CachedFFTGraph(key)
+    end
+end
+
+# Thread-safe graph cache with lock
+const _fft_graph_cache = Dict{FFTGraphKey, CachedFFTGraph}()
+const _fft_graph_cache_lock = ReentrantLock()
+
+@autoreleasepool function _fft!(p::MtlFFTPlan{T, S, backward, inplace, N}, x, y) where {T <: FFTNumber, S <: FFTNumber, N, backward, inplace}
+    # Get or create cached graph
+    key = FFTGraphKey(p)
+    cached = _get_cached_graph!(_fft_graph_cache_lock, _fft_graph_cache, key)
+
+    # Build feed and result dictionaries with current data
     feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        placeholder => MPSGraphTensorData(x)
+        cached.placeholder => MPSGraphTensorData(x)
     )
 
-    # result dictionary
-    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        fft_result => MPSGraphTensorData(y)
+    resultdict = Dict{MPSGraphTensor, MPSGraphTensorData}(
+        cached.result => MPSGraphTensorData(y)
     )
 
-    # Execute
-    cmdbuf = MPS.MPSCommandBuffer(Metal.global_queue(Metal.device()))
-    MPS.encode!(cmdbuf, graph, NSDictionary(feeds), NSDictionary(results), nil, MPSGraphs.default_exec_desc())
-    Metal.commit!(cmdbuf)
-    Metal.wait_completed(cmdbuf)
+    cmdbuf = MPS.MPSCommandBuffer(global_queue(device()))
+    MPS.encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(resultdict), nil, MPSGraphs.default_exec_desc())
+    commit!(cmdbuf)
+    wait_completed(cmdbuf)
 
     return y
 end
@@ -261,14 +308,14 @@ end
 function LinearAlgebra.mul!(y::MtlArray{T, N}, p::MtlFFTPlan{T, S, backward, inplace, N}, x::MtlArray{S, N}) where {T, S, backward, inplace, N}
     assert_applicable(p, x, y)
 
-    unsafe_execute!(p, x, y)
+    _fft!(p, x, y)
     return y
 end
 
 function Base.:(*)(p::MtlFFTPlan{T, S, backward, true}, x::MtlArray{S}) where {T, S, backward}
     assert_applicable(p, x)
 
-    unsafe_execute!(p, x, x)
+    _fft!(p, x, x)
     return x
 end
 function Base.:(*)(p::MtlFFTPlan{T, S, backward, false}, x::MtlArray{S1, M}) where {T, S, backward, S1, M}
@@ -281,6 +328,6 @@ function Base.:(*)(p::MtlFFTPlan{T, S, backward, false}, x::MtlArray{S1, M}) whe
     assert_applicable(p, z)
 
     y = MtlArray{T, M}(undef, p.output_size)
-    unsafe_execute!(p, z, y)
+    _fft!(p, z, y)
     return y
 end
