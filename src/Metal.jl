@@ -14,6 +14,8 @@ import ObjectiveC: is_macos
 import KernelAbstractions
 using ScopedValues
 
+using Reexport: @reexport
+
 include("version.jl")
 
 # core library
@@ -68,6 +70,7 @@ include("accumulate.jl")
 include("indexing.jl")
 include("random.jl")
 include("gpuarrays.jl")
+include("fft.jl")
 
 # KernelAbstractions
 include("MetalKernels.jl")
