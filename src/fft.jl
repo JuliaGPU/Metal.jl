@@ -160,14 +160,14 @@ function plan_rfft(x::MtlArray{T, N}, region::NTuple{R, Int}) where {T <: FFTRea
 end
 
 # out-of-place complex-to-real
-Base.@constprop :aggressive function plan_brfft(x::MtlArray{T, N}, d::Int, region) where {T <: FFTComplex, N}
+Base.@constprop :aggressive function plan_brfft(x::MtlArray{T, N}, d::Integer, region) where {T <: FFTComplex, N}
     R = length(region)
     region = NTuple{R,Int}(region)
 
     plan_brfft(x, d, region)
 end
 
-function plan_brfft(x::MtlArray{T, N}, d::Int, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
+function plan_brfft(x::MtlArray{T, N}, d::Integer, region::NTuple{R, Int}) where {T <: FFTComplex, N, R}
     backward = true
     inplace = false
 
