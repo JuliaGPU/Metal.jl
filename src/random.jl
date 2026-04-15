@@ -1,38 +1,86 @@
 using Random
-using ..MPS: MPSVector, _mpsmat_rand!, MPSMatrixRandomUniformDistributionDescriptor,
-             MPSMatrixRandomNormalDistributionDescriptor
+
+# Metal.jl ships three RNGs:
+#
+# - `Metal.RNG` (an alias for `GPUArrays.RNG{MtlArray}`): the default
+#   Philox4x32-10 counter-based RNG, returned by `Metal.default_rng()`.
+#   Used by `rand`/`randn`/`rand!`/`randn!`.
+#
+# - `MPS.RNG`: a Metal Performance Shaders-backed Philox RNG. Reachable as
+#   `Metal.mps_rng()`. Kept available for users who explicitly want to use the
+#   MPS path (and seeded by `Metal.seed!` so it stays in sync).
+#
+# - `Metal.KernelRNG`: a custom kernel that calls Metal's on-device Philox2x32.
+#   Kept around for testing and performance comparison; see `Metal.kernel_rng`.
+
+const RNG = GPUArrays.RNG{MtlArray}
+
+function default_rng()
+    dev = device()
+
+    # every task maintains library state per device
+    LibraryState = @NamedTuple{rng::RNG}
+    states = get!(task_local_storage(), :MetalRNG) do
+        Dict{MTLDevice,LibraryState}()
+    end::Dict{MTLDevice,LibraryState}
+
+    # get library state
+    @noinline function new_state(dev)
+        rng = RNG()
+        Random.seed!(rng)
+        (; rng)
+    end
+    state = get!(states, dev) do
+        new_state(dev)
+    end
+
+    return state.rng
+end
+
+# accessors for the alternative RNGs
+mps_rng() = MPS.default_rng()
+kernel_rng() = _default_kernel_rng()
+
+
+## Kernel-based RNG (uses Metal's on-device Philox2x32 generator)
 
 """
-    Metal.RNG()
+    Metal.KernelRNG()
 
-A random number generator using `rand()` in a device kernel.
+A random number generator that launches a Metal kernel which calls the
+device-side `rand()`/`randn()` on Metal's Philox2x32 generator.
+
+!!! warning
+    This RNG is kept for testing and performance comparison against the
+    default `Metal.RNG` (the GPUArrays RNG). For production use prefer
+    `Metal.RNG`.
 """
-mutable struct RNG <: AbstractRNG
+mutable struct KernelRNG <: AbstractRNG
     seed::UInt32
     counter::UInt32
 
-    function RNG(seed::Integer)
+    function KernelRNG(seed::Integer)
         new(seed%UInt32, 0)
     end
-    RNG(seed::UInt32, counter::UInt32) = new(seed, counter)
+    KernelRNG(seed::UInt32, counter::UInt32) = new(seed, counter)
 end
 
-make_seed() = Base.rand(RandomDevice(), UInt32)
+kernel_make_seed() = Base.rand(RandomDevice(), UInt32)
 
-RNG() = RNG(make_seed())
+KernelRNG() = KernelRNG(kernel_make_seed())
 
-Base.copy(rng::RNG) = RNG(rng.seed, rng.counter)
-Base.hash(rng::RNG, h::UInt) = hash(rng.seed, hash(rng.counter, h))
-Base.:(==)(a::RNG, b::RNG) = (a.seed == b.seed) && (a.counter == b.counter)
+Base.copy(rng::KernelRNG) = KernelRNG(rng.seed, rng.counter)
+Base.hash(rng::KernelRNG, h::UInt) = hash(rng.seed, hash(rng.counter, h))
+Base.:(==)(a::KernelRNG, b::KernelRNG) = (a.seed == b.seed) && (a.counter == b.counter)
 
-function Random.seed!(rng::RNG, seed::Integer)
+function Random.seed!(rng::KernelRNG, seed::Integer)
     rng.seed = seed % UInt32
     rng.counter = 0
 end
 
-Random.seed!(rng::RNG) = Random.seed!(rng, make_seed())
+Random.seed!(rng::KernelRNG) = Random.seed!(rng, kernel_make_seed())
 
-function Random.rand!(rng::RNG, A::WrappedMtlArray)
+function Random.rand!(rng::KernelRNG, A::WrappedMtlArray)
     isempty(A) && return A
 
     ## COV_EXCL_START
@@ -78,7 +126,7 @@ function Random.rand!(rng::RNG, A::WrappedMtlArray)
     A
 end
 
-function Random.randn!(rng::RNG, A::WrappedMtlArray{<:Union{AbstractFloat,Complex{<:AbstractFloat}}})
+function Random.randn!(rng::KernelRNG, A::WrappedMtlArray{<:Union{AbstractFloat,Complex{<:AbstractFloat}}})
     isempty(A) && return A
 
     ## COV_EXCL_START
@@ -159,19 +207,56 @@ function Random.randn!(rng::RNG, A::WrappedMtlArray{<:Union{AbstractFloat,Comple
     A
 end
 
-function default_rng()
+# GPU arrays
+Random.rand(rng::KernelRNG, T::Type, dims::Dims) =
+    Random.rand!(rng, MtlArray{T}(undef, dims))
+Random.randn(rng::KernelRNG, T::Type, dims::Dims) =
+    Random.randn!(rng, MtlArray{T}(undef, dims))
+
+# specify default types
+Random.rand(rng::KernelRNG, dims::Dims) = Random.rand(rng, Float32, dims)
+Random.randn(rng::KernelRNG, dims::Dims) = Random.randn(rng, Float32, dims)
+
+# support all dimension specifications
+Random.rand(rng::KernelRNG, dim1::Integer, dims::Integer...) =
+    Random.rand(rng, Dims((dim1, dims...)))
+Random.randn(rng::KernelRNG, dim1::Integer, dims::Integer...) =
+    Random.randn(rng, Dims((dim1, dims...)))
+# ... and with a type
+Random.rand(rng::KernelRNG, T::Type, dim1::Integer, dims::Integer...) =
+    Random.rand(rng, T, Dims((dim1, dims...)))
+Random.randn(rng::KernelRNG, T::Type, dim1::Integer, dims::Integer...) =
+    Random.randn(rng, T, Dims((dim1, dims...)))
+
+# CPU arrays
+function Random.rand!(rng::KernelRNG, A::AbstractArray{T}) where {T}
+    B = MtlArray{T}(undef, size(A))
+    Random.rand!(rng, B)
+    copyto!(A, B)
+end
+function Random.randn!(rng::KernelRNG, A::AbstractArray{T}) where {T}
+    B = MtlArray{T}(undef, size(A))
+    Random.randn!(rng, B)
+    copyto!(A, B)
+end
+
+# scalars
+Random.rand(rng::KernelRNG, T::Type=Float32) = Random.rand(rng, T, 1)[]
+Random.randn(rng::KernelRNG, T::Type=Float32) = Random.randn(rng, T, 1)[]
+# resolve ambiguities
+Random.randn(rng::KernelRNG, T::Random.BitFloatType) = Random.randn(rng, T, 1)[]
+
+# task-local cache for the kernel-based RNG
+function _default_kernel_rng()
     dev = device()
 
-    # every task maintains library state per device
-    LibraryState = @NamedTuple{rng::RNG}
-    states = get!(task_local_storage(), :RNG) do
+    LibraryState = @NamedTuple{rng::KernelRNG}
+    states = get!(task_local_storage(), :MetalKernelRNG) do
         Dict{MTLDevice,LibraryState}()
     end::Dict{MTLDevice,LibraryState}
 
-    # get library state
     @noinline function new_state(dev)
-        # Metal RNG objects are cheap, so we don't need to cache them
-        (; rng = RNG())
+        (; rng = KernelRNG())
     end
     state = get!(states, dev) do
         new_state(dev)
@@ -180,94 +265,34 @@ function default_rng()
     return state.rng
 end
 
-gpuarrays_rng() = GPUArrays.default_rng(MtlArray)
-mtl_rng() = default_rng()
-mpsrand_rng() = MPS.default_rng()
-
-# RNG interface
-
-# GPU arrays
-Random.rand(rng::RNG, T::Type, dims::Dims) =
-    rand!(rng, MtlArray{T}(undef, dims))
-Random.randn(rng::RNG, T::Type, dims::Dims) =
-    randn!(rng, MtlArray{T}(undef, dims))
-
-# specify default types
-Random.rand(rng::RNG, dims::Dims) =
-    Random.rand(rng, Float32, dims)
-Random.randn(rng::RNG, dims::Dims) =
-    Random.randn(rng, Float32, dims)
-
-# support all dimension specifications
-Random.rand(rng::RNG, dim1::Integer, dims::Integer...) =
-    Random.rand(rng, Dims((dim1, dims...)))
-Random.randn(rng::RNG, dim1::Integer, dims::Integer...) =
-    Random.randn(rng, Dims((dim1, dims...)))
-# ... and with a type
-Random.rand(rng::RNG, T::Type, dim1::Integer, dims::Integer...) =
-    Random.rand(rng, T, Dims((dim1, dims...)))
-Random.randn(rng::RNG, T::Type, dim1::Integer, dims::Integer...) =
-    Random.randn(rng, T, Dims((dim1, dims...)))
-
-# CPU arrays
-function Random.rand!(rng::RNG, A::AbstractArray{T}) where {T}
-    B = MtlArray{T}(undef, size(A))
-    rand!(rng, B)
-    copyto!(A, B)
-end
-function Random.randn!(rng::RNG, A::AbstractArray{T}) where {T}
-    B = MtlArray{T}(undef, size(A))
-    randn!(rng, B)
-    copyto!(A, B)
-end
-
-# scalars
-Random.rand(rng::RNG, T::Type=Float32) = Random.rand(rng, T, 1)[]
-Random.randn(rng::RNG, T::Type=Float32) = Random.randn(rng, T, 1)[]
-# resolve ambiguities
-Random.randn(rng::RNG, T::Random.BitFloatType) = Random.randn(rng, T, 1)[]
 
 ############################################
 #            RNG-less API                  #
-# Use MPS for uniformly distributed RNG,   #
-# but native rand for normally distributed #
-# to work around JuliaGPU/Metal.jl#474     #
+# Routes through Metal.default_rng() (the  #
+# GPUArrays RNG); MPS is reachable through #
+# Metal.mps_rng() and used by Metal.seed!. #
 ############################################
 
-# GPUArrays in-place
-Random.rand!(A::MtlArray) = Random.rand!(mtl_rng(), A)
-Random.randn!(A::MtlArray) = Random.randn!(mtl_rng(), A)
+# in-place
+Random.rand!(A::MtlArray) = Random.rand!(default_rng(), A)
+Random.randn!(A::MtlArray) = Random.randn!(default_rng(), A)
 
-# Use MPS random functionality where possible for uniformly distributed RNG
-function Random.rand!(A::MPS.UniformArray)
-    return Random.rand!(mpsrand_rng(), A)
-end
-
-# GPUArrays out-of-place
-function rand(T::MPS.UniformType, dims::Dims; storage=DefaultStorageMode)
-    return Random.rand!(mpsrand_rng(), MtlArray{T,length(dims),storage}(undef, dims...))
-end
-
+# out-of-place
 rand(T::Type, dims::Dims; storage=DefaultStorageMode) =
-    Random.rand!(mtl_rng(), MtlArray{T,length(dims),storage}(undef, dims...))
+    Random.rand!(default_rng(), MtlArray{T,length(dims),storage}(undef, dims...))
 randn(T::Type, dims::Dims; storage=DefaultStorageMode) =
-    Random.randn!(mtl_rng(), MtlArray{T,length(dims),storage}(undef, dims...))
-
-# support all dimension specifications
-function rand(T::MPS.UniformType, dim1::Integer, dims::Integer...; storage=DefaultStorageMode)
-    return Random.rand!(mpsrand_rng(), MtlArray{T,length(dims) + 1,storage}(undef, dim1, dims...))
-end
+    Random.randn!(default_rng(), MtlArray{T,length(dims),storage}(undef, dims...))
 
 rand(T::Type, dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
-    Random.rand!(mtl_rng(), MtlArray{T,length(dims) + 1,storage}(undef, dim1, dims...))
+    Random.rand!(default_rng(), MtlArray{T,length(dims) + 1,storage}(undef, dim1, dims...))
 randn(T::Type, dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
-    Random.randn!(mtl_rng(), MtlArray{T,length(dims) + 1,storage}(undef, dim1, dims...))
+    Random.randn!(default_rng(), MtlArray{T,length(dims) + 1,storage}(undef, dim1, dims...))
 
-# untyped out-of-place
+# untyped out-of-place (defaults to Float32)
 rand(dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
-    Random.rand!(mpsrand_rng(), MtlArray{Float32,length(dims) + 1,storage}(undef, dim1, dims...))
+    Random.rand!(default_rng(), MtlArray{Float32,length(dims) + 1,storage}(undef, dim1, dims...))
 randn(dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
-    Random.randn!(mtl_rng(), MtlArray{Float32,length(dims) + 1,storage}(undef, dim1, dims...))
+    Random.randn!(default_rng(), MtlArray{Float32,length(dims) + 1,storage}(undef, dim1, dims...))
 
 # scalars
 rand(T::Type=Float32; storage=SharedStorage) = rand(T, 1; storage)[1]
@@ -275,6 +300,6 @@ randn(T::Type=Float32; storage=SharedStorage) = randn(T, 1; storage)[1]
 
 # seeding
 function seed!(seed=Base.rand(UInt64))
-    Random.seed!(mtl_rng(), seed)
-    Random.seed!(mpsrand_rng(), seed)
+    Random.seed!(default_rng(), seed)
+    Random.seed!(mps_rng(), seed)
 end

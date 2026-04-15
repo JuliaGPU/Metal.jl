@@ -67,7 +67,6 @@ include("mapreduce.jl")
 include("accumulate.jl")
 include("indexing.jl")
 include("random.jl")
-include("gpuarrays.jl")
 
 # KernelAbstractions
 include("MetalKernels.jl")
