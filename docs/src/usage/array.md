@@ -3,7 +3,6 @@
 ```@meta
 DocTestSetup = quote
     using Metal
-    using GPUArrays
 
     import Random
     Random.seed!(1)
@@ -120,31 +119,41 @@ Base's convenience functions for generating random numbers are available in Meta
 ```jldoctest
 julia> Metal.rand(2)
 2-element MtlVector{Float32, Metal.PrivateStorage}:
- 0.89025915
- 0.8946847
+ 0.67199826
+ 0.87411195
 
 julia> Metal.randn(Float32, 2, 1)
 2×1 MtlMatrix{Float32, Metal.PrivateStorage}:
- -1.4323475
- -1.8173797
+ -0.35001364
+ -0.064419515
 ```
 
-Behind the scenes, these random numbers come from two different generators: one backed by
-[Metal Performance Shaders](https://developer.apple.com/documentation/metalperformanceshaders/mpsmatrixrandom?language=objc),
-another by using the GPUArrays.jl random methods. Operations on these generators are implemented using methods from the Random
-standard library:
+Behind the scenes, these random numbers come from GPUArrays.jl's RNG, exposed as
+`Metal.RNG`, and returned by `Metal.default_rng()`. Operations on it are implemented using
+methods from the Random standard library:
 
 ```jldoctest
-julia> using Random, GPUArrays
+julia> using Random
 
-julia> a = Random.rand(MPS.default_rng(), Float32, 1)
+julia> a = Random.rand(Metal.default_rng(), Float32, 1)
 1-element MtlVector{Float32, Metal.PrivateStorage}:
- 0.89025915
+ 0.67199826
 
-julia> a = Random.rand!(GPUArrays.default_rng(MtlArray), a)
+julia> Random.rand!(Metal.default_rng(), a)
 1-element MtlVector{Float32, Metal.PrivateStorage}:
- 0.34963223
+ 0.23174448
 ```
+
+Two additional RNGs are available:
+
+- `MPS.RNG` (returned by `Metal.mps_rng()`): a generator backed by
+  [Metal Performance Shaders](https://developer.apple.com/documentation/metalperformanceshaders/mpsmatrixrandom?language=objc).
+  Supports uniform distributions over `Float32` and the integer types, and normal
+  `Float32`. `Metal.seed!` reseeds it alongside the default RNG so that switching to
+  it is reproducible.
+
+- `Metal.KernelRNG` (returned by `Metal.kernel_rng()`): a kernel calling Metal's
+  on-device random number generator. Kept for testing and performance comparison.
 
 !!! note
     `MPSMatrixRandom` functionality requires Metal.jl >= v1.4
