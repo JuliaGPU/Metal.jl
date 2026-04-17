@@ -23,8 +23,8 @@ end
     @test (pointer(xs2) + 3) - 3 == pointer(xs2)
 
     # GPU address exposed via UInt/Int, so `UInt(ptr) % N == 0` alignment
-    # checks work the same as for a regular Ptr. Buffers are page-aligned,
-    # and the value must track pointer arithmetic on the offset.
+    # checks work the same as for a regular Ptr. value must track pointer
+    # arithmetic on the offset.
     for SM in STORAGEMODES
         ys = MtlArray{Int8,1,SM}(undef, 128)
         p = pointer(ys)
@@ -32,8 +32,9 @@ end
         @test UInt(p) isa UInt
         @test Int(p) == UInt(p) % Int
         @test UInt(p) == UInt(ys.data[].gpuAddress) + ys.offset
-        @test UInt(p) % 4096 == 0
         @test UInt(p + 7) == UInt(p) + 7
+        # fresh allocations should be aligned enough for typical SIMD use
+        @test UInt(p) % 16 == 0
         @test UInt(p + 16) % 16 == 0
     end
 

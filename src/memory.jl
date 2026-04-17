@@ -27,7 +27,8 @@ Base.convert(::Type{Ptr{T}}, ptr::MtlPtr) where {T} =
     convert(Ptr{T}, ptr.buffer) + ptr.offset
 
 # return the GPU virtual address, so that alignment checks like
-# `UInt(ptr) % N == 0` work the same as for a regular Ptr.
+# `UInt(ptr) % N == 0` work the same as for a regular Ptr. note that this is
+# the GPU-side address, distinct from the CPU-side `contents` pointer.
 Base.UInt(ptr::MtlPtr) = UInt(ptr.buffer.gpuAddress) + ptr.offset
 Base.Int(ptr::MtlPtr) = Int(UInt(ptr))
 
