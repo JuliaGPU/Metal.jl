@@ -22,6 +22,21 @@ end
     @test (pointer(xs2) + 3) == (3 + pointer(xs2))
     @test (pointer(xs2) + 3) - 3 == pointer(xs2)
 
+    # GPU address exposed via UInt/Int, so `UInt(ptr) % N == 0` alignment
+    # checks work the same as for a regular Ptr. Buffers are page-aligned,
+    # and the value must track pointer arithmetic on the offset.
+    for SM in STORAGEMODES
+        ys = MtlArray{Int8,1,SM}(undef, 128)
+        p = pointer(ys)
+        @test p isa Metal.MtlPtr
+        @test UInt(p) isa UInt
+        @test Int(p) == UInt(p) % Int
+        @test UInt(p) == UInt(ys.data[].gpuAddress) + ys.offset
+        @test UInt(p) % 4096 == 0
+        @test UInt(p + 7) == UInt(p) + 7
+        @test UInt(p + 16) % 16 == 0
+    end
+
     @test collect(MtlArray([1 2; 3 4])) == [1 2; 3 4]
     @test collect(mtl([1, 2, 3])) == [1, 2, 3]
     @test testf(vec, rand(Float32, 5,3))

@@ -26,6 +26,11 @@ Base.:(+)(x::Integer, y::MtlPtr{T}) where {T} = y + x
 Base.convert(::Type{Ptr{T}}, ptr::MtlPtr) where {T} =
     convert(Ptr{T}, ptr.buffer) + ptr.offset
 
+# return the GPU virtual address, so that alignment checks like
+# `UInt(ptr) % N == 0` work the same as for a regular Ptr.
+Base.UInt(ptr::MtlPtr) = UInt(ptr.buffer.gpuAddress) + ptr.offset
+Base.Int(ptr::MtlPtr) = Int(UInt(ptr))
+
 
 ## operations
 
