@@ -4,7 +4,7 @@ export @metal
 ## high-level @metal interface
 
 const MACRO_KWARGS = [:launch]
-const COMPILER_KWARGS = [:kernel, :name, :always_inline, :macos, :air, :metal]
+const COMPILER_KWARGS = [:kernel, :name, :always_inline, :opt_level, :macos, :air, :metal]
 const LAUNCH_KWARGS = [:groups, :threads, :queue]
 
 """
