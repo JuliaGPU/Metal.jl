@@ -141,6 +141,7 @@ function compiler_config(dev; kwargs...)
     return config
 end
 @noinline function _compiler_config(dev; kernel=true, name=nothing, always_inline=false,
+                                         opt_level=2,
                                          macos=nothing, air=nothing, metal=nothing,
                                          kwargs...)
     # determine the versions of things to target
@@ -160,7 +161,7 @@ end
     # create GPUCompiler objects
     target = MetalCompilerTarget(; macos, air, metal, kwargs...)
     params = MetalCompilerParams()
-    CompilerConfig(target, params; kernel, name, always_inline)
+    CompilerConfig(target, params; kernel, name, always_inline, opt_level)
 end
 
 # compile to executable machine code
