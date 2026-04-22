@@ -355,6 +355,7 @@ function compiler_config(dev; kwargs...)
 end
 @noinline function _compiler_config(dev; kernel=true, name=nothing, always_inline=false,
                                          debug_level=Base.JLOptions().debug_level,
+                                         opt_level=2,
                                          macos=nothing, air=nothing, metal=nothing,
                                          kwargs...)
     # determine the versions of things to target
@@ -378,7 +379,7 @@ end
     # create GPUCompiler objects
     target = MetalCompilerTarget(; macos, air, metal, kwargs...)
     params = MetalCompilerParams()
-    CompilerConfig(target, params; kernel, name, always_inline, debug_level)
+    CompilerConfig(target, params; kernel, name, always_inline, debug_level, opt_level)
 end
 
 # Persist compilation artifacts so they can be retrieved off-machine (e.g. from CI).

@@ -114,6 +114,28 @@ end
         @metal name="mykernel" dummy()
     end)))
 
+    # set the optimization level
+    let
+        # forwarded to the GPUCompiler `CompilerConfig`
+        @test Metal.compiler_config(device(); opt_level=1).opt_level == 1
+        # and accepted by the `@metal` macro
+        @metal opt_level=1 dummy()
+        # and it actually changes the optimization the pipeline performs: a
+        # fixed-trip-count loop is left as-is at -O0 but cleaned up at -O2
+        function sum_kernel(x)
+            acc = zero(Float32)
+            for i in 1:8
+                acc += unsafe_load(x, i)
+            end
+            unsafe_store!(x, acc, 1)
+            return
+        end
+        tt = Tuple{Core.LLVMPtr{Float32,1}}
+        ir_O0 = sprint(io->Metal.code_llvm(io, sum_kernel, tt; opt_level=0))
+        ir_O2 = sprint(io->Metal.code_llvm(io, sum_kernel, tt; opt_level=2))
+        @test ir_O0 != ir_O2
+    end
+
     # set macOS, AIR, and Metal versions
     let
         @test occursin("""!{!"Metal", i32 3, i32 2, i32 1}""",
