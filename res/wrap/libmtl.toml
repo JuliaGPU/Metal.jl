@@ -50,6 +50,9 @@ immutable=false
 [api.MTLCommandQueue]
 immutable=false
 
+[api.MTLCommandQueueDescriptor]
+immutable=false
+
 [api.MTL4CommandQueueDescriptor]
 immutable=false
 
@@ -104,6 +107,9 @@ immutable=false
 immutable=false
 
 [api.MTLLibrary]
+immutable=false
+
+[api.MTLLogStateDescriptor]
 immutable=false
 
 [api.MTLResidencySet]
