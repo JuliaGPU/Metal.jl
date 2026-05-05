@@ -87,19 +87,8 @@ for example in find_examples(joinpath(@__DIR__, "..", "examples"))
     name = splitext(basename(example))[1]
     dir = dirname(example)
     testsuite["examples/$name"] = quote
-        cd($dir) do
-            project = Base.active_project()
-            Base.set_active_project($dir)
-            try
-                withenv("TESTING" => "true") do
-                redirect_stdout(devnull) do
-                    include($example)
-                end
-                end
-            finally
-                Base.set_active_project(project)
-            end
-        end
+        cmd = Cmd(`$(Base.julia_cmd()) --project=$dir --startup-file=no $example`; dir = $dir)
+        run(pipeline(setenv(cmd, "TESTING" => "true"); stdout = devnull))
     end
 end
 
