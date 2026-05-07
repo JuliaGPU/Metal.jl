@@ -51,10 +51,17 @@ end
     _copyto!(dest, bc) # Keep it for ArrayConflict
 @inline Base.copyto!(dest::AbstractArray, bc::Broadcasted{<:MtlArrayStyle}) =
     _copyto!(dest, bc)
+@inline _preprocess_broadcast(dest, bc) = Broadcast.preprocess(dest, bc)
+@inline function _preprocess_broadcast(dest::MtlArray{Bool},
+                                      bc::Broadcasted{Style, Axes, typeof(identity),
+                                                      <:Tuple{Integer}}) where {Style, Axes}
+    x = convert(Bool, bc.args[1])
+    return Broadcast.preprocess(dest, Broadcasted{Style}(bc.f, (x,), bc.axes))
+end
 @inline function _copyto!(dest::AbstractArray, bc::Broadcasted)
     axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
     isempty(dest) && return dest
-    bc = Broadcast.preprocess(dest, bc)
+    bc = _preprocess_broadcast(dest, bc)
 
     # if this is a common broadcast shape, specialize the kernel on it
     Is = CartesianIndices(dest)

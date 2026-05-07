@@ -600,6 +600,14 @@ end
     @test testf(x->min.(max.(x, zero(Float32)), one(Float32)), randn(Float32, 1000))
     @test testf(x->max.(min.(x, one(Float32)), zero(Float32)), randn(Float32, 1000))
 
+    let x = MtlArray{Bool}(undef, 2)
+        x .= 1
+        @test Array(x) == [true, true]
+
+        x .= Int32(0)
+        @test Array(x) == [false, false]
+    end
+
     # preserving buffer types
     let x = Metal.zeros(Float32, 1; storage=Metal.SharedStorage)
         y = x .+ 1
