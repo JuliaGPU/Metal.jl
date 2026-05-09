@@ -263,20 +263,6 @@ function CachedFFTGraph(key::FFTGraphKey)
     CachedFFTGraph(graph, placeholder, result)
 end
 
-# Get or create cached graph
-function _get_cached_graph!(graph_cache_lock, graph_cache, key::FFTGraphKey)
-    # Fast path: check cache without lock (safe for reads)
-    cached = get(graph_cache, key, nothing)
-    if cached !== nothing
-        return cached
-    end
-
-    # Slow path: acquire lock and build graph
-    @lock graph_cache_lock get!(graph_cache, key) do
-        CachedFFTGraph(key)
-    end
-end
-
 # Thread-safe graph cache with lock
 const _fft_graph_cache = Dict{FFTGraphKey, CachedFFTGraph}()
 const _fft_graph_cache_lock = ReentrantLock()
@@ -284,7 +270,9 @@ const _fft_graph_cache_lock = ReentrantLock()
 @autoreleasepool function _fft!(p::MtlFFTPlan{T, S, backward, inplace, N}, x, y) where {T <: FFTNumber, S <: FFTNumber, N, backward, inplace}
     # Get or create cached graph
     key = FFTGraphKey(p)
-    cached = _get_cached_graph!(_fft_graph_cache_lock, _fft_graph_cache, key)
+    cached = @lock _fft_graph_cache_lock get!(_fft_graph_cache, key) do
+        CachedFFTGraph(key)
+    end
 
     # Build feed and result dictionaries with current data
     feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
