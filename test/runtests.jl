@@ -135,6 +135,13 @@ function test_worker(name, init_worker_code)
         return addworker(; env=["METAL_CAPTURE_ENABLED"=>"1"], init_worker_code)
     end
 
+    if name == "examples/flopscomp"
+        # Single-use worker since loading AppleAccelerate
+        # overloads some base functionality with extra
+        # limitations (e.g. FFTs must be powers of 2)
+        return addworker(; init_worker_code)
+    end
+
     return nothing
 end
 
