@@ -61,7 +61,7 @@ steps:
           setup:
             julia:
               - "1.13-nightly"
-              - "nightly"
+              # - "nightly" # uncomment once dependencies support current llvm
 
   # special tests
   - group: ":eyes: Special"
