@@ -125,20 +125,6 @@ function CachedMatmulGraph(key::MatmulGraphKey)
     CachedMatmulGraph(graph, placeC, placeA, placeB, castC)
 end
 
-# Get or create cached graph
-function _get_cached_graph!(graph_cache_lock, graph_cache, key::MatmulGraphKey)
-    # Fast path: check cache without lock (safe for reads)
-    cached = get(graph_cache, key, nothing)
-    if cached !== nothing
-        return cached
-    end
-
-    # Slow path: acquire lock and build graph
-    @lock graph_cache_lock get!(graph_cache, key) do
-        CachedMatmulGraph(key)
-    end
-end
-
 # Thread-safe graph cache with lock
 const _matmul_graph_cache = Dict{MatmulGraphKey, CachedMatmulGraph}()
 const _matmul_graph_cache_lock = ReentrantLock()
@@ -147,7 +133,9 @@ const _matmul_graph_cache_lock = ReentrantLock()
                                    transpose_a, transpose_b) where {Tc, Tab, Na, Nb}
     # Get or create cached graph
     key = MatmulGraphKey(a, b, c, alpha, beta, transpose_a, transpose_b)
-    cached = _get_cached_graph!(_matmul_graph_cache_lock, _matmul_graph_cache, key)
+    cached = @lock _matmul_graph_cache_lock get!(_matmul_graph_cache, key) do
+        CachedMatmulGraph(key)
+    end
 
     # Build feed and result dictionaries with current data
     feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
