@@ -187,7 +187,10 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
         job = CompilerJob(source, config)
         cache = GPUCompiler.cache_view(job)
 
-        ci, res = something(lookup(cache, source), compile_metal!(cache, job))
+        # `@something` (not the `something` function) so `compile_metal!` only runs
+        # on a cache miss — otherwise Julia evaluates it eagerly and silently re-runs
+        # the full LLVM compile on every launch.
+        ci, res = @something lookup(cache, source) compile_metal!(cache, job)
 
         # Resolve the MTLComputePipelineState for the active device. Linear scan
         # over the session-local cache; almost always n=1, one `===` compare.
