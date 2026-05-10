@@ -7,16 +7,30 @@ const MetalCompilerJob = CompilerJob{MetalCompilerTarget, MetalCompilerParams}
 """
     MetalResults
 
-Cached compilation results attached to each Metal `CodeInstance`. `metallib` and `entry`
-are session-portable (serialized via package precompilation through CompilerCaching);
-`pipeline` is a session-local handle that's re-linked from `metallib` after a fresh
-session load.
+Cached compilation results attached to each Metal `CodeInstance`. Fields are populated
+through the compile pipeline: `bitcode` after LLVM codegen (for runtime functions, which
+GPUCompiler links into the kernel module — see `GPUCompiler.bitcode`/`bitcode!`),
+`metallib` + `entry` after AIR downgrade + library wrap, `pipeline` after the
+session-local link onto an `MTLDevice`. The first three are session-portable (cached
+through precompilation); `pipeline` is session-local.
 """
 mutable struct MetalResults
+    bitcode::Union{Nothing, Tuple{Bool, Vector{UInt8}}}  # (opaque_pointers, bytes)
     metallib::Union{Nothing, Vector{UInt8}}
     entry::Union{Nothing, String}
     pipeline::Any  # MTLComputePipelineState — populated lazily, not serialized
-    MetalResults() = new(nothing, nothing, nothing)
+    MetalResults() = new(nothing, nothing, nothing, nothing)
+end
+
+function GPUCompiler.bitcode(r::MetalResults, opaque_pointers::Bool)
+    r.bitcode === nothing && return nothing
+    stored, bytes = r.bitcode
+    return stored === opaque_pointers ? bytes : nothing
+end
+
+function GPUCompiler.bitcode!(r::MetalResults, bytes::Vector{UInt8}, opaque_pointers::Bool)
+    r.bitcode = (opaque_pointers, bytes)
+    return nothing
 end
 
 GPUCompiler.runtime_module(::MetalCompilerJob) = Metal
