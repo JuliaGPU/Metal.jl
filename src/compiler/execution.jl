@@ -181,17 +181,28 @@ the function changes, or when different types or keyword arguments are provided.
 """
 function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
     Base.@lock mtlfunction_lock begin
-        config = compiler_config(device(); name, kwargs...)::MetalCompilerConfig
+        dev = device()
+        config = compiler_config(dev; name, kwargs...)::MetalCompilerConfig
         source = methodinstance(F, tt)
         job = CompilerJob(source, config)
         cache = GPUCompiler.cache_view(job)
 
         ci, res = something(lookup(cache, source), compile_metal!(cache, job))
-        if res.pipeline === nothing
-            res.pipeline = link_pipeline(res.metallib::Vector{UInt8},
-                                         res.entry::String)
+
+        # Resolve the MTLComputePipelineState for the active device. Linear scan
+        # over the session-local cache; almost always n=1, one `===` compare.
+        pipeline = nothing
+        @inbounds for (cached_dev, cached_pipeline) in res.pipelines
+            if cached_dev === dev
+                pipeline = cached_pipeline
+                break
+            end
         end
-        pipeline = res.pipeline::MTLComputePipelineState
+        if pipeline === nothing
+            pipeline = link_pipeline(dev, res.metallib::Vector{UInt8},
+                                     res.entry::String)
+            push!(res.pipelines, (dev, pipeline))
+        end
 
         h = hash(pipeline, hash(f, hash(tt)))
         get!(_kernel_instances, h) do

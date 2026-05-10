@@ -10,16 +10,24 @@ const MetalCompilerJob = CompilerJob{MetalCompilerTarget, MetalCompilerParams}
 Cached compilation results attached to each Metal `CodeInstance`. Fields are populated
 through the compile pipeline: `bitcode` after LLVM codegen (for runtime functions, which
 GPUCompiler links into the kernel module — see `GPUCompiler.bitcode`/`bitcode!`),
-`metallib` + `entry` after AIR downgrade + library wrap, `pipeline` after the
+`metallib` + `entry` after AIR downgrade + library wrap, and `pipelines` after the
 session-local link onto an `MTLDevice`. The first three are session-portable (cached
-through precompilation); `pipeline` is session-local.
+through precompilation); `pipelines` is session-local.
+
+`pipelines` is a small linear cache of `(MTLDevice, MTLComputePipelineState)` pairs.
+The cache partition (via `GPUCompiler.cache_owner`) already covers the macOS / AIR /
+Metal versions that affect codegen, so the only runtime-visible dimension left is the
+`MTLDevice` that owns the linked pipeline state. A linear scan with `===` is fastest in
+the common case (n=1, single device per process) and remains cheap when multiple GPUs
+are addressed (e.g. integrated + discrete on a Mac).
 """
 mutable struct MetalResults
     bitcode::Union{Nothing, Tuple{Bool, Vector{UInt8}}}  # (opaque_pointers, bytes)
     metallib::Union{Nothing, Vector{UInt8}}
     entry::Union{Nothing, String}
-    pipeline::Any  # MTLComputePipelineState — populated lazily, not serialized
-    MetalResults() = new(nothing, nothing, nothing, nothing)
+    pipelines::Vector{Tuple{MTLDevice, MTLComputePipelineState}}  # session-local
+    MetalResults() = new(nothing, nothing, nothing,
+                         Tuple{MTLDevice, MTLComputePipelineState}[])
 end
 
 function GPUCompiler.bitcode(r::MetalResults, opaque_pointers::Bool)
@@ -260,12 +268,11 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
     return (; metallib, entry)
 end
 
-# link the metallib into a session-local pipeline state on the active device.
-@autoreleasepool function link_pipeline(metallib::Vector{UInt8}, entry::String)
+# link the metallib into a session-local pipeline state on the given device.
+@autoreleasepool function link_pipeline(dev::MTLDevice, metallib::Vector{UInt8}, entry::String)
     @signpost_event log=log_compiler() "Link" entry
 
     @signpost_interval log=log_compiler() "Instantiate compute pipeline" begin
-        dev = device()
         lib = MTLLibraryFromData(dev, metallib)
         fun = MTLFunction(lib, entry)
         try
