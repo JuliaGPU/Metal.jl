@@ -3,6 +3,7 @@ module Metal
 using GPUArrays
 using Adapt
 using GPUCompiler
+using CompilerCaching: CacheView, lookup, results
 using GPUToolbox
 using LLVM
 using LLVM.Interop

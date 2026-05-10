@@ -4,11 +4,28 @@ struct MetalCompilerParams <: AbstractCompilerParams end
 const MetalCompilerConfig = CompilerConfig{MetalCompilerTarget, MetalCompilerParams}
 const MetalCompilerJob = CompilerJob{MetalCompilerTarget, MetalCompilerParams}
 
+"""
+    MetalResults
+
+Cached compilation results attached to each Metal `CodeInstance`. `metallib` and `entry`
+are session-portable (serialized via package precompilation through CompilerCaching);
+`pipeline` is a session-local handle that's re-linked from `metallib` after a fresh
+session load.
+"""
+mutable struct MetalResults
+    metallib::Union{Nothing, Vector{UInt8}}
+    entry::Union{Nothing, String}
+    pipeline::Any  # MTLComputePipelineState — populated lazily, not serialized
+    MetalResults() = new(nothing, nothing, nothing)
+end
+
 GPUCompiler.runtime_module(::MetalCompilerJob) = Metal
 
 GPUCompiler.method_table(::MetalCompilerJob) = method_table
 
 GPUCompiler.kernel_state_type(job::MetalCompilerJob) = KernelState
+
+GPUCompiler.results_type(::MetalCompilerJob) = MetalResults
 
 function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
                                     mod::LLVM.Module, entry::LLVM.Function)
@@ -115,18 +132,7 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
 end
 
 
-## compiler implementation (cache, configure, compile, and link)
-
-# cache of compilation caches, per device
-const _compiler_caches = Dict{MTLDevice, Dict{Any, Any}}()
-function compiler_cache(ctx::MTLDevice)
-    cache = get(_compiler_caches, ctx, nothing)
-    if cache === nothing
-        cache = Dict{Any, Any}()
-        _compiler_caches[ctx] = cache
-    end
-    return cache
-end
+## compiler implementation (configure, compile, and link)
 
 # cache of compiler configurations, per device (but additionally configurable via kwargs)
 const _toolchain = Ref{Any}()
@@ -163,12 +169,13 @@ end
     CompilerConfig(target, params; kernel, name, always_inline)
 end
 
-# compile to executable machine code
-function compile(@nospecialize(job::CompilerJob))
+# run inference + LLVM codegen, downgrade to AIR, wrap in a Metal library.
+# returns `(metallib::Vector{UInt8}, entry::String)`, both session-portable so they
+# survive precompilation when stored on a cached `CodeInstance`.
+function compile_to_metallib(@nospecialize(job::CompilerJob))
     @signpost_event log=log_compiler() "Compile" "Job=$job"
 
     @signpost_interval log=log_compiler() "Generate LLVM IR" begin
-        # TODO: on 1.9, this actually creates a context. cache those.
         ir, entry = JuliaContext() do ctx
             mod, meta = GPUCompiler.compile(:llvm, job)
             string(mod), LLVM.name(meta.entry)
@@ -176,23 +183,22 @@ function compile(@nospecialize(job::CompilerJob))
     end
 
     @signpost_interval log=log_compiler() "Downgrade to AIR" begin
-        # generate AIR
         air = let
             input = Pipe()
             output = Pipe()
-            log = Pipe()
+            errlog = Pipe()
 
             cmd = `$(LLVMDowngrader_jll.llvm_as()) --bitcode-version=5.0 -o -`
-            proc = run(pipeline(cmd, stdout=output, stderr=log, stdin=input); wait=false)
+            proc = run(pipeline(cmd, stdout=output, stderr=errlog, stdin=input); wait=false)
             close(output.in)
-            close(log.in)
+            close(errlog.in)
 
             writer = @async begin
                 write(input, ir)
                 close(input)
             end
             reader = @async read(output)
-            logger = @async read(log, String)
+            logger = @async read(errlog, String)
 
             try
                 wait(proc)
@@ -237,43 +243,31 @@ function compile(@nospecialize(job::CompilerJob))
         end
     end
 
-    return (; ir, air, metallib, entry)
+    return (; metallib, entry)
 end
 
-# link into an executable kernel
-@autoreleasepool function link(@nospecialize(job::CompilerJob), compiled)
-    @signpost_event log=log_compiler() "Link" "Job=$job"
+# link the metallib into a session-local pipeline state on the active device.
+@autoreleasepool function link_pipeline(metallib::Vector{UInt8}, entry::String)
+    @signpost_event log=log_compiler() "Link" entry
 
     @signpost_interval log=log_compiler() "Instantiate compute pipeline" begin
         dev = device()
-        lib = MTLLibraryFromData(dev, compiled.metallib)
-        fun = MTLFunction(lib, compiled.entry)
-        pipeline_state = try
-            MTLComputePipelineState(dev, fun)
+        lib = MTLLibraryFromData(dev, metallib)
+        fun = MTLFunction(lib, entry)
+        try
+            return MTLComputePipelineState(dev, fun)
         catch err
             isa(err, NSError) || rethrow()
             retain(err)
 
             # the back-end compiler likely failed
-            # XXX: check more accurately? the error domain doesn't help much here
-            ir_file = tempname(cleanup=false) * ".ll"
-            write(ir_file, compiled.ir)
-            air_file = tempname(cleanup=false) * ".air"
-            write(air_file, compiled.air)
             metallib_file = tempname(cleanup=false) * ".metallib"
-            write(metallib_file, compiled.metallib)
+            write(metallib_file, metallib)
             if parse(Bool, get(ENV, "BUILDKITE", "false"))
-                run(`buildkite-agent artifact upload $(ir_file)`)
-                run(`buildkite-agent artifact upload $(air_file)`)
                 run(`buildkite-agent artifact upload $(metallib_file)`)
             end
             error("""Compilation to native code failed; see below for details.
-                     If you think this is a bug, please file an issue and attach the following files:
-                     - $(ir_file)
-                     - $(air_file)
-                     - $(metallib_file)""")
+                     If you think this is a bug, please file an issue and attach $(metallib_file)""")
         end
     end
-
-    pipeline_state
 end

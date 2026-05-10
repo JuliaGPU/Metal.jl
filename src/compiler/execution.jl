@@ -180,25 +180,36 @@ in a hot path without degrading performance. New code will be generated automati
 the function changes, or when different types or keyword arguments are provided.
 """
 function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
-    dev = device()
     Base.@lock mtlfunction_lock begin
-        # compile the function
-        cache = compiler_cache(dev)
+        config = compiler_config(device(); name, kwargs...)::MetalCompilerConfig
         source = methodinstance(F, tt)
-        config = compiler_config(dev; name, kwargs...)::MetalCompilerConfig
-        pipeline = GPUCompiler.cached_compilation(cache, source, config, compile, link)
+        job = CompilerJob(source, config)
+        cache = GPUCompiler.cache_view(job)
 
-        # create a callable object that captures the function instance. we don't need to think
-        # about world age here, as GPUCompiler already does and will return a different object
-        h = hash(pipeline, hash(f, hash(tt)))
-        kernel = get(_kernel_instances, h, nothing)
-        if kernel === nothing
-            # create the kernel state object
-            kernel = HostKernel{F,tt}(f, pipeline)
-            _kernel_instances[h] = kernel
+        ci, res = something(lookup(cache, source), compile_metal!(cache, job))
+        if res.pipeline === nothing
+            res.pipeline = link_pipeline(res.metallib::Vector{UInt8},
+                                         res.entry::String)
         end
-        return kernel::HostKernel{F,tt}
+        pipeline = res.pipeline::MTLComputePipelineState
+
+        h = hash(pipeline, hash(f, hash(tt)))
+        get!(_kernel_instances, h) do
+            HostKernel{F,tt}(f, pipeline)
+        end::HostKernel{F,tt}
     end
+end
+
+# Run inference and codegen for `job`, then populate the cached `MetalResults` with the
+# session-portable artifacts. The `CodeInstance` is created during inference inside
+# `GPUCompiler.compile` (which uses the same owner-partitioned `CacheView`), and gets a
+# fresh `MetalResults()` attached via `@setup_caching`'s `finish!` hook.
+function compile_metal!(cache::CacheView, @nospecialize(job::CompilerJob))
+    metallib, entry = compile_to_metallib(job)
+    ci = get(cache, job.source, nothing)::Core.CodeInstance
+    res = results(cache, ci)::MetalResults
+    res.metallib, res.entry = metallib, entry
+    return (ci, res)
 end
 
 # cache of kernel instances
