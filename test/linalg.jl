@@ -1,3 +1,5 @@
+using Test, Metal
+
 using LinearAlgebra, ScopedValues
 
 if MPS.is_supported(device())

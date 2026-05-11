@@ -55,7 +55,7 @@ function MPSGraphTensorData(buffer::MTLBuffer, shape::MPSShape, dataType, rowByt
 end
 MPSGraphTensorData(matrix::MtlArray{T}) where T = MPSGraphTensorData(matrix.data[], convert(MPSShape, reverse(size(matrix))), T)
 
-function MPSGraphTensorData(matrix::MPSMatrix)
+@objcmethod function MPSGraphTensorData(matrix::KindOf{MPSMatrix})
     obj = @objc [MPSGraphTensorData alloc]::id{MPSGraphTensorData}
     tensor = MPSGraphTensorData(obj)
     finalizer(release, tensor)
@@ -63,7 +63,7 @@ function MPSGraphTensorData(matrix::MPSMatrix)
     return tensor
 end
 
-function MPSGraphTensorData(matrix::MPSMatrix, rank)
+@objcmethod function MPSGraphTensorData(matrix::KindOf{MPSMatrix}, rank)
     1 <= rank <= 16 || throw(ArgumentError("`rank` must be between 1 and 16 inclusive"))
 
     obj = @objc [MPSGraphTensorData alloc]::id{MPSGraphTensorData}
@@ -74,7 +74,7 @@ function MPSGraphTensorData(matrix::MPSMatrix, rank)
     return tensor
 end
 
-function MPSGraphTensorData(vector::MPSVector)
+@objcmethod function MPSGraphTensorData(vector::KindOf{MPSVector})
     obj = @objc [MPSGraphTensorData alloc]::id{MPSGraphTensorData}
     tensor = MPSGraphTensorData(obj)
     finalizer(release, tensor)
@@ -82,7 +82,7 @@ function MPSGraphTensorData(vector::MPSVector)
     return tensor
 end
 
-function MPSGraphTensorData(vector::MPSVector, rank)
+@objcmethod function MPSGraphTensorData(vector::KindOf{MPSVector}, rank)
     1 <= rank <= 16 || throw(ArgumentError("`rank` must be between 1 and 16 inclusive"))
 
     obj = @objc [MPSGraphTensorData alloc]::id{MPSGraphTensorData}

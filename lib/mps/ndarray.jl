@@ -43,29 +43,29 @@ export MPSNDArray
 # @objcwrapper immutable=false MPSNDArray <: NSObject
 
 @static if Metal.is_macos(v"15")
-    function userBuffer(ndarr::MPSNDArray)::Union{Nothing, MTLBuffer}
+    @objcmethod function userBuffer(ndarr::KindOf{MPSNDArray})::Union{Nothing, MTLBuffer}
         res = @objc [ndarr::id{MPSNDArray} userBuffer]::id{MTLBuffer}
         return res == nil ? nothing : MTLBuffer(res)
     end
 end
 
-function resourceSize(ndarr::MPSNDArray)
+@objcmethod function resourceSize(ndarr::KindOf{MPSNDArray})
     return @objc [ndarr::id{MPSNDArray} resourceSize]::NSUInteger
 end
 
-function descriptor(ndarr::MPSNDArray)::MPSNDArrayDescriptor
+@objcmethod function descriptor(ndarr::KindOf{MPSNDArray})::MPSNDArrayDescriptor
     res = @objc [ndarr::id{MPSNDArray} descriptor]::id{MPSNDArrayDescriptor}
     return res == nil ? nothing : MPSNDArrayDescriptor(res)
 end
 
-function Base.size(ndarr::MPSNDArray)
+@objcmethod function Base.size(ndarr::KindOf{MPSNDArray})
     ndims = Int(ndarr.numberOfDimensions)
     Tuple([Int(lengthOfDimension(ndarr,i)) for i in 0:ndims-1])
 end
 
 # @objcwrapper immutable=false MPSTemporaryNDArray <: MPSNDArray
 
-function MPSTemporaryNDArray(cmdbuf::MTLCommandBuffer, descriptor::MPSNDArrayDescriptor)
+@objcmethod function MPSTemporaryNDArray(cmdbuf::KindOf{MTLCommandBuffer}, descriptor::MPSNDArrayDescriptor)
     obj = @objc [MPSTemporaryNDArray temporaryNDArrayWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                  descriptor:descriptor::id{MPSNDArrayDescriptor}]::id{MPSTemporaryNDArray}
     return MPSTemporaryNDArray(obj)
@@ -126,7 +126,7 @@ function Metal.MtlArray(ndarr::MPSNDArray; storage = Metal.DefaultStorageMode, a
     return exportToMtlArray!(arr, ndarr; async)
 end
 
-function exportToMtlArray!(arr::MtlArray{T}, ndarr::MPSNDArray; async=false) where T
+@objcmethod function exportToMtlArray!(arr::MtlArray{T}, ndarr::KindOf{MPSNDArray}; async=false) where T
     dev = device(arr)
 
     cmdBuf = MTLCommandBuffer(global_queue(dev)) do cmdBuf
@@ -138,13 +138,13 @@ function exportToMtlArray!(arr::MtlArray{T}, ndarr::MPSNDArray; async=false) whe
 end
 
 # rowStrides in Bytes
-exportDataWithCommandBuffer(ndarr::MPSNDArray, cmdbuf::MTLCommandBuffer, toBuffer, destinationDataType, offset, rowStrides) =
+@objcmethod exportDataWithCommandBuffer(ndarr::KindOf{MPSNDArray}, cmdbuf::KindOf{MTLCommandBuffer}, toBuffer, destinationDataType, offset, rowStrides) =
     GC.@preserve rowStrides @objc [ndarr::MPSNDArray exportDataWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                              toBuffer:toBuffer::id{MTLBuffer}
                              destinationDataType:destinationDataType::MPSDataType
                              offset:offset::NSUInteger
                              rowStrides:pointer(rowStrides)::Ptr{NSInteger}]::Nothing
-exportDataWithCommandBuffer(ndarr::MPSNDArray, cmdbuf::MTLCommandBuffer, toBuffer, destinationDataType, offset) =
+@objcmethod exportDataWithCommandBuffer(ndarr::KindOf{MPSNDArray}, cmdbuf::KindOf{MTLCommandBuffer}, toBuffer, destinationDataType, offset) =
     @objc [ndarr::MPSNDArray exportDataWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                              toBuffer:toBuffer::id{MTLBuffer}
                              destinationDataType:destinationDataType::MPSDataType
@@ -152,13 +152,13 @@ exportDataWithCommandBuffer(ndarr::MPSNDArray, cmdbuf::MTLCommandBuffer, toBuffe
                              rowStrides:nil::id{ObjectiveC.Object}]::Nothing
 
 # rowStrides in Bytes
-importDataWithCommandBuffer!(ndarr::MPSNDArray, cmdbuf::MTLCommandBuffer, fromBuffer, sourceDataType, offset, rowStrides) =
+@objcmethod importDataWithCommandBuffer!(ndarr::KindOf{MPSNDArray}, cmdbuf::KindOf{MTLCommandBuffer}, fromBuffer, sourceDataType, offset, rowStrides) =
     GC.@preserve rowStrides @objc [ndarr::MPSNDArray importDataWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                              fromBuffer:fromBuffer::id{MTLBuffer}
                              sourceDataType:sourceDataType::MPSDataType
                              offset:offset::NSUInteger
                              rowStrides:pointer(rowStrides)::Ptr{NSInteger}]::Nothing
-importDataWithCommandBuffer!(ndarr::MPSNDArray, cmdbuf::MTLCommandBuffer, fromBuffer, sourceDataType, offset) =
+@objcmethod importDataWithCommandBuffer!(ndarr::KindOf{MPSNDArray}, cmdbuf::KindOf{MTLCommandBuffer}, fromBuffer, sourceDataType, offset) =
      @objc [ndarr::MPSNDArray importDataWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                              fromBuffer:fromBuffer::id{MTLBuffer}
                              sourceDataType:sourceDataType::MPSDataType
@@ -170,14 +170,14 @@ importDataWithCommandBuffer!(ndarr::MPSNDArray, cmdbuf::MTLCommandBuffer, fromBu
 # importDataWithCommandBuffer(fromImages, offset)
 
 # 0-indexed
-lengthOfDimension(ndarr::MPSNDArray, dimensionIndex) =
+@objcmethod lengthOfDimension(ndarr::KindOf{MPSNDArray}, dimensionIndex) =
     @objc [ndarr::MPSNDArray lengthOfDimension:dimensionIndex::NSUInteger]::UInt
 
 # TODO
 # readBytes(strideBytes)
 # writeBytes(strideBytes)
 
-synchronizeOnCommandBuffer(ndarr::MPSNDArray, q::MTLCommandBuffer) =
+@objcmethod synchronizeOnCommandBuffer(ndarr::KindOf{MPSNDArray}, q::KindOf{MTLCommandBuffer}) =
     @objc [ndarr::MPSNDArray synchronizeOnCommandBuffer:q::id{MTLCommandBuffer}]::Nothing
 
 
@@ -198,12 +198,12 @@ function MPSNDArrayMultiaryKernel(device, sourceCount)
     return obj
 end
 
-function encode!(cmdbuf::MTLCommandBuffer, kernel::K, sourceArrays) where {K<:MPSNDArrayMultiaryKernel}
-    @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayMultiaryKernel}, sourceArrays::AbstractVector)
+    @objc [kernel::id{MPSNDArrayMultiaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                      sourceArrays:sourceArrays::id{NSArray}]::id{MPSNDArray}
 end
-function encode!(cmdbuf::MTLCommandBuffer, kernel::K, sourceArrays, destinationArray) where {K<:MPSNDArrayMultiaryKernel}
-    @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayMultiaryKernel}, sourceArrays::AbstractVector, destinationArray::KindOf{MPSNDArray})
+    @objc [kernel::id{MPSNDArrayMultiaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                      sourceArrays:sourceArrays::id{NSArray}
                                      destinationArray:destinationArray::id{MPSNDArray}]::Nothing
 end
@@ -233,12 +233,12 @@ function MPSNDArrayUnaryKernel(device)
     return obj
 end
 
-function encode!(cmdbuf::MTLCommandBuffer, kernel::K, sourceArray) where {K<:MPSNDArrayUnaryKernel}
-    @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayUnaryKernel}, sourceArray::KindOf{MPSNDArray})
+    @objc [kernel::id{MPSNDArrayUnaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                      sourceArray:sourceArray::id{MPSNDArray}]::id{MPSNDArray}
 end
-function encode!(cmdbuf::MTLCommandBuffer, kernel::K, sourceArray, destinationArray) where {K<:MPSNDArrayUnaryKernel}
-    @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayUnaryKernel}, sourceArray::KindOf{MPSNDArray}, destinationArray::KindOf{MPSNDArray})
+    @objc [kernel::id{MPSNDArrayUnaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                      sourceArray:sourceArray::id{MPSNDArray}
                                      destinationArray:destinationArray::id{MPSNDArray}]::Nothing
 end
@@ -268,13 +268,13 @@ function MPSNDArrayBinaryKernel(device)
     return obj
 end
 
-function encode!(cmdbuf::MTLCommandBuffer, kernel::K, primarySourceArray, secondarySourceArray) where {K<:MPSNDArrayBinaryKernel}
-    @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayBinaryKernel}, primarySourceArray::KindOf{MPSNDArray}, secondarySourceArray::KindOf{MPSNDArray})
+    @objc [kernel::id{MPSNDArrayBinaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                      secondarySourceArray:secondarySourceArray::id{MPSNDArray}
                                      primarySourceArray:primarySourceArray::id{MPSNDArray}]::id{MPSNDArray}
 end
-function encode!(cmdbuf::MTLCommandBuffer, kernel::K, primarySourceArray, secondarySourceArray, destinationArray) where {K<:MPSNDArrayBinaryKernel}
-    @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayBinaryKernel}, primarySourceArray::KindOf{MPSNDArray}, secondarySourceArray::KindOf{MPSNDArray}, destinationArray::KindOf{MPSNDArray})
+    @objc [kernel::id{MPSNDArrayBinaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                      primarySourceArray:primarySourceArray::id{MPSNDArray}
                                      secondarySourceArray:secondarySourceArray::id{MPSNDArray}
                                      destinationArray:destinationArray::id{MPSNDArray}]::Nothing

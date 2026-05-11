@@ -40,12 +40,12 @@ end
 
 # @objcwrapper immutable=false MPSMatrixRandom <: MPSKernel
 
-function encode!(cmdbuf::MTLCommandBuffer, kernel::K, destinationMatrix::MPSMatrix) where {K<:MPSMatrixRandom}
-    @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSMatrixRandom}, destinationMatrix::KindOf{MPSMatrix})
+    @objc [kernel::id{MPSMatrixRandom} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                          destinationMatrix:destinationMatrix::id{MPSMatrix}]::Nothing
 end
-function encode!(cmdbuf::MTLCommandBuffer, kernel::K, destinationVector::MPSVector) where {K<:MPSMatrixRandom}
-    @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSMatrixRandom}, destinationVector::KindOf{MPSVector})
+    @objc [kernel::id{MPSMatrixRandom} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                          destinationVector:destinationVector::id{MPSVector}]::Nothing
 end
 
@@ -83,11 +83,12 @@ for R in [:MPSMatrixRandomMTGP32, :MPSMatrixRandomPhilox]
     end
 end
 
-synchronize_state(kern::MPSMatrixRandomMTGP32, cmdbuf::MTLCommandBuffer) =
+@objcmethod synchronize_state(kern::MPSMatrixRandomMTGP32, cmdbuf::KindOf{MTLCommandBuffer}) =
     @objc [kern::id{MPSMatrixRandomMTGP32} synchronizeStateOnCommandBuffer:cmdbuf::id{MTLCommandBuffer}]::Nothing
 
 
-@inline function _mpsmat_rand!(randkern::MPSMatrixRandom, dest::MtlArray{T}, ::Type{T2};
+@objcmethod @inline function _mpsmat_rand!(randkern::KindOf{MPSMatrixRandom},
+                        dest::MtlArray{T}, ::Type{T2};
                         queue::MTLCommandQueue = global_queue(randkern.device),
                         async::Bool=false) where {T,T2}
     bytesize = sizeof(dest)

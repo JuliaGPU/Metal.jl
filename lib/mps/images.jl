@@ -2,8 +2,8 @@
 
 # @objcwrapper immutable=false MPSUnaryImageKernel <: MPSKernel
 
-function encode!(cmdbuf::MTLCommandBuffer, kernel::K, sourceTexture::MTLTexture, destinationTexture::MTLTexture) where {K<:MPSUnaryImageKernel}
-    @objc [kernel::id{K} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSUnaryImageKernel}, sourceTexture::MTLTexture, destinationTexture::MTLTexture)
+    @objc [kernel::id{MPSUnaryImageKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                      sourceTexture:sourceTexture::id{MTLTexture}
                                      destinationTexture:destinationTexture::id{MTLTexture}]::Nothing
 end

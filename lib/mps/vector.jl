@@ -59,7 +59,7 @@ end
 
 # @objcwrapper immutable=false MPSTemporaryVector <: MPSVector
 
-function MPSTemporaryVector(commandBuffer::MTLCommandBuffer, descriptor::MPSVectorDescriptor)
+@objcmethod function MPSTemporaryVector(commandBuffer::KindOf{MTLCommandBuffer}, descriptor::MPSVectorDescriptor)
     obj = @objc [MPSTemporaryVector temporaryVectorWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}
                               descriptor:descriptor::id{MPSVectorDescriptor}]::id{MPSTemporaryVector}
     return MPSTemporaryVector(obj)
@@ -85,7 +85,7 @@ function MPSMatrixVectorMultiplication(dev, transpose, rows, columns, alpha, bet
     return obj
 end
 
-function encode!(cmdbuf::MTLCommandBuffer, matvecmul::MPSMatrixVectorMultiplication, inputMatrix, inputVector, resultVector)
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, matvecmul::MPSMatrixVectorMultiplication, inputMatrix, inputVector, resultVector)
     @objc [matvecmul::id{MPSMatrixVectorMultiplication} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                                         inputMatrix:inputMatrix::id{MPSMatrix}
                                                         inputVector:inputVector::id{MPSVector}
