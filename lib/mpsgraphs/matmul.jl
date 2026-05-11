@@ -15,17 +15,18 @@ Creates a default MPSGraphExecutionDescriptor with a MPSGraphCompilationDescript
         execDesc
     end
 else
-    const _default_exec_desc::Ref{MPSGraphExecutionDescriptor} = Ref{MPSGraphExecutionDescriptor}()
+    const _default_exec_desc = Ref{Union{Nothing,MPSGraphExecutionDescriptor}}(nothing)
     function default_exec_desc()
-        if !isassigned(_default_exec_desc)
+        if _default_exec_desc[] === nothing
             compDesc = MPSGraphCompilationDescriptor()
             # Use optimization level 0 to avoid operations being moved to the neural engine
             compDesc.optimizationLevel = MPSGraphOptimizationLevel0
 
-            _default_exec_desc[] = MPSGraphExecutionDescriptor()
-            _default_exec_desc[].compilationDescriptor = compDesc
+            execDesc = MPSGraphExecutionDescriptor()
+            execDesc.compilationDescriptor = compDesc
+            _default_exec_desc[] = execDesc
         end
-        _default_exec_desc[]
+        _default_exec_desc[]::MPSGraphExecutionDescriptor
     end
 end
 
