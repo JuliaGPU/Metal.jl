@@ -64,7 +64,7 @@ mutable struct MtlFFTPlan{T <: FFTNumber, S <: FFTNumber, backward, inplace, N, 
 
     function MtlFFTPlan{T, S, backward, inplace, N, R}(input_size::NTuple{N, Int}, output_size::NTuple{N, Int}, region::NTuple{R, Int}) where {T <: FFTNumber, S <: FFTNumber, backward, inplace, N, R}
         # Validate region
-        if any(diff(collect(region)) .< 1)
+        if any(i -> region[i] >= region[i+1], 1:R-1)
             throw(ArgumentError("region must be an increasing sequence"))
         end
         if any(region .< 1 .|| region .> N)

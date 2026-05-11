@@ -83,12 +83,7 @@ rtol(::Type{Float16}) = 1.0e-2
 rtol(::Type{Float32}) = 1.0e-5
 rtol(::Type{Float64}) = 1.0e-12
 rtol(::Type{I}) where {I<:Integer} = rtol(Metal.mtlfloat(I))
-atol(::Type{Float16}) = 1.0e-3
-atol(::Type{Float32}) = 1.0e-8
-atol(::Type{Float64}) = 1.0e-15
-atol(::Type{I}) where {I<:Integer} = atol(Metal.mtlfloat(I))
 rtol(::Type{Complex{T}}) where {T} = rtol(T)
-atol(::Type{Complex{T}}) where {T} = atol(T)
 # Test dimensions
 N1 = 8
 N2 = 32
@@ -106,24 +101,24 @@ if MPS.is_supported(device())
         p = @inferred plan_fft(d_X)
         d_Y = p * d_X
         Y = Array(d_Y)
-        @test isapprox(Y, fftw_X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Y, fftw_X, rtol = rtol(T))
 
         # Inverse FFT
         pinv = plan_ifft(d_Y)
         d_Z = pinv * d_Y
         Z = Array(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Z, X, rtol = rtol(T))
 
         pinv2 = inv(p)
         d_Z = pinv2 * d_Y
         Z = Array(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Z, X, rtol = rtol(T))
 
         # Backward FFT (unnormalized inverse)
         pinvb = @inferred plan_bfft(d_Y)
         d_Z = pinvb * d_Y
         Z = Array(d_Z) ./ length(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Z, X, rtol = rtol(T))
     end
 
     function complex_in_place(X::AbstractArray{T, N}) where {T <: Complex, N}
@@ -134,20 +129,20 @@ if MPS.is_supported(device())
         p = @inferred plan_fft!(d_X)
         p * d_X
         Y = Array(d_X)
-        @test isapprox(Y, fftw_X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Y, fftw_X, rtol = rtol(T))
 
         # In-place inverse FFT
         pinv = plan_ifft!(d_X)
         pinv * d_X
         Z = Array(d_X)
-        @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Z, X, rtol = rtol(T))
 
         # Reset and test bfft!
         p * d_X
         pinvb = @inferred plan_bfft!(d_X)
         pinvb * d_X
         Z = Array(d_X) ./ length(X)
-        @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Z, X, rtol = rtol(T))
     end
 
     function complex_batched(X::AbstractArray{T, N}, region) where {T <: Complex, N}
@@ -160,16 +155,16 @@ if MPS.is_supported(device())
         @test_throws ArgumentError p * d_X2
 
         Y = Array(d_Y)
-        @test isapprox(Y, fftw_X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Y, fftw_X, rtol = rtol(T))
 
         pinv = plan_ifft(d_Y, region)
         d_Z = pinv * d_Y
         Z = Array(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Z, X, rtol = rtol(T))
 
         ldiv!(d_Z, p, d_Y)
         Z = collect(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Z, X, rtol = rtol(T))
     end
 
     @testset "Complex FFT" begin
@@ -180,9 +175,11 @@ if MPS.is_supported(device())
                     dims = ntuple(i -> sz, n)
                     @test testf(fft!, rand(T, dims))
                     @test testf(ifft!, rand(T, dims))
+                    @test testf(bfft!, rand(T, dims))
 
                     @test testf(fft, rand(T, dims))
                     @test testf(ifft, rand(T, dims))
+                    @test testf(bfft, rand(T, dims))
                 end
             end
 
@@ -259,29 +256,29 @@ if MPS.is_supported(device())
         p = @inferred plan_rfft(d_X)
         d_Y = p * d_X
         Y = Array(d_Y)
-        @test isapprox(Y, fftw_X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Y, fftw_X, rtol = rtol(T))
 
         # Inverse rfft
         pinv = plan_irfft(d_Y, size(X, 1))
         d_Z = pinv * d_Y
         Z = Array(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Z, X, rtol = rtol(T))
 
         pinv2 = inv(p)
         d_Z = pinv2 * d_Y
         Z = Array(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Z, X, rtol = rtol(T))
 
         pinv3 = inv(pinv)
         d_W = pinv3 * d_X
         W = Array(d_W)
-        @test isapprox(W, Y, rtol = rtol(T), atol = atol(T))
+        @test isapprox(W, Y, rtol = rtol(T))
 
         # Backward rfft (unnormalized)
         pinvb = @inferred plan_brfft(d_Y, size(X, 1))
         d_Z = pinvb * d_Y
         Z = Array(d_Z) ./ length(X)
-        @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Z, X, rtol = rtol(T))
     end
 
     function real_batched(X::AbstractArray{T, N}, region) where {T <: Real, N}
@@ -291,12 +288,12 @@ if MPS.is_supported(device())
         p = plan_rfft(d_X, region)
         d_Y = p * d_X
         Y = Array(d_Y)
-        @test isapprox(Y, fftw_X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Y, fftw_X, rtol = rtol(T))
 
         pinv = plan_irfft(d_Y, size(X, region[1]), region)
         d_Z = pinv * d_Y
         Z = Array(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Z, X, rtol = rtol(T))
     end
 
     @testset "Real FFT" begin
@@ -358,11 +355,11 @@ if MPS.is_supported(device())
         p = plan_fft(d_X)
         d_Y = p * d_X
         Y = collect(d_Y)
-        @test isapprox(Y, fftw_X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Y, fftw_X, rtol = rtol(T))
 
         d_Y = fft(d_X)
         Y = collect(d_Y)
-        @test isapprox(Y, fftw_X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Y, fftw_X, rtol = rtol(T))
     end
 
     @testset "1D $T" for T in [Complex{Int32}, Complex{Int64}]
@@ -379,11 +376,11 @@ if MPS.is_supported(device())
         p = plan_rfft(d_X)
         d_Y = p * d_X
         Y = collect(d_Y)
-        @test isapprox(Y, fftw_X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Y, fftw_X, rtol = rtol(T))
 
         d_Y = rfft(d_X)
         Y = collect(d_Y)
-        @test isapprox(Y, fftw_X, rtol = rtol(T), atol = atol(T))
+        @test isapprox(Y, fftw_X, rtol = rtol(T))
     end
 
     @testset "1D $T" for T in [Int32, Int64]
