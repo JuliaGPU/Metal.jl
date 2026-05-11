@@ -181,7 +181,7 @@ function MPSMatrixFindTopK(dev, numberOfTopKValues)
     return obj
 end
 
-@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::MPSMatrixFindTopK, inputMatrix, resultIndexMatrix, resultValueMatrix)
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSMatrixFindTopK}, inputMatrix::KindOf{MPSMatrix}, resultIndexMatrix::KindOf{MPSMatrix}, resultValueMatrix::KindOf{MPSMatrix})
     @objc [kernel::id{MPSMatrixFindTopK} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                                       inputMatrix:inputMatrix::id{MPSMatrix}
                                                       resultIndexMatrix:resultIndexMatrix::id{MPSMatrix}
@@ -273,7 +273,7 @@ for f in (:MPSMatrixSoftMax, :MPSMatrixLogSoftMax)
             return obj
         end
 
-        @objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::$(f), inputMatrix, resultMatrix)
+        @objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{$(f)}, inputMatrix::KindOf{MPSMatrix}, resultMatrix::KindOf{MPSMatrix})
             @objc [kernel::id{$(f)} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                     inputMatrix:inputMatrix::id{MPSMatrix}
                                     resultMatrix:resultMatrix::id{MPSMatrix}]::Nothing

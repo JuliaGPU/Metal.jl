@@ -14,7 +14,7 @@ function MPSMatrixDecompositionLU(dev, rows, columns)
     return obj
 end
 
-@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::MPSMatrixDecompositionLU, sourceMatrix, resultMatrix, pivotIndices, status)
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSMatrixDecompositionLU}, sourceMatrix::KindOf{MPSMatrix}, resultMatrix::KindOf{MPSMatrix}, pivotIndices::KindOf{MPSMatrix}, status::KindOf{MTLBuffer})
     @objc [kernel::id{MPSMatrixDecompositionLU} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                                 sourceMatrix:sourceMatrix::id{MPSMatrix}
                                                 resultMatrix:resultMatrix::id{MPSMatrix}
@@ -39,7 +39,7 @@ function MPSMatrixDecompositionCholesky(dev, lower, order)
     return obj
 end
 
-@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::MPSMatrixDecompositionCholesky, sourceMatrix, resultMatrix, status)
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSMatrixDecompositionCholesky}, sourceMatrix::KindOf{MPSMatrix}, resultMatrix::KindOf{MPSMatrix}, status::KindOf{MTLBuffer})
     @objc [kernel::id{MPSMatrixDecompositionCholesky} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                                       sourceMatrix:sourceMatrix::id{MPSMatrix}
                                                       resultMatrix:resultMatrix::id{MPSMatrix}
