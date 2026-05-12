@@ -198,11 +198,11 @@ function MPSNDArrayMultiaryKernel(device, sourceCount)
     return obj
 end
 
-@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayMultiaryKernel}, sourceArrays::AbstractVector)
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayMultiaryKernel}, sourceArrays)
     @objc [kernel::id{MPSNDArrayMultiaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                      sourceArrays:sourceArrays::id{NSArray}]::id{MPSNDArray}
 end
-@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayMultiaryKernel}, sourceArrays::AbstractVector, destinationArray::KindOf{MPSNDArray})
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayMultiaryKernel}, sourceArrays, destinationArray)
     @objc [kernel::id{MPSNDArrayMultiaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                      sourceArrays:sourceArrays::id{NSArray}
                                      destinationArray:destinationArray::id{MPSNDArray}]::Nothing
@@ -233,11 +233,11 @@ function MPSNDArrayUnaryKernel(device)
     return obj
 end
 
-@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayUnaryKernel}, sourceArray::KindOf{MPSNDArray})
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayUnaryKernel}, sourceArray)
     @objc [kernel::id{MPSNDArrayUnaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                      sourceArray:sourceArray::id{MPSNDArray}]::id{MPSNDArray}
 end
-@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayUnaryKernel}, sourceArray::KindOf{MPSNDArray}, destinationArray::KindOf{MPSNDArray})
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayUnaryKernel}, sourceArray, destinationArray)
     @objc [kernel::id{MPSNDArrayUnaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                      sourceArray:sourceArray::id{MPSNDArray}
                                      destinationArray:destinationArray::id{MPSNDArray}]::Nothing
@@ -268,12 +268,12 @@ function MPSNDArrayBinaryKernel(device)
     return obj
 end
 
-@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayBinaryKernel}, primarySourceArray::KindOf{MPSNDArray}, secondarySourceArray::KindOf{MPSNDArray})
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayBinaryKernel}, primarySourceArray, secondarySourceArray)
     @objc [kernel::id{MPSNDArrayBinaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                      secondarySourceArray:secondarySourceArray::id{MPSNDArray}
                                      primarySourceArray:primarySourceArray::id{MPSNDArray}]::id{MPSNDArray}
 end
-@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayBinaryKernel}, primarySourceArray::KindOf{MPSNDArray}, secondarySourceArray::KindOf{MPSNDArray}, destinationArray::KindOf{MPSNDArray})
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSNDArrayBinaryKernel}, primarySourceArray, secondarySourceArray, destinationArray)
     @objc [kernel::id{MPSNDArrayBinaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                      primarySourceArray:primarySourceArray::id{MPSNDArray}
                                      secondarySourceArray:secondarySourceArray::id{MPSNDArray}

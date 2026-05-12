@@ -85,7 +85,7 @@ function MPSMatrixVectorMultiplication(dev, transpose, rows, columns, alpha, bet
     return obj
 end
 
-@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, matvecmul::KindOf{MPSMatrixVectorMultiplication}, inputMatrix::KindOf{MPSMatrix}, inputVector::KindOf{MPSVector}, resultVector::KindOf{MPSVector})
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, matvecmul::KindOf{MPSMatrixVectorMultiplication}, inputMatrix, inputVector, resultVector)
     @objc [matvecmul::id{MPSMatrixVectorMultiplication} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                                         inputMatrix:inputMatrix::id{MPSMatrix}
                                                         inputVector:inputVector::id{MPSVector}

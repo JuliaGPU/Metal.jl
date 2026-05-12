@@ -39,7 +39,7 @@ function MPSMatrixDecompositionCholesky(dev, lower, order)
     return obj
 end
 
-@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSMatrixDecompositionCholesky}, sourceMatrix::KindOf{MPSMatrix}, resultMatrix::KindOf{MPSMatrix}, status::KindOf{MTLBuffer})
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSMatrixDecompositionCholesky}, sourceMatrix, resultMatrix, status)
     @objc [kernel::id{MPSMatrixDecompositionCholesky} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                                       sourceMatrix:sourceMatrix::id{MPSMatrix}
                                                       resultMatrix:resultMatrix::id{MPSMatrix}
