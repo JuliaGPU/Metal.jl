@@ -10,6 +10,7 @@ module MPS
 
 using ..Metal
 using .MTL
+using .MTL: MTLCommandBufferLike, MTLCommandQueueLike
 
 using CEnum
 using ObjectiveC, .Foundation

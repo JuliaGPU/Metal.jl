@@ -30,7 +30,7 @@ function MPSMatrixCopy(dev, copyRows, copyColumns, sourcesAreTransposed, destina
     return obj
 end
 
-@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSMatrixCopy}, copyDescriptor)
+function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSMatrixCopyLike, copyDescriptor)
     @objc [kernel::id{MPSMatrixCopy} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                      copyDescriptor:copyDescriptor::id{MPSMatrixCopyDescriptor}]::Nothing
 end

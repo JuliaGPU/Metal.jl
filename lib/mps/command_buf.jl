@@ -8,12 +8,12 @@
 
 export MPSCommandBuffer
 
-@objcmethod function MPSCommandBuffer(commandBuffer::KindOf{MTLCommandBuffer})
+function MPSCommandBuffer(commandBuffer::MTLCommandBufferLike)
     handle = @objc [MPSCommandBuffer commandBufferWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}]::id{MPSCommandBuffer}
     MPSCommandBuffer(handle)
 end
 
-@objcmethod function MPSCommandBuffer(commandQueue::KindOf{MTLCommandQueue})
+function MPSCommandBuffer(commandQueue::MTLCommandQueueLike)
     handle = @objc [MPSCommandBuffer commandBufferFromCommandQueue:commandQueue::id{MTLCommandQueue}]::id{MPSCommandBuffer}
     MPSCommandBuffer(handle)
 end

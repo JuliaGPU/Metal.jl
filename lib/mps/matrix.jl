@@ -121,7 +121,7 @@ function MPSMatrixMultiplication(dev, transposeLeft, transposeRight, resultRows,
     return obj
 end
 
-@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, matmul::KindOf{MPSMatrixMultiplication}, left, right, result)
+function encode!(cmdbuf::MTLCommandBufferLike, matmul::MPSMatrixMultiplicationLike, left, right, result)
     @objc [matmul::id{MPSMatrixMultiplication} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                                leftMatrix:left::id{MPSMatrix}
                                                rightMatrix:right::id{MPSMatrix}
@@ -181,7 +181,7 @@ function MPSMatrixFindTopK(dev, numberOfTopKValues)
     return obj
 end
 
-@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSMatrixFindTopK}, inputMatrix, resultIndexMatrix, resultValueMatrix)
+function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSMatrixFindTopKLike, inputMatrix, resultIndexMatrix, resultValueMatrix)
     @objc [kernel::id{MPSMatrixFindTopK} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                                       inputMatrix:inputMatrix::id{MPSMatrix}
                                                       resultIndexMatrix:resultIndexMatrix::id{MPSMatrix}
@@ -264,6 +264,7 @@ export MPSMatrixSoftMax, MPSMatrixLogSoftMax, encode!
 # @objcwrapper immutable=false MPSMatrixLogSoftMax <: MPSMatrixSoftMax
 
 for f in (:MPSMatrixSoftMax, :MPSMatrixLogSoftMax)
+    fLike = Symbol(f, :Like)
     @eval begin
         function $(f)(dev)
             kernel = @objc [$(f) alloc]::id{$(f)}
@@ -273,7 +274,7 @@ for f in (:MPSMatrixSoftMax, :MPSMatrixLogSoftMax)
             return obj
         end
 
-        @objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{$(f)}, inputMatrix, resultMatrix)
+        function encode!(cmdbuf::MTLCommandBufferLike, kernel::$(fLike), inputMatrix, resultMatrix)
             @objc [kernel::id{$(f)} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                     inputMatrix:inputMatrix::id{MPSMatrix}
                                     resultMatrix:resultMatrix::id{MPSMatrix}]::Nothing

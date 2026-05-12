@@ -4,7 +4,7 @@
 
 # @objcwrapper MPSKernel <: NSObject
 
-@objcmethod @autoreleasepool function Base.copy(kernel::KindOf{MPSKernel})
+@autoreleasepool function Base.copy(kernel::MPSKernelLike)
     K = typeof(kernel)
     obj = @objc [kernel::id{MPSKernel} copy]::id{MPSKernel}
     K(reinterpret(id{K}, obj))
