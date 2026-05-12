@@ -116,7 +116,7 @@ greater than the value for which they are waiting. For shared events, this
 update similarly triggers notification handlers waiting on the event.
 """
 @objcmethod function encode_signal!(cmdbuf::KindOf{MTLCommandBuffer},
-                                      ev::KindOf{MTLEvent}, val::Integer)
+                                      ev, val::Integer)
     @objc [cmdbuf::id{MTLCommandBuffer} encodeSignalEvent:ev::id{MTLEvent}
                                      value:val::UInt64]::Nothing
 end
@@ -136,7 +136,7 @@ but doesn't start any commands that appear after it. Execution continues
 immediately if the event already has an equal or larger value.
 """
 @objcmethod function encode_wait!(cmdbuf::KindOf{MTLCommandBuffer},
-                                    ev::KindOf{MTLEvent}, val::Integer)
+                                    ev, val::Integer)
     @objc [cmdbuf::id{MTLCommandBuffer} encodeWaitForEvent:ev::id{MTLEvent}
                                      value:val::UInt64]::Nothing
 end

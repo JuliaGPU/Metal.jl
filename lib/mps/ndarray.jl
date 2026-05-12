@@ -138,13 +138,13 @@ end
 end
 
 # rowStrides in Bytes
-@objcmethod exportDataWithCommandBuffer(ndarr::KindOf{MPSNDArray}, cmdbuf::KindOf{MTLCommandBuffer}, toBuffer, destinationDataType, offset, rowStrides) =
+@objcmethod exportDataWithCommandBuffer(ndarr::KindOf{MPSNDArray}, cmdbuf, toBuffer, destinationDataType, offset, rowStrides) =
     GC.@preserve rowStrides @objc [ndarr::MPSNDArray exportDataWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                              toBuffer:toBuffer::id{MTLBuffer}
                              destinationDataType:destinationDataType::MPSDataType
                              offset:offset::NSUInteger
                              rowStrides:pointer(rowStrides)::Ptr{NSInteger}]::Nothing
-@objcmethod exportDataWithCommandBuffer(ndarr::KindOf{MPSNDArray}, cmdbuf::KindOf{MTLCommandBuffer}, toBuffer, destinationDataType, offset) =
+@objcmethod exportDataWithCommandBuffer(ndarr::KindOf{MPSNDArray}, cmdbuf, toBuffer, destinationDataType, offset) =
     @objc [ndarr::MPSNDArray exportDataWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                              toBuffer:toBuffer::id{MTLBuffer}
                              destinationDataType:destinationDataType::MPSDataType
@@ -152,13 +152,13 @@ end
                              rowStrides:nil::id{ObjectiveC.Object}]::Nothing
 
 # rowStrides in Bytes
-@objcmethod importDataWithCommandBuffer!(ndarr::KindOf{MPSNDArray}, cmdbuf::KindOf{MTLCommandBuffer}, fromBuffer, sourceDataType, offset, rowStrides) =
+@objcmethod importDataWithCommandBuffer!(ndarr::KindOf{MPSNDArray}, cmdbuf, fromBuffer, sourceDataType, offset, rowStrides) =
     GC.@preserve rowStrides @objc [ndarr::MPSNDArray importDataWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                              fromBuffer:fromBuffer::id{MTLBuffer}
                              sourceDataType:sourceDataType::MPSDataType
                              offset:offset::NSUInteger
                              rowStrides:pointer(rowStrides)::Ptr{NSInteger}]::Nothing
-@objcmethod importDataWithCommandBuffer!(ndarr::KindOf{MPSNDArray}, cmdbuf::KindOf{MTLCommandBuffer}, fromBuffer, sourceDataType, offset) =
+@objcmethod importDataWithCommandBuffer!(ndarr::KindOf{MPSNDArray}, cmdbuf, fromBuffer, sourceDataType, offset) =
      @objc [ndarr::MPSNDArray importDataWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                              fromBuffer:fromBuffer::id{MTLBuffer}
                              sourceDataType:sourceDataType::MPSDataType
@@ -177,7 +177,7 @@ end
 # readBytes(strideBytes)
 # writeBytes(strideBytes)
 
-@objcmethod synchronizeOnCommandBuffer(ndarr::KindOf{MPSNDArray}, q::KindOf{MTLCommandBuffer}) =
+@objcmethod synchronizeOnCommandBuffer(ndarr::KindOf{MPSNDArray}, q) =
     @objc [ndarr::MPSNDArray synchronizeOnCommandBuffer:q::id{MTLCommandBuffer}]::Nothing
 
 
