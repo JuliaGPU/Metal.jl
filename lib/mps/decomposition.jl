@@ -14,7 +14,7 @@ function MPSMatrixDecompositionLU(dev, rows, columns)
     return obj
 end
 
-@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSMatrixDecompositionLU}, sourceMatrix::KindOf{MPSMatrix}, resultMatrix::KindOf{MPSMatrix}, pivotIndices::KindOf{MPSMatrix}, status::KindOf{MTLBuffer})
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSMatrixDecompositionLU}, sourceMatrix, resultMatrix, pivotIndices, status)
     @objc [kernel::id{MPSMatrixDecompositionLU} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                                 sourceMatrix:sourceMatrix::id{MPSMatrix}
                                                 resultMatrix:resultMatrix::id{MPSMatrix}
