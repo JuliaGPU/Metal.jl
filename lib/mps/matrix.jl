@@ -121,7 +121,7 @@ function MPSMatrixMultiplication(dev, transposeLeft, transposeRight, resultRows,
     return obj
 end
 
-function encode!(cmdbuf::MTLCommandBuffer, matmul::MPSMatrixMultiplication, left, right, result)
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, matmul::KindOf{MPSMatrixMultiplication}, left, right, result)
     @objc [matmul::id{MPSMatrixMultiplication} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                                leftMatrix:left::id{MPSMatrix}
                                                rightMatrix:right::id{MPSMatrix}
@@ -181,7 +181,7 @@ function MPSMatrixFindTopK(dev, numberOfTopKValues)
     return obj
 end
 
-function encode!(cmdbuf::MTLCommandBuffer, kernel::MPSMatrixFindTopK, inputMatrix, resultIndexMatrix, resultValueMatrix)
+@objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{MPSMatrixFindTopK}, inputMatrix, resultIndexMatrix, resultValueMatrix)
     @objc [kernel::id{MPSMatrixFindTopK} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                                       inputMatrix:inputMatrix::id{MPSMatrix}
                                                       resultIndexMatrix:resultIndexMatrix::id{MPSMatrix}
@@ -273,7 +273,7 @@ for f in (:MPSMatrixSoftMax, :MPSMatrixLogSoftMax)
             return obj
         end
 
-        function encode!(cmdbuf::MTLCommandBuffer, kernel::$(f), inputMatrix, resultMatrix)
+        @objcmethod function encode!(cmdbuf::KindOf{MTLCommandBuffer}, kernel::KindOf{$(f)}, inputMatrix, resultMatrix)
             @objc [kernel::id{$(f)} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
                                     inputMatrix:inputMatrix::id{MPSMatrix}
                                     resultMatrix:resultMatrix::id{MPSMatrix}]::Nothing

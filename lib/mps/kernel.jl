@@ -4,8 +4,9 @@
 
 # @objcwrapper MPSKernel <: NSObject
 
-@autoreleasepool function Base.copy(kernel::K) where {K <: MPSKernel}
-    obj = @objc [kernel::MPSKernel copy]::id{MPSKernel}
+@objcmethod @autoreleasepool function Base.copy(kernel::KindOf{MPSKernel})
+    K = typeof(kernel)
+    obj = @objc [kernel::id{MPSKernel} copy]::id{MPSKernel}
     K(reinterpret(id{K}, obj))
 end
 

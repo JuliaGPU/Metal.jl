@@ -49,30 +49,30 @@ into the command buffers and those threads can complete in any order.
 
 [enqueue](https://developer.apple.com/documentation/metal/mtlcommandbuffer/1443019-enqueue?language=objc)
 """
-function enqueue!(cmdbuf::MTLCommandBuffer)
+@objcmethod function enqueue!(cmdbuf::KindOf{MTLCommandBuffer})
     cmdbuf.status in [MTLCommandBufferStatusCompleted, MTLCommandBufferStatusEnqueued] &&
         error("Cannot enqueue an already enqueued command buffer")
     @objc [cmdbuf::id{MTLCommandBuffer} enqueue]::Nothing
 end
 
-function commit!(cmdbuf::MTLCommandBuffer)
+@objcmethod function commit!(cmdbuf::KindOf{MTLCommandBuffer})
     cmdbuf.status in [MTLCommandBufferStatusCompleted, MTLCommandBufferStatusCommitted] &&
         error("Cannot commit an already committed/completed command buffer")
     @objc [cmdbuf::id{MTLCommandBuffer} commit]::Nothing
 end
 
-function commit!(f::Base.Callable, cmdbuf::MTLCommandBuffer)
+@objcmethod function commit!(f::Base.Callable, cmdbuf::KindOf{MTLCommandBuffer})
     enqueue!(cmdbuf)
     ret = f(cmdbuf)
     commit!(cmdbuf)
     return ret
 end
 
-function use_residency_set!(cmdbuf::MTLCommandBuffer, resset::MTLResidencySet)
+@objcmethod function use_residency_set!(cmdbuf::KindOf{MTLCommandBuffer}, resset::MTLResidencySet)
     @objc [cmdbuf::id{MTLCommandBuffer} useResidencySet:resset::id{MTLResidencySet}]::Nothing
 end
 
-function use_residency_sets!(cmdbuf::MTLCommandBuffer, ressets, count)
+@objcmethod function use_residency_sets!(cmdbuf::KindOf{MTLCommandBuffer}, ressets, count)
     @objc [cmdbuf::id{MTLCommandBuffer} useResidencySets:ressets::Ptr{id{MTLResidencySet}}
                                                 count:count::NSUInteger]::Nothing
 end
@@ -86,7 +86,7 @@ blocks registered by addScheduledHandler: have been invoked. A command buffer
 is considered scheduled after all its dependencies are resolved, and it is sent
 to the GPU for execution.
 """
-function wait_scheduled(cmdbuf::MTLCommandBuffer)
+@objcmethod function wait_scheduled(cmdbuf::KindOf{MTLCommandBuffer})
     @objc [cmdbuf::id{MTLCommandBuffer} waitUntilScheduled]::Nothing
 end
 
@@ -98,7 +98,7 @@ buffer is completed.
 This method returns after the command buffer is completed and all code
 blocks registered by addCompletedHandler: are invoked.
 """
-function wait_completed(cmdbuf::MTLCommandBuffer)
+@objcmethod function wait_completed(cmdbuf::KindOf{MTLCommandBuffer})
     @objc [cmdbuf::id{MTLCommandBuffer} waitUntilCompleted]::Nothing
 end
 
@@ -115,7 +115,8 @@ waiting on the event are allowed to run if the new value is equal to or
 greater than the value for which they are waiting. For shared events, this
 update similarly triggers notification handlers waiting on the event.
 """
-function encode_signal!(cmdbuf::MTLCommandBuffer, ev::MTLEvent, val::Integer)
+@objcmethod function encode_signal!(cmdbuf::KindOf{MTLCommandBuffer},
+                                      ev, val::Integer)
     @objc [cmdbuf::id{MTLCommandBuffer} encodeSignalEvent:ev::id{MTLEvent}
                                      value:val::UInt64]::Nothing
 end
@@ -134,7 +135,8 @@ GPU executes commands that appear earlier than the wait command,
 but doesn't start any commands that appear after it. Execution continues
 immediately if the event already has an equal or larger value.
 """
-function encode_wait!(cmdbuf::MTLCommandBuffer, ev::MTLEvent, val::Integer)
+@objcmethod function encode_wait!(cmdbuf::KindOf{MTLCommandBuffer},
+                                    ev, val::Integer)
     @objc [cmdbuf::id{MTLCommandBuffer} encodeWaitForEvent:ev::id{MTLEvent}
                                      value:val::UInt64]::Nothing
 end
@@ -162,7 +164,7 @@ end
 
 Execute a block of code when execution of the command buffer is scheduled.
 """
-function on_scheduled(f::Base.Callable, cmdbuf::MTLCommandBuffer)
+@objcmethod function on_scheduled(f::Base.Callable, cmdbuf::KindOf{MTLCommandBuffer})
     block = _command_buffer_callback(f)
     @objc [cmdbuf::id{MTLCommandBuffer} addScheduledHandler:block::id{NSBlock}]::Nothing
 end
@@ -175,7 +177,7 @@ end
 
 Execute a block of code when execution of the command buffer is completed.
 """
-function on_completed(f::Base.Callable, cmdbuf::MTLCommandBuffer)
+@objcmethod function on_completed(f::Base.Callable, cmdbuf::KindOf{MTLCommandBuffer})
     block = _command_buffer_callback(f)
     @objc [cmdbuf::id{MTLCommandBuffer} addCompletedHandler:block::id{NSBlock}]::Nothing
 end
