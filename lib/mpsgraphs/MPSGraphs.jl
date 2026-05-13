@@ -12,6 +12,7 @@ using ..Metal
 using .MTL
 using .MPS
 using .MPS: MPSDataType, MPSShape, exportDataWithCommandBuffer
+using .MPS: MPSMatrixLike, MPSVectorLike
 
 using CEnum
 using ObjectiveC, .Foundation, .Dispatch
