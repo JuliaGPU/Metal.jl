@@ -1,5 +1,5 @@
 # Uncomment once all supported julia versions support public
-# public SharedStorage, ManagedStorage, PrivateStorage
+# public SharedStorage, PrivateStorage
 
 # Metal Has 4 storage types
 # SharedStorage  -> Buffer in Host memory, accessed by the GPU. Requires no sync

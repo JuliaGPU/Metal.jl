@@ -1,3 +1,4 @@
+export SharedStorage, ManagedStorage, PrivateStorage
 export ReadUsage, WriteUsage, ReadWriteUsage
 
 Base.convert(::Type{MTLStorageMode}, ::Type{SharedStorage})     = MTLStorageModeShared
