@@ -15,6 +15,12 @@ using PrecompileTools: @setup_workload, @compile_workload
         # closure types differ between this workload and user code, so wouldn't share
         # the precompiled launcher).
         @metal identity(nothing)
+
+        # exercise MtlArray creation and host↔device copy paths in both 1D and 2D
+        for h in (Float32[0], Float32[0;;])
+            a = MtlArray(h)
+            Array(a)
+        end
     end
 
     # Caches populated by the workload hold ObjectiveC handles whose underlying
