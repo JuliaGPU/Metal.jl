@@ -246,7 +246,7 @@ const _kernel_instances = Dict{UInt, Any}()
     ex
 end
 
-@inline function encode_argument!(kernel, arg)
+@inline function encode_argument!(@nospecialize(kernel), arg)
     argtyp = typeof(arg)
 
     # replace non-isbits arguments (they should be unused, or compilation
@@ -263,10 +263,16 @@ end
     return argument_buffer
 end
 
+# Thin outer callable: the @autoreleasepool stays at the same scope as the
+# baseline, and we forward into a shared `_launch` body so the bulk of the
+# launch compiles only once.
 @autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
                                                queue=global_queue(device()))
-    gs = MTLSize(groups)
-    ts = MTLSize(threads)
+    _launch(kernel, MTLSize(groups), MTLSize(threads), queue, args)
+end
+
+function _launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
+                 queue::MTLCommandQueue, @nospecialize(args::Tuple))
     (gs.width>0 && gs.height>0 && gs.depth>0) ||
         throw(ArgumentError("All group dimensions should be non-zero"))
     (ts.width>0 && ts.height>0 && ts.depth>0) ||
@@ -282,14 +288,16 @@ end
     (gs.depth * ts.depth) > typemax(UInt32) &&
         throw(ArgumentError("Total threads per grid in a dimension (threads.depth($(gs.depth)) * groups.depth($(ts.depth)) = $(gs.depth * ts.depth)) must not exceed $(typemax(UInt32))"))
 
+    f = kernel.f
+    pipeline = kernel.pipeline
     kernel_state = KernelState(Random.rand(UInt32))
 
     cmdbuf = MTLCommandBuffer(queue)
-    cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
+    cmdbuf.label = "MTLCommandBuffer($(nameof(f)))"
     cce = MTLComputeCommandEncoder(cmdbuf)
     argument_buffers = try
-        MTL.set_function!(cce, kernel.pipeline)
-        bufs = encode_arguments!(cce, kernel, kernel_state, kernel.f, args...)
+        MTL.set_function!(cce, pipeline)
+        bufs = _encode_arguments!(cce, kernel, kernel_state, f, args)
         MTL.append_current_function!(cce, gs, ts)
         bufs
     finally
@@ -304,7 +312,7 @@ end
     # kernel has actually completed.
     #
     # TODO: is there a way to bind additional resources to the command buffer?
-    roots = [kernel.f, args]
+    roots = Any[f, args]
     MTL.on_completed(cmdbuf) do buf
         empty!(roots)
         foreach(free, argument_buffers)
@@ -326,7 +334,15 @@ end
     end
 
     commit!(cmdbuf)
+    return
 end
+
+# Bridge from the @nospecialize launch into the @generated encoder: still
+# specializes on f and args types (encode_arguments! needs them to detect ghost
+# types) but not on the HostKernel type parameters, so this compiles only once
+# per arg-type combination — shared across all kernels with those arg types.
+@inline _encode_arguments!(cce, @nospecialize(kernel), kernel_state, f, args::Tuple) =
+    encode_arguments!(cce, kernel, kernel_state, f, args...)
 
 ## Intra-warp Helpers
 

@@ -27,8 +27,3 @@ using PrecompileTools: @setup_workload, @compile_workload
     empty!(global_queues)
     _toolchain[] = nothing
 end
-
-# Worth the hassle
-if isdefined(Base, :Compiler) && isdefined(Base.Compiler, :typeinf_local)
-    precompile(Tuple{typeof(Base.Compiler.typeinf_local), GPUCompiler.GPUInterpreter{Base.Compiler.CachedMethodTable{Base.Compiler.OverlayMethodTable}}, Base.Compiler.InferenceState, Base.Compiler.CurrentState})
-end
