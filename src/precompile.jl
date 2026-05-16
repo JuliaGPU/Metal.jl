@@ -8,10 +8,24 @@ using PrecompileTools: @setup_workload, @compile_workload
         metallib = parse(MetalLib, metallib_file)
         sprint(write, metallib)
 
-        # compile a trivial kernel to exercise the full compilation pipeline:
-        #   mtlfunction → GPUCompiler → LLVM IR → AIR → metallib → link
-        mtlfunction(identity, Tuple{Nothing})
+        # exercise the full kernel-launch pipeline:
+        #   mtlfunction → GPUCompiler → LLVM IR → AIR → metallib → link → launch
+        # The launch path skips GPU submission during precompilation (see _launch).
+        # Use `identity` since it's the only kernel whose type users can name (other
+        # closure types differ between this workload and user code, so wouldn't share
+        # the precompiled launcher).
+        @metal identity(nothing)
     end
+
+    # Caches populated by the workload hold ObjectiveC handles whose underlying
+    # objects only exist in the precompilation process; serializing those into
+    # the package image yields dangling pointers when the image is loaded. Drop
+    # the entries before precompilation finalizes.
+    empty!(_compiler_caches)
+    empty!(_compiler_configs)
+    empty!(_kernel_instances)
+    empty!(global_queues)
+    _toolchain[] = nothing
 end
 
 # Worth the hassle

@@ -317,6 +317,14 @@ end
         end
     end
 
+    # During precompilation, don't commit: the GPU would do useless work and
+    # may hold resources past the end of the workload. The handler above has
+    # already been compiled, and will still fire (with status `Aborted`) when
+    # the autoreleasepool drains the command buffer, taking care of cleanup.
+    if ccall(:jl_generating_output, Cint, ()) != 0
+        return
+    end
+
     commit!(cmdbuf)
 end
 
