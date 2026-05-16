@@ -42,15 +42,15 @@ full_str = sprint(io->show(io, MIME"text/plain"(), dev))
 end
 
 @testset "storage_type" begin
-    @test convert(MTL.MTLStorageMode, MTL.SharedStorage) == MTL.MTLStorageModeShared
-    @test convert(MTL.MTLStorageMode, MTL.ManagedStorage) == MTL.MTLStorageModeManaged
-    @test convert(MTL.MTLStorageMode, MTL.PrivateStorage) == MTL.MTLStorageModePrivate
-    @test convert(MTL.MTLStorageMode, MTL.Memoryless) == MTL.MTLStorageModeMemoryless
+    @test convert(MTL.MTLStorageMode, Metal.SharedStorage) == MTL.MTLStorageModeShared
+    @test convert(MTL.MTLStorageMode, Metal.ManagedStorage) == MTL.MTLStorageModeManaged
+    @test convert(MTL.MTLStorageMode, Metal.PrivateStorage) == MTL.MTLStorageModePrivate
+    @test convert(MTL.MTLStorageMode, Metal.Memoryless) == MTL.MTLStorageModeMemoryless
 
-    @test convert(MTL.MTLResourceOptions, MTL.SharedStorage) == MTL.MTLResourceStorageModeShared
-    @test convert(MTL.MTLResourceOptions, MTL.ManagedStorage) == MTL.MTLResourceStorageModeManaged
-    @test convert(MTL.MTLResourceOptions, MTL.PrivateStorage) == MTL.MTLResourceStorageModePrivate
-    @test convert(MTL.MTLResourceOptions, MTL.Memoryless) == MTL.MTLResourceStorageModeMemoryless
+    @test convert(MTL.MTLResourceOptions, Metal.SharedStorage) == MTL.MTLResourceStorageModeShared
+    @test convert(MTL.MTLResourceOptions, Metal.ManagedStorage) == MTL.MTLResourceStorageModeManaged
+    @test convert(MTL.MTLResourceOptions, Metal.PrivateStorage) == MTL.MTLResourceStorageModePrivate
+    @test convert(MTL.MTLResourceOptions, Metal.Memoryless) == MTL.MTLResourceStorageModeMemoryless
 
     @test convert(MTL.MTLResourceOptions, MTL.MTLStorageModeShared) == MTL.MTLResourceStorageModeShared
     @test convert(MTL.MTLResourceOptions, MTL.MTLStorageModeManaged) == MTL.MTLResourceStorageModeManaged

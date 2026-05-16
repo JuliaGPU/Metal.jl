@@ -130,7 +130,7 @@ end
 # TODO: figure out a GPU-compatible way to get the permutation matrix
 LinearAlgebra.ipiv2perm(v::MtlVector, maxi::Integer) =
     LinearAlgebra.ipiv2perm(Array(v), maxi)
-LinearAlgebra.ipiv2perm(v::MtlVector{<:Any, MTL.CPUStorage}, maxi::Integer) =
+LinearAlgebra.ipiv2perm(v::MtlVector{<:Any, CPUStorage}, maxi::Integer) =
     LinearAlgebra.ipiv2perm(unsafe_wrap(Array, v), maxi)
 
 @autoreleasepool function LinearAlgebra.lu(A::MtlMatrix{T};

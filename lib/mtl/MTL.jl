@@ -13,6 +13,9 @@ using ObjectiveC, .Foundation, .Dispatch
 
 using ..Metal
 
+# Import the bindings that are not used in MTL for backward compatibility
+import ..Metal: StorageMode, SharedStorage, ManagedStorage, PrivateStorage, Memoryless, CPUStorage
+
 # Metal APIs generally expect to be running under an autorelease pool.
 # In most cases, we handle this in the code calling into the MTL module,
 # however, finalizers are out of the caller's control, so we need to
