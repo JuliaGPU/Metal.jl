@@ -208,8 +208,12 @@ const _kernel_instances = Dict{UInt, Any}()
 ## kernel launching and argument encoding
 
 @inline @generated function encode_arguments!(cce, kernel, args::Vararg{Any,N}) where {N}
-    ex = quote end
-    buffers = []
+    # Return a `Vector{MTLBuffer}` (rather than a tuple whose type varies with
+    # the number of allocated buffers) so the on_completed closure that
+    # captures the result has a stable type across kernels.
+    ex = quote
+        buffers = MTLBuffer[]
+    end
 
     # the arguments passed into this function have not been `mtlconvert`ed, because we need
     # to retain the top-level MTLBuffer and MtlPtr objects. eager conversion of nested
@@ -229,19 +233,16 @@ const _kernel_instances = Dict{UInt, Any}()
             continue
         else
             # everything else is passed by reference, in an argument buffer
-            buf = gensym("buffer")
             append!(ex.args, (quote
-                $buf = encode_argument!(kernel, mtlconvert($(argex), cce))
-                set_buffer!(cce, $buf, 0, $idx)
+                buf = encode_argument!(kernel, mtlconvert($(argex), cce))
+                set_buffer!(cce, buf, 0, $idx)
+                push!(buffers, buf)
             end).args)
-            push!(buffers, buf)
         end
         idx += 1
     end
 
-    append!(ex.args, (quote
-        return ($(buffers...),)
-    end).args)
+    push!(ex.args, :(return buffers))
 
     ex
 end
@@ -263,9 +264,10 @@ end
     return argument_buffer
 end
 
-# Thin outer callable: the @autoreleasepool stays at the same scope as the
-# baseline, and we forward into a shared `_launch` body so the bulk of the
-# launch compiles only once.
+# Thin outer callable forwards into a shared `_launch` body so the bulk of the
+# launch compiles only once across kernel/argument-type combinations. The
+# `@autoreleasepool` stays at the outer level (matching the baseline) and only
+# wraps a single function call, keeping its closure body small.
 @autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
                                                queue=global_queue(device()))
     _launch(kernel, MTLSize(groups), MTLSize(threads), queue, args)
