@@ -3,16 +3,16 @@ using PrecompileTools: @setup_workload, @compile_workload
 @setup_workload begin
     metallib_file = joinpath(dirname(@__DIR__), "test", "dummy.metallib")
 
-    # parsing and writing metal libraries
-    metallib = parse(MetalLib, metallib_file)
-    sprint(write, metallib)
-end
+    @compile_workload begin
+        # parsing and writing metal libraries
+        metallib = parse(MetalLib, metallib_file)
+        sprint(write, metallib)
 
-precompile(compile, (CompilerJob,))
-precompile(Tuple{typeof(GPUCompiler.finish_ir!), GPUCompiler.CompilerJob{GPUCompiler.MetalCompilerTarget, Metal.MetalCompilerParams}, LLVM.Module, LLVM.Function})
-precompile(Tuple{typeof(GPUCompiler.finish_module!), GPUCompiler.CompilerJob{GPUCompiler.MetalCompilerTarget, Metal.MetalCompilerParams}, LLVM.Module, LLVM.Function})
-precompile(Tuple{typeof(GPUCompiler.check_ir), GPUCompiler.CompilerJob{GPUCompiler.MetalCompilerTarget, Metal.MetalCompilerParams}, LLVM.Module})
-precompile(Tuple{typeof(GPUCompiler.actual_compilation), Base.Dict{Any, Any}, Core.MethodInstance, UInt64, GPUCompiler.CompilerConfig{GPUCompiler.MetalCompilerTarget, Metal.MetalCompilerParams}, typeof(Metal.compile), typeof(Metal.link)})
+        # compile a trivial kernel to exercise the full compilation pipeline:
+        #   mtlfunction → GPUCompiler → LLVM IR → AIR → metallib → link
+        mtlfunction(identity, Tuple{Nothing})
+    end
+end
 
 # Worth the hassle
 if isdefined(Base, :Compiler) && isdefined(Base.Compiler, :typeinf_local)
