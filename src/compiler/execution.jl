@@ -180,25 +180,50 @@ in a hot path without degrading performance. New code will be generated automati
 the function changes, or when different types or keyword arguments are provided.
 """
 function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
-    dev = device()
     Base.@lock mtlfunction_lock begin
-        # compile the function
-        cache = compiler_cache(dev)
-        source = methodinstance(F, tt)
+        dev = device()
         config = compiler_config(dev; name, kwargs...)::MetalCompilerConfig
-        pipeline = GPUCompiler.cached_compilation(cache, source, config, compile, link)
+        source = methodinstance(F, tt)
+        job = CompilerJob(source, config)
+        cache = GPUCompiler.cache_view(job)
 
-        # create a callable object that captures the function instance. we don't need to think
-        # about world age here, as GPUCompiler already does and will return a different object
-        h = hash(pipeline, hash(f, hash(tt)))
-        kernel = get(_kernel_instances, h, nothing)
-        if kernel === nothing
-            # create the kernel state object
-            kernel = HostKernel{F,tt}(f, pipeline)
-            _kernel_instances[h] = kernel
+        # `@something` (not the `something` function) so `compile_metal!` only runs
+        # on a cache miss — otherwise Julia evaluates it eagerly and silently re-runs
+        # the full LLVM compile on every launch.
+        ci, res = @something lookup(cache, source) compile_metal!(cache, job)
+
+        # Resolve the MTLComputePipelineState for the active device. Linear scan
+        # over the session-local cache; almost always n=1, one `===` compare.
+        pipeline = nothing
+        @inbounds for (cached_dev, cached_pipeline) in res.pipelines
+            if cached_dev === dev
+                pipeline = cached_pipeline
+                break
+            end
         end
-        return kernel::HostKernel{F,tt}
+        if pipeline === nothing
+            pipeline = link_pipeline(dev, res.metallib::Vector{UInt8},
+                                     res.entry::String)
+            push!(res.pipelines, (dev, pipeline))
+        end
+
+        h = hash(pipeline, hash(f, hash(tt)))
+        get!(_kernel_instances, h) do
+            HostKernel{F,tt}(f, pipeline)
+        end::HostKernel{F,tt}
     end
+end
+
+# Run inference and codegen for `job`, then populate the cached `MetalResults` with the
+# session-portable artifacts. The `CodeInstance` is created during inference inside
+# `GPUCompiler.compile` (which uses the same owner-partitioned `CacheView`), and gets a
+# fresh `MetalResults()` attached via `@setup_caching`'s `finish!` hook.
+function compile_metal!(cache::CacheView, @nospecialize(job::CompilerJob))
+    metallib, entry = compile_to_metallib(job)
+    ci = get(cache, job.source, nothing)::Core.CodeInstance
+    res = results(cache, ci)::MetalResults
+    res.metallib, res.entry = metallib, entry
+    return (ci, res)
 end
 
 # cache of kernel instances
