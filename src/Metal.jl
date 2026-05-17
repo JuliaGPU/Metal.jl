@@ -15,6 +15,7 @@ import KernelAbstractions
 using ScopedValues
 
 include("version.jl")
+include("storage_type.jl")
 
 # core library
 include("../lib/mtl/MTL.jl")
