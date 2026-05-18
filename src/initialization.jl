@@ -1,3 +1,20 @@
+# World age captured at __init__ time. Used to invoke the GPU-compiler stack
+# in a frozen world to avoid latency from invalidations.
+const initialization_world = Ref{UInt}(typemax(UInt))
+
+"""
+    invoke_frozen(f, args...; kwargs...)
+
+Invoke `f(args...; kwargs...)` in the world age captured at `__init__` time.
+"""
+@inline function invoke_frozen(f, args...; kwargs...)
+    if isempty(kwargs)
+        return Base.invoke_in_world(initialization_world[], f, args...)
+    end
+    kwargs = merge(NamedTuple(), kwargs)
+    return Base.invoke_in_world(initialization_world[], Core.kwcall, kwargs, f, args...)
+end
+
 @static if isdefined(Base, :OncePerProcess) # VERSION >= v"1.12.0-DEV.1421"
     const functional = OncePerProcess{Bool}() do
         try
@@ -72,6 +89,8 @@ function __init__()
     if isdefined(Base, :active_repl_backend) && !isnothing(Base.active_repl_backend)
         push!(Base.active_repl_backend.ast_transforms, synchronize_metal_tasks)
     end
+
+    initialization_world[] = Base.get_world_counter()
 end
 
 function synchronize_metal_tasks(ex)

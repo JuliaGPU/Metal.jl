@@ -208,8 +208,9 @@ const _kernel_instances = Dict{UInt, Any}()
 ## kernel launching and argument encoding
 
 @inline @generated function encode_arguments!(cce, kernel, args::Vararg{Any,N}) where {N}
-    ex = quote end
-    buffers = []
+    ex = quote
+        buffers = MTLBuffer[]
+    end
 
     # the arguments passed into this function have not been `mtlconvert`ed, because we need
     # to retain the top-level MTLBuffer and MtlPtr objects. eager conversion of nested
@@ -229,24 +230,21 @@ const _kernel_instances = Dict{UInt, Any}()
             continue
         else
             # everything else is passed by reference, in an argument buffer
-            buf = gensym("buffer")
             append!(ex.args, (quote
-                $buf = encode_argument!(kernel, mtlconvert($(argex), cce))
-                set_buffer!(cce, $buf, 0, $idx)
+                buf = encode_argument!(kernel, mtlconvert($(argex), cce))
+                set_buffer!(cce, buf, 0, $idx)
+                push!(buffers, buf)
             end).args)
-            push!(buffers, buf)
         end
         idx += 1
     end
 
-    append!(ex.args, (quote
-        return ($(buffers...),)
-    end).args)
+    push!(ex.args, :(return buffers))
 
     ex
 end
 
-@inline function encode_argument!(kernel, arg)
+@inline function encode_argument!(@nospecialize(kernel), arg)
     argtyp = typeof(arg)
 
     # replace non-isbits arguments (they should be unused, or compilation
@@ -263,10 +261,15 @@ end
     return argument_buffer
 end
 
+# wraps a single function call, keeping its closure body small.
 @autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
                                                queue=global_queue(device()))
-    gs = MTLSize(groups)
-    ts = MTLSize(threads)
+    # function barrier to avoid capturing the `@autoreleasepool` in the generated code
+    launch(kernel, MTLSize(groups), MTLSize(threads), queue, args)
+end
+
+function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
+                queue::MTLCommandQueue, @nospecialize(args::Tuple))
     (gs.width>0 && gs.height>0 && gs.depth>0) ||
         throw(ArgumentError("All group dimensions should be non-zero"))
     (ts.width>0 && ts.height>0 && ts.depth>0) ||
@@ -282,14 +285,16 @@ end
     (gs.depth * ts.depth) > typemax(UInt32) &&
         throw(ArgumentError("Total threads per grid in a dimension (threads.depth($(gs.depth)) * groups.depth($(ts.depth)) = $(gs.depth * ts.depth)) must not exceed $(typemax(UInt32))"))
 
+    f = kernel.f
+    pipeline = kernel.pipeline
     kernel_state = KernelState(Random.rand(UInt32))
 
     cmdbuf = MTLCommandBuffer(queue)
-    cmdbuf.label = "MTLCommandBuffer($(nameof(kernel.f)))"
+    cmdbuf.label = "MTLCommandBuffer($(nameof(f)))"
     cce = MTLComputeCommandEncoder(cmdbuf)
     argument_buffers = try
-        MTL.set_function!(cce, kernel.pipeline)
-        bufs = encode_arguments!(cce, kernel, kernel_state, kernel.f, args...)
+        MTL.set_function!(cce, pipeline)
+        bufs = encode_arguments_nospec!(cce, kernel, kernel_state, f, args)
         MTL.append_current_function!(cce, gs, ts)
         bufs
     finally
@@ -304,7 +309,7 @@ end
     # kernel has actually completed.
     #
     # TODO: is there a way to bind additional resources to the command buffer?
-    roots = [kernel.f, args]
+    roots = Any[f, args]
     MTL.on_completed(cmdbuf) do buf
         empty!(roots)
         foreach(free, argument_buffers)
@@ -317,8 +322,18 @@ end
         end
     end
 
+    # HACK: don't actually commit when precompiling to prevent holding onto resources
+    if ccall(:jl_generating_output, Cint, ()) != 0
+        return
+    end
+
     commit!(cmdbuf)
+    return
 end
+
+# force specialization on f and args, but not on the kernel
+@inline encode_arguments_nospec!(cce, @nospecialize(kernel), kernel_state, f, args::Tuple) =
+    encode_arguments!(cce, kernel, kernel_state, f, args...)
 
 ## Intra-warp Helpers
 

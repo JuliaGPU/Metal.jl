@@ -1,20 +1,29 @@
 using PrecompileTools: @setup_workload, @compile_workload
 
-@setup_workload begin
+Sys.isapple() && @setup_workload begin
     metallib_file = joinpath(dirname(@__DIR__), "test", "dummy.metallib")
 
-    # parsing and writing metal libraries
-    metallib = parse(MetalLib, metallib_file)
-    sprint(write, metallib)
-end
+    @compile_workload begin
+        # parsing and writing metal libraries
+        metallib = parse(MetalLib, metallib_file)
+        sprint(write, metallib)
 
-precompile(compile, (CompilerJob,))
-precompile(Tuple{typeof(GPUCompiler.finish_ir!), GPUCompiler.CompilerJob{GPUCompiler.MetalCompilerTarget, Metal.MetalCompilerParams}, LLVM.Module, LLVM.Function})
-precompile(Tuple{typeof(GPUCompiler.finish_module!), GPUCompiler.CompilerJob{GPUCompiler.MetalCompilerTarget, Metal.MetalCompilerParams}, LLVM.Module, LLVM.Function})
-precompile(Tuple{typeof(GPUCompiler.check_ir), GPUCompiler.CompilerJob{GPUCompiler.MetalCompilerTarget, Metal.MetalCompilerParams}, LLVM.Module})
-precompile(Tuple{typeof(GPUCompiler.actual_compilation), Base.Dict{Any, Any}, Core.MethodInstance, UInt64, GPUCompiler.CompilerConfig{GPUCompiler.MetalCompilerTarget, Metal.MetalCompilerParams}, typeof(Metal.compile), typeof(Metal.link)})
+        # exercise the full kernel-launch pipeline:
+        @metal identity(nothing)
 
-# Worth the hassle
-if isdefined(Base, :Compiler) && isdefined(Base.Compiler, :typeinf_local)
-    precompile(Tuple{typeof(Base.Compiler.typeinf_local), GPUCompiler.GPUInterpreter{Base.Compiler.CachedMethodTable{Base.Compiler.OverlayMethodTable}}, Base.Compiler.InferenceState, Base.Compiler.CurrentState})
+        # exercise MtlArray creation and host↔device copy paths in both 1D and 2D
+        for h in (Float32[0], Float32[0;;])
+            a = MtlArray(h)
+            Array(a)
+        end
+    end
+
+    # Caches populated by the workload hold ObjectiveC handles whose underlying
+    # objects only exist in the precompilation process; serializing those into
+    # the package image yields dangling pointers when the image is loaded. Drop
+    # the entries before precompilation finalizes.
+    empty!(_compiler_caches)
+    empty!(_compiler_configs)
+    empty!(_kernel_instances)
+    empty!(global_queues)
 end

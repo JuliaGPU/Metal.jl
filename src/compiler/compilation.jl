@@ -129,7 +129,6 @@ function compiler_cache(ctx::MTLDevice)
 end
 
 # cache of compiler configurations, per device (but additionally configurable via kwargs)
-const _toolchain = Ref{Any}()
 const _compiler_configs = Dict{UInt, MetalCompilerConfig}()
 function compiler_config(dev; kwargs...)
     h = hash(dev, hash(kwargs))
@@ -170,7 +169,7 @@ function compile(@nospecialize(job::CompilerJob))
     @signpost_interval log=log_compiler() "Generate LLVM IR" begin
         # TODO: on 1.9, this actually creates a context. cache those.
         ir, entry = JuliaContext() do ctx
-            mod, meta = GPUCompiler.compile(:llvm, job)
+            mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)
             string(mod), LLVM.name(meta.entry)
         end
     end
