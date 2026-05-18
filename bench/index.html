@@ -311,6 +311,20 @@
           _: '#333333'
         };
 
+        function timeAgo(date) {
+          const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+          if (seconds < 60) return 'just now';
+          const mins = Math.floor(seconds / 60);
+          if (mins < 60) return mins + 'm ago';
+          const hrs = Math.floor(mins / 60);
+          if (hrs < 24) return hrs + 'h ago';
+          const days = Math.floor(hrs / 24);
+          if (days < 30) return days + 'd ago';
+          const months = Math.floor(days / 30);
+          if (months < 12) return months + 'mo ago';
+          return Math.floor(days / 365) + 'y ago';
+        }
+
         function init() {
           function collectBenchesPerTestCase(entries) {
             const map = new Map();
@@ -331,8 +345,13 @@
 
           const data = window.BENCHMARK_DATA;
 
-          // Render header
-          document.getElementById('last-update').textContent = new Date(data.lastUpdate).toString();
+          // Render header — show a relative "Xh ago" with the full timestamp
+          // as the tooltip, since the absolute date is rarely what you want
+          // at a glance.
+          const lastUpdateDate = new Date(data.lastUpdate);
+          const lastUpdate = document.getElementById('last-update');
+          lastUpdate.textContent = timeAgo(lastUpdateDate);
+          lastUpdate.title = lastUpdateDate.toString();
           const repoLink = document.getElementById('repository-link');
           repoLink.href = data.repoUrl;
           repoLink.textContent = data.repoUrl;
@@ -399,10 +418,36 @@
             return dataset.filter(d => new Date(d.commit.timestamp) >= cutoff);
           }
 
-          let currentCutoff = cutoffFromValue('3m');
+          // URL state: ?w=<window>&q=<search>&t=<trend-filter>. Keeps the
+          // dashboard shareable / deep-linkable across reloads.
+          const VALID_WINDOWS = ['3m', '6m', '1y', '2y', 'all'];
+          const DEFAULT_WINDOW = '3m';
+          const VALID_TREND_FILTERS = ['regressed', 'stable', 'improved'];
+          const urlParams = new URLSearchParams(window.location.search);
+          const initialWindow = VALID_WINDOWS.includes(urlParams.get('w'))
+            ? urlParams.get('w') : DEFAULT_WINDOW;
+          const initialQuery = urlParams.get('q') || '';
+          const initialTrendFilter = VALID_TREND_FILTERS.includes(urlParams.get('t'))
+            ? urlParams.get('t') : null;
+
+          let currentCutoff = cutoffFromValue(initialWindow);
           // null | 'regressed' | 'stable' | 'improved' — clicking a summary
           // pill toggles this on; clicking the same pill again clears it.
-          let currentTrendFilter = null;
+          let currentTrendFilter = initialTrendFilter;
+
+          function syncURL() {
+            const url = new URL(window.location.href);
+            const w = document.getElementById('window-select').value;
+            const q = document.getElementById('search-input').value.trim();
+            const setParam = (key, value, defaultValue) => {
+              if (value && value !== defaultValue) url.searchParams.set(key, value);
+              else url.searchParams.delete(key);
+            };
+            setParam('w', w, DEFAULT_WINDOW);
+            setParam('q', q, '');
+            setParam('t', currentTrendFilter, '');
+            window.history.replaceState({}, '', url);
+          }
 
           function trendCategory(wrapper) {
             const t = wrapper._trend;
@@ -897,6 +942,11 @@
             }
           }
 
+          // Reflect URL-derived state in the controls before rendering so
+          // populateBench / applyFilter pick them up consistently.
+          document.getElementById('window-select').value = initialWindow;
+          input.value = initialQuery;
+
           const main = document.getElementById('main');
           for (const {name, dataSet} of dataSets) {
             renderBenchSet(name, dataSet, main);
@@ -917,10 +967,13 @@
             applyTrendFilter();
             updateSummary();
             applyFilter();
+            syncURL();
           });
 
-          // Search input
+          // Search input — sync the URL on change (blur / enter) rather than
+          // every keystroke, so typing doesn't hammer history.replaceState.
           input.addEventListener('input', applyFilter);
+          input.addEventListener('change', syncURL);
           document.addEventListener('keydown', (e) => {
             if (e.key === '/' && document.activeElement !== input) {
               e.preventDefault();
@@ -939,6 +992,7 @@
             updateSummary();
             applyTrendFilter();
             applyFilter();
+            syncURL();
           });
         }
 
