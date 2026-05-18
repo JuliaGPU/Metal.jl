@@ -208,9 +208,6 @@ const _kernel_instances = Dict{UInt, Any}()
 ## kernel launching and argument encoding
 
 @inline @generated function encode_arguments!(cce, kernel, args::Vararg{Any,N}) where {N}
-    # Return a `Vector{MTLBuffer}` (rather than a tuple whose type varies with
-    # the number of allocated buffers) so the on_completed closure that
-    # captures the result has a stable type across kernels.
     ex = quote
         buffers = MTLBuffer[]
     end
@@ -264,17 +261,15 @@ end
     return argument_buffer
 end
 
-# Thin outer callable forwards into a shared `_launch` body so the bulk of the
-# launch compiles only once across kernel/argument-type combinations. The
-# `@autoreleasepool` stays at the outer level (matching the baseline) and only
 # wraps a single function call, keeping its closure body small.
 @autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
                                                queue=global_queue(device()))
-    _launch(kernel, MTLSize(groups), MTLSize(threads), queue, args)
+    # function barrier to avoid capturing the `@autoreleasepool` in the generated code
+    launch(kernel, MTLSize(groups), MTLSize(threads), queue, args)
 end
 
-function _launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
-                 queue::MTLCommandQueue, @nospecialize(args::Tuple))
+function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
+                queue::MTLCommandQueue, @nospecialize(args::Tuple))
     (gs.width>0 && gs.height>0 && gs.depth>0) ||
         throw(ArgumentError("All group dimensions should be non-zero"))
     (ts.width>0 && ts.height>0 && ts.depth>0) ||
@@ -299,7 +294,7 @@ function _launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     cce = MTLComputeCommandEncoder(cmdbuf)
     argument_buffers = try
         MTL.set_function!(cce, pipeline)
-        bufs = _encode_arguments!(cce, kernel, kernel_state, f, args)
+        bufs = encode_arguments_nospec!(cce, kernel, kernel_state, f, args)
         MTL.append_current_function!(cce, gs, ts)
         bufs
     finally
@@ -327,10 +322,7 @@ function _launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         end
     end
 
-    # During precompilation, don't commit: the GPU would do useless work and
-    # may hold resources past the end of the workload. The handler above has
-    # already been compiled, and will still fire (with status `Aborted`) when
-    # the autoreleasepool drains the command buffer, taking care of cleanup.
+    # HACK: don't actually commit when precompiling to prevent holding onto resources
     if ccall(:jl_generating_output, Cint, ()) != 0
         return
     end
@@ -339,11 +331,8 @@ function _launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     return
 end
 
-# Bridge from the @nospecialize launch into the @generated encoder: still
-# specializes on f and args types (encode_arguments! needs them to detect ghost
-# types) but not on the HostKernel type parameters, so this compiles only once
-# per arg-type combination — shared across all kernels with those arg types.
-@inline _encode_arguments!(cce, @nospecialize(kernel), kernel_state, f, args::Tuple) =
+# force specialization on f and args, but not on the kernel
+@inline encode_arguments_nospec!(cce, @nospecialize(kernel), kernel_state, f, args::Tuple) =
     encode_arguments!(cce, kernel, kernel_state, f, args...)
 
 ## Intra-warp Helpers

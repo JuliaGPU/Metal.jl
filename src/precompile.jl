@@ -9,11 +9,6 @@ Sys.isapple() && @setup_workload begin
         sprint(write, metallib)
 
         # exercise the full kernel-launch pipeline:
-        #   mtlfunction → GPUCompiler → LLVM IR → AIR → metallib → link → launch
-        # The launch path skips GPU submission during precompilation (see _launch).
-        # Use `identity` since it's the only kernel whose type users can name (other
-        # closure types differ between this workload and user code, so wouldn't share
-        # the precompiled launcher).
         @metal identity(nothing)
 
         # exercise MtlArray creation and host↔device copy paths in both 1D and 2D
@@ -31,5 +26,4 @@ Sys.isapple() && @setup_workload begin
     empty!(_compiler_configs)
     empty!(_kernel_instances)
     empty!(global_queues)
-    _toolchain[] = nothing
 end
