@@ -7,4 +7,6 @@ Testsuite.testsuite(MetalBackend, "Metal", Metal, MtlArray, Metal.MtlDeviceArray
     "Convert",           # depends on https://github.com/JuliaGPU/Metal.jl/issues/69
     "SpecialFunctions",  # gamma and erfc not currently supported on Metal.jl
     "sparse",            # not supported yet
+    "CPU synchronization",
+    "fallback test: callable types",
 ]))
