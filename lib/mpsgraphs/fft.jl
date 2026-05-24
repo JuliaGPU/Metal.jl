@@ -7,7 +7,7 @@
 Create an MPSGraphFFTDescriptor with the specified parameters.
 """
 function MPSGraphFFTDescriptor(; inverse::Bool = false, scalingMode::MPSGraphFFTScalingMode = MPSGraphFFTScalingModeNone)
-    obj = @objc [MPSGraphFFTDescriptor alloc]::id{MPSGraphFFTDescriptor}
+    obj = @objc [MPSGraphFFTDescriptor descriptor]::id{MPSGraphFFTDescriptor}
     desc = MPSGraphFFTDescriptor(obj)
     desc.inverse = inverse
     desc.scalingMode = scalingMode
