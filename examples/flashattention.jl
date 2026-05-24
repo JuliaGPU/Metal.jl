@@ -50,7 +50,6 @@
 
 using Metal
 using Test
-using BenchmarkTools
 
 using Metal.MPS: MPSCommandBuffer, commit!, wait_completed
 using Metal.MPSGraphs: MPSGraph, MPSGraphTensor, MPSGraphTensorData,
@@ -216,15 +215,6 @@ function main()
     @test Array(O_mps)       ≈ O_cpu rtol = 1e-2
     @test Array(O_mpsgraph)  ≈ O_cpu rtol = 1e-2
     @test Array(O_simdgroup) ≈ O_cpu rtol = 1e-2
-
-    if get(ENV, "TESTING", "false") != "true"
-        println("\nattention_mps:")
-        @btime Metal.@sync attention_mps($Q, $K, $V)
-        println("attention_mpsgraph:")
-        @btime Metal.@sync attention_mpsgraph($Q, $K, $V)
-        println("attention_simdgroup:")
-        @btime Metal.@sync attention_simdgroup($Q, $K, $V)
-    end
 end
 
 isinteractive() || main()
