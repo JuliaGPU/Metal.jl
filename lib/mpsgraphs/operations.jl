@@ -74,3 +74,28 @@ Dumps the `graph`.
     This function is undocumented from Apple so it may stop working at any time.
 """
 dump_graph(graph::MPSGraph) = @objc [graph::id{MPSGraph} dump]::Nothing ## COV_EXCL_LINE
+
+# Scaled dot-product attention: softmax((Q · K^T) * scale [+ mask]) · V, fused.
+# Available macOS 14.0+.
+function scaledDotProductAttentionWithQueryTensor(graph::MPSGraph, Q::MPSGraphTensor,
+                                                  K::MPSGraphTensor, V::MPSGraphTensor,
+                                                  scale::Real, name = "sdpa")
+    obj = @objc [graph::id{MPSGraph} scaledDotProductAttentionWithQueryTensor:Q::id{MPSGraphTensor}
+                                                            keyTensor:K::id{MPSGraphTensor}
+                                                          valueTensor:V::id{MPSGraphTensor}
+                                                                scale:scale::Cfloat
+                                                                 name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+function scaledDotProductAttentionWithQueryTensor(graph::MPSGraph, Q::MPSGraphTensor,
+                                                  K::MPSGraphTensor, V::MPSGraphTensor,
+                                                  mask::MPSGraphTensor, scale::Real,
+                                                  name = "sdpa")
+    obj = @objc [graph::id{MPSGraph} scaledDotProductAttentionWithQueryTensor:Q::id{MPSGraphTensor}
+                                                            keyTensor:K::id{MPSGraphTensor}
+                                                          valueTensor:V::id{MPSGraphTensor}
+                                                           maskTensor:mask::id{MPSGraphTensor}
+                                                                scale:scale::Cfloat
+                                                                 name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end

@@ -18,6 +18,21 @@ when you don't need a custom kernel.
 
 Works on macOS 13+ / M1+.
 
+## `fa_mpsgraph.jl`
+
+The high-level MPS path. Builds a one-node MPSGraph using
+`scaledDotProductAttentionWithQueryTensor` (macOS 14+), which fuses
+Q·Kᵀ → scale → softmax → ·V into a single op. Apple uses the same op as
+the backbone of their own SDPA paths (MLX falls back to it; Core ML
+lowers attention to it), so it's the closest thing to "ask Apple for
+attention" that Metal.jl can give you.
+
+Inputs are 4-D `(head_dim, seq, num_heads, batch)` in Julia — MPSGraph
+sees these reversed as `(batch, num_heads, seq, head_dim)`, the layout
+Apple's SDPA expects.
+
+Works on macOS 14+ / M1+.
+
 ## `fa_simdgroup.jl`
 
 A single-block scaled dot-product attention kernel built from
