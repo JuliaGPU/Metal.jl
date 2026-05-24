@@ -55,15 +55,15 @@ epilogue. Apple positions this as the "preferred programming model for
 ML applications" — on M5 hardware it can issue Neural-Accelerator MMAs
 and skip threadgroup memory entirely.
 
-That path is not yet wired up in Metal.jl. The ABI is documented in
-[`docs/src/devel/air_intrinsics.md`](../../docs/src/devel/air_intrinsics.md);
-the externally-defined `__tensorops_impl_matmul2d_op_run_*` symbols are
-fully captured there, and the matmul2d descriptor layout is known. What
-remains is a Julia-side `MtlCooperativeTensor` wrapper plus a host-side
-`MTLTensor` / `MTL4ComputeCommandEncoder` binding (the Objective-C
-classes are already generated in `lib/mtl/libmtl.jl`, gated on
-`macos(v"26.0.0")`). Both validation steps require macOS 26 + Xcode 26;
-M5 hardware is required to see the Neural-Accelerator speedup.
+That path is not yet wired up in Metal.jl. The Objective-C classes are
+already generated in `lib/mtl/libmtl.jl` (gated on `macos(v"26.0.0")`);
+what remains is a Julia-side `MtlCooperativeTensor` wrapper plus a
+host-side `MTLTensor` / `MTL4ComputeCommandEncoder` binding. Note that
+the device-side ops lower to externally-defined
+`__tensorops_impl_matmul2d_op_*` symbols rather than `air.*` intrinsics,
+so the binding pattern differs from the SIMD-group case. Validation
+needs macOS 26 + Xcode 26; M5 hardware is required to see the
+Neural-Accelerator speedup.
 
 ## References
 
