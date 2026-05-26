@@ -90,6 +90,35 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
     return entry
 end
 
+function GPUCompiler.finish_linked_module!(@nospecialize(job::MetalCompilerJob),
+                                           mod::LLVM.Module)
+    invoke(GPUCompiler.finish_linked_module!,
+           Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module},
+           job, mod)
+
+    # GPUCompiler's `box` machinery looks up Julia type tags by loading from the
+    # address of an external `jl_<typename>_type` function (a host-runtime symbol
+    # that doesn't exist on the GPU). On CUDA, ptxas tolerates the unresolved
+    # reference; on Metal, the metallib linker rejects it. Materialize a local
+    # global for each such symbol so the link succeeds. The boxing path only
+    # executes when an `InexactError` is being constructed for a trap, and the
+    # box's result is never observed (the path ends in `llvm.trap`), so the tag
+    # value is immaterial.
+    for f in collect(functions(mod))
+        name = LLVM.name(f)
+        (startswith(name, "jl_") && endswith(name, "_type")) || continue
+        isdeclaration(f) || continue
+        # rename the function out of the way, create a same-named global,
+        # rewrite uses, then erase the function
+        LLVM.name!(f, name * ".decl")
+        gv = LLVM.GlobalVariable(mod, LLVM.Int64Type(), name)
+        LLVM.initializer!(gv, LLVM.ConstantInt(LLVM.Int64Type(), 0))
+        LLVM.linkage!(gv, LLVM.API.LLVMInternalLinkage)
+        LLVM.replace_uses!(f, gv)
+        erase!(f)
+    end
+end
+
 function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
                                     mod::LLVM.Module, entry::LLVM.Function)
     entry = invoke(GPUCompiler.finish_ir!,
