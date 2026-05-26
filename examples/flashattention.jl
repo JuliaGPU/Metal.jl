@@ -32,23 +32,27 @@
 #       tuned reference. Works on macOS 13+ / M1+.
 #
 #   attention_tensor(Q, K, V)
-#       Two kernels (QKᵀ + softmax, then PV) using the Metal 4
-#       `tensor_ops::matmul2d` primitives. Each kernel builds
+#       One fused kernel (QKᵀ → softmax → ·V) using the Metal 4
+#       `tensor_ops::matmul2d` primitives. The kernel builds
 #       `tensor_inline` views over the `MtlDeviceArray` inputs, so the
 #       kernel signature stays buffer-shaped — no host-side `MTLTensor`
 #       / `MTL4ComputeCommandEncoder` wrapping is needed. The matmuls
 #       lower to externally-defined `__tensorops_impl_matmul2d_op_*`
 #       symbols (linked from the MetalPerformancePrimitives runtime),
-#       not `air.*` intrinsics. Requires macOS 26+; on M3/M4 the runtime
-#       still lowers to the same simdgroup MMA hardware. Limited to N =
-#       D = 64 because the matmul descriptor is specialized to that
-#       single 64x64 tile. Splitting QK and PV across two dispatches —
-#       rather than one fused kernel — works around an Apple back-end
-#       crash on two `__tensorops_impl_matmul2d_op_run_*` calls in a
-#       single kernel; it also means the scores tile is materialized in
-#       device memory (`cooperative_tensor` would keep it in registers
-#       for true postfix-fusion, but the device-side dynamic-alloca
-#       support that requires isn't wired up yet).
+#       not `air.*` intrinsics. Scratch for the scores and softmaxed P
+#       lives in threadgroup memory for the lifetime of the kernel — no
+#       device-memory round-trip between the two matmuls. Requires
+#       macOS 26+; on M3/M4 the runtime still lowers to the same
+#       simdgroup MMA hardware. Limited to N = D = 64 because the
+#       matmul descriptor is specialized to that single 64×64 tile, and
+#       the two matmul callsites only avoid Apple's back-end
+#       "out of stack registers" crash when the `matmul2d` op is built
+#       through Metal.jl's `TensorOpsMatmul2D{DESC, NSIMD}` wrapper
+#       (descriptor + simdgroup count as type parameters, mirroring
+#       MSL's `matmul2d<desc, execution_simdgroups<N>>`).
+#       `cooperative_tensor` would keep the scores tile in registers for
+#       true postfix-fusion, but the device-side dynamic-alloca support
+#       that requires isn't wired up yet.
 #
 # All implementations take Julia 4-D `(head_dim, seq, num_heads, batch)`
 # inputs — MPSGraph sees these reversed as `(batch, num_heads, seq,
@@ -191,30 +195,40 @@ end
 
 ## Custom kernel with Metal 4 tensor ops (matmul2d, inline tensors)
 
-# Step 1: compute Q^T K into a Float32 scores buffer, then a row-wise softmax
-# (cast to Float16) into a P buffer. The matmul writes its (M, N) output in a
-# layout that Julia reads as K^T Q (the transpose of Q^T K), so we apply a
+# One fused kernel per (head, batch): QKᵀ → softmax → ·V, with scores and
+# softmaxed P kept in threadgroup memory. The matmul writes its (M, N) output
+# in a layout that Julia reads as KᵀQ (the transpose of QᵀK), so we apply a
 # *column*-wise softmax — that's what corresponds to row-wise softmax of the
-# implicit Q^T K, and it's the right direction for column-major contiguous
+# implicit QᵀK, and it's the right direction for column-major contiguous
 # memory access.
-function _fa_tensor_qk_softmax!(Q::AbstractMatrix{Float16},
-                                K::AbstractMatrix{Float16},
-                                S::AbstractMatrix{Float32},
-                                P::AbstractMatrix{Float16},
-                                D::UInt32, N::UInt32, scale::Float32,
-                                ::Val{TN}, ::Val{TD},
-                                ::Val{NSIMD}) where {TN, TD, NSIMD}
+function _fa_tensor!(O::AbstractMatrix{Float16},
+                     Q::AbstractMatrix{Float16},
+                     K::AbstractMatrix{Float16},
+                     V::AbstractMatrix{Float16},
+                     D::UInt32, N::UInt32, scale::Float32,
+                     ::Val{TN}, ::Val{TD},
+                     ::Val{NSIMD}) where {TN, TD, NSIMD}
     tid = Int32(thread_position_in_threadgroup_3d().x) - Int32(1)
 
-    A = MtlInlineTensor(Q, (D, N))
-    B = MtlInlineTensor(K, (D, N))
-    C = MtlInlineTensor(S, (N, N))
-    op = TensorOpsMatmul2D{matmul2d_descriptor(TN, TN, TD; transpose_right = true),
-                           Int32(NSIMD)}()
-    op(A, B, C)
-    threadgroup_barrier(Metal.MemoryFlagDevice)
+    # Scratch lives in threadgroup memory for the entire kernel: scores tile
+    # (Float32 for accumulator precision) and the softmaxed P (Float16 for the
+    # second matmul).
+    S = MtlThreadGroupArray(Float32, (TN, TN))
+    P = MtlThreadGroupArray(Float16, (TN, TN))
 
-    # Column-wise softmax. 64 of 128 threads do real work; the rest wait.
+    # Step 1: S = QᵀK (read as KᵀQ in Julia layout, see above).
+    let tA = MtlInlineTensor(Q, (D, N)),
+        tB = MtlInlineTensor(K, (D, N)),
+        tC = MtlInlineTensor(S, (N, N))
+        op = TensorOpsMatmul2D{matmul2d_descriptor(TN, TN, TD;
+                                                   transpose_right = true),
+                               Int32(NSIMD)}()
+        op(tA, tB, tC)
+    end
+    threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+
+    # Step 2: column-wise softmax. N of (NSIMD*32) threads do real work; the
+    # rest wait at the barrier below.
     @inbounds if tid < Int32(N)
         col = tid + Int32(1)
         m = -Inf32
@@ -233,22 +247,16 @@ function _fa_tensor_qk_softmax!(Q::AbstractMatrix{Float16},
             P[i, col] = Float16(S[i, col] * inv_s)
         end
     end
-    return
-end
+    threadgroup_barrier(Metal.MemoryFlagThreadGroup)
 
-# Step 2: O = V · P (in Julia view; equivalent to V · P_attn^T because the
-# softmax output is stored in the transposed layout).
-function _fa_tensor_pv!(O::AbstractMatrix{Float16},
-                        V::AbstractMatrix{Float16},
-                        P::AbstractMatrix{Float16},
-                        D::UInt32, N::UInt32,
-                        ::Val{TN}, ::Val{TD},
-                        ::Val{NSIMD}) where {TN, TD, NSIMD}
-    A = MtlInlineTensor(P, (N, N))
-    B = MtlInlineTensor(V, (D, N))
-    C = MtlInlineTensor(O, (D, N))
-    op = TensorOpsMatmul2D{matmul2d_descriptor(TN, TD, TN), Int32(NSIMD)}()
-    op(A, B, C)
+    # Step 3: O = V·P (Julia view; equivalent to V·Pᵀ in math notation because
+    # the softmax output is stored in the transposed layout).
+    let tA = MtlInlineTensor(P, (N, N)),
+        tB = MtlInlineTensor(V, (D, N)),
+        tC = MtlInlineTensor(O, (D, N))
+        op = TensorOpsMatmul2D{matmul2d_descriptor(TN, TD, TN), Int32(NSIMD)}()
+        op(tA, tB, tC)
+    end
     return
 end
 
@@ -257,17 +265,10 @@ function attention_tensor(Q::MtlArray{Float16,4}, K::MtlArray{Float16,4},
                           scale = inv(sqrt(Float32(size(Q, 1)))))
     @assert size(Q) == size(K) == size(V)
     D, N, H, B = size(Q)
-    # MPP requires a real tile, and the (m, n, k) descriptor below is
-    # specialized to (N, N, D); allowing other shapes would mean dispatching
-    # multiple threadgroups.
+    # The matmul descriptor below is specialized to (N, N, D); allowing other
+    # shapes would mean dispatching multiple threadgroups.
     @assert D == N "tensor-ops kernel currently expects D == N"
     O = similar(Q)
-
-    # Allocate persistent scratch for the scores / softmax outputs. One per
-    # (head, batch) pair would let us overlap; for clarity we reuse a single
-    # pair across all dispatches.
-    S = MtlArray{Float32}(undef, N, N)
-    P = MtlArray{Float16}(undef, N, N)
 
     simdgroup_size = 32
     nsimd = 4                       # matches `execution_simdgroups<4>` in the op desc
@@ -283,12 +284,10 @@ function attention_tensor(Q::MtlArray{Float16,4}, K::MtlArray{Float16,4},
         Km = view(K, :, :, h, b)
         Vm = view(V, :, :, h, b)
         Om = view(O, :, :, h, b)
-        @metal threads = threads _fa_tensor_qk_softmax!(Qm, Km, S, P,
-                                                       UInt32(D), UInt32(N),
-                                                       Float32(scale),
-                                                       TN_val, TD_val, NS_val)
-        @metal threads = threads _fa_tensor_pv!(Om, Vm, P, UInt32(D), UInt32(N),
-                                                TN_val, TD_val, NS_val)
+        @metal threads = threads _fa_tensor!(Om, Qm, Km, Vm,
+                                             UInt32(D), UInt32(N),
+                                             Float32(scale),
+                                             TN_val, TD_val, NS_val)
     end
     Metal.synchronize()
     return O
