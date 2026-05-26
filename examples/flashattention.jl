@@ -1,6 +1,6 @@
 # Flash Attention reference implementations on Apple Silicon.
 #
-# Three ways to spell scaled dot-product attention on Metal, illustrating
+# Four ways to spell scaled dot-product attention on Metal, illustrating
 # the programming models Metal.jl exposes:
 #
 #   attention_mps(Q, K, V)
@@ -31,22 +31,28 @@
 #       https://github.com/philipturner/metal-flash-attention for a
 #       tuned reference. Works on macOS 13+ / M1+.
 #
-# A fourth path would use the Metal 4 `cooperative_tensor` /
-# `tensor_ops::matmul2d` primitives with postfix-fusion of the softmax
-# epilogue. Apple positions this as the preferred programming model for
-# ML on M5; on M3/M4 it lowers to the same simdgroup MMA hardware the
-# `attention_simdgroup` path already drives. That path isn't yet wired up
-# in Metal.jl — the ObjC classes are generated in `lib/mtl/libmtl.jl`
-# (gated on `macos(v"26.0.0")`), but the host-side `MTLTensor` /
-# `MTL4ComputeCommandEncoder` wrappers and the device-side
-# `MtlCooperativeTensor` are not. Note that the device-side ops lower to
-# externally-defined `__tensorops_impl_matmul2d_op_*` symbols rather than
-# `air.*` intrinsics, so the binding pattern differs from the simdgroup
-# case.
+#   attention_tensor(Q, K, V)
+#       Two kernels (QKᵀ + softmax, then PV) using the Metal 4
+#       `tensor_ops::matmul2d` primitives. Each kernel builds
+#       `tensor_inline` views over the `MtlDeviceArray` inputs, so the
+#       kernel signature stays buffer-shaped — no host-side `MTLTensor`
+#       / `MTL4ComputeCommandEncoder` wrapping is needed. The matmuls
+#       lower to externally-defined `__tensorops_impl_matmul2d_op_*`
+#       symbols (linked from the MetalPerformancePrimitives runtime),
+#       not `air.*` intrinsics. Requires macOS 26+; on M3/M4 the runtime
+#       still lowers to the same simdgroup MMA hardware. Limited to N =
+#       D = 64 because the matmul descriptor is specialized to that
+#       single 64x64 tile. Splitting QK and PV across two dispatches —
+#       rather than one fused kernel — works around an Apple back-end
+#       crash on two `__tensorops_impl_matmul2d_op_run_*` calls in a
+#       single kernel; it also means the scores tile is materialized in
+#       device memory (`cooperative_tensor` would keep it in registers
+#       for true postfix-fusion, but the device-side dynamic-alloca
+#       support that requires isn't wired up yet).
 #
-# All three implementations take Julia 4-D `(head_dim, seq, num_heads,
-# batch)` inputs — MPSGraph sees these reversed as `(batch, num_heads,
-# seq, head_dim)`, the layout Apple's SDPA expects.
+# All implementations take Julia 4-D `(head_dim, seq, num_heads, batch)`
+# inputs — MPSGraph sees these reversed as `(batch, num_heads, seq,
+# head_dim)`, the layout Apple's SDPA expects.
 
 using Metal
 using Test
@@ -183,6 +189,101 @@ function attention_simdgroup(Q::MtlArray{Float16,4}, K::MtlArray{Float16,4},
 end
 
 
+## Custom kernel with Metal 4 tensor ops (matmul2d, inline tensors)
+
+# Step 1: compute Q^T K into a Float32 scores buffer, then a row-wise softmax
+# (cast to Float16) into a P buffer. The matmul writes its (M, N) output in a
+# layout that Julia reads as K^T Q (the transpose of Q^T K), so we apply a
+# *column*-wise softmax — that's what corresponds to row-wise softmax of the
+# implicit Q^T K, and it's the right direction for column-major contiguous
+# memory access.
+function _fa_tensor_qk_softmax!(Q::AbstractMatrix{Float16},
+                                K::AbstractMatrix{Float16},
+                                S::AbstractMatrix{Float32},
+                                P::AbstractMatrix{Float16},
+                                D::UInt32, N::UInt32, scale::Float32)
+    threads = Int32(threads_per_threadgroup_3d().x)
+    tid = Int32(thread_position_in_threadgroup_3d().x) - Int32(1)
+
+    A = MtlInlineTensor(Q, (D, N))
+    B = MtlInlineTensor(K, (D, N))
+    C = MtlInlineTensor(S, (N, N))
+    desc = matmul2d_descriptor(N, N, D; transpose_right = true)
+    tensor_ops_matmul2d!(desc, A, B, C, threads)
+    threadgroup_barrier(Metal.MemoryFlagDevice)
+
+    # Column-wise softmax. 64 of 128 threads do real work; the rest wait.
+    @inbounds if tid < Int32(N)
+        col = tid + Int32(1)
+        m = -Inf32
+        for i in Int32(1):Int32(N)
+            v = S[i, col] * scale
+            m = v > m ? v : m
+        end
+        s = 0.0f0
+        for i in Int32(1):Int32(N)
+            p = exp(S[i, col] * scale - m)
+            S[i, col] = p
+            s += p
+        end
+        inv_s = 1.0f0 / s
+        for i in Int32(1):Int32(N)
+            P[i, col] = Float16(S[i, col] * inv_s)
+        end
+    end
+    return
+end
+
+# Step 2: O = V · P (in Julia view; equivalent to V · P_attn^T because the
+# softmax output is stored in the transposed layout).
+function _fa_tensor_pv!(O::AbstractMatrix{Float16},
+                        V::AbstractMatrix{Float16},
+                        P::AbstractMatrix{Float16},
+                        D::UInt32, N::UInt32)
+    threads = Int32(threads_per_threadgroup_3d().x)
+    A = MtlInlineTensor(P, (N, N))
+    B = MtlInlineTensor(V, (D, N))
+    C = MtlInlineTensor(O, (D, N))
+    desc = matmul2d_descriptor(N, D, N)
+    tensor_ops_matmul2d!(desc, A, B, C, threads)
+    return
+end
+
+function attention_tensor(Q::MtlArray{Float16,4}, K::MtlArray{Float16,4},
+                          V::MtlArray{Float16,4};
+                          scale = inv(sqrt(Float32(size(Q, 1)))))
+    @assert size(Q) == size(K) == size(V)
+    D, N, H, B = size(Q)
+    # MPP requires a real tile, and the (m, n, k) descriptor below is
+    # specialized to (N, N, D); allowing other shapes would mean dispatching
+    # multiple threadgroups.
+    @assert D == N "tensor-ops kernel currently expects D == N"
+    O = similar(Q)
+
+    # Allocate persistent scratch for the scores / softmax outputs. One per
+    # (head, batch) pair would let us overlap; for clarity we reuse a single
+    # pair across all dispatches.
+    S = MtlArray{Float32}(undef, N, N)
+    P = MtlArray{Float16}(undef, N, N)
+
+    simdgroup_size = 32
+    threads = 4 * simdgroup_size      # matmul descriptor wants execution_simdgroups<4>
+
+    for b in 1:B, h in 1:H
+        Qm = view(Q, :, :, h, b)
+        Km = view(K, :, :, h, b)
+        Vm = view(V, :, :, h, b)
+        Om = view(O, :, :, h, b)
+        @metal threads = threads _fa_tensor_qk_softmax!(Qm, Km, S, P,
+                                                       UInt32(D), UInt32(N),
+                                                       Float32(scale))
+        @metal threads = threads _fa_tensor_pv!(Om, Vm, P, UInt32(D), UInt32(N))
+    end
+    Metal.synchronize()
+    return O
+end
+
+
 ## CPU reference + driver
 
 function attention_cpu(Q, K, V; scale = inv(sqrt(eltype(Q)(size(Q, 1)))))
@@ -201,20 +302,38 @@ end
 
 function main()
     T = Float16    # simdgroup path requires fp16
-    D = N = 8      # constrained by the simdgroup kernel
 
-    Q = MtlArray(randn(T, D, N, 1, 1))
-    K = MtlArray(randn(T, D, N, 1, 1))
-    V = MtlArray(randn(T, D, N, 1, 1))
+    # The simdgroup kernel is locked to 8x8 tiles, and the tensor-ops kernel
+    # uses a 64x64 matmul descriptor. Run each at its natural shape.
+    let D = N = 8
+        Q = MtlArray(randn(T, D, N, 1, 1))
+        K = MtlArray(randn(T, D, N, 1, 1))
+        V = MtlArray(randn(T, D, N, 1, 1))
 
-    O_cpu       = attention_cpu(Array(Q), Array(K), Array(V))
-    O_mps       = attention_mps(Q, K, V)
-    O_mpsgraph  = attention_mpsgraph(Q, K, V)
-    O_simdgroup = attention_simdgroup(Q, K, V)
+        O_cpu       = attention_cpu(Array(Q), Array(K), Array(V))
+        O_mps       = attention_mps(Q, K, V)
+        O_mpsgraph  = attention_mpsgraph(Q, K, V)
+        O_simdgroup = attention_simdgroup(Q, K, V)
 
-    @test Array(O_mps)       ≈ O_cpu rtol = 1e-2
-    @test Array(O_mpsgraph)  ≈ O_cpu rtol = 1e-2
-    @test Array(O_simdgroup) ≈ O_cpu rtol = 1e-2
+        @test Array(O_mps)       ≈ O_cpu rtol = 1e-2
+        @test Array(O_mpsgraph)  ≈ O_cpu rtol = 1e-2
+        @test Array(O_simdgroup) ≈ O_cpu rtol = 1e-2
+    end
+
+    if Metal.macos_version() >= v"26.0.0"
+        let D = N = 64
+            Q = MtlArray(randn(T, D, N, 1, 1))
+            K = MtlArray(randn(T, D, N, 1, 1))
+            V = MtlArray(randn(T, D, N, 1, 1))
+
+            O_cpu      = attention_cpu(Array(Q), Array(K), Array(V))
+            O_mps      = attention_mps(Q, K, V)
+            O_tensor   = attention_tensor(Q, K, V)
+
+            @test Array(O_mps)    ≈ O_cpu rtol = 1e-2
+            @test Array(O_tensor) ≈ O_cpu rtol = 1e-2
+        end
+    end
 end
 
 isinteractive() || main()
