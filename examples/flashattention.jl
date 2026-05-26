@@ -201,15 +201,17 @@ function _fa_tensor_qk_softmax!(Q::AbstractMatrix{Float16},
                                 K::AbstractMatrix{Float16},
                                 S::AbstractMatrix{Float32},
                                 P::AbstractMatrix{Float16},
-                                D::UInt32, N::UInt32, scale::Float32)
-    threads = Int32(threads_per_threadgroup_3d().x)
+                                D::UInt32, N::UInt32, scale::Float32,
+                                ::Val{TN}, ::Val{TD},
+                                ::Val{NSIMD}) where {TN, TD, NSIMD}
     tid = Int32(thread_position_in_threadgroup_3d().x) - Int32(1)
 
     A = MtlInlineTensor(Q, (D, N))
     B = MtlInlineTensor(K, (D, N))
     C = MtlInlineTensor(S, (N, N))
-    desc = matmul2d_descriptor(N, N, D; transpose_right = true)
-    tensor_ops_matmul2d!(desc, A, B, C, threads)
+    op = TensorOpsMatmul2D{matmul2d_descriptor(TN, TN, TD; transpose_right = true),
+                           Int32(NSIMD)}()
+    op(A, B, C)
     threadgroup_barrier(Metal.MemoryFlagDevice)
 
     # Column-wise softmax. 64 of 128 threads do real work; the rest wait.
@@ -239,13 +241,14 @@ end
 function _fa_tensor_pv!(O::AbstractMatrix{Float16},
                         V::AbstractMatrix{Float16},
                         P::AbstractMatrix{Float16},
-                        D::UInt32, N::UInt32)
-    threads = Int32(threads_per_threadgroup_3d().x)
+                        D::UInt32, N::UInt32,
+                        ::Val{TN}, ::Val{TD},
+                        ::Val{NSIMD}) where {TN, TD, NSIMD}
     A = MtlInlineTensor(P, (N, N))
     B = MtlInlineTensor(V, (D, N))
     C = MtlInlineTensor(O, (D, N))
-    desc = matmul2d_descriptor(N, D, N)
-    tensor_ops_matmul2d!(desc, A, B, C, threads)
+    op = TensorOpsMatmul2D{matmul2d_descriptor(TN, TD, TN), Int32(NSIMD)}()
+    op(A, B, C)
     return
 end
 
@@ -267,7 +270,13 @@ function attention_tensor(Q::MtlArray{Float16,4}, K::MtlArray{Float16,4},
     P = MtlArray{Float16}(undef, N, N)
 
     simdgroup_size = 32
-    threads = 4 * simdgroup_size      # matmul descriptor wants execution_simdgroups<4>
+    nsimd = 4                       # matches `execution_simdgroups<4>` in the op desc
+    threads = nsimd * simdgroup_size
+
+    # The matmul descriptors carry (TN, TD) — the static tile shape per head.
+    TN_val = Val(Int32(N))
+    TD_val = Val(Int32(D))
+    NS_val = Val(Int32(nsimd))
 
     for b in 1:B, h in 1:H
         Qm = view(Q, :, :, h, b)
@@ -276,8 +285,10 @@ function attention_tensor(Q::MtlArray{Float16,4}, K::MtlArray{Float16,4},
         Om = view(O, :, :, h, b)
         @metal threads = threads _fa_tensor_qk_softmax!(Qm, Km, S, P,
                                                        UInt32(D), UInt32(N),
-                                                       Float32(scale))
-        @metal threads = threads _fa_tensor_pv!(Om, Vm, P, UInt32(D), UInt32(N))
+                                                       Float32(scale),
+                                                       TN_val, TD_val, NS_val)
+        @metal threads = threads _fa_tensor_pv!(Om, Vm, P, UInt32(D), UInt32(N),
+                                                TN_val, TD_val, NS_val)
     end
     Metal.synchronize()
     return O

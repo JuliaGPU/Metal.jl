@@ -1,32 +1,33 @@
 # High-level tile-decomposed matmul on top of `tensor_ops::matmul2d`.
 
+# Specialized on the tile shape (TM, TN, TK) and simdgroup count (NSIMD) so the
+# matmul descriptor and execution width are compile-time constants — see
+# `TensorOpsMatmul2D`.
 function _tensor_matmul_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceArray,
                                 M::UInt32, N::UInt32, K::UInt32,
-                                tm::UInt32, tn::UInt32, tk::UInt32)
-    threads = Int32(threads_per_threadgroup_3d().x)
+                                ::Val{TM}, ::Val{TN}, ::Val{TK},
+                                ::Val{NSIMD}) where {TM, TN, TK, NSIMD}
     tgid    = threadgroup_position_in_grid_3d()
     n_tile  = Int32(tgid.x) - Int32(1)
     m_tile  = Int32(tgid.y) - Int32(1)
-    n_off   = n_tile * Int32(tn)
-    m_off   = m_tile * Int32(tm)
+    n_off   = n_tile * Int32(TN)
+    m_off   = m_tile * Int32(TM)
 
-    # In the matmul ABI, output is laid out as Julia col-major (apple_N, apple_M).
-    # We swap operands at the call site (apple_A buf = Julia B, apple_B buf =
-    # Julia A) so the natural Julia semantics `C = A * B` come out; see the
-    # derivation in `tensor_matmul!`.
     tA = MtlInlineTensor(B, (K, M))
     tB = MtlInlineTensor(A, (N, K))
     tC = MtlInlineTensor(C, (N, M))
 
-    mC = view(tC, (n_off, m_off), (Int32(tn), Int32(tm)))
+    mC = view(tC, (n_off, m_off), (Int32(TN), Int32(TM)))
 
-    desc = matmul2d_descriptor(tm, tn, tk; mode = matmul2d_multiply_accumulate)
-    nslices = Int32(K ÷ tk)
+    op = TensorOpsMatmul2D{matmul2d_descriptor(TM, TN, TK;
+                                               mode = matmul2d_multiply_accumulate),
+                           Int32(NSIMD)}()
+    nslices = Int32(K ÷ UInt32(TK))
     for s in Int32(0):(nslices - Int32(1))
-        k_off = s * Int32(tk)
-        mA = view(tA, (k_off, m_off), (Int32(tk), Int32(tm)))
-        mB = view(tB, (n_off, k_off), (Int32(tn), Int32(tk)))
-        tensor_ops_matmul2d!(desc, mA, mB, mC, threads)
+        k_off = s * Int32(TK)
+        mA = view(tA, (k_off, m_off), (Int32(TK), Int32(TM)))
+        mB = view(tB, (n_off, k_off), (Int32(TN), Int32(TK)))
+        op(mA, mB, mC)
     end
     return
 end
@@ -77,9 +78,11 @@ function tensor_matmul!(C::MtlMatrix{TC}, A::MtlMatrix{TA}, B::MtlMatrix{TB};
 
     fill!(C, zero(TC))
     groups = (aN ÷ tile_n, aM ÷ tile_m, 1)
-    @metal threads = 4 * 32 groups = groups _tensor_matmul_kernel!(
+    nsimd = 4
+    @metal threads = nsimd * 32 groups = groups _tensor_matmul_kernel!(
         C, A, B,
         UInt32(aM), UInt32(aN), UInt32(aK),
-        UInt32(tile_m), UInt32(tile_n), UInt32(tile_k))
+        Val(Int32(tile_m)), Val(Int32(tile_n)), Val(Int32(tile_k)),
+        Val(Int32(nsimd)))
     return C
 end

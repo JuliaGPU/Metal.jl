@@ -1,4 +1,4 @@
-export MtlInlineTensor, matmul2d_descriptor, tensor_ops_matmul2d!,
+export MtlInlineTensor, matmul2d_descriptor, TensorOpsMatmul2D,
        matmul2d_multiply, matmul2d_multiply_accumulate, tensor_matmul!
 
 using Core: LLVMPtr
@@ -209,17 +209,19 @@ into the destination, set `mode = matmul2d_multiply_accumulate` and zero
 the destination before the loop. A typical pattern:
 
 ```julia
-desc = matmul2d_descriptor(M, N, TileK; mode = matmul2d_multiply_accumulate)
+op = TensorOpsMatmul2D{matmul2d_descriptor(M, N, TileK;
+                                           mode = matmul2d_multiply_accumulate),
+                       Int32(NSIMD)}()
 for s in 0:(nslices - 1)
     sA = view(tA, (Int32(s) * Int32(TileK), Int32(0)), (Int32(TileK), Int32(M)))
     sB = view(tB, (Int32(0), Int32(s) * Int32(TileK)), (Int32(N), Int32(TileK)))
-    tensor_ops_matmul2d!(desc, sA, sB, tC, threads)
+    op(sA, sB, tC)
 end
 ```
 
 Keep the loop's trip count dynamic — a compile-time-known trip count
-that fully unrolls into multiple `tensor_ops_matmul2d!` call sites
-currently crashes Apple's back-end (see `ISSUE-tensor-ops.md`).
+that fully unrolls into multiple op call sites currently crashes Apple's
+back-end (see `ISSUE-tensor-ops.md`).
 """
 struct matmul2d_descriptor
     m::Int32
@@ -261,33 +263,47 @@ _tensorops_aspace_prefix(::Val{AS.Device})      = "dv"
 _tensorops_aspace_prefix(::Val{AS.ThreadGroup}) = "tg"
 
 """
-    tensor_ops_matmul2d!(desc, left, right, dest, threads)
+    TensorOpsMatmul2D{DESC, NSIMD}
 
-`dest = left * right (+ dest if mode=multiply_accumulate)` executed
-cooperatively by `threads` participating threads (i.e.
-`simdgroup_size * num_simdgroups`). Each operand is a rank-2
-[`MtlInlineTensor`](@ref) over either device or threadgroup memory; the
-right `__tensorops_impl_matmul2d_op_run_{aspace}_{type}_..._*` symbol is
-picked based on the operand types and address spaces.
+Configured `tensor_ops::matmul2d` op. Mirrors Apple's MSL
+`matmul2d<desc, execution_simdgroups<N>>` template: `DESC` is the
+[`matmul2d_descriptor`](@ref) value, `NSIMD` is the simdgroup count
+(`execution_simdgroups<N>`). Both are encoded as type parameters so the
+generated AIR carries them as compile-time constants — `NSIMD`
+specifically: the AGX register allocator runs out of stack registers
+when the simdgroup count is a runtime value and two matmul calls live
+in the same kernel.
+
+Construct with [`TensorOpsMatmul2D(desc, Val(N))`](@ref) and invoke
+like a function:
+
+```julia
+op = TensorOpsMatmul2D(matmul2d_descriptor(64, 32, -1), Val(4))
+op(left, right, dest)            # run; mirrors `op.run(...)` in MSL
+```
 """
-@generated function tensor_ops_matmul2d!(
-        desc::matmul2d_descriptor,
+struct TensorOpsMatmul2D{DESC, NSIMD} end
+
+TensorOpsMatmul2D(desc::matmul2d_descriptor, ::Val{NSIMD}) where {NSIMD} =
+    TensorOpsMatmul2D{desc, Int32(NSIMD)}()
+
+@device_function @inline @generated function (::TensorOpsMatmul2D{DESC, NSIMD})(
         left::MtlInlineTensor{TL, 2, AL},
         right::MtlInlineTensor{TR, 2, AR},
-        dest::MtlInlineTensor{TD, 2, AD},
-        threads::Int32) where {TL, TR, TD, AL, AR, AD}
+        dest::MtlInlineTensor{TD, 2, AD}) where {DESC, NSIMD, TL, TR, TD, AL, AR, AD}
     sym = "__tensorops_impl_matmul2d_op_run" *
           "_$(_tensorops_aspace_prefix(Val(AL)))_$(_tensorops_suffix(TL))" *
           "_$(_tensorops_aspace_prefix(Val(AR)))_$(_tensorops_suffix(TR))" *
           "_$(_tensorops_aspace_prefix(Val(AD)))_$(_tensorops_suffix(TD))"
     quote
+        threads = Int32(NSIMD) * Int32(threads_per_simdgroup())
         ccall($"extern $sym", llvmcall, Cvoid,
               (Ref{matmul2d_descriptor},
                Ref{UInt8}, Int32,
                Ref{UInt8}, Int32,
                Ref{UInt8}, Int32,
                Int32),
-              desc,
+              $(QuoteNode(DESC)),
               left.storage,  $_TENSOR_DESC_INLINE,
               right.storage, $_TENSOR_DESC_INLINE,
               dest.storage,  $_TENSOR_DESC_INLINE,
@@ -295,3 +311,4 @@ picked based on the operand types and address spaces.
         return nothing
     end
 end
+
