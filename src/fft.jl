@@ -285,8 +285,7 @@ const _fft_graph_cache_lock = ReentrantLock()
 
     cmdbuf = MPS.MPSCommandBuffer(global_queue(device()))
     MPS.encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(resultdict), nil, MPSGraphs.default_exec_desc())
-    commit!(cmdbuf)
-    wait_completed(cmdbuf)
+    synchronize(cmdbuf)
 
     return y
 end

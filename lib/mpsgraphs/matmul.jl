@@ -151,8 +151,7 @@ const _matmul_graph_cache_lock = ReentrantLock()
 
     cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
     encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(resultdict), nil, default_exec_desc())
-    commit!(cmdbuf)
-    wait_completed(cmdbuf)
+    Metal.synchronize(cmdbuf)
 
     return c
 end

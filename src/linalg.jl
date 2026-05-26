@@ -160,7 +160,8 @@ LinearAlgebra.ipiv2perm(v::MtlVector{<:Any, CPUStorage}, maxi::Integer) =
 
     B = similar(A, M, N)
 
-    commit!(cmdbuf) do cbuf
+    MTL.enqueue!(cmdbuf)
+    let cbuf = cmdbuf
         mps_b = MPSMatrix(B)
         kernel = MPSMatrixCopy(dev, M, N, false, true)
         descriptor = MPSMatrixCopyDescriptor(mps_at, mps_b)
@@ -169,7 +170,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{<:Any, CPUStorage}, maxi::Integer) =
 
     p = vec(P) .+ UInt32(1)
 
-    wait_completed(cmdbuf)
+    synchronize(cmdbuf)
 
     status = convert(LinearAlgebra.BlasInt, status[]::MPS.MPSMatrixDecompositionStatus)
     check && checknonsingular(status)
@@ -216,7 +217,8 @@ end
         encode!(cbuf, kernel, mps_at, mps_at, mps_p, status)
     end
 
-    commit!(cmdbuf) do cbuf
+    MTL.enqueue!(cmdbuf)
+    let cbuf = cmdbuf
         kernel = MPSMatrixCopy(dev, M, N, false, true)
         descriptor = MPSMatrixCopyDescriptor(mps_at, mps_a)
         encode!(cbuf, kernel, descriptor)
@@ -224,7 +226,7 @@ end
 
     p = vec(P) .+ UInt32(1)
 
-    wait_completed(cmdbuf)
+    synchronize(cmdbuf)
 
     status = convert(LinearAlgebra.BlasInt, status[])
     check && _check_lu_success(status, allowsingular)
