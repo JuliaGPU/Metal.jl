@@ -1,5 +1,5 @@
 export MtlInlineTensor, matmul2d_descriptor, tensor_ops_matmul2d!,
-       matmul2d_multiply, matmul2d_multiply_accumulate
+       matmul2d_multiply, matmul2d_multiply_accumulate, tensor_matmul!
 
 using Core: LLVMPtr
 
@@ -15,7 +15,13 @@ using Core: LLVMPtr
 # `Ref{NTuple{N, UInt8}}`. Julia's `llvm-alloc-opt` pass promotes the Ref to
 # a stack alloca once everything is inlined into the kernel.
 
-const _TENSOR_DESCRIPTOR_SIZE = 64
+# Conservative upper bound on the size of an i32-indexed tensor descriptor.
+# Apple's compiler emits a dynamic `alloca i8, i64 %sz` where `%sz` comes
+# from `air.get_descriptor_size_tensor` (marked deferred-static-alloca-size
+# so it's resolved at metallib build time). We use one static size that
+# covers the ranks we care about (≤ 8 for i32-indexed tensors); higher
+# ranks would need a bigger buffer.
+const _TENSOR_DESCRIPTOR_SIZE = 128
 
 const _TensorDescriptorStorage = Base.RefValue{NTuple{_TENSOR_DESCRIPTOR_SIZE, UInt8}}
 
@@ -38,8 +44,8 @@ const _TensorDescriptorStorage = Base.RefValue{NTuple{_TENSOR_DESCRIPTOR_SIZE, U
     handle::_TensorDescriptorStorage,
     rank::Int16,
     data::LLVMPtr{UInt8, AS.Device},
-    extents::NTuple{2, Int32},
-    strides::NTuple{2, Int32},
+    extents::NTuple{<:Any, Int32},
+    strides::NTuple{<:Any, Int32},
     contiguous::Int8,
 ) = ccall("extern air.init_strided_private_tensor.i32.global", llvmcall,
           Cvoid,
@@ -51,8 +57,8 @@ const _TensorDescriptorStorage = Base.RefValue{NTuple{_TENSOR_DESCRIPTOR_SIZE, U
     handle::_TensorDescriptorStorage,
     rank::Int16,
     data::LLVMPtr{UInt8, AS.ThreadGroup},
-    extents::NTuple{2, Int32},
-    strides::NTuple{2, Int32},
+    extents::NTuple{<:Any, Int32},
+    strides::NTuple{<:Any, Int32},
     contiguous::Int8,
 ) = ccall("extern air.init_strided_private_tensor.i32.local", llvmcall,
           Cvoid,
@@ -70,8 +76,8 @@ const _TensorDescriptorStorage = Base.RefValue{NTuple{_TENSOR_DESCRIPTOR_SIZE, U
     dst::_TensorDescriptorStorage,
     src::_TensorDescriptorStorage,
     rank::Int16,
-    origin::NTuple{2, Int32},
-    extents::NTuple{2, Int32},
+    origin::NTuple{<:Any, Int32},
+    extents::NTuple{<:Any, Int32},
 ) = ccall("extern air.slice_private_tensor_private_tensor.s.i32", llvmcall,
           Cvoid,
           (Ref{UInt8}, Ref{UInt8}, Int16, Ref{Int32}, Ref{Int32}),
@@ -83,104 +89,104 @@ const _TensorDescriptorStorage = Base.RefValue{NTuple{_TENSOR_DESCRIPTOR_SIZE, U
 """
     MtlInlineTensor{T, R, ASpace}
 
-Kernel-stack tensor view over an `MtlDeviceArray` or `MtlThreadGroupArray`,
-suitable for use as an operand of [`tensor_ops_matmul2d!`](@ref). `T` is the
-element type; `R` is the rank (only rank 2 is supported today); `ASpace` is
-the address space of the underlying data (`AS.Device` or `AS.ThreadGroup`).
-Backed by a thread-private byte buffer (an inline `Ref`) that the runtime
-initializes at construction.
+Kernel-stack tensor view over an `MtlDeviceArray` or `MtlThreadGroupArray`.
+`T` is the element type, `R` the rank, `ASpace` the address space of the
+underlying data (`AS.Device` or `AS.ThreadGroup`). Backed by a thread-
+private byte buffer (an inline `Ref`) that the runtime initializes at
+construction.
 
-Note: extents follow the MSL `dextents<int32_t, R>{e1, e2, ...}` convention
+Extents follow the MSL `dextents<int32_t, R>{e1, e2, ...}` convention
 (innermost dimension first), which is the row-major view the matmul kernel
 expects. For a Julia column-major `MtlMatrix(M, N)`, pass extents `(M, N)`
 if you want to treat columns as the inner dimension.
+
+`tensor_ops::matmul2d` itself is rank-2 — higher-rank tensors are useful
+for slicing, multi-batch lifts, and the future `convolution2d` op.
 """
 struct MtlInlineTensor{T, R, ASpace}
     storage::_TensorDescriptorStorage
 end
 
-# In-kernel constructors: packed-stride rank-2 tensor over device or
-# threadgroup memory. `contiguous` is `1` (packed) by default; the
-# explicit-stride methods below pass `0`.
-@device_function @inline function MtlInlineTensor{T, 2, AS.Device}(
+# `tensor_inline` packed-stride strides: stride(0) = 1, stride(k) = prod(extents[1:k]).
+@inline function _packed_strides(extents::NTuple{R, Int32}) where {R}
+    ntuple(Val(R)) do k
+        s = Int32(1)
+        for j in 1:(k - 1)
+            s *= extents[j]
+        end
+        s
+    end
+end
+
+# In-kernel constructors (packed strides):
+@device_function @inline function MtlInlineTensor{T, R, AS.Device}(
         data::MtlDeviceArray{T, <:Any, AS.Device},
-        e1::Integer, e2::Integer) where {T}
+        extents::NTuple{R, <:Integer}) where {T, R}
+    e = Int32.(extents)
     storage = Ref{NTuple{_TENSOR_DESCRIPTOR_SIZE, UInt8}}()
-    init_strided_tensor_device!(storage, Int16(2),
+    init_strided_tensor_device!(storage, Int16(R),
                                 reinterpret(LLVMPtr{UInt8, AS.Device}, pointer(data)),
-                                (Int32(e1), Int32(e2)),
-                                (Int32(1),  Int32(e1)),
-                                Int8(1))
-    return MtlInlineTensor{T, 2, AS.Device}(storage)
+                                e, _packed_strides(e), Int8(1))
+    return MtlInlineTensor{T, R, AS.Device}(storage)
 end
 
-@device_function @inline function MtlInlineTensor{T, 2, AS.ThreadGroup}(
+@device_function @inline function MtlInlineTensor{T, R, AS.ThreadGroup}(
         data::MtlDeviceArray{T, <:Any, AS.ThreadGroup},
-        e1::Integer, e2::Integer) where {T}
+        extents::NTuple{R, <:Integer}) where {T, R}
+    e = Int32.(extents)
     storage = Ref{NTuple{_TENSOR_DESCRIPTOR_SIZE, UInt8}}()
-    init_strided_tensor_threadgroup!(storage, Int16(2),
+    init_strided_tensor_threadgroup!(storage, Int16(R),
                                      reinterpret(LLVMPtr{UInt8, AS.ThreadGroup}, pointer(data)),
-                                     (Int32(e1), Int32(e2)),
-                                     (Int32(1),  Int32(e1)),
-                                     Int8(1))
-    return MtlInlineTensor{T, 2, AS.ThreadGroup}(storage)
+                                     e, _packed_strides(e), Int8(1))
+    return MtlInlineTensor{T, R, AS.ThreadGroup}(storage)
 end
 
-# Explicit-stride variants (mark the tensor as non-packed for the runtime).
-@device_function @inline function MtlInlineTensor{T, 2, AS.Device}(
+# Explicit-stride variants:
+@device_function @inline function MtlInlineTensor{T, R, AS.Device}(
         data::MtlDeviceArray{T, <:Any, AS.Device},
-        e1::Integer, e2::Integer,
-        s1::Integer, s2::Integer) where {T}
+        extents::NTuple{R, <:Integer},
+        strides::NTuple{R, <:Integer}) where {T, R}
     storage = Ref{NTuple{_TENSOR_DESCRIPTOR_SIZE, UInt8}}()
-    init_strided_tensor_device!(storage, Int16(2),
+    init_strided_tensor_device!(storage, Int16(R),
                                 reinterpret(LLVMPtr{UInt8, AS.Device}, pointer(data)),
-                                (Int32(e1), Int32(e2)),
-                                (Int32(s1), Int32(s2)),
-                                Int8(0))
-    return MtlInlineTensor{T, 2, AS.Device}(storage)
+                                Int32.(extents), Int32.(strides), Int8(0))
+    return MtlInlineTensor{T, R, AS.Device}(storage)
 end
 
-@device_function @inline function MtlInlineTensor{T, 2, AS.ThreadGroup}(
+@device_function @inline function MtlInlineTensor{T, R, AS.ThreadGroup}(
         data::MtlDeviceArray{T, <:Any, AS.ThreadGroup},
-        e1::Integer, e2::Integer,
-        s1::Integer, s2::Integer) where {T}
+        extents::NTuple{R, <:Integer},
+        strides::NTuple{R, <:Integer}) where {T, R}
     storage = Ref{NTuple{_TENSOR_DESCRIPTOR_SIZE, UInt8}}()
-    init_strided_tensor_threadgroup!(storage, Int16(2),
+    init_strided_tensor_threadgroup!(storage, Int16(R),
                                      reinterpret(LLVMPtr{UInt8, AS.ThreadGroup}, pointer(data)),
-                                     (Int32(e1), Int32(e2)),
-                                     (Int32(s1), Int32(s2)),
-                                     Int8(0))
-    return MtlInlineTensor{T, 2, AS.ThreadGroup}(storage)
+                                     Int32.(extents), Int32.(strides), Int8(0))
+    return MtlInlineTensor{T, R, AS.ThreadGroup}(storage)
 end
 
-# Convenience: infer address space from the array.
+# Convenience: infer rank and address space from the inputs.
 @inline MtlInlineTensor(data::MtlDeviceArray{T, <:Any, A},
-                        extents::NTuple{2, <:Integer}) where {T, A} =
-    MtlInlineTensor{T, 2, A}(data, extents[1], extents[2])
+                        extents::NTuple{R, <:Integer}) where {T, R, A} =
+    MtlInlineTensor{T, R, A}(data, extents)
 
 @inline MtlInlineTensor(data::MtlDeviceArray{T, <:Any, A},
-                        extents::NTuple{2, <:Integer},
-                        strides::NTuple{2, <:Integer}) where {T, A} =
-    MtlInlineTensor{T, 2, A}(data, extents[1], extents[2], strides[1], strides[2])
+                        extents::NTuple{R, <:Integer},
+                        strides::NTuple{R, <:Integer}) where {T, R, A} =
+    MtlInlineTensor{T, R, A}(data, extents, strides)
 
 Base.eltype(::Type{<:MtlInlineTensor{T}}) where {T} = T
 Base.eltype(::MtlInlineTensor{T}) where {T} = T
 
 # Slice. Origins are zero-based to match MSL semantics.
-@device_function @inline function _slice_inline_tensor(
-        t::MtlInlineTensor{T, 2, A},
-        o1::Integer, o2::Integer,
-        e1::Integer, e2::Integer) where {T, A}
+@device_function @inline function Base.view(
+        t::MtlInlineTensor{T, R, A},
+        origin::NTuple{R, <:Integer},
+        extents::NTuple{R, <:Integer}) where {T, R, A}
     storage = Ref{NTuple{_TENSOR_DESCRIPTOR_SIZE, UInt8}}()
-    slice_private_tensor!(storage, t.storage, Int16(2),
-                          (Int32(o1), Int32(o2)),
-                          (Int32(e1), Int32(e2)))
-    return MtlInlineTensor{T, 2, A}(storage)
+    slice_private_tensor!(storage, t.storage, Int16(R),
+                          Int32.(origin), Int32.(extents))
+    return MtlInlineTensor{T, R, A}(storage)
 end
-
-@inline Base.view(t::MtlInlineTensor{T, 2}, origin::NTuple{2, <:Integer},
-                  extents::NTuple{2, <:Integer}) where {T} =
-    _slice_inline_tensor(t, origin[1], origin[2], extents[1], extents[2])
 
 
 ## matmul2d descriptor (mirrors `mpp::tensor_ops::matmul2d_descriptor`).
@@ -259,7 +265,7 @@ _tensorops_aspace_prefix(::Val{AS.ThreadGroup}) = "tg"
 
 `dest = left * right (+ dest if mode=multiply_accumulate)` executed
 cooperatively by `threads` participating threads (i.e.
-`simdgroup_size * num_simdgroups`). Each operand is an
+`simdgroup_size * num_simdgroups`). Each operand is a rank-2
 [`MtlInlineTensor`](@ref) over either device or threadgroup memory; the
 right `__tensorops_impl_matmul2d_op_run_{aspace}_{type}_..._*` symbol is
 picked based on the operand types and address spaces.
