@@ -288,14 +288,9 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     f = kernel.f
     pipeline = kernel.pipeline
 
-    # every kernel gets a pointer to the device-wide bump-allocator buffer in
-    # its `KernelState`. allocating it lazily once per device is cheaper than
-    # detecting per-kernel whether `gpu_malloc` is referenced, and the buffer
-    # is small enough that we don't mind paying for it on kernels that never
-    # actually allocate.
     buf = malloc_buffer(pipeline.device)
-    malloc_buf = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, UInt64(buf.gpuAddress))
-    kernel_state = KernelState(Random.rand(UInt32), malloc_buf)
+    buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, UInt64(buf.gpuAddress))
+    kernel_state = KernelState(Random.rand(UInt32), buf_ptr)
 
     cmdbuf = MTLCommandBuffer(queue)
     cmdbuf.label = "MTLCommandBuffer($(nameof(f)))"
