@@ -16,22 +16,6 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
                    Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module, LLVM.Function},
                    job, mod, entry)
 
-    # `Runtime.<name>`'s `llvmcall` body emits a weak `gpu_<name>` stub at every
-    # call site. LLVM's linker would normally let our strong runtime-library def
-    # override that weak stub — but GPUCompiler's `InternalizePass` runs *before*
-    # the runtime gets linked, internalizing the weak stub. once internal, the
-    # symbol can't be replaced from another module, so the strong override is
-    # ignored. drop the stub bodies here so they become external declarations
-    # again, which the runtime link then resolves to the strong defs.
-    for f in collect(functions(mod))
-        startswith(LLVM.name(f), "gpu_") || continue
-        isdeclaration(f) && continue
-        for bb in collect(blocks(f))
-            erase!(bb)
-        end
-        LLVM.linkage!(f, LLVM.API.LLVMExternalLinkage)
-    end
-
     # if this kernel uses our RNG, we should prime the shared state.
     # XXX: these transformations should really happen at the Julia IR level...
     if job.config.kernel && haskey(globals(mod), "global_random_keys")
@@ -88,35 +72,6 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
         #      (e.g., a compile-time version of `deferred_codegen`)
     end
     return entry
-end
-
-function GPUCompiler.finish_linked_module!(@nospecialize(job::MetalCompilerJob),
-                                           mod::LLVM.Module)
-    invoke(GPUCompiler.finish_linked_module!,
-           Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module},
-           job, mod)
-
-    # GPUCompiler's `box` machinery looks up Julia type tags by loading from the
-    # address of an external `jl_<typename>_type` function (a host-runtime symbol
-    # that doesn't exist on the GPU). On CUDA, ptxas tolerates the unresolved
-    # reference; on Metal, the metallib linker rejects it. Materialize a local
-    # global for each such symbol so the link succeeds. The boxing path only
-    # executes when an `InexactError` is being constructed for a trap, and the
-    # box's result is never observed (the path ends in `llvm.trap`), so the tag
-    # value is immaterial.
-    for f in collect(functions(mod))
-        name = LLVM.name(f)
-        (startswith(name, "jl_") && endswith(name, "_type")) || continue
-        isdeclaration(f) || continue
-        # rename the function out of the way, create a same-named global,
-        # rewrite uses, then erase the function
-        LLVM.name!(f, name * ".decl")
-        gv = LLVM.GlobalVariable(mod, LLVM.Int64Type(), name)
-        LLVM.initializer!(gv, LLVM.ConstantInt(LLVM.Int64Type(), 0))
-        LLVM.linkage!(gv, LLVM.API.LLVMInternalLinkage)
-        LLVM.replace_uses!(f, gv)
-        erase!(f)
-    end
 end
 
 function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
@@ -215,6 +170,11 @@ function compile(@nospecialize(job::CompilerJob))
         # TODO: on 1.9, this actually creates a context. cache those.
         ir, entry = JuliaContext() do ctx
             mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)
+            # `:llvm` output skips `emit_asm` (and thus `ResolveCPUReferencesPass`),
+            # which resolves loads from `jl_<T>_type` host-runtime symbols into
+            # constants. Run it explicitly so the metallib linker doesn't reject
+            # those unresolved references.
+            GPUCompiler.prepare_execution!(job, mod)
             string(mod), LLVM.name(meta.entry)
         end
     end
