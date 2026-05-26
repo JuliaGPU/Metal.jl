@@ -26,6 +26,7 @@ export MTL
 
 # essential stuff
 include("state.jl")
+include("synchronization.jl")
 include("initialization.jl")
 
 # device functionality
