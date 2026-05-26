@@ -170,6 +170,8 @@ function compile(@nospecialize(job::CompilerJob))
         # TODO: on 1.9, this actually creates a context. cache those.
         ir, entry = JuliaContext() do ctx
             mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)
+            # we never call `GPUCompiler.mcgen`, so run preparatory passes now
+            GPUCompiler.prepare_execution!(job, mod)
             string(mod), LLVM.name(meta.entry)
         end
     end

@@ -287,7 +287,10 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
 
     f = kernel.f
     pipeline = kernel.pipeline
-    kernel_state = KernelState(Random.rand(UInt32))
+
+    buf = malloc_buffer(pipeline.device)
+    buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, UInt64(buf.gpuAddress))
+    kernel_state = KernelState(Random.rand(UInt32), buf_ptr)
 
     cmdbuf = MTLCommandBuffer(queue)
     cmdbuf.label = "MTLCommandBuffer($(nameof(f)))"

@@ -40,6 +40,7 @@ include("device/intrinsics/synchronization.jl")
 include("device/intrinsics/memory.jl")
 include("device/intrinsics/simd.jl")
 include("device/intrinsics/atomics.jl")
+include("device/malloc.jl")
 include("device/random.jl")
 include("device/quirks.jl")
 
