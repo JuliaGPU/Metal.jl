@@ -53,11 +53,18 @@ The GPUCompiler bits:
 ## What's not working / known limitations
 
 - **Two `__tensorops_impl_matmul2d_op_run_*` calls in one kernel crash the
-  Metal back-end** (`XPC_ERROR_CONNECTION_INTERRUPTED` from
-  `AGXMetalG15X_M1`). The attention example sidesteps this by splitting QK
-  and PV into two dispatches. This is likely an Apple compiler bug — the IR
-  we emit looks structurally identical to single-matmul kernels that compile
-  fine. Worth filing upstream.
+  Metal back-end** at pipeline-state creation
+  (`XPC_ERROR_CONNECTION_INTERRUPTED` from `AGXMetalG15X_M1`). MSL-compiled
+  metallibs of the same kernel shape build pipeline states fine, so the
+  crash is triggered by our specific AIR pattern: the
+  `matmul2d_descriptor` ends up populated as a sequence of per-field
+  stores (via Julia's lowering of `Ref(::matmul2d_descriptor)` and SROA),
+  rather than Apple's pattern of `memcpy` from a `linkonce_odr` constant
+  global. The likely fix is to emit the constant-global + memcpy pattern
+  for descriptors whose fields are compile-time constants. Local
+  reproducer in `bugs/two_matmul_crash/` (gitignored — see the README
+  there for the AIR diff and what's been tried). The attention example
+  sidesteps this by splitting QK and PV into two dispatches.
 - **No `cooperative_tensor` yet.** That means the softmax epilogue can't be
   done in registers — the scores tile is materialized in device memory. A
   proper Flash Attention would fuse the softmax into the cooperative tensor
