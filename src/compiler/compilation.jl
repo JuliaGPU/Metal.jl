@@ -170,10 +170,7 @@ function compile(@nospecialize(job::CompilerJob))
         # TODO: on 1.9, this actually creates a context. cache those.
         ir, entry = JuliaContext() do ctx
             mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)
-            # `:llvm` output skips `emit_asm` (and thus `ResolveCPUReferencesPass`),
-            # which resolves loads from `jl_<T>_type` host-runtime symbols into
-            # constants. Run it explicitly so the metallib linker doesn't reject
-            # those unresolved references.
+            # we never call `GPUCompiler.mcgen`, so run preparatory passes now
             GPUCompiler.prepare_execution!(job, mod)
             string(mod), LLVM.name(meta.entry)
         end

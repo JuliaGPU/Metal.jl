@@ -37,7 +37,9 @@ end
 
 struct KernelState
     random_seed::UInt32
-    # bump allocator buffer; null when the kernel doesn't use dynamic memory.
+
+    # bump allocator buffer
+    #
     # the first 4 bytes are an atomically-incremented counter; allocations
     # start at offset 4 and continue until the buffer is exhausted.
     malloc_buf::Core.LLVMPtr{UInt8, AS.Device}
