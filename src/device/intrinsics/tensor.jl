@@ -1,4 +1,5 @@
-export MtlInlineTensor, matmul2d_descriptor, tensor_ops_matmul2d!
+export MtlInlineTensor, matmul2d_descriptor, tensor_ops_matmul2d!,
+       matmul2d_multiply, matmul2d_multiply_accumulate
 
 using Core: LLVMPtr
 
@@ -196,6 +197,23 @@ end
 Configuration descriptor for a `tensor_ops::matmul2d` operation. `k`
 defaults to `-1` (dynamic — inferred from the input tensors at runtime).
 Layout matches the 20-byte `mpp::tensor_ops::matmul2d_descriptor` POD.
+
+For an outer `K`-loop where each iteration accumulates a partial product
+into the destination, set `mode = matmul2d_multiply_accumulate` and zero
+the destination before the loop. A typical pattern:
+
+```julia
+desc = matmul2d_descriptor(M, N, TileK; mode = matmul2d_multiply_accumulate)
+for s in 0:(nslices - 1)
+    sA = view(tA, (Int32(s) * Int32(TileK), Int32(0)), (Int32(TileK), Int32(M)))
+    sB = view(tB, (Int32(0), Int32(s) * Int32(TileK)), (Int32(N), Int32(TileK)))
+    tensor_ops_matmul2d!(desc, sA, sB, tC, threads)
+end
+```
+
+Keep the loop's trip count dynamic — a compile-time-known trip count
+that fully unrolls into multiple `tensor_ops_matmul2d!` call sites
+currently crashes Apple's back-end (see `ISSUE-tensor-ops.md`).
 """
 struct matmul2d_descriptor
     m::Int32
