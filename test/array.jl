@@ -600,6 +600,18 @@ end
     @test testf(x->min.(max.(x, zero(Float32)), one(Float32)), randn(Float32, 1000))
     @test testf(x->max.(min.(x, one(Float32)), zero(Float32)), randn(Float32, 1000))
 
+    # Bool scalar broadcast assignment (issue #766): the conversion code
+    # path constructs an InexactError box on its dead trap branch, which
+    # used to leave an unresolved `jl_int64_type` reference in the metallib.
+    let x = MtlArray{Bool}(undef, 2)
+        x .= 1
+        @test Array(x) == [true, true]
+        x .= Int32(0)
+        @test Array(x) == [false, false]
+        x .= true
+        @test Array(x) == [true, true]
+    end
+
     # preserving buffer types
     let x = Metal.zeros(Float32, 1; storage=Metal.SharedStorage)
         y = x .+ 1
