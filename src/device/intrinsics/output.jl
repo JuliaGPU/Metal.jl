@@ -1,6 +1,3 @@
-const MTLLOG_SUBSYSTEM = "com.juliagpu.metal.jl"
-const MTLLOG_CATEGORY = "mtlprintf"
-
 const __METAL_OS_LOG_TYPE_DEBUG__ = Int32(2)
 const __METAL_OS_LOG_TYPE_INFO__ = Int32(1)
 const __METAL_OS_LOG_TYPE_DEFAULT__ = Int32(0)
@@ -78,9 +75,9 @@ end
             position!(builder, entry)
 
             str = globalstring_ptr!(builder, String(fmt), addrspace = 2)
-            subsystem_str = globalstring_ptr!(builder, MTLLOG_SUBSYSTEM, addrspace = 2)
-            category_str = globalstring_ptr!(builder, MTLLOG_CATEGORY, addrspace = 2)
-            log_type = LLVM.ConstantInt(T_int32, __METAL_OS_LOG_TYPE_DEBUG__)
+            subsystem_str = null(T_pint8a2)
+            category_str = const_inttoptr(LLVM.ConstantInt(T_int64, -1), T_pint8a2)
+            log_type = LLVM.ConstantInt(T_int32, __METAL_OS_LOG_TYPE_DEFAULT__)
 
             # compute argsize
             dl = datalayout(mod)
