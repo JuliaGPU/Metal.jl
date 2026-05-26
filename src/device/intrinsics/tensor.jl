@@ -179,8 +179,15 @@ matmul2d_descriptor(m::Integer, n::Integer, k::Integer = -1;
 const _TENSOR_DESC_INLINE = Int32(2)   # `__tensor_ops_tensor_descriptor_type::tensor_inline`
 
 # Element-type suffix for `__tensorops_impl_matmul2d_op_run_*` symbols.
-_tensorops_suffix(::Type{Float16}) = "f16"
-_tensorops_suffix(::Type{Float32}) = "f32"
+# The 4-bit integer formats (`i4`, `ui4`) aren't exposed yet — Julia has no
+# native 4-bit integer type. `int32` is only valid as the destination of
+# an `i8`/`ui8` × `i4`/`ui4` matmul.
+_tensorops_suffix(::Type{Float16})      = "f16"
+_tensorops_suffix(::Type{Float32})      = "f32"
+_tensorops_suffix(::Type{Core.BFloat16}) = "b16"
+_tensorops_suffix(::Type{Int8})         = "i8"
+_tensorops_suffix(::Type{UInt8})        = "ui8"
+_tensorops_suffix(::Type{Int32})        = "i32"
 
 """
     tensor_ops_matmul2d!(desc, left, right, dest, threads)
