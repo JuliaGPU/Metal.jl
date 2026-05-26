@@ -16,6 +16,22 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
                    Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module, LLVM.Function},
                    job, mod, entry)
 
+    # `Runtime.<name>`'s `llvmcall` body emits a weak `gpu_<name>` stub at every
+    # call site. LLVM's linker would normally let our strong runtime-library def
+    # override that weak stub — but GPUCompiler's `InternalizePass` runs *before*
+    # the runtime gets linked, internalizing the weak stub. once internal, the
+    # symbol can't be replaced from another module, so the strong override is
+    # ignored. drop the stub bodies here so they become external declarations
+    # again, which the runtime link then resolves to the strong defs.
+    for f in collect(functions(mod))
+        startswith(LLVM.name(f), "gpu_") || continue
+        isdeclaration(f) && continue
+        for bb in collect(blocks(f))
+            erase!(bb)
+        end
+        LLVM.linkage!(f, LLVM.API.LLVMExternalLinkage)
+    end
+
     # if this kernel uses our RNG, we should prime the shared state.
     # XXX: these transformations should really happen at the Julia IR level...
     if job.config.kernel && haskey(globals(mod), "global_random_keys")

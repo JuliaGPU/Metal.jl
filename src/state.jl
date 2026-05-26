@@ -96,3 +96,32 @@ function device_synchronize()
         synchronize(queue)
     end
 end
+
+
+## dynamic-memory allocator buffer
+#
+# kernels that perform dynamic memory allocations bump-allocate out of a per-
+# device scratch buffer. the buffer is allocated lazily on first use, and its
+# counter is never reset — allocations are monotonic for the device's lifetime
+# (the bump-allocator-style design is intentional, see device/malloc.jl).
+#
+# 1 MB allows ~65k 16-byte boxes before exhaustion, plenty for the dead
+# throw-path boxing that motivates this.
+
+const MALLOC_BUF_SIZE = 1024 * 1024
+
+const _device_malloc_bufs = Dict{MTLDevice, MTLBuffer}()
+const _device_malloc_lock = ReentrantLock()
+
+function malloc_buffer(dev::MTLDevice)
+    Base.@lock _device_malloc_lock begin
+        get!(_device_malloc_bufs, dev) do
+            buf = @autoreleasepool MTLBuffer(dev, MALLOC_BUF_SIZE;
+                                             storage=SharedStorage)
+            # initialize the counter (first 4 bytes) to 4 so the first
+            # allocation lands past the counter itself
+            unsafe_store!(convert(Ptr{UInt32}, MTL.contents(buf)), UInt32(4))
+            buf
+        end
+    end
+end
