@@ -46,6 +46,19 @@ const _TensorDescriptorStorage = Base.RefValue{NTuple{_TENSOR_DESCRIPTOR_SIZE, U
            Ref{Int32}, Ref{Int32}, Int8),
           handle, rank, data, extents, strides, contiguous)
 
+@device_function init_strided_tensor_threadgroup!(
+    handle::_TensorDescriptorStorage,
+    rank::Int16,
+    data::LLVMPtr{UInt8, AS.ThreadGroup},
+    extents::NTuple{2, Int32},
+    strides::NTuple{2, Int32},
+    contiguous::Int8,
+) = ccall("extern air.init_strided_private_tensor.i32.local", llvmcall,
+          Cvoid,
+          (Ref{UInt8}, Int16, LLVMPtr{UInt8, AS.ThreadGroup},
+           Ref{Int32}, Ref{Int32}, Int8),
+          handle, rank, data, extents, strides, contiguous)
+
 @device_function get_extent_private_tensor(handle::_TensorDescriptorStorage,
                                            rank::Int16, dim::Int16) =
     ccall("extern air.get_extent_private_tensor.i32", llvmcall,
@@ -67,24 +80,28 @@ const _TensorDescriptorStorage = Base.RefValue{NTuple{_TENSOR_DESCRIPTOR_SIZE, U
 ## High-level inline-tensor wrapper.
 
 """
-    MtlInlineTensor{T, R}
+    MtlInlineTensor{T, R, ASpace}
 
-Kernel-stack tensor view over an `MtlDeviceArray`, suitable for use as an
-operand of [`tensor_ops_matmul2d!`](@ref). `T` is the element type; `R` is
-the rank (only rank 2 is supported today). Backed by a thread-private byte
-buffer (an inline `Ref`) that the runtime initializes at construction.
+Kernel-stack tensor view over an `MtlDeviceArray` or `MtlThreadGroupArray`,
+suitable for use as an operand of [`tensor_ops_matmul2d!`](@ref). `T` is the
+element type; `R` is the rank (only rank 2 is supported today); `ASpace` is
+the address space of the underlying data (`AS.Device` or `AS.ThreadGroup`).
+Backed by a thread-private byte buffer (an inline `Ref`) that the runtime
+initializes at construction.
 
 Note: extents follow the MSL `dextents<int32_t, R>{e1, e2, ...}` convention
 (innermost dimension first), which is the row-major view the matmul kernel
 expects. For a Julia column-major `MtlMatrix(M, N)`, pass extents `(M, N)`
 if you want to treat columns as the inner dimension.
 """
-struct MtlInlineTensor{T, R}
+struct MtlInlineTensor{T, R, ASpace}
     storage::_TensorDescriptorStorage
 end
 
-# In-kernel constructor: build a packed-stride rank-2 tensor over `data`.
-@device_function @inline function MtlInlineTensor{T, 2}(
+# In-kernel constructors: packed-stride rank-2 tensor over device or
+# threadgroup memory. `contiguous` is `1` (packed) by default; the
+# explicit-stride methods below pass `0`.
+@device_function @inline function MtlInlineTensor{T, 2, AS.Device}(
         data::MtlDeviceArray{T, <:Any, AS.Device},
         e1::Integer, e2::Integer) where {T}
     storage = Ref{NTuple{_TENSOR_DESCRIPTOR_SIZE, UInt8}}()
@@ -93,15 +110,23 @@ end
                                 (Int32(e1), Int32(e2)),
                                 (Int32(1),  Int32(e1)),
                                 Int8(1))
-    return MtlInlineTensor{T, 2}(storage)
+    return MtlInlineTensor{T, 2, AS.Device}(storage)
 end
 
-@inline MtlInlineTensor(data::MtlDeviceArray{T, <:Any, AS.Device},
-                       extents::NTuple{2, <:Integer}) where {T} =
-    MtlInlineTensor{T, 2}(data, extents[1], extents[2])
+@device_function @inline function MtlInlineTensor{T, 2, AS.ThreadGroup}(
+        data::MtlDeviceArray{T, <:Any, AS.ThreadGroup},
+        e1::Integer, e2::Integer) where {T}
+    storage = Ref{NTuple{_TENSOR_DESCRIPTOR_SIZE, UInt8}}()
+    init_strided_tensor_threadgroup!(storage, Int16(2),
+                                     reinterpret(LLVMPtr{UInt8, AS.ThreadGroup}, pointer(data)),
+                                     (Int32(e1), Int32(e2)),
+                                     (Int32(1),  Int32(e1)),
+                                     Int8(1))
+    return MtlInlineTensor{T, 2, AS.ThreadGroup}(storage)
+end
 
-# In-kernel constructor with explicit strides.
-@device_function @inline function MtlInlineTensor{T, 2}(
+# Explicit-stride variants (mark the tensor as non-packed for the runtime).
+@device_function @inline function MtlInlineTensor{T, 2, AS.Device}(
         data::MtlDeviceArray{T, <:Any, AS.Device},
         e1::Integer, e2::Integer,
         s1::Integer, s2::Integer) where {T}
@@ -111,27 +136,45 @@ end
                                 (Int32(e1), Int32(e2)),
                                 (Int32(s1), Int32(s2)),
                                 Int8(0))
-    return MtlInlineTensor{T, 2}(storage)
+    return MtlInlineTensor{T, 2, AS.Device}(storage)
 end
 
-@inline MtlInlineTensor(data::MtlDeviceArray{T, <:Any, AS.Device},
-                       extents::NTuple{2, <:Integer},
-                       strides::NTuple{2, <:Integer}) where {T} =
-    MtlInlineTensor{T, 2}(data, extents[1], extents[2], strides[1], strides[2])
+@device_function @inline function MtlInlineTensor{T, 2, AS.ThreadGroup}(
+        data::MtlDeviceArray{T, <:Any, AS.ThreadGroup},
+        e1::Integer, e2::Integer,
+        s1::Integer, s2::Integer) where {T}
+    storage = Ref{NTuple{_TENSOR_DESCRIPTOR_SIZE, UInt8}}()
+    init_strided_tensor_threadgroup!(storage, Int16(2),
+                                     reinterpret(LLVMPtr{UInt8, AS.ThreadGroup}, pointer(data)),
+                                     (Int32(e1), Int32(e2)),
+                                     (Int32(s1), Int32(s2)),
+                                     Int8(0))
+    return MtlInlineTensor{T, 2, AS.ThreadGroup}(storage)
+end
+
+# Convenience: infer address space from the array.
+@inline MtlInlineTensor(data::MtlDeviceArray{T, <:Any, A},
+                        extents::NTuple{2, <:Integer}) where {T, A} =
+    MtlInlineTensor{T, 2, A}(data, extents[1], extents[2])
+
+@inline MtlInlineTensor(data::MtlDeviceArray{T, <:Any, A},
+                        extents::NTuple{2, <:Integer},
+                        strides::NTuple{2, <:Integer}) where {T, A} =
+    MtlInlineTensor{T, 2, A}(data, extents[1], extents[2], strides[1], strides[2])
 
 Base.eltype(::Type{<:MtlInlineTensor{T}}) where {T} = T
 Base.eltype(::MtlInlineTensor{T}) where {T} = T
 
 # Slice. Origins are zero-based to match MSL semantics.
 @device_function @inline function _slice_inline_tensor(
-        t::MtlInlineTensor{T, 2},
+        t::MtlInlineTensor{T, 2, A},
         o1::Integer, o2::Integer,
-        e1::Integer, e2::Integer) where {T}
+        e1::Integer, e2::Integer) where {T, A}
     storage = Ref{NTuple{_TENSOR_DESCRIPTOR_SIZE, UInt8}}()
     slice_private_tensor!(storage, t.storage, Int16(2),
                           (Int32(o1), Int32(o2)),
                           (Int32(e1), Int32(e2)))
-    return MtlInlineTensor{T, 2}(storage)
+    return MtlInlineTensor{T, 2, A}(storage)
 end
 
 @inline Base.view(t::MtlInlineTensor{T, 2}, origin::NTuple{2, <:Integer},
@@ -182,12 +225,16 @@ const _TENSOR_DESC_INLINE = Int32(2)   # `__tensor_ops_tensor_descriptor_type::t
 # The 4-bit integer formats (`i4`, `ui4`) aren't exposed yet — Julia has no
 # native 4-bit integer type. `int32` is only valid as the destination of
 # an `i8`/`ui8` × `i4`/`ui4` matmul.
-_tensorops_suffix(::Type{Float16})      = "f16"
-_tensorops_suffix(::Type{Float32})      = "f32"
+_tensorops_suffix(::Type{Float16})       = "f16"
+_tensorops_suffix(::Type{Float32})       = "f32"
 _tensorops_suffix(::Type{Core.BFloat16}) = "b16"
-_tensorops_suffix(::Type{Int8})         = "i8"
-_tensorops_suffix(::Type{UInt8})        = "ui8"
-_tensorops_suffix(::Type{Int32})        = "i32"
+_tensorops_suffix(::Type{Int8})          = "i8"
+_tensorops_suffix(::Type{UInt8})         = "ui8"
+_tensorops_suffix(::Type{Int32})         = "i32"
+
+# Address-space prefix for the run helpers (`dv` for device, `tg` for threadgroup).
+_tensorops_aspace_prefix(::Val{AS.Device})      = "dv"
+_tensorops_aspace_prefix(::Val{AS.ThreadGroup}) = "tg"
 
 """
     tensor_ops_matmul2d!(desc, left, right, dest, threads)
@@ -195,20 +242,20 @@ _tensorops_suffix(::Type{Int32})        = "i32"
 `dest = left * right (+ dest if mode=multiply_accumulate)` executed
 cooperatively by `threads` participating threads (i.e.
 `simdgroup_size * num_simdgroups`). Each operand is an
-[`MtlInlineTensor`](@ref).
-
-Supported element-type combinations follow `MPPTensorOpsMatMul2d.h`; only
-`(f16, f16, f16)`, `(f16, f16, f32)`, `(f32, f32, f32)` are wired up here.
+[`MtlInlineTensor`](@ref) over either device or threadgroup memory; the
+right `__tensorops_impl_matmul2d_op_run_{aspace}_{type}_..._*` symbol is
+picked based on the operand types and address spaces.
 """
 @generated function tensor_ops_matmul2d!(
         desc::matmul2d_descriptor,
-        left::MtlInlineTensor{TL, 2},
-        right::MtlInlineTensor{TR, 2},
-        dest::MtlInlineTensor{TD, 2},
-        threads::Int32) where {TL, TR, TD}
-    sym = "__tensorops_impl_matmul2d_op_run_dv_$(_tensorops_suffix(TL))" *
-          "_dv_$(_tensorops_suffix(TR))" *
-          "_dv_$(_tensorops_suffix(TD))"
+        left::MtlInlineTensor{TL, 2, AL},
+        right::MtlInlineTensor{TR, 2, AR},
+        dest::MtlInlineTensor{TD, 2, AD},
+        threads::Int32) where {TL, TR, TD, AL, AR, AD}
+    sym = "__tensorops_impl_matmul2d_op_run" *
+          "_$(_tensorops_aspace_prefix(Val(AL)))_$(_tensorops_suffix(TL))" *
+          "_$(_tensorops_aspace_prefix(Val(AR)))_$(_tensorops_suffix(TR))" *
+          "_$(_tensorops_aspace_prefix(Val(AD)))_$(_tensorops_suffix(TD))"
     quote
         ccall($"extern $sym", llvmcall, Cvoid,
               (Ref{matmul2d_descriptor},
