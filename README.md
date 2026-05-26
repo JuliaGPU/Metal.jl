@@ -34,7 +34,7 @@ if you want to use it. PRs are very welcome!
 
 -  Mac device with M-series chip
 -  Julia 1.10-1.12
--  macOS 13-26
+-  macOS 14-26
 
 These requirements are fairly strict, and are due to our limited development
 resources (manpower, hardware). Supported OS versions follow Apple's support,
