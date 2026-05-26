@@ -33,7 +33,10 @@
 #
 #   attention_tensor(Q, K, V)
 #       One fused kernel (QKᵀ → softmax → ·V) using the Metal 4
-#       `tensor_ops::matmul2d` primitives. The kernel builds
+#       `tensor_ops::matmul2d` primitives. Single dispatch with grid =
+#       (H, B), one threadgroup per (head, batch) pair, so all heads
+#       run in parallel — the kernel reads its own `(h, b)` from
+#       `threadgroup_position_in_grid`. The kernel builds
 #       `tensor_inline` views over the `MtlDeviceArray` inputs, so the
 #       kernel signature stays buffer-shaped — no host-side `MTLTensor`
 #       / `MTL4ComputeCommandEncoder` wrapping is needed. The matmuls
@@ -201,14 +204,27 @@ end
 # *column*-wise softmax — that's what corresponds to row-wise softmax of the
 # implicit QᵀK, and it's the right direction for column-major contiguous
 # memory access.
-function _fa_tensor!(O::AbstractMatrix{Float16},
-                     Q::AbstractMatrix{Float16},
-                     K::AbstractMatrix{Float16},
-                     V::AbstractMatrix{Float16},
-                     D::UInt32, N::UInt32, scale::Float32,
-                     ::Val{TN}, ::Val{TD},
-                     ::Val{NSIMD}) where {TN, TD, NSIMD}
-    tid = Int32(thread_position_in_threadgroup_3d().x) - Int32(1)
+function _fa_tensor!(O::MtlDeviceArray{Float16, 4},
+                     Q::MtlDeviceArray{Float16, 4},
+                     K::MtlDeviceArray{Float16, 4},
+                     V::MtlDeviceArray{Float16, 4},
+                     scale::Float32,
+                     ::Val{TD}, ::Val{TN},
+                     ::Val{NSIMD}) where {TD, TN, NSIMD}
+    # One threadgroup per (head, batch) pair.
+    tgid = threadgroup_position_in_grid_3d()
+    h    = Int32(tgid.x) - Int32(1)
+    b    = Int32(tgid.y) - Int32(1)
+    tid  = Int32(thread_position_in_threadgroup_3d().x) - Int32(1)
+
+    # Pointer arithmetic for the (h, b) slice of each 4-D buffer.
+    H = Int32(size(Q, 3))
+    DN = Int32(TD) * Int32(TN)
+    slice_first = (b * H + h) * DN + Int32(1)
+    Qb = MtlDeviceArray{Float16, 2, Metal.AS.Device}((Int32(TD), Int32(TN)), pointer(Q, slice_first))
+    Kb = MtlDeviceArray{Float16, 2, Metal.AS.Device}((Int32(TD), Int32(TN)), pointer(K, slice_first))
+    Vb = MtlDeviceArray{Float16, 2, Metal.AS.Device}((Int32(TD), Int32(TN)), pointer(V, slice_first))
+    Ob = MtlDeviceArray{Float16, 2, Metal.AS.Device}((Int32(TD), Int32(TN)), pointer(O, slice_first))
 
     # Scratch lives in threadgroup memory for the entire kernel: scores tile
     # (Float32 for accumulator precision) and the softmaxed P (Float16 for the
@@ -217,9 +233,9 @@ function _fa_tensor!(O::AbstractMatrix{Float16},
     P = MtlThreadGroupArray(Float16, (TN, TN))
 
     # Step 1: S = QᵀK (read as KᵀQ in Julia layout, see above).
-    let tA = MtlInlineTensor(Q, (D, N)),
-        tB = MtlInlineTensor(K, (D, N)),
-        tC = MtlInlineTensor(S, (N, N))
+    let tA = MtlInlineTensor(Qb, (Int32(TD), Int32(TN))),
+        tB = MtlInlineTensor(Kb, (Int32(TD), Int32(TN))),
+        tC = MtlInlineTensor(S,  (Int32(TN), Int32(TN)))
         op = TensorOpsMatmul2D{matmul2d_descriptor(TN, TN, TD;
                                                    transpose_right = true),
                                Int32(NSIMD)}()
@@ -227,23 +243,23 @@ function _fa_tensor!(O::AbstractMatrix{Float16},
     end
     threadgroup_barrier(Metal.MemoryFlagThreadGroup)
 
-    # Step 2: column-wise softmax. N of (NSIMD*32) threads do real work; the
+    # Step 2: column-wise softmax. TN of (NSIMD*32) threads do real work; the
     # rest wait at the barrier below.
-    @inbounds if tid < Int32(N)
+    @inbounds if tid < Int32(TN)
         col = tid + Int32(1)
         m = -Inf32
-        for i in Int32(1):Int32(N)
+        for i in Int32(1):Int32(TN)
             v = S[i, col] * scale
             m = v > m ? v : m
         end
         s = 0.0f0
-        for i in Int32(1):Int32(N)
+        for i in Int32(1):Int32(TN)
             p = exp(S[i, col] * scale - m)
             S[i, col] = p
             s += p
         end
         inv_s = 1.0f0 / s
-        for i in Int32(1):Int32(N)
+        for i in Int32(1):Int32(TN)
             P[i, col] = Float16(S[i, col] * inv_s)
         end
     end
@@ -251,9 +267,9 @@ function _fa_tensor!(O::AbstractMatrix{Float16},
 
     # Step 3: O = V·P (Julia view; equivalent to V·Pᵀ in math notation because
     # the softmax output is stored in the transposed layout).
-    let tA = MtlInlineTensor(P, (N, N)),
-        tB = MtlInlineTensor(V, (D, N)),
-        tC = MtlInlineTensor(O, (D, N))
+    let tA = MtlInlineTensor(P,  (Int32(TN), Int32(TN))),
+        tB = MtlInlineTensor(Vb, (Int32(TD), Int32(TN))),
+        tC = MtlInlineTensor(Ob, (Int32(TD), Int32(TN)))
         op = TensorOpsMatmul2D{matmul2d_descriptor(TN, TD, TN), Int32(NSIMD)}()
         op(tA, tB, tC)
     end
@@ -274,22 +290,13 @@ function attention_tensor(Q::MtlArray{Float16,4}, K::MtlArray{Float16,4},
     nsimd = 4                       # matches `execution_simdgroups<4>` in the op desc
     threads = nsimd * simdgroup_size
 
-    # The matmul descriptors carry (TN, TD) — the static tile shape per head.
-    TN_val = Val(Int32(N))
-    TD_val = Val(Int32(D))
-    NS_val = Val(Int32(nsimd))
-
-    for b in 1:B, h in 1:H
-        Qm = view(Q, :, :, h, b)
-        Km = view(K, :, :, h, b)
-        Vm = view(V, :, :, h, b)
-        Om = view(O, :, :, h, b)
-        @metal threads = threads _fa_tensor!(Om, Qm, Km, Vm,
-                                             UInt32(D), UInt32(N),
-                                             Float32(scale),
-                                             TN_val, TD_val, NS_val)
-    end
-    Metal.synchronize()
+    # Single dispatch covering all (head, batch) pairs: one threadgroup each,
+    # grid = (H, B). The kernel uses `threadgroup_position_in_grid` to pick its
+    # slice. The matmul descriptors carry (TN, TD) — the static tile shape per
+    # head.
+    Metal.@sync @metal threads = threads groups = (H, B, 1) _fa_tensor!(
+        O, Q, K, V, Float32(scale),
+        Val(Int32(D)), Val(Int32(N)), Val(Int32(nsimd)))
     return O
 end
 
