@@ -38,6 +38,18 @@ The GPUCompiler bits:
   Without the section attribute, the metallib back-end won't resolve the
   symbol from the MetalPerformancePrimitives runtime.
 
+## What's intentionally not exposed
+
+- **`static_slice<>` / compile-time extents.** Apple's tensor API only
+  exposes `static_slice` on `tensor_handle` operands, not `tensor_inline`.
+  An inline tensor built with static extents (e.g.
+  `tensor<device half, extents<int32_t, 64, 32>, tensor_inline>`) emits
+  identical AIR to one built with dynamic extents — same
+  `air.init_strided_private_tensor` + runtime extents arrays. So encoding
+  static extents in the `MtlInlineTensor` type would only buy us a slightly
+  smaller alloca for the extents tuple; it would not enable bounds-check
+  elision in the matmul or in the slice path. We leave it dynamic.
+
 ## What's not working / known limitations
 
 - **Two `__tensorops_impl_matmul2d_op_run_*` calls in one kernel crash the
