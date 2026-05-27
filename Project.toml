@@ -33,9 +33,11 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [weakdeps]
+DSP = "717857b8-e6f2-59f4-9121-6e50c889abd2"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [extensions]
+MetalDSPExt = "DSP"
 SpecialFunctionsExt = "SpecialFunctions"
 
 [compat]
@@ -44,6 +46,7 @@ Adapt = "4.5"
 BFloat16s = "0.5, 0.6"
 CEnum = "0.4, 0.5"
 CodecBzip2 = "0.8.5"
+DSP = "0.7, 0.8"
 ExprTools = "0.1"
 GPUArrays = "11.5"
 GPUCompiler = "1.13.2"
