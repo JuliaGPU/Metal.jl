@@ -6,6 +6,34 @@ Benchmarks backing the design of the GPU convolution support (the `DSP.conv` /
 5 runs × 30 calls (ms/call). These numbers drive the "single-implementation"
 decision and are intended as source material for the PR description.
 
+## CPU vs GPU (`DSP.conv`)
+
+GPU `DSP.conv` (via `MetalDSPExt`) vs CPU `DSP.conv` (FFTW-backed), `Float32`.
+GPU times are compute-only (`Metal.synchronize()`, data already on device). The
+GPU has a ~0.4–0.8 ms fixed dispatch/sync overhead, so it wins only at scale.
+
+1-D (kernel 127):
+
+| signal | CPU (ms) | GPU (ms) | speedup |
+|-------:|---------:|---------:|--------:|
+| 10³    | 0.037    | 0.412    | 0.1× |
+| 10⁴    | 0.061    | 0.422    | 0.1× |
+| 10⁵    | 0.288    | 0.491    | 0.6× |
+| 10⁶    | 2.469    | 0.815    | **3.0×** |
+
+2-D (kernel 15×15):
+
+| image | CPU (ms) | GPU (ms) | speedup |
+|------:|---------:|---------:|--------:|
+| 128²  | 0.128    | 0.598    | 0.2× |
+| 256²  | 0.427    | 0.592    | 0.7× |
+| 512²  | 1.457    | 0.830    | **1.8×** |
+| 1024² | 5.135    | 1.633    | **3.1×** |
+
+Guidance: the GPU path pays off for large signals/images (1-D ≳ 10⁶, 2-D ≳ 512²)
+or when data already lives on the GPU; for small inputs CPU FFTW is faster. A
+one-off `CPU→GPU→CPU` round trip shifts the crossover further right.
+
 ## Single 2-D image, `mode = :same`
 
 | image | kernel | fused FFT | MPS-direct | fused speedup |
