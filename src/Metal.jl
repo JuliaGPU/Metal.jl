@@ -60,6 +60,10 @@ include("../lib/mps/MPS.jl")
 export MPS
 include("../lib/mpsgraphs/MPSGraphs.jl")
 export MPSGraphs
+# Re-export the public convolution API to the top-level Metal namespace.
+# Internal helpers (conv_direct, imfilter, plan-cache management) stay in MPSGraphs.
+using .MPSGraphs: conv, conv_fft, conv_fft!, conv_fft_fused, xcorr, plan_conv_fft, ConvFFTPlan
+export conv, conv_fft, conv_fft!, conv_fft_fused, xcorr, plan_conv_fft, ConvFFTPlan
 
 # LinearAlgebra
 include("linalg.jl")

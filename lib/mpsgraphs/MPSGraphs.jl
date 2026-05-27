@@ -49,5 +49,6 @@ include("random.jl")
 
 include("matmul.jl")
 include("fft.jl")
+include("convolution.jl")
 
 end
