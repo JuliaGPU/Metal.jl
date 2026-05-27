@@ -889,7 +889,7 @@ end
 # DSP.xcorr interface (provided by the DSP.jl extension).
 
 """
-    conv(signal::MtlArray, kernel::MtlArray; mode=:full, dims=nothing, algorithm=:auto)
+    conv(signal::MtlArray, kernel::MtlArray; mode=:full, dims=nothing)
 
 Compute the linear convolution of `signal` and `kernel` via the FFT convolution
 theorem. This is the internal engine entry point; the public interface is
@@ -905,7 +905,6 @@ theorem. This is the internal engine entry point; the public interface is
 - `dims`: Dimensions along which to convolve
   - `nothing` (default): All dimensions for 1D/2D, dim 1 for N-D
   - Integer or tuple: Specific dimension(s)
-- `algorithm`: accepted for `DSP.conv` compatibility; the FFT path is always used
 
 # Returns
 MtlArray with the convolution result.
@@ -932,30 +931,23 @@ edges = conv(image, sobel_x; mode=:same)
 """
 function conv(
         signal::MtlVector{T}, kernel::MtlVector{T};
-        mode::Symbol = :full, dims = nothing, algorithm::Symbol = :auto
+        mode::Symbol = :full, dims = nothing
     ) where {T <: Union{Float32, Float16}}
-    # FFT-based engine; :direct is not available
-    if algorithm == :direct
-        throw(ArgumentError("Direct convolution is not available (FFT-only engine). Use :auto or :fft."))
-    end
     return conv_fft(signal, kernel; mode = mode)
 end
 
 # Complex 1D
 function conv(
         signal::MtlVector{Complex{T}}, kernel::MtlVector{Complex{T}};
-        mode::Symbol = :full, dims = nothing, algorithm::Symbol = :auto
+        mode::Symbol = :full, dims = nothing
     ) where {T <: Union{Float32, Float16}}
-    if algorithm == :direct
-        throw(ArgumentError("Direct convolution not supported for complex 1D arrays. Use :auto or :fft."))
-    end
     return conv_fft(signal, kernel; mode = mode)
 end
 
-# 2D convolution (FFT-based)
+# 2D
 function conv(
         signal::MtlMatrix{T}, kernel::MtlMatrix{T};
-        mode::Symbol = :full, dims = nothing, algorithm::Symbol = :auto
+        mode::Symbol = :full, dims = nothing
     ) where {T <: Union{Float32, Float16}}
     conv_dims = dims === nothing ? (1, 2) : (dims isa Int ? (dims,) : Tuple(dims))
     return conv_fft(signal, kernel; dims = conv_dims, mode = mode)
@@ -964,11 +956,8 @@ end
 # Complex 2D
 function conv(
         signal::MtlMatrix{Complex{T}}, kernel::MtlMatrix{Complex{T}};
-        mode::Symbol = :full, dims = nothing, algorithm::Symbol = :auto
+        mode::Symbol = :full, dims = nothing
     ) where {T <: Union{Float32, Float16}}
-    if algorithm == :direct
-        throw(ArgumentError("Direct convolution not supported for complex arrays. Use :auto or :fft."))
-    end
     conv_dims = dims === nothing ? (1, 2) : (dims isa Int ? (dims,) : Tuple(dims))
     return conv_fft(signal, kernel; dims = conv_dims, mode = mode)
 end
@@ -976,12 +965,8 @@ end
 # N-D generic (N > 2)
 function conv(
         signal::MtlArray{T, N}, kernel::MtlArray{T, N};
-        mode::Symbol = :full, dims = nothing, algorithm::Symbol = :auto
+        mode::Symbol = :full, dims = nothing
     ) where {T <: Union{Float32, Float16}, N}
-    # N-D always uses FFT
-    if algorithm == :direct && N > 2
-        throw(ArgumentError("Direct convolution only supported for 2D arrays. Use :auto or :fft."))
-    end
     conv_dims = dims === nothing ? 1 : (dims isa Int ? (dims,) : Tuple(dims))
     return conv_fft(signal, kernel; dims = conv_dims, mode = mode)
 end
@@ -989,11 +974,8 @@ end
 # Complex N-D
 function conv(
         signal::MtlArray{Complex{T}, N}, kernel::MtlArray{Complex{T}, N};
-        mode::Symbol = :full, dims = nothing, algorithm::Symbol = :auto
+        mode::Symbol = :full, dims = nothing
     ) where {T <: Union{Float32, Float16}, N}
-    if algorithm == :direct
-        throw(ArgumentError("Direct convolution not supported for complex arrays. Use :auto or :fft."))
-    end
     conv_dims = dims === nothing ? 1 : (dims isa Int ? (dims,) : Tuple(dims))
     return conv_fft(signal, kernel; dims = conv_dims, mode = mode)
 end

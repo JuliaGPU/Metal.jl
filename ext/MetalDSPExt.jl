@@ -24,8 +24,8 @@ compatibility; the FFT path is always used.
 function DSP.conv(
         u::MtlArray{T, N}, v::MtlArray{T, N}; algorithm::Symbol = :auto
     ) where {T <: MtlConvNumber, N}
-    alg = algorithm === :fft ? :fft : :auto
-    return Metal.MPSGraphs.conv(u, v; dims = ntuple(identity, N), mode = :full, algorithm = alg)
+    # `algorithm` accepted for DSP.conv compatibility; the FFT engine is always used.
+    return Metal.MPSGraphs.conv(u, v; dims = ntuple(identity, N), mode = :full)
 end
 
 """

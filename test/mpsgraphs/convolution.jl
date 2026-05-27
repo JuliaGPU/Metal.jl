@@ -207,9 +207,6 @@ if MPS.is_supported(device())
             result = conv(signal, kernel; mode = :full)
             expected = conv_fft(signal, kernel; mode = :full)
             @test isapprox(Array(result), Array(expected), rtol = 1.0e-4)
-
-            # Complex doesn't support direct
-            @test_throws ArgumentError conv(signal, kernel; algorithm = :direct)
         end
     end
 
