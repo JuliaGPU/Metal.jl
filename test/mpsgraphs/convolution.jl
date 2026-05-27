@@ -6,9 +6,11 @@
 # - Unified conv() API with auto-selection
 # - Convolution plan caching
 
-# Internal (non-exported) convolution symbols, accessed directly from the submodule.
-# Metal exports only the core conv API; these stay internal.
-using Metal.MPSGraphs: conv_direct, get_cached_conv_plan, clear_conv_plan_cache!, imfilter
+# The convolution engine is internal to MPSGraphs (public access is via DSP.conv).
+# These tests exercise the engine directly, so import its symbols from the submodule.
+using Metal.MPSGraphs: conv, conv_fft, conv_fft!, conv_fft_fused, xcorr,
+    plan_conv_fft, ConvFFTPlan, conv_direct, get_cached_conv_plan,
+    clear_conv_plan_cache!, imfilter
 
 # Simple reference convolution for verification (CPU)
 function ref_conv(u::Vector{T}, v::Vector{T}) where {T}
