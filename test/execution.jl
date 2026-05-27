@@ -141,6 +141,29 @@ end
     @test all(vecA .== Int(5))
 end
 
+@testset "device-side exceptions" begin
+    # a device exception must not wedge the GPU (JuliaGPU/Metal.jl#433); it should
+    # complete cleanly and surface to the host as a `KernelException` on synchronize.
+    function throwing_kernel(a)
+        a[2] = 1f0      # out-of-bounds store on a length-1 array
+        return
+    end
+    function fill_one(a)
+        a[thread_position_in_grid_1d()] = 1f0
+        return
+    end
+
+    a = Metal.zeros(Float32, 1)
+    @metal threads=1 throwing_kernel(a)
+    @test_throws Metal.KernelException synchronize()
+
+    # the flag is reset on read, and the GPU stays usable afterwards
+    b = Metal.zeros(Float32, 4)
+    @metal threads=4 fill_one(b)
+    synchronize()
+    @test Array(b) == ones(Float32, 4)
+end
+
 @testset "launch params" begin
     vecA .= 0
     @metal threads=(2) tester(bufferA)
