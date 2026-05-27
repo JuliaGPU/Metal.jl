@@ -1,16 +1,8 @@
-# Tests for convolution operations in MPSGraphs
-#
-# This tests:
-# - FFT-based convolution (conv_fft)
-# - MPS direct convolution (conv_direct)
-# - Unified conv() API with auto-selection
-# - Convolution plan caching
-
-# The convolution engine is internal to MPSGraphs (public access is via DSP.conv).
-# These tests exercise the engine directly, so import its symbols from the submodule.
-using Metal.MPSGraphs: conv, conv_fft, conv_fft!, conv_fft_fused, xcorr,
-    plan_conv_fft, ConvFFTPlan, conv_direct, get_cached_conv_plan,
-    clear_conv_plan_cache!, imfilter
+# Tests for the FFT-based convolution engine in MPSGraphs (conv_fft, the unified
+# conv(), xcorr, imfilter). The engine is internal; the public interface is
+# DSP.conv / DSP.xcorr (tested in test/dsp.jl). These tests exercise the engine
+# directly, so import its symbols from the submodule.
+using Metal.MPSGraphs: conv, conv_fft, conv_fft!, xcorr, imfilter
 
 # Simple reference convolution for verification (CPU)
 function ref_conv(u::Vector{T}, v::Vector{T}) where {T}
@@ -131,128 +123,6 @@ if MPS.is_supported(device())
         end
     end
 
-    # ============================================================================
-    # Convolution Plan Tests
-    # ============================================================================
-
-    @testset "Convolution Plans" begin
-        @testset "Basic Plan Usage" begin
-            signal_size = 1000
-            kernel_size = 100
-
-            plan = plan_conv_fft(signal_size, kernel_size, Float32; mode = :full)
-
-            signal = MtlVector(rand(Float32, signal_size))
-            kernel = MtlVector(rand(Float32, kernel_size))
-
-            result = conv_fft(plan, signal, kernel)
-            expected = conv_fft(signal, kernel; mode = :full)
-
-            @test isapprox(Array(result), Array(expected), rtol = 1.0e-4)
-        end
-
-        @testset "Plan with Pre-computed Kernel" begin
-            signal_size = 1000
-            kernel = MtlVector(rand(Float32, 100))
-
-            plan = plan_conv_fft(signal_size, kernel; mode = :full)
-
-            signal1 = MtlVector(rand(Float32, signal_size))
-            signal2 = MtlVector(rand(Float32, signal_size))
-
-            result1 = conv_fft(plan, signal1)
-            result2 = conv_fft(plan, signal2)
-
-            # Verify correctness
-            expected1 = conv_fft(signal1, kernel; mode = :full)
-            expected2 = conv_fft(signal2, kernel; mode = :full)
-
-            @test isapprox(Array(result1), Array(expected1), rtol = 1.0e-4)
-            @test isapprox(Array(result2), Array(expected2), rtol = 1.0e-4)
-        end
-
-        @testset "Cached Plan" begin
-            signal_size = (64, 64)
-            kernel_size = (5, 5)
-
-            # Get same plan twice
-            plan1 = get_cached_conv_plan(signal_size, kernel_size, Float32; dims = (1, 2))
-            plan2 = get_cached_conv_plan(signal_size, kernel_size, Float32; dims = (1, 2))
-
-            # Should be same object (cached)
-            @test plan1 === plan2
-
-            # Clean up
-            clear_conv_plan_cache!()
-        end
-    end
-
-    # ============================================================================
-    # MPS Direct Convolution Tests
-    # ============================================================================
-
-    @testset "MPS Direct Convolution" begin
-        @testset "Basic 2D Convolution" begin
-            @testset for T in [Float32, Float16]
-                image = rand(T, 64, 64)
-                kernel = rand(T, 3, 3)
-
-                d_image = MtlMatrix(image)
-                d_kernel = MtlMatrix(kernel)
-
-                # Direct convolution
-                result_direct = Array(conv_direct(d_image, d_kernel; mode = :same))
-
-                # FFT convolution (for comparison)
-                result_fft = Array(conv_fft(d_image, d_kernel; dims = (1, 2), mode = :same))
-
-                @test size(result_direct) == size(image)
-                @test isapprox(result_direct, result_fft, rtol = rtol(T))
-            end
-        end
-
-        @testset "Different Kernel Sizes" begin
-            image = rand(Float32, 128, 128)
-            d_image = MtlMatrix(image)
-
-            for ks in [3, 5, 7, 9, 11]
-                kernel = rand(Float32, ks, ks)
-                d_kernel = MtlMatrix(kernel)
-
-                result_direct = Array(conv_direct(d_image, d_kernel; mode = :same))
-                result_fft = Array(conv_fft(d_image, d_kernel; dims = (1, 2), mode = :same))
-
-                @test isapprox(result_direct, result_fft, rtol = 1.0e-4)
-            end
-        end
-
-        @testset "Valid Mode" begin
-            image = rand(Float32, 64, 64)
-            kernel = rand(Float32, 5, 5)
-
-            d_image = MtlMatrix(image)
-            d_kernel = MtlMatrix(kernel)
-
-            result = Array(conv_direct(d_image, d_kernel; mode = :valid))
-            @test size(result) == (60, 60)
-
-            # Compare with FFT
-            result_fft = Array(conv_fft(d_image, d_kernel; dims = (1, 2), mode = :valid))
-            @test isapprox(result, result_fft, rtol = 1.0e-4)
-        end
-
-        @testset "Full Mode Falls Back to FFT" begin
-            image = rand(Float32, 64, 64)
-            kernel = rand(Float32, 3, 3)
-
-            d_image = MtlMatrix(image)
-            d_kernel = MtlMatrix(kernel)
-
-            # Full mode should work (falls back to FFT internally)
-            result = Array(conv_direct(d_image, d_kernel; mode = :full))
-            @test size(result) == (66, 66)
-        end
-    end
 
     # ============================================================================
     # imfilter Tests
@@ -329,31 +199,6 @@ if MPS.is_supported(device())
             @test isapprox(Array(result_large), Array(expected_large), rtol = 1.0e-4)
         end
 
-        @testset "Algorithm Forcing" begin
-            image = MtlMatrix(rand(Float32, 64, 64))
-            kernel = MtlMatrix(rand(Float32, 3, 3))
-
-            result_auto = conv(image, kernel; mode = :same, algorithm = :auto)
-            result_fft = conv(image, kernel; mode = :same, algorithm = :fft)
-            result_direct = conv(image, kernel; mode = :same, algorithm = :direct)
-
-            # All should give numerically similar results
-            @test isapprox(Array(result_auto), Array(result_direct), rtol = 1.0e-6)
-            @test isapprox(Array(result_auto), Array(result_fft), rtol = 1.0e-4)
-        end
-
-        @testset "Error Handling" begin
-            signal_1d = MtlVector(rand(Float32, 100))
-            kernel_1d = MtlVector(rand(Float32, 10))
-
-            # 1D doesn't support direct
-            @test_throws ArgumentError conv(signal_1d, kernel_1d; algorithm = :direct)
-
-            # Invalid algorithm
-            image = MtlMatrix(rand(Float32, 64, 64))
-            kernel = MtlMatrix(rand(Float32, 3, 3))
-            @test_throws ArgumentError conv(image, kernel; algorithm = :invalid)
-        end
 
         @testset "Complex Arrays" begin
             signal = MtlVector(rand(ComplexF32, 100))

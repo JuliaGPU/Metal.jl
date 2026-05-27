@@ -17,14 +17,14 @@ const MtlConvNumber = Union{Float32, Float16, ComplexF32, ComplexF16}
     DSP.conv(u::MtlArray, v::MtlArray; algorithm = :auto)
 
 Full linear convolution of two `MtlArray`s on the GPU, computed via the FFT
-convolution theorem (with an MPS direct-convolution fast path for small 2-D
-kernels). Convolves over all dimensions, matching `DSP.conv` semantics. The
-`algorithm` keyword accepts `:auto`, `:fft`, or `:direct`.
+convolution theorem. Convolves over all dimensions, matching `DSP.conv`
+semantics. The `algorithm` keyword (`:auto`/`:fft`) is accepted for
+compatibility; the FFT path is always used.
 """
 function DSP.conv(
         u::MtlArray{T, N}, v::MtlArray{T, N}; algorithm::Symbol = :auto
     ) where {T <: MtlConvNumber, N}
-    alg = algorithm in (:fft, :direct) ? algorithm : :auto
+    alg = algorithm === :fft ? :fft : :auto
     return Metal.MPSGraphs.conv(u, v; dims = ntuple(identity, N), mode = :full, algorithm = alg)
 end
 
