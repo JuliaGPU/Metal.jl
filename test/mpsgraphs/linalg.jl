@@ -1,5 +1,3 @@
-if MPS.is_supported(device())
-
 @testset "mixed-precision matrix matrix multiplication" begin
     N = 10
     rows_a = N
@@ -95,5 +93,3 @@ end
         @test Array(buf_c) ≈ truth_c
     end
 end
-
-end # MPS.is_supported(device())

@@ -2,8 +2,6 @@ using Test, Metal
 
 using LinearAlgebra, ScopedValues
 
-if MPS.is_supported(device())
-
 @testset "matmul algorithm selection" begin
     # test that unsupported configurations error properly
     N = 20
@@ -116,6 +114,4 @@ end
 
     # Issue #656
     @test isempty(transpose!(B, A))
-end
-
 end

@@ -1,5 +1,3 @@
-if MPS.is_supported(device())
-
 using .MPSGraphs: MPSGraphRandomOpDescriptor, MPSGraphRandomDistributionNormal, MPSGraphRandomDistributionTruncatedNormal, MPSGraphRandomDistributionUniform
 
 # determined by looking at the error message when trying to construct
@@ -24,4 +22,3 @@ end
 for (dist, T) in OP_TYPES
     @test MPSGraphRandomOpDescriptor(dist, T) isa MPSGraphRandomOpDescriptor
 end
-end # MPS.is_supported(device())
