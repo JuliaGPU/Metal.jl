@@ -3,12 +3,11 @@
 ## exception type
 
 struct KernelException <: Exception
-    dev_name::String    # captured to avoid crashes when accessing ObjC state
+    dev::MTLDevice
 end
 
-function Base.showerror(io::IO, err::KernelException)
-    print(io, "KernelException: exception thrown during kernel execution on device $(err.dev_name)")
-end
+Base.showerror(io::IO, err::KernelException) =
+    print(io, "KernelException: exception thrown during kernel execution on device $(String(err.dev.name))")
 
 
 ## exception mailbox
@@ -22,6 +21,9 @@ const device_exception_lock = ReentrantLock()
 function exception_flag_buffer(dev::MTLDevice)
     Base.@lock device_exception_lock begin
         buf, _ = get!(device_exception_flags, dev) do
+            # `newBufferWithLength:` (a `new*` method) returns retain-count-1, non-autoreleased
+            # per Apple's ARC naming convention, so the buffer survives the pool drain. the
+            # pool is here to catch any intermediates the alloc call autoreleases internally.
             @autoreleasepool begin
                 buf = MTLBuffer(dev, sizeof(UInt32); storage=SharedStorage)
                 ptr = convert(Ptr{UInt32}, MTL.contents(buf))
@@ -34,14 +36,14 @@ function exception_flag_buffer(dev::MTLDevice)
 end
 
 # check the exception flags of all devices, rethrowing host-side if one was set.
-# the caller is responsible for running inside an autorelease pool.
+# the caller is responsible for running inside an autorelease pool (`synchronize` is).
 function check_exceptions()
     Base.@lock device_exception_lock begin
         for (dev, (_, ptr)) in device_exception_flags
             if unsafe_load(ptr) != 0
                 # reset so the next launch starts clean
                 unsafe_store!(ptr, UInt32(0))
-                throw(KernelException(String(dev.name)))
+                throw(KernelException(dev))
             end
         end
     end
