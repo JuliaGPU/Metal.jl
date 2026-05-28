@@ -381,9 +381,13 @@ function conv_fft_fused(
         cmdbuf = MPSCommandBuffer(Metal.global_queue(current_device()))
         encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(resultdict), nil, default_exec_desc())
         commit!(cmdbuf)
-        wait_completed(cmdbuf)
+        # No per-call host wait: the graph runs on the same in-order queue as the
+        # padding above and the extraction copy below, so results are correct once
+        # the caller synchronizes (e.g. via `Array`). Skipping the wait lets
+        # successive convolutions pipeline on the GPU instead of serializing.
 
-        # Extract appropriate region based on mode (must copy since output buffer is reused)
+        # Extract the requested region. This copies, so the pooled `output` buffer
+        # can be safely overwritten by the next call enqueued on the same queue.
         return _extract_conv_result_nd(output, output_sizes, full_sizes, mode)
     end
 end
