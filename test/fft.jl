@@ -90,378 +90,374 @@ N2 = 32
 N3 = 64
 N4 = 8
 
-if MPS.is_supported(device())
+## complex FFT tests
+function complex_out_of_place(X::AbstractArray{T, N}) where {T <: Complex, N}
+    fftw_X = fft(X)
+    d_X = MtlArray(X)
 
-    ## complex FFT tests
-    function complex_out_of_place(X::AbstractArray{T, N}) where {T <: Complex, N}
-        fftw_X = fft(X)
-        d_X = MtlArray(X)
+    # Forward FFT with @inferred
+    p = @inferred plan_fft(d_X)
+    d_Y = p * d_X
+    Y = Array(d_Y)
+    @test isapprox(Y, fftw_X, rtol = rtol(T))
 
-        # Forward FFT with @inferred
-        p = @inferred plan_fft(d_X)
-        d_Y = p * d_X
-        Y = Array(d_Y)
-        @test isapprox(Y, fftw_X, rtol = rtol(T))
+    # Inverse FFT
+    pinv = plan_ifft(d_Y)
+    d_Z = pinv * d_Y
+    Z = Array(d_Z)
+    @test isapprox(Z, X, rtol = rtol(T))
 
-        # Inverse FFT
-        pinv = plan_ifft(d_Y)
-        d_Z = pinv * d_Y
-        Z = Array(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T))
+    pinv2 = inv(p)
+    d_Z = pinv2 * d_Y
+    Z = Array(d_Z)
+    @test isapprox(Z, X, rtol = rtol(T))
 
-        pinv2 = inv(p)
-        d_Z = pinv2 * d_Y
-        Z = Array(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T))
+    # Backward FFT (unnormalized inverse)
+    pinvb = @inferred plan_bfft(d_Y)
+    d_Z = pinvb * d_Y
+    Z = Array(d_Z) ./ length(d_Z)
+    @test isapprox(Z, X, rtol = rtol(T))
+end
 
-        # Backward FFT (unnormalized inverse)
-        pinvb = @inferred plan_bfft(d_Y)
-        d_Z = pinvb * d_Y
-        Z = Array(d_Z) ./ length(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T))
-    end
+function complex_in_place(X::AbstractArray{T, N}) where {T <: Complex, N}
+    fftw_X = fft(X)
+    d_X = MtlArray(copy(X))
 
-    function complex_in_place(X::AbstractArray{T, N}) where {T <: Complex, N}
-        fftw_X = fft(X)
-        d_X = MtlArray(copy(X))
+    # In-place forward FFT
+    p = @inferred plan_fft!(d_X)
+    p * d_X
+    Y = Array(d_X)
+    @test isapprox(Y, fftw_X, rtol = rtol(T))
 
-        # In-place forward FFT
-        p = @inferred plan_fft!(d_X)
-        p * d_X
-        Y = Array(d_X)
-        @test isapprox(Y, fftw_X, rtol = rtol(T))
+    # In-place inverse FFT
+    pinv = plan_ifft!(d_X)
+    pinv * d_X
+    Z = Array(d_X)
+    @test isapprox(Z, X, rtol = rtol(T))
 
-        # In-place inverse FFT
-        pinv = plan_ifft!(d_X)
-        pinv * d_X
-        Z = Array(d_X)
-        @test isapprox(Z, X, rtol = rtol(T))
+    # Reset and test bfft!
+    p * d_X
+    pinvb = @inferred plan_bfft!(d_X)
+    pinvb * d_X
+    Z = Array(d_X) ./ length(X)
+    @test isapprox(Z, X, rtol = rtol(T))
+end
 
-        # Reset and test bfft!
-        p * d_X
-        pinvb = @inferred plan_bfft!(d_X)
-        pinvb * d_X
-        Z = Array(d_X) ./ length(X)
-        @test isapprox(Z, X, rtol = rtol(T))
-    end
+function complex_batched(X::AbstractArray{T, N}, region) where {T <: Complex, N}
+    fftw_X = fft(X, region)
+    d_X = MtlArray(X)
 
-    function complex_batched(X::AbstractArray{T, N}, region) where {T <: Complex, N}
-        fftw_X = fft(X, region)
-        d_X = MtlArray(X)
+    p = plan_fft(d_X, region)
+    d_Y = p * d_X
+    d_X2 = reshape(d_X, (size(d_X)..., 1))
+    @test_throws ArgumentError p * d_X2
 
-        p = plan_fft(d_X, region)
-        d_Y = p * d_X
-        d_X2 = reshape(d_X, (size(d_X)..., 1))
-        @test_throws ArgumentError p * d_X2
+    Y = Array(d_Y)
+    @test isapprox(Y, fftw_X, rtol = rtol(T))
 
-        Y = Array(d_Y)
-        @test isapprox(Y, fftw_X, rtol = rtol(T))
+    pinv = plan_ifft(d_Y, region)
+    d_Z = pinv * d_Y
+    Z = Array(d_Z)
+    @test isapprox(Z, X, rtol = rtol(T))
 
-        pinv = plan_ifft(d_Y, region)
-        d_Z = pinv * d_Y
-        Z = Array(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T))
+    ldiv!(d_Z, p, d_Y)
+    Z = collect(d_Z)
+    @test isapprox(Z, X, rtol = rtol(T))
+end
 
-        ldiv!(d_Z, p, d_Y)
-        Z = collect(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T))
-    end
+@testset "Complex FFT" begin
+    @testset for T in [ComplexF16, ComplexF32]
+        @testset "simple" begin
+            @testset "$(n)D" for n = 1:3
+                sz = 40
+                dims = ntuple(i -> sz, n)
+                @test testf(fft!, rand(T, dims))
+                @test testf(ifft!, rand(T, dims))
+                @test testf(bfft!, rand(T, dims))
 
-    @testset "Complex FFT" begin
-        @testset for T in [ComplexF16, ComplexF32]
-            @testset "simple" begin
-                @testset "$(n)D" for n = 1:3
-                    sz = 40
-                    dims = ntuple(i -> sz, n)
-                    @test testf(fft!, rand(T, dims))
-                    @test testf(ifft!, rand(T, dims))
-                    @test testf(bfft!, rand(T, dims))
-
-                    @test testf(fft, rand(T, dims))
-                    @test testf(ifft, rand(T, dims))
-                    @test testf(bfft, rand(T, dims))
-                end
-            end
-
-            @testset "1D" begin
-                X = rand(T, N1)
-                complex_out_of_place(X)
-            end
-
-            @testset "1D in-place" begin
-                X = rand(T, N1)
-                complex_in_place(X)
-            end
-
-            @testset "2D" begin
-                X = rand(T, N1, N2)
-                complex_out_of_place(X)
-            end
-
-            @testset "2D in-place" begin
-                X = rand(T, N1, N2)
-                complex_in_place(X)
-            end
-
-            @testset "3D" begin
-                X = rand(T, N1, N2, N3)
-                complex_out_of_place(X)
-            end
-
-            @testset "3D in-place" begin
-                X = rand(T, N1, N2, N3)
-                complex_in_place(X)
-            end
-
-            @testset "Batch 1D" begin
-                dims = (N1, N2)
-                X = rand(T, dims)
-                complex_batched(X, 1)
-
-                X = rand(T, dims)
-                complex_batched(X, 2)
-
-                X = rand(T, dims)
-                complex_batched(X, (1, 2))
-            end
-
-            @testset "Batch 2D (in 3D)" begin
-                dims = (N1, N2, N3)
-                for region in [(1, 2), (2, 3), (1, 3)]
-                    X = rand(T, dims)
-                    complex_batched(X, region)
-                end
-
-                X = rand(T, dims)
-                @test_throws ArgumentError complex_batched(X, (3, 1))
-            end
-            @testset "Batch 2D (in 4D)" begin
-                dims = (N1, N2, N3, N4)
-                for region in [(1, 2), (1, 4), (3, 4), (1, 3), (2, 3), (2,), (3,)]
-                    X = rand(T, dims)
-                    complex_batched(X, region)
-                end
-                X = rand(T, dims)
-                complex_batched(X, (2, 4))
+                @test testf(fft, rand(T, dims))
+                @test testf(ifft, rand(T, dims))
+                @test testf(bfft, rand(T, dims))
             end
         end
-    end
 
-    ## real FFT tests
-    function real_out_of_place(X::AbstractArray{T, N}) where {T <: Real, N}
-        fftw_X = rfft(X)
-        d_X = MtlArray(X)
+        @testset "1D" begin
+            X = rand(T, N1)
+            complex_out_of_place(X)
+        end
 
-        # Forward rfft with @inferred
-        p = @inferred plan_rfft(d_X)
-        d_Y = p * d_X
-        Y = Array(d_Y)
-        @test isapprox(Y, fftw_X, rtol = rtol(T))
+        @testset "1D in-place" begin
+            X = rand(T, N1)
+            complex_in_place(X)
+        end
 
-        # Inverse rfft
-        pinv = plan_irfft(d_Y, size(X, 1))
-        d_Z = pinv * d_Y
-        Z = Array(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T))
+        @testset "2D" begin
+            X = rand(T, N1, N2)
+            complex_out_of_place(X)
+        end
 
-        pinv2 = inv(p)
-        d_Z = pinv2 * d_Y
-        Z = Array(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T))
+        @testset "2D in-place" begin
+            X = rand(T, N1, N2)
+            complex_in_place(X)
+        end
 
-        pinv3 = inv(pinv)
-        d_W = pinv3 * d_X
-        W = Array(d_W)
-        @test isapprox(W, Y, rtol = rtol(T))
+        @testset "3D" begin
+            X = rand(T, N1, N2, N3)
+            complex_out_of_place(X)
+        end
 
-        # Backward rfft (unnormalized)
-        pinvb = @inferred plan_brfft(d_Y, size(X, 1))
-        d_Z = pinvb * d_Y
-        Z = Array(d_Z) ./ length(X)
-        @test isapprox(Z, X, rtol = rtol(T))
-    end
+        @testset "3D in-place" begin
+            X = rand(T, N1, N2, N3)
+            complex_in_place(X)
+        end
 
-    function real_batched(X::AbstractArray{T, N}, region) where {T <: Real, N}
-        fftw_X = rfft(X, region)
-        d_X = MtlArray(X)
+        @testset "Batch 1D" begin
+            dims = (N1, N2)
+            X = rand(T, dims)
+            complex_batched(X, 1)
 
-        p = plan_rfft(d_X, region)
-        d_Y = p * d_X
-        Y = Array(d_Y)
-        @test isapprox(Y, fftw_X, rtol = rtol(T))
+            X = rand(T, dims)
+            complex_batched(X, 2)
 
-        pinv = plan_irfft(d_Y, size(X, region[1]), region)
-        d_Z = pinv * d_Y
-        Z = Array(d_Z)
-        @test isapprox(Z, X, rtol = rtol(T))
-    end
+            X = rand(T, dims)
+            complex_batched(X, (1, 2))
+        end
 
-    @testset "Real FFT" begin
-        @testset for T in [Float16, Float32]
-            @testset "1D" begin
-                X = rand(T, N1)
-                real_out_of_place(X)
-            end
-
-            @testset "Batch 1D" begin
-                dims = (N1, N2)
+        @testset "Batch 2D (in 3D)" begin
+            dims = (N1, N2, N3)
+            for region in [(1, 2), (2, 3), (1, 3)]
                 X = rand(T, dims)
-                real_batched(X, 1)
+                complex_batched(X, region)
+            end
 
+            X = rand(T, dims)
+            @test_throws ArgumentError complex_batched(X, (3, 1))
+        end
+        @testset "Batch 2D (in 4D)" begin
+            dims = (N1, N2, N3, N4)
+            for region in [(1, 2), (1, 4), (3, 4), (1, 3), (2, 3), (2,), (3,)]
                 X = rand(T, dims)
-                real_batched(X, 2)
-
-                X = rand(T, dims)
-                real_batched(X, (1, 2))
+                complex_batched(X, region)
             end
-
-            @testset "2D" begin
-                X = rand(T, N1, N2)
-                real_out_of_place(X)
-            end
-
-            @testset "Batch 2D (in 3D)" begin
-                dims = (N1, N2, N3)
-                for region in [(1, 2), (2, 3), (1, 3)]
-                    X = rand(T, dims)
-                    real_batched(X, region)
-                end
-
-                X = rand(T, dims)
-                @test_throws ArgumentError real_batched(X, (3, 1))
-            end
-
-            @testset "Batch 2D (in 4D)" begin
-                dims = (N1,N2,N3,N4)
-                for region in [(1,2),(1,4),(3,4),(1,3),(2,3)]
-                    X = rand(T, dims)
-                    real_batched(X, region)
-                end
-                X = rand(T, dims)
-                real_batched(X, (2, 4))
-            end
-
-            @testset "3D" begin
-                X = rand(T, N1, N2, N3)
-                real_out_of_place(X)
-            end
+            X = rand(T, dims)
+            complex_batched(X, (2, 4))
         end
     end
+end
 
-    ## complex integer
-    function out_of_place(X::AbstractArray{T,N}) where {T <: Complex{<:Integer},N}
-        fftw_X = fft(ComplexF32.(X))
-        d_X = MtlArray(X)
-        p = plan_fft(d_X)
-        d_Y = p * d_X
-        Y = collect(d_Y)
-        @test isapprox(Y, fftw_X, rtol = rtol(T))
+## real FFT tests
+function real_out_of_place(X::AbstractArray{T, N}) where {T <: Real, N}
+    fftw_X = rfft(X)
+    d_X = MtlArray(X)
 
-        d_Y = fft(d_X)
-        Y = collect(d_Y)
-        @test isapprox(Y, fftw_X, rtol = rtol(T))
+    # Forward rfft with @inferred
+    p = @inferred plan_rfft(d_X)
+    d_Y = p * d_X
+    Y = Array(d_Y)
+    @test isapprox(Y, fftw_X, rtol = rtol(T))
+
+    # Inverse rfft
+    pinv = plan_irfft(d_Y, size(X, 1))
+    d_Z = pinv * d_Y
+    Z = Array(d_Z)
+    @test isapprox(Z, X, rtol = rtol(T))
+
+    pinv2 = inv(p)
+    d_Z = pinv2 * d_Y
+    Z = Array(d_Z)
+    @test isapprox(Z, X, rtol = rtol(T))
+
+    pinv3 = inv(pinv)
+    d_W = pinv3 * d_X
+    W = Array(d_W)
+    @test isapprox(W, Y, rtol = rtol(T))
+
+    # Backward rfft (unnormalized)
+    pinvb = @inferred plan_brfft(d_Y, size(X, 1))
+    d_Z = pinvb * d_Y
+    Z = Array(d_Z) ./ length(X)
+    @test isapprox(Z, X, rtol = rtol(T))
+end
+
+function real_batched(X::AbstractArray{T, N}, region) where {T <: Real, N}
+    fftw_X = rfft(X, region)
+    d_X = MtlArray(X)
+
+    p = plan_rfft(d_X, region)
+    d_Y = p * d_X
+    Y = Array(d_Y)
+    @test isapprox(Y, fftw_X, rtol = rtol(T))
+
+    pinv = plan_irfft(d_Y, size(X, region[1]), region)
+    d_Z = pinv * d_Y
+    Z = Array(d_Z)
+    @test isapprox(Z, X, rtol = rtol(T))
+end
+
+@testset "Real FFT" begin
+    @testset for T in [Float16, Float32]
+        @testset "1D" begin
+            X = rand(T, N1)
+            real_out_of_place(X)
+        end
+
+        @testset "Batch 1D" begin
+            dims = (N1, N2)
+            X = rand(T, dims)
+            real_batched(X, 1)
+
+            X = rand(T, dims)
+            real_batched(X, 2)
+
+            X = rand(T, dims)
+            real_batched(X, (1, 2))
+        end
+
+        @testset "2D" begin
+            X = rand(T, N1, N2)
+            real_out_of_place(X)
+        end
+
+        @testset "Batch 2D (in 3D)" begin
+            dims = (N1, N2, N3)
+            for region in [(1, 2), (2, 3), (1, 3)]
+                X = rand(T, dims)
+                real_batched(X, region)
+            end
+
+            X = rand(T, dims)
+            @test_throws ArgumentError real_batched(X, (3, 1))
+        end
+
+        @testset "Batch 2D (in 4D)" begin
+            dims = (N1,N2,N3,N4)
+            for region in [(1,2),(1,4),(3,4),(1,3),(2,3)]
+                X = rand(T, dims)
+                real_batched(X, region)
+            end
+            X = rand(T, dims)
+            real_batched(X, (2, 4))
+        end
+
+        @testset "3D" begin
+            X = rand(T, N1, N2, N3)
+            real_out_of_place(X)
+        end
     end
+end
 
-    @testset "1D $T" for T in [Complex{Int32}, Complex{Int64}]
-        dims = (N1,)
-        X = rand(T, dims)
-        out_of_place(X)
-    end
+## complex integer
+function out_of_place(X::AbstractArray{T,N}) where {T <: Complex{<:Integer},N}
+    fftw_X = fft(ComplexF32.(X))
+    d_X = MtlArray(X)
+    p = plan_fft(d_X)
+    d_Y = p * d_X
+    Y = collect(d_Y)
+    @test isapprox(Y, fftw_X, rtol = rtol(T))
 
+    d_Y = fft(d_X)
+    Y = collect(d_Y)
+    @test isapprox(Y, fftw_X, rtol = rtol(T))
+end
 
-    ## real integer
-    function out_of_place(X::AbstractArray{T,N}) where {T <: Integer,N}
-        fftw_X = rfft(Float32.(X))
-        d_X = MtlArray(X)
-        p = plan_rfft(d_X)
-        d_Y = p * d_X
-        Y = collect(d_Y)
-        @test isapprox(Y, fftw_X, rtol = rtol(T))
-
-        d_Y = rfft(d_X)
-        Y = collect(d_Y)
-        @test isapprox(Y, fftw_X, rtol = rtol(T))
-    end
-
-    @testset "1D $T" for T in [Int32, Int64]
-        X = rand(T, N1)
-        out_of_place(X)
-    end
+@testset "1D $T" for T in [Complex{Int32}, Complex{Int64}]
+    dims = (N1,)
+    X = rand(T, dims)
+    out_of_place(X)
+end
 
 
-    ## Additional Tests
-    @testset "Plan Properties" begin
-        x = MtlArray(randn(ComplexF32, 64, 64))
-        p = plan_fft(x)
-        @test size(p) == (64, 64)
-        @test fftdims(p) == (1, 2)
+## real integer
+function out_of_place(X::AbstractArray{T,N}) where {T <: Integer,N}
+    fftw_X = rfft(Float32.(X))
+    d_X = MtlArray(X)
+    p = plan_rfft(d_X)
+    d_Y = p * d_X
+    Y = collect(d_Y)
+    @test isapprox(Y, fftw_X, rtol = rtol(T))
 
-        p2 = plan_fft(x, 1)
-        @test fftdims(p2) == (1,)
-    end
+    d_Y = rfft(d_X)
+    Y = collect(d_Y)
+    @test isapprox(Y, fftw_X, rtol = rtol(T))
+end
 
-    @testset "mul! Interface" begin
-        x = MtlArray(randn(ComplexF32, 32, 32))
-        y = similar(x)
-        p = plan_fft(x)
-        mul!(y, p, x)
-        @test isapprox(Array(y), fft(Array(x)), rtol = 1.0e-4)
+@testset "1D $T" for T in [Int32, Int64]
+    X = rand(T, N1)
+    out_of_place(X)
+end
 
-        # Real FFT mul!
-        xr = MtlArray(randn(Float32, 32, 32))
-        yr = MtlArray{ComplexF32}(undef, 17, 32)
-        pr = plan_rfft(xr)
-        mul!(yr, pr, xr)
-        @test isapprox(Array(yr), rfft(Array(xr)), rtol = 1.0e-4)
-    end
 
-    @testset "Plan Reuse" begin
-        x1 = MtlArray(randn(ComplexF32, 64, 64))
-        x2 = MtlArray(randn(ComplexF32, 64, 64))
+## Additional Tests
+@testset "Plan Properties" begin
+    x = MtlArray(randn(ComplexF32, 64, 64))
+    p = plan_fft(x)
+    @test size(p) == (64, 64)
+    @test fftdims(p) == (1, 2)
 
-        p = plan_fft(x1)
-        y1 = p * x1
-        y2 = p * x2
+    p2 = plan_fft(x, 1)
+    @test fftdims(p2) == (1,)
+end
 
-        @test isapprox(Array(y1), fft(Array(x1)), rtol = 1.0e-4)
-        @test isapprox(Array(y2), fft(Array(x2)), rtol = 1.0e-4)
-    end
+@testset "mul! Interface" begin
+    x = MtlArray(randn(ComplexF32, 32, 32))
+    y = similar(x)
+    p = plan_fft(x)
+    mul!(y, p, x)
+    @test isapprox(Array(y), fft(Array(x)), rtol = 1.0e-4)
 
-    @testset "Type Restrictions" begin
-        # ComplexF32 should work
-        x32 = MtlArray(randn(ComplexF32, 32, 32))
-        @test plan_fft(x32) isa Metal.MtlFFTPlan
+    # Real FFT mul!
+    xr = MtlArray(randn(Float32, 32, 32))
+    yr = MtlArray{ComplexF32}(undef, 17, 32)
+    pr = plan_rfft(xr)
+    mul!(yr, pr, xr)
+    @test isapprox(Array(yr), rfft(Array(xr)), rtol = 1.0e-4)
+end
 
-        # ComplexF16 should work
-        x16 = MtlArray(ComplexF16.(randn(ComplexF32, 32, 32)))
-        @test plan_fft(x16) isa Metal.MtlFFTPlan
+@testset "Plan Reuse" begin
+    x1 = MtlArray(randn(ComplexF32, 64, 64))
+    x2 = MtlArray(randn(ComplexF32, 64, 64))
 
-        # Float32 rfft should work
-        xr32 = MtlArray(randn(Float32, 32, 32))
-        @test plan_rfft(xr32) isa Metal.MtlFFTPlan
+    p = plan_fft(x1)
+    y1 = p * x1
+    y2 = p * x2
 
-        # Float16 rfft should work
-        xr16 = MtlArray(Float16.(randn(Float32, 32, 32)))
-        @test plan_rfft(xr16) isa Metal.MtlFFTPlan
-    end
+    @test isapprox(Array(y1), fft(Array(x1)), rtol = 1.0e-4)
+    @test isapprox(Array(y2), fft(Array(x2)), rtol = 1.0e-4)
+end
 
-    @testset "Invalid Dimensions" begin
-        x = MtlArray(randn(ComplexF32, 32, 32))
-        @test_throws ArgumentError plan_fft(x, 3)  # Only 2 dimensions
-        @test_throws ArgumentError plan_fft(x, 0)  # Invalid dimension
-    end
+@testset "Type Restrictions" begin
+    # ComplexF32 should work
+    x32 = MtlArray(randn(ComplexF32, 32, 32))
+    @test plan_fft(x32) isa Metal.MtlFFTPlan
 
-    @testset "Odd Sizes" begin
-        # Odd-sized irfft
-        x_cpu = randn(Float32, 63, 64)
-        y_cpu = rfft(x_cpu, 1)
-        y_gpu = MtlArray(y_cpu)
+    # ComplexF16 should work
+    x16 = MtlArray(ComplexF16.(randn(ComplexF32, 32, 32)))
+    @test plan_fft(x16) isa Metal.MtlFFTPlan
 
-        z_cpu = irfft(y_cpu, 63, 1)
-        z_gpu = Array(irfft(y_gpu, 63, 1))
+    # Float32 rfft should work
+    xr32 = MtlArray(randn(Float32, 32, 32))
+    @test plan_rfft(xr32) isa Metal.MtlFFTPlan
 
-        @test size(z_gpu) == (63, 64)
-        @test isapprox(z_cpu, z_gpu, rtol = 1.0e-4)
-    end
+    # Float16 rfft should work
+    xr16 = MtlArray(Float16.(randn(Float32, 32, 32)))
+    @test plan_rfft(xr16) isa Metal.MtlFFTPlan
+end
 
-end # MPS.is_supported(device())
+@testset "Invalid Dimensions" begin
+    x = MtlArray(randn(ComplexF32, 32, 32))
+    @test_throws ArgumentError plan_fft(x, 3)  # Only 2 dimensions
+    @test_throws ArgumentError plan_fft(x, 0)  # Invalid dimension
+end
+
+@testset "Odd Sizes" begin
+    # Odd-sized irfft
+    x_cpu = randn(Float32, 63, 64)
+    y_cpu = rfft(x_cpu, 1)
+    y_gpu = MtlArray(y_cpu)
+
+    z_cpu = irfft(y_cpu, 63, 1)
+    z_gpu = Array(irfft(y_gpu, 63, 1))
+
+    @test size(z_gpu) == (63, 64)
+    @test isapprox(z_cpu, z_gpu, rtol = 1.0e-4)
+end

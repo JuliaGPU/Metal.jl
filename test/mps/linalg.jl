@@ -1,5 +1,3 @@
-if MPS.is_supported(device())
-
 @testset "mixed-precision matrix matrix multiplication" begin
     N = 10
     rows_a = N
@@ -184,6 +182,4 @@ using .MPS: MPSMatrixSoftMax, MPSMatrixLogSoftMax
     @test lkern isa MPSMatrixLogSoftMax
     @test lkern.sourceColumns == cols
     @test lkern.sourceRows == rows
-end
-
 end
