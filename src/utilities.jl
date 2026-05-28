@@ -42,6 +42,7 @@ function versioninfo(io::IO=stdout)
 
     prefs = [
         "default_storage" => load_preference(Metal, "default_storage"),
+        "use_nonblocking_synchronization" => load_preference(Metal, "use_nonblocking_synchronization"),
     ]
     if any(x->!isnothing(x[2]), prefs)
         println(io, "Preferences:")
