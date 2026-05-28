@@ -59,10 +59,44 @@ function enqueue!(cmdbuf::MTLCommandBufferLike)
     @objc [cmdbuf::id{MTLCommandBuffer} enqueue]::Nothing
 end
 
+const last_committed_lock = ReentrantLock()
+const last_committed_per_queue = Dict{id{MTLCommandQueue}, MTLCommandBufferLike}()
+
+"""
+    last_committed(queue::MTLCommandQueue)::Union{MTLCommandBufferLike, Nothing}
+
+Return the most recently committed command buffer on `queue`, or `nothing` if
+nothing has been committed. The returned cmdbuf carries an additional retain;
+the caller is responsible for calling [`release`](@ref) when done. The
+retain-inside-lock is what makes this race-free against a concurrent `commit!`
+overwriting (and releasing) the dict slot.
+"""
+function last_committed(queue::MTLCommandQueue)
+    key = pointer(queue)
+    @lock last_committed_lock begin
+        get(last_committed_per_queue, key, nothing)
+    end
+end
+
 function commit!(cmdbuf::MTLCommandBufferLike)
     cmdbuf.status in [MTLCommandBufferStatusCompleted, MTLCommandBufferStatusCommitted] &&
         error("Cannot commit an already committed/completed command buffer")
     @objc [cmdbuf::id{MTLCommandBuffer} commit]::Nothing
+    # Record the commit so synchronize(queue) can wait on this cmdbuf instead
+    # of allocating a fresh sentinel. The slot is overwritten on every commit,
+    # so the dict stays bounded at one cmdbuf per queue. Retain explicitly:
+    # MTL retains a committed cmdbuf only until it completes, so without our
+    # own retain the wrapper could become a dangling pointer once the GPU is
+    # done. The retain on the new entry pairs with a release on the displaced one.
+    Foundation.retain(cmdbuf)
+    key = pointer(cmdbuf.commandQueue)
+    old = @lock last_committed_lock begin
+        prev = get(last_committed_per_queue, key, nothing)
+        last_committed_per_queue[key] = cmdbuf
+        prev
+    end
+    old === nothing || release(old)
+    return
 end
 
 function commit!(f::Base.Callable, cmdbuf::MTLCommandBufferLike)
