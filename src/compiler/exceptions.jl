@@ -40,9 +40,10 @@ end
 function check_exceptions()
     Base.@lock device_exception_lock begin
         for (dev, (_, ptr)) in device_exception_flags
-            if unsafe_load(ptr) != 0
-                # reset so the next launch starts clean
-                unsafe_store!(ptr, UInt32(0))
+            # atomic read-and-clear so concurrent `synchronize`s on the same device
+            # can't both observe the set flag and throw duplicate exceptions, nor
+            # race the load against the clear and swallow it.
+            if unsafe_swap!(ptr, UInt32(0), :sequentially_consistent) != 0
                 throw(KernelException(dev))
             end
         end
