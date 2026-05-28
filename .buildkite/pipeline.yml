@@ -102,6 +102,10 @@ steps:
         env:
           MTL_DEBUG_LAYER: '1'
           MTL_SHADER_VALIDATION: '1'
+        commands: |
+          # blocking synchronization is easier to validate, and the nonblocking one
+          # causes miscompilations on CI's macOS 15
+          echo -e "[Metal]\nnonblocking_synchronization = false" >LocalPreferences.toml
         agents:
           queue: "juliaecosystem"
           os: "macos"
