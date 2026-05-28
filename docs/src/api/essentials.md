@@ -16,6 +16,6 @@ Metal.device!
 Metal.devices
 Metal.device
 Metal.global_queue
-Metal.synchronize
-Metal.device_synchronize
+synchronize
+device_synchronize
 ```

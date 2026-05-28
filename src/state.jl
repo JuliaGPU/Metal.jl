@@ -1,4 +1,4 @@
-export device, device!, global_queue, synchronize, device_synchronize
+export device, device!, global_queue
 
 log_compiler()          = OSLog("org.juliagpu.metal", "Compiler")
 log_compiler(args...)   = log_compiler()(args...)
@@ -54,49 +54,6 @@ function global_queue(dev::MTLDevice)
         end
     end::MTLCommandQueue
 end
-
-"""
-    queue_event(queue::MTLCommandQueue)::MTLSharedEvent
-
-Return the `MTLSharedEvent` used to synchronize a queue
-"""
-function queue_event(queue::MTLCommandQueue)
-    get!(task_local_storage(), (:MTLSharedEvent, queue)) do
-        MTLSharedEvent(queue.device)
-    end::MTLSharedEvent
-end
-
-# TODO: Increase performance (currently ~15us)
-"""
-    synchronize(queue)
-
-Wait for currently committed GPU work on this queue to finish.
-
-Create a new MTLCommandBuffer from the global command queue, commit it to the queue,
-and simply wait for it to be completed. Since command buffers *should* execute in a
-First-In-First-Out manner, this synchronizes the GPU.
-"""
-@autoreleasepool function synchronize(queue::MTLCommandQueue=global_queue(device()))
-    ev = queue_event(queue)
-    val = ev.signaledValue + 1
-    cmdbuf = MTLCommandBuffer(queue)
-    MTL.encode_signal!(cmdbuf, ev, val)
-    commit!(cmdbuf)
-    MTL.waitUntilSignaledValue(ev, val)
-    return
-end
-
-"""
-    device_synchronize()
-
-Synchronize all committed GPU work across all global queues
-"""
-function device_synchronize()
-    for queue in keys(global_queues)
-        synchronize(queue)
-    end
-end
-
 
 ## dynamic-memory allocator buffer
 #

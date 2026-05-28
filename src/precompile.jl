@@ -26,4 +26,5 @@ Sys.isapple() && @setup_workload begin
     empty!(_compiler_configs)
     empty!(_kernel_instances)
     empty!(global_queues)
+    empty!(MTL.last_committed_per_queue)
 end

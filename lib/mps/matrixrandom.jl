@@ -111,6 +111,6 @@ synchronize_state(kern::MPSMatrixRandomMTGP32, cmdbuf::MTLCommandBufferLike) =
         end
     end
 
-    async || wait_completed(cmdbuf)
+    async || synchronize(cmdbuf)
     return
 end

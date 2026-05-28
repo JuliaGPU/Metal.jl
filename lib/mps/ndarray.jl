@@ -133,7 +133,7 @@ function exportToMtlArray!(arr::MtlArray{T}, ndarr::MPSNDArrayLike; async=false)
         exportDataWithCommandBuffer(ndarr, cmdBuf, arr.data[], T, arr.offset)
     end
 
-    async || wait_completed(cmdBuf)
+    async || synchronize(cmdBuf)
     return arr
 end
 

@@ -169,7 +169,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{<:Any, CPUStorage}, maxi::Integer) =
 
     p = vec(P) .+ UInt32(1)
 
-    wait_completed(cmdbuf)
+    synchronize(cmdbuf)
 
     status = convert(LinearAlgebra.BlasInt, status[]::MPS.MPSMatrixDecompositionStatus)
     check && checknonsingular(status)
@@ -224,7 +224,7 @@ end
 
     p = vec(P) .+ UInt32(1)
 
-    wait_completed(cmdbuf)
+    synchronize(cmdbuf)
 
     status = convert(LinearAlgebra.BlasInt, status[])
     check && _check_lu_success(status, allowsingular)

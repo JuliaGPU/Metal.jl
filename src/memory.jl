@@ -109,7 +109,7 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
                     end
                 end
                 commit!(cmdbuf)
-                async || wait_completed(cmdbuf)
+                async || synchronize(cmdbuf)
             end
         end
     end
@@ -126,7 +126,7 @@ end
             append_fillbuffer!(enc, dst.buffer, value, N * sizeof(T), dst.offset)
         end
         commit!(cmdbuf)
-        async || wait_completed(cmdbuf)
+        async || synchronize(cmdbuf)
     end
     return dst
 end
