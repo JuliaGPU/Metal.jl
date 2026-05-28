@@ -160,8 +160,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{<:Any, CPUStorage}, maxi::Integer) =
 
     B = similar(A, M, N)
 
-    MTL.enqueue!(cmdbuf)
-    let cbuf = cmdbuf
+    commit!(cmdbuf) do cbuf
         mps_b = MPSMatrix(B)
         kernel = MPSMatrixCopy(dev, M, N, false, true)
         descriptor = MPSMatrixCopyDescriptor(mps_at, mps_b)
@@ -217,8 +216,7 @@ end
         encode!(cbuf, kernel, mps_at, mps_at, mps_p, status)
     end
 
-    MTL.enqueue!(cmdbuf)
-    let cbuf = cmdbuf
+    commit!(cmdbuf) do cbuf
         kernel = MPSMatrixCopy(dev, M, N, false, true)
         descriptor = MPSMatrixCopyDescriptor(mps_at, mps_a)
         encode!(cbuf, kernel, descriptor)

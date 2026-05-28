@@ -6,7 +6,7 @@
 
     B = MtlVector{Float32}(undef, N)
     fill!(B, 0)
-    Metal.synchronize()
+    synchronize()
 
     @test all(isone.(A))
     @test all(iszero(B))

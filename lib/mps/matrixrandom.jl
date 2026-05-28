@@ -93,26 +93,24 @@ synchronize_state(kern::MPSMatrixRandomMTGP32, cmdbuf::MTLCommandBufferLike) =
                         async::Bool=false) where {T,T2}
     bytesize = sizeof(dest)
 
-    cmdbuf = MTLCommandBuffer(queue)
-    MTL.enqueue!(cmdbuf)
-    if bytesize % 16 == 0 && dest.offset == 0
-        vecDesc = MPSVectorDescriptor(bytesize ÷ sizeof(T2), T2)
-        mpsdest = MPSVector(dest, vecDesc)
-        encode!(cmdbuf, randkern, mpsdest)
+    cmdbuf = if bytesize % 16 == 0 && dest.offset == 0
+        MTLCommandBuffer(queue) do cmdbuf
+            vecDesc = MPSVectorDescriptor(bytesize ÷ sizeof(T2), T2)
+            mpsdest = MPSVector(dest, vecDesc)
+            encode!(cmdbuf, randkern, mpsdest)
+        end
     else
-        len = UInt(ceil(bytesize / sizeof(T2)) * 4)
-        vecDesc = MPSVectorDescriptor(len, T2)
-        tempVec = MPSTemporaryVector(cmdbuf, vecDesc)
-        encode!(cmdbuf, randkern, tempVec)
-        MTLBlitCommandEncoder(cmdbuf) do enc
-            MTL.append_copy!(enc, dest.data[], dest.offset, tempVec.data, tempVec.offset, bytesize)
+        MTLCommandBuffer(queue) do cmdbuf
+            len = UInt(ceil(bytesize / sizeof(T2)) * 4)
+            vecDesc = MPSVectorDescriptor(len, T2)
+            tempVec = MPSTemporaryVector(cmdbuf, vecDesc)
+            encode!(cmdbuf, randkern, tempVec)
+            MTLBlitCommandEncoder(cmdbuf) do enc
+                MTL.append_copy!(enc, dest.data[], dest.offset, tempVec.data, tempVec.offset, bytesize)
+            end
         end
     end
 
-    if async
-        commit!(cmdbuf)
-    else
-        Metal.synchronize(cmdbuf)
-    end
+    async || synchronize(cmdbuf)
     return
 end

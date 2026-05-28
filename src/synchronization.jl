@@ -9,45 +9,35 @@ const use_nonblocking_synchronization =
 
 
 #
-# nonblocking sync
+# fast-path synchronization
 #
 
-"""
-    synchronize(cmdbuf::MTLCommandBufferLike)
+# before paying the cost of a completion handler + scheduler wakeup, busy-poll
+# the command buffer's status. for empty / very short work, this lets us skip
+# the libdispatch-to-Julia thread switch entirely. mirrors CUDA.jl's
+# `spinning_synchronization`.
 
-Commit `cmdbuf` and wait for it to finish executing.
+is_completed(cmdbuf::MTL.MTLCommandBufferLike) =
+    cmdbuf.status >= MTL.MTLCommandBufferStatusCompleted
 
-`cmdbuf` must not have been committed already: nonblocking synchronization
-requires registering a completion handler, which Metal only permits before
-commit. After the handler is in place, `cmdbuf` is committed and the calling
-task waits on an `Event` that the handler notifies on completion, keeping the
-Julia scheduler live on the calling thread instead of parking it inside
-Metal's blocking `waitUntilCompleted`.
-"""
-@autoreleasepool function synchronize(cmdbuf::MTL.MTLCommandBufferLike)
-    # Nonblocking sync wakes the calling task from the command buffer's
-    # completion handler, which Metal fires on a libdispatch thread. That
-    # thread-switch-from-a-foreign-callback doesn't work while a precompile
-    # worker is generating output, hanging image serialization, so fall back
-    # to blocking sync in that context.
-    precompiling = ccall(:jl_generating_output, Cint, ()) != 0
-    if use_nonblocking_synchronization && !precompiling
-        # Metal adopts the libdispatch thread into the Julia runtime when the
-        # callback enters it (JuliaLang/julia#49934, 1.9+), so the handler can
-        # notify an ordinary `Event` and let the scheduler resume us — keeping
-        # the calling thread in the Julia scheduler rather than parked inside
-        # Metal's blocking `waitUntilCompleted`.
-        done = Base.Event()
-        on_completed(cmdbuf) do _
-            notify(done)
+function spinning_synchronization(f, obj)
+    f(obj) && return true
+
+    # initially pause without yielding to keep latency low; switch to yield
+    # after a few dozen spins so other tasks aren't starved.
+    spins = 0
+    while spins < 256
+        if spins < 32
+            ccall(:jl_cpu_pause, Cvoid, ())
+            ccall(:jl_gc_safepoint, Cvoid, ())
+        else
+            yield()
         end
-        commit!(cmdbuf)
-        wait(done)
-    else
-        commit!(cmdbuf)
-        wait_completed(cmdbuf)
+        f(obj) && return true
+        spins += 1
     end
-    return
+
+    return false
 end
 
 
@@ -59,12 +49,45 @@ end
     synchronize(queue::MTLCommandQueue=global_queue(device()))
 
 Wait for currently committed GPU work on `queue` to finish.
-
-Commits an empty command buffer to the queue and waits for it to complete.
-Since command buffers execute in submission order, this synchronizes the queue.
 """
-synchronize(queue::MTLCommandQueue=global_queue(device())) =
-    synchronize(MTLCommandBuffer(queue))
+@autoreleasepool function synchronize(queue::MTLCommandQueue=global_queue(device()))
+    # Nonblocking sync wakes the calling task from the command buffer's
+    # completion handler, which Metal fires on a libdispatch thread. That
+    # thread-switch-from-a-foreign-callback doesn't work while a precompile
+    # worker is generating output, hanging image serialization, so fall back
+    # to blocking sync in that context.
+    precompiling = ccall(:jl_generating_output, Cint, ()) != 0
+
+    sentinel = MTLCommandBuffer(queue)
+    if use_nonblocking_synchronization && !precompiling
+        # Metal adopts the libdispatch thread into the Julia runtime when the
+        # callback enters it (JuliaLang/julia#49934, 1.9+), so the handler can
+        # notify an ordinary `Event` and let the scheduler resume us, keeping
+        # the calling thread in the Julia scheduler rather than parked inside
+        # Metal's blocking `waitUntilCompleted`.
+        done = Base.Event()
+        on_completed(sentinel) do _
+            notify(done)
+        end
+        commit!(sentinel)
+        # spin briefly first: for empty queues / short kernels this avoids
+        # the libdispatch → Julia scheduler wakeup entirely. if the handler
+        # fired during the spin, `wait` returns immediately.
+        spinning_synchronization(is_completed, sentinel) || wait(done)
+    else
+        commit!(sentinel)
+        wait_completed(sentinel)
+    end
+    return
+end
+
+"""
+    synchronize(cmdbuf::MTLCommandBufferLike)
+
+Wait for `cmdbuf` (which must already have been committed) and all preceding
+work on the same queue to complete. Equivalent to `synchronize(cmdbuf.commandQueue)`.
+"""
+synchronize(cmdbuf::MTL.MTLCommandBufferLike) = synchronize(cmdbuf.commandQueue)
 
 """
     device_synchronize()

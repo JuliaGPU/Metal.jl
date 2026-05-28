@@ -108,11 +108,8 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
                         nbytes -= transfer_bytes
                     end
                 end
-                if async
-                    commit!(cmdbuf)
-                else
-                    synchronize(cmdbuf)
-                end
+                commit!(cmdbuf)
+                async || synchronize(cmdbuf)
             end
         end
     end
@@ -128,11 +125,8 @@ end
         MTLBlitCommandEncoder(cmdbuf) do enc
             append_fillbuffer!(enc, dst.buffer, value, N * sizeof(T), dst.offset)
         end
-        if async
-            commit!(cmdbuf)
-        else
-            synchronize(cmdbuf)
-        end
+        commit!(cmdbuf)
+        async || synchronize(cmdbuf)
     end
     return dst
 end

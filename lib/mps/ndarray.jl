@@ -129,14 +129,11 @@ end
 function exportToMtlArray!(arr::MtlArray{T}, ndarr::MPSNDArrayLike; async=false) where T
     dev = device(arr)
 
-    cmdBuf = MTLCommandBuffer(global_queue(dev))
-    MTL.enqueue!(cmdBuf)
-    exportDataWithCommandBuffer(ndarr, cmdBuf, arr.data[], T, arr.offset)
-    if async
-        commit!(cmdBuf)
-    else
-        Metal.synchronize(cmdBuf)
+    cmdBuf = MTLCommandBuffer(global_queue(dev)) do cmdBuf
+        exportDataWithCommandBuffer(ndarr, cmdBuf, arr.data[], T, arr.offset)
     end
+
+    async || synchronize(cmdBuf)
     return arr
 end
 
