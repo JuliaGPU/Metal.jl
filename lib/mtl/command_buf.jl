@@ -66,10 +66,7 @@ const last_committed_per_queue = Dict{id{MTLCommandQueue}, MTLCommandBufferLike}
     last_committed(queue::MTLCommandQueue)::Union{MTLCommandBufferLike, Nothing}
 
 Return the most recently committed command buffer on `queue`, or `nothing` if
-nothing has been committed. The returned cmdbuf carries an additional retain;
-the caller is responsible for calling [`release`](@ref) when done. The
-retain-inside-lock is what makes this race-free against a concurrent `commit!`
-overwriting (and releasing) the dict slot.
+nothing has been committed.
 """
 function last_committed(queue::MTLCommandQueue)
     key = pointer(queue)
