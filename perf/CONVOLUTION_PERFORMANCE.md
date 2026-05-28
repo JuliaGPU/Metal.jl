@@ -9,30 +9,38 @@ decision and are intended as source material for the PR description.
 ## CPU vs GPU (`DSP.conv`)
 
 GPU `DSP.conv` (via `MetalDSPExt`) vs CPU `DSP.conv` (FFTW-backed), `Float32`.
-GPU times are compute-only (`Metal.synchronize()`, data already on device). The
-GPU has a ~0.4–0.8 ms fixed dispatch/sync overhead, so it wins only at scale.
+GPU times are batched throughput (one `Metal.synchronize()`, data already on
+device). Convolutions pipeline on the GPU — no per-call host wait — so the
+effective per-call overhead is ~0.2 ms.
 
 1-D (kernel 127):
 
 | signal | CPU (ms) | GPU (ms) | speedup |
 |-------:|---------:|---------:|--------:|
-| 10³    | 0.037    | 0.412    | 0.1× |
-| 10⁴    | 0.061    | 0.422    | 0.1× |
-| 10⁵    | 0.288    | 0.491    | 0.6× |
-| 10⁶    | 2.469    | 0.815    | **3.0×** |
+| 10³    | 0.039    | 0.191    | 0.2× |
+| 10⁴    | 0.059    | 0.202    | 0.3× |
+| 10⁵    | 0.292    | 0.202    | **1.4×** |
+| 10⁶    | 2.436    | 0.514    | **4.7×** |
 
 2-D (kernel 15×15):
 
 | image | CPU (ms) | GPU (ms) | speedup |
 |------:|---------:|---------:|--------:|
-| 128²  | 0.128    | 0.598    | 0.2× |
-| 256²  | 0.427    | 0.592    | 0.7× |
-| 512²  | 1.457    | 0.830    | **1.8×** |
-| 1024² | 5.135    | 1.633    | **3.1×** |
+| 128²  | 0.116    | 0.378    | 0.3× |
+| 256²  | 0.444    | 0.334    | **1.3×** |
+| 512²  | 1.398    | 0.359    | **3.9×** |
+| 1024² | 5.155    | 1.381    | **3.7×** |
 
-Guidance: the GPU path pays off for large signals/images (1-D ≳ 10⁶, 2-D ≳ 512²)
-or when data already lives on the GPU; for small inputs CPU FFTW is faster. A
-one-off `CPU→GPU→CPU` round trip shifts the crossover further right.
+Guidance: the GPU path wins from ~10⁵ (1-D) / ~256² (2-D) upward, reaching ~4–5×
+at large sizes; for smaller inputs CPU FFTW is faster, and a one-off
+`CPU→GPU→CPU` round trip shifts the crossover right.
+
+Note: an earlier per-call host wait serialized convolutions (crossover ~10⁶ /
+512²). Removing it so calls pipeline (commit `c2909b8d`) moved the crossover left
+and roughly doubled the large-size speedup. Profiling showed the residual
+per-call cost is GPU FFT compute plus kernel-launch overhead, not host-side graph
+setup (feeds/`MPSGraphTensorData`/`NSDictionary` build is ~5 µs), so further
+host-side caching was not worthwhile.
 
 ## Single 2-D image, `mode = :same`
 
