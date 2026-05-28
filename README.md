@@ -27,7 +27,7 @@ framework.
 
 **The package is a work-in-progress.** There are bugs, functionality is missing,
 and performance hasn't been optimized. Expect to have to make changes to this package
-if you want to use it. PRs are very welcome!
+if you want to use it. PRs are very [welcome](#contributing)!
 
 
 ## Requirements
@@ -148,6 +148,12 @@ julia> dev = device()
 julia> dev.name
 NSString("Apple M1 Pro")
 ```
+
+## Contributing
+If you want to help improve this package, look at the [contributing page](https://metal.juliagpu.org/stable/faq/contributing/) for more details.
+
+> [!IMPORTANT]
+> If your pull request contains substantial contributions from a generative AI tool, please disclose so with details, and review all changes before opening. This also applies to other content, such as issues, discussions, and comments. You are expected to understand any code, issue, or comment you submit as if you had written it yourself.
 
 
 ## Acknowledgements
