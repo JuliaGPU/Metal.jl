@@ -29,4 +29,3 @@ function MTLCommandQueue(dev::MTLDevice)
     finalizer(release, obj)
     return obj
 end
-

@@ -146,5 +146,6 @@ end
     _, out = @grab_output @on_device kernel()
     @test out == "seven_i32 = 7\nthree_f32 = 3.000000\n1.0f0 + 4.0f0 = 5.000000\n"
 end
-end
-end
+
+end # macos_version() < v"15" else branch
+end # @testset "output"
