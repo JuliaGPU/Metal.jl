@@ -79,6 +79,19 @@ function __init__()
         return
     end
 
+    # The default `SharedStorage` is optimal on unified-memory (Apple Silicon) GPUs
+    # and works everywhere, but on a discrete GPU `PrivateStorage` is usually faster.
+    # Steer those (rare) users to the preference, unless they already chose a default.
+    if DefaultStorageMode == SharedStorage &&
+            load_preference(Metal, "default_storage", nothing) === nothing &&
+            functional() && !device().hasUnifiedMemory
+        @warn """Metal.jl defaults to `SharedStorage`, which is optimal on unified-memory
+                 (Apple Silicon) GPUs. This GPU does not have unified memory, where
+                 `PrivateStorage` is usually faster. To switch the default, run
+                     using Preferences; set_preferences!(Metal, "default_storage" => "private")
+                 and restart Julia.""" maxlog = 1
+    end
+
     # ensure that operations executed by the REPL back-end finish before returning,
     # because displaying values happens on a different task
     if isdefined(Base, :active_repl_backend) && !isnothing(Base.active_repl_backend)

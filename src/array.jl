@@ -39,7 +39,7 @@ end
 
 `N`-dimensional Metal array with storage mode `S` and elements of type `T`.
 
-`S` can be `Metal.PrivateStorage` (default), `Metal.SharedStorage`.
+`S` can be `Metal.SharedStorage` (default) or `Metal.PrivateStorage`.
 
 See the Array Programming section of the Metal.jl docs for more details.
 """
@@ -190,14 +190,16 @@ See also `VecOrMat`(@ref) for examples.
 """
 const MtlVecOrMat{T,S} = Union{MtlVector{T,S},MtlMatrix{T,S}}
 
-# default to private memory
-const DefaultStorageMode = let str = @load_preference("default_storage", "private")
-    if str == "private"
-        PrivateStorage
-    elseif str == "shared"
+# Default to shared storage: zero-copy on unified-memory (Apple Silicon) GPUs and
+# valid on discrete GPUs too (`__init__` steers discrete-GPU users to `private`).
+# Override with the `default_storage` preference.
+const DefaultStorageMode = let str = @load_preference("default_storage", "shared")
+    if str == "shared"
         SharedStorage
+    elseif str == "private"
+        PrivateStorage
     else
-        error("unknown default storage mode: $default_storage")
+        error("unknown default storage mode: $str (expected \"shared\" or \"private\")")
     end
 end
 
@@ -475,9 +477,9 @@ function Adapt.adapt_storage(to::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) whe
 end
 
 """
-    mtl(A; storage=Metal.PrivateStorage)
+    mtl(A; storage=Metal.SharedStorage)
 
-`storage` can be `Metal.PrivateStorage` (default) or `Metal.SharedStorage`.
+`storage` can be `Metal.SharedStorage` (default) or `Metal.PrivateStorage`.
 
 Opinionated GPU array adaptor, which may alter the element type `T` of arrays:
 * For `T<:AbstractFloat`, it makes a `MtlArray{Float32}` for performance and compatibility

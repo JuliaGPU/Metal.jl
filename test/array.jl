@@ -72,6 +72,12 @@ end
     @test Adapt.adapt(MtlMatrix{ComplexF32, Metal.SharedStorage}, [1 2;3 4]) isa MtlArray{ComplexF32, 2, Metal.SharedStorage}
     @test Adapt.adapt(MtlArray{Float16}, Float64[1]) isa MtlArray{Float16}
 
+    # MtlArrays default to shared storage; explicit storage modes still resolve.
+    @test Metal.DefaultStorageMode === Metal.SharedStorage
+    @test Metal.is_shared(MtlArray{Int}(undef, 4))
+    @test Metal.is_shared(mtl([1.0f0, 2.0f0, 3.0f0]))
+    @test Metal.is_private(MtlArray{Int, 1, Metal.PrivateStorage}(undef, 4))
+
     # Test a few explicitly unsupported types
     @test_throws "MtlArray only supports element types that are stored inline" MtlArray(BigInt[1])
     @test_throws "Metal does not support Float64 values" MtlArray(Float64[1])
