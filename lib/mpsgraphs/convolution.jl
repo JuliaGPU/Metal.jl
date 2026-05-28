@@ -14,9 +14,7 @@ using AbstractFFTs
 export conv, conv_fft, conv_fft!, xcorr, imfilter
 export clear_fused_conv_cache!
 
-# ============================================================================
 # Helper Functions
-# ============================================================================
 
 """
     nextfastfft(n::Integer)
@@ -36,13 +34,10 @@ function nextfastfft(n::Integer)
         m == 1 && return n
         n += 1
     end
+    return
 end
 
-"""
-    _conv_output_size(signal_size, kernel_size, mode)
-
-Compute the output size for convolution based on mode.
-"""
+# Output size of a 1-D convolution dimension, per mode.
 function _conv_output_size(signal_size::Int, kernel_size::Int, mode::Symbol)
     full_size = signal_size + kernel_size - 1
     if mode == :full
@@ -56,11 +51,7 @@ function _conv_output_size(signal_size::Int, kernel_size::Int, mode::Symbol)
     end
 end
 
-"""
-    _extract_conv_result(result, output_size, full_size, mode)
-
-Extract the appropriate portion of the convolution result based on mode.
-"""
+# Extract the requested portion of a 1-D convolution result, per mode.
 function _extract_conv_result(
         result::MtlArray{T, 1}, output_size::Int, full_size::Int, mode::Symbol
     ) where {T}
@@ -107,9 +98,7 @@ function _extract_conv_result(
     return result[ranges...]
 end
 
-# ============================================================================
 # Fused MPSGraph Convolution (Single Graph Execution)
-# ============================================================================
 
 # Cache key for fused convolution graphs
 struct FusedConvGraphKey
@@ -144,9 +133,7 @@ function _record_and_evict!(cache::AbstractDict, order::AbstractVector, key)
     return nothing
 end
 
-# ============================================================================
 # Buffer Pooling for Fused Convolution
-# ============================================================================
 
 # Key for buffer pool: (fft_sizes, eltype)
 struct BufferPoolKey
@@ -166,17 +153,14 @@ const _fused_conv_buffer_pool = Dict{BufferPoolKey, CachedFusedConvBuffers}()
 const _fused_conv_buffer_pool_lock = ReentrantLock()
 const _fused_conv_buffer_pool_order = BufferPoolKey[]
 
-"""
-Get or create cached buffers for fused convolution.
-Returns pre-allocated padded signal, kernel, and output buffers.
-"""
+# Get or create pooled padded signal/kernel/output buffers for a given FFT size.
 function _get_cached_buffers(fft_sizes::NTuple{N, Int}, ::Type{T}) where {N, T}
     key = BufferPoolKey(fft_sizes, T)
     cached = get(_fused_conv_buffer_pool, key, nothing)
     if cached !== nothing
         return cached
     end
-    lock(_fused_conv_buffer_pool_lock) do
+    return lock(_fused_conv_buffer_pool_lock) do
         cached = get(_fused_conv_buffer_pool, key, nothing)
         if cached !== nothing
             return cached
@@ -205,9 +189,7 @@ function clear_fused_conv_buffer_pool!()
     return nothing
 end
 
-# ============================================================================
 # Fast Padding Kernel (Single kernel for copy + zero-pad)
-# ============================================================================
 
 # Custom Metal kernel that copies source data and zero-pads in one operation
 # This is ~4.5x faster than separate copyto! + broadcast zero operations
@@ -221,50 +203,20 @@ function _pad_copy_kernel_1d!(dest, src, src_len)
     return
 end
 
-"""
-Copy source array to destination with zero-padding using a single GPU kernel.
-Much faster than separate copyto! + broadcast operations (~4.5x speedup).
-"""
-function _fast_pad_copy!(dest::MtlVector{T}, src::MtlVector{T}) where T
+# Copy a 1-D source into a zero-padded destination with a single GPU kernel
+# (faster than separate copyto! + broadcast fill).
+function _fast_pad_copy!(dest::MtlVector{T}, src::MtlVector{T}) where {T}
     src_len = length(src)
     dest_len = length(dest)
     threads = min(256, dest_len)
     groups = cld(dest_len, threads)
-    @metal threads=threads groups=groups _pad_copy_kernel_1d!(dest, src, src_len)
-    return dest
-end
-
-# N-D version: pad along all dimensions (linearized)
-function _pad_copy_kernel_nd!(dest, src, src_linear_len)
-    i = thread_position_in_grid_1d()
-    if i <= src_linear_len
-        @inbounds dest[i] = src[i]
-    elseif i <= length(dest)
-        @inbounds dest[i] = zero(eltype(dest))
-    end
-    return
-end
-
-"""
-Fast N-D padding: copies source to destination buffer with zero-padding.
-For N-D arrays, this only works correctly when source fits contiguously at the start.
-For general N-D padding with different sizes per dimension, use _fast_pad_copy_nd!.
-"""
-function _fast_pad_copy_contiguous!(dest::MtlArray{T, N}, src::MtlArray{T, N}) where {T, N}
-    src_len = length(src)
-    dest_len = length(dest)
-    threads = min(256, dest_len)
-    groups = cld(dest_len, threads)
-    @metal threads=threads groups=groups _pad_copy_kernel_nd!(dest, src, src_len)
+    @metal threads = threads groups = groups _pad_copy_kernel_1d!(dest, src, src_len)
     return dest
 end
 
 
-"""
-Build a fused N-D convolution graph: rfft(signal) * rfft(kernel) → irfft → scale
-All operations in a single MPSGraph for minimal command submission overhead.
-Works for any dimensionality (1D, 2D, 3D, etc).
-"""
+# Build the fused N-D convolution graph (rfft * rfft -> irfft -> scale) as a single
+# MPSGraph, for any dimensionality.
 function _build_fused_conv_graph_nd(fft_sizes::NTuple{N, Int}, ::Type{T}) where {N, T <: Union{Float32, Float16}}
     graph = MPSGraph()
 
@@ -277,7 +229,7 @@ function _build_fused_conv_graph_nd(fft_sizes::NTuple{N, Int}, ::Type{T}) where 
 
     # Metal uses reversed axis ordering: axis 0 in Metal = last axis in Julia
     # For N-D, we transform all dimensions
-    axes = NSArray([NSNumber(Int32(i)) for i in (N-1):-1:0])
+    axes = NSArray([NSNumber(Int32(i)) for i in (N - 1):-1:0])
 
     # Forward rfft on both inputs
     signal_fft = realToHermiteanFFTWithTensor(graph, signal_ph, axes, fft_desc_fwd, "signal_rfft")
@@ -301,15 +253,13 @@ function _build_fused_conv_graph_nd(fft_sizes::NTuple{N, Int}, ::Type{T}) where 
     return CachedFusedConvGraph(graph, signal_ph, kernel_ph, result_scaled)
 end
 
-"""
-Get or create a cached fused convolution graph.
-"""
+# Get or create the cached fused convolution graph for a given FFT size.
 function _get_cached_fused_conv_graph(key::FusedConvGraphKey)
     cached = get(_fused_conv_graph_cache, key, nothing)
     if cached !== nothing
         return cached
     end
-    lock(_fused_conv_graph_cache_lock) do
+    return lock(_fused_conv_graph_cache_lock) do
         cached = get(_fused_conv_graph_cache, key, nothing)
         if cached !== nothing
             return cached
@@ -407,6 +357,7 @@ function _zero_padding_regions_fused!(arr::MtlArray{T, N}, data_sizes::NTuple{N,
             @view(arr[ranges...]) .= zero(T)
         end
     end
+    return
 end
 
 # Helper for extracting result based on mode
@@ -450,16 +401,9 @@ end
 # Export the new function
 # (added to exports at top of file)
 
-# ============================================================================
 # Efficient Padding Helpers
-# ============================================================================
 
-"""
-    _zero_padding_regions!(arr, data_sizes, padded_sizes, dims)
-
-Zero only the padding regions of an N-D array, avoiding unnecessary writes.
-For each dimension in `dims`, zeros elements from (data_size+1) to padded_size.
-"""
+# Zero only the padding regions of an N-D array (avoids rewriting the data block).
 function _zero_padding_regions!(
         arr::MtlArray{T, N}, data_sizes::NTuple{N, Int},
         padded_sizes::NTuple{N, Int}, dims::Tuple
@@ -471,7 +415,7 @@ function _zero_padding_regions!(
             ranges = ntuple(N) do i
                 if i == d
                     # Padding region in this dimension
-                    (data_sizes[i]+1):padded_sizes[i]
+                    (data_sizes[i] + 1):padded_sizes[i]
                 elseif i < d
                     # For earlier dimensions, include entire padded size
                     # (to cover corner regions that previous strips may have missed)
@@ -488,9 +432,7 @@ function _zero_padding_regions!(
     return nothing
 end
 
-# ============================================================================
 # 1D FFT Convolution (Real Inputs - Optimized)
-# ============================================================================
 
 """
     conv_fft(signal::MtlVector, kernel::MtlVector; mode=:full)
@@ -528,12 +470,10 @@ function conv_fft(
     ) where {T <: Union{Float32, Float16}}
     # Delegate to fused implementation for better performance
     # (single MPSGraph execution instead of 4+ separate operations)
-    return conv_fft_fused(signal, kernel; mode=mode)
+    return conv_fft_fused(signal, kernel; mode = mode)
 end
 
-# ============================================================================
 # 1D FFT Convolution (Complex Inputs)
-# ============================================================================
 
 """
     conv_fft(signal::MtlVector{Complex{T}}, kernel::MtlVector{Complex{T}}; mode=:full)
@@ -563,10 +503,10 @@ function conv_fft(
 
     # Zero only the padding regions
     if ns < nfft
-        @view(signal_padded[(ns+1):nfft]) .= zero(Complex{T})
+        @view(signal_padded[(ns + 1):nfft]) .= zero(Complex{T})
     end
     if nk < nfft
-        @view(kernel_padded[(nk+1):nfft]) .= zero(Complex{T})
+        @view(kernel_padded[(nk + 1):nfft]) .= zero(Complex{T})
     end
 
     # FFT
@@ -583,9 +523,7 @@ function conv_fft(
     return _extract_conv_result(y, output_size, full_size, mode)
 end
 
-# ============================================================================
 # N-D FFT Convolution (along specified dimensions)
-# ============================================================================
 
 """
     conv_fft(signal::MtlArray, kernel::MtlArray; dims=1, mode=:full)
@@ -626,7 +564,7 @@ function conv_fft(
 
     # Use fused implementation when convolving along ALL dimensions (faster single-graph execution)
     if length(dims_tuple) == N && Set(dims_tuple) == Set(1:N)
-        return conv_fft_fused(signal, kernel; mode=mode)
+        return conv_fft_fused(signal, kernel; mode = mode)
     end
 
     # Compute output sizes for each convolved dimension
@@ -754,9 +692,7 @@ function conv_fft(
     return _extract_conv_result(y, output_sizes, full_sizes, mode, dims_tuple)
 end
 
-# ============================================================================
 # Cross-correlation
-# ============================================================================
 
 # GPU-friendly reverse along specified dimensions
 # Uses broadcasting to avoid scalar indexing
@@ -831,9 +767,7 @@ function xcorr(
     end
 end
 
-# ============================================================================
 # In-place convolution (output pre-allocated)
-# ============================================================================
 
 """
     conv_fft!(output, signal, kernel; dims=1, mode=:full)
@@ -902,9 +836,7 @@ function imfilter(image::MtlMatrix{T}, kernel::MtlMatrix{T}) where {T <: Union{F
     return conv_fft(image, kernel; dims = (1, 2), mode = :same)
 end
 
-# ============================================================================
 # Unified Convolution API (FFT-based)
-# ============================================================================
 #
 # The unified `conv()` dispatches to the FFT convolution engine for 1D, 2D, and
 # N-D arrays. It is the internal entry point behind the public DSP.conv /

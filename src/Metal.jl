@@ -60,8 +60,6 @@ include("../lib/mps/MPS.jl")
 export MPS
 include("../lib/mpsgraphs/MPSGraphs.jl")
 export MPSGraphs
-# The convolution engine lives in MPSGraphs and is exposed publicly through the
-# DSP.jl package extension (DSP.conv / DSP.xcorr), not as bespoke Metal exports.
 
 # LinearAlgebra
 include("linalg.jl")

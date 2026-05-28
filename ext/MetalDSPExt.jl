@@ -17,10 +17,12 @@ const MtlConvNumber = Union{Float32, Float16, ComplexF32, ComplexF16}
 # below intercept DSP.conv/xcorr before DSP's generic CPU path, which would hit
 # disallowed scalar indexing on the device.
 @noinline function _conv_unsupported(u, v)
-    throw(ArgumentError(
-        "Metal convolution supports Float32/Float16 and their Complex types; " *
-            "got $(eltype(u)) and $(eltype(v)). Convert first, e.g. with `Float32.(x)`."
-    ))
+    throw(
+        ArgumentError(
+            "Metal convolution supports Float32/Float16 and their Complex types; " *
+                "got $(eltype(u)) and $(eltype(v)). Convert first, e.g. with `Float32.(x)`."
+        )
+    )
 end
 
 """
