@@ -127,9 +127,22 @@ struct CachedFusedConvGraph
     result::MPSGraphTensor
 end
 
-# Thread-safe cache for fused convolution graphs
+# Thread-safe cache for fused convolution graphs (bounded FIFO; see _record_and_evict!)
+const _FUSED_CONV_CACHE_MAX_ENTRIES = 32
 const _fused_conv_graph_cache = Dict{FusedConvGraphKey, CachedFusedConvGraph}()
 const _fused_conv_graph_cache_lock = ReentrantLock()
+const _fused_conv_graph_cache_order = FusedConvGraphKey[]
+
+# Drop the oldest cached entry once a cache exceeds the size cap (call under the
+# cache's lock). Keeps the graph cache and buffer pool from growing unboundedly
+# when many distinct convolution sizes are used.
+function _record_and_evict!(cache::AbstractDict, order::AbstractVector, key)
+    push!(order, key)
+    if length(order) > _FUSED_CONV_CACHE_MAX_ENTRIES
+        delete!(cache, popfirst!(order))
+    end
+    return nothing
+end
 
 # ============================================================================
 # Buffer Pooling for Fused Convolution
@@ -148,9 +161,10 @@ mutable struct CachedFusedConvBuffers{T, N}
     output::MtlArray{T, N}
 end
 
-# Thread-safe buffer pool
+# Thread-safe buffer pool (bounded FIFO)
 const _fused_conv_buffer_pool = Dict{BufferPoolKey, CachedFusedConvBuffers}()
 const _fused_conv_buffer_pool_lock = ReentrantLock()
+const _fused_conv_buffer_pool_order = BufferPoolKey[]
 
 """
 Get or create cached buffers for fused convolution.
@@ -173,6 +187,7 @@ function _get_cached_buffers(fft_sizes::NTuple{N, Int}, ::Type{T}) where {N, T}
         output = MtlArray{T, N}(undef, fft_sizes)
         cached = CachedFusedConvBuffers{T, N}(signal_padded, kernel_padded, output)
         _fused_conv_buffer_pool[key] = cached
+        _record_and_evict!(_fused_conv_buffer_pool, _fused_conv_buffer_pool_order, key)
         return cached
     end
 end
@@ -185,6 +200,7 @@ Clear the fused convolution buffer pool, freeing GPU memory.
 function clear_fused_conv_buffer_pool!()
     lock(_fused_conv_buffer_pool_lock) do
         empty!(_fused_conv_buffer_pool)
+        empty!(_fused_conv_buffer_pool_order)
     end
     return nothing
 end
@@ -301,6 +317,7 @@ function _get_cached_fused_conv_graph(key::FusedConvGraphKey)
         # Build N-D fused graph
         cached = _build_fused_conv_graph_nd(key.signal_fft_size, key.eltype)
         _fused_conv_graph_cache[key] = cached
+        _record_and_evict!(_fused_conv_graph_cache, _fused_conv_graph_cache_order, key)
         return cached
     end
 end
@@ -420,6 +437,7 @@ Clear the fused convolution graph cache and buffer pool, freeing GPU memory.
 function clear_fused_conv_cache!()
     lock(_fused_conv_graph_cache_lock) do
         empty!(_fused_conv_graph_cache)
+        empty!(_fused_conv_graph_cache_order)
     end
     clear_fused_conv_buffer_pool!()
     return nothing
