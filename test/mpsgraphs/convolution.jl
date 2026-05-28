@@ -1,8 +1,8 @@
 # Tests for the FFT-based convolution engine in MPSGraphs (conv_fft, the unified
-# conv(), xcorr, imfilter). The engine is internal; the public interface is
+# conv(), xcorr). The engine is internal; the public interface is
 # DSP.conv / DSP.xcorr (tested in test/dsp.jl). These tests exercise the engine
 # directly, so import its symbols from the submodule.
-using Metal.MPSGraphs: conv, conv_fft, conv_fft!, xcorr, imfilter
+using Metal.MPSGraphs: conv, conv_fft, conv_fft!, xcorr
 
 # Simple reference convolution for verification (CPU)
 function ref_conv(u::Vector{T}, v::Vector{T}) where {T}
@@ -26,9 +26,7 @@ rtol(::Type{ComplexF32}) = 1.0e-4
 
 if MPS.is_supported(device())
 
-    # ============================================================================
     # FFT Convolution Tests
-    # ============================================================================
 
     @testset "FFT Convolution" begin
         @testset "1D Real Convolution" begin
@@ -104,9 +102,7 @@ if MPS.is_supported(device())
         end
     end
 
-    # ============================================================================
     # Cross-correlation Tests
-    # ============================================================================
 
     @testset "Cross-correlation" begin
         @testset for T in [Float32, Float16]
@@ -124,45 +120,7 @@ if MPS.is_supported(device())
     end
 
 
-    # ============================================================================
-    # imfilter Tests
-    # ============================================================================
-
-    @testset "imfilter" begin
-        @testset "Small Kernel (uses direct)" begin
-            image = rand(Float32, 256, 256)
-            kernel = Float32[
-                -1 0 1
-                -2 0 2
-                -1 0 1
-            ] ./ 8  # Sobel
-
-            d_image = MtlMatrix(image)
-            d_kernel = MtlMatrix(kernel)
-
-            result = Array(imfilter(d_image, d_kernel))
-            @test size(result) == size(image)
-
-            # Verify correctness against FFT
-            result_fft = Array(conv_fft(d_image, d_kernel; dims = (1, 2), mode = :same))
-            @test isapprox(result, result_fft, rtol = 1.0e-4)
-        end
-
-        @testset "Large Kernel (uses FFT)" begin
-            image = rand(Float32, 256, 256)
-            kernel = rand(Float32, 15, 15)  # Larger than threshold
-
-            d_image = MtlMatrix(image)
-            d_kernel = MtlMatrix(kernel)
-
-            result = Array(imfilter(d_image, d_kernel))
-            @test size(result) == size(image)
-        end
-    end
-
-    # ============================================================================
     # Unified conv() API Tests
-    # ============================================================================
 
     @testset "Unified conv() API" begin
         @testset "1D Convolution" begin
@@ -178,20 +136,18 @@ if MPS.is_supported(device())
             @test length(result_valid) == 991
         end
 
-        @testset "2D Auto-Selection" begin
+        @testset "2D matches conv_fft" begin
             image = MtlMatrix(rand(Float32, 128, 128))
             small_kernel = MtlMatrix(rand(Float32, 3, 3))
             large_kernel = MtlMatrix(rand(Float32, 15, 15))
 
-            # Small kernel should auto-select direct
             result_small = conv(image, small_kernel; mode = :same)
             @test size(result_small) == size(image)
 
-            # Large kernel should auto-select FFT
             result_large = conv(image, large_kernel; mode = :same)
             @test size(result_large) == size(image)
 
-            # Both should give same result as explicit FFT
+            # conv() should match an explicit conv_fft call
             expected_small = conv_fft(image, small_kernel; dims = (1, 2), mode = :same)
             expected_large = conv_fft(image, large_kernel; dims = (1, 2), mode = :same)
 
@@ -210,9 +166,7 @@ if MPS.is_supported(device())
         end
     end
 
-    # ============================================================================
     # Edge Cases
-    # ============================================================================
 
     @testset "Edge Cases" begin
         @testset "Single Element Kernel" begin

@@ -11,7 +11,7 @@
 
 using AbstractFFTs
 
-export conv, conv_fft, conv_fft!, xcorr, imfilter
+export conv, conv_fft, conv_fft!, xcorr
 export clear_fused_conv_cache!
 
 # Helper Functions
@@ -787,55 +787,6 @@ function conv_fft!(
 end
 
 
-"""
-    imfilter(image::MtlMatrix, kernel::MtlMatrix)
-
-Apply a 2-D filter `kernel` to `image` via FFT-based convolution (`:same` mode).
-
-A convenience wrapper following the ImageFiltering.jl interface; the kernel is
-centered on each pixel.
-
-# Arguments
-- `image`: 2D input image
-- `kernel`: 2D filter kernel
-
-# Returns
-Filtered image with same size as input (`:same` mode).
-
-# Example
-```julia
-using Metal
-
-# Create test image
-image = MtlMatrix(randn(Float32, 512, 512))
-
-# Gaussian blur (5×5 approximation)
-gaussian = MtlMatrix(Float32[
-    1  4  6  4 1
-    4 16 24 16 4
-    6 24 36 24 6
-    4 16 24 16 4
-    1  4  6  4 1
-] ./ 256)
-
-blurred = imfilter(image, gaussian)
-
-# Sobel edge detection
-sobel_x = MtlMatrix(Float32[-1 0 1; -2 0 2; -1 0 1] ./ 8)
-sobel_y = MtlMatrix(Float32[-1 -2 -1; 0 0 0; 1 2 1] ./ 8)
-edges_x = imfilter(image, sobel_x)
-edges_y = imfilter(image, sobel_y)
-edges = sqrt.(edges_x.^2 .+ edges_y.^2)
-```
-
-# Notes
-- Equivalent to `conv(image, kernel; dims=(1, 2), mode=:same)`.
-- The kernel is centered on each pixel (like ImageFiltering.jl's `imfilter`).
-"""
-function imfilter(image::MtlMatrix{T}, kernel::MtlMatrix{T}) where {T <: Union{Float32, Float16}}
-    return conv_fft(image, kernel; dims = (1, 2), mode = :same)
-end
-
 # Unified Convolution API (FFT-based)
 #
 # The unified `conv()` dispatches to the FFT convolution engine for 1D, 2D, and
@@ -845,92 +796,27 @@ end
 """
     conv(signal::MtlArray, kernel::MtlArray; mode=:full, dims=nothing)
 
-Compute the linear convolution of `signal` and `kernel` via the FFT convolution
-theorem. This is the internal engine entry point; the public interface is
-`DSP.conv` (provided by the DSP.jl extension).
+Linear convolution of `signal` and `kernel` via the FFT convolution theorem.
+This is the internal engine; the public interface is `DSP.conv` (DSP.jl extension).
 
-# Arguments
-- `signal`: Input signal (1D, 2D, or N-D MtlArray)
-- `kernel`: Convolution kernel (same dimensions as signal)
-- `mode`: Output size mode
-  - `:full` (default): Full convolution output
-  - `:same`: Output has same size as signal (centered)
-  - `:valid`: Only fully overlapping region
-- `dims`: Dimensions along which to convolve
-  - `nothing` (default): All dimensions for 1D/2D, dim 1 for N-D
-  - Integer or tuple: Specific dimension(s)
-
-# Returns
-MtlArray with the convolution result.
-
-# Examples
-
-```julia
-using Metal, Metal.MPSGraphs
-
-# 1D signal processing
-signal = MtlVector(randn(Float32, 10000))
-kernel = MtlVector(Float32[0.25, 0.5, 0.25])  # Simple smoothing
-smoothed = conv(signal, kernel; mode=:same)
-
-# 2D image filtering
-image = MtlMatrix(randn(Float32, 512, 512))
-sobel_x = MtlMatrix(Float32[-1 0 1; -2 0 2; -1 0 1] ./ 8)
-edges = conv(image, sobel_x; mode=:same)
-```
-
-# See Also
-- `imfilter`: ImageFiltering.jl-style 2D filtering
-- `xcorr`: Cross-correlation
+`mode` is `:full` (default), `:same`, or `:valid`. `dims` selects the convolved
+dimensions (default: all dimensions for 1-D/2-D, dimension 1 for N-D).
 """
-function conv(
-        signal::MtlVector{T}, kernel::MtlVector{T};
-        mode::Symbol = :full, dims = nothing
-    ) where {T <: Union{Float32, Float16}}
-    return conv_fft(signal, kernel; mode = mode)
-end
-
-# Complex 1D
-function conv(
-        signal::MtlVector{Complex{T}}, kernel::MtlVector{Complex{T}};
-        mode::Symbol = :full, dims = nothing
-    ) where {T <: Union{Float32, Float16}}
-    return conv_fft(signal, kernel; mode = mode)
-end
-
-# 2D
-function conv(
-        signal::MtlMatrix{T}, kernel::MtlMatrix{T};
-        mode::Symbol = :full, dims = nothing
-    ) where {T <: Union{Float32, Float16}}
-    conv_dims = dims === nothing ? (1, 2) : (dims isa Int ? (dims,) : Tuple(dims))
-    return conv_fft(signal, kernel; dims = conv_dims, mode = mode)
-end
-
-# Complex 2D
-function conv(
-        signal::MtlMatrix{Complex{T}}, kernel::MtlMatrix{Complex{T}};
-        mode::Symbol = :full, dims = nothing
-    ) where {T <: Union{Float32, Float16}}
-    conv_dims = dims === nothing ? (1, 2) : (dims isa Int ? (dims,) : Tuple(dims))
-    return conv_fft(signal, kernel; dims = conv_dims, mode = mode)
-end
-
-# N-D generic (N > 2)
 function conv(
         signal::MtlArray{T, N}, kernel::MtlArray{T, N};
         mode::Symbol = :full, dims = nothing
     ) where {T <: Union{Float32, Float16}, N}
-    conv_dims = dims === nothing ? 1 : (dims isa Int ? (dims,) : Tuple(dims))
+    N == 1 && return conv_fft(signal, kernel; mode = mode)
+    conv_dims = dims === nothing ? (N == 2 ? (1, 2) : 1) : (dims isa Int ? (dims,) : Tuple(dims))
     return conv_fft(signal, kernel; dims = conv_dims, mode = mode)
 end
 
-# Complex N-D
 function conv(
         signal::MtlArray{Complex{T}, N}, kernel::MtlArray{Complex{T}, N};
         mode::Symbol = :full, dims = nothing
     ) where {T <: Union{Float32, Float16}, N}
-    conv_dims = dims === nothing ? 1 : (dims isa Int ? (dims,) : Tuple(dims))
+    N == 1 && return conv_fft(signal, kernel; mode = mode)
+    conv_dims = dims === nothing ? (N == 2 ? (1, 2) : 1) : (dims isa Int ? (dims,) : Tuple(dims))
     return conv_fft(signal, kernel; dims = conv_dims, mode = mode)
 end
 
