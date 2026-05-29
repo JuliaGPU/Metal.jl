@@ -69,17 +69,19 @@ Wait for currently committed GPU work on `queue` to finish.
     retain(last)
     try
         # Fast path: cmdbuf has already completed; queue is drained.
-        is_completed(last) && return
-
-        if use_nonblocking_synchronization
-            spinning_synchronization(last) && return
-            nonblocking_synchronization(last)
-        else
-            wait_completed(last)
+        if !is_completed(last)
+            if use_nonblocking_synchronization
+                spinning_synchronization(last) || nonblocking_synchronization(last)
+            else
+                wait_completed(last)
+            end
         end
     finally
         release(last)
     end
+
+    # surface any device-side exception thrown by the work we just waited on
+    check_exceptions()
     return
 end
 

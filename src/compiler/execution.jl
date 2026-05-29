@@ -290,13 +290,20 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
 
     buf = malloc_buffer(pipeline.device)
     buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, UInt64(buf.gpuAddress))
-    kernel_state = KernelState(Random.rand(UInt32), buf_ptr)
+    exc = exception_flag_buffer(pipeline.device)
+    exc_ptr = reinterpret(Core.LLVMPtr{UInt32, AS.Device}, UInt64(exc.gpuAddress))
+    kernel_state = KernelState(Random.rand(UInt32), buf_ptr, exc_ptr)
 
     cmdbuf = MTLCommandBuffer(queue)
     cmdbuf.label = "MTLCommandBuffer($(nameof(f)))"
     cce = MTLComputeCommandEncoder(cmdbuf)
     argument_buffers = try
         MTL.set_function!(cce, pipeline)
+        # the kernel state holds GPU addresses to per-device scratch buffers (malloc bump
+        # allocator, exception mailbox) that aren't otherwise bound to the encoder. declare
+        # them so Metal Shader Validation tracks the accesses instead of dropping them.
+        MTL.use!(cce, buf, MTL.ReadWriteUsage)
+        MTL.use!(cce, exc, MTL.ReadWriteUsage)
         bufs = encode_arguments_nospec!(cce, kernel, kernel_state, f, args)
         MTL.append_current_function!(cce, gs, ts)
         bufs
