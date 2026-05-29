@@ -74,3 +74,12 @@ Dumps the `graph`.
     This function is undocumented from Apple so it may stop working at any time.
 """
 dump_graph(graph::MPSGraph) = @objc [graph::id{MPSGraph} dump]::Nothing ## COV_EXCL_LINE
+
+## Convolution support (used by convolution.jl)
+
+function concatTensors(graph::MPSGraph, tensors::NSArray, dimension::Int, name = "concat")
+    obj = @objc [graph::id{MPSGraph} concatTensors:tensors::id{NSArray}
+                                dimension:dimension::NSInteger
+                                name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
