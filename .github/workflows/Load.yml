@@ -16,14 +16,15 @@ permissions:
 
 jobs:
   test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.os }}
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }} (load)
     runs-on: ${{ matrix.os }}
     if: github.event.pull_request.draft == false
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
         version:
-          - '1'    # latest stable 1.x release
+          - '1'
         os:
           - 'ubuntu-latest'
           - 'macOS-15-intel'

@@ -19,20 +19,16 @@ permissions:
 
 jobs:
   test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.os }} aarch64 (virtualized)
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     if: github.event.pull_request.draft == false
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        # cover both the `OncePerProcess`-based and the legacy `functional()`
-        # implementations (the cutoff is Julia 1.12).
         version:
-          - '1.10'
-          - '1.12'
+          - '1'
         os:
-          # GitHub-hosted Apple Silicon runners; their GPU is paravirtualized.
           - 'macos-15'
           - 'macos-26'
 

@@ -2,8 +2,8 @@ using Metal
 using ParallelTestRunner
 
 # Quit without erroring if Metal loaded without issues on unsupported platforms
-if !Sys.isapple()
-    @warn """Metal.jl succesfully loaded on non-macOS system.
+if !Sys.isapple() || Sys.ARCH != :aarch64
+    @warn """Metal.jl succesfully loaded on non-Apple Silicon system.
              This system is unsupported but should still load.
              Skipping tests."""
     Sys.exit()
