@@ -55,3 +55,32 @@ is_m3(dev::MTLDevice) = supports_family(dev, MTLGPUFamilyApple9) &&
                         occursin("M3", String(dev.name))
 is_m4(dev::MTLDevice) = supports_family(dev, MTLGPUFamilyApple9) &&
                         occursin("M4", String(dev.name))
+
+"""
+    highest_apple_family(dev::MTLDevice)
+
+Returns the number `n` of the highest `MTLGPUFamilyApple`n` feature set that `dev` reports
+support for (e.g. `7` for `MTLGPUFamilyApple7`), or `nothing` if it supports none of them.
+
+Note that paravirtualized GPUs under-report this (see [`is_virtual`](@ref)).
+"""
+function highest_apple_family(dev::MTLDevice)
+    for n in 10:-1:1
+        supports_family(dev, MTLGPUFamily(1000 + n)) && return n
+    end
+    return nothing
+end
+
+"""
+    highest_metal_family(dev::MTLDevice)
+
+Returns the number `n` of the highest `MTLGPUFamilyMetal`n` feature set that `dev` reports
+support for (e.g. `3` for Metal 3, `4` for Metal 4), or `nothing` if it supports neither.
+
+Note that paravirtualized GPUs under-report this (see [`is_virtual`](@ref)).
+"""
+function highest_metal_family(dev::MTLDevice)
+    supports_family(dev, MTLGPUFamilyMetal4) && return 4
+    supports_family(dev, MTLGPUFamilyMetal3) && return 3
+    return nothing
+end

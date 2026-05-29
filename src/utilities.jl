@@ -20,6 +20,8 @@ function versioninfo(io::IO=stdout)
     println(io, "Toolchain:")
     println(io, "- Julia: $VERSION")
     println(io, "- LLVM: $(LLVM.version())")
+    println(io, "- Metal: $(metal_support()) (shading language), $(air_support()) (AIR), " *
+                "$(metallib_support()) (metallib)")
     println(io)
 
     println(io, "Julia packages:")
@@ -63,7 +65,20 @@ function versioninfo(io::IO=stdout)
         println(io, length(devs), " devices:")
     end
     for (i, dev) in enumerate(devs)
-        println(io, "- $(dev.name) $(num_gpu_cores()) GPU cores ($(Base.format_bytes(dev.currentAllocatedSize)) allocated)")
+        cores = num_gpu_cores()
+        corestr = cores > 0 ? "$cores GPU cores" : "unknown number of GPU cores"
+
+        # device capabilities; useful to spot when (e.g. virtualized) devices gain support
+        # for a newer feature set than Metal.jl currently assumes.
+        caps = String[]
+        apple = MTL.highest_apple_family(dev)
+        apple === nothing || push!(caps, "Apple$apple")
+        metal = MTL.highest_metal_family(dev)
+        metal === nothing || push!(caps, "Metal $metal")
+        MTL.is_virtual(dev) && push!(caps, "virtualized")
+        capstr = isempty(caps) ? "" : "; $(join(caps, ", "))"
+
+        println(io, "- $(dev.name) ($corestr, $(Base.format_bytes(dev.currentAllocatedSize)) allocated$capstr)")
     end
 
     return
