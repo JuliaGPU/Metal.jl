@@ -55,6 +55,40 @@ function global_queue(dev::MTLDevice)
     end::MTLCommandQueue
 end
 
+# tracks the most recently launched logging-enabled cmdbuf per queue, so that
+# `synchronize` can wait on it and thereby drain its `addLogHandler:` blocks
+# (Metal dispatches log delivery asynchronously and offers no flush primitive;
+# `waitUntilCompleted` on the specific cmdbuf is what processes its pending blocks).
+const _logging_cmdbufs = IdDict{MTLCommandQueue,MTLCommandBuffer}()
+const _logging_cmdbufs_lock = ReentrantLock()
+
+function track_logging_cmdbuf!(queue::MTLCommandQueue, cmdbuf::MTLCommandBuffer)
+    # the surrounding `@autoreleasepool` in `(::HostKernel)()` will release the
+    # caller's reference on return, so retain a fresh one for the tracking slot.
+    retain(cmdbuf)
+    old = Base.@lock _logging_cmdbufs_lock begin
+        prev = get(_logging_cmdbufs, queue, nothing)
+        _logging_cmdbufs[queue] = cmdbuf
+        prev
+    end
+    old === nothing || release(old)
+    return
+end
+
+function drain_logging_cmdbufs!(queue::MTLCommandQueue)
+    cmdbuf = Base.@lock _logging_cmdbufs_lock begin
+        prev = get(_logging_cmdbufs, queue, nothing)
+        delete!(_logging_cmdbufs, queue)
+        prev
+    end
+    if cmdbuf !== nothing
+        MTL.wait_completed(cmdbuf)
+        release(cmdbuf)
+    end
+    return
+end
+
+
 ## dynamic-memory allocator buffer
 #
 # kernels that perform dynamic memory allocations bump-allocate out of a per-

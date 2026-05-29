@@ -31,14 +31,14 @@ const darwin_version = ObjectiveC.darwin_version
 #                  or air.language_version in the embedded bitcode
 
 """
-    Metal.metallib_support()::VersionNumber
+    Metal.metallib_support(macos=macos_version())::VersionNumber
 
-Returns the highest supported version for the metallib file format.
+Returns the highest metallib file-format version supported by `macos` (defaulting to the
+host macOS version).
 
 See also [`Metal.air_support`](@ref) and [`Metal.metal_support`](@ref).
 """
-function metallib_support()
-    macos = macos_version()
+function metallib_support(macos::VersionNumber = macos_version())
     if macos >= v"16" # Tahoe is v"26" but can report v"16" with julia versions not compiled with the Tahoe SDK
         v"1.2.9"
     elseif macos >= v"15"
@@ -49,14 +49,14 @@ function metallib_support()
 end
 
 """
-    Metal.air_support()::VersionNumber
+    Metal.air_support(macos=macos_version())::VersionNumber
 
-Returns the highest supported version for the embedded AIR bitcode format.
+Returns the highest embedded-AIR-bitcode version supported by `macos` (defaulting to the
+host macOS version).
 
 See also [`Metal.metallib_support`](@ref) and [`Metal.metal_support`](@ref).
 """
-function air_support()
-    macos = macos_version()
+function air_support(macos::VersionNumber = macos_version())
     if macos >= v"16" # Tahoe is v"26" but can report v"16" with julia versions not compiled with the Tahoe SDK
         v"2.8"
     elseif macos >= v"15"
@@ -69,14 +69,14 @@ function air_support()
 end
 
 """
-    Metal.metal_support()::VersionNumber
+    Metal.metal_support(macos=macos_version())::VersionNumber
 
-Returns the highest supported version for the Metal Shading Language.
+Returns the highest Metal Shading Language version supported by `macos` (defaulting to the
+host macOS version).
 
 See also [`Metal.metallib_support`](@ref) and [`Metal.air_support`](@ref).
 """
-function metal_support()
-    macos = macos_version()
+function metal_support(macos::VersionNumber = macos_version())
     if macos >= v"16" # Tahoe is v"26" but can report v"16" with julia versions not compiled with the Tahoe SDK
         v"4"
     elseif macos >= v"15"

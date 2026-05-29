@@ -63,6 +63,11 @@ end
 Wait for currently committed GPU work on `queue` to finish.
 """
 @autoreleasepool function synchronize(queue::MTLCommandQueue = global_queue(device()))
+    # flush any pending log handlers from logging-enabled kernels on this queue
+    # (Metal delivers logs asynchronously; `wait_completed` on the specific cmdbuf
+    # is what processes its `addLogHandler:` blocks)
+    drain_logging_cmdbufs!(queue)
+
     last = MTL.last_committed(queue)
     last === nothing && return
 
