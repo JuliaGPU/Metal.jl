@@ -16,12 +16,14 @@ effectively returns the only system GPU.
 function device()
     get!(task_local_storage(), :MTLDevice) do
         dev = MTLDevice(1)
-        if !supports_family(dev, MTL.MTLGPUFamilyApple7)
-            @warn """Metal.jl is only supported on non-virtualized Apple Silicon, you may run into issues.
+        if is_virtual(dev)
+            @warn """Metal.jl is running on a virtualized Apple GPU; this is supported on a
+                     best-effort basis, so you may run into issues.
                      See https://github.com/JuliaGPU/Metal.jl/issues/22 for more details.""" maxlog=1
-        end
-        if !supports_family(dev, MTL.MTLGPUFamilyMetal3)
-            @warn """Metal.jl is only supported on Metal 3-capable devices, you may run into issues.
+        elseif !supports_family(dev, MTL.MTLGPUFamilyApple7) ||
+               !supports_family(dev, MTL.MTLGPUFamilyMetal3)
+            @warn """Metal.jl is only supported on Metal 3-capable Apple Silicon (M-series) GPUs,
+                     you may run into issues.
                      See https://github.com/JuliaGPU/Metal.jl/issues/22 for more details.""" maxlog=1
         end
         return dev

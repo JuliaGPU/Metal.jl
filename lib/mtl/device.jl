@@ -31,11 +31,21 @@ MTLDevice(i::Integer) = devices()[i]
 # family
 #
 
-export supports_family, is_m4, is_m3, is_m2, is_m1
+export supports_family, is_virtual, is_m4, is_m3, is_m2, is_m1
 
 function supports_family(dev::MTLDevice, gpufamily::MTLGPUFamily)
     @objc [dev::MTLDevice supportsFamily:gpufamily::MTLGPUFamily]::Bool
 end
+
+"""
+    is_virtual(dev::MTLDevice)
+
+Returns `true` if `dev` is a paravirtualized GPU, i.e. Metal.jl is running inside a virtual
+machine. Such devices are backed by real Apple Silicon hardware and support Metal 3, but
+under-report their capabilities through `supportsFamily` (e.g. claiming to lack the
+`MTLGPUFamilyApple7` and `MTLGPUFamilyMetal3` feature sets).
+"""
+is_virtual(dev::MTLDevice) = occursin("Paravirtual", String(dev.name))
 
 is_m1(dev::MTLDevice) = supports_family(dev, MTLGPUFamilyApple7) &&
                         !supports_family(dev, MTLGPUFamilyApple8)

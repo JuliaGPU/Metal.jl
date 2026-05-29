@@ -19,8 +19,7 @@ end
     const functional = OncePerProcess{Bool}() do
         try
             dev = device()
-            return supports_family(dev, MTL.MTLGPUFamilyApple7) &&
-            supports_family(dev, MTL.MTLGPUFamilyMetal3)
+            return is_functional(dev)
         catch
             return false
         end
@@ -33,12 +32,19 @@ else
         if isnothing(_functional[])
             dev = device()
 
-            _functional[] =
-                supports_family(dev, MTL.MTLGPUFamilyApple7) &&
-                supports_family(dev, MTL.MTLGPUFamilyMetal3)
+            _functional[] = is_functional(dev)
         end
         _functional[]
     end
+end
+
+# A device is functional if it supports the feature set Metal.jl targets (Apple7 + Metal 3),
+# or if it is a paravirtualized GPU. The latter is backed by real Apple Silicon and supports
+# Metal 3, but under-reports its capabilities through `supportsFamily` (see `is_virtual`).
+function is_functional(dev)
+    is_virtual(dev) && return true
+    return supports_family(dev, MTL.MTLGPUFamilyApple7) &&
+           supports_family(dev, MTL.MTLGPUFamilyMetal3)
 end
 
 function __init__()

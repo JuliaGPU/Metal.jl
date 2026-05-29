@@ -166,7 +166,14 @@ end
 
 ## COV_EXCL_STOP
 
-serial_mapreduce_threshold(dev) = dev.maxThreadsPerThreadgroup.width * num_gpu_cores()
+function serial_mapreduce_threshold(dev)
+    cores = num_gpu_cores()
+    # the core count is unavailable on some devices (e.g. paravirtualized GPUs in VMs, which
+    # don't expose an `AGXAccelerator` IOService). fall back to a conservative estimate so the
+    # heuristic below doesn't degenerate into always picking the serial path.
+    cores == 0 && (cores = 8)
+    return dev.maxThreadsPerThreadgroup.width * cores
+end
 
 function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
                                  A::Union{AbstractArray,Broadcast.Broadcasted};
