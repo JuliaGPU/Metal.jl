@@ -34,14 +34,13 @@ else # if Sys.isapple()
         end
     end
 
-    if !isempty(archname)
-        archchecker = occursin(archname)
-        if archchecker("Paravirtual") # Virtualized graphics (probably Github Actions runners)
-            @warn """Metal.jl succesfully loaded on macOS system with unsupported Paravirtual graphics.
-                    This system is unsupported but should still load.
-                    Skipping tests."""
-            Sys.exit()
-        elseif !archchecker("applegpu") # Every other unsupported system (Intel or AMD graphics)
+    if MTL.is_virtual(device())
+        # Virtualized GPUs (e.g. macOS VMs, GitHub Actions runners) are backed by real Apple
+        # Silicon and support Metal 3, but under-report their capabilities. They are supported
+        # on a best-effort basis, so run the tests anyway.
+        @info "Metal.jl loaded on a virtualized Apple GPU; running tests on a best-effort basis."
+    elseif !isempty(archname)
+        if !occursin("applegpu", archname) # Intel or AMD graphics
             @warn """Metal.jl succesfully loaded on macOS system with unsupported graphics.
                     This system is unsupported but should still load.
                     Skipping tests."""
@@ -57,6 +56,9 @@ Metal.functional() || error("Metal.jl is not functional on this system. This is 
 
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
 
+# parse command-line arguments (--all is Metal-specific)
+args = parse_args(ARGS; custom = ["all"])
+
 # register custom tests that do not correspond to files in the test directory
 testsuite = find_tests(@__DIR__)
 ## GPUArrays test suite
@@ -64,9 +66,17 @@ import GPUArrays
 gpuarrays = pathof(GPUArrays)
 gpuarrays_root = dirname(dirname(gpuarrays))
 gpuarrays_testsuite = joinpath(gpuarrays_root, "test", "testsuite.jl")
-include(gpuarrays_testsuite)
-for name in keys(TestSuite.tests)
-    testsuite["gpuarrays/$name"] = :(TestSuite.tests[$name](MtlArray))
+## The GPUArrays test suite is large and slow, which is impractical on the
+## best-effort virtualized GPUs used by the GitHub Actions CI. It is opt-in,
+## enabled with `--all` (passed by the buildkite CI, which runs on real
+## hardware) or by explicitly selecting a `gpuarrays/*` test.
+want_all = args.custom["all"] !== nothing
+want_gpuarrays = want_all || any(startswith("gpuarrays/"), args.positionals)
+if want_gpuarrays
+    include(gpuarrays_testsuite)
+    for name in keys(TestSuite.tests)
+        testsuite["gpuarrays/$name"] = :(TestSuite.tests[$name](MtlArray))
+    end
 end
 ## examples
 function find_examples(dir, examples=String[])
@@ -102,8 +112,6 @@ for example in find_examples(joinpath(@__DIR__, "..", "examples"))
         end
     end
 end
-
-args = parse_args(ARGS)
 
 # filter out certain tests depending on the exact testing conditions
 if filter_tests!(testsuite, args)
