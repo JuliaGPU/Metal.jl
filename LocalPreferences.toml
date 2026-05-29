@@ -2,3 +2,7 @@
 # which storage mode unspecified allocations should default to.
 # possible values: "private", "shared", "managed"
 #default_storage = "private"
+
+# whether to use a nonblocking synchronization mechanism,
+# making it possible to do use cooperative multitasking.
+#nonblocking_synchronization = true
