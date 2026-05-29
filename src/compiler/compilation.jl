@@ -162,6 +162,50 @@ end
     CompilerConfig(target, params; kernel, name, always_inline)
 end
 
+# Persist compilation artifacts so they can be retrieved off-machine (e.g. from CI).
+# Writes the files (their paths go in the error message) and, on a CI runner, makes
+# them retrievable:
+#  - Buildkite: uploaded in-process via `buildkite-agent artifact upload`.
+#  - GitHub Actions: there is no in-process upload equivalent, so the files are
+#    dropped in a predictable directory for an `actions/upload-artifact` step (run
+#    it with `if: always()`) to collect, and that directory is surfaced as a
+#    workflow notice.
+# Set `JULIA_METAL_DUMP_DIR` to force a deterministic destination (handy for CI or
+# local debugging); otherwise GitHub Actions uses $RUNNER_TEMP/metal-compilation-dumps
+# and everything else uses a temp directory.
+# Used both on a compilation error (the catch blocks below) and, when
+# `JULIA_METAL_DUMP_DIR` is set, unconditionally for every kernel.
+# `artifacts` are `extension => data` pairs sharing one base name, e.g.
+# `dump_artifacts(".ll" => ir, ".air" => air)`.
+function dump_artifacts(artifacts::Pair{String}...)
+    on_github = get(ENV, "GITHUB_ACTIONS", "false") == "true"
+    dir = if haskey(ENV, "JULIA_METAL_DUMP_DIR")
+        mkpath(ENV["JULIA_METAL_DUMP_DIR"])
+    elseif on_github
+        mkpath(joinpath(get(ENV, "RUNNER_TEMP", tempdir()), "metal-compilation-dumps"))
+    else
+        tempdir()
+    end
+    stem = tempname(dir; cleanup=false)
+
+    paths = String[]
+    for (ext, data) in artifacts
+        path = stem * ext
+        write(path, data)
+        push!(paths, path)
+    end
+
+    if parse(Bool, get(ENV, "BUILDKITE", "false"))
+        for path in paths
+            run(`buildkite-agent artifact upload $path`)
+        end
+    elseif on_github
+        println("::notice title=Metal compilation dump::wrote $(join(basename.(paths), ", ")) to $dir")
+    end
+
+    return paths
+end
+
 # compile to executable machine code
 function compile(@nospecialize(job::CompilerJob))
     @signpost_event log=log_compiler() "Compile" "Job=$job"
@@ -213,11 +257,7 @@ function compile(@nospecialize(job::CompilerJob))
                 wait(proc)
                 success(proc) || error(fetch(logger))
             catch err
-                ir_file = tempname(cleanup=false) * ".ll"
-                write(ir_file, ir)
-                if parse(Bool, get(ENV, "BUILDKITE", "false"))
-                    run(`buildkite-agent artifact upload $(ir_file)`)
-                end
+                ir_file, = dump_artifacts(".ll" => ir)
                 error("""Compilation to AIR failed; see above for details.
                          If you think this is a bug, please file an issue and attach $(ir_file)""")
             end
@@ -237,19 +277,17 @@ function compile(@nospecialize(job::CompilerJob))
             write(io, lib)
             take!(io)
         catch err
-            ir_file = tempname(cleanup=false) * ".ll"
-            write(ir_file, ir)
-            air_file = tempname(cleanup=false) * ".air"
-            write(air_file, air)
-            if parse(Bool, get(ENV, "BUILDKITE", "false"))
-                run(`buildkite-agent artifact upload $(ir_file)`)
-                run(`buildkite-agent artifact upload $(air_file)`)
-            end
+            ir_file, air_file = dump_artifacts(".ll" => ir, ".air" => air)
             error("""Compilation to Metal library failed; see below for details.
                      If you think this is a bug, please file an issue and attach the following files:
                      - $(ir_file)
                      - $(air_file)""")
         end
+    end
+
+    # when `JULIA_METAL_DUMP_DIR` is set, dump every compiled kernel's artifacts
+    if haskey(ENV, "JULIA_METAL_DUMP_DIR")
+        dump_artifacts(".ll" => ir, ".air" => air, ".metallib" => metallib)
     end
 
     return (; ir, air, metallib, entry, loggingEnabled)
@@ -271,17 +309,9 @@ end
 
             # the back-end compiler likely failed
             # XXX: check more accurately? the error domain doesn't help much here
-            ir_file = tempname(cleanup=false) * ".ll"
-            write(ir_file, compiled.ir)
-            air_file = tempname(cleanup=false) * ".air"
-            write(air_file, compiled.air)
-            metallib_file = tempname(cleanup=false) * ".metallib"
-            write(metallib_file, compiled.metallib)
-            if parse(Bool, get(ENV, "BUILDKITE", "false"))
-                run(`buildkite-agent artifact upload $(ir_file)`)
-                run(`buildkite-agent artifact upload $(air_file)`)
-                run(`buildkite-agent artifact upload $(metallib_file)`)
-            end
+            ir_file, air_file, metallib_file =
+                dump_artifacts(".ll" => compiled.ir, ".air" => compiled.air,
+                               ".metallib" => compiled.metallib)
             error("""Compilation to native code failed; see below for details.
                      If you think this is a bug, please file an issue and attach the following files:
                      - $(ir_file)
