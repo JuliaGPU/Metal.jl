@@ -267,8 +267,13 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
         # NOTE: we can't use the previously-compiled kernel, or its launch configuration,
         #       since the type of `partial` might not match the original output container
         #       (e.g. if that was a view).
+        # NOTE: size the threadgroup shared array by the hardware maximum (as the first
+        #       kernel does), not by `threads`. `partial_threads` below is recomputed from
+        #       this kernel's own `maxTotalThreadsPerThreadgroup`, which may exceed the first
+        #       kernel's; launching more threads than the shared array has slots is an
+        #       out-of-bounds access (issue #616, surfaced by macOS-15 shader validation).
         partial_kernel = @metal launch=false partial_mapreduce_device(
-                                    f, op, init, Val(threads), Val(Rreduce),
+                                    f, op, init, Val(maxthreads), Val(Rreduce),
                                     Val(Rother), Val(UInt64(length(Rother))),
                                     Val(grain), Val(shuffle), partial, A)
         partial_reduce_threads = compute_threads(partial_kernel)
@@ -283,7 +288,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
             # use broadcasting to extend singleton dimensions
             partial .= R
         end
-        partial_kernel(f, op, init, Val(threads), Val(Rreduce),
+        partial_kernel(f, op, init, Val(maxthreads), Val(Rreduce),
                         Val(Rother), Val(UInt64(length(Rother))),
                         Val(grain), Val(shuffle), partial, A;
                         groups=partial_groups, threads=partial_threads)
