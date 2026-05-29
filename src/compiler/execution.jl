@@ -296,9 +296,8 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     kernel_state = KernelState(Random.rand(UInt32), buf_ptr, exc_ptr)
 
     cmdbuf = if kernel.loggingEnabled
-        # TODO: make this a dynamic error, i.e., from the kernel (JuliaGPU/Metal.jl#433)
-        @static if !is_macos(v"15.0.0")
-            error("Logging is only supported on macOS 15 or higher")
+        if !is_macos(v"15")
+            error("Capturing GPU log output requires macOS 15 or higher.")
         end
 
         if MTLCaptureManager().isCapturing

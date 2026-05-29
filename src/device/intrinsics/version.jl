@@ -1,6 +1,6 @@
 ## accessors for the Metal and AIR version
 
-export metal_version, air_version
+export metal_version, air_version, @sv_str
 
 for var in ["metal_major", "metal_minor", "air_major", "air_minor"]
     @eval @inline $(Symbol(var))() =

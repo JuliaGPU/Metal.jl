@@ -147,13 +147,13 @@ end
         macos = macos_version()
     end
     if metal === nothing
-        metal = metal_support()
+        metal = metal_support(macos)
     end
     if air === nothing
-        # we support down to macOS 13, which supports AIR 2.5
-        # so always target that version for now
-        air = v"2.5"
-        @assert air <= air_support()
+        air = v"2.5"    # macOS 13
+        if air > air_support(macos)
+            error("""Metal.jl requires AIR 2.5 (macOS 13) or newer, but macOS $(macos) only supports AIR $(air_support(macos)).""")
+        end
     end
 
     # create GPUCompiler objects
@@ -172,7 +172,21 @@ function compile(@nospecialize(job::CompilerJob))
             mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)
             # we never call `GPUCompiler.mcgen`, so run preparatory passes now
             GPUCompiler.prepare_execution!(job, mod)
-            string(mod), LLVM.name(meta.entry), haskey(functions(mod), "air.os_log")
+
+            # GPU logging is emitted as the `air.os_log` intrinsic, which requires Metal 3.2
+            # (macOS 15). check for it *here*, after optimization, rather than during macro
+            # expansion: that way version-gated logging (e.g. `metal_version() >= sv"3.2" &&
+            # @mtlprintln(...)`) compiles fine for older targets, because the dead `os_log`
+            # call has already been eliminated and won't trip this check.
+            loggingEnabled = haskey(functions(mod), "air.os_log")
+            if loggingEnabled && job.config.target.metal < v"3.2"
+                error("""GPU logging (`@mtlprintf`, `@mtlprint`, `@mtlprintln`, `@mtlshow`) requires \
+                         macOS 15 / Metal 3.2 or newer, but this kernel targets Metal $(job.config.target.metal) \
+                         (macOS $(job.config.target.macos)). To keep targeting older versions, guard logging \
+                         calls behind `metal_version() >= sv"3.2"`.""")
+            end
+
+            string(mod), LLVM.name(meta.entry), loggingEnabled
         end
     end
 

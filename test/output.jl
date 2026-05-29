@@ -1,14 +1,31 @@
 @testset "output" begin
 
-@static if Metal.macos_version() < v"15"
+# GPU logging requires macOS 15 / Metal 3.2. Targeting an older Metal version (here forced via
+# the `metal`/`macos` kwargs, so this runs on any host) must raise an informative *host* error
+# at compile time -- the dynamic replacement for the old static macOS-version check.
+@testset "unsupported target" begin
+    function logger()
+        @mtlprintln("Hello, World")
+        return
+    end
+    @test_throws "requires macOS 15 / Metal 3.2" @metal launch=false metal=v"3.1" logger()
+    @test_throws "requires macOS 15 / Metal 3.2" @metal launch=false macos=v"14" logger()
 
-@warn "Skipping output tests in macOS 14 and below"
-
-function kernel()
-    @mtlprint("Hello, World\n")
-    return
+    # version-gated logging must still compile cleanly for older targets: the dead `os_log`
+    # call is eliminated before the check runs.
+    function gated_logger()
+        if metal_version() >= sv"3.2"
+            @mtlprintln("Hello, World")
+        end
+        return
+    end
+    kernel = @metal launch=false metal=v"3.1" gated_logger()
+    @test kernel isa Metal.HostKernel
 end
-@test_throws "Logging is only supported on macOS 15 or higher" @metal kernel()
+
+if Metal.macos_version() < v"15"
+
+@warn "Skipping GPU logging tests on macOS 14 and below"
 
 else
 
@@ -148,4 +165,5 @@ end
 end
 
 end # macos_version() < v"15" else branch
+
 end # @testset "output"
