@@ -90,3 +90,32 @@ julia> Metal.@capture @metal threads=length(c) vadd(a, b, c);
 ...
 [ Info: GPU frame capture saved to julia_1.gputrace; open the resulting trace in Xcode
 ```
+
+## Dumping compiled code
+
+When a kernel fails to compile, Metal.jl writes the offending LLVM IR (`.ll`), AIR
+(`.air`), and Metal library (`.metallib`) to disk and prints their paths in the error
+message, so you can attach them to a bug report. On CI it also keeps them around: Buildkite
+uploads them as build artifacts, and on GitHub Actions Metal.jl writes them to
+`$RUNNER_TEMP/metal-compilation-dumps` and prints a workflow notice (collect them with an
+`actions/upload-artifact` step that runs with `if: always()`).
+
+Sometimes a kernel compiles here but fails the back-end compiler only on another machine.
+To capture the IR in that case, set the `JULIA_METAL_DUMP_DIR` environment variable to a
+directory. Metal.jl then dumps the `.ll`/`.air`/`.metallib` of every compiled kernel there,
+not only the failing ones, and sends the on-failure dumps above to the same directory.
+
+```julia
+$ JULIA_METAL_DUMP_DIR=/tmp/metal-dumps julia
+...
+
+julia> using Metal
+
+julia> @metal threads=length(c) vadd(a, b, c);
+
+julia> readdir("/tmp/metal-dumps")
+3-element Vector{String}:
+ "jl_8kQ2Xv.air"
+ "jl_8kQ2Xv.ll"
+ "jl_8kQ2Xv.metallib"
+```
