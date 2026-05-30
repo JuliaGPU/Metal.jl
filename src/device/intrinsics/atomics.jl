@@ -49,7 +49,7 @@ for typ in (:Int32, :UInt32), as in (AS.Device, AS.ThreadGroup)
             #       status boolean, but the contents of the expected value box, which will
             #       have been changed to the current value if the exchange failed.
             expected_box = Ref(expected)
-            @typed_ccall($"air.atomic.$memnam.cmpxchg.weak.$typnam", llvmcall, Bool,
+            @typed_ccall($"air.atomic.$memnam.cmpxchg.weak.$typnam", llvmcall, $typ,
                          (LLVMPtr{$typ,$as}, Ptr{$typ}, $typ, Int32, Int32, Int32, Bool),
                          ptr, expected_box, desired, Val(memory_order_relaxed),
                          Val(memory_order_relaxed), Val($memid), Val(true))
