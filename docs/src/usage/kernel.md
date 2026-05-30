@@ -118,6 +118,33 @@ Metal places output from `@mtlprintf` into a log buffer. The system only removes
 
 See also: `@mtlprint`, `@mtlprintln` and `@mtlshow`
 
+## Exceptions
+
+When a kernel hits an error condition — an out-of-bounds access, a domain error, an
+overflow, and so on — it does not abort the GPU. Instead the faulting lane records the
+exception in a host-visible mailbox and returns; the next `synchronize()` observes it and
+rethrows it on the host as a `KernelException`:
+
+```julia
+julia> function kernel(a)
+           a[2] = 1f0   # out-of-bounds: `a` has length 1
+           return
+       end
+
+julia> @metal threads=1 kernel(Metal.zeros(Float32, 1));
+
+julia> synchronize()
+ERROR: KernelException: BoundsError (Out-of-bounds array access) was thrown on thread (1, 1, 1) in threadgroup (1, 1, 1) during kernel execution on device Apple M1
+```
+
+The common implicit exceptions (bounds, domain, overflow, inexact, …) report their type
+and reason. Other throws report the type that the compiler could deduce, provided Julia is
+running at debug level 1 or higher (the default; pass `-g0` to disable). Reporting works on
+all macOS versions — unlike `@mtlprintf`, it does not require macOS 15.
+
+Only the position of one faulting lane is reported, and no device-side stack trace is
+available.
+
 ## Other Helpful Links
 
 [Metal Shading Language Specification](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf)
