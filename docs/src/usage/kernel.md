@@ -120,10 +120,10 @@ See also: `@mtlprint`, `@mtlprintln` and `@mtlshow`
 
 ## Exceptions
 
-When a kernel hits an error condition — an out-of-bounds access, a domain error, an
-overflow, and so on — it does not abort the GPU. Instead the faulting lane records the
-exception in a host-visible mailbox and returns; the next `synchronize()` observes it and
-rethrows it on the host as a `KernelException`:
+When a kernel hits an error condition, such as an out-of-bounds access or a domain error,
+it does not abort the GPU. The faulting lane records the exception in a host-visible
+mailbox and returns, and the next `synchronize()` reads that mailbox and rethrows the
+exception on the host as a `KernelException`:
 
 ```julia
 julia> function kernel(a)
@@ -137,13 +137,14 @@ julia> synchronize()
 ERROR: KernelException: A BoundsError was thrown by thread 1×1×1 in threadgroup 1×1×1 on device Apple M1: Out-of-bounds array access
 ```
 
-The common implicit exceptions (bounds, domain, overflow, inexact, …) report their type
-and reason. Other throws report the type that the compiler could deduce, provided Julia is
-running at debug level 1 or higher (the default; pass `-g0` to disable). Reporting works on
-all macOS versions — unlike `@mtlprintf`, it does not require macOS 15.
+The common implicit exceptions (bounds, domain, overflow, inexact, and so on) report their
+type and reason. Other throws report whatever type the compiler could deduce, as long as
+Julia runs at debug level 1 or higher, which is the default. At `-g0` they report only the
+faulting position. Reporting works on all macOS versions; unlike `@mtlprintf`, it does not
+require macOS 15.
 
-Only the position of one faulting lane is reported, and no device-side stack trace is
-available.
+Only one faulting lane's position is recorded, and there is no device-side stack trace.
+Raising the debug level to `-g2` does not add one.
 
 ## Other Helpful Links
 
