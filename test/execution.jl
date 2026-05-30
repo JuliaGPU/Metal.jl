@@ -196,6 +196,20 @@ end
         @test exc.name == "exception"
     end
 
+    # a device-side stack trace is captured at debug level >= 2
+    if Base.JLOptions().debug_level >= 2
+        @metal threads=1 throwing_kernel(a)
+        exc = try
+            synchronize()
+            nothing
+        catch err
+            err
+        end
+        @test exc isa Metal.KernelException
+        @test !isempty(exc.backtrace)
+        @test any(frame -> occursin("throw_boundserror", frame[1]), exc.backtrace)
+    end
+
     # the mailbox is reset on read, and the GPU stays usable afterwards
     b = Metal.zeros(Float32, 4)
     @metal threads=4 fill_one(b)

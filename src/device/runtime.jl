@@ -15,25 +15,42 @@ GPUCompiler.reset_runtime()
 # position (and, eventually, the exception type and reason), and raises `status`; the host
 # reads it after synchronizing (`check_exceptions`) and rethrows as a `KernelException`.
 
-# fixed capacities (incl. the null terminator) of the in-mailbox message buffers
+# fixed capacities (incl. the null terminator) of the in-mailbox text buffers, and the
+# number of stack frames captured at debug level >= 2 (GPUCompiler only reports frames then)
 const EXCEPTION_NAME_LEN   = 64
 const EXCEPTION_REASON_LEN = 192
+const EXCEPTION_FUNC_LEN   = 128
+const EXCEPTION_FILE_LEN   = 128
+const EXCEPTION_MAX_FRAMES = 16
+
+struct ExceptionFrame_st
+    func::NTuple{EXCEPTION_FUNC_LEN, UInt8}
+    file::NTuple{EXCEPTION_FILE_LEN, UInt8}
+    line::Int32
+
+    ExceptionFrame_st() = new(ntuple(_ -> 0x00, EXCEPTION_FUNC_LEN),
+                              ntuple(_ -> 0x00, EXCEPTION_FILE_LEN), 0)
+end
 
 struct ExceptionInfo_st
     # whether an exception has been encountered (0 -> 1)
     status::Int32
-    # whether a lane has claimed the mailbox (0 -> 1), so only one writes a coherent record
+    # whether a lane has claimed the mailbox (0 -> 1); only the holder writes a record
     output_lock::Int32
-    # the position of the faulting lane
+    # the position of the faulting lane (also used to recognize the lock holder)
     thread::NTuple{3, UInt32}
     threadgroup::NTuple{3, UInt32}
     # the exception type name and reason, as null-terminated text the host reads back
     name::NTuple{EXCEPTION_NAME_LEN, UInt8}
     reason::NTuple{EXCEPTION_REASON_LEN, UInt8}
+    # the device-side stack trace, captured at debug level >= 2
+    num_frames::Int32
+    frames::NTuple{EXCEPTION_MAX_FRAMES, ExceptionFrame_st}
 
     ExceptionInfo_st() = new(0, 0, (0, 0, 0), (0, 0, 0),
                              ntuple(_ -> 0x00, EXCEPTION_NAME_LEN),
-                             ntuple(_ -> 0x00, EXCEPTION_REASON_LEN))
+                             ntuple(_ -> 0x00, EXCEPTION_REASON_LEN),
+                             0, ntuple(_ -> ExceptionFrame_st(), EXCEPTION_MAX_FRAMES))
 end
 
 # field byte offsets, computed once on the host and spliced into device code as constants
@@ -43,6 +60,12 @@ const EXCEPTION_THREAD_OFFSET      = Int(fieldoffset(ExceptionInfo_st, 3))
 const EXCEPTION_THREADGROUP_OFFSET = Int(fieldoffset(ExceptionInfo_st, 4))
 const EXCEPTION_NAME_OFFSET        = Int(fieldoffset(ExceptionInfo_st, 5))
 const EXCEPTION_REASON_OFFSET      = Int(fieldoffset(ExceptionInfo_st, 6))
+const EXCEPTION_NUM_FRAMES_OFFSET  = Int(fieldoffset(ExceptionInfo_st, 7))
+const EXCEPTION_FRAMES_OFFSET      = Int(fieldoffset(ExceptionInfo_st, 8))
+const EXCEPTION_FRAME_SIZE         = Int(sizeof(ExceptionFrame_st))
+const EXCEPTION_FRAME_FUNC_OFFSET  = Int(fieldoffset(ExceptionFrame_st, 1))
+const EXCEPTION_FRAME_FILE_OFFSET  = Int(fieldoffset(ExceptionFrame_st, 2))
+const EXCEPTION_FRAME_LINE_OFFSET  = Int(fieldoffset(ExceptionFrame_st, 3))
 
 # the mailbox is reached through a byte pointer in the kernel state; reinterpret it to the
 # requested field type at the given byte offset.
@@ -65,9 +88,11 @@ const EXCEPTION_REASON_OFFSET      = Int(fieldoffset(ExceptionInfo_st, 6))
     return Expr(:block, exprs...)
 end
 
-# claim the mailbox for the calling lane, recording its position. returns `true` to the
-# single lane that wins the claim; any other faulting lane gets `false` and leaves the
-# record untouched (no spin, so a divergent threadgroup can't deadlock here).
+# claim the mailbox for the calling lane. returns `true` to the single lane that wins the
+# claim and, re-entrantly, to that same lane on later calls (recognized by its recorded
+# position), so it can go on to write the name, reason, and stack frames. any other faulting
+# lane gets `false` and leaves the record untouched (no spin, so a divergent threadgroup
+# can't deadlock here).
 #
 # a test-and-set via `atomic_exchange_explicit` (rather than compare-exchange) keeps this
 # callable from kernel code: cmpxchg boxes its expected value in a `Ref`, which can survive
@@ -76,16 +101,20 @@ end
 # exchange takes its operand by value, so there is nothing to promote.
 @inline function lock_output!(info)
     lock_ptr = exception_field(Int32, info, EXCEPTION_LOCK_OFFSET)
+    t  = thread_position_in_threadgroup()
+    tg = threadgroup_position_in_grid()
     if atomic_exchange_explicit(lock_ptr, Int32(1)) == Int32(0)
-        t  = thread_position_in_threadgroup()
-        tg = threadgroup_position_in_grid()
+        # we just claimed it; record our position so later calls recognize us
         unsafe_store!(exception_field(NTuple{3,UInt32}, info, EXCEPTION_THREAD_OFFSET),
                       (t.x, t.y, t.z))
         unsafe_store!(exception_field(NTuple{3,UInt32}, info, EXCEPTION_THREADGROUP_OFFSET),
                       (tg.x, tg.y, tg.z))
         return true
     end
-    return false
+    # already claimed: re-entrant only for the lane that holds it
+    held_t  = unsafe_load(exception_field(NTuple{3,UInt32}, info, EXCEPTION_THREAD_OFFSET))
+    held_tg = unsafe_load(exception_field(NTuple{3,UInt32}, info, EXCEPTION_THREADGROUP_OFFSET))
+    return held_t == (t.x, t.y, t.z) && held_tg == (tg.x, tg.y, tg.z)
 end
 
 # copy a null-terminated device C string into a mailbox buffer, truncated to `maxlen`.
@@ -112,12 +141,12 @@ function signal_exception()
 end
 
 # GPUCompiler reports the exception type it deduced (e.g. "bounds error", "type error") at
-# debug level >= 1. claim the mailbox and record it as the type name; a quirk's `@gputhrow`
-# may already hold the lock with a more precise name and reason, in which case we leave its
-# record untouched.
+# debug level >= 1. record it as the type name, unless a quirk's `@gputhrow` already wrote a
+# more precise name (in which case the name buffer is non-empty and we leave it alone).
 function report_exception(ex)
     info = kernel_state().exception_info
-    if lock_output!(info)
+    if lock_output!(info) &&
+       unsafe_load(exception_field(UInt8, info, EXCEPTION_NAME_OFFSET)) == 0x00
         store_cstring!(info, EXCEPTION_NAME_OFFSET, EXCEPTION_NAME_LEN, ex)
     end
     return
@@ -127,7 +156,19 @@ report_exception_name(ex) = report_exception(ex)
 
 report_oom(sz) = return
 
-report_exception_frame(idx, func, file, line) = return
+# GPUCompiler reports each stack frame (recovered from debug info) at debug level >= 2.
+function report_exception_frame(idx, func, file, line)
+    info = kernel_state().exception_info
+    if lock_output!(info) && 1 <= idx <= EXCEPTION_MAX_FRAMES
+        frame = EXCEPTION_FRAMES_OFFSET + (Int(idx) - 1) * EXCEPTION_FRAME_SIZE
+        store_cstring!(info, frame + EXCEPTION_FRAME_FUNC_OFFSET, EXCEPTION_FUNC_LEN, func)
+        store_cstring!(info, frame + EXCEPTION_FRAME_FILE_OFFSET, EXCEPTION_FILE_LEN, file)
+        unsafe_store!(exception_field(Int32, info, frame + EXCEPTION_FRAME_LINE_OFFSET),
+                      Int32(line))
+        unsafe_store!(exception_field(Int32, info, EXCEPTION_NUM_FRAMES_OFFSET), Int32(idx))
+    end
+    return
+end
 
 
 ## kernel state

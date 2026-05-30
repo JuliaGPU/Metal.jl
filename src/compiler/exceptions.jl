@@ -8,6 +8,7 @@ struct KernelException <: Exception
     reason::String
     thread::NTuple{3, UInt32}
     threadgroup::NTuple{3, UInt32}
+    backtrace::Vector{Tuple{String, String, Int}}   # (function, file, line) per frame
 end
 
 function Base.showerror(io::IO, err::KernelException)
@@ -18,6 +19,13 @@ function Base.showerror(io::IO, err::KernelException)
     print(io, "KernelException: $article $name was thrown by thread $thread ",
               "in threadgroup $threadgroup on device $(String(err.dev.name))")
     isempty(err.reason) || print(io, ": ", err.reason)
+    if !isempty(err.backtrace)
+        print(io, "\nStacktrace:")
+        for (i, (func, file, line)) in enumerate(err.backtrace)
+            print(io, "\n [", i, "] ", func)
+            isempty(file) || print(io, " at ", file, ":", line)
+        end
+    end
 end
 
 # decode a null-terminated mailbox text buffer into a `String`
@@ -63,9 +71,14 @@ function check_exceptions()
             # race the load against the clear and swallow it.
             if unsafe_swap!(status_ptr, Int32(0), :sequentially_consistent) != 0
                 info = unsafe_load(ptr)
+                nframes = min(Int(info.num_frames), EXCEPTION_MAX_FRAMES)
+                backtrace = Tuple{String, String, Int}[
+                    (exception_string(info.frames[i].func),
+                     exception_string(info.frames[i].file),
+                     Int(info.frames[i].line)) for i in 1:nframes]
                 exc = KernelException(dev, exception_string(info.name),
                                       exception_string(info.reason),
-                                      info.thread, info.threadgroup)
+                                      info.thread, info.threadgroup, backtrace)
                 # clear the lock and payload so the mailbox is reusable
                 unsafe_store!(ptr, ExceptionInfo_st())
                 throw(exc)

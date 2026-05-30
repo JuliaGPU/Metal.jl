@@ -143,8 +143,8 @@ Julia runs at debug level 1 or higher, which is the default. At `-g0` they repor
 faulting position. Reporting works on all macOS versions; unlike `@mtlprintf`, it does not
 require macOS 15.
 
-Only one faulting lane's position is recorded, and there is no device-side stack trace.
-Raising the debug level to `-g2` does not add one.
+Only one faulting lane's position is recorded. Running Julia at debug level 2 (`-g2`) also
+captures a device-side stack trace, which is appended to the reported exception.
 
 ## Other Helpful Links
 
