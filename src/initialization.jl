@@ -64,8 +64,10 @@ function __init__()
         ENV["MTL_DEBUG_LAYER_ERROR_MODE"] = "nslog"
         ENV["MTL_DEBUG_LAYER_WARNING_MODE"] = "nslog"
 
-        # enable Metal shader validation
-        ENV["MTL_SHADER_VALIDATION"] = "4"
+        # NOTE: we deliberately don't enable Metal shader validation
+        # (`MTL_SHADER_VALIDATION`) here: it rejects pipeline creation for any kernel that
+        # writes the device exception mailbox by GPU address (i.e. anything that can throw),
+        # which is most kernels. Set the variable manually to opt in.
     end
 
     @autoreleasepool try
