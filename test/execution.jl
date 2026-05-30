@@ -174,6 +174,8 @@ end
     @test exc isa Metal.KernelException
     @test exc.thread == (3, 1, 1)
     @test exc.threadgroup == (1, 1, 1)
+    @test exc.name == "BoundsError"
+    @test exc.reason == "Out-of-bounds array access"
 
     # the mailbox is reset on read, and the GPU stays usable afterwards
     b = Metal.zeros(Float32, 4)

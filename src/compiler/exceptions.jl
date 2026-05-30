@@ -4,14 +4,25 @@
 
 struct KernelException <: Exception
     dev::MTLDevice
+    name::String
+    reason::String
     thread::NTuple{3, UInt32}
     threadgroup::NTuple{3, UInt32}
 end
 
 function Base.showerror(io::IO, err::KernelException)
-    print(io, "KernelException: exception thrown on thread $(Int.(err.thread)) ",
+    print(io, "KernelException: ")
+    print(io, isempty(err.name) ? "an exception" : err.name)
+    isempty(err.reason) || print(io, " (", err.reason, ")")
+    print(io, " was thrown on thread $(Int.(err.thread)) ",
               "in threadgroup $(Int.(err.threadgroup)) ",
               "during kernel execution on device $(String(err.dev.name))")
+end
+
+# decode a null-terminated mailbox text buffer into a `String`
+function _exception_string(bytes::NTuple{N, UInt8}) where {N}
+    len = something(findfirst(iszero, bytes), N + 1) - 1
+    return String(UInt8[bytes[i] for i in 1:len])
 end
 
 
@@ -51,7 +62,9 @@ function check_exceptions()
             # race the load against the clear and swallow it.
             if unsafe_swap!(status_ptr, Int32(0), :sequentially_consistent) != 0
                 info = unsafe_load(ptr)
-                exc = KernelException(dev, info.thread, info.threadgroup)
+                exc = KernelException(dev, _exception_string(info.name),
+                                      _exception_string(info.reason),
+                                      info.thread, info.threadgroup)
                 # clear the lock and payload so the mailbox is reusable
                 unsafe_store!(ptr, ExceptionInfo_st())
                 throw(exc)

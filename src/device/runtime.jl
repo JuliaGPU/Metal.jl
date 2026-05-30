@@ -15,6 +15,10 @@ GPUCompiler.reset_runtime()
 # position (and, eventually, the exception type and reason), and raises `status`; the host
 # reads it after synchronizing (`check_exceptions`) and rethrows as a `KernelException`.
 
+# fixed capacities (incl. the null terminator) of the in-mailbox message buffers
+const EXCEPTION_NAME_LEN   = 64
+const EXCEPTION_REASON_LEN = 192
+
 struct ExceptionInfo_st
     # whether an exception has been encountered (0 -> 1)
     status::Int32
@@ -23,8 +27,13 @@ struct ExceptionInfo_st
     # the position of the faulting lane
     thread::NTuple{3, UInt32}
     threadgroup::NTuple{3, UInt32}
+    # the exception type name and reason, as null-terminated text the host reads back
+    name::NTuple{EXCEPTION_NAME_LEN, UInt8}
+    reason::NTuple{EXCEPTION_REASON_LEN, UInt8}
 
-    ExceptionInfo_st() = new(0, 0, (0, 0, 0), (0, 0, 0))
+    ExceptionInfo_st() = new(0, 0, (0, 0, 0), (0, 0, 0),
+                             ntuple(_ -> 0x00, EXCEPTION_NAME_LEN),
+                             ntuple(_ -> 0x00, EXCEPTION_REASON_LEN))
 end
 
 # field byte offsets, computed once on the host and spliced into device code as constants
@@ -32,6 +41,8 @@ const EXCEPTION_STATUS_OFFSET      = Int(fieldoffset(ExceptionInfo_st, 1))
 const EXCEPTION_LOCK_OFFSET        = Int(fieldoffset(ExceptionInfo_st, 2))
 const EXCEPTION_THREAD_OFFSET      = Int(fieldoffset(ExceptionInfo_st, 3))
 const EXCEPTION_THREADGROUP_OFFSET = Int(fieldoffset(ExceptionInfo_st, 4))
+const EXCEPTION_NAME_OFFSET        = Int(fieldoffset(ExceptionInfo_st, 5))
+const EXCEPTION_REASON_OFFSET      = Int(fieldoffset(ExceptionInfo_st, 6))
 
 # the mailbox is reached through a byte pointer in the kernel state; reinterpret it to the
 # requested field type at the given byte offset.
@@ -39,12 +50,31 @@ const EXCEPTION_THREADGROUP_OFFSET = Int(fieldoffset(ExceptionInfo_st, 4))
     reinterpret(Core.LLVMPtr{T, AS.Device},
                 reinterpret(Core.LLVMPtr{UInt8, AS.Device}, info) + offset)
 
+# copy a compile-time string literal into a mailbox buffer (null-terminated, truncated to
+# `maxlen`). the bytes are known at compile time, so this unrolls to plain constant stores.
+@inline @generated function store_string!(info, ::Val{offset}, ::Val{maxlen},
+                                          ::Val{str}) where {offset, maxlen, str}
+    bytes = codeunits(String(str))
+    n = min(length(bytes), maxlen - 1)
+    exprs = Expr[:(base = _exception_field(UInt8, info, $offset))]
+    for i in 1:n
+        push!(exprs, :(unsafe_store!(base + $(i - 1), $(bytes[i]))))
+    end
+    push!(exprs, :(unsafe_store!(base + $n, 0x00)))
+    push!(exprs, :(return nothing))
+    return Expr(:block, exprs...)
+end
+
 # claim the mailbox for the calling lane, recording its position. returns `true` to the
 # single lane that wins the claim; any other faulting lane gets `false` and leaves the
 # record untouched (no spin, so a divergent threadgroup can't deadlock here).
+#
+# a test-and-set via `atomic_exchange_explicit` (rather than compare-exchange) keeps this
+# callable from kernel code: cmpxchg boxes its expected value in a `Ref`, which the kernel
+# IR validator rejects (`ijl_stored_inline`) even though the runtime library tolerates it.
 @inline function lock_output!(info)
     lock_ptr = _exception_field(Int32, info, EXCEPTION_LOCK_OFFSET)
-    if atomic_compare_exchange_weak_explicit(lock_ptr, Int32(0), Int32(1)) == Int32(0)
+    if atomic_exchange_explicit(lock_ptr, Int32(1)) == Int32(0)
         t  = thread_position_in_threadgroup()
         tg = threadgroup_position_in_grid()
         unsafe_store!(_exception_field(NTuple{3,UInt32}, info, EXCEPTION_THREAD_OFFSET),

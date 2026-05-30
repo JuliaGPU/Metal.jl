@@ -1,9 +1,17 @@
 # local method table for device functions
 Base.Experimental.@MethodTable(method_table)
 
-macro print_and_throw(args...)
+# throw a device-side exception, recording its type name and reason in the exception
+# mailbox so the host can report them (see `device/runtime.jl`, `compiler/exceptions.jl`).
+macro gputhrow(name::String, reason::String)
+    name_q = QuoteNode(Symbol(name))
+    reason_q = QuoteNode(Symbol(reason))
     return quote
-        #@println "ERROR: " $(args...) "."
+        info = kernel_state().exception_info
+        if lock_output!(info)
+            store_string!(info, Val(EXCEPTION_NAME_OFFSET),   Val(EXCEPTION_NAME_LEN),   Val($name_q))
+            store_string!(info, Val(EXCEPTION_REASON_OFFSET), Val(EXCEPTION_REASON_LEN), Val($reason_q))
+        end
         throw(nothing)
     end
 end
