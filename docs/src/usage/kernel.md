@@ -134,7 +134,7 @@ julia> function kernel(a)
 julia> @metal threads=1 kernel(Metal.zeros(Float32, 1));
 
 julia> synchronize()
-ERROR: KernelException: BoundsError (Out-of-bounds array access) was thrown on thread (1, 1, 1) in threadgroup (1, 1, 1) during kernel execution on device Apple M1
+ERROR: KernelException: A BoundsError was thrown by thread 1×1×1 in threadgroup 1×1×1 on device Apple M1: Out-of-bounds array access
 ```
 
 The common implicit exceptions (bounds, domain, overflow, inexact, …) report their type

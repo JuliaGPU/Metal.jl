@@ -11,12 +11,13 @@ struct KernelException <: Exception
 end
 
 function Base.showerror(io::IO, err::KernelException)
-    print(io, "KernelException: ")
-    print(io, isempty(err.name) ? "an exception" : err.name)
-    isempty(err.reason) || print(io, " (", err.reason, ")")
-    print(io, " was thrown on thread $(Int.(err.thread)) ",
-              "in threadgroup $(Int.(err.threadgroup)) ",
-              "during kernel execution on device $(String(err.dev.name))")
+    name = isempty(err.name) ? "exception" : err.name
+    article = first(uppercase(name)) in ('A', 'E', 'I', 'O', 'U') ? "An" : "A"
+    thread = join(Int.(err.thread), '×')
+    threadgroup = join(Int.(err.threadgroup), '×')
+    print(io, "KernelException: $article $name was thrown by thread $thread ",
+              "in threadgroup $threadgroup on device $(String(err.dev.name))")
+    isempty(err.reason) || print(io, ": ", err.reason)
 end
 
 # decode a null-terminated mailbox text buffer into a `String`
