@@ -177,6 +177,25 @@ end
     @test exc.name == "BoundsError"
     @test exc.reason == "Out-of-bounds array access"
 
+    # a non-quirk throw still records the type GPUCompiler deduced (here, `jl_throw`'s
+    # generic "exception"); requires debug level >= 1, the default
+    if Base.JLOptions().debug_level >= 1
+        function divzero(out, d)
+            out[1] = 1 ÷ d[1]   # integer divide-by-zero -> throw(DivideError())
+            return
+        end
+        d = MtlArray(Int32[0]); o = Metal.zeros(Int32, 1)
+        @metal threads=1 divzero(o, d)
+        exc = try
+            synchronize()
+            nothing
+        catch err
+            err
+        end
+        @test exc isa Metal.KernelException
+        @test exc.name == "exception"
+    end
+
     # the mailbox is reset on read, and the GPU stays usable afterwards
     b = Metal.zeros(Float32, 4)
     @metal threads=4 fill_one(b)

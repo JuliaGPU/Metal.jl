@@ -86,6 +86,20 @@ end
     return false
 end
 
+# copy a null-terminated device C string into a mailbox buffer, truncated to `maxlen`.
+@inline function store_cstring!(info, offset, maxlen, src::Ptr{Cchar})
+    base = _exception_field(UInt8, info, offset)
+    i = 0
+    while i < maxlen - 1
+        c = unsafe_load(src + i) % UInt8
+        c == 0x00 && break
+        unsafe_store!(base + i, c)
+        i += 1
+    end
+    unsafe_store!(base + i, 0x00)
+    return
+end
+
 function signal_exception()
     info = kernel_state().exception_info
     # record our position if we're the first faulting lane to reach the mailbox
@@ -95,11 +109,21 @@ function signal_exception()
     return
 end
 
-report_exception(ex) = return
+# GPUCompiler reports the exception type it deduced (e.g. "bounds error", "type error") at
+# debug level >= 1. claim the mailbox and record it as the type name; a quirk's `@gputhrow`
+# may already hold the lock with a more precise name and reason, in which case we leave its
+# record untouched.
+function report_exception(ex)
+    info = kernel_state().exception_info
+    if lock_output!(info)
+        store_cstring!(info, EXCEPTION_NAME_OFFSET, EXCEPTION_NAME_LEN, ex)
+    end
+    return
+end
+
+report_exception_name(ex) = report_exception(ex)
 
 report_oom(sz) = return
-
-report_exception_name(ex) = return
 
 report_exception_frame(idx, func, file, line) = return
 
