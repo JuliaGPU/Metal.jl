@@ -6,6 +6,12 @@ const MetalCompilerJob = CompilerJob{MetalCompilerTarget, MetalCompilerParams}
 
 GPUCompiler.runtime_module(::MetalCompilerJob) = Metal
 
+# GPUCompiler keys its runtime `.bc` cache on the slug, and the default Metal slug only
+# tracks the macOS version (i.e. it's insensitive to the runtime function bodies). bump the
+# token below whenever the device runtime changes (e.g. exception reporting), otherwise a
+# stale cached runtime would silently shadow the change (see JuliaGPU/Metal.jl#785).
+GPUCompiler.runtime_slug(job::MetalCompilerJob) = "metal-macos$(job.config.target.macos)-rt1"
+
 GPUCompiler.method_table(::MetalCompilerJob) = method_table
 
 GPUCompiler.kernel_state_type(job::MetalCompilerJob) = KernelState

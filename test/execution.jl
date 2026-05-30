@@ -157,7 +157,25 @@ end
     @metal threads=1 throwing_kernel(a)
     @test_throws Metal.KernelException synchronize()
 
-    # the flag is reset on read, and the GPU stays usable afterwards
+    # the faulting lane's position is reported in the exception
+    function throw_at_three(a)
+        if thread_position_in_threadgroup().x == 3
+            a[2] = 1f0  # out-of-bounds store on a length-1 array
+        end
+        return
+    end
+    @metal threads=4 throw_at_three(a)
+    exc = try
+        synchronize()
+        nothing
+    catch err
+        err
+    end
+    @test exc isa Metal.KernelException
+    @test exc.thread == (3, 1, 1)
+    @test exc.threadgroup == (1, 1, 1)
+
+    # the mailbox is reset on read, and the GPU stays usable afterwards
     b = Metal.zeros(Float32, 4)
     @metal threads=4 fill_one(b)
     synchronize()
