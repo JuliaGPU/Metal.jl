@@ -46,7 +46,7 @@ const EXCEPTION_REASON_OFFSET      = Int(fieldoffset(ExceptionInfo_st, 6))
 
 # the mailbox is reached through a byte pointer in the kernel state; reinterpret it to the
 # requested field type at the given byte offset.
-@inline _exception_field(::Type{T}, info, offset) where {T} =
+@inline exception_field(::Type{T}, info, offset) where {T} =
     reinterpret(Core.LLVMPtr{T, AS.Device},
                 reinterpret(Core.LLVMPtr{UInt8, AS.Device}, info) + offset)
 
@@ -56,7 +56,7 @@ const EXCEPTION_REASON_OFFSET      = Int(fieldoffset(ExceptionInfo_st, 6))
                                           ::Val{str}) where {offset, maxlen, str}
     bytes = codeunits(String(str))
     n = min(length(bytes), maxlen - 1)
-    exprs = Expr[:(base = _exception_field(UInt8, info, $offset))]
+    exprs = Expr[:(base = exception_field(UInt8, info, $offset))]
     for i in 1:n
         push!(exprs, :(unsafe_store!(base + $(i - 1), $(bytes[i]))))
     end
@@ -70,16 +70,18 @@ end
 # record untouched (no spin, so a divergent threadgroup can't deadlock here).
 #
 # a test-and-set via `atomic_exchange_explicit` (rather than compare-exchange) keeps this
-# callable from kernel code: cmpxchg boxes its expected value in a `Ref`, which the kernel
-# IR validator rejects (`ijl_stored_inline`) even though the runtime library tolerates it.
+# callable from kernel code: cmpxchg boxes its expected value in a `Ref`, which can survive
+# as a heap allocation (`gpu_gc_pool_alloc`/`ijl_stored_inline`) when `llvm-alloc-opt` fails
+# to promote it to a stack slot in a complex kernel; the IR validator then rejects it.
+# exchange takes its operand by value, so there is nothing to promote.
 @inline function lock_output!(info)
-    lock_ptr = _exception_field(Int32, info, EXCEPTION_LOCK_OFFSET)
+    lock_ptr = exception_field(Int32, info, EXCEPTION_LOCK_OFFSET)
     if atomic_exchange_explicit(lock_ptr, Int32(1)) == Int32(0)
         t  = thread_position_in_threadgroup()
         tg = threadgroup_position_in_grid()
-        unsafe_store!(_exception_field(NTuple{3,UInt32}, info, EXCEPTION_THREAD_OFFSET),
+        unsafe_store!(exception_field(NTuple{3,UInt32}, info, EXCEPTION_THREAD_OFFSET),
                       (t.x, t.y, t.z))
-        unsafe_store!(_exception_field(NTuple{3,UInt32}, info, EXCEPTION_THREADGROUP_OFFSET),
+        unsafe_store!(exception_field(NTuple{3,UInt32}, info, EXCEPTION_THREADGROUP_OFFSET),
                       (tg.x, tg.y, tg.z))
         return true
     end
@@ -88,7 +90,7 @@ end
 
 # copy a null-terminated device C string into a mailbox buffer, truncated to `maxlen`.
 @inline function store_cstring!(info, offset, maxlen, src::Ptr{Cchar})
-    base = _exception_field(UInt8, info, offset)
+    base = exception_field(UInt8, info, offset)
     i = 0
     while i < maxlen - 1
         c = unsafe_load(src + i) % UInt8
@@ -105,7 +107,7 @@ function signal_exception()
     # record our position if we're the first faulting lane to reach the mailbox
     lock_output!(info)
     # raise the host-visible flag so the exception isn't silently swallowed
-    atomic_store_explicit(_exception_field(Int32, info, EXCEPTION_STATUS_OFFSET), Int32(1))
+    atomic_store_explicit(exception_field(Int32, info, EXCEPTION_STATUS_OFFSET), Int32(1))
     return
 end
 
@@ -143,7 +145,7 @@ struct KernelState
     #
     # a host+device visible buffer that `signal_exception` fills when a device exception is
     # thrown; the host reads it after synchronizing (`check_exceptions`) and rethrows as a
-    # `KernelException`. held as a byte pointer; see `_exception_field`.
+    # `KernelException`. held as a byte pointer; see `exception_field`.
     exception_info::Core.LLVMPtr{UInt8, AS.Device}
 end
 

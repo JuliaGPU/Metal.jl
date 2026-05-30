@@ -21,7 +21,7 @@ function Base.showerror(io::IO, err::KernelException)
 end
 
 # decode a null-terminated mailbox text buffer into a `String`
-function _exception_string(bytes::NTuple{N, UInt8}) where {N}
+function exception_string(bytes::NTuple{N, UInt8}) where {N}
     len = something(findfirst(iszero, bytes), N + 1) - 1
     return String(UInt8[bytes[i] for i in 1:len])
 end
@@ -63,8 +63,8 @@ function check_exceptions()
             # race the load against the clear and swallow it.
             if unsafe_swap!(status_ptr, Int32(0), :sequentially_consistent) != 0
                 info = unsafe_load(ptr)
-                exc = KernelException(dev, _exception_string(info.name),
-                                      _exception_string(info.reason),
+                exc = KernelException(dev, exception_string(info.name),
+                                      exception_string(info.reason),
                                       info.thread, info.threadgroup)
                 # clear the lock and payload so the mailbox is reusable
                 unsafe_store!(ptr, ExceptionInfo_st())
