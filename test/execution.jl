@@ -157,7 +157,9 @@ end
     @metal threads=1 throwing_kernel(a)
     @test_throws Metal.KernelException synchronize()
 
-    # the faulting lane's position is reported in the exception
+    # the faulting lane's type, reason, and position are reported at debug level >= 1 (the
+    # default); at -g0 only the bare status flag is written and everything stays at its
+    # sentinel, so the host reports just that an exception occurred
     function throw_at_three(a)
         if thread_position_in_threadgroup().x == 3
             a[2] = 1f0  # out-of-bounds store on a length-1 array
@@ -172,10 +174,16 @@ end
         err
     end
     @test exc isa Metal.KernelException
-    @test exc.thread == (3, 1, 1)
-    @test exc.threadgroup == (1, 1, 1)
-    @test exc.name == "BoundsError"
-    @test exc.reason == "Out-of-bounds array access"
+    if Base.JLOptions().debug_level >= 1
+        @test exc.thread == (3, 1, 1)
+        @test exc.threadgroup == (1, 1, 1)
+        @test exc.name == "BoundsError"
+        @test exc.reason == "Out-of-bounds array access"
+    else
+        @test exc.thread == (0, 0, 0)
+        @test isempty(exc.name)
+        @test isempty(exc.reason)
+    end
 
     # a non-quirk throw still records the type GPUCompiler deduced (here, `jl_throw`'s
     # generic "exception"); requires debug level >= 1, the default

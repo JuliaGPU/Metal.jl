@@ -137,14 +137,19 @@ julia> synchronize()
 ERROR: KernelException: A BoundsError was thrown by thread 1×1×1 in threadgroup 1×1×1 on device Apple M1: Out-of-bounds array access
 ```
 
-The common implicit exceptions (bounds, domain, overflow, inexact, and so on) report their
-type and reason. Other throws report whatever type the compiler could deduce, as long as
-Julia runs at debug level 1 or higher, which is the default. At `-g0` they report only the
-faulting position. Reporting works on all macOS versions; unlike `@mtlprintf`, it does not
-require macOS 15.
+How much detail is reported depends on Julia's debug level (the `-g` flag), so the unhappy
+path stays as small as the level allows:
 
-Only one faulting lane's position is recorded. Running Julia at debug level 2 (`-g2`) also
-captures a device-side stack trace, which is appended to the reported exception.
+- At `-g0`, only the fact that an exception occurred is reported:
+  `KernelException: an exception was thrown on device Apple M1`.
+- At `-g1` (the default), the type, reason, and faulting position are reported, as shown
+  above. The common implicit exceptions (bounds, domain, overflow, inexact, and so on)
+  carry a precise type and reason; other throws report whatever type the compiler could
+  deduce, which is often a generic `exception`.
+- At `-g2`, a device-side stack trace is additionally captured and appended.
+
+Only one faulting lane is recorded. Reporting works on all macOS versions; unlike
+`@mtlprintf`, it does not require macOS 15.
 
 ## Other Helpful Links
 

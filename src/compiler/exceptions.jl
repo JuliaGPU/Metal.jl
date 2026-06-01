@@ -11,13 +11,19 @@ struct KernelException <: Exception
     backtrace::Vector{Tuple{String, String, Int}}   # (function, file, line) per frame
 end
 
+# the device writes only as much as the debug level asks for, leaving everything else at its
+# zero/empty sentinel; render each field iff it isn't a sentinel, so the host never needs to
+# know the debug level. positions are 1-based, so `(0, 0, 0)` means "not recorded".
 function Base.showerror(io::IO, err::KernelException)
     name = isempty(err.name) ? "exception" : err.name
     article = first(uppercase(name)) in ('A', 'E', 'I', 'O', 'U') ? "An" : "A"
-    thread = join(Int.(err.thread), '×')
-    threadgroup = join(Int.(err.threadgroup), '×')
-    print(io, "KernelException: $article $name was thrown by thread $thread ",
-              "in threadgroup $threadgroup on device $(String(err.dev.name))")
+    print(io, "KernelException: $article $name was thrown")
+    if err.thread != (0, 0, 0)
+        thread = join(Int.(err.thread), '×')
+        threadgroup = join(Int.(err.threadgroup), '×')
+        print(io, " by thread $thread in threadgroup $threadgroup")
+    end
+    print(io, " on device $(String(err.dev.name))")
     isempty(err.reason) || print(io, ": ", err.reason)
     if !isempty(err.backtrace)
         print(io, "\nStacktrace:")
