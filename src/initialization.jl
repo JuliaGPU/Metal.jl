@@ -57,19 +57,6 @@ function __init__()
         @warn "Metal.jl has not been tested on macOS 27 or later, you may run into issues."
     end
 
-    if Base.JLOptions().debug_level >= 2
-        # enable Metal API validation
-        ENV["MTL_DEBUG_LAYER"] = "1"
-        # ... but make it non-fatal
-        ENV["MTL_DEBUG_LAYER_ERROR_MODE"] = "nslog"
-        ENV["MTL_DEBUG_LAYER_WARNING_MODE"] = "nslog"
-
-        # NOTE: we deliberately don't enable Metal shader validation
-        # (`MTL_SHADER_VALIDATION`) here: it rejects pipeline creation for any kernel that
-        # writes the device exception mailbox by GPU address (i.e. anything that can throw),
-        # which is most kernels. Set the variable manually to opt in.
-    end
-
     @autoreleasepool try
         load_framework("CoreGraphics")
         load_framework("MetalPerformanceShadersGraph")
