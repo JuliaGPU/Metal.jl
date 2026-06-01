@@ -174,16 +174,10 @@ end
         err
     end
     @test exc isa Metal.KernelException
-    if Base.JLOptions().debug_level >= 1
-        @test exc.thread == (3, 1, 1)
-        @test exc.threadgroup == (1, 1, 1)
-        @test exc.name == "BoundsError"
-        @test exc.reason == "Out-of-bounds array access"
-    else
-        @test exc.thread == (0, 0, 0)
-        @test isempty(exc.name)
-        @test isempty(exc.reason)
-    end
+    @test exc.thread == (3, 1, 1)
+    @test exc.threadgroup == (1, 1, 1)
+    @test exc.name == "BoundsError"
+    @test exc.reason == "Out-of-bounds array access"
 
     # a non-quirk throw still records the type GPUCompiler deduced (here, `jl_throw`'s
     # generic "exception"); requires debug level >= 1, the default
@@ -223,6 +217,43 @@ end
     @metal threads=4 fill_one(b)
     synchronize()
     @test Array(b) == ones(Float32, 4)
+end
+
+@testset "exception reporting per debug level" begin
+    # the device stack trace (`-g2`) and the deduced-name path can only be exercised at a
+    # debug level fixed for the whole process, so drive throwing kernels in subprocesses and
+    # check the host-side `KernelException`. uses the shared project, so no world rebuild.
+    #
+    # NOTE: only `-g1`/`-g2` are checked. a `-g0` request reuses any already-precompiled
+    # image at `-g0` or higher (Julia's `jl_match_cache_flags`), so a shared-depot `-g0` run
+    # does not exercise the minimal path; that needs an isolated depot and isn't worth a CI
+    # job. `-g1`/`-g2` requests reject lower-level caches, so they are stable here.
+    function throw_message(debuglevel)
+        script = """
+            using Metal
+            kernel(a) = (a[2] = 1f0; return)   # out-of-bounds on a length-1 array
+            @metal threads=1 kernel(Metal.zeros(Float32, 1))
+            try
+                synchronize()
+            catch err
+                showerror(stdout, err)
+            end
+        """
+        cmd = `$(Base.julia_cmd()) -g$(debuglevel) --project=$(Base.active_project()) --startup-file=no --color=no -e $script`
+        return read(pipeline(ignorestatus(cmd); stderr = devnull), String)
+    end
+
+    out1 = throw_message(1)
+    @test occursin("KernelException", out1)
+    @test occursin("BoundsError", out1)
+    @test occursin("Out-of-bounds array access", out1)
+    @test !occursin("Stacktrace", out1)
+
+    out2 = throw_message(2)
+    @test occursin("KernelException", out2)
+    @test occursin("BoundsError", out2)
+    @test occursin("Stacktrace", out2)
+    @test occursin("throw_boundserror", out2)
 end
 
 @testset "launch params" begin
