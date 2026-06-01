@@ -145,20 +145,19 @@ end
 # type name, unless a quirk's `@gputhrow` already wrote a more precise name (in which case
 # the name buffer is non-empty and we leave it alone).
 #
-# both are defined with the same body rather than one delegating to the other: the deduced
-# name arrives as a constant global behind a generic pointer, and an extra call layer
-# defeats the address-space inference that keeps the read in the constant space (needed so
-# Metal's shader validator doesn't crash on a generic-space load).
-for fname in (:report_exception, :report_exception_name)
-    @eval function $fname(ex)
-        info = kernel_state().exception_info
-        if lock_output!(info) &&
-           unsafe_load(exception_field(UInt8, info, EXCEPTION_NAME_OFFSET)) == 0x00
-            store_cstring!(info, EXCEPTION_NAME_OFFSET, EXCEPTION_NAME_LEN, ex)
-        end
-        return
+# the deduced name arrives as a constant global behind a generic pointer; GPUCompiler's
+# interprocedural address-space narrowing iterates to a fixed point, so the delegation
+# below still resolves the read to the constant space (needed so Metal's shader validator
+# doesn't crash on a generic-space load).
+function report_exception(ex)
+    info = kernel_state().exception_info
+    if lock_output!(info) &&
+       unsafe_load(exception_field(UInt8, info, EXCEPTION_NAME_OFFSET)) == 0x00
+        store_cstring!(info, EXCEPTION_NAME_OFFSET, EXCEPTION_NAME_LEN, ex)
     end
+    return
 end
+report_exception_name(ex) = report_exception(ex)
 
 report_oom(sz) = return
 
