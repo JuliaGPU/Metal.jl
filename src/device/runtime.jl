@@ -208,10 +208,3 @@ struct KernelState
 end
 
 @inline @generated kernel_state() = GPUCompiler.kernel_state_value(KernelState)
-
-# the compiling kernel's configured debug level (`@metal debug_level=`, defaulting to the
-# session's `-g`), resolved to a compile-time constant during codegen. unlike reading
-# `Base.JLOptions().debug_level`, this is part of GPUCompiler's compile cache key, so device
-# code branching on it (e.g. `lock_output!`) stays correct across debug levels regardless of
-# pkgimage reuse.
-@inline @generated kernel_debug_level() = GPUCompiler.kernel_debug_level_value()
