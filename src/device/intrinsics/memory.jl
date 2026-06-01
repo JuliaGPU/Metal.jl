@@ -54,36 +54,6 @@ end
         end
 
         call_function(llvm_f, Core.LLVMPtr{T, AS.ThreadGroup})
-        # # XXX: as long as LLVMPtr is emitted as i8*, it doesn't make sense to type the GV
-        # eltyp = convert(LLVMType, LLVM.Int8Type())
-        # T_ptr = convert(LLVMType, Core.LLVMPtr{T,AS.ThreadGroup})
-
-        # # create a function
-        # llvm_f, _ = create_function(T_ptr)
-
-        # # create the global variable
-        # mod = LLVM.parent(llvm_f)
-        # gv_typ = LLVM.PointerType(eltyp)
-        # gv = GlobalVariable(mod, gv_typ, "dyn_threadgroup_memory", AS.ThreadGroup)
-
-        # linkage!(gv, LLVM.API.LLVMInternalLinkage)
-        # initializer!(gv, UndefValue(gv_typ))
-
-        # alignment!(gv, 16)  # source: Metal Feature Set Tables
-
-        # # generate IR
-        # IRBuilder() do builder
-        #     entry = BasicBlock(llvm_f, "entry")
-        #     position!(builder, entry)
-
-        #     ptr = gep!(builder, gv_typ, gv, [ConstantInt(0), ConstantInt(0)])
-
-        #     untyped_ptr = bitcast!(builder, ptr, T_ptr)
-
-        #     ret!(builder, untyped_ptr)
-        # end
-
-        # call_function(llvm_f, Core.LLVMPtr{T,AS.ThreadGroup})
     end
 end
 
