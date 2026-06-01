@@ -148,6 +148,11 @@ path stays as small as the level allows:
   deduce, which is often a generic `exception`.
 - At `-g2`, a device-side stack trace is additionally captured and appended.
 
+The level can also be set per launch, independent of the session's `-g`, with the
+`debug_level` keyword — for example `@metal debug_level=2 kernel(args...)` to capture a
+backtrace for one kernel without restarting Julia, or `debug_level=0` to keep a hot kernel's
+exception path minimal. It defaults to the session's `-g`.
+
 Only one faulting lane is recorded. Reporting works on all macOS versions; unlike
 `@mtlprintf`, it does not require macOS 15.
 
