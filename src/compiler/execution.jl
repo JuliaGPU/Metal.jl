@@ -290,11 +290,10 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     pipeline = kernel.pipeline
 
     buf = malloc_buffer(pipeline.device)
+    buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, UInt64(buf.gpuAddress))
     exc = exception_info_buffer(pipeline.device)
-    # pass the scratch-buffer addresses as integers; the device reconstructs pointers from
-    # them (see `KernelState`), which keeps Metal shader validation from crashing on them.
-    kernel_state = KernelState(Random.rand(UInt32), UInt64(buf.gpuAddress),
-                               UInt64(exc.gpuAddress))
+    exc_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, UInt64(exc.gpuAddress))
+    kernel_state = KernelState(Random.rand(UInt32), buf_ptr, exc_ptr)
 
     cmdbuf = if kernel.loggingEnabled
         if !is_macos(v"15")

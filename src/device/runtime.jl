@@ -178,27 +178,21 @@ end
 
 ## kernel state
 
-# NOTE: the buffer addresses below are held as integers, not pointers, deliberately.
-# Metal shader validation (`MTL_SHADER_VALIDATION`) instruments device-pointer loads from
-# the argument buffer and crashes its compiler service when the pointer has no bound buffer
-# behind it (which is the case for these `gpuAddress`-derived buffers). passing them as
-# integers and reconstructing the pointer on-device (an `inttoptr`, see `exception_field`
-# and `malloc`) keeps the access opaque to the validator, so it leaves it alone.
 struct KernelState
     random_seed::UInt32
 
-    # bump allocator buffer, by GPU address
+    # bump allocator buffer
     #
     # the first 4 bytes are an atomically-incremented counter; allocations
     # start at offset 4 and continue until the buffer is exhausted.
-    malloc_buf::UInt64
+    malloc_buf::Core.LLVMPtr{UInt8, AS.Device}
 
-    # device-side exception mailbox (`ExceptionInfo_st`), by GPU address
+    # device-side exception mailbox (`ExceptionInfo_st`)
     #
     # a host+device visible buffer that `signal_exception` fills when a device exception is
     # thrown; the host reads it after synchronizing (`check_exceptions`) and rethrows as a
-    # `KernelException`. reconstructed to a byte pointer on use; see `exception_field`.
-    exception_info::UInt64
+    # `KernelException`. held as a byte pointer; see `exception_field`.
+    exception_info::Core.LLVMPtr{UInt8, AS.Device}
 end
 
 @inline @generated kernel_state() = GPUCompiler.kernel_state_value(KernelState)
