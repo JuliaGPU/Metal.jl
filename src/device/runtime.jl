@@ -98,11 +98,11 @@ end
 # payload to write, so the mailbox is never claimed and every caller gets `false`; each throw
 # site then collapses to the bare `status` store in `signal_exception`, with no lock,
 # position, or string writes. `-g1` (the default) records name/reason/position and `-g2` adds
-# frames (GPUCompiler only emits the frame reporters then). the gate is a `@static if` on the
-# same `debug_level` that GPUCompiler's `emit_exception!`/`llvm_debug_info` read: it resolves
-# at parse time, and both the package and GPUCompiler's runtime library are keyed on the debug
-# level (`debug_level` is a `Base.CacheFlags` field, and the runtime slug includes it like PTX
-# does), so it bakes correctly per `-g` in every place this is reached from.
+# frames (GPUCompiler only emits the frame reporters then). the gate reads
+# `kernel_debug_level()` — GPUCompiler's per-job debug level resolved to a compile-time
+# constant during codegen, NOT the `-g` global — so it is part of the compile cache key and
+# stays correct under pkgimage reuse across `-g` and under a per-kernel `@metal debug_level=`
+# override, while still folding the cold path away at `-g0`.
 #
 # a test-and-set via `atomic_exchange_explicit` (rather than compare-exchange) keeps this
 # callable from kernel code: cmpxchg boxes its expected value in a `Ref`, which can survive
@@ -110,9 +110,7 @@ end
 # to promote it to a stack slot in a complex kernel; the IR validator then rejects it.
 # exchange takes its operand by value, so there is nothing to promote.
 @inline function lock_output!(info)
-    @static if Base.JLOptions().debug_level < 1
-        return false
-    end
+    kernel_debug_level() < 1 && return false
     lock_ptr = exception_field(Int32, info, EXCEPTION_LOCK_OFFSET)
     t  = thread_position_in_threadgroup()
     tg = threadgroup_position_in_grid()
@@ -210,3 +208,10 @@ struct KernelState
 end
 
 @inline @generated kernel_state() = GPUCompiler.kernel_state_value(KernelState)
+
+# the compiling kernel's configured debug level (`@metal debug_level=`, defaulting to the
+# session's `-g`), resolved to a compile-time constant during codegen. unlike reading
+# `Base.JLOptions().debug_level`, this is part of GPUCompiler's compile cache key, so device
+# code branching on it (e.g. `lock_output!`) stays correct across debug levels regardless of
+# pkgimage reuse.
+@inline @generated kernel_debug_level() = GPUCompiler.kernel_debug_level_value()

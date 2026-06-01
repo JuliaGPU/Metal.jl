@@ -179,39 +179,6 @@ end
     @test exc.name == "BoundsError"
     @test exc.reason == "Out-of-bounds array access"
 
-    # a non-quirk throw still records the type GPUCompiler deduced (here, `jl_throw`'s
-    # generic "exception"); requires debug level >= 1, the default
-    if Base.JLOptions().debug_level >= 1
-        function divzero(out, d)
-            out[1] = 1 ÷ d[1]   # integer divide-by-zero -> throw(DivideError())
-            return
-        end
-        d = MtlArray(Int32[0]); o = Metal.zeros(Int32, 1)
-        @metal threads=1 divzero(o, d)
-        exc = try
-            synchronize()
-            nothing
-        catch err
-            err
-        end
-        @test exc isa Metal.KernelException
-        @test exc.name == "exception"
-    end
-
-    # a device-side stack trace is captured at debug level >= 2
-    if Base.JLOptions().debug_level >= 2
-        @metal threads=1 throwing_kernel(a)
-        exc = try
-            synchronize()
-            nothing
-        catch err
-            err
-        end
-        @test exc isa Metal.KernelException
-        @test !isempty(exc.backtrace)
-        @test any(frame -> occursin("throw_boundserror", frame[1]), exc.backtrace)
-    end
-
     # the mailbox is reset on read, and the GPU stays usable afterwards
     b = Metal.zeros(Float32, 4)
     @metal threads=4 fill_one(b)
@@ -220,40 +187,42 @@ end
 end
 
 @testset "exception reporting per debug level" begin
-    # the device stack trace (`-g2`) and the deduced-name path can only be exercised at a
-    # debug level fixed for the whole process, so drive throwing kernels in subprocesses and
-    # check the host-side `KernelException`. uses the shared project, so no world rebuild.
-    #
-    # NOTE: only `-g1`/`-g2` are checked. a `-g0` request reuses any already-precompiled
-    # image at `-g0` or higher (Julia's `jl_match_cache_flags`), so a shared-depot `-g0` run
-    # does not exercise the minimal path; that needs an isolated depot and isn't worth a CI
-    # job. `-g1`/`-g2` requests reject lower-level caches, so they are stable here.
-    function throw_message(debuglevel)
-        script = """
-            using Metal
-            kernel(a) = (a[2] = 1f0; return)   # out-of-bounds on a length-1 array
-            @metal threads=1 kernel(Metal.zeros(Float32, 1))
-            try
-                synchronize()
-            catch err
-                showerror(stdout, err)
-            end
-        """
-        cmd = `$(Base.julia_cmd()) -g$(debuglevel) --project=$(Base.active_project()) --startup-file=no --color=no -e $script`
-        return read(pipeline(ignorestatus(cmd); stderr = devnull), String)
+    # `@metal debug_level=` controls how much an exception reports, independent of the
+    # session's `-g` (it's part of the compile cache key, resolved at codegen), so all three
+    # tiers can be checked in one process regardless of how the suite was launched.
+    bounds_oob(a) = (a[2] = 1f0; return)   # out-of-bounds on a length-1 array
+    nonquirk(out, d) = (out[1] = 1 ÷ d[1]; return)   # divide-by-zero -> throw(DivideError())
+    function throw_at(dl, kernel, args...)
+        @metal threads=1 debug_level=dl kernel(args...)
+        try; synchronize(); nothing; catch err; err; end
     end
 
-    out1 = throw_message(1)
-    @test occursin("KernelException", out1)
-    @test occursin("BoundsError", out1)
-    @test occursin("Out-of-bounds array access", out1)
-    @test !occursin("Stacktrace", out1)
+    # -g0: only that an exception occurred; everything else stays at its sentinel
+    exc0 = throw_at(0, bounds_oob, Metal.zeros(Float32, 1))
+    @test exc0 isa Metal.KernelException
+    @test isempty(exc0.name)
+    @test isempty(exc0.reason)
+    @test exc0.thread == (0, 0, 0)
+    @test isempty(exc0.backtrace)
 
-    out2 = throw_message(2)
-    @test occursin("KernelException", out2)
-    @test occursin("BoundsError", out2)
-    @test occursin("Stacktrace", out2)
-    @test occursin("throw_boundserror", out2)
+    # -g1: the faulting type, reason, and position
+    exc1 = throw_at(1, bounds_oob, Metal.zeros(Float32, 1))
+    @test exc1.name == "BoundsError"
+    @test exc1.reason == "Out-of-bounds array access"
+    @test exc1.thread == (1, 1, 1)
+    @test isempty(exc1.backtrace)
+
+    # a non-quirk throw records whatever type the compiler deduced (here `jl_throw`'s
+    # generic "exception"), via report_exception at debug level >= 1
+    excn = throw_at(1, nonquirk, Metal.zeros(Int32, 1), MtlArray(Int32[0]))
+    @test excn isa Metal.KernelException
+    @test excn.name == "exception"
+
+    # -g2: adds the device stack trace
+    exc2 = throw_at(2, bounds_oob, Metal.zeros(Float32, 1))
+    @test exc2.name == "BoundsError"
+    @test !isempty(exc2.backtrace)
+    @test any(frame -> occursin("throw_boundserror", frame[1]), exc2.backtrace)
 end
 
 @testset "launch params" begin
