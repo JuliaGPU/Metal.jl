@@ -9,8 +9,8 @@ macro gputhrow(name::String, reason::String)
     return quote
         info = kernel_state().exception_info
         if lock_output!(info)
-            store_string!(info, Val(EXCEPTION_NAME_OFFSET),   Val(EXCEPTION_NAME_LEN),   Val($name_q))
-            store_string!(info, Val(EXCEPTION_REASON_OFFSET), Val(EXCEPTION_REASON_LEN), Val($reason_q))
+            store_string!(info_field(info, Val(:name)),   Val($name_q))
+            store_string!(info_field(info, Val(:reason)), Val($reason_q))
         end
         throw(nothing)
     end
