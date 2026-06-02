@@ -31,7 +31,7 @@ end
             linkage!(gv, LLVM.API.LLVMInternalLinkage)
             initializer!(gv, UndefValue(gv_typ))
         end
-        alignment!(gv, 16)  # source: Metal Feature Set Tables
+        alignment!(gv, Base.datatype_alignment(T))
 
         # generate IR
         IRBuilder() do builder
