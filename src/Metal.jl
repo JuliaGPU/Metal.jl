@@ -82,6 +82,7 @@ include("../lib/mpsgraphs/MPSGraphs.jl")
 export MPSGraphs
 
 # LinearAlgebra
+include("gemm.jl")
 include("linalg.jl")
 
 # array implementation

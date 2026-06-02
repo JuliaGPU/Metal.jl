@@ -21,9 +21,14 @@ end
         C.offset == 0
 end
 
-# Supported values are :auto, :MPS, :MPSGraph, and :GPUArrays
+# Supported values are :auto, :MPS, :MPSGraph, :GPUArrays, and :Julia
 const matmul_alg = ScopedValue(:auto)
 matmul_alg_error(alg, inT, outT, vec) = error("Matrix-$(vec ? "Vector" : "Matrix") multiplication algorithm `:$alg` is not supported for input eltype $inT and output eltype $outT.")
+
+# the native `:Julia` GEMM handles 'N'/'T'/'C'; Symmetric/Hermitian wrapper chars
+# ('S'/'H') are expanded through the generic GPUArrays path instead.
+@inline _is_ntc(t) = (t == 'N') || (t == 'T') || (t == 'C')
+@inline _ntc_char(t) = t == 'N' ? 'N' : (t == 'C' ? 'C' : 'T')
 
 LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
     LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
@@ -60,10 +65,16 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     elseif alg === :MPS || (alg === :auto && mps_supported)
         mps_supported || matmul_alg_error(alg, eltype(A), eltype(C), false)
         matmul!(C, A, B, alpha, beta, transA, transB)
-    elseif alg === :GPUArrays || alg === :auto
+    elseif alg === :Julia || alg === :auto
+        if _is_ntc(tA) && _is_ntc(tB)
+            gemm!(C, _ntc_char(tA), _ntc_char(tB), A, B, alpha, beta)
+        else
+            GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
+        end
+    elseif alg === :GPUArrays
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
     else
-        error(":$alg is not a valid matmul algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`")
+        error(":$alg is not a valid matmul algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`, `:Julia`")
     end
 end
 
@@ -102,10 +113,16 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
     elseif alg === :MPS || (alg === :auto && mps_supported)
         mps_supported || matmul_alg_error(alg, eltype(A), eltype(C), true)
         matvecmul!(C, A, B, alpha, beta, transA)
-    elseif alg === :GPUArrays || alg === :auto
+    elseif alg === :Julia || alg === :auto
+        if _is_ntc(tA)
+            gemv!(C, _ntc_char(tA), A, B, alpha, beta)
+        else
+            GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)
+        end
+    elseif alg === :GPUArrays
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)
     else
-        error(":$alg is not a valid matmul algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`")
+        error(":$alg is not a valid matmul algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`, `:Julia`")
     end
 end
 
