@@ -1,5 +1,9 @@
 # Math function mappings to Metal intrinsics
 
+# We try to rely on LLVM intrinsics as much as possible, as emitted by Julia
+# and lowered to AIR intrinsucs by GPUCompiler.jl. Only functions that need
+# special handling (no LLVM intrinsic, no Julia lowering) are handled here.
+
 using Base: FastMath
 using Base.Math: throw_complex_domainerror
 import Core: Float16, Float32
@@ -25,14 +29,8 @@ end
 
 ### Floating Point Intrinsics
 
-## Metal only supports single and half-precision floating-point types (and their vector counterparts)
-## For single precision types, there are precise and fast variants
-
-## NOTE: math functions that Julia already lowers to plain LLVM intrinsics — sqrt, fma,
-## abs/fabs, floor, ceil, trunc and round — are no longer wrapped here. GPUCompiler's Metal
-## back-end maps each `llvm.*` intrinsic to the matching `air.<op>` device function, and to
-## the relaxed `air.fast_<op>` when the op is `afn`-flagged (`@fastmath` or fastmath=true).
-## Only functions LLVM has no intrinsic for (the transcendentals below, etc.) stay wrapped.
+# Metal only supports single and half-precision floating-point types (and their vector counterparts)
+# For single precision types, there are precise and fast variants
 
 @device_override FastMath.min_fast(x::Float32, y::Float32) = ccall("extern air.fast_fmin.f32", llvmcall, Cfloat, (Cfloat, Cfloat), x, y)
 @device_override Base.min(x::Float32, y::Float32) = ccall("extern air.fmin.f32", llvmcall, Cfloat, (Cfloat, Cfloat), x, y)
@@ -98,7 +96,6 @@ end
 @device_override Base.atanh(x::Float16) = ccall("extern air.atanh.f16", llvmcall, Float16, (Float16,), x)
 
 @device_function ceil_fast(x::Float32) = ccall("extern air.fast_ceil.f32", llvmcall, Cfloat, (Cfloat,), x)
-# Base.ceil lowers to llvm.ceil -> air.ceil in the back-end
 
 @device_override FastMath.cos_fast(x::Float32) = ccall("extern air.fast_cos.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.cos(x::Float32) = ccall("extern air.cos.f32", llvmcall, Cfloat, (Cfloat,), x)
@@ -125,10 +122,6 @@ end
 @device_override Base.exp10(x::Float16) = ccall("extern air.exp10.f16", llvmcall, Float16, (Float16,), x)
 
 @device_function floor_fast(x::Float32) = ccall("extern air.fast_floor.f32", llvmcall, Cfloat, (Cfloat,), x)
-# Base.floor lowers to llvm.floor -> air.floor in the back-end
-
-# Base.fma lowers to llvm.fma.{f32,f16} -> air.fma.{f32,f16} in the back-end (both forms exist,
-# verified against Apple's frontend).
 
 @device_function fract_fast(x::Float32) = ccall("extern air.fast_fract.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_function fract(x::Float32) = ccall("extern air.fract.f32", llvmcall, Cfloat, (Cfloat,), x)
@@ -281,8 +274,6 @@ end
 @device_function rint(x::Float16) = ccall("extern air.rint.f16", llvmcall, Float16, (Float16,), x)
 
 @device_function round_fast(x::Float32) = ccall("extern air.fast_round.f32", llvmcall, Cfloat, (Cfloat,), x)
-# Base.round lowers to llvm.rint (round-to-even) -> air.rint in the back-end. This now matches
-# CPU Julia's round-half-to-even; the previous air.round mapping rounded ties away from zero.
 
 @device_function rsqrt_fast(x::Float32) = ccall("extern air.fast_rsqrt.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_function rsqrt(x::Float32) = ccall("extern air.rsqrt.f32", llvmcall, Cfloat, (Cfloat,), x)
@@ -316,9 +307,6 @@ end
 @device_override Base.sinpi(x::Float32) = ccall("extern air.sinpi.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.sinpi(x::Float16) = ccall("extern air.sinpi.f16", llvmcall, Float16, (Float16,), x)
 
-# Base.sqrt(::Float32) lowers to llvm.sqrt.f32 -> air.sqrt.f32, and @fastmath/FastMath.sqrt_fast
-# carry `afn` -> air.fast_sqrt.f32, both in the back-end. Float16 is kept here to use the native
-# half sqrt: Julia would otherwise compute it by promoting through Float32.
 @device_override Base.sqrt(x::Float16) = ccall("extern air.sqrt.f16", llvmcall, Float16, (Float16,), x)
 
 @device_override FastMath.tan_fast(x::Float32) = ccall("extern air.fast_tan.f32", llvmcall, Cfloat, (Cfloat,), x)
@@ -334,7 +322,6 @@ end
 @device_override Base.tanpi(x::Float16) = ccall("extern air.tanpi.f16", llvmcall, Float16, (Float16,), x)
 
 @device_function trunc_fast(x::Float32) = ccall("extern air.fast_trunc.f32", llvmcall, Cfloat, (Cfloat,), x)
-# Base.trunc lowers to llvm.trunc -> air.trunc in the back-end
 
 @device_function function nextafter(x::Float32, y::Float32)
     if metal_version() >= sv"3.1" # macOS 14+
