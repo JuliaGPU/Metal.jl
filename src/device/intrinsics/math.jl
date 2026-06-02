@@ -32,21 +32,10 @@ end
 # Metal only supports single and half-precision floating-point types (and their vector counterparts)
 # For single precision types, there are precise and fast variants
 
-@device_override FastMath.min_fast(x::Float32, y::Float32) = ccall("extern air.fast_fmin.f32", llvmcall, Cfloat, (Cfloat, Cfloat), x, y)
-@device_override Base.min(x::Float32, y::Float32) = ccall("extern air.fmin.f32", llvmcall, Cfloat, (Cfloat, Cfloat), x, y)
-@device_override Base.min(x::Float16, y::Float16) = ccall("extern air.fmin.f16", llvmcall, Float16, (Float16, Float16), x, y)
-
-@device_override FastMath.min_fast(x::Float32, y::Float32, z::Float32) = ccall("extern air.fast_fmin3.f32", llvmcall, Cfloat, (Cfloat, Cfloat, Cfloat), x, y, z)
-@device_override Base.min(x::Float32, y::Float32, z::Float32) = ccall("extern air.fmin3.f32", llvmcall, Cfloat, (Cfloat, Cfloat, Cfloat), x, y, z)
-@device_override Base.min(x::Float16, y::Float16, z::Float16) = ccall("extern air.fmin3.f16", llvmcall, Float16, (Float16, Float16, Float16), x, y, z)
-
-@device_override FastMath.max_fast(x::Float32, y::Float32) = ccall("extern air.fast_fmax.f32", llvmcall, Cfloat, (Cfloat, Cfloat), x, y)
-@device_override Base.max(x::Float32, y::Float32) = ccall("extern air.fmax.f32", llvmcall, Cfloat, (Cfloat, Cfloat), x, y)
-@device_override Base.max(x::Float16, y::Float16) = ccall("extern air.fmax.f16", llvmcall, Float16, (Float16, Float16), x, y)
-
-@device_override FastMath.max_fast(x::Float32, y::Float32, z::Float32) = ccall("extern air.fast_fmax3.f32", llvmcall, Cfloat, (Cfloat, Cfloat, Cfloat), x, y, z)
-@device_override Base.max(x::Float32, y::Float32, z::Float32) = ccall("extern air.fmax3.f32", llvmcall, Cfloat, (Cfloat, Cfloat, Cfloat), x, y, z)
-@device_override Base.max(x::Float16, y::Float16, z::Float16) = ccall("extern air.fmax3.f16", llvmcall, Float16, (Float16, Float16, Float16), x, y, z)
+# min/max are handled entirely by the back-end. Base.min/max lower to llvm.minimum/llvm.maximum,
+# which become a NaN-correct air.fmin/air.fmax sequence (propagating NaN and ordering -0 < +0,
+# like CPU Julia); @fastmath/fastmath sets `nnan`, so the back-end uses the relaxed
+# air.fast_fmin/air.fast_fmax instead. (3-argument min/max reduce to two 2-argument ops.)
 
 @device_override function Base.:(/)(a::Complex{Float32}, b::Complex{Float32})
     are = real(a); aim = imag(a); bre = real(b); bim = imag(b)
@@ -122,6 +111,12 @@ end
 @device_override Base.exp10(x::Float16) = ccall("extern air.exp10.f16", llvmcall, Float16, (Float16,), x)
 
 @device_function floor_fast(x::Float32) = ccall("extern air.fast_floor.f32", llvmcall, Cfloat, (Cfloat,), x)
+
+# Base.fma(::Float32) lowers to llvm.fma.f32 -> air.fma.f32 in the back-end. Float16 is kept
+# here: Julia gates fma on `have_fma(Float16)`, which the GPU back-end can't fold (it lowers to
+# a `jl_have_fma` runtime call), so emit the native air.fma.f16 directly to avoid Julia's Float64
+# `fma_emulated` fallback.
+@device_override Base.fma(a::Float16, b::Float16, c::Float16) = ccall("extern air.fma.f16", llvmcall, Float16, (Float16,Float16,Float16), a,b,c)
 
 @device_function fract_fast(x::Float32) = ccall("extern air.fast_fract.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_function fract(x::Float32) = ccall("extern air.fract.f32", llvmcall, Cfloat, (Cfloat,), x)
