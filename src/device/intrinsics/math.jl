@@ -346,28 +346,10 @@ end
 
 ### Integer Intrinsics
 
-# abs and 2-argument integer min/max lower to llvm.abs / llvm.{s,u}{min,max} in the back-end,
-# which maps them to air.abs.{s,u} / air.{min,max}.{s,u}. (`Base.max(::Int64)` was already left
-# to the back-end, see JuliaGPU/Metal.jl#547.) The 3-argument min/max below are kept: they fuse
-# to air.{min,max}3 (a single instruction), which two 2-argument llvm intrinsics do not.
-
-@device_override Base.min(x::Int64, y::Int64, z::Int64)    = ccall("extern air.min3.s.i64", llvmcall, Int64, (Int64, Int64, Int64), x, y, z)
-@device_override Base.min(x::UInt64, y::UInt64, z::UInt64) = ccall("extern air.min3.u.i64", llvmcall, UInt64, (UInt64, UInt64, UInt64), x, y, z)
-@device_override Base.min(x::Int32, y::Int32, z::Int32)    = ccall("extern air.min3.s.i32", llvmcall, Int32, (Int32, Int32, Int32), x, y, z)
-@device_override Base.min(x::UInt32, y::UInt32, z::UInt32) = ccall("extern air.min3.u.i32", llvmcall, UInt32, (UInt32, UInt32, UInt32), x, y, z)
-@device_override Base.min(x::Int16, y::Int16, z::Int16)    = ccall("extern air.min3.s.i16", llvmcall, Int16, (Int16, Int16, Int16), x, y, z)
-@device_override Base.min(x::UInt16, y::UInt16, z::UInt16) = ccall("extern air.min3.u.i16", llvmcall, UInt16, (UInt16, UInt16, UInt16), x, y, z)
-@device_override Base.min(x::Int8, y::Int8, z::Int8)       = ccall("extern air.min3.s.i8", llvmcall, Int8, (Int8, Int8, Int8), x, y, z)
-@device_override Base.min(x::UInt8, y::UInt8, z::UInt8)    = ccall("extern air.min3.u.i8", llvmcall, UInt8, (UInt8, UInt8, UInt8), x, y, z)
-
-@device_override Base.max(x::Int64, y::Int64, z::Int64)    = ccall("extern air.max3.s.i64", llvmcall, Int64, (Int64, Int64, Int64), x, y, z)
-@device_override Base.max(x::UInt64, y::UInt64, z::UInt64) = ccall("extern air.max3.u.i64", llvmcall, UInt64, (UInt64, UInt64, UInt64), x, y, z)
-@device_override Base.max(x::Int32, y::Int32, z::Int32)    = ccall("extern air.max3.s.i32", llvmcall, Int32, (Int32, Int32, Int32), x, y, z)
-@device_override Base.max(x::UInt32, y::UInt32, z::UInt32) = ccall("extern air.max3.u.i32", llvmcall, UInt32, (UInt32, UInt32, UInt32), x, y, z)
-@device_override Base.max(x::Int16, y::Int16, z::Int16)    = ccall("extern air.max3.s.i16", llvmcall, Int16, (Int16, Int16, Int16), x, y, z)
-@device_override Base.max(x::UInt16, y::UInt16, z::UInt16) = ccall("extern air.max3.u.i16", llvmcall, UInt16, (UInt16, UInt16, UInt16), x, y, z)
-@device_override Base.max(x::Int8, y::Int8, z::Int8)       = ccall("extern air.max3.s.i8", llvmcall, Int8, (Int8, Int8, Int8), x, y, z)
-@device_override Base.max(x::UInt8, y::UInt8, z::UInt8)    = ccall("extern air.max3.u.i8", llvmcall, UInt8, (UInt8, UInt8, UInt8), x, y, z)
+# Integer min/max/abs lower to llvm.abs / llvm.{s,u}{min,max} in the back-end, which maps them
+# to air.abs.{s,u} / air.{min,max}.{s,u}. (`Base.max(::Int64)` was already left to the back-end,
+# see JuliaGPU/Metal.jl#547.) Chained min/max — including the 3-argument min(a,b,c) that reduces
+# to nested 2-arg calls — are fused to AGX's air.{min,max}3 by a back-end peephole.
 
 @static if isdefined(Base, :mul_hi) # VERSION >= v"1.13.0-"
     @device_override Base.mul_hi(x::Int64, y::Int64)   = ccall("extern air.mul_hi.s.i64", llvmcall, Int64, (Int64, Int64), x, y)
