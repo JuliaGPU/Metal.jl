@@ -20,21 +20,13 @@ for T in (:Float16,:Float32), R in (RoundUp, RoundDown), irr in (π, ℯ)
 end
 
 ### Common Intrinsics
-# Base.clamp and Base.sign compile to plain comparisons + select (no LLVM math intrinsic, no
-# Float64), which the back-end handles natively and which match CPU Julia's NaN/-0.0 semantics
-# — unlike air.clamp/air.sign, which return 0/bound for NaN and 0 for -0.0. So they are not
-# overridden; `clamp_fast` remains as opt-in access to Metal's relaxed air.fast_clamp.
+
 @device_function clamp_fast(x::Float32, minval::Float32, maxval::Float32) = ccall("extern air.fast_clamp.f32", llvmcall, Cfloat, (Cfloat, Cfloat, Cfloat), x, minval, maxval)
 
 ### Floating Point Intrinsics
 
 # Metal only supports single and half-precision floating-point types (and their vector counterparts)
 # For single precision types, there are precise and fast variants
-
-# min/max are handled entirely by the back-end. Base.min/max lower to llvm.minimum/llvm.maximum,
-# which become a NaN-correct air.fmin/air.fmax sequence (propagating NaN and ordering -0 < +0,
-# like CPU Julia); @fastmath/fastmath sets `nnan`, so the back-end uses the relaxed
-# air.fast_fmin/air.fast_fmax instead. (3-argument min/max reduce to two 2-argument ops.)
 
 @device_override function Base.:(/)(a::Complex{Float32}, b::Complex{Float32})
     are = real(a); aim = imag(a); bre = real(b); bim = imag(b)
@@ -111,10 +103,7 @@ end
 
 @device_function floor_fast(x::Float32) = ccall("extern air.fast_floor.f32", llvmcall, Cfloat, (Cfloat,), x)
 
-# Base.fma(::Float32) lowers to llvm.fma.f32 -> air.fma.f32 in the back-end. Float16 is kept
-# here: Julia gates fma on `have_fma(Float16)`, which the GPU back-end can't fold (it lowers to
-# a `jl_have_fma` runtime call), so emit the native air.fma.f16 directly to avoid Julia's Float64
-# `fma_emulated` fallback.
+# Float16 override necessary because `Base.have_fma(::Float16)` results in a runtime call
 @device_override Base.fma(a::Float16, b::Float16, c::Float16) = ccall("extern air.fma.f16", llvmcall, Float16, (Float16,Float16,Float16), a,b,c)
 
 @device_function fract_fast(x::Float32) = ccall("extern air.fast_fract.f32", llvmcall, Cfloat, (Cfloat,), x)
@@ -379,14 +368,6 @@ end
 @device_override Base.max(x::UInt16, y::UInt16, z::UInt16) = ccall("extern air.max3.u.i16", llvmcall, UInt16, (UInt16, UInt16, UInt16), x, y, z)
 @device_override Base.max(x::Int8, y::Int8, z::Int8)       = ccall("extern air.max3.s.i8", llvmcall, Int8, (Int8, Int8, Int8), x, y, z)
 @device_override Base.max(x::UInt8, y::UInt8, z::UInt8)    = ccall("extern air.max3.u.i8", llvmcall, UInt8, (UInt8, UInt8, UInt8), x, y, z)
-
-# leading_zeros, trailing_zeros, count_ones and bitreverse lower to llvm.ctlz / llvm.cttz /
-# llvm.ctpop / llvm.bitreverse in the back-end, which renames them to air.clz / air.ctz /
-# air.popcount / air.reverse_bits. The Metal-specific aliases below are kept as public API.
-const clz = leading_zeros
-const ctz = trailing_zeros
-const popcount = count_ones
-const reverse_bits = bitreverse
 
 @static if isdefined(Base, :mul_hi) # VERSION >= v"1.13.0-"
     @device_override Base.mul_hi(x::Int64, y::Int64)   = ccall("extern air.mul_hi.s.i64", llvmcall, Int64, (Int64, Int64), x, y)
