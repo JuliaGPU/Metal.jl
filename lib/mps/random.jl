@@ -67,6 +67,13 @@ const NormalArray = MtlArray{<:Float32}
 @autoreleasepool function Random.randn!(rng::RNG, A::MtlArray{Float32})
     isempty(A) && return A
     _mpsmat_rand!(rng.normalFloat32, A, Float32)
+    # Workaround for upstream MPSMatrixRandom bug (#474): the normal generator is
+    # an inverse-CDF transform z = Phi^-1(u) of a uniform u in [0,1) at 2^-23
+    # resolution. When u draws exactly 0 (rate 2^-23 ~ 1.2e-7), Phi^-1(0) = -Inf
+    # yields a NaN. Apple never excludes the 0 endpoint, and the min/max-clamped
+    # descriptor doesn't help (its clamp uses ordered comparisons that pass NaN
+    # through), so scrub the rare non-finite values here.
+    A .= ifelse.(isfinite.(A), A, zero(eltype(A)))
     return A
 end
 
