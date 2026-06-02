@@ -1,4 +1,4 @@
-# Correctness sweep for the native `:Julia` GEMM, against a CPU oracle.
+# Correctness sweep for the `:native` GEMM, against a CPU oracle.
 # Run: julia --project=. bin/gemm/validate.jl
 using Metal, LinearAlgebra, Printf
 using ScopedValues: with

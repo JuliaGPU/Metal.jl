@@ -85,20 +85,20 @@ end
     @test Array(mtl_view_c) ≈ view_c
 end
 
-@testset "native :Julia GEMM" begin
-    _op(M, t) = t == 'N' ? M : t == 'C' ? adjoint(M) : transpose(M)
-    _mk(T, sz) = T <: Integer ? rand(T(1):T(4), sz...) : rand(T, sz...)
-    _rtol(T) = real(T) == Float16 ? 1.0f-1 : real(T) == Float32 ? 1.0f-3 : 1e-5
+@testset "native GEMM" begin
+    op(M, t) = t == 'N' ? M : t == 'C' ? adjoint(M) : transpose(M)
+    mk(T, sz) = T <: Integer ? rand(T(1):T(4), sz...) : rand(T, sz...)
+    tol(T) = real(T) == Float16 ? 1.0f-1 : real(T) == Float32 ? 1.0f-3 : 1e-5
 
     # C = α·op(A)·op(B) + β·C against a CPU oracle, forcing the native path
     function nativetest(T, M, N, K, tA, tB, α, β)
         sA = tA == 'N' ? (M, K) : (K, M)
         sB = tB == 'N' ? (K, N) : (N, K)
-        Ah = _mk(T, sA); Bh = _mk(T, sB); Ch = _mk(T, (M, N))
+        Ah = mk(T, sA); Bh = mk(T, sB); Ch = mk(T, (M, N))
         dA = MtlArray(Ah); dB = MtlArray(Bh); dC = MtlArray(copy(Ch))
-        ref = α .* (_op(Ah, tA) * _op(Bh, tB)) .+ β .* Ch
-        @with (Metal.matmul_alg => :Julia) mul!(dC, _op(dA, tA), _op(dB, tB), α, β)
-        T <: Integer ? Array(dC) == ref : isapprox(Array(dC), ref; rtol=_rtol(T))
+        ref = α .* (op(Ah, tA) * op(Bh, tB)) .+ β .* Ch
+        @with (Metal.matmul_alg => :native) mul!(dC, op(dA, tA), op(dB, tB), α, β)
+        T <: Integer ? Array(dC) == ref : isapprox(Array(dC), ref; rtol=tol(T))
     end
 
     # fast path (Float16/Float32): transpose × α/β × ragged shapes
@@ -120,14 +120,14 @@ end
     # offset views (dense MtlMatrix with offset≠0): the case MPSGraph falls back on
     @testset "offset views" begin
         for T in (Float32, ComplexF32)
-            P = MtlArray(_mk(T, (40, 60))); Q = MtlArray(_mk(T, (32, 50)))
+            P = MtlArray(mk(T, (40, 60))); Q = MtlArray(mk(T, (32, 50)))
             A = view(P, :, 3:34)      # 40×32, offset≠0, dense
             B = view(Q, :, 2:41)      # 32×40, offset≠0, dense
             @test A isa MtlMatrix && A.offset != 0 && B isa MtlMatrix && B.offset != 0
             C = MtlArray(zeros(T, 40, 40))
             ref = Array(A) * Array(B)
-            @with (Metal.matmul_alg => :Julia) mul!(C, A, B)
-            @test isapprox(Array(C), ref; rtol=_rtol(T))
+            @with (Metal.matmul_alg => :native) mul!(C, A, B)
+            @test isapprox(Array(C), ref; rtol=tol(T))
         end
     end
 
@@ -136,8 +136,8 @@ end
         for tA in ('N', 'T')
             A = MtlArray(rand(Float32, 50, 70)); x = MtlArray(rand(Float32, tA == 'N' ? 70 : 50))
             y = MtlArray(zeros(Float32, tA == 'N' ? 50 : 70))
-            ref = _op(Array(A), tA) * Array(x)
-            @with (Metal.matmul_alg => :Julia) mul!(y, _op(A, tA), x)
+            ref = op(Array(A), tA) * Array(x)
+            @with (Metal.matmul_alg => :native) mul!(y, op(A, tA), x)
             @test isapprox(Array(y), ref; rtol=1.0f-3)
         end
     end
@@ -149,7 +149,7 @@ end
         @test nativetest(Float32, 64, 1, 100, 'N', 'N', 1.0f0, 0.0f0)
         # empty contraction: C = β·C
         C = MtlArray(fill(2.0f0, 4, 4))
-        @with (Metal.matmul_alg => :Julia) mul!(C, MtlArray(rand(Float32, 4, 0)), MtlArray(rand(Float32, 0, 4)), 1.0f0, 3.0f0)
+        @with (Metal.matmul_alg => :native) mul!(C, MtlArray(rand(Float32, 4, 0)), MtlArray(rand(Float32, 0, 4)), 1.0f0, 3.0f0)
         @test Array(C) == fill(6.0f0, 4, 4)
     end
 
@@ -157,7 +157,7 @@ end
     @testset "differential vs MPSGraph" begin
         A = MtlArray(rand(Float32, 96, 80)); B = MtlArray(rand(Float32, 80, 64))
         Cj = MtlArray(zeros(Float32, 96, 64)); Cg = MtlArray(zeros(Float32, 96, 64))
-        @with (Metal.matmul_alg => :Julia) mul!(Cj, A, B)
+        @with (Metal.matmul_alg => :native) mul!(Cj, A, B)
         @with (Metal.matmul_alg => :MPSGraph) mul!(Cg, A, B)
         @test isapprox(Array(Cj), Array(Cg); rtol=1.0f-3)
     end

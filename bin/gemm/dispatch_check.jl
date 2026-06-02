@@ -1,6 +1,6 @@
 using Metal, LinearAlgebra
 using ScopedValues: with
-with(Metal.matmul_alg => :Julia) do
+with(Metal.matmul_alg => :native) do
     A = MtlArray(rand(Float32, 128, 96)); B = MtlArray(rand(Float32, 96, 64))
     C = A * B
     println("*(F32)         err=", maximum(abs.(Array(C) - Array(A) * Array(B))))

@@ -1,4 +1,4 @@
-# Benchmark the native :Julia GEMM against MPS and MPSGraph.
+# Benchmark the :native GEMM against MPS and MPSGraph.
 # Run: julia --project=. bin/gemm/benchmark.jl [sizes...]
 using Metal, LinearAlgebra, Printf
 using ScopedValues: with
@@ -21,7 +21,7 @@ function gflops(alg, C, A, B; iters=20)
     end
 end
 
-const ALGS = (:Julia, :MPS, :MPSGraph)
+const ALGS = (:native, :MPS, :MPSGraph)
 
 function bench(T, M, N, K)
     A = MtlArray(rand(T, M, K)); B = MtlArray(rand(T, K, N))

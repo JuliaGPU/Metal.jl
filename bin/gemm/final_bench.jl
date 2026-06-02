@@ -2,7 +2,7 @@
 using Metal, LinearAlgebra, Printf
 using ScopedValues: with
 
-_op(M, t) = t == 'N' ? M : transpose(M)
+op(M, t) = t == 'N' ? M : transpose(M)
 
 function gflops(alg, C, opA, opB; iters=20)
     M, N = size(C); K = size(opA, 2)
@@ -21,8 +21,8 @@ function row(T, M, N, K, tA, tB)
     A = MtlArray(rand(T, tA == 'N' ? (M, K) : (K, M)))
     B = MtlArray(rand(T, tB == 'N' ? (K, N) : (N, K)))
     C = MtlArray(zeros(T, M, N))
-    oa = _op(A, tA); ob = _op(B, tB)
-    r = map((:Julia, :MPS, :MPSGraph)) do alg
+    oa = op(A, tA); ob = op(B, tB)
+    r = map((:native, :MPS, :MPSGraph)) do alg
         try gflops(alg, C, oa, ob) catch; NaN end
     end
     @printf("%-9s %c%c %5dx%5dx%5d | Julia %7.1f  MPS %7.1f  MPSGraph %7.1f\n",

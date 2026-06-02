@@ -1,35 +1,38 @@
 # Design: a Julia-native GEMM for Metal.jl
 
-Status: **implemented** (Phases 0–4). Design notes below kept for reference.
+Status: implemented (Phases 0 through 4). The design notes below are kept for reference.
 Author: investigation 2026-06-02
-Priority ordering: **coverage & correctness first**, performance second.
+Priority ordering: coverage and correctness first, performance second.
 
 ## Implementation status (2026-06-02)
 
-Landed in `src/gemm.jl` + the `:Julia` arm in `src/linalg.jl`, plus the transpose-flag
-parameterization in `src/device/intrinsics/simd.jl`.
+The code lives in `src/gemm.jl`, the `:native` arm of the selector in `src/linalg.jl`, and
+the transpose-flag parameter added to `src/device/intrinsics/simd.jl`.
 
-- **Coverage (done).** `:Julia` is a drop-in for `generic_matmatmul!`/`generic_matvecmul!`
-  and is the `:auto` fallback in place of GPUArrays. A fast `simdgroup_matrix` kernel
-  handles Float16/Float32; a shared-memory tiled robust kernel handles every other
-  eltype (ComplexF32, Int*, …). Correct across eltype × {N,T,C}² × α/β × ragged shapes ×
-  offset views × gemv — including the offset≠0 case MPSGraph silently falls back on.
-  Tested in `test/linalg.jl` ("native :Julia GEMM"); scratch toolkit in `bin/gemm/`
-  (`validate.jl`, `benchmark.jl`, `tune.jl`, `phase0.jl`).
-- **Performance (partial).** Square F32 on M1 (8-core): **~580 GFLOP/s at 2048³**
-  (≈1/3 of MPS's ~1760; up from ~190 for the first blocked kernel). Key levers found:
-  high occupancy (4×4 simdgroups = 512 threads/threadgroup dominates everything else),
-  and a lean epilogue — a simdgroup matrix is an `NTuple{64,VecElement}` spread across
-  lanes, so α/β scaling is a plain elementwise op and the result stores straight to
-  device memory, avoiding a C-sized threadgroup staging tile that otherwise crushes
-  occupancy. `EDGE`/`SIMPLE` compile-time specializations keep aligned α=1/β=0 matmuls
-  on the fast no-bounds-check path.
-- **Open perf levers (not done).** The fast kernel is ~memory-bandwidth bound at the
-  64×64 tile. To close the gap to MPS: `float4` vectorized cooperative loads; 128×128
-  tiles with a per-specialization thread/accumulator budget (the general α/β kernel is
-  register-limited to 832 threads, the lean one reaches 1024); investigate the KB>1
-  (deeper contraction tile) throughput cliff. Bank-conflict padding was tried and does
-  not help (already conflict-free). M5 TensorOps path remains future work (§9).
+Coverage is complete. `:native` is a drop-in for `generic_matmatmul!` and
+`generic_matvecmul!`, and it is the `:auto` fallback in place of GPUArrays. A fast
+`simdgroup_matrix` kernel handles Float16 and Float32; a shared-memory tiled robust kernel
+handles every other eltype (ComplexF32, the integer types, and so on). Results match a CPU
+oracle across eltype, all N/T/C transpose combinations, α/β scaling, ragged shapes, offset
+views, and gemv, including the offset≠0 case that MPSGraph silently falls back on. Tests are
+in `test/linalg.jl` ("native GEMM"); the development toolkit is in `bin/gemm/`.
+
+Performance is partway there. Square Float32 on an 8-core M1 runs at about 580 GFLOP/s at
+2048³, roughly a third of MPS's 1760 and up from 190 for the first blocked version. Two
+things moved it. The first is occupancy: 4×4 simdgroups (512 threads per threadgroup) beat
+every smaller configuration by a wide margin. The second is a lean epilogue. A simdgroup
+matrix is an `NTuple{64,VecElement}` spread across the lanes, so scaling it by α/β is a plain
+elementwise op on the tuple and the result stores straight to device memory. That removes the
+C-sized threadgroup staging tile, which was otherwise capping occupancy. The `EDGE` and
+`SIMPLE` compile-time specializations keep aligned α=1/β=0 matmuls on the path with no bounds
+checks.
+
+Levers not yet pulled: the fast kernel is roughly memory-bandwidth bound at the 64×64 tile.
+Closing the gap to MPS would take `float4` vectorized cooperative loads and 128×128 tiles
+with a per-specialization thread budget (the general α/β kernel is register-limited to 832
+threads, the lean one reaches 1024). The KB>1 (deeper contraction tile) throughput cliff is
+still unexplained. Bank-conflict padding does not help, because the layout is already
+conflict-free. The M5 TensorOps path remains future work (§9).
 
 ---
 
@@ -101,7 +104,7 @@ A * B  /  mul!(C, A, B[, α, β])
 
 Metal.jl already provides the seam (`src/linalg.jl:28-110`): it defines the
 6-argument `(C, tA, tB, A, B, α, β)` form and a `ScopedValue` selector
-`matmul_alg[] ∈ {:auto, :MPS, :MPSGraph, :GPUArrays}`. We add `:Julia` to this
+`matmul_alg[] ∈ {:auto, :MPS, :MPSGraph, :GPUArrays}`. We add `:native` to this
 selector. Helpers we reuse: `LinearAlgebra.lapack_size(tA, A)` for effective dims,
 `tA == 'T' || tA == 'C'` for the boolean transpose flag.
 
@@ -179,7 +182,7 @@ gemm-metal TiledSimd ~8.3 TFLOPS on M3 Max).
 **Gaps to fill:**
 
 1. The GEMM kernel(s) + a host launcher (tiling, grid, ragged-tile handling).
-2. The `:Julia` arm in the `matmul_alg` selector + a capability predicate that
+2. The `:native` arm in the `matmul_alg` selector + a capability predicate that
    decides fast-path vs. robust-path (§5).
 3. **Transpose flag is hardcoded.** `simdgroup_load`/`simdgroup_store` currently
    pass `Val(true)` as the AIR transpose argument unconditionally
@@ -240,19 +243,19 @@ existing `GPUArrays` kernel within fp tolerance.
 In `src/linalg.jl`, extend the selector:
 
 ```julia
-# matmul_alg[] ∈ {:auto, :MPS, :MPSGraph, :GPUArrays, :Julia}
-elseif alg === :Julia || (alg === :auto && julia_supported)
+# matmul_alg[] ∈ {:auto, :MPS, :MPSGraph, :GPUArrays, :native}
+elseif alg === :native || (alg === :auto && julia_supported)
     Metal.gemm!(C, tA, tB, A, B, alpha, beta)   # new native entry point
 ```
 
-- Phase 1–3: keep `:auto` preferring MPSGraph/MPS as today; `:Julia` is opt-in and
+- Phase 1–3: keep `:auto` preferring MPSGraph/MPS as today; `:native` is opt-in and
   is also installed as the **fallback in place of `:GPUArrays`** (so the slow path
-  is ours and correct for offsets). Flip `:auto` to prefer `:Julia` only in Phase 4
+  is ours and correct for offsets). Flip `:auto` to prefer `:native` only in Phase 4
   once benchmarks justify it.
 - `Symmetric`/`Hermitian` `WrapperChar`s: simplest correct behaviour is to
   `LinearAlgebra.wrap(A, tA)` them back and let the existing generic path expand
   them, or materialize. Do not attempt syrk/herk specialization now.
-- `generic_matvecmul!`: add the matching `:Julia` arm calling a gemv specialization.
+- `generic_matvecmul!`: add the matching `:native` arm calling a gemv specialization.
 
 Native entry point signature mirrors the internal MPS one for familiarity:
 
@@ -287,7 +290,7 @@ want. Deferred with that path.
 
 - **Phase 1 — correct, drop-in F32 NN kernel + robust fallback.** Tiled simdgroup
   kernel for `tA=tB='N'`, F32, with ragged-tile bounds checking; the robust
-  strided/any-eltype kernel; the `:Julia` selector arm replacing `:GPUArrays` as
+  strided/any-eltype kernel; the `:native` selector arm replacing `:GPUArrays` as
   fallback. Validate against CPU/`GPUArrays` for all shapes **including non-zero
   offsets and odd strides** (the cases MPS breaks on). At this point the package is
   already strictly more correct than today's fallback.
@@ -299,7 +302,7 @@ want. Deferred with that path.
 
 - **Phase 3 — robustness hardening.** Empty/degenerate dims, α=0/β=0 shortcuts,
   large-K accuracy, alias detection (`A === C`), thorough test sweep across the
-  matrix; wire `:Julia` into CI alongside the MPS/MPSGraph suites.
+  matrix; wire `:native` into CI alongside the MPS/MPSGraph suites.
 
 - **Phase 4 — performance.** `float4` loads, bank-conflict padding,
   double-buffering (small), swizzling (large); per-generation tile autotuning;
@@ -319,7 +322,7 @@ want. Deferred with that path.
 - **Differential:** for supported types, also diff against `:MPS` and `:MPSGraph`
   results to catch sign/transpose mistakes.
 - **Regression anchors:** the #381 offset≠0 NaN case and the MPSGraph offset
-  fallback case must produce correct results on `:Julia`.
+  fallback case must produce correct results on `:native`.
 - Place tests in `test/linalg.jl` (and mirror MPS/MPSGraph layout). Gate
   performance assertions out of correctness CI.
 
