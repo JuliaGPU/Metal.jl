@@ -307,8 +307,10 @@ end
         Metal.@sync @metal threads = N metal = v"3.0" nextafter_test(buffer2, typemin(T))
         @test Array(buffer2) == arr
 
+        # before macOS 14 there is no air.nextafter; the software fallback must be used
+        # (it no longer emits air.sign since that override was dropped in favor of Base)
         ir = sprint(io->(@device_code_llvm io=io dump_module=true @metal metal = v"3.0" nextafter_out_test()))
-        @test occursin(Regex("@air\\.sign\\.f$(8*sizeof(T))"), ir)
+        @test !occursin(Regex("@air\\.nextafter\\.f$(8*sizeof(T))"), ir)
     end
 
     # Borrowed from the Julia "Irrationals compared with Rationals and Floats" testset
@@ -324,6 +326,59 @@ end
         res = MtlArray(zeros(Bool, 4))
         Metal.@sync @metal convert_test(res)
         @test all(Array(res))
+    end
+end
+end
+
+# Ops whose Metal intrinsic has IEEE edge-case behavior that differs from Julia's: Metal's
+# `sign` returns 0 for NaN (Julia returns NaN), and `air.fmin`/`air.fmax` are non-NaN-
+# propagating (Julia's min/max propagate NaN). Metal.jl deliberately routes these through
+# Base / a NaN-correcting back-end lowering instead of the raw intrinsic, so the GPU result
+# should match the host. Compare against Julia's own result over NaN/±Inf/±0 inputs using
+# `isequal` (NaN == NaN, and -0.0 != +0.0) rather than hard-coding the expected values, so a
+# regression to the raw-intrinsic semantics is caught without baking that behavior into the test.
+@testset "edge-case semantics match Julia" begin
+@testset "$T" for T in (Float32, Float16)
+    let # sign
+        x = T[NaN, Inf, -Inf, T(0), T(-0.0), T(1.5), T(-1.5)]
+        d = MtlArray(x)
+        function kernel(o, a)
+            i = thread_position_in_grid().x
+            @inbounds o[i] = sign(a[i])
+            return
+        end
+        o = similar(d)
+        Metal.@sync @metal threads=length(x) kernel(o, d)
+        @test isequal(Array(o), sign.(x))
+    end
+
+    # min/max: NaN in either operand, both signed zeros, and ±Inf
+    xs = T[NaN, NaN, T(0),    T(-0.0), Inf,  -Inf, T(1), NaN,  T(-0.0)]
+    ys = T[T(1), NaN, T(-0.0), T(0),   T(1), T(1), NaN,  -Inf, T(0)]
+    @testset "$op" for op in (min, max)
+        dx, dy = MtlArray(xs), MtlArray(ys)
+        function kernel(o, a, b)
+            i = thread_position_in_grid().x
+            @inbounds o[i] = op(a[i], b[i])
+            return
+        end
+        o = similar(dx)
+        Metal.@sync @metal threads=length(xs) kernel(o, dx, dy)
+        @test isequal(Array(o), op.(xs, ys))
+    end
+
+    let # clamp
+        x  = T[NaN, Inf, -Inf, T(0.5), T(-0.5), T(2), T(-2)]
+        lo = fill(T(-1), length(x)); hi = fill(T(1), length(x))
+        dx, dlo, dhi = MtlArray(x), MtlArray(lo), MtlArray(hi)
+        function kernel(o, a, b, c)
+            i = thread_position_in_grid().x
+            @inbounds o[i] = clamp(a[i], b[i], c[i])
+            return
+        end
+        o = similar(dx)
+        Metal.@sync @metal threads=length(x) kernel(o, dx, dlo, dhi)
+        @test isequal(Array(o), clamp.(x, lo, hi))
     end
 end
 end
