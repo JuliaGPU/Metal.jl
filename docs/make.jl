@@ -41,6 +41,7 @@ function main()
             "FAQ" => Any[
                 "faq/faq.md",
                 "faq/contributing.md",
+                "faq/hacking.md",
             ],
         ]
     )

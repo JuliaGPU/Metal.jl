@@ -43,49 +43,13 @@ so you should not have to define them. If using a struct for the first time in a
 interface, remember to add tests! Objective-C object methods and constructors are not yet automtically
 generatied, so any contributions there are welcome.
 
+Some device-side functionality maps directly onto Apple IR intrinsics, in which case the
+wrapper is little more than a `ccall`. Apple's documentation doesn't tell you how those
+intrinsics are spelled, though; the [Hacking](@ref) page covers how to dig that out, along
+with the rest of the low-level tooling used to develop the package.
+
 It is also recommended to follow [these steps](https://github.com/fredrikekre/Runic.jl?tab=readme-ov-file#ignore-formatting-commits-in-git-blame) from the Runic.jl documentation
 in your local development repository so that formatting commits are ignored in blame.
-
-## Mapping to Metal Intrinsics
-
-Some Metal functions map directly to Apple intermediate representation intrinsics. In this
-case, wrapping them into Metal.jl is relatively easy. All that needs to be done is to create
-a mapping from a Julia function via a simple ccall. See the
-[threadgroup barrier implementation](https://github.com/JuliaGPU/Metal.jl/blob/main/src/device/intrinsics/synchronization.jl#L43-L44) for
-reference.
-
-However, the Metal documentation doesn't tell you what the format of the intrinsic names
-should be. To find this out, you need to create your own test kernel directly in the Metal
-Shading Language, compile it using Apple's tooling, then view the created intermediate
-representation (IR).
-
-## Reverse-Engineering Bare MSL/Apple IR
-
-First, you need to write an MSL kernel that uses the functionality you're interested in.
-For example,
-
-```objective-c
-#include <metal_stdlib>
-
-using namespace metal;
-
-kernel void dummy_kernel(device volatile atomic_float* out,
-                        uint i [[thread_position_in_grid]])
-{
-    atomic_store_explicit(&out[i], 0.0f, memory_order_relaxed);
-}
-```
-
-To compile with Metal's tools and emit human-readable IR, run something roughly along the
-lines of: `xcrun metal -S -emit-llvm dummy_kernel.metal`
-
-This will create a `.ll` file that you can then parse for whatever information you need.
-Be sure to double-check the metadata at the bottom for any significant changes your
-functionality introduces.
-
-Test with different types and configurations to see what changes are caused. Also
-ensure that when writing very simple kernels, whatever you're interested in doesn't get
-optimized away. Double-check that the kernel's IR makes sense for what you wrote.
 
 ## Metal Performance Shaders
 
