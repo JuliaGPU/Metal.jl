@@ -20,12 +20,11 @@ for T in (:Float16,:Float32), R in (RoundUp, RoundDown), irr in (π, ℯ)
 end
 
 ### Common Intrinsics
+# Base.clamp and Base.sign compile to plain comparisons + select (no LLVM math intrinsic, no
+# Float64), which the back-end handles natively and which match CPU Julia's NaN/-0.0 semantics
+# — unlike air.clamp/air.sign, which return 0/bound for NaN and 0 for -0.0. So they are not
+# overridden; `clamp_fast` remains as opt-in access to Metal's relaxed air.fast_clamp.
 @device_function clamp_fast(x::Float32, minval::Float32, maxval::Float32) = ccall("extern air.fast_clamp.f32", llvmcall, Cfloat, (Cfloat, Cfloat, Cfloat), x, minval, maxval)
-@device_override Base.clamp(x::Float32, minval::Float32, maxval::Float32) = ccall("extern air.clamp.f32", llvmcall, Cfloat, (Cfloat, Cfloat, Cfloat), x, minval, maxval)
-@device_override Base.clamp(x::Float16, minval::Float16, maxval::Float16) = ccall("extern air.clamp.f16", llvmcall, Float16, (Float16, Float16, Float16), x, minval, maxval)
-
-@device_override Base.sign(x::Float32) = ccall("extern air.sign.f32", llvmcall, Cfloat, (Cfloat,), x)
-@device_override Base.sign(x::Float16) = ccall("extern air.sign.f16", llvmcall, Float16, (Float16,), x)
 
 ### Floating Point Intrinsics
 
