@@ -78,12 +78,15 @@ const EXCEPTION_FRAME_SIZE = sizeof(ExceptionFrame_st)
 
 # copy a compile-time string literal into a fixed-size mailbox text buffer (null-terminated,
 # truncated to the buffer's capacity, which is taken from its own type). the bytes are known
-# at compile time, so this unrolls to plain constant stores.
-@inline @generated function store_string!(dest::Core.LLVMPtr{NTuple{N, UInt8}, AS},
-                                          ::Val{str}) where {N, AS, str}
+# at compile time, so this unrolls to plain constant stores. kept out of line (`:noinline`):
+# this is unhappy-path code, and inlining its byte stores into every kernel that can throw
+# bloats the kernel the Metal shader validator then has to compile (see `lock_output!`).
+@generated function store_string!(dest::Core.LLVMPtr{NTuple{N, UInt8}, AS},
+                                  ::Val{str}) where {N, AS, str}
     bytes = codeunits(String(str))
     n = min(length(bytes), N - 1)
-    exprs = Expr[:(base = reinterpret(Core.LLVMPtr{UInt8, $AS}, dest))]
+    exprs = Expr[Expr(:meta, :noinline),
+                 :(base = reinterpret(Core.LLVMPtr{UInt8, $AS}, dest))]
     for i in 1:n
         push!(exprs, :(unsafe_store!(base + $(i - 1), $(bytes[i]))))
     end
@@ -97,8 +100,21 @@ end
 # position), so it can go on to write the name, reason, and stack frames. any other faulting
 # lane gets `false` and leaves the record untouched (no spin, so a divergent threadgroup
 # can't deadlock here).
-@inline function lock_output!(info)
-    kernel_debug_level() < 1 && return false
+#
+# the debug-level gate is kept inline so it folds to a compile-time constant: at `-g0` this
+# returns `false` unconditionally, and everything it guards (the recording below, plus the
+# name/reason/frame stores in callers) becomes dead and is eliminated, leaving the unhappy
+# path as just the status flag in `signal_exception`. the actual claim is `@noinline`.
+@inline lock_output!(info) = kernel_debug_level() < 1 ? false : claim_output!(info)
+
+# the body of `lock_output!`, kept out of line. with `--check-bounds=yes` every indexing
+# operation grows a throw path, and inlining this claim (atomic exchange + SIMD position
+# reads + the re-entrant comparison) into each one balloons the kernel. Apple's shader
+# validator compiles that bloated kernel on every PSO creation and, on the macOS 15 CI
+# runner, crashes doing so; the backend then retries, which is what made the validation suite
+# time out. one shared, called-into copy keeps each kernel's unhappy path to a handful of
+# calls.
+@noinline function claim_output!(info)
     lock_ptr = info_field(info, Val(:output_lock))
     t  = thread_position_in_threadgroup()
     tg = threadgroup_position_in_grid()
@@ -115,9 +131,10 @@ end
 end
 
 # copy a null-terminated device C string into a fixed-size mailbox text buffer, truncated to
-# the buffer's capacity (taken from its type).
-@inline function store_cstring!(dest::Core.LLVMPtr{NTuple{N, UInt8}, AS},
-                                src::Ptr{Cchar}) where {N, AS}
+# the buffer's capacity (taken from its type). kept out of line for the same reason as
+# `lock_output!`: it's unhappy-path code that should not bloat every throwing kernel.
+@noinline function store_cstring!(dest::Core.LLVMPtr{NTuple{N, UInt8}, AS},
+                                  src::Ptr{Cchar}) where {N, AS}
     base = reinterpret(Core.LLVMPtr{UInt8, AS}, dest)
     i = 0
     while i < N - 1
