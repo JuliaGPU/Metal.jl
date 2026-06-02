@@ -350,7 +350,8 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
         encode_arguments_nospec!(cce, kernel, kernel_state, kernel.f, args)
 
         if prod(shmem) > 0
-            for (i, n) in enumerate(shmem)
+            for (i, _n) in enumerate(shmem)
+                n = cld(_n, 16) * 16
                 MTL.set_threadgroup_memory_length!(cce, n, i)
             end
         end
