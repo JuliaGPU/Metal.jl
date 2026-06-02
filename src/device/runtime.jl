@@ -78,19 +78,34 @@ const EXCEPTION_FRAME_SIZE = sizeof(ExceptionFrame_st)
 
 # copy a compile-time string literal into a fixed-size mailbox text buffer (null-terminated,
 # truncated to the buffer's capacity, which is taken from its own type). the bytes are known
-# at compile time, so this unrolls to plain constant stores. kept out of line (`:noinline`):
-# this is unhappy-path code, and inlining its byte stores into every kernel that can throw
-# bloats the kernel the Metal shader validator then has to compile (see `lock_output!`).
+# at compile time, so this packs them into 64-bit words and stores those.
+#
+# kept out of line (`:noinline`): this is unhappy-path code, and inlining its stores into
+# every kernel that can throw bloats the kernel the Metal shader validator then has to
+# compile (see `lock_output!`). storing whole words rather than byte-at-a-time matters for
+# the same reason: GPU validation instruments every store, so a `UInt64` store is 8× cheaper
+# to validate than eight `UInt8` stores. the mailbox text buffers (`name`, `reason`) are
+# 8-byte aligned within `ExceptionInfo_st` and their capacities are multiples of 8, so the
+# word stores stay aligned and in bounds; the literal is zero-padded to a word boundary,
+# which also writes the null terminator.
 @generated function store_string!(dest::Core.LLVMPtr{NTuple{N, UInt8}, AS},
                                   ::Val{str}) where {N, AS, str}
-    bytes = codeunits(String(str))
+    bytes = collect(codeunits(String(str)))
     n = min(length(bytes), N - 1)
-    exprs = Expr[Expr(:meta, :noinline),
-                 :(base = reinterpret(Core.LLVMPtr{UInt8, $AS}, dest))]
-    for i in 1:n
-        push!(exprs, :(unsafe_store!(base + $(i - 1), $(bytes[i]))))
+    padded = bytes[1:n]
+    push!(padded, 0x00)                              # null terminator
+    while length(padded) % sizeof(UInt64) != 0       # zero-pad to a word boundary
+        push!(padded, 0x00)
     end
-    push!(exprs, :(unsafe_store!(base + $n, 0x00)))
+    exprs = Expr[Expr(:meta, :noinline),
+                 :(base = reinterpret(Core.LLVMPtr{UInt64, $AS}, dest))]
+    for w in 0:(length(padded) ÷ sizeof(UInt64) - 1)
+        word = UInt64(0)
+        for b in 0:(sizeof(UInt64) - 1)              # little-endian pack
+            word |= UInt64(padded[w * sizeof(UInt64) + b + 1]) << (8 * b)
+        end
+        push!(exprs, :(unsafe_store!(base + $(w * sizeof(UInt64)), $word)))
+    end
     push!(exprs, :(return nothing))
     return Expr(:block, exprs...)
 end
