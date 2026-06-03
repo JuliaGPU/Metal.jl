@@ -20,8 +20,12 @@ function versioninfo(io::IO=stdout)
     println(io, "Toolchain:")
     println(io, "- Julia: $VERSION")
     println(io, "- LLVM: $(LLVM.version())")
-    println(io, "- Metal: $(metal_support()) (shading language), $(air_support()) (AIR), " *
-                "$(metallib_support()) (metallib)")
+    # MSL and AIR versions only use major.minor (patch is always 0); the metallib
+    # file-format version carries meaning in its patch field (e.g. 1.2.6 vs 1.2.9).
+    mm(v) = "$(v.major).$(v.minor)"
+    println(io, "- Metal: $(mm(metal_target())) (MSL), $(mm(air_target())) (AIR), " *
+                "$(metallib_target()) (metallib)")
+    println(io, "  (host supports up to $(mm(metal_support())) / $(mm(air_support())) / $(metallib_support()))")
     println(io)
 
     println(io, "Julia packages:")
@@ -66,7 +70,7 @@ function versioninfo(io::IO=stdout)
     end
     for (i, dev) in enumerate(devs)
         cores = num_gpu_cores()
-        corestr = "$(cores > 0 ? cores : "?") cores GPU cores"
+        corestr = "$(cores > 0 ? cores : "?") GPU cores"
 
         # device capabilities; useful to spot when (e.g. virtualized) devices gain support
         # for a newer feature set than Metal.jl currently assumes.
@@ -74,7 +78,9 @@ function versioninfo(io::IO=stdout)
         apple = MTL.highest_apple_family(dev)
         apple === nothing || push!(caps, "Apple$apple")
         metal = MTL.highest_metal_family(dev)
-        metal === nothing || push!(caps, "Metal $metal")
+        # render as a feature-set family (e.g. "Metal4"), not to be confused with the
+        # shading-language version reported under "Toolchain:" above
+        metal === nothing || push!(caps, "Metal$metal family")
         MTL.is_virtual(dev) && push!(caps, "virtualized")
         capstr = isempty(caps) ? "" : "; $(join(caps, ", "))"
 

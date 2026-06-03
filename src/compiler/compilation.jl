@@ -148,10 +148,10 @@ end
         macos = macos_version()
     end
     if metal === nothing
-        metal = metal_support(macos)
+        metal = metal_target(macos)
     end
     if air === nothing
-        air = v"2.5"    # macOS 13
+        air = air_target()
         if air > air_support(macos)
             error("""Metal.jl requires AIR 2.5 (macOS 13) or newer, but macOS $(macos) only supports AIR $(air_support(macos)).""")
         end

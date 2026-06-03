@@ -87,3 +87,35 @@ function metal_support(macos::VersionNumber = macos_version())
         v"3.0"
     end
 end
+
+# The versions Metal.jl emits by default. These mirror the `*_support` ceilings but
+# capture what the toolchain actually targets: MSL tracks the host-supported version
+# to expose the newest intrinsics, while AIR and the metallib file format are pinned
+# to conservative baselines for backward compatibility. `versioninfo` reports these,
+# and the compiler uses them as defaults (see `_compiler_config` and `MetalLib`).
+
+"""
+    Metal.metal_target(macos=macos_version())::VersionNumber
+
+Returns the Metal Shading Language version Metal.jl emits by default, which tracks the
+host-supported version (see [`Metal.metal_support`](@ref)) to expose the newest intrinsics.
+"""
+metal_target(macos::VersionNumber = macos_version()) = metal_support(macos)
+
+"""
+    Metal.air_target()::VersionNumber
+
+Returns the embedded-AIR-bitcode version Metal.jl emits by default. Pinned to the macOS 13
+baseline (v2.5) for backward compatibility, regardless of what the host supports (see
+[`Metal.air_support`](@ref)).
+"""
+air_target() = v"2.5"
+
+"""
+    Metal.metallib_target()::VersionNumber
+
+Returns the metallib file-format version Metal.jl emits by default. Pinned to a conservative
+baseline (v1.2.6) for backward compatibility, regardless of what the host supports (see
+[`Metal.metallib_support`](@ref)).
+"""
+metallib_target() = v"1.2.6"
