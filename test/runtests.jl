@@ -34,7 +34,16 @@ else # if Sys.isapple()
         end
     end
 
-    if MTL.is_virtual(device())
+    if !Metal.functional() && MTL.is_virtual(device()) && Metal.macos_version() < v"15"
+        # Virtualized GPUs on macOS <15 are unsupported: the paravirtual driver can't run
+        # Metal.jl compute kernels at all (gpuAddress argument passing is broken; see
+        # `Metal.is_supported`). `functional()` already reports this; skip the suite cleanly
+        # rather than reporting thousands of failures.
+        @warn """Metal.jl loaded on a virtualized Apple GPU running macOS $(Metal.macos_version()),
+                 which is unsupported (compute kernels silently produce wrong results).
+                 Skipping tests. See https://github.com/JuliaGPU/Metal.jl/issues/309."""
+        Sys.exit()
+    elseif MTL.is_virtual(device())
         # Virtualized GPUs (e.g. macOS VMs, GitHub Actions runners) are backed by real Apple
         # Silicon and support Metal 3, but under-report their capabilities. They are supported
         # on a best-effort basis, so run the tests anyway.
