@@ -46,3 +46,5 @@ jobs:
       # heavy GPUArrays test suite (gated behind `--all`) is left to the
       # buildkite CI, which runs on real hardware.
       - uses: julia-actions/julia-runtest@v1
+        with:
+          test_args: '--quickfail'
