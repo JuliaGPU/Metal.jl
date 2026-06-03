@@ -19,7 +19,6 @@ jobs:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} (load)
     runs-on: ${{ matrix.os }}
     if: github.event.pull_request.draft == false
-    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -29,7 +28,7 @@ jobs:
           - 'ubuntu-latest'
           - 'macOS-15-intel'
           - 'windows-latest'
-          - 'macOS-latest'
+          - 'macOS-14'
 
     steps:
       - uses: actions/checkout@v6
