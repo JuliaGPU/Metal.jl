@@ -27,6 +27,7 @@ jobs:
         os:
           - 'ubuntu-latest'
           - 'macOS-15-intel'
+          - 'macOS-26-intel'
           - 'windows-latest'
           - 'macOS-14'
 
