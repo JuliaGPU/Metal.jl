@@ -1,5 +1,8 @@
+@public functional
+
 # World age captured at __init__ time. Used to invoke the GPU-compiler stack
 # in a frozen world to avoid latency from invalidations.
+const initialized = Ref{Bool}(false)
 const initialization_world = Ref{UInt}(typemax(UInt))
 
 """
@@ -15,28 +18,26 @@ Invoke `f(args...; kwargs...)` in the world age captured at `__init__` time.
     return Base.invoke_in_world(initialization_world[], Core.kwcall, kwargs, f, args...)
 end
 
-@static if isdefined(Base, :OncePerProcess) # VERSION >= v"1.12.0-DEV.1421"
-    const functional = OncePerProcess{Bool}() do
-        try
-            dev = device()
-            return is_supported(dev)
-        catch
-            return false
-        end
-    end
-else
-    # Becomes `nothing` once it has been determined that the device is on macOS
-    const _functional = Ref{Union{Nothing,Bool}}(false)
-
-    function functional()
-        if isnothing(_functional[])
-            dev = device()
-
-            _functional[] = is_supported(dev)
-        end
-        _functional[]
+function check_functional()
+    initialized[] || return false
+    try
+        is_supported(device())
+    catch
+        false
     end
 end
+@static if isdefined(Base, :OncePerProcess) # VERSION >= v"1.12.0-DEV.1421"
+    const functional = OncePerProcess{Bool}(check_functional)
+else
+    functional() = check_functional()
+end
+
+"""
+    Metal.functional()
+
+Report whether Metal.jl can be loaded and used.
+"""
+functional
 
 # A device is supported if it provides the feature set Metal.jl targets (Apple7 + Metal 3),
 # or if it is a paravirtualized GPU. The latter is backed by real Apple Silicon and supports
@@ -72,11 +73,7 @@ function __init__()
         ver = MTL.MTLCompileOptions().languageVersion
         @debug "Successfully loaded Metal; targeting v$ver."
 
-        # Successful loading of CoreGraphics means there's a
-        # chance the graphics device is supported
-        if @isdefined _functional
-            _functional[] = nothing  # VERSION <= v"1.12.0-DEV.1421"
-        end
+        initialized[] = true
     catch err
         @error "Failed to load Metal" exception=(err,catch_backtrace())
         return

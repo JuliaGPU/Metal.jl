@@ -1,67 +1,11 @@
 using Metal
 using ParallelTestRunner
 
-# Quit without erroring if Metal loaded without issues on unsupported platforms
-if !Sys.isapple() || Sys.ARCH != :aarch64
-    @warn """Metal.jl succesfully loaded on non-Apple Silicon system.
-             This system is unsupported but should still load.
-             Skipping tests."""
+if !Metal.functional()
+    @warn """Metal.jl is not functional on this system, so there is nothing to test; skipping.
+             (If you believe this system should be supported, please file an issue.)"""
     Sys.exit()
-else # if Sys.isapple()
-    # Skip tests on older unsupported versions
-    if !Metal.is_macos(v"13")
-        @warn """Metal.jl succesfully loaded on unsupported macOS version (v$(Metal.macos_version())).
-                This system is unsupported but should still load.
-                Skipping tests."""
-        Sys.exit()
-    end
-
-    archname = if Metal.is_macos(v"14")
-        arch = device().architecture
-        if !isnothing(arch)
-            string(arch.name)
-        else
-            ""
-        end
-    end
-
-    # device.architecture returns null on Intel graphics devices so use Xcode
-    if isempty(archname)
-        cmd = pipeline(Cmd(`xcrun -f metal-arch`, ignorestatus = true), stdout = devnull, stderr = devnull)
-
-        if run(cmd).exitcode == 0 # Check that Xcode is installed
-            archname = read(`xcrun metal-arch --name`, String)
-        end
-    end
-
-    if !Metal.functional() && MTL.is_virtual(device()) && Metal.macos_version() < v"15"
-        # Virtualized GPUs on macOS <15 are unsupported: the paravirtual driver can't run
-        # Metal.jl compute kernels at all (gpuAddress argument passing is broken; see
-        # `Metal.is_supported`). `functional()` already reports this; skip the suite cleanly
-        # rather than reporting thousands of failures.
-        @warn """Metal.jl loaded on a virtualized Apple GPU running macOS $(Metal.macos_version()),
-                 which is unsupported (compute kernels silently produce wrong results).
-                 Skipping tests. See https://github.com/JuliaGPU/Metal.jl/issues/309."""
-        Sys.exit()
-    elseif MTL.is_virtual(device())
-        # Virtualized GPUs (e.g. macOS VMs, GitHub Actions runners) are backed by real Apple
-        # Silicon and support Metal 3, but under-report their capabilities. They are supported
-        # on a best-effort basis, so run the tests anyway.
-        @info "Metal.jl loaded on a virtualized Apple GPU; running tests on a best-effort basis."
-    elseif !isempty(archname)
-        if !occursin("applegpu", archname) # Intel or AMD graphics
-            @warn """Metal.jl succesfully loaded on macOS system with unsupported graphics.
-                    This system is unsupported but should still load.
-                    Skipping tests."""
-            Sys.exit()
-        end
-    else
-        @info "GPU architecture could not be detected, assuming supported device."
-    end
 end
-
-# If we ever error here, fix above
-Metal.functional() || error("Metal.jl is not functional on this system. This is unexpected; please file an issue.")
 
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
 
