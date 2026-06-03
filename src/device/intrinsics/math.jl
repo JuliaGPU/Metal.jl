@@ -1,7 +1,7 @@
 # Math function mappings to Metal intrinsics
 
 # We try to rely on LLVM intrinsics as much as possible, as emitted by Julia
-# and lowered to AIR intrinsucs by GPUCompiler.jl. Only functions that need
+# and lowered to AIR intrinsics by GPUCompiler.jl. Only functions that need
 # special handling (no LLVM intrinsic, no Julia lowering) are handled here.
 
 using Base: FastMath
@@ -11,7 +11,6 @@ import Core: Float16, Float32
 # TODO:
 # - wrap all intrinsics from include/metal/metal_math
 # - add support for vector types
-# - consider emitting LLVM intrinsics and lowering those in the back-end
 
 ### Constants
 # π and ℯ
