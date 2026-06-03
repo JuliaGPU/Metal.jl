@@ -346,11 +346,6 @@ end
 
 ### Integer Intrinsics
 
-# Integer min/max/abs lower to llvm.abs / llvm.{s,u}{min,max} in the back-end, which maps them
-# to air.abs.{s,u} / air.{min,max}.{s,u}. (`Base.max(::Int64)` was already left to the back-end,
-# see JuliaGPU/Metal.jl#547.) Chained min/max — including the 3-argument min(a,b,c) that reduces
-# to nested 2-arg calls — are fused to AGX's air.{min,max}3 by a back-end peephole.
-
 @static if isdefined(Base, :mul_hi) # VERSION >= v"1.13.0-"
     @device_override Base.mul_hi(x::Int64, y::Int64)   = ccall("extern air.mul_hi.s.i64", llvmcall, Int64, (Int64, Int64), x, y)
     @device_override Base.mul_hi(x::UInt64, y::UInt64) = ccall("extern air.mul_hi.u.i64", llvmcall, UInt64, (UInt64, UInt64), x, y)
