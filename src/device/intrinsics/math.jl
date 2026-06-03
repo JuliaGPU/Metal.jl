@@ -27,6 +27,11 @@ end
 # Metal only supports single and half-precision floating-point types (and their vector counterparts)
 # For single precision types, there are precise and fast variants
 
+@static if VERSION < v"1.12"
+    @device_override Base.min(x::Float16, y::Float16) = ccall("llvm.minimum.f16", llvmcall, Float16, (Float16, Float16), x, y)
+    @device_override Base.max(x::Float16, y::Float16) = ccall("llvm.maximum.f16", llvmcall, Float16, (Float16, Float16), x, y)
+end
+
 @device_override function Base.:(/)(a::Complex{Float32}, b::Complex{Float32})
     are = real(a); aim = imag(a); bre = real(b); bim = imag(b)
     if (isinf(bre) | isinf(bim))
@@ -344,6 +349,15 @@ end
 
 
 ### Integer Intrinsics
+
+@static if VERSION < v"1.12"
+    @device_override Base.bitreverse(x::Int16)  = ccall("llvm.bitreverse.i16", llvmcall, Int16, (Int16,), x)
+    @device_override Base.bitreverse(x::UInt16) = ccall("llvm.bitreverse.i16", llvmcall, UInt16, (UInt16,), x)
+    @device_override Base.bitreverse(x::Int32)  = ccall("llvm.bitreverse.i32", llvmcall, Int32, (Int32,), x)
+    @device_override Base.bitreverse(x::UInt32) = ccall("llvm.bitreverse.i32", llvmcall, UInt32, (UInt32,), x)
+    @device_override Base.bitreverse(x::Int64)  = ccall("llvm.bitreverse.i64", llvmcall, Int64, (Int64,), x)
+    @device_override Base.bitreverse(x::UInt64) = ccall("llvm.bitreverse.i64", llvmcall, UInt64, (UInt64,), x)
+end
 
 @static if isdefined(Base, :mul_hi) # VERSION >= v"1.13.0-"
     @device_override Base.mul_hi(x::Int64, y::Int64)   = ccall("extern air.mul_hi.s.i64", llvmcall, Int64, (Int64, Int64), x, y)
