@@ -7,7 +7,7 @@ export MTLDevice, MTLCreateSystemDefaultDevice, devices
 # @objcwrapper MTLDevice <: NSObject
 
 MTLCreateSystemDefaultDevice() =
-    MTLDevice(ccall(:MTLCreateSystemDefaultDevice, id{MTLDevice}, ()))
+    MTLDevice(@ccall libmtl.MTLCreateSystemDefaultDevice()::id{MTLDevice})
 
 """
     devices()
@@ -15,7 +15,7 @@ MTLCreateSystemDefaultDevice() =
 Get an iterator for the compute devices.
 """
 function devices()
-    list = NSArray(ccall(:MTLCopyAllDevices, id{NSArray}, ()))
+    list = NSArray(@ccall libmtl.MTLCopyAllDevices()::id{NSArray})
     [reinterpret(MTLDevice, dev) for dev in list]
 end
 
