@@ -66,17 +66,9 @@ import GPUArrays
 gpuarrays = pathof(GPUArrays)
 gpuarrays_root = dirname(dirname(gpuarrays))
 gpuarrays_testsuite = joinpath(gpuarrays_root, "test", "testsuite.jl")
-## The GPUArrays test suite is large and slow, which is impractical on the
-## best-effort virtualized GPUs used by the GitHub Actions CI. It is opt-in,
-## enabled with `--all` (passed by the buildkite CI, which runs on real
-## hardware) or by explicitly selecting a `gpuarrays/*` test.
-want_all = args.custom["all"] !== nothing
-want_gpuarrays = want_all || any(startswith("gpuarrays/"), args.positionals)
-if want_gpuarrays
-    include(gpuarrays_testsuite)
-    for name in keys(TestSuite.tests)
-        testsuite["gpuarrays/$name"] = :(TestSuite.tests[$name](MtlArray))
-    end
+include(gpuarrays_testsuite)
+for name in keys(TestSuite.tests)
+    testsuite["gpuarrays/$name"] = :(TestSuite.tests[$name](MtlArray))
 end
 ## examples
 function find_examples(dir, examples=String[])
@@ -115,6 +107,13 @@ end
 
 # filter out certain tests depending on the exact testing conditions
 if filter_tests!(testsuite, args)
+    # The GPUArrays test suite is large and slow, so it's opt-in
+    if args.custom["all"] === nothing
+        filter!(testsuite) do (name, _)
+            !startswith(name, "gpuarrays/")
+        end
+    end
+
     if Metal.DefaultStorageMode != Metal.PrivateStorage
         # GPUArrays' scalar indexing tests assume that indexing is not supported
         delete!(testsuite, "gpuarrays/indexing scalar")
