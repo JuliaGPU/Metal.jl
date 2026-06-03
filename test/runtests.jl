@@ -1,7 +1,7 @@
 using Metal
 using ParallelTestRunner
 
-if !Metal.functional() || Sys.ARCH != :aarch64
+if !Metal.functional()
     @warn """Metal.jl is not functional on this system, so there is nothing to test; skipping.
              (If you believe this system should be supported, please file an issue.)"""
     Sys.exit()
