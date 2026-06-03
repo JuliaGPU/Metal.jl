@@ -55,8 +55,8 @@ function __init__()
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     precompiling && return
 
-    if !Sys.isapple()
-        @error "Metal.jl is only supported on macOS"
+    if !Sys.isapple() || Sys.ARCH != :aarch64
+        @error "Metal.jl is only supported on Apple Silicon"
         return
     end
 
