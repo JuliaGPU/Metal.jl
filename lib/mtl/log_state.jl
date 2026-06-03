@@ -21,6 +21,6 @@ function MTLLogState(dev::MTLDevice, descriptor::MTLLogStateDescriptor)
     err = Ref{id{NSError}}(nil)
     handle = @objc [dev::id{MTLDevice} newLogStateWithDescriptor:descriptor::id{MTLLogStateDescriptor}
         error:err::Ptr{id{NSError}}]::id{MTLLogState}
-    err[] == nil || throw(NSError(err[]))
+    err[] == nil || throw_error(err[])
     MTLLogState(handle)
 end

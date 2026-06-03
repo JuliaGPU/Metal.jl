@@ -10,7 +10,7 @@ function MTLResidencySet(device::MTLDevice, desc::MTLResidencySetDescriptor)
     err = Ref{id{NSError}}(nil)
     handle = @objc [device::id{MTLDevice} newResidencySetWithDescriptor:desc::id{MTLResidencySetDescriptor}
                                                                     error:err::Ptr{id{NSError}}]::id{MTLResidencySet}
-    err[] == nil || throw(NSError(err[]))
+    err[] == nil || throw_error(err[])
     obj = MTLResidencySet(handle)
     finalizer(release, obj)
     return obj
