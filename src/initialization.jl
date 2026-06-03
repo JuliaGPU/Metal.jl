@@ -46,7 +46,7 @@ functional
 # Paravirtual GPUs are only supported on macOS 15+: the macOS <15 paravirtual driver does not
 # implement the GPU-address-based ("bindless") argument passing Metal.jl requires.
 function is_supported(dev)
-    is_virtual(dev) && return macos_version() >= v"15"
+    is_virtual(dev) && return macos_version() >= v"15" && Sys.ARCH == :aarch64
     return supports_family(dev, MTL.MTLGPUFamilyApple7) &&
            supports_family(dev, MTL.MTLGPUFamilyMetal3)
 end
