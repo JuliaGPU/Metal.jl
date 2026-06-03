@@ -27,6 +27,19 @@ if Metal.macos_version() < v"15"
 
 @warn "Skipping GPU logging tests on macOS 14 and below"
 
+elseif Metal.is_virtual(Metal.device())
+
+# GPU logging requires an `MTLLogState`, which the paravirtualized GPU driver cannot
+# create. Rather than the formatted-output tests below, verify the launch path bails out
+# with a clear host error.
+@testset "unsupported on virtualized GPUs" begin
+    function logger()
+        @mtlprintln("Hello, World")
+        return
+    end
+    @test_throws "not supported on virtualized GPUs" @metal logger()
+end
+
 else
 
 @testset "formatted output" begin
