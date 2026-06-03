@@ -27,9 +27,10 @@ jobs:
           - '1'
         os:
           - 'ubuntu-latest'
+          - 'macOS-14'
           - 'macOS-15-intel'
+          - 'macOS-26-intel'
           - 'windows-latest'
-          - 'macOS-latest'
 
     steps:
       - uses: actions/checkout@v6
@@ -41,5 +42,8 @@ jobs:
       - uses: julia-actions/cache@v3
       - uses: julia-actions/julia-buildpkg@v1
 
-      - name: Run tests
-        uses: julia-actions/julia-runtest@v1
+      - name: Test that Metal loads but is not functional
+        shell: julia --color=yes --project=. {0}
+        run: |
+          using Metal
+          @assert Metal.functional() == false "Metal.functional() should report false on unsupported platforms"
