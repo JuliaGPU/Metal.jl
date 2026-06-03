@@ -66,7 +66,7 @@ function versioninfo(io::IO=stdout)
     end
     for (i, dev) in enumerate(devs)
         cores = num_gpu_cores()
-        corestr = cores > 0 ? "$cores GPU cores" : "unknown number of GPU cores"
+        corestr = "$(cores > 0 ? cores : "?") cores GPU cores"
 
         # device capabilities; useful to spot when (e.g. virtualized) devices gain support
         # for a newer feature set than Metal.jl currently assumes.
