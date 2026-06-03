@@ -27,5 +27,5 @@ Sys.isapple() && @setup_workload begin
     empty!(_kernel_instances)
     empty!(global_queues)
     empty!(MTL.last_committed_per_queue)
-    empty!(device_exception_flags)
+    empty!(device_exception_info)
 end

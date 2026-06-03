@@ -118,6 +118,44 @@ Metal places output from `@mtlprintf` into a log buffer. The system only removes
 
 See also: `@mtlprint`, `@mtlprintln` and `@mtlshow`
 
+## Exceptions
+
+When a kernel hits an error condition, such as an out-of-bounds access or a domain error,
+it does not abort the GPU. The faulting lane records the exception in a host-visible
+mailbox and returns, and the next `synchronize()` reads that mailbox and rethrows the
+exception on the host as a `KernelException`:
+
+```julia
+julia> function kernel(a)
+           a[2] = 1f0   # out-of-bounds: `a` has length 1
+           return
+       end
+
+julia> @metal threads=1 kernel(Metal.zeros(Float32, 1));
+
+julia> synchronize()
+ERROR: KernelException: A BoundsError was thrown by thread 1×1×1 in threadgroup 1×1×1 on device Apple M1: Out-of-bounds array access
+```
+
+How much detail is reported depends on Julia's debug level (the `-g` flag), so the unhappy
+path stays as small as the level allows:
+
+- At `-g0`, only the fact that an exception occurred is reported:
+  `KernelException: an exception was thrown on device Apple M1`.
+- At `-g1` (the default), the type, reason, and faulting position are reported, as shown
+  above. The common implicit exceptions (bounds, domain, overflow, inexact, and so on)
+  carry a precise type and reason; other throws report whatever type the compiler could
+  deduce, which is often a generic `exception`.
+- At `-g2`, a device-side stack trace is additionally captured and appended.
+
+The level can also be set per launch, independent of the session's `-g`, with the
+`debug_level` keyword — for example `@metal debug_level=2 kernel(args...)` to capture a
+backtrace for one kernel without restarting Julia, or `debug_level=0` to keep a hot kernel's
+exception path minimal. It defaults to the session's `-g`.
+
+Only one faulting lane is recorded. Reporting works on all macOS versions; unlike
+`@mtlprintf`, it does not require macOS 15.
+
 ## Other Helpful Links
 
 [Metal Shading Language Specification](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf)

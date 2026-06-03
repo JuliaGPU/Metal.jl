@@ -1,14 +1,14 @@
 # math.jl
 @device_override @noinline Base.Math.throw_complex_domainerror(f::Symbol, x) =
-    @print_and_throw "This operation requires a complex input to return a complex result"
+    @gputhrow "DomainError" "This operation requires a complex input to return a complex result"
 @device_override @noinline Base.Math.throw_exp_domainerror(x) =
-    @print_and_throw "Exponentiation yielding a complex result requires a complex argument"
+    @gputhrow "DomainError" "Exponentiation yielding a complex result requires a complex argument"
 @device_override function Base.Math.exponent(x::T) where T<:Base.IEEEFloat
     xs = reinterpret(Unsigned, x) & ~Base.sign_mask(T)
-    xs >= Base.exponent_mask(T) && @print_and_throw "Cannot be NaN or Inf."
+    xs >= Base.exponent_mask(T) && @gputhrow "DomainError" "Cannot be NaN or Inf."
     k = Int(xs >> Base.significand_bits(T))
     if k == 0 # x is subnormal
-        xs == 0 && @print_and_throw "Cannot be ±0.0."
+        xs == 0 && @gputhrow "DomainError" "Cannot be ±0.0."
         m = leading_zeros(xs) - Base.exponent_bits(T)
         k = 1 - m
     end
@@ -17,29 +17,29 @@ end
 
 # intfuncs.jl
 @device_override @noinline Base.throw_domerr_powbysq(::Any, p) =
-    @print_and_throw "Cannot raise an integer to a negative power"
+    @gputhrow "DomainError" "Cannot raise an integer to a negative power"
 @device_override @noinline Base.throw_domerr_powbysq(::Integer, p) =
-    @print_and_throw "Cannot raise an integer to a negative power"
+    @gputhrow "DomainError" "Cannot raise an integer to a negative power"
 @device_override @noinline Base.throw_domerr_powbysq(::AbstractMatrix, p) =
-    @print_and_throw "Cannot raise an integer to a negative power"
+    @gputhrow "DomainError" "Cannot raise an integer to a negative power"
 
 # checked.jl
 @device_override @noinline Base.Checked.throw_overflowerr_binaryop(op, x, y) =
-    @print_and_throw "Binary operation overflowed"
+    @gputhrow "OverflowError" "Binary operation overflowed"
 @device_override @noinline Base.Checked.throw_overflowerr_negation(op, x, y) =
-    @print_and_throw "Negation overflowed"
+    @gputhrow "OverflowError" "Negation overflowed"
 
 # boot.jl
 @device_override @noinline Core.throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} =
-    @print_and_throw "Inexact conversion"
+    @gputhrow "InexactError" "Inexact conversion"
 
 # abstractarray.jl
 @device_override @noinline Base.throw_boundserror(A, I) =
-    @print_and_throw "Out-of-bounds array access"
+    @gputhrow "BoundsError" "Out-of-bounds array access"
 
 # trig.jl
 @device_override @noinline Base.Math.sincos_domain_error(x) =
-    @print_and_throw "sincos(x) is only defined for finite x."
+    @gputhrow "DomainError" "sincos(x) is only defined for finite x."
 
 # diagonal.jl
 # XXX: remove when we have malloc
@@ -49,7 +49,7 @@ import LinearAlgebra
     if i == j
         @inbounds D.diag[i] = v
     elseif !iszero(v)
-        @print_and_throw "cannot set off-diagonal entry to a nonzero value"
+        @gputhrow "ArgumentError" "cannot set off-diagonal entry to a nonzero value"
     end
     return v
 end
@@ -58,7 +58,7 @@ end
 # XXX: remove when we have malloc
 @device_override @inline function Base.getindex(x::Number, I::Integer...)
     @boundscheck all(isone, I) ||
-        @print_and_throw "Out-of-bounds access of scalar value"
+        @gputhrow "BoundsError" "Out-of-bounds access of scalar value"
     x
 end
 

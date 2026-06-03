@@ -157,11 +157,72 @@ end
     @metal threads=1 throwing_kernel(a)
     @test_throws Metal.KernelException synchronize()
 
-    # the flag is reset on read, and the GPU stays usable afterwards
+    # the faulting lane's type, reason, and position are reported at debug level >= 1 (the
+    # default); at -g0 only the bare status flag is written and everything stays at its
+    # sentinel, so the host reports just that an exception occurred
+    function throw_at_three(a)
+        if thread_position_in_threadgroup().x == 3
+            a[2] = 1f0  # out-of-bounds store on a length-1 array
+        end
+        return
+    end
+    @metal threads=4 throw_at_three(a)
+    exc = try
+        synchronize()
+        nothing
+    catch err
+        err
+    end
+    @test exc isa Metal.KernelException
+    @test exc.thread == (3, 1, 1)
+    @test exc.threadgroup == (1, 1, 1)
+    @test exc.name == "BoundsError"
+    @test exc.reason == "Out-of-bounds array access"
+
+    # the mailbox is reset on read, and the GPU stays usable afterwards
     b = Metal.zeros(Float32, 4)
     @metal threads=4 fill_one(b)
     synchronize()
     @test Array(b) == ones(Float32, 4)
+end
+
+@testset "exception reporting per debug level" begin
+    # `@metal debug_level=` controls how much an exception reports, independent of the
+    # session's `-g` (it's part of the compile cache key, resolved at codegen), so all three
+    # tiers can be checked in one process regardless of how the suite was launched.
+    bounds_oob(a) = (a[2] = 1f0; return)   # out-of-bounds on a length-1 array
+    nonquirk(out, d) = (out[1] = 1 ÷ d[1]; return)   # divide-by-zero -> throw(DivideError())
+    function throw_at(dl, kernel, args...)
+        @metal threads=1 debug_level=dl kernel(args...)
+        try; synchronize(); nothing; catch err; err; end
+    end
+
+    # -g0: only that an exception occurred; everything else stays at its sentinel
+    exc0 = throw_at(0, bounds_oob, Metal.zeros(Float32, 1))
+    @test exc0 isa Metal.KernelException
+    @test isempty(exc0.name)
+    @test isempty(exc0.reason)
+    @test exc0.thread == (0, 0, 0)
+    @test isempty(exc0.backtrace)
+
+    # -g1: the faulting type, reason, and position
+    exc1 = throw_at(1, bounds_oob, Metal.zeros(Float32, 1))
+    @test exc1.name == "BoundsError"
+    @test exc1.reason == "Out-of-bounds array access"
+    @test exc1.thread == (1, 1, 1)
+    @test isempty(exc1.backtrace)
+
+    # a non-quirk throw records whatever type the compiler deduced (here `jl_throw`'s
+    # generic "exception"), via report_exception at debug level >= 1
+    excn = throw_at(1, nonquirk, Metal.zeros(Int32, 1), MtlArray(Int32[0]))
+    @test excn isa Metal.KernelException
+    @test excn.name == "exception"
+
+    # -g2: adds the device stack trace
+    exc2 = throw_at(2, bounds_oob, Metal.zeros(Float32, 1))
+    @test exc2.name == "BoundsError"
+    @test !isempty(exc2.backtrace)
+    @test any(frame -> occursin("throw_boundserror", frame[1]), exc2.backtrace)
 end
 
 @testset "launch params" begin

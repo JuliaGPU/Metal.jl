@@ -4,7 +4,7 @@ export @metal
 ## high-level @metal interface
 
 const MACRO_KWARGS = [:launch]
-const COMPILER_KWARGS = [:kernel, :name, :always_inline, :macos, :air, :metal]
+const COMPILER_KWARGS = [:kernel, :name, :always_inline, :debug_level, :macos, :air, :metal]
 const LAUNCH_KWARGS = [:groups, :threads, :queue]
 
 """
@@ -291,8 +291,8 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
 
     buf = malloc_buffer(pipeline.device)
     buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, UInt64(buf.gpuAddress))
-    exc = exception_flag_buffer(pipeline.device)
-    exc_ptr = reinterpret(Core.LLVMPtr{UInt32, AS.Device}, UInt64(exc.gpuAddress))
+    exc = exception_info_buffer(pipeline.device)
+    exc_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, UInt64(exc.gpuAddress))
     kernel_state = KernelState(Random.rand(UInt32), buf_ptr, exc_ptr)
 
     cmdbuf = if kernel.loggingEnabled
