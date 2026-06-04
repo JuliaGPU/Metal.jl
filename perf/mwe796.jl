@@ -67,21 +67,8 @@ println("accumulate 1d:        ", round(t * 1e6; digits=1), " us")
 
 # per-debug-level timing of the raw scan kernel (the dominant launch of accumulate 1d),
 # using the per-kernel `debug_level` keyword (part of the compile cache key) so all levels
-# can be compared within one process. only supported on post-#796 trees.
+# can be compared within one process. only supported on post-#796 trees; in a separate file
+# because `@metal debug_level=` is rejected at macro-expansion time on older trees.
 if :debug_level in Metal.COMPILER_KWARGS
-    vec = gpu_vec
-    output = similar(vec)
-    Rdim = CartesianIndices((n_el,))
-    Rpre = CartesianIndices(())
-    Rpost = CartesianIndices(())
-    Rother = CartesianIndices((1, 1))
-    for level in 0:2
-        kern = @metal launch=false debug_level=level Metal.partial_scan(
-            +, output, vec, Rdim, Rpre, Rpost, Rother, 0.0f0, nothing,
-            Val(1024), Val(true))
-        t = @belapsed Metal.@sync $kern(+, $output, $vec, $Rdim, $Rpre, $Rpost, $Rother,
-                                        0.0f0, nothing, Val(1024), Val(true);
-                                        threads=1024, groups=(500, 1, 1))
-        println("partial_scan -g$level:      ", round(t * 1e6; digits=1), " us")
-    end
+    include("mwe796_sweep.jl")
 end
