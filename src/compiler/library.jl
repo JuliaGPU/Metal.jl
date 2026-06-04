@@ -97,9 +97,9 @@ Base.@kwdef struct MetalLibFunction
 end
 
 Base.@kwdef struct MetalLib
-    # even though Metal.jl only supports macOS 14+, which supports metallib v1.2.7, we don't
-    # fully support this format yet and fall back to v1.2.6 for now. this matches macOS 12,
-    # but does support newer AIR/Metal versions in the embedded bitcode.
+    # defaults to the newest file format the host supports. note that optional sections
+    # the official toolchain would emit (e.g. reflection data) are simply left out when
+    # we have nothing to put there; the loader accepts that.
     file_version::VersionNumber=metallib_target()
     file_type::FileType=FILE_EXECUTABLE
     is_macos::Bool=true
@@ -833,7 +833,7 @@ function Base.write(io::IO, lib::MetalLib)
         if fun.source_id !== nothing && haskey(embedded_source_offsets, fun.source_id)
             function_tags["SOFF"] = embedded_source_offsets[fun.source_id]
         end
-        if lib.file_version >= v"1.2.7"
+        if lib.file_version >= v"1.2.7" && !isempty(reflection_list_offsets)
             function_tags["RFLT"] = reflection_list_offsets[i]
         end
         push!(function_tag_groups, function_tags)
@@ -859,7 +859,7 @@ function Base.write(io::IO, lib::MetalLib)
             embedded_source_tag = lib.file_version >= v"1.2.6" ? "HSRD" : "HSRC"
             header_ex_tags[embedded_source_tag] = (; offset=0, size=sizeof(embedded_source))
         end
-        if lib.file_version >= v"1.2.7"
+        if lib.file_version >= v"1.2.7" && sizeof(reflection_list) > 0
             header_ex_tags["RLST"] = (; offset=0, size=sizeof(reflection_list))
         end
         # XXX: placeholder; this data is invalid

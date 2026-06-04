@@ -151,9 +151,9 @@ end
         metal = metal_target(macos)
     end
     if air === nothing
-        air = air_target()
+        air = air_target(macos)
         if air > air_support(macos)
-            error("""Metal.jl requires AIR $(air_target()) (macOS 14) or newer, but macOS $(macos) only supports AIR $(air_support(macos)).""")
+            error("""Metal.jl requires AIR 2.6 (macOS 14) or newer, but macOS $(macos) only supports AIR $(air_support(macos)).""")
         end
     end
 
@@ -254,7 +254,9 @@ function compile(@nospecialize(job::CompilerJob))
             fun = MetalLibFunction(; name=entry, air_module=air,
                                      air_version=job.config.target.air,
                                      metal_version=job.config.target.metal)
-            lib = MetalLib(; functions = [fun])
+            lib = MetalLib(; functions = [fun],
+                             file_version = metallib_target(job.config.target.macos),
+                             platform_version = job.config.target.macos)
 
             io = IOBuffer()
             write(io, lib)

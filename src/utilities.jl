@@ -25,7 +25,6 @@ function versioninfo(io::IO=stdout)
     mm(v) = "$(v.major).$(v.minor)"
     println(io, "- Metal: $(mm(metal_target())) (MSL), $(mm(air_target())) (AIR), " *
                 "$(metallib_target()) (metallib)")
-    println(io, "  (host supports up to $(mm(metal_support())) / $(mm(air_support())) / $(metallib_support()))")
     println(io)
 
     println(io, "Julia packages:")

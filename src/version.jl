@@ -84,11 +84,11 @@ function metal_support(macos::VersionNumber = macos_version())
     end
 end
 
-# The versions Metal.jl emits by default. These mirror the `*_support` ceilings but
-# capture what the toolchain actually targets: MSL tracks the host-supported version
-# to expose the newest intrinsics, while AIR and the metallib file format are pinned
-# to conservative baselines for backward compatibility. `versioninfo` reports these,
-# and the compiler uses them as defaults (see `_compiler_config` and `MetalLib`).
+# The versions Metal.jl emits by default. These track the `*_support` ceilings, which is
+# also what the offline `metal` compiler does: compiling with `-mmacosx-version-min=N`
+# yields the AIR, MSL and metallib versions that `N` supports. Since we compile for the
+# host device only, the deployment target is the host. `versioninfo` reports these, and
+# the compiler uses them as defaults (see `_compiler_config` and `MetalLib`).
 
 """
     Metal.metal_target(macos=macos_version())::VersionNumber
@@ -99,19 +99,17 @@ host-supported version (see [`Metal.metal_support`](@ref)) to expose the newest 
 metal_target(macos::VersionNumber = macos_version()) = metal_support(macos)
 
 """
-    Metal.air_target()::VersionNumber
+    Metal.air_target(macos=macos_version())::VersionNumber
 
-Returns the embedded-AIR-bitcode version Metal.jl emits by default. Pinned to the macOS 14
-baseline (v2.6) for backward compatibility, regardless of what the host supports (see
-[`Metal.air_support`](@ref)).
+Returns the embedded-AIR-bitcode version Metal.jl emits by default, which tracks the
+host-supported version (see [`Metal.air_support`](@ref)).
 """
-air_target() = v"2.6"
+air_target(macos::VersionNumber = macos_version()) = air_support(macos)
 
 """
-    Metal.metallib_target()::VersionNumber
+    Metal.metallib_target(macos=macos_version())::VersionNumber
 
-Returns the metallib file-format version Metal.jl emits by default. Pinned to a conservative
-baseline (v1.2.6) for backward compatibility, regardless of what the host supports (see
-[`Metal.metallib_support`](@ref)).
+Returns the metallib file-format version Metal.jl emits by default, which tracks the
+host-supported version (see [`Metal.metallib_support`](@ref)).
 """
-metallib_target() = v"1.2.6"
+metallib_target(macos::VersionNumber = macos_version()) = metallib_support(macos)
