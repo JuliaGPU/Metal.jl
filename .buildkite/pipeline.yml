@@ -156,22 +156,30 @@ steps:
       - JuliaCI/julia#v1:
           version: "1.12"
     command: |
-      echo "--- :git: Setting up pre-#796 worktree"
+      echo "--- :git: Setting up worktrees"
       git fetch -q origin 356e7d28ea5c2005aa3bd51ab3a3389cc28ad135
+      git fetch -q origin 80b02d0387cce30fd0a8cf1af0dc569dfb171ecb
+      git fetch -q origin 65ef0f7c8685ce77dafaa7b6d0bcd453d63137ee
       git worktree add worktree-before 356e7d28ea5c2005aa3bd51ab3a3389cc28ad135
+      git worktree add worktree-v1 80b02d0387cce30fd0a8cf1af0dc569dfb171ecb
+      git worktree add worktree-v2 65ef0f7c8685ce77dafaa7b6d0bcd453d63137ee
 
       echo "--- :julia: Instantiating projects"
       julia --project=envs/before -e 'using Pkg; Pkg.develop(path="worktree-before"); Pkg.add("BenchmarkTools"); Pkg.status()'
       julia --project=envs/after -e 'using Pkg; Pkg.develop(path=pwd()); Pkg.add("BenchmarkTools"); Pkg.status()'
+      julia --project=envs/v1 -e 'using Pkg; Pkg.develop(path="worktree-v1"); Pkg.add("BenchmarkTools"); Pkg.status()'
+      julia --project=envs/v2 -e 'using Pkg; Pkg.develop(path="worktree-v2"); Pkg.add("BenchmarkTools"); Pkg.status()'
 
       echo "+++ :racehorse: BEFORE 796, -g1"
       julia --project=envs/before perf/mwe796.jl
       echo "+++ :racehorse: AFTER 796, -g1"
       julia --project=envs/after perf/mwe796.jl
-      echo "+++ :racehorse: AFTER 796, -g0"
-      julia -g0 --project=envs/after perf/mwe796.jl
-      echo "+++ :racehorse: AFTER 796, -g2"
-      julia -g2 --project=envs/after perf/mwe796.jl
+      echo "+++ :racehorse: V1 slim site code, -g1"
+      julia --project=envs/v1 perf/mwe796.jl
+      echo "+++ :racehorse: V2 position only at -g2, -g1"
+      julia --project=envs/v2 perf/mwe796.jl
+      echo "+++ :racehorse: V2 position only at -g2, -g2"
+      julia -g2 --project=envs/v2 perf/mwe796.jl
     agents:
       queue: "juliaecosystem"
       os: "macos"
