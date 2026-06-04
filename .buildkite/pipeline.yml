@@ -156,16 +156,22 @@ steps:
       - JuliaCI/julia#v1:
           version: "1.12"
     command: |
-      julia --project=perf -e '
-        using Pkg
+      echo "--- :git: Setting up pre-#796 worktree"
+      git fetch -q origin 356e7d28ea5c2005aa3bd51ab3a3389cc28ad135
+      git worktree add /tmp/metal-before 356e7d28ea5c2005aa3bd51ab3a3389cc28ad135
 
-        println("--- :julia: Instantiating project")
-        Pkg.develop([PackageSpec(path=pwd())])
+      echo "--- :julia: Instantiating projects"
+      julia --project=/tmp/env-before -e 'using Pkg; Pkg.develop(path="/tmp/metal-before"); Pkg.add("BenchmarkTools"); Pkg.status()'
+      julia --project=/tmp/env-after -e 'using Pkg; Pkg.develop(path=pwd()); Pkg.add("BenchmarkTools"); Pkg.status()'
 
-        println("+++ :julia: Benchmarking")
-        include("perf/runbenchmarks.jl")'
-    artifact_paths:
-      - "benchmarkresults.json"
+      echo "+++ :racehorse: BEFORE 796, -g1"
+      julia --project=/tmp/env-before perf/mwe796.jl
+      echo "+++ :racehorse: AFTER 796, -g1"
+      julia --project=/tmp/env-after perf/mwe796.jl
+      echo "+++ :racehorse: AFTER 796, -g0"
+      julia -g0 --project=/tmp/env-after perf/mwe796.jl
+      echo "+++ :racehorse: AFTER 796, -g2"
+      julia -g2 --project=/tmp/env-after perf/mwe796.jl
     agents:
       queue: "juliaecosystem"
       os: "macos"
