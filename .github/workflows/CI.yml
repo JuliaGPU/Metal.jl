@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    tags: '*'
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+  # needed for julia-actions/cache to delete old caches
+  actions: write
+
+jobs:
+  test:
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    if: github.event.pull_request.draft == false
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1'
+        os:
+          - 'macos-15'
+          - 'macos-26'
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: ${{ matrix.version }}
+          arch: aarch64
+      - uses: julia-actions/cache@v3
+      - uses: julia-actions/julia-buildpkg@v1
+      # The GitHub-hosted macOS runners only have a paravirtualized GPU, which
+      # Metal.jl supports on a best-effort basis. Run only the core tests; the
+      # heavy GPUArrays test suite (gated behind `--all`) is left to the
+      # buildkite CI, which runs on real hardware.
+      - uses: julia-actions/julia-runtest@v1
+        with:
+          test_args: '--quickfail'

@@ -140,7 +140,7 @@ function startCapture(manager::MTLCaptureManager, desc::MTLCaptureDescriptor)
     err = Ref{id{NSError}}(nil)
     success = @objc [manager::id{MTLCaptureManager} startCaptureWithDescriptor:desc::id{MTLCaptureDescriptor}
                                                     error:err::Ptr{id{NSError}}]::Bool
-    success || throw(NSError(err[]))
+    success || throw_error(err[])
     return
 end
 

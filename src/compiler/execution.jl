@@ -300,6 +300,13 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
             error("Capturing GPU log output requires macOS 15 or higher.")
         end
 
+        if is_virtual(queue.device)
+            # `MTLLogState` needs a residency set, which the paravirtualized GPU driver
+            # cannot create (failing with `MTLLogStateErrorDomain` code 2). Bail out here
+            # with a clear host error instead of surfacing that opaque `NSError`.
+            error("Capturing GPU log output is not supported on virtualized GPUs.")
+        end
+
         if MTLCaptureManager().isCapturing
             error("Logging is not supported while GPU frame capturing")
         end

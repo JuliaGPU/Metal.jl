@@ -8,7 +8,7 @@ function MTLLibrary(dev::MTLDevice, src::String,
     handle = @objc [dev::id{MTLDevice} newLibraryWithSource:src::id{NSString}
                                           options:opts::id{MTLCompileOptions}
                                           error:err::Ptr{id{NSError}}]::id{MTLLibrary}
-    err[] == nil || throw(NSError(err[]))
+    err[] == nil || throw_error(err[])
 
     obj = MTLLibrary(handle)
     finalizer(release, obj)
@@ -22,7 +22,7 @@ function MTLLibraryFromFile(dev::MTLDevice, path::String)
         @objc [dev::id{MTLDevice} newLibraryWithURL:url::id{NSURL}
                                      error:err::Ptr{id{NSError}}]::id{MTLLibrary}
     end
-    err[] == nil || throw(NSError(err[]))
+    err[] == nil || throw_error(err[])
 
     obj = MTLLibrary(handle)
     finalizer(release, obj)
@@ -36,7 +36,7 @@ function MTLLibraryFromData(dev::MTLDevice, input_data)
         handle = @objc [dev::id{MTLDevice} newLibraryWithData:data::dispatch_data_t
                                               error:err::Ptr{id{NSError}}]::id{MTLLibrary}
     end
-    err[] == nil || throw(NSError(err[]))
+    err[] == nil || throw_error(err[])
 
     obj = MTLLibrary(handle)
     finalizer(release, obj)

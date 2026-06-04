@@ -166,7 +166,8 @@ end
 dev = first(devices())
 
 let ev = MTLEvent(dev)
-    @test ev.device == dev
+    # paravirtualized GPUs do not populate the event's device back-reference
+    @test ev.device == dev broken=MTL.is_virtual(dev)
     @test ev.label === nothing
     ev.label = "MyEvent"
     @test ev.label == "MyEvent"
@@ -490,7 +491,8 @@ end
     end
 end
 
-if Metal.is_macos(v"15")
+# residency sets are a macOS 15 feature that paravirtualized GPUs do not implement
+if Metal.is_macos(v"15") && !MTL.is_virtual(first(devices()))
 @testset "residency sets" begin
 
 dev = first(devices())

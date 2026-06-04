@@ -1,61 +1,16 @@
 using Metal
 using ParallelTestRunner
 
-# Quit without erroring if Metal loaded without issues on unsupported platforms
-if !Sys.isapple()
-    @warn """Metal.jl succesfully loaded on non-macOS system.
-             This system is unsupported but should still load.
-             Skipping tests."""
+if !Metal.functional()
+    @warn """Metal.jl is not functional on this system, so there is nothing to test; skipping.
+             (If you believe this system should be supported, please file an issue.)"""
     Sys.exit()
-else # if Sys.isapple()
-    # Skip tests on older unsupported versions
-    if !Metal.is_macos(v"13")
-        @warn """Metal.jl succesfully loaded on unsupported macOS version (v$(Metal.macos_version())).
-                This system is unsupported but should still load.
-                Skipping tests."""
-        Sys.exit()
-    end
-
-    archname = if Metal.is_macos(v"14")
-        arch = device().architecture
-        if !isnothing(arch)
-            string(arch.name)
-        else
-            ""
-        end
-    end
-
-    # device.architecture returns null on Intel graphics devices so use Xcode
-    if isempty(archname)
-        cmd = pipeline(Cmd(`xcrun -f metal-arch`, ignorestatus = true), stdout = devnull, stderr = devnull)
-
-        if run(cmd).exitcode == 0 # Check that Xcode is installed
-            archname = read(`xcrun metal-arch --name`, String)
-        end
-    end
-
-    if !isempty(archname)
-        archchecker = occursin(archname)
-        if archchecker("Paravirtual") # Virtualized graphics (probably Github Actions runners)
-            @warn """Metal.jl succesfully loaded on macOS system with unsupported Paravirtual graphics.
-                    This system is unsupported but should still load.
-                    Skipping tests."""
-            Sys.exit()
-        elseif !archchecker("applegpu") # Every other unsupported system (Intel or AMD graphics)
-            @warn """Metal.jl succesfully loaded on macOS system with unsupported graphics.
-                    This system is unsupported but should still load.
-                    Skipping tests."""
-            Sys.exit()
-        end
-    else
-        @info "GPU architecture could not be detected, assuming supported device."
-    end
 end
 
-# If we ever error here, fix above
-Metal.functional() || error("Metal.jl is not functional on this system. This is unexpected; please file an issue.")
-
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
+
+# parse command-line arguments (--all is Metal-specific)
+args = parse_args(ARGS; custom = ["all"])
 
 # register custom tests that do not correspond to files in the test directory
 testsuite = find_tests(@__DIR__)
@@ -103,10 +58,15 @@ for example in find_examples(joinpath(@__DIR__, "..", "examples"))
     end
 end
 
-args = parse_args(ARGS)
-
 # filter out certain tests depending on the exact testing conditions
 if filter_tests!(testsuite, args)
+    # The GPUArrays test suite is large and slow, so it's opt-in
+    if args.custom["all"] === nothing
+        filter!(testsuite) do (name, _)
+            !startswith(name, "gpuarrays/")
+        end
+    end
+
     if Metal.DefaultStorageMode != Metal.PrivateStorage
         # GPUArrays' scalar indexing tests assume that indexing is not supported
         delete!(testsuite, "gpuarrays/indexing scalar")

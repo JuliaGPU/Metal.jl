@@ -3,6 +3,11 @@ using Test, Metal
 using LinearAlgebra, ScopedValues
 
 @testset "matmul algorithm selection" begin
+    # MPSGraph's Float16 matmul produces wrong results on some paravirtualized GPUs (e.g. the
+    # GitHub Actions runners), even though it works on others. Skip those correctness checks
+    # on virtual devices; the buildkite CI still covers them on real hardware.
+    virtual = Metal.is_virtual(Metal.device())
+
     # test that unsupported configurations error properly
     N = 20
     function test_matmul(inT, outT; vec_b=false, alg=:auto)
@@ -33,7 +38,7 @@ using LinearAlgebra, ScopedValues
         # :auto
         @test test_matmul(Int32, Int32; vec_b)     # fallback to GPUArrays
         @test test_matmul(Int8, Float32; vec_b)    # should use MPS
-        Metal.macos_version() >= v"14" && @test test_matmul(Float16, Float32; vec_b) # should use MPSGraph on M1/M2
+        Metal.macos_version() >= v"14" && @test test_matmul(Float16, Float32; vec_b) skip=virtual # should use MPSGraph on M1/M2
 
         # :MPS
         mpsInT = vec_b ? Float32 : Int16
@@ -42,7 +47,7 @@ using LinearAlgebra, ScopedValues
 
         # :MPSGraph
         @test test_matmul(Int8, Float32; vec_b, alg=:MPSGraph)
-        Metal.macos_version() >= v"14" && @test test_matmul(Float16, Float32; vec_b, alg=:MPSGraph)
+        Metal.macos_version() >= v"14" && @test test_matmul(Float16, Float32; vec_b, alg=:MPSGraph) skip=virtual
 
         # :GPUArrays
         @test test_matmul(Int32, Int32; vec_b, alg=:GPUArrays)

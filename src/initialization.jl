@@ -1,5 +1,8 @@
+@public functional
+
 # World age captured at __init__ time. Used to invoke the GPU-compiler stack
 # in a frozen world to avoid latency from invalidations.
+const initialized = Ref{Bool}(false)
 const initialization_world = Ref{UInt}(typemax(UInt))
 
 """
@@ -15,38 +18,45 @@ Invoke `f(args...; kwargs...)` in the world age captured at `__init__` time.
     return Base.invoke_in_world(initialization_world[], Core.kwcall, kwargs, f, args...)
 end
 
+function check_functional()
+    initialized[] || return false
+    try
+        is_supported(device())
+    catch
+        false
+    end
+end
 @static if isdefined(Base, :OncePerProcess) # VERSION >= v"1.12.0-DEV.1421"
-    const functional = OncePerProcess{Bool}() do
-        try
-            dev = device()
-            return supports_family(dev, MTL.MTLGPUFamilyApple7) &&
-            supports_family(dev, MTL.MTLGPUFamilyMetal3)
-        catch
-            return false
-        end
-    end
+    const functional = OncePerProcess{Bool}(check_functional)
 else
-    # Becomes `nothing` once it has been determined that the device is on macOS
-    const _functional = Ref{Union{Nothing,Bool}}(false)
+    functional() = check_functional()
+end
 
-    function functional()
-        if isnothing(_functional[])
-            dev = device()
+"""
+    Metal.functional()
 
-            _functional[] =
-                supports_family(dev, MTL.MTLGPUFamilyApple7) &&
-                supports_family(dev, MTL.MTLGPUFamilyMetal3)
-        end
-        _functional[]
-    end
+Report whether Metal.jl can be loaded and used.
+"""
+functional
+
+# A device is supported if it provides the feature set Metal.jl targets (Apple7 + Metal 3),
+# or if it is a paravirtualized GPU. The latter is backed by real Apple Silicon and supports
+# Metal 3, but under-reports its capabilities through `supportsFamily` (see `is_virtual`).
+#
+# Paravirtual GPUs are only supported on macOS 15+: the macOS <15 paravirtual driver does not
+# implement the GPU-address-based ("bindless") argument passing Metal.jl requires.
+function is_supported(dev)
+    is_virtual(dev) && return macos_version() >= v"15"
+    return supports_family(dev, MTL.MTLGPUFamilyApple7) &&
+           supports_family(dev, MTL.MTLGPUFamilyMetal3)
 end
 
 function __init__()
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     precompiling && return
 
-    if !Sys.isapple()
-        @error "Metal.jl is only supported on macOS"
+    if !Sys.isapple() || Sys.ARCH != :aarch64
+        @error "Metal.jl is only supported on Apple Silicon"
         return
     end
 
@@ -63,11 +73,7 @@ function __init__()
         ver = MTL.MTLCompileOptions().languageVersion
         @debug "Successfully loaded Metal; targeting v$ver."
 
-        # Successful loading of CoreGraphics means there's a
-        # chance the graphics device is supported
-        if @isdefined _functional
-            _functional[] = nothing  # VERSION <= v"1.12.0-DEV.1421"
-        end
+        initialized[] = true
     catch err
         @error "Failed to load Metal" exception=(err,catch_backtrace())
         return
