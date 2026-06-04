@@ -15,5 +15,18 @@
 @test Metal.air_target() <= Metal.air_support()
 @test Metal.metallib_target() <= Metal.metallib_support()
 
+# the version mapping, as derived from the offline compiler (see src/version.jl)
+@test Metal.metallib_support(v"14") == v"1.2.7"
+@test Metal.air_support(v"14") == v"2.6"
+@test Metal.metal_support(v"14") == v"3.1"
+@test Metal.metallib_support(v"15") == v"1.2.8"
+@test Metal.air_support(v"15") == v"2.7"
+@test Metal.metal_support(v"15") == v"3.2"
+for tahoe in [v"16", v"26"]
+    @test Metal.metallib_support(tahoe) == v"1.2.9"
+    @test Metal.air_support(tahoe) == v"2.8"
+    @test Metal.metal_support(tahoe) == v"4"
+end
+
 # paravirtualized GPUs don't expose an AGXAccelerator IOService to query the core count
 @test Metal.num_gpu_cores() > 0 broken=Metal.MTL.is_virtual(Metal.device())
