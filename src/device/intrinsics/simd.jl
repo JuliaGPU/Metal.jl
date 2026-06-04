@@ -16,8 +16,12 @@ for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"))
                 matrix_origin::NTuple{2, Int64} = (1, 1),
             ) = @typed_ccall($"air.simdgroup_matrix_8x8_load.v64$suffix.p$as$suffix",
                 llvmcall, NTuple{64, VecElement{$jltype}},
-                (LLVMPtr{$jltype, $as}, Int64, NTuple{2, VecElement{Int64}}, Bool),
-                pointer(data), size(data)[1], convert_origin(matrix_origin), Val(true))
+                (LLVMPtr{$jltype, $as}, NTuple{2, VecElement{Int64}},
+                 NTuple{2, VecElement{Int64}}, NTuple{2, VecElement{Int64}}),
+                pointer(data),
+                (VecElement{Int64}(8), VecElement{Int64}(size(data)[1])),
+                (VecElement{Int64}(size(data)[1]), VecElement{Int64}(1)),
+                convert_origin(reverse(matrix_origin)))
 
             @device_function simdgroup_store(
                 src::NTuple{64, VecElement{$jltype}},
@@ -25,8 +29,13 @@ for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"))
                 matrix_origin::NTuple{2, Int64} = (1, 1),
             ) = @typed_ccall($"air.simdgroup_matrix_8x8_store.v64$suffix.p$as$suffix",
                 llvmcall, Cvoid,
-                (NTuple{64, VecElement{$jltype}}, LLVMPtr{$jltype, $as}, Int64, NTuple{2, VecElement{Int64}}, Bool),
-                src, pointer(dest), size(dest)[1], convert_origin(matrix_origin), Val(true))
+                (NTuple{64, VecElement{$jltype}}, LLVMPtr{$jltype, $as},
+                 NTuple{2, VecElement{Int64}}, NTuple{2, VecElement{Int64}},
+                 NTuple{2, VecElement{Int64}}),
+                src, pointer(dest),
+                (VecElement{Int64}(8), VecElement{Int64}(size(dest)[1])),
+                (VecElement{Int64}(size(dest)[1]), VecElement{Int64}(1)),
+                convert_origin(reverse(matrix_origin)))
         end
     end
 
