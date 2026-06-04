@@ -158,22 +158,19 @@ steps:
     command: |
       echo "--- :git: Setting up worktrees"
       git fetch -q origin 356e7d28ea5c2005aa3bd51ab3a3389cc28ad135
-      git fetch -q origin ab6b7a3d104cb4d7dbd87d00a2e66594656feaf6
+      git fetch -q origin 5604f5e08b1fb90c57f9c72750ad310cef7388f5
       git worktree add worktree-before 356e7d28ea5c2005aa3bd51ab3a3389cc28ad135
-      git worktree add worktree-fix ab6b7a3d104cb4d7dbd87d00a2e66594656feaf6
+      git worktree add worktree-fix 5604f5e08b1fb90c57f9c72750ad310cef7388f5
 
       echo "--- :julia: Instantiating projects"
       julia --project=envs/before -e 'using Pkg; Pkg.develop(path="worktree-before"); Pkg.add("BenchmarkTools"); Pkg.status()'
-      julia --project=envs/after -e 'using Pkg; Pkg.develop(path=pwd()); Pkg.add("BenchmarkTools"); Pkg.status()'
       julia --project=envs/fix -e 'using Pkg; Pkg.develop(path="worktree-fix"); Pkg.add("BenchmarkTools"); Pkg.status()'
 
       echo "+++ :racehorse: BEFORE 796, -g1"
       julia --project=envs/before perf/mwe796.jl
-      echo "+++ :racehorse: AFTER 796, -g1"
-      julia --project=envs/after perf/mwe796.jl
-      echo "+++ :racehorse: FIX tb/fix_796_regression, -g1"
+      echo "+++ :racehorse: FIX tb/cheap_g1_exceptions, -g1"
       julia --project=envs/fix perf/mwe796.jl
-      echo "+++ :racehorse: FIX tb/fix_796_regression, -g2"
+      echo "+++ :racehorse: FIX tb/cheap_g1_exceptions, -g2"
       julia -g2 --project=envs/fix perf/mwe796.jl
     agents:
       queue: "juliaecosystem"
