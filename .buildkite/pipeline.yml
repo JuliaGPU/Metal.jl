@@ -31,6 +31,7 @@ steps:
               - "1.10"
               - "1.11"
               - "1.12"
+              - "1.13"
 
   - group: ":soon: Pre-releases"
     steps:
@@ -60,8 +61,7 @@ steps:
         matrix:
           setup:
             julia:
-              - "1.13-nightly"
-              # - "nightly" # uncomment once dependencies support current llvm
+              - "nightly"
 
   # special tests
   - group: ":eyes: Special"
