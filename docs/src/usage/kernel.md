@@ -135,6 +135,7 @@ julia> @metal threads=1 kernel(Metal.zeros(Float32, 1));
 
 julia> synchronize()
 ERROR: KernelException: A BoundsError was thrown on device Apple M1: Out-of-bounds array access
+For more details, run Julia with `-g2`, or launch the kernel with `@metal debug_level=2`.
 ```
 
 How much detail is reported depends on Julia's debug level (the `-g` flag), so the unhappy
