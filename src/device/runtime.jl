@@ -37,7 +37,8 @@ struct ExceptionInfo_st
     status::Int32
     # whether a lane has claimed the mailbox (0 -> 1); only the holder writes a record
     output_lock::Int32
-    # the position of the faulting lane (also used to recognize the lock holder)
+    # the position of the faulting lane, recorded at debug level >= 2 (also used to
+    # recognize the lock holder for the multi-call -g2 reporting sequence)
     thread::NTuple{3, UInt32}
     threadgroup::NTuple{3, UInt32}
     # the exception type name and reason, as null-terminated text the host reads back
@@ -110,8 +111,8 @@ const EXCEPTION_FRAME_SIZE = sizeof(ExceptionFrame_st)
     return Expr(:block, exprs...)
 end
 
-# claim the mailbox for the calling lane. returns `true` to the single lane that wins the
-# claim and, re-entrantly, to that same lane on later calls (recognized by its recorded
+# claim the mailbox for the calling lane. returns `true` to the lane that wins the claim
+# (at `-g2` also re-entrantly to that same lane on later calls, recognized by its recorded
 # position), so it can go on to write the name, reason, and stack frames. any other faulting
 # lane gets `false` and leaves the record untouched (no spin, so a divergent threadgroup
 # can't deadlock here).
@@ -130,6 +131,19 @@ end
 # to a handful of calls.
 @noinline function claim_output!(info)
     lock_ptr = info_field(info, Val(:output_lock))
+    if kernel_debug_level() < 2
+        # one-shot claim: at `-g1` each lane records everything it has to say (the name
+        # and reason) under a single call, so no re-entrancy is needed -- and skipping the
+        # position keeps the cold path free of thread-position uses. those reads cost every
+        # throw-capable kernel even when nothing ever throws: the positions are kernel
+        # inputs held live for the cold path's sake, and the extra cold code itself is
+        # penalized by the M1/macOS 15 backend (the #796 regression). the lane's position
+        # is hence only reported at `-g2`.
+        return atomic_exchange_explicit(lock_ptr, Int32(1)) == Int32(0)
+    end
+    # re-entrant claim: the `-g2` reporting sequence spans multiple calls (the exception
+    # name, then each stack frame), so the holder must be able to re-claim, recognized by
+    # its recorded position (which doubles as the reported fault location).
     t  = thread_position_in_threadgroup()
     tg = threadgroup_position_in_grid()
     if atomic_exchange_explicit(lock_ptr, Int32(1)) == Int32(0)

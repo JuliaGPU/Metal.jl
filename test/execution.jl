@@ -157,16 +157,15 @@ end
     @metal threads=1 throwing_kernel(a)
     @test_throws Metal.KernelException synchronize()
 
-    # the faulting lane's type, reason, and position are reported at debug level >= 1 (the
-    # default); at -g0 only the bare status flag is written and everything stays at its
-    # sentinel, so the host reports just that an exception occurred
+    # the faulting lane's position is recorded at debug level >= 2 (recording it at lower
+    # levels would cost every kernel two extra position inputs; see `claim_output!`)
     function throw_at_three(a)
         if thread_position_in_threadgroup().x == 3
             a[2] = 1f0  # out-of-bounds store on a length-1 array
         end
         return
     end
-    @metal threads=4 throw_at_three(a)
+    @metal threads=4 debug_level=2 throw_at_three(a)
     exc = try
         synchronize()
         nothing
@@ -205,11 +204,12 @@ end
     @test exc0.thread == (0, 0, 0)
     @test isempty(exc0.backtrace)
 
-    # -g1: the faulting type, reason, and position
+    # -g1: the faulting type and reason; no position (recording it would cost every kernel
+    # that can throw two extra position inputs, hurting occupancy even when nothing throws)
     exc1 = throw_at(1, bounds_oob, Metal.zeros(Float32, 1))
     @test exc1.name == "BoundsError"
     @test exc1.reason == "Out-of-bounds array access"
-    @test exc1.thread == (1, 1, 1)
+    @test exc1.thread == (0, 0, 0)
     @test isempty(exc1.backtrace)
 
     # a non-quirk throw records whatever type the compiler deduced (here `jl_throw`'s
@@ -218,9 +218,11 @@ end
     @test excn isa Metal.KernelException
     @test excn.name == "exception"
 
-    # -g2: adds the device stack trace
+    # -g2: adds the faulting position and the device stack trace
     exc2 = throw_at(2, bounds_oob, Metal.zeros(Float32, 1))
     @test exc2.name == "BoundsError"
+    @test exc2.thread == (1, 1, 1)
+    @test exc2.threadgroup == (1, 1, 1)
     @test !isempty(exc2.backtrace)
     @test any(frame -> occursin("throw_boundserror", frame[1]), exc2.backtrace)
 end
