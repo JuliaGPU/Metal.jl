@@ -364,7 +364,8 @@ tag_value_io["SARC"] = (
     end)
 ## reflection lists
 tag_value_io["RBUF"] = (
-    # Reflection buffer
+    # Reflection buffer: zero-padding to align the payload to 16 bytes within the file,
+    # followed by a flatbuffer with an "AIRR" identifier (see the format notes up top)
     Vector{UInt8},
     (io, nb) -> begin
         read(io, nb)
@@ -372,13 +373,16 @@ tag_value_io["RBUF"] = (
     (io, val) -> write(io, val))
 ## script lists
 tag_value_io["SBUF"] = (
-    # Script buffer
+    # Script buffer; a flatbuffer describing pipeline descriptor scripts
     Vector{UInt8},
     (io, nb) -> begin
-        # XXX: these are probably flatbuffers; decode here?
         read(io, nb)
     end,
     (io, val) -> write(io, val))
+
+# unlike other tags, buffer tags encode the size of their value as a 32-bit field,
+# presumably so that their contents can outgrow the 16-bit size limit
+const wide_size_tags = ["RBUF", "SBUF"]
 
 function Base.read!(io::IO, tg::TagGroup)
     if tg.has_size
@@ -399,14 +403,12 @@ function Base.read!(io::IO, tg::TagGroup)
         end
 
         # read the value size and note our position
-        value_size = read(io, tg.size_type)
-        tg.offsets[tag_name] = position(io)
-
-        # XXX: there's a 2 byte mismatch between the buffers in list, and
-        #      the next token. bug in air-lld, or are we missing something?
-        if tag_name in ["RBUF", "SBUF"]
-            value_size += 2
+        value_size = if tag_name in wide_size_tags
+            read(io, UInt32)
+        else
+            read(io, tg.size_type)
         end
+        tg.offsets[tag_name] = position(io)
 
         if !haskey(tag_value_io, tag_name)
             @warn "Unknown tag: $tag_name"
@@ -451,14 +453,12 @@ function Base.write(io::IO, tg::TagGroup)
             end
             value_size = sizeof(value_bytes)
 
-            # XXX: there's a 2 byte mismatch between the buffers in list, and
-            #      the next token. bug in air-lld, or are we missing something?
-            if tag in ["RBUF", "SBUF"]
-                value_size -= 2
-            end
-
             # write the value size and the value itself
-            write(io, tg.size_type(value_size))
+            if tag in wide_size_tags
+                write(io, UInt32(value_size))
+            else
+                write(io, tg.size_type(value_size))
+            end
             tg.offsets[tag] = position(io)
             write(io, value_bytes)
         end
