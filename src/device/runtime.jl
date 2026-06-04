@@ -134,11 +134,14 @@ end
     if kernel_debug_level() < 2
         # one-shot claim: at `-g1` each lane records everything it has to say (the name
         # and reason) under a single call, so no re-entrancy is needed -- and skipping the
-        # position keeps the cold path free of thread-position uses. those reads cost every
-        # throw-capable kernel even when nothing ever throws: the positions are kernel
-        # inputs held live for the cold path's sake, and the extra cold code itself is
-        # penalized by the M1/macOS 15 backend (the #796 regression). the lane's position
-        # is hence only reported at `-g2`.
+        # position recording keeps the unhappy path down to this single atomic exchange.
+        # that frugality is measured, not aesthetic: the position machinery (reading the
+        # thread-position kernel inputs, keeping them live into cold code, and the
+        # re-entrant comparisons below) is penalized by the M1 (macOS 15) backend in every
+        # kernel that can throw, even when no exception is ever thrown -- it alone
+        # regressed accumulate by ~50% (JuliaGPU/Metal.jl#796), independently of the
+        # other costly construct (see `report_exception`). the lane's position is hence
+        # only recorded, and reported, at `-g2`.
         return atomic_exchange_explicit(lock_ptr, Int32(1)) == Int32(0)
     end
     # re-entrant claim: the `-g2` reporting sequence spans multiple calls (the exception
@@ -201,12 +204,22 @@ end
 # debug level 1 (`report_exception`) or >= 2 (`report_exception_name`). record it as the
 # type name, unless a quirk's `@gputhrow` already wrote a more precise name (in which case
 # the name buffer is non-empty and we leave it alone).
+#
+# recording only happens at debug level >= 2: copying the runtime name string requires
+# `store_cstring!`'s data-dependent byte loop, and a loop on the unhappy path is one of the
+# constructs the M1 (macOS 15) backend penalizes in every kernel that can throw, even when
+# no exception is ever thrown (it alone regressed accumulate by more than 50%; see
+# `claim_output!` for the other one). at `-g1` this folds to an empty function, and quirk
+# throws -- the common exceptions -- still record their full name and reason through
+# `record_exception!`'s loop-free word stores.
 function report_exception(ex)
-    info = kernel_state().exception_info
-    name = info_field(info, Val(:name))
-    if lock_output!(info) &&
-       unsafe_load(reinterpret(Core.LLVMPtr{UInt8, AS.Device}, name)) == 0x00
-        store_cstring!(name, ex)
+    if kernel_debug_level() >= 2
+        info = kernel_state().exception_info
+        name = info_field(info, Val(:name))
+        if lock_output!(info) &&
+           unsafe_load(reinterpret(Core.LLVMPtr{UInt8, AS.Device}, name)) == 0x00
+            store_cstring!(name, ex)
+        end
     end
     return
 end

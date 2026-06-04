@@ -157,8 +157,9 @@ end
     @metal threads=1 throwing_kernel(a)
     @test_throws Metal.KernelException synchronize()
 
-    # the faulting lane's position is recorded at debug level >= 2 (recording it at lower
-    # levels would cost every kernel two extra position inputs; see `claim_output!`)
+    # the faulting lane's position is recorded at debug level >= 2 (the recording machinery
+    # slows down every kernel that can throw, even when nothing ever does; see
+    # `claim_output!`)
     function throw_at_three(a)
         if thread_position_in_threadgroup().x == 3
             a[2] = 1f0  # out-of-bounds store on a length-1 array
@@ -204,19 +205,23 @@ end
     @test exc0.thread == (0, 0, 0)
     @test isempty(exc0.backtrace)
 
-    # -g1: the faulting type and reason; no position (recording it would cost every kernel
-    # that can throw two extra position inputs, hurting occupancy even when nothing throws)
+    # -g1: the faulting type and reason for quirk throws; no position (the recording
+    # machinery slows down every kernel that can throw, even when nothing ever does;
+    # see `claim_output!`)
     exc1 = throw_at(1, bounds_oob, Metal.zeros(Float32, 1))
     @test exc1.name == "BoundsError"
     @test exc1.reason == "Out-of-bounds array access"
     @test exc1.thread == (0, 0, 0)
     @test isempty(exc1.backtrace)
 
-    # a non-quirk throw records whatever type the compiler deduced (here `jl_throw`'s
-    # generic "exception"), via report_exception at debug level >= 1
+    # a non-quirk throw records the compiler-deduced type name (here `jl_throw`'s generic
+    # "exception") only at debug level >= 2: copying that runtime string takes a byte loop
+    # on the unhappy path, which is similarly penalized (see `report_exception`)
     excn = throw_at(1, nonquirk, Metal.zeros(Int32, 1), MtlArray(Int32[0]))
     @test excn isa Metal.KernelException
-    @test excn.name == "exception"
+    @test isempty(excn.name)
+    excn2 = throw_at(2, nonquirk, Metal.zeros(Int32, 1), MtlArray(Int32[0]))
+    @test excn2.name == "exception"
 
     # -g2: adds the faulting position and the device stack trace
     exc2 = throw_at(2, bounds_oob, Metal.zeros(Float32, 1))

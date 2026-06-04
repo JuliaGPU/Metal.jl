@@ -142,15 +142,15 @@ path stays as small as the level allows:
 
 - At `-g0`, only the fact that an exception occurred is reported:
   `KernelException: an exception was thrown on device Apple M1`.
-- At `-g1` (the default), the type and reason are reported, as shown above. The common
-  implicit exceptions (bounds, domain, overflow, inexact, and so on) carry a precise type
-  and reason; other throws report whatever type the compiler could deduce, which is often
-  a generic `exception`.
+- At `-g1` (the default), the type and reason are reported, as shown above, for the common
+  implicit exceptions (bounds, domain, overflow, inexact, and so on); other throws only
+  report that an exception occurred.
 - At `-g2`, the faulting position (`... was thrown by thread 1×1×1 in threadgroup 1×1×1`)
-  and a device-side stack trace are additionally reported. (The position is not recorded
-  at `-g1` because keeping it would tax every kernel that can throw, even when nothing
-  ever throws: the exception path grows and the thread-position inputs are kept live,
-  which measurably slows kernels down on M1/M2 GPUs.)
+  and a device-side stack trace are additionally reported, and throws not covered above
+  report whatever type name the compiler could deduce (often a generic `exception`).
+  This extra detail is not recorded at `-g1` because its machinery taxes every kernel
+  that can throw, even when nothing ever throws, measurably slowing down kernels on
+  M1-era GPUs.
 
 The level can also be set per launch, independent of the session's `-g`, with the
 `debug_level` keyword — for example `@metal debug_level=2 kernel(args...)` to capture a
