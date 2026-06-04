@@ -15,10 +15,13 @@ import Base.FastMath
 # intrinsics, and the NaN-propagating float `min`/`max` — so a back-end change that stops
 # emitting them is caught here instead of silently regressing performance.
 #
-# We inspect `Metal.code_llvm` (the IR after GPUCompiler's `finish_ir!`, where the `air.*`
-# intrinsics appear); no GPU or metallib build is needed. Each function is spliced into the
-# compiled closure via `@eval` so the call is a concrete, specializable call (a captured
-# `Function` would dispatch dynamically and never lower).
+# The operations handled by a front-end `@device_override` emit their `air.*` intrinsic
+# directly into the Julia-generated IR, so we inspect `Metal.code_llvm` (no GPU or metallib
+# build needed). The ones lowered by GPUCompiler's back-end keep their generic `llvm.*`
+# intrinsic at that stage and only become `air.*` during machine-code generation, so those
+# are inspected through `Metal.code_air` (which lowers, downgrades, and disassembles).
+# Each function is spliced into the compiled closure via `@eval` so the call is a concrete,
+# specializable call (a captured `Function` would dispatch dynamically and never lower).
 
 # integer types paired with their AIR mangling: `iN` width suffix and `s`/`u` signedness.
 const INT_TYPES = [(Int8, "i8", "s"), (UInt8, "i8", "u"), (Int16, "i16", "s"),
@@ -163,7 +166,7 @@ end
         end
         @test @filecheck begin
             @check "@air.fma.f32"
-            Metal.code_llvm((a, b, c) -> fma(a, b, c), Tuple{Float32,Float32,Float32})
+            Metal.code_air((a, b, c) -> fma(a, b, c), Tuple{Float32,Float32,Float32})
         end
         # sqrt: f16 is a front-end override; f32 (and the fast f32 form) come from the
         # back-end's llvm.sqrt lowering.
@@ -173,11 +176,11 @@ end
         end
         @test @filecheck begin
             @check "@air.sqrt.f32"
-            Metal.code_llvm(x -> sqrt(x), Tuple{Float32})
+            Metal.code_air(x -> sqrt(x), Tuple{Float32})
         end
         @test @filecheck begin
             @check "@air.fast_sqrt.f32"
-            Metal.code_llvm(x -> $(FastMath.sqrt_fast)(x), Tuple{Float32})
+            Metal.code_air(x -> $(FastMath.sqrt_fast)(x), Tuple{Float32})
         end
         @test @filecheck begin
             @check "@air.sincos.f32"
@@ -202,11 +205,11 @@ end
     @eval begin
         @test @filecheck begin
             @check $("@air.$root.f32")
-            Metal.code_llvm(x -> $fn(x), Tuple{Float32})
+            Metal.code_air(x -> $fn(x), Tuple{Float32})
         end
         @test @filecheck begin
             @check $("@air.$root.f16")
-            Metal.code_llvm(x -> $fn(x), Tuple{Float16})
+            Metal.code_air(x -> $fn(x), Tuple{Float16})
         end
     end
 end
@@ -215,7 +218,7 @@ end
 @testset "float $name $T" for T in (Float32, Float16), (fn, name) in ((min, "fmin"), (max, "fmax"))
     @eval @test @filecheck begin
         @check $("@air.$name.f$(8*sizeof(T))")
-        Metal.code_llvm((x, y) -> $fn(x, y), Tuple{$T,$T})
+        Metal.code_air((x, y) -> $fn(x, y), Tuple{$T,$T})
     end
 end
 
@@ -225,11 +228,11 @@ end
     @eval begin
         @test @filecheck begin
             @check_not "air.clamp"
-            Metal.code_llvm((x, lo, hi) -> clamp(x, lo, hi), Tuple{Float32,Float32,Float32})
+            Metal.code_air((x, lo, hi) -> clamp(x, lo, hi), Tuple{Float32,Float32,Float32})
         end
         @test @filecheck begin
             @check_not "air.sign"
-            Metal.code_llvm(x -> sign(x), Tuple{Float32})
+            Metal.code_air(x -> sign(x), Tuple{Float32})
         end
     end
 end
@@ -242,7 +245,7 @@ end
     sgn == "s" || continue
     @eval @test @filecheck begin
         @check $("@air.abs.s.$iN")
-        Metal.code_llvm(x -> abs(x), Tuple{$T})
+        Metal.code_air(x -> abs(x), Tuple{$T})
     end
 end
 
@@ -250,7 +253,7 @@ end
 @testset "$name $T" for (T, iN, sgn) in INT_TYPES, (fn, name) in ((min, "min"), (max, "max"))
     @eval @test @filecheck begin
         @check $("@air.$name.$sgn.$iN")
-        Metal.code_llvm((x, y) -> $fn(x, y), Tuple{$T,$T})
+        Metal.code_air((x, y) -> $fn(x, y), Tuple{$T,$T})
     end
 end
 
@@ -258,7 +261,7 @@ end
 @testset "$name 3-arg $T" for (T, iN, sgn) in INT_TYPES, (fn, name) in ((min, "min3"), (max, "max3"))
     @eval @test @filecheck begin
         @check $("@air.$name.$sgn.$iN")
-        Metal.code_llvm((x, y, z) -> $fn(x, y, z), Tuple{$T,$T,$T})
+        Metal.code_air((x, y, z) -> $fn(x, y, z), Tuple{$T,$T,$T})
     end
 end
 
@@ -268,7 +271,7 @@ end
                                        (count_ones, "popcount"), (bitreverse, "reverse_bits"))
     @eval @test @filecheck begin
         @check $("@air.$name.$iN")
-        Metal.code_llvm(x -> $fn(x), Tuple{$T})
+        Metal.code_air(x -> $fn(x), Tuple{$T})
     end
 end
 
