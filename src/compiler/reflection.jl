@@ -19,8 +19,16 @@ function split_kwargs_runtime(kwargs, wanted::Vector{Symbol})
     return extracted, remaining
 end
 
-# forward the rest to GPUCompiler with an appropriate CompilerJob
-for method in (:code_typed, :code_warntype, :code_llvm, :code_native)
+# forward the rest to GPUCompiler with an appropriate CompilerJob.
+# `code_air` shows the module as downgraded to AIR (and disassembled again), which maps
+# onto GPUCompiler's `code_native`; `code_llvm` shows the IR before that lowering, still
+# containing generic LLVM intrinsics. `code_native` is kept as an alias for `code_air`,
+# as AIR is the closest thing to native code we can generate.
+for (method, fwd) in [:code_typed    => :code_typed,
+                      :code_warntype => :code_warntype,
+                      :code_llvm     => :code_llvm,
+                      :code_air      => :code_native,
+                      :code_native   => :code_native]
     # only code_typed doesn't take a io argument
     args = method === :code_typed ? (:job,) : (:io, :job)
 
@@ -31,7 +39,7 @@ for method in (:code_typed, :code_warntype, :code_llvm, :code_native)
             source = methodinstance(typeof(func), Base.to_tuple_type(types))
             config = compiler_config(device(); kernel, compiler_kwargs...)
             job = CompilerJob(source, config)
-            GPUCompiler.$method($(args...); kwargs...)
+            GPUCompiler.$fwd($(args...); kwargs...)
         end
         $method(@nospecialize(func), @nospecialize(types); kwargs...) =
             $method(stdout, func, types; kwargs...)
@@ -43,13 +51,14 @@ end
 #
 
 export @device_code_lowered, @device_code_typed, @device_code_warntype,
-       @device_code_llvm, @device_code_metal, @device_code
+       @device_code_llvm, @device_code_air, @device_code_metal, @device_code
 
 # forward to GPUCompiler
 @eval $(Symbol("@device_code_lowered")) = $(getfield(GPUCompiler, Symbol("@device_code_lowered")))
 @eval $(Symbol("@device_code_typed")) = $(getfield(GPUCompiler, Symbol("@device_code_typed")))
 @eval $(Symbol("@device_code_warntype")) = $(getfield(GPUCompiler, Symbol("@device_code_warntype")))
 @eval $(Symbol("@device_code_llvm")) = $(getfield(GPUCompiler, Symbol("@device_code_llvm")))
+@eval $(Symbol("@device_code_air")) = $(getfield(GPUCompiler, Symbol("@device_code_native")))
 @eval $(Symbol("@device_code_metal")) = $(getfield(GPUCompiler, Symbol("@device_code_native")))
 @eval $(Symbol("@device_code")) = $(getfield(GPUCompiler, Symbol("@device_code")))
 
