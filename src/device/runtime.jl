@@ -123,12 +123,11 @@ end
 @inline lock_output!(info) = kernel_debug_level() < 1 ? false : claim_output!(info)
 
 # the body of `lock_output!`, kept out of line. with `--check-bounds=yes` every indexing
-# operation grows a throw path, and inlining this claim (atomic exchange + SIMD position
-# reads + the re-entrant comparison) into each one balloons the kernel. Apple's shader
-# validator compiles that bloated kernel on every PSO creation and, on the macOS 15 CI
-# runner, crashes doing so; the backend then retries, which is what made the validation suite
-# time out. one shared, called-into copy keeps each kernel's unhappy path to a handful of
-# calls.
+# operation grows a throw path, and inlining this claim into each one balloons the kernel.
+# Apple's shader validator compiles that bloated kernel on every PSO creation and, on the
+# macOS 15 CI runner, crashes doing so; the backend then retries, which is what made the
+# validation suite time out. one shared, called-into copy keeps each kernel's unhappy path
+# to a handful of calls.
 @noinline function claim_output!(info)
     lock_ptr = info_field(info, Val(:output_lock))
     t  = thread_position_in_threadgroup()
@@ -162,12 +161,24 @@ end
     return
 end
 
+# record a compile-time exception name and reason in the mailbox, claiming it first. one
+# out-of-line copy serves every `@gputhrow` site of a given exception (see the macro),
+# keeping per-site cold code to a single call whose only argument is the mailbox pointer.
+@noinline function record_exception!(info, ::Val{name}, ::Val{reason}) where {name, reason}
+    if lock_output!(info)
+        store_string!(info_field(info, Val(:name)),   Val(name))
+        store_string!(info_field(info, Val(:reason)), Val(reason))
+    end
+    return
+end
+
 function signal_exception()
     info = kernel_state().exception_info
-    # record our position if we're the first faulting lane to reach the mailbox; at `-g0`
-    # `lock_output!` is a no-op (returns `false`), leaving only the status flag below
-    lock_output!(info)
-    # raise the host-visible flag so the exception isn't silently swallowed
+    # raise the host-visible flag so the exception isn't silently swallowed. no claiming
+    # here: at debug level >= 1 the reporting calls preceding this one (`report_exception`,
+    # `@gputhrow`) have already claimed the mailbox and recorded what there is to record,
+    # and at `-g0` there is nothing to claim for, keeping this -- the one call present at
+    # every throw site regardless of debug level -- free of mailbox traffic.
     atomic_store_explicit(info_field(info, Val(:status)), Int32(1))
     return
 end

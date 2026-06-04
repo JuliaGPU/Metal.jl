@@ -3,14 +3,16 @@ Base.Experimental.@MethodTable(method_table)
 
 # throw a device-side exception, recording its type name and reason in the exception
 # mailbox so the host can report them (see `device/runtime.jl`, `compiler/exceptions.jl`).
+# the recording happens in a single out-of-line helper (`record_exception!`): GPUCompiler
+# force-inlines throwing functions into their callers, so anything in this macro lands at
+# every single throw site of every kernel.
 macro gputhrow(name::String, reason::String)
     name_q = QuoteNode(Symbol(name))
     reason_q = QuoteNode(Symbol(reason))
     return quote
-        info = kernel_state().exception_info
-        if lock_output!(info)
-            store_string!(info_field(info, Val(:name)),   Val($name_q))
-            store_string!(info_field(info, Val(:reason)), Val($reason_q))
+        # the gate folds to a constant, so `-g0` kernels don't even carry the call
+        if kernel_debug_level() >= 1
+            record_exception!(kernel_state().exception_info, Val($name_q), Val($reason_q))
         end
         throw(nothing)
     end
