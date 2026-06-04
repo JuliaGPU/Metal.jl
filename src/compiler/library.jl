@@ -15,7 +15,7 @@ using SHA: sha256
 using CEnum: @cenum
 using UUIDs: UUID
 using Printf: @printf
-using CodecBzip2: Bzip2Compressor, Bzip2Decompressor, Bzip2DecompressorStream
+using CodecBzip2: Bzip2DecompressorStream
 
 
 ## enums
@@ -73,7 +73,17 @@ end
 struct EmbeddedSource
     link_options::String
     working_directory::Union{Nothing,String}
+    # BZip2-compressed tarballs, kept verbatim: toolchains differ in compression level
+    # and padding (Xcode 26 emits level 6 unpadded, older ones level 9 padded to 16 KiB
+    # multiples), so recompressing would not round-trip. see `decompress_source_archive`.
     archives::Vector{Pair{String,Vector{UInt8}}}
+end
+
+# the source archives are stored as BZip2-compressed tarballs. some toolchains pad the
+# compressed stream to a multiple of 16 KiB, so stop decompressing at the stream's end.
+function decompress_source_archive(compressed::Vector{UInt8})
+    stream = Bzip2DecompressorStream(IOBuffer(compressed); stop_on_end=true)
+    read(stream, typemax(Int))
 end
 
 Base.@kwdef struct MetalLibFunction
@@ -336,31 +346,18 @@ tag_value_io["DEPF"] = (
     end)
 ## embedded sources
 tag_value_io["SARC"] = (
-    # Source archive; an identifier (null-terminated ASCII) and BZip2-compressed tarball
+    # Source archive; an identifier (null-terminated ASCII) and BZip2-compressed tarball,
+    # which is stored as-is (see the comments on `EmbeddedSource`)
     @NamedTuple{id::String, archive::Vector{UInt8}},
     (io, nb) -> begin
         id = String(readuntil(io, UInt8(0)))
-        compressed = read(io, nb - sizeof(id) - 1)
-
-        # decompress the archive
-        #archive = transcode(Bzip2Decompressor, compressed)
-        # special handling is required to set `stop_on_end=true`,
-        # as these archives are padded to multiples of 16KB.
-        stream = Bzip2DecompressorStream(IOBuffer(compressed); stop_on_end=true)
-        archive = read(stream, typemax(Int))
-
+        archive = read(io, nb - sizeof(id) - 1)
         (; id, archive)
     end,
     (io, val) -> begin
         write(io, val.id)
         write(io, UInt8(0))
-
-        # compress and pad the archive
-        compressed = transcode(Bzip2Compressor, val.archive)
-        padding = 16*1024 - (sizeof(compressed) % (16*1024))
-        compressed = vcat(compressed, Base.zeros(UInt8, padding))
-
-        write(io, compressed)
+        write(io, val.archive)
     end)
 ## reflection lists
 tag_value_io["RBUF"] = (
