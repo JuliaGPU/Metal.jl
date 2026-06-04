@@ -8,10 +8,9 @@
 #
 # TODO:
 # - fully support metallib v2.7: RFLT, reflection list
-# - fix UUID computation to be based on the module's data
 # - figure out which LLVM IR version AIR v2.5 corresponds to
 
-using SHA: sha256
+using SHA: sha256, SHA2_256_CTX, update!, digest!
 using CEnum: @cenum
 using UUIDs: UUID
 using Printf: @printf
@@ -84,6 +83,22 @@ end
 function decompress_source_archive(compressed::Vector{UInt8})
     stream = Bzip2DecompressorStream(IOBuffer(compressed); stop_on_end=true)
     read(stream, typemax(Int))
+end
+
+# derive a UUID from library contents. the official toolchain stamps every library with
+# a UUID, but generates it randomly and nothing seems to inspect the contents; deriving
+# one from the modules keeps our output deterministic.
+function content_uuid(datas::Vector{UInt8}...)
+    ctx = SHA2_256_CTX()
+    for data in datas
+        update!(ctx, data)
+    end
+    dgst = digest!(ctx)
+    u = ntoh(only(reinterpret(UInt128, dgst[1:16])))
+    # stamp the version and variant bits of a random (version 4) UUID, like Apple does
+    u = (u & ~(UInt128(0xf) << 76)) | (UInt128(0x4) << 76)
+    u = (u & ~(UInt128(0x3) << 62)) | (UInt128(0x2) << 62)
+    return UUID(u)
 end
 
 Base.@kwdef struct MetalLibFunction
@@ -900,8 +915,6 @@ function Base.write(io::IO, lib::MetalLib)
         if lib.file_version >= v"1.2.7" && sizeof(reflection_list) > 0
             header_ex_tags["RLST"] = (; offset=0, size=sizeof(reflection_list))
         end
-        # XXX: placeholder; this data is invalid
-        #      it should be a UUID based on all of the module's data
         if lib.uuid !== nothing
             header_ex_tags["UUID"] = lib.uuid
         end

@@ -256,7 +256,8 @@ function compile(@nospecialize(job::CompilerJob))
                                      metal_version=job.config.target.metal)
             lib = MetalLib(; functions = [fun],
                              file_version = metallib_target(job.config.target.macos),
-                             platform_version = job.config.target.macos)
+                             platform_version = job.config.target.macos,
+                             uuid = content_uuid(air))
 
             io = IOBuffer()
             write(io, lib)
