@@ -6,9 +6,21 @@
 #   https://github.com/a2flo/floor_llvm/blob/floor_toolchain_1406/llvm/lib/Bitcode/MetalLib/MetalLibWriterPass.cpp
 #   https://github.com/a2flo/floor_llvm/blob/floor_toolchain_1406/llvm/tools/metallib-dis/metallib-dis.cpp
 #
-# TODO:
-# - fully support metallib v2.7: RFLT, reflection list
-# - figure out which LLVM IR version AIR v2.5 corresponds to
+# parts of the format we read but do not generate:
+# - reflection data: the official toolchain gives every function an RBUF reflection
+#   buffer, a flatbuffer (identifier "AIRR", payload 16-byte aligned within the file)
+#   describing the function's signature. the schemas are embedded as binary flatbuffer
+#   schemas (BFBS) in the Metal toolchain binaries, and use a double-table scheme where
+#   each node is a small table holding the node type and an offset to the type-specific
+#   table. floor implements writing these; see metal_reflection_{types,writing}.hpp there.
+# - script lists (SLST section, SBUF buffers), recording pipeline descriptor scripts;
+#   compare with `metal-source -flatbuffers=json`
+#
+# parts we do not support at all:
+# - compressed reflection buffers (RBUZ)
+# - dynamic libraries and symbol companions: variable lists, imported/exported symbol
+#   lists, the install name
+# - graphics-related metadata: vertex attributes (VATT/VATY tags), tessellation (TESS)
 
 using SHA: sha256, SHA2_256_CTX, update!, digest!
 using CEnum: @cenum

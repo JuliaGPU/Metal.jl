@@ -121,6 +121,51 @@ downgrade and the re-parse both run the LLVM verifier, which catches malformed i
 signatures (for example an `air.*` call with the wrong argument types) before Apple's
 compiler ever sees them.
 
+## The metallib container format
+
+The `.metallib` container is undocumented, but understood well enough to implement.
+Metal.jl has a pure-Julia reader and writer in `src/compiler/library.jl`; useful outside
+references are [MetalLibraryArchive](https://github.com/YuAo/MetalLibraryArchive) and the
+[floor](https://github.com/a2flo/floor_llvm) project, whose `MetalLibWriterPass.cpp` and
+`metallib-dis` tool are the most complete third-party implementation.
+
+A library starts with a fixed header: the `MTLB` magic, the file-format version, file and
+platform types, the platform version, and the offsets of the main sections. Then comes a
+function list, where each function is a group of tagged values (name, program type, module
+hash, AIR/MSL versions, and offsets into the other sections), followed by per-function
+public and private metadata, and the AIR bitcode modules themselves. Optional sections are
+referenced from a header extension after the function list: embedded source archives
+(`HSRD`), the dynamic header recording the library name (`HDYN`), reflection data (`RLST`),
+script lists (`SLST`), and a UUID.
+
+The file-format version follows the deployment target, as do the AIR and MSL versions
+recorded per function and stamped into the bitcode:
+
+| `-mmacosx-version-min` | metallib | AIR | MSL |
+|:-----------------------|:---------|:----|:----|
+| 14                     | 1.2.7    | 2.6 | 3.1 |
+| 15                     | 1.2.8    | 2.7 | 3.2 |
+| 26                     | 1.2.9    | 2.8 | 4.0 |
+
+The `Metal.metallib_support`, `Metal.air_support` and `Metal.metal_support` functions encode
+this mapping, and Metal.jl emits the same versions the offline compiler would when targeting
+the host. The header of `src/version.jl` describes how to re-derive the table for a new
+macOS release using `xcrun metal` and a hex editor.
+
+Since metallib v1.2.7 the toolchain attaches reflection data to every function: an `RBUF`
+buffer holding a flatbuffer with an `AIRR` file identifier, describing the function's
+signature and resource bindings. The flatbuffer schemas are not published, but Apple embeds
+them as binary flatbuffer schemas (BFBS) in the Metal toolchain binaries, from where they
+can be extracted and fed to a flatbuffers implementation. The one non-standard part is that
+nodes are encoded through a double table: the first table holds the node type and an offset
+to a second table with the type-specific fields. floor implements writing these buffers
+(see its `metal_reflection_types.hpp` and `metal_reflection_writing.hpp`).
+
+Metal.jl reads and round-trips all of the above, but only generates the sections it has
+data for. In practice that means libraries without reflection buffers or script lists,
+which the runtime accepts. The header of `src/compiler/library.jl` lists what is not
+implemented yet.
+
 ## Reproducing and reducing backend compiler crashes
 
 A good chunk of Metal.jl debugging is narrowing a crash in Apple's GPU compiler down to the
