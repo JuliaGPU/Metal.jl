@@ -158,28 +158,23 @@ steps:
     command: |
       echo "--- :git: Setting up worktrees"
       git fetch -q origin 356e7d28ea5c2005aa3bd51ab3a3389cc28ad135
-      git fetch -q origin 65ef0f7c8685ce77dafaa7b6d0bcd453d63137ee
-      git fetch -q origin f6e8b075e701ce3736fa255863beabf801551dd4
-      git fetch -q origin a5ba318bdfa521010f15a3b6d79aaee4e2d64d20
+      git fetch -q origin ab6b7a3d104cb4d7dbd87d00a2e66594656feaf6
       git worktree add worktree-before 356e7d28ea5c2005aa3bd51ab3a3389cc28ad135
-      git worktree add worktree-v2 65ef0f7c8685ce77dafaa7b6d0bcd453d63137ee
-      git worktree add worktree-vA f6e8b075e701ce3736fa255863beabf801551dd4
-      git worktree add worktree-vB a5ba318bdfa521010f15a3b6d79aaee4e2d64d20
+      git worktree add worktree-fix ab6b7a3d104cb4d7dbd87d00a2e66594656feaf6
 
       echo "--- :julia: Instantiating projects"
       julia --project=envs/before -e 'using Pkg; Pkg.develop(path="worktree-before"); Pkg.add("BenchmarkTools"); Pkg.status()'
-      julia --project=envs/v2 -e 'using Pkg; Pkg.develop(path="worktree-v2"); Pkg.add("BenchmarkTools"); Pkg.status()'
-      julia --project=envs/vA -e 'using Pkg; Pkg.develop(path="worktree-vA"); Pkg.add("BenchmarkTools"); Pkg.status()'
-      julia --project=envs/vB -e 'using Pkg; Pkg.develop(path="worktree-vB"); Pkg.add("BenchmarkTools"); Pkg.status()'
+      julia --project=envs/after -e 'using Pkg; Pkg.develop(path=pwd()); Pkg.add("BenchmarkTools"); Pkg.status()'
+      julia --project=envs/fix -e 'using Pkg; Pkg.develop(path="worktree-fix"); Pkg.add("BenchmarkTools"); Pkg.status()'
 
       echo "+++ :racehorse: BEFORE 796, -g1"
       julia --project=envs/before perf/mwe796.jl
-      echo "+++ :racehorse: V2 position only at -g2, -g1"
-      julia --project=envs/v2 perf/mwe796.jl
-      echo "+++ :racehorse: vA deduced-name only at -g2, -g1"
-      julia --project=envs/vA perf/mwe796.jl
-      echo "+++ :racehorse: vB record nothing at -g1, -g1"
-      julia --project=envs/vB perf/mwe796.jl
+      echo "+++ :racehorse: AFTER 796, -g1"
+      julia --project=envs/after perf/mwe796.jl
+      echo "+++ :racehorse: FIX tb/fix_796_regression, -g1"
+      julia --project=envs/fix perf/mwe796.jl
+      echo "+++ :racehorse: FIX tb/fix_796_regression, -g2"
+      julia -g2 --project=envs/fix perf/mwe796.jl
     agents:
       queue: "juliaecosystem"
       os: "macos"
