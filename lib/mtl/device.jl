@@ -74,8 +74,6 @@ end
 
 Returns the number `n` of the highest `MTLGPUFamilyMetal`n` feature set that `dev` reports
 support for (e.g. `3` for Metal 3, `4` for Metal 4), or `nothing` if it supports neither.
-
-Note that paravirtualized GPUs under-report this (see [`is_virtual`](@ref)).
 """
 function highest_metal_family(dev::MTLDevice)
     supports_family(dev, MTLGPUFamilyMetal4) && return 4
