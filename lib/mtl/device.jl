@@ -41,9 +41,9 @@ end
     is_virtual(dev::MTLDevice)
 
 Returns `true` if `dev` is a paravirtualized GPU, i.e. Metal.jl is running inside a virtual
-machine. Such devices are backed by real Apple Silicon hardware and support Metal 3, but
-under-report their capabilities through `supportsFamily` (e.g. claiming to lack the
-`MTLGPUFamilyApple7` and `MTLGPUFamilyMetal3` feature sets).
+machine. On Apple Silicon, such devices partially support Metal 3, and they support
+some of the capabilities of their underlying hardware family despite `supportsFamily`
+claiming lower capabilities (e.g. Not claiming support for `MTLGPUFamilyApple7` and `MTLGPUFamilyMetal3` feature sets due to a few missing features).
 """
 is_virtual(dev::MTLDevice) = occursin("Paravirtual", String(dev.name))
 
