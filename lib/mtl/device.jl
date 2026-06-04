@@ -61,8 +61,6 @@ is_m4(dev::MTLDevice) = supports_family(dev, MTLGPUFamilyApple9) &&
 
 Returns the number `n` of the highest `MTLGPUFamilyApple`n` feature set that `dev` reports
 support for (e.g. `7` for `MTLGPUFamilyApple7`), or `nothing` if it supports none of them.
-
-Note that paravirtualized GPUs under-report this (see [`is_virtual`](@ref)).
 """
 function highest_apple_family(dev::MTLDevice)
     for n in 10:-1:1
