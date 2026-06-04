@@ -4,6 +4,11 @@
 using Metal
 using BenchmarkTools
 
+# the GPUCompiler runtime library is cached on disk keyed by target+debug level only, with
+# no hash of the runtime sources: when multiple Metal.jl checkouts share a depot, one tree's
+# runtime (signal_exception etc.) gets linked into the other's kernels. force a rebuild.
+Metal.GPUCompiler.reset_runtime()
+
 @info "Configuration" pkgdir(Metal) Base.pkgversion(Metal.GPUCompiler) Base.JLOptions().debug_level
 
 const n_el = 512 * 1000
