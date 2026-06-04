@@ -121,6 +121,9 @@ Base.@kwdef struct MetalLib
 
     uuid::Union{Nothing, UUID} = nothing
 
+    # name of the library, as recorded in the dynamic header (metallib v1.2.9)
+    library_name::Union{Nothing, String} = nothing
+
     functions::Vector{MetalLibFunction}
     embedded_source::Union{Nothing, EmbeddedSource} = nothing
 end
@@ -150,6 +153,10 @@ function Base.show(io::IO, lib::MetalLib)
         print(io, " [$(join(platform_flags, ", "))]")
     end
     println(io)
+
+    if lib.library_name !== nothing
+        println(io, "  name: $(lib.library_name)")
+    end
 
     println(io, "  functions:")
 
@@ -277,6 +284,11 @@ tag_value_io["HSRC"] = (
     (io, _)   -> (; offset=read(io, UInt64), size=read(io, UInt64)),
     (io, val) -> write(io, UInt64[val.offset, val.size]))
 tag_value_io["HSRD"] = tag_value_io["HSRC"]
+tag_value_io["HDYN"] = (
+    # Offset and size of the dynamic header section; 2 x 64-bit unsigned integers
+    @NamedTuple{offset::UInt64, size::UInt64},
+    (io, _)   -> (; offset=read(io, UInt64), size=read(io, UInt64)),
+    (io, val) -> write(io, UInt64[val.offset, val.size]))
 tag_value_io["RLST"] = (
     # Offset and size of the reflection list section; 2 x 64-bit unsigned integers
     @NamedTuple{offset::UInt64, size::UInt64},
@@ -643,6 +655,17 @@ function Base.read(io::IO, ::Type{MetalLib})
         @assert position(io) == header_ex["SLST"].offset + header_ex["SLST"].size
     end
 
+    # dynamic header
+    #
+    # this section only records the name of the library
+    library_name = nothing
+    if header_ex !== nothing && haskey(header_ex, "HDYN")
+        seek(io, header_ex["HDYN"].offset)
+        dynamic_header = read!(io, TagGroup(has_size=false))
+        library_name = get(dynamic_header, "NAME", nothing)
+        @assert position(io) == header_ex["HDYN"].offset + header_ex["HDYN"].size
+    end
+
     # embedded source
     #
     # there can be fewer sources than functions, so preserve the function -> source mapping
@@ -718,6 +741,9 @@ function Base.read(io::IO, ::Type{MetalLib})
         # TODO: get rid of the nothing checks
         push!(optional_args, :uuid => header_ex["UUID"])
     end
+    if library_name !== nothing
+        push!(optional_args, :library_name => library_name)
+    end
 
     MetalLib(; file_version, file_type, is_macos, is_stub,
                platform_version, platform_type, is_64bit,
@@ -751,6 +777,18 @@ function Base.write(io::IO, lib::MetalLib)
                 archive_tags["SARC"] = (; id, archive)
                 write(io, archive_tags)
             end
+        end
+        take!(io)
+    end
+
+
+    ## dynamic header
+
+    dynamic_header = let io=IOBuffer()
+        if lib.library_name !== nothing
+            dynamic_header_tags = TagGroup(has_size=false)
+            dynamic_header_tags["NAME"] = lib.library_name
+            write(io, dynamic_header_tags)
         end
         take!(io)
     end
@@ -856,6 +894,9 @@ function Base.write(io::IO, lib::MetalLib)
             embedded_source_tag = lib.file_version >= v"1.2.6" ? "HSRD" : "HSRC"
             header_ex_tags[embedded_source_tag] = (; offset=0, size=sizeof(embedded_source))
         end
+        if sizeof(dynamic_header) > 0
+            header_ex_tags["HDYN"] = (; offset=0, size=sizeof(dynamic_header))
+        end
         if lib.file_version >= v"1.2.7" && sizeof(reflection_list) > 0
             header_ex_tags["RLST"] = (; offset=0, size=sizeof(reflection_list))
         end
@@ -956,6 +997,10 @@ function Base.write(io::IO, lib::MetalLib)
         mark_placeholder(:embedded_source_offset,
                          position(io) + offsetof(header_ex_tags, embedded_source_tag))
     end
+    if sizeof(dynamic_header) > 0
+        mark_placeholder(:dynamic_header_offset,
+                         position(io) + offsetof(header_ex_tags, "HDYN"))
+    end
     if sizeof(reflection_list) > 0
         mark_placeholder(:reflection_list_offset,
                          position(io) + offsetof(header_ex_tags, "RLST"))
@@ -980,7 +1025,11 @@ function Base.write(io::IO, lib::MetalLib)
         write(io, embedded_source)
     end
 
-    # TODO: dynamic header
+    # dynamic header
+    if sizeof(dynamic_header) > 0
+        patch_placeholder(io, :dynamic_header_offset, position(io))
+        write(io, dynamic_header)
+    end
 
     # TODO: variable list
 
