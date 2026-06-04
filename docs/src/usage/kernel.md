@@ -134,7 +134,8 @@ julia> function kernel(a)
 julia> @metal threads=1 kernel(Metal.zeros(Float32, 1));
 
 julia> synchronize()
-ERROR: KernelException: A BoundsError was thrown by thread 1×1×1 in threadgroup 1×1×1 on device Apple M1: Out-of-bounds array access
+ERROR: KernelException: A BoundsError was thrown on device Apple M1: Out-of-bounds array access
+For more details, run Julia with `-g2`, or launch the kernel with `@metal debug_level=2`.
 ```
 
 How much detail is reported depends on Julia's debug level (the `-g` flag), so the unhappy
@@ -142,11 +143,15 @@ path stays as small as the level allows:
 
 - At `-g0`, only the fact that an exception occurred is reported:
   `KernelException: an exception was thrown on device Apple M1`.
-- At `-g1` (the default), the type, reason, and faulting position are reported, as shown
-  above. The common implicit exceptions (bounds, domain, overflow, inexact, and so on)
-  carry a precise type and reason; other throws report whatever type the compiler could
-  deduce, which is often a generic `exception`.
-- At `-g2`, a device-side stack trace is additionally captured and appended.
+- At `-g1` (the default), the type and reason are reported, as shown above, for the common
+  implicit exceptions (bounds, domain, overflow, inexact, and so on); other throws only
+  report that an exception occurred.
+- At `-g2`, the faulting position (`... was thrown by thread 1×1×1 in threadgroup 1×1×1`)
+  and a device-side stack trace are additionally reported, and throws not covered above
+  report whatever type name the compiler could deduce (often a generic `exception`).
+  This extra detail is not recorded at `-g1` because its machinery taxes every kernel
+  that can throw, even when nothing ever throws, measurably slowing down kernels on
+  M1-era GPUs.
 
 The level can also be set per launch, independent of the session's `-g`, with the
 `debug_level` keyword — for example `@metal debug_level=2 kernel(args...)` to capture a

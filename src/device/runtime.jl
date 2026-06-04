@@ -37,7 +37,8 @@ struct ExceptionInfo_st
     status::Int32
     # whether a lane has claimed the mailbox (0 -> 1); only the holder writes a record
     output_lock::Int32
-    # the position of the faulting lane (also used to recognize the lock holder)
+    # the position of the faulting lane, recorded at debug level >= 2 (also used to
+    # recognize the lock holder for the multi-call -g2 reporting sequence)
     thread::NTuple{3, UInt32}
     threadgroup::NTuple{3, UInt32}
     # the exception type name and reason, as null-terminated text the host reads back
@@ -110,8 +111,8 @@ const EXCEPTION_FRAME_SIZE = sizeof(ExceptionFrame_st)
     return Expr(:block, exprs...)
 end
 
-# claim the mailbox for the calling lane. returns `true` to the single lane that wins the
-# claim and, re-entrantly, to that same lane on later calls (recognized by its recorded
+# claim the mailbox for the calling lane. returns `true` to the lane that wins the claim
+# (at `-g2` also re-entrantly to that same lane on later calls, recognized by its recorded
 # position), so it can go on to write the name, reason, and stack frames. any other faulting
 # lane gets `false` and leaves the record untouched (no spin, so a divergent threadgroup
 # can't deadlock here).
@@ -123,14 +124,29 @@ end
 @inline lock_output!(info) = kernel_debug_level() < 1 ? false : claim_output!(info)
 
 # the body of `lock_output!`, kept out of line. with `--check-bounds=yes` every indexing
-# operation grows a throw path, and inlining this claim (atomic exchange + SIMD position
-# reads + the re-entrant comparison) into each one balloons the kernel. Apple's shader
-# validator compiles that bloated kernel on every PSO creation and, on the macOS 15 CI
-# runner, crashes doing so; the backend then retries, which is what made the validation suite
-# time out. one shared, called-into copy keeps each kernel's unhappy path to a handful of
-# calls.
+# operation grows a throw path, and inlining this claim into each one balloons the kernel.
+# Apple's shader validator compiles that bloated kernel on every PSO creation and, on the
+# macOS 15 CI runner, crashes doing so; the backend then retries, which is what made the
+# validation suite time out. one shared, called-into copy keeps each kernel's unhappy path
+# to a handful of calls.
 @noinline function claim_output!(info)
     lock_ptr = info_field(info, Val(:output_lock))
+    if kernel_debug_level() < 2
+        # one-shot claim: at `-g1` each lane records everything it has to say (the name
+        # and reason) under a single call, so no re-entrancy is needed -- and skipping the
+        # position recording keeps the unhappy path down to this single atomic exchange.
+        # that frugality is measured, not aesthetic: the position machinery (reading the
+        # thread-position kernel inputs, keeping them live into cold code, and the
+        # re-entrant comparisons below) is penalized by the M1 (macOS 15) backend in every
+        # kernel that can throw, even when no exception is ever thrown -- it alone
+        # regressed accumulate by ~50% (JuliaGPU/Metal.jl#796), independently of the
+        # other costly construct (see `report_exception`). the lane's position is hence
+        # only recorded, and reported, at `-g2`.
+        return atomic_exchange_explicit(lock_ptr, Int32(1)) == Int32(0)
+    end
+    # re-entrant claim: the `-g2` reporting sequence spans multiple calls (the exception
+    # name, then each stack frame), so the holder must be able to re-claim, recognized by
+    # its recorded position (which doubles as the reported fault location).
     t  = thread_position_in_threadgroup()
     tg = threadgroup_position_in_grid()
     if atomic_exchange_explicit(lock_ptr, Int32(1)) == Int32(0)
@@ -162,12 +178,24 @@ end
     return
 end
 
+# record a compile-time exception name and reason in the mailbox, claiming it first. one
+# out-of-line copy serves every `@gputhrow` site of a given exception (see the macro),
+# keeping per-site cold code to a single call whose only argument is the mailbox pointer.
+@noinline function record_exception!(info, ::Val{name}, ::Val{reason}) where {name, reason}
+    if lock_output!(info)
+        store_string!(info_field(info, Val(:name)),   Val(name))
+        store_string!(info_field(info, Val(:reason)), Val(reason))
+    end
+    return
+end
+
 function signal_exception()
     info = kernel_state().exception_info
-    # record our position if we're the first faulting lane to reach the mailbox; at `-g0`
-    # `lock_output!` is a no-op (returns `false`), leaving only the status flag below
-    lock_output!(info)
-    # raise the host-visible flag so the exception isn't silently swallowed
+    # raise the host-visible flag so the exception isn't silently swallowed. no claiming
+    # here: at debug level >= 1 the reporting calls preceding this one (`report_exception`,
+    # `@gputhrow`) have already claimed the mailbox and recorded what there is to record,
+    # and at `-g0` there is nothing to claim for, keeping this -- the one call present at
+    # every throw site regardless of debug level -- free of mailbox traffic.
     atomic_store_explicit(info_field(info, Val(:status)), Int32(1))
     return
 end
@@ -176,12 +204,22 @@ end
 # debug level 1 (`report_exception`) or >= 2 (`report_exception_name`). record it as the
 # type name, unless a quirk's `@gputhrow` already wrote a more precise name (in which case
 # the name buffer is non-empty and we leave it alone).
+#
+# recording only happens at debug level >= 2: copying the runtime name string requires
+# `store_cstring!`'s data-dependent byte loop, and a loop on the unhappy path is one of the
+# constructs the M1 (macOS 15) backend penalizes in every kernel that can throw, even when
+# no exception is ever thrown (it alone regressed accumulate by more than 50%; see
+# `claim_output!` for the other one). at `-g1` this folds to an empty function, and quirk
+# throws -- the common exceptions -- still record their full name and reason through
+# `record_exception!`'s loop-free word stores.
 function report_exception(ex)
-    info = kernel_state().exception_info
-    name = info_field(info, Val(:name))
-    if lock_output!(info) &&
-       unsafe_load(reinterpret(Core.LLVMPtr{UInt8, AS.Device}, name)) == 0x00
-        store_cstring!(name, ex)
+    if kernel_debug_level() >= 2
+        info = kernel_state().exception_info
+        name = info_field(info, Val(:name))
+        if lock_output!(info) &&
+           unsafe_load(reinterpret(Core.LLVMPtr{UInt8, AS.Device}, name)) == 0x00
+            store_cstring!(name, ex)
+        end
     end
     return
 end

@@ -25,7 +25,9 @@ function Base.showerror(io::IO, err::KernelException)
     end
     print(io, " on device $(String(err.dev.name))")
     isempty(err.reason) || print(io, ": ", err.reason)
-    if !isempty(err.backtrace)
+    if err.thread == (0, 0, 0)
+        print(io, "\nFor more details, run Julia with `-g2`, or launch the kernel with `@metal debug_level=2`")
+    else
         print(io, "\nStacktrace:")
         for (i, (func, file, line)) in enumerate(err.backtrace)
             print(io, "\n [", i, "] ", func)
