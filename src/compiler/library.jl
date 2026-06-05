@@ -99,7 +99,7 @@ end
 Base.@kwdef struct MetalLib
     # even though Metal.jl only supports macOS 14+, which supports metallib v1.2.7, we don't
     # fully support this format yet and fall back to v1.2.6 for now. this matches macOS 12,
-    # but does support AIR/Metal v2.5/v3.0, as opposed to v2.4/v2.4 by macOS 12.
+    # but does support newer AIR/Metal versions in the embedded bitcode.
     file_version::VersionNumber=metallib_target()
     file_type::FileType=FILE_EXECUTABLE
     is_macos::Bool=true

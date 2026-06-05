@@ -61,10 +61,8 @@ function air_support(macos::VersionNumber = macos_version())
         v"2.8"
     elseif macos >= v"15"
         v"2.7"
-    elseif macos >= v"14"
+    else # macOS 14
         v"2.6"
-    else # macOS 13
-        v"2.5"
     end
 end
 
@@ -81,10 +79,8 @@ function metal_support(macos::VersionNumber = macos_version())
         v"4"
     elseif macos >= v"15"
         v"3.2"
-    elseif macos >= v"14"
+    else # macOS 14
         v"3.1"
-    else # macOS 13
-        v"3.0"
     end
 end
 
@@ -105,11 +101,11 @@ metal_target(macos::VersionNumber = macos_version()) = metal_support(macos)
 """
     Metal.air_target()::VersionNumber
 
-Returns the embedded-AIR-bitcode version Metal.jl emits by default. Pinned to the macOS 13
-baseline (v2.5) for backward compatibility, regardless of what the host supports (see
+Returns the embedded-AIR-bitcode version Metal.jl emits by default. Pinned to the macOS 14
+baseline (v2.6) for backward compatibility, regardless of what the host supports (see
 [`Metal.air_support`](@ref)).
 """
-air_target() = v"2.5"
+air_target() = v"2.6"
 
 """
     Metal.metallib_target()::VersionNumber

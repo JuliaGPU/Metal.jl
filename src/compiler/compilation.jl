@@ -153,7 +153,7 @@ end
     if air === nothing
         air = air_target()
         if air > air_support(macos)
-            error("""Metal.jl requires AIR 2.5 (macOS 13) or newer, but macOS $(macos) only supports AIR $(air_support(macos)).""")
+            error("""Metal.jl requires AIR $(air_target()) (macOS 14) or newer, but macOS $(macos) only supports AIR $(air_support(macos)).""")
         end
     end
 
