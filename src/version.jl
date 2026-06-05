@@ -43,7 +43,7 @@ function metallib_support(macos::VersionNumber = macos_version())
         v"1.2.9"
     elseif macos >= v"15"
         v"1.2.8"
-    else # macOS 14
+    else # macOS 13-14
         v"1.2.7"
     end
 end
@@ -61,8 +61,10 @@ function air_support(macos::VersionNumber = macos_version())
         v"2.8"
     elseif macos >= v"15"
         v"2.7"
-    else # macOS 14
+    elseif macos >= v"14"
         v"2.6"
+    else # macOS 13
+        v"2.5"
     end
 end
 
@@ -79,8 +81,10 @@ function metal_support(macos::VersionNumber = macos_version())
         v"4"
     elseif macos >= v"15"
         v"3.2"
-    else # macOS 14
+    elseif macos >= v"14"
         v"3.1"
+    else # macOS 13
+        v"3.0"
     end
 end
 

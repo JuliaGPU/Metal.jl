@@ -215,9 +215,11 @@ end
     end
     if air === nothing
         air = air_target(macos)
-        if air > air_support(macos)
+        if air < v"2.6"
             error("""Metal.jl requires AIR 2.6 (macOS 14) or newer, but macOS $(macos) only supports AIR $(air_support(macos)).""")
         end
+    elseif air < v"2.6"
+        error("""Metal.jl requires AIR 2.6 (macOS 14) or newer; cannot target AIR $(air).""")
     end
 
     # create GPUCompiler objects
