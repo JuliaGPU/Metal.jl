@@ -31,5 +31,12 @@ for tahoe in [v"16", v"26"]
     @test Metal.metal_support(tahoe) == v"4"
 end
 
+# compatibility versions, as reported by pre-Tahoe SDK builds, normalize to marketing
+# versions
+@test Metal.normalize_macos(v"16") == v"26"
+@test Metal.normalize_macos(v"16.2.1") == v"26.2.1"
+@test Metal.normalize_macos(v"15.5") == v"15.5"
+@test Metal.normalize_macos(v"26.1") == v"26.1"
+
 # paravirtualized GPUs don't expose an AGXAccelerator IOService to query the core count
 @test Metal.num_gpu_cores() > 0 broken=Metal.MTL.is_virtual(Metal.device())

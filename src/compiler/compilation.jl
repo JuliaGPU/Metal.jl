@@ -215,6 +215,8 @@ end
     # determine the versions of things to target
     if macos === nothing
         macos = macos_version()
+    else
+        macos = normalize_macos(macos)
     end
     if metal === nothing
         metal = metal_target(macos)

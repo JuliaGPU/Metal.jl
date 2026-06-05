@@ -1,5 +1,15 @@
 export macos_version, darwin_version
 
+# Julia binaries built against a pre-Tahoe SDK observe compatibility versions (macOS 26
+# reports as 16); normalize to the marketing version, like the offline compiler
+# normalizes the deployment target.
+function normalize_macos(version::VersionNumber)
+    if v"16" <= version < v"26"
+        version = VersionNumber(version.major + 10, version.minor, version.patch)
+    end
+    return version
+end
+
 """
     macos_version()::VersionNumber
 
@@ -7,7 +17,7 @@ Returns the host macOS version.
 
 See also [`Metal.darwin_version`](@ref).
 """
-const macos_version = ObjectiveC.macos_version
+macos_version() = normalize_macos(ObjectiveC.macos_version())
 
 """
     darwin_version()::VersionNumber
