@@ -85,9 +85,10 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
         # AIR 2.8 generalized the simdgroup matrix load/store intrinsics, replacing
         # the elements-per-row scalar, matrix origin, and transposition flag with
         # vectors describing the dimensions, strides and origin of the memory operand.
-        # our device code only emits the transposed layout, i.e., dims = (8, epr),
-        # strides = (epr, 1), and a swapped origin, which is also the only layout the
-        # legacy signature can express.
+        # this rewrite blindly projects onto the legacy transposed encoding, i.e.,
+        # epr = dims[2] with a swapped origin and transpose = true, because that is the
+        # only layout our device code emits (keep in sync with `simdgroup_load/store`
+        # in src/device/intrinsics/simd.jl).
         for f in collect(functions(mod))
             fn = LLVM.name(f)
             m = match(r"^air\.simdgroup_matrix_8x8_(load|store)\.", fn)

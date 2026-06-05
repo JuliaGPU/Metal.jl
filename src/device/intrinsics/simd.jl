@@ -8,6 +8,12 @@ function convert_origin(origin::NTuple{2, Int64})
     return (VecElement{Int64}(origin[1]-1), VecElement{Int64}(origin[2]-1))
 end
 
+# the load/store intrinsics use their newest (AIR 2.8) signature, taking dims, strides
+# and origin vectors; here always the transposed layout of a column-major matrix, i.e.,
+# dims = (8, epr), strides = (epr, 1), and a row/column-swapped origin. when targeting
+# older AIR versions, `finish_ir!` rewrites these calls to the legacy signature, relying
+# on this being the only emitted layout (keep in sync with the downgrade rule in
+# src/compiler/compilation.jl).
 for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"))
     for as in (AS.Device, AS.ThreadGroup)
         @eval begin
