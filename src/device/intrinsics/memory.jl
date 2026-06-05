@@ -34,7 +34,7 @@ end
         initializer!(gv, UndefValue(T_ptr_at_3))
 
         # Set Attributes matching your target IR
-        alignment!(gv, 16)
+        alignment!(gv, 8)
         constant!(gv, true)
         unnamed_addr!(gv, true)
         extinit!(gv, true)
