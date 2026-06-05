@@ -114,6 +114,11 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
             # redeclare the function and rewrite its calls
             LLVM.name!(f, fn * ".air28")
             old_f = LLVM.Function(mod, fn, old_ft)
+            # carry over the attributes (convergent etc.); they were attached before
+            # optimization, so GPUCompiler won't re-derive them for this declaration
+            for attr in collect(function_attributes(f))
+                push!(function_attributes(old_f), attr)
+            end
             for call in calls
                 @dispose builder=IRBuilder() begin
                     position!(builder, call)
