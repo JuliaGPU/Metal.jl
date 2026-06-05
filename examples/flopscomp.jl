@@ -3,12 +3,9 @@ using Plots
 using Plots.Measures
 
 Ts=[
-    (Int8, Float16),
-    (Int8, Float32),
-    (Int16, Float32),
-    (Float16, Float16),
-    (Float16, Float32),
-    (Float32, Float32),
+    (Int8, Float16) (Int8, Float32) (Int16, Float32);
+    (Float16, Float16) (Float16, Float32) (Float32, Float32);
+
 ]
 
 testing = get(ENV, "TESTING", "false") == "true"
@@ -107,7 +104,7 @@ function compare(Ns, Fs, inT, outT=inT; n_batch=1, ntrials, verbose=!testing)
     prefixstr = "\33[2K\r($inT, $outT) "
     @time "$((inT, outT))" begin
         for n in Ns
-            verify = (n < maxintfloat(outT) && (inT != Float16 || (n < maxintfloat(inT))))
+            verify = (n < maxintfloat(real(outT)) && (inT != Float16 || (n < maxintfloat(real(inT)))))
             n_str = "$n: "
             for (f, info_str) in newFs
                 verbose && print(prefixstr, n_str, info_str)
@@ -162,12 +159,13 @@ function plot_results(res, Fs=DEFAULT_FS; outpath=nothing, fileext="svg", plt_ti
         push!(n_batches, n_batch)
     end
 
-    finalplot = plot(resplts...; layout=(2,3),
+    layout = ndims(Ts) == 1 ? (length(Ts), 1) : size(Ts)
+    finalplot = plot(resplts...; layout,
                      ylim=(0,ylim_upper),
                      plot_title=plt_title,
                      tickfonthalign=:left,
                      bottommargin=15pt,
-                     size=(2000,1200))
+                     size=(500*size(Ts,2),500*size(Ts,1)))
     if !isnothing(outpath)
         savefig(plot(finalplot, dpi=500), joinpath(outpath, "bench_all_$(first(n_batches)).$fileext"))
     end

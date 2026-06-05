@@ -1,213 +1,220 @@
-@testset "shuffle idx" begin
-    function shuffle_kernel(d)
-        i = thread_index_in_simdgroup()
-        j = threads_per_simdgroup() - i + 0x1
+using Metal: metal_support
 
-        d[i] = simd_shuffle(d[i], j)
-        return
-    end
+@testset "shuffle functions" begin
+    shuffle_test_types = [Float32, Float16,# BFloat16,
+                          Int32, UInt32, Int16, UInt16,
+                          Int8, UInt8]
+    @testset "simd_shuffle" begin
+        function shuffle_kernel(d)
+            i = thread_index_in_simdgroup()
+            j = threads_per_simdgroup() - i + 0x1
 
-    threadsPerSimdgroup = 32
-
-    @testset for T in [UInt8, UInt16, UInt32,
-                       Int8, Int16, Int32,
-                       Float16, Float32]
-        a = rand(T, threadsPerSimdgroup)
-        d_a = MtlArray(a)
-        Metal.@sync @metal threads=threadsPerSimdgroup shuffle_kernel(d_a)
-        @test Array(d_a) == reverse(a)
-    end
-end
-
-@testset "shuffle xor" begin
-    function xor_kernel(in)
-        i = thread_index_in_simdgroup()
-
-        new_val = simd_shuffle_xor(in[i], 1)
-
-        in[i] = new_val
-        return
-    end
-
-    threadsPerSimdgroup = 32
-
-    # tests that each pair of values a get swapped using sub_group_shuffle_xor
-    @testset for T in [UInt8, UInt16, UInt32,
-                       Int8, Int16, Int32,
-                       Float16, Float32]
-        in = rand(T, threadsPerSimdgroup)
-        idxs = xor.(0:(threadsPerSimdgroup - 1), 1) .+ 1
-        d_in = MtlArray(in)
-        Metal.@sync @metal threads=threadsPerSimdgroup xor_kernel(d_in)
-        @test Array(d_in) == in[idxs]
-    end
-end
-
-@testset "$f($typ)" for typ in [Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8], (f,res_idx) in [(simd_shuffle_down, 1), (simd_shuffle_up, 32)]
-    function kernel(a::MtlDeviceVector{T}, b::MtlDeviceVector{T}) where T
-        idx = thread_position_in_grid().x
-        idx_in_simd = thread_index_in_simdgroup()
-        simd_idx = simdgroup_index_in_threadgroup()
-
-        temp = MtlThreadGroupArray(T, 32)
-        temp[idx] = a[idx]
-        simdgroup_barrier(Metal.MemoryFlagThreadGroup)
-
-        if simd_idx == 1
-            value = temp[idx_in_simd]
-
-            value = value + f(value, 16)
-            value = value + f(value,  8)
-            value = value + f(value,  4)
-            value = value + f(value,  2)
-            value = value + f(value,  1)
-
-            b[idx] = value
+            d[i] = simd_shuffle(d[i], j)
+            return
         end
-        return
-    end
 
-    dev_a = Metal.zeros(typ, 32; storage=Metal.SharedStorage)
-    dev_b = Metal.zeros(typ, 32; storage=Metal.SharedStorage)
-    synchronize()
-    a = unsafe_wrap(Array{typ}, dev_a, 32)
-    b = unsafe_wrap(Array{typ}, dev_b, 32)
+        threadsPerSimdgroup = 32
 
-    rand!(a, (1:4))
-    Metal.@sync @metal threads=32 kernel(dev_a, dev_b)
-    @test sum(a) ≈ b[res_idx]
-end
-@testset "$f($typ)" for typ in [Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8], (f,nshift) in [(simd_shuffle_and_fill_down, -4), (simd_shuffle_and_fill_up, 2)]
-    function kernel_mod(data::MtlDeviceVector{T}, filling_data::MtlDeviceVector{T}, modulo) where T
-        idx = thread_position_in_grid().x
-        idx_in_simd = thread_index_in_simdgroup() #simd_lane_id
-        simd_idx = simdgroup_index_in_threadgroup() #simd_group_id
-
-        temp_data = MtlThreadGroupArray(T, 16)
-        temp_data[idx] = data[idx]
-        temp_filling_data = MtlThreadGroupArray(T, 16)
-        temp_filling_data[idx] = filling_data[idx]
-        simdgroup_barrier(Metal.MemoryFlagThreadGroup)
-
-        if simd_idx == 1
-            dat_value = temp_data[idx_in_simd]
-            dat_fil_value = temp_filling_data[idx_in_simd]
-
-            value = f(dat_value, dat_fil_value, abs(nshift), modulo)
-
-            data[idx] = value
+        @testset "$T" for T in shuffle_test_types
+            a = rand(T, threadsPerSimdgroup)
+            d_a = MtlArray(a)
+            Metal.@sync @metal threads=threadsPerSimdgroup shuffle_kernel(d_a)
+            @test Array(d_a) == reverse(a)
         end
-        return
     end
 
-    N = 16
-    midN = N ÷ 2
+    @testset "simd_shuffle" begin
+        function xor_kernel(in)
+            i = thread_index_in_simdgroup()
 
-    data = Array{typ}(1:N)
-    mtldata = MtlArray(data)
-    mtlfilling = MtlArray(data)
+            new_val = simd_shuffle_xor(in[i], 1)
 
-    Metal.@sync @metal threads=N kernel_mod(mtldata, mtlfilling, N)
-    @test Array(mtldata) == circshift(data, nshift)
+            in[i] = new_val
+            return
+        end
 
-    mtlfilling2 = MtlArray(data)
+        threadsPerSimdgroup = 32
 
-    Metal.@sync @metal threads=N kernel_mod(mtlfilling2, mtlfilling, midN)
-    @test Array(mtlfilling2) == [circshift(data[1:midN], nshift); circshift(data[midN+1:end], nshift)]
-end
-
-@testset "simd_ballot" begin
-    function ballot_kernel(output, threshold)
-        idx = thread_position_in_grid().x
-        lane = thread_index_in_simdgroup()
-
-        # Each thread votes true if its lane index is ≤ threshold
-        predicate = lane ≤ threshold
-        ballot = simd_ballot(predicate)
-
-        output[idx] = ballot
-        return
+        # tests that each pair of values a get swapped using sub_group_shuffle_xor
+        @testset "T" for T in shuffle_test_types
+            in = rand(T, threadsPerSimdgroup)
+            idxs = xor.(0:(threadsPerSimdgroup - 1), 1) .+ 1
+            d_in = MtlArray(in)
+            Metal.@sync @metal threads=threadsPerSimdgroup xor_kernel(d_in)
+            @test Array(d_in) == in[idxs]
+        end
     end
 
-    threads_per_simdgroup = 32
+    @testset "$f" for (f,res_idx) in [(simd_shuffle_down, 1), (simd_shuffle_up, 32)]
+        function kernel(a::MtlDeviceVector{T}, b::MtlDeviceVector{T}) where T
+            idx = thread_position_in_grid().x
+            idx_in_simd = thread_index_in_simdgroup()
+            simd_idx = simdgroup_index_in_threadgroup()
 
-    @testset "threshold=$threshold" for threshold in [0, 1, 8, 16, 31, 32]
-        output = MtlArray(zeros(UInt64, threads_per_simdgroup))
-        Metal.@sync @metal threads = threads_per_simdgroup ballot_kernel(output, UInt32(threshold))
+            temp = MtlThreadGroupArray(T, 32)
+            temp[idx] = a[idx]
+            simdgroup_barrier(Metal.MemoryFlagThreadGroup)
 
-        # Expected: bits 0..(threshold-1) are set (1-indexed threshold means bits 0 to threshold-1)
-        expected_ballot = threshold == 0 ? UInt64(0) : (UInt64(1) << threshold) - 1
-        result = Array(output)
+            if simd_idx == 1
+                value = temp[idx_in_simd]
 
-        # All threads should see the same ballot result
-        @test all(result .== expected_ballot)
+                value = value + f(value, 16)
+                value = value + f(value,  8)
+                value = value + f(value,  4)
+                value = value + f(value,  2)
+                value = value + f(value,  1)
+
+                b[idx] = value
+            end
+            return
+        end
+        @testset "$typ" for typ in shuffle_test_types
+            dev_a = Metal.zeros(typ, 32; storage=Metal.SharedStorage)
+            dev_b = Metal.zeros(typ, 32; storage=Metal.SharedStorage)
+            synchronize()
+            a = unsafe_wrap(Array{typ}, dev_a, 32)
+            b = unsafe_wrap(Array{typ}, dev_b, 32)
+
+            rand!(a, (1:4))
+            Metal.@sync @metal threads=32 kernel(dev_a, dev_b)
+            @test sum(a) ≈ b[res_idx]
+        end
     end
-end
+    @testset "$f" for (f,nshift) in [(simd_shuffle_and_fill_down, -4), (simd_shuffle_and_fill_up, 2)]
+        function kernel_mod(data::MtlDeviceVector{T}, filling_data::MtlDeviceVector{T}, modulo) where T
+            idx = thread_position_in_grid().x
+            idx_in_simd = thread_index_in_simdgroup() #simd_lane_id
+            simd_idx = simdgroup_index_in_threadgroup() #simd_group_id
 
-@testset "simd_vote_all" begin
-    function all_kernel(output, threshold)
-        idx = thread_position_in_grid().x
-        lane = thread_index_in_simdgroup()
+            temp_data = MtlThreadGroupArray(T, 16)
+            temp_data[idx] = data[idx]
+            temp_filling_data = MtlThreadGroupArray(T, 16)
+            temp_filling_data[idx] = filling_data[idx]
+            simdgroup_barrier(Metal.MemoryFlagThreadGroup)
 
-        # First get a ballot mask based on threshold
-        predicate = lane ≤ threshold
-        ballot = simd_ballot(predicate)
+            if simd_idx == 1
+                dat_value = temp_data[idx_in_simd]
+                dat_fil_value = temp_filling_data[idx_in_simd]
 
-        # simd_vote_all checks if all bits in the mask are set
-        result = simd_vote_all(ballot)
+                value = f(dat_value, dat_fil_value, abs(nshift), modulo)
 
-        output[idx] = result
-        return
+                data[idx] = value
+            end
+            return
+        end
+
+        @testset "$typ" for typ in shuffle_test_types
+            N = 16
+            midN = N ÷ 2
+
+            data = Array{typ}(1:N)
+            mtldata = MtlArray(data)
+            mtlfilling = MtlArray(data)
+
+            Metal.@sync @metal threads=N kernel_mod(mtldata, mtlfilling, N)
+            @test Array(mtldata) == circshift(data, nshift)
+
+            mtlfilling2 = MtlArray(data)
+
+            Metal.@sync @metal threads=N kernel_mod(mtlfilling2, mtlfilling, midN)
+            @test Array(mtlfilling2) == [circshift(data[1:midN], nshift); circshift(data[midN+1:end], nshift)]
+        end
     end
 
-    threads_per_simdgroup = 32
+    @testset "simd_ballot" begin
+        function ballot_kernel(output, threshold)
+            idx = thread_position_in_grid().x
+            lane = thread_index_in_simdgroup()
 
-    # simd_vote_all returns true only when all bits in the ballot mask are set
-    @testset "threshold=$threshold" for threshold in [0, 16, 31, 32, 33]
-        output = MtlArray(zeros(UInt8, threads_per_simdgroup))
-        Metal.@sync @metal threads = threads_per_simdgroup all_kernel(output, UInt32(threshold))
+            # Each thread votes true if its lane index is ≤ threshold
+            predicate = lane ≤ threshold
+            ballot = simd_ballot(predicate)
 
-        result = Array(output)
-        # All bits set means threshold ≥ 32 (all 32 lanes voted true)
-        expected = threshold ≥ threads_per_simdgroup
+            output[idx] = ballot
+            return
+        end
 
-        @test all(result .== expected)
-    end
-end
+        threads_per_simdgroup = 32
 
-@testset "simd_vote_any" begin
-    function any_kernel(output, threshold)
-        idx = thread_position_in_grid().x
-        lane = thread_index_in_simdgroup()
+        @testset "threshold=$threshold" for threshold in [0, 1, 8, 16, 31, 32]
+            output = MtlArray(zeros(UInt64, threads_per_simdgroup))
+            Metal.@sync @metal threads = threads_per_simdgroup ballot_kernel(output, UInt32(threshold))
 
-        # First get a ballot mask based on threshold
-        predicate = lane ≤ threshold
-        ballot = simd_ballot(predicate)
+            # Expected: bits 0..(threshold-1) are set (1-indexed threshold means bits 0 to threshold-1)
+            expected_ballot = threshold == 0 ? UInt64(0) : (UInt64(1) << threshold) - 1
+            result = Array(output)
 
-        # simd_vote_any checks if any bit in the mask is set
-        result = simd_vote_any(ballot)
-
-        output[idx] = result
-        return
+            # All threads should see the same ballot result
+            @test all(result .== expected_ballot)
+        end
     end
 
-    threads_per_simdgroup = 32
+    @testset "simd_vote_all" begin
+        function all_kernel(output, threshold)
+            idx = thread_position_in_grid().x
+            lane = thread_index_in_simdgroup()
 
-    # simd_vote_any returns true when any bit in the ballot mask is set
-    @testset "threshold=$threshold" for threshold in [0, 1, 16, 32]
-        output = MtlArray(zeros(UInt8, threads_per_simdgroup))
-        Metal.@sync @metal threads = threads_per_simdgroup any_kernel(output, UInt32(threshold))
+            # First get a ballot mask based on threshold
+            predicate = lane ≤ threshold
+            ballot = simd_ballot(predicate)
 
-        result = Array(output)
-        # Any bit set means threshold ≥ 1 (at least lane 1 voted true)
-        expected = threshold ≥ 1
+            # simd_vote_all checks if all bits in the mask are set
+            result = simd_vote_all(ballot)
 
-        @test all(result .== expected)
+            output[idx] = result
+            return
+        end
+
+        threads_per_simdgroup = 32
+
+        # simd_vote_all returns true only when all bits in the ballot mask are set
+        @testset "threshold=$threshold" for threshold in [0, 16, 31, 32, 33]
+            output = MtlArray(zeros(UInt8, threads_per_simdgroup))
+            Metal.@sync @metal threads = threads_per_simdgroup all_kernel(output, UInt32(threshold))
+
+            result = Array(output)
+            # All bits set means threshold ≥ 32 (all 32 lanes voted true)
+            expected = threshold ≥ threads_per_simdgroup
+
+            @test all(result .== expected)
+        end
     end
-end
+
+    @testset "simd_vote_any" begin
+        function any_kernel(output, threshold)
+            idx = thread_position_in_grid().x
+            lane = thread_index_in_simdgroup()
+
+            # First get a ballot mask based on threshold
+            predicate = lane ≤ threshold
+            ballot = simd_ballot(predicate)
+
+            # simd_vote_any checks if any bit in the mask is set
+            result = simd_vote_any(ballot)
+
+            output[idx] = result
+            return
+        end
+
+        threads_per_simdgroup = 32
+
+        # simd_vote_any returns true when any bit in the ballot mask is set
+        @testset "threshold=$threshold" for threshold in [0, 1, 16, 32]
+            output = MtlArray(zeros(UInt8, threads_per_simdgroup))
+            Metal.@sync @metal threads = threads_per_simdgroup any_kernel(output, UInt32(threshold))
+
+            result = Array(output)
+            # Any bit set means threshold ≥ 1 (at least lane 1 voted true)
+            expected = threshold ≥ 1
+
+            @test all(result .== expected)
+        end
+    end
+end # @testset "shuffle functions"
 
 @testset "matrix functions" begin
-    @testset "load_store($typ)" for typ in [Float16, Float32]
+    simdgroup_types = [Float16, Float32]#, BFloat16]
+    @testset "load_store($typ)" for typ in simdgroup_types
         function kernel(a::MtlDeviceArray{T}, b::MtlDeviceArray{T},
                             origin_a=(1, 1), origin_b=(1, 1)) where {T}
             sg_a = simdgroup_load(a, origin_a)
@@ -230,7 +237,7 @@ end
         end
     end
 
-    @testset "load_store_tg($typ)" for typ in [Float16, Float32]
+    @testset "load_store_tg($typ)" for typ in simdgroup_types
         function kernel(a::MtlDeviceArray{T}, b::MtlDeviceArray{T}) where {T}
             pos = thread_position_in_threadgroup()
 
@@ -254,7 +261,7 @@ end
         @test Array(a) == Array(b)
     end
 
-    @testset "mul($typ)" for typ in [Float16, Float32]
+    @testset "mul($typ)" for typ in simdgroup_types
         function kernel(a::MtlDeviceArray{T}, b::MtlDeviceArray{T}, c::MtlDeviceArray{T}) where {T}
             sg_a = simdgroup_load(a)
             sg_b = simdgroup_load(b)
@@ -270,7 +277,7 @@ end
         @test Array(a) * Array(b) ≈ Array(c)
     end
 
-    @testset "mad($typ)" for typ in [Float16, Float32]
+    @testset "mad($typ)" for typ in simdgroup_types
         function kernel(a::MtlDeviceArray{T}, b::MtlDeviceArray{T}, c::MtlDeviceArray{T},
                     d::MtlDeviceArray{T}) where {T}
             sg_a = simdgroup_load(a)
