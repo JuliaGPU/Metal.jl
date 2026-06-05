@@ -295,4 +295,40 @@ end # @testset "shuffle functions"
         @metal threads=(8, 8) kernel(a, b, c, d)
         @test Array(a) * Array(b) + Array(c) ≈ Array(d)
     end
+
+    @testset "intrinsic ABI" begin
+        # the load/store intrinsics take dims/strides/origin vectors on AIR 2.8, and are
+        # downgraded to the legacy scalar+transpose form when targeting older versions
+        # (see the downgrade rule in src/compiler/compilation.jl)
+        function kernel(a, b)
+            sg = simdgroup_load(a, (3, 2))
+            simdgroup_store(sg, b, (2, 4))
+            return
+        end
+        a = MtlArray(rand(Float32, 16, 16))
+        b = MtlArray(zeros(Float32, 16, 16))
+
+        # AIR 2.8: dims, strides and origin vectors (always the transposed layout, so
+        # the origin is row/column-swapped)
+        asm = sprint() do io
+            @device_code_air io=io @metal launch=false macos=v"26" kernel(a, b)
+        end
+        @test occursin(r"call <64 x float> @air\.simdgroup_matrix_8x8_load\.v64f32\.p1f32\(float addrspace\(1\)\* %\S+, <2 x i64> %\S+, <2 x i64> %\S+, <2 x i64> <i64 1, i64 2>\)", asm)
+        @test occursin(r"call void @air\.simdgroup_matrix_8x8_store\.v64f32\.p1f32\(<64 x float> %\S+, float addrspace\(1\)\* %\S+, <2 x i64> %\S+, <2 x i64> %\S+, <2 x i64> <i64 3, i64 1>\)", asm)
+
+        # AIR < 2.8: scalar elements-per-row, unswapped origin, and a transpose flag
+        asm = sprint() do io
+            @device_code_air io=io @metal launch=false macos=v"14" kernel(a, b)
+        end
+        @test occursin(r"call <64 x float> @air\.simdgroup_matrix_8x8_load\.v64f32\.p1f32\(float addrspace\(1\)\* %\S+, i64 %\S+, <2 x i64> <i64 2, i64 1>, i1 true\)", asm)
+        @test occursin(r"call void @air\.simdgroup_matrix_8x8_store\.v64f32\.p1f32\(<64 x float> %\S+, float addrspace\(1\)\* %\S+, i64 %\S+, <2 x i64> <i64 1, i64 3>, i1 true\)", asm)
+        ## the legacy declarations keep the intrinsic attributes
+        attrs = match(r"declare.+@air\.simdgroup_matrix_8x8_load\.v64f32\.p1f32\(.+\).* (#\d+)", asm)
+        @test attrs !== nothing
+        @test occursin(Regex("attributes $(attrs.captures[1]) = \\{[^}]*convergent"), asm)
+
+        # the downgraded form executes correctly
+        @metal threads=(8, 8) macos=v"14" kernel(a, b)
+        @test Array(a)[3:10, 2:9] == Array(b)[2:9, 4:11]
+    end
 end # End Matrix Functions
