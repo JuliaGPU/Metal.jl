@@ -18,8 +18,8 @@
 #
 # parts we do not support at all:
 # - compressed reflection buffers (RBUZ)
-# - dynamic libraries and symbol companions: variable lists, imported/exported symbol
-#   lists, the install name
+# - dynamic libraries and symbol companions: variable lists and imported/exported symbol
+#   lists (the install name maps onto the dynamic header's NAME tag, which we do support)
 # - graphics-related metadata: vertex attributes (VATT/VATY tags), tessellation (TESS)
 
 using SHA: sha256, SHA2_256_CTX, update!, digest!
@@ -142,7 +142,7 @@ Base.@kwdef struct MetalLib
     is_macos::Bool=true
     is_stub::Bool=false
 
-    platform_version::VersionNumber=v"14"
+    platform_version::VersionNumber=macos_version()
     platform_type::PlatformType=PLATFORM_MACOS
     is_64bit::Bool=true
 
@@ -189,6 +189,18 @@ function Base.show(io::IO, lib::MetalLib)
 
     for fun in lib.functions
         println(io, "    $(fun.name) [AIR v$(fun.air_version), Metal v$(fun.metal_version)]")
+    end
+
+    if lib.embedded_source !== nothing
+        println(io, "  embedded source:")
+        println(io, "    link options: $(lib.embedded_source.link_options)")
+        if lib.embedded_source.working_directory !== nothing
+            println(io, "    working directory: $(lib.embedded_source.working_directory)")
+        end
+        for (id, archive) in lib.embedded_source.archives
+            tarball = decompress_source_archive(archive)
+            println(io, "    archive $(id): $(sizeof(archive)) bytes ($(sizeof(tarball)) uncompressed)")
+        end
     end
 
     print(io, ")")
