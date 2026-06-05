@@ -14,7 +14,7 @@ printer_blacklist = [
 ]
 
 [codegen]
-minimum_macos_supported = "13"
+minimum_macos_supported = "14"
 use_ccall_macro = true
 always_NUL_terminated_string = true
 

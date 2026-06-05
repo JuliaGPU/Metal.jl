@@ -110,7 +110,7 @@ end
     MTLStageAll = 0x7fffffffffffffff
 end
 
-@objcwrapper immutable = true availability = macos(v"14.0.0") MTLArchitecture <: NSObject
+@objcwrapper immutable = true MTLArchitecture <: NSObject
 
 @objcproperties MTLArchitecture begin
     @autoproperty name::id{NSString}
@@ -152,7 +152,7 @@ end
 @objcproperties MTLDevice begin
     @autoproperty name::id{NSString}
     @autoproperty registryID::UInt64
-    @autoproperty architecture::id{MTLArchitecture} availability = macos(v"14.0.0")
+    @autoproperty architecture::id{MTLArchitecture}
     @autoproperty maxThreadsPerThreadgroup::MTLSize
     @autoproperty lowPower::Bool getter = isLowPower
     @autoproperty headless::Bool getter = isHeadless
@@ -191,8 +191,8 @@ end
     @autoproperty supportsFunctionPointersFromRender::Bool
     @autoproperty supportsRaytracingFromRender::Bool
     @autoproperty supportsPrimitiveMotionBlur::Bool
-    @autoproperty shouldMaximizeConcurrentCompilation::Bool setter = setShouldMaximizeConcurrentCompilation availability = macos(v"13.3.0")
-    @autoproperty maximumConcurrentCompilationTaskCount::UInt64 availability = macos(v"13.3.0")
+    @autoproperty shouldMaximizeConcurrentCompilation::Bool setter = setShouldMaximizeConcurrentCompilation
+    @autoproperty maximumConcurrentCompilationTaskCount::UInt64
 end
 
 @objcwrapper immutable = true MTLCommandEncoder <: NSObject
@@ -1040,9 +1040,9 @@ end
     @autoproperty libraries::id{NSArray} type = Vector{MTLDynamicLibrary} setter = setLibraries
     @autoproperty preserveInvariance::Bool setter = setPreserveInvariance
     @autoproperty optimizationLevel::MTLLibraryOptimizationLevel setter = setOptimizationLevel
-    @autoproperty compileSymbolVisibility::MTLCompileSymbolVisibility setter = setCompileSymbolVisibility availability = macos(v"13.3.0")
-    @autoproperty allowReferencingUndefinedSymbols::Bool setter = setAllowReferencingUndefinedSymbols availability = macos(v"13.3.0")
-    @autoproperty maxTotalThreadsPerThreadgroup::UInt64 setter = setMaxTotalThreadsPerThreadgroup availability = macos(v"13.3.0")
+    @autoproperty compileSymbolVisibility::MTLCompileSymbolVisibility setter = setCompileSymbolVisibility
+    @autoproperty allowReferencingUndefinedSymbols::Bool setter = setAllowReferencingUndefinedSymbols
+    @autoproperty maxTotalThreadsPerThreadgroup::UInt64 setter = setMaxTotalThreadsPerThreadgroup
     @autoproperty requiredThreadsPerThreadgroup::MTLSize setter = setRequiredThreadsPerThreadgroup availability = macos(v"26.0.0")
     @autoproperty enableLogging::Bool setter = setEnableLogging availability = macos(v"15.0.0")
 end
@@ -2304,11 +2304,11 @@ end
     @autoproperty colorAttachments::id{MTLRenderPipelineColorAttachmentDescriptorArray}
     @autoproperty depthAttachmentPixelFormat::MTLPixelFormat setter = setDepthAttachmentPixelFormat
     @autoproperty stencilAttachmentPixelFormat::MTLPixelFormat setter = setStencilAttachmentPixelFormat
-    @autoproperty supportIndirectCommandBuffers::Bool setter = setSupportIndirectCommandBuffers availability = macos(v"14.0.0")
+    @autoproperty supportIndirectCommandBuffers::Bool setter = setSupportIndirectCommandBuffers
     @autoproperty binaryArchives::id{NSArray} type = Vector{MTLBinaryArchive} setter = setBinaryArchives availability = macos(v"15.0.0")
-    @autoproperty objectLinkedFunctions::id{MTLLinkedFunctions} setter = setObjectLinkedFunctions availability = macos(v"14.0.0")
-    @autoproperty meshLinkedFunctions::id{MTLLinkedFunctions} setter = setMeshLinkedFunctions availability = macos(v"14.0.0")
-    @autoproperty fragmentLinkedFunctions::id{MTLLinkedFunctions} setter = setFragmentLinkedFunctions availability = macos(v"14.0.0")
+    @autoproperty objectLinkedFunctions::id{MTLLinkedFunctions} setter = setObjectLinkedFunctions
+    @autoproperty meshLinkedFunctions::id{MTLLinkedFunctions} setter = setMeshLinkedFunctions
+    @autoproperty fragmentLinkedFunctions::id{MTLLinkedFunctions} setter = setFragmentLinkedFunctions
     @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation availability = macos(v"15.0.0")
     @autoproperty requiredThreadsPerObjectThreadgroup::MTLSize setter = setRequiredThreadsPerObjectThreadgroup availability = macos(v"26.0.0")
     @autoproperty requiredThreadsPerMeshThreadgroup::MTLSize setter = setRequiredThreadsPerMeshThreadgroup availability = macos(v"26.0.0")
@@ -2645,7 +2645,7 @@ end
     MTLCurveEndCapsSphere = 2
 end
 
-@objcwrapper immutable = true availability = macos(v"14.0.0") MTLAccelerationStructureCurveGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
+@objcwrapper immutable = true MTLAccelerationStructureCurveGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
 
 @objcproperties MTLAccelerationStructureCurveGeometryDescriptor begin
     @autoproperty controlPointBuffer::id{MTLBuffer} setter = setControlPointBuffer
@@ -2667,7 +2667,7 @@ end
     @autoproperty curveEndCaps::MTLCurveEndCaps setter = setCurveEndCaps
 end
 
-@objcwrapper immutable = true availability = macos(v"14.0.0") MTLAccelerationStructureMotionCurveGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
+@objcwrapper immutable = true MTLAccelerationStructureMotionCurveGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
 
 @objcproperties MTLAccelerationStructureMotionCurveGeometryDescriptor begin
     @autoproperty controlPointBuffers::id{NSArray} type = Vector{MTLMotionKeyframeData} setter = setControlPointBuffers
@@ -2778,7 +2778,7 @@ end
     @autoproperty motionTransformStride::UInt64 setter = setMotionTransformStride availability = macos(v"15.0.0")
 end
 
-@objcwrapper immutable = true availability = macos(v"14.0.0") MTLIndirectInstanceAccelerationStructureDescriptor <: MTLAccelerationStructureDescriptor
+@objcwrapper immutable = true MTLIndirectInstanceAccelerationStructureDescriptor <: MTLAccelerationStructureDescriptor
 
 @objcproperties MTLIndirectInstanceAccelerationStructureDescriptor begin
     @autoproperty instanceDescriptorBuffer::id{MTLBuffer} setter = setInstanceDescriptorBuffer
@@ -3020,12 +3020,12 @@ end
     @autoproperty maxVertexBufferBindCount::UInt64 setter = setMaxVertexBufferBindCount
     @autoproperty maxFragmentBufferBindCount::UInt64 setter = setMaxFragmentBufferBindCount
     @autoproperty maxKernelBufferBindCount::UInt64 setter = setMaxKernelBufferBindCount
-    @autoproperty maxKernelThreadgroupMemoryBindCount::UInt64 setter = setMaxKernelThreadgroupMemoryBindCount availability = macos(v"14.0.0")
-    @autoproperty maxObjectBufferBindCount::UInt64 setter = setMaxObjectBufferBindCount availability = macos(v"14.0.0")
-    @autoproperty maxMeshBufferBindCount::UInt64 setter = setMaxMeshBufferBindCount availability = macos(v"14.0.0")
-    @autoproperty maxObjectThreadgroupMemoryBindCount::UInt64 setter = setMaxObjectThreadgroupMemoryBindCount availability = macos(v"14.0.0")
+    @autoproperty maxKernelThreadgroupMemoryBindCount::UInt64 setter = setMaxKernelThreadgroupMemoryBindCount
+    @autoproperty maxObjectBufferBindCount::UInt64 setter = setMaxObjectBufferBindCount
+    @autoproperty maxMeshBufferBindCount::UInt64 setter = setMaxMeshBufferBindCount
+    @autoproperty maxObjectThreadgroupMemoryBindCount::UInt64 setter = setMaxObjectThreadgroupMemoryBindCount
     @autoproperty supportRayTracing::Bool setter = setSupportRayTracing
-    @autoproperty supportDynamicAttributeStride::Bool setter = setSupportDynamicAttributeStride availability = macos(v"14.0.0")
+    @autoproperty supportDynamicAttributeStride::Bool setter = setSupportDynamicAttributeStride
     @autoproperty supportColorAttachmentMapping::Bool setter = setSupportColorAttachmentMapping availability = macos(v"26.0.0")
 end
 
