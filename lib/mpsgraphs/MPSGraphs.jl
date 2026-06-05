@@ -13,6 +13,7 @@ using .MTL
 using .MPS
 using .MPS: MPSDataType, MPSShape, exportDataWithCommandBuffer
 using .MPS: MPSMatrixLike, MPSVectorLike
+using BFloat16s
 
 using CEnum
 using ObjectiveC, .Foundation, .Dispatch
@@ -27,17 +28,13 @@ const MPSGRAPH_VALID_MATMUL_TYPES =
      (Float16, Float16),
      (Float16, Float32),
      (Float32, Float32),
+     (BFloat16, BFloat16),
+     (Float16, ComplexF16),
+     (Float16, ComplexF32),
+     (Float32, ComplexF32),
     ]
 
-const MPSGRAPH_VALID_MATVECMUL_TYPES =
-    [
-     (Int8, Float16),
-     (Int8, Float32),
-     (Int16, Float32),
-     (Float16, Float16),
-     (Float16, Float32),
-     (Float32, Float32),
-    ]
+const MPSGRAPH_VALID_MATVECMUL_TYPES = MPSGRAPH_VALID_MATMUL_TYPES
 
 include("libmpsgraph.jl")
 
