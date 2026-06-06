@@ -124,9 +124,22 @@ end
                        sprint(io->Metal.code_llvm(io, dummy, Tuple{}; air=v"3.2.1",
                                                       dump_module=true, kernel=true)))
 
-        @test occursin("""!"SDK Version", [3 x i32] [i32 3, i32 2, i32 1]}""",
-                       sprint(io->Metal.code_llvm(io, dummy, Tuple{}; macos=v"3.2.1",
+        @test occursin("""!"SDK Version", [3 x i32] [i32 15, i32 2, i32 1]}""",
+                       sprint(io->Metal.code_llvm(io, dummy, Tuple{}; macos=v"15.2.1",
                                                       dump_module=true, kernel=true)))
+
+        # compatibility versions are normalized to marketing versions
+        @test occursin("""!"SDK Version", [3 x i32] [i32 26, i32 2, i32 1]}""",
+                       sprint(io->Metal.code_llvm(io, dummy, Tuple{}; macos=v"16.2.1",
+                                                      dump_module=true, kernel=true)))
+
+        # targeting macOS < 14, or the AIR versions that come with it, is not supported
+        @test_throws "Metal.jl requires AIR 2.6" begin
+            Metal.code_llvm(devnull, dummy, Tuple{}; macos=v"13")
+        end
+        @test_throws "Metal.jl requires AIR 2.6" begin
+            Metal.code_llvm(devnull, dummy, Tuple{}; air=v"2.5")
+        end
     end
 
     @test Metal.return_type(identity, Tuple{Int}) === Int

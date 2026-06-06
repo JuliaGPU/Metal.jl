@@ -6,16 +6,27 @@
 #   https://github.com/a2flo/floor_llvm/blob/floor_toolchain_1406/llvm/lib/Bitcode/MetalLib/MetalLibWriterPass.cpp
 #   https://github.com/a2flo/floor_llvm/blob/floor_toolchain_1406/llvm/tools/metallib-dis/metallib-dis.cpp
 #
-# TODO:
-# - fully support metallib v2.7: RFLT, reflection list
-# - fix UUID computation to be based on the module's data
-# - figure out which LLVM IR version AIR v2.5 corresponds to
+# parts of the format we read but do not generate:
+# - reflection data: the official toolchain gives every function an RBUF reflection
+#   buffer, a flatbuffer (identifier "AIRR", payload 16-byte aligned within the file)
+#   describing the function's signature. the schemas are embedded as binary flatbuffer
+#   schemas (BFBS) in the Metal toolchain binaries, and use a double-table scheme where
+#   each node is a small table holding the node type and an offset to the type-specific
+#   table. floor implements writing these; see metal_reflection_{types,writing}.hpp there.
+# - script lists (SLST section, SBUF buffers), recording pipeline descriptor scripts;
+#   compare with `metal-source -flatbuffers=json`
+#
+# parts we do not support at all:
+# - compressed reflection buffers (RBUZ)
+# - dynamic libraries and symbol companions: variable lists and imported/exported symbol
+#   lists (the install name maps onto the dynamic header's NAME tag, which we do support)
+# - graphics-related metadata: vertex attributes (VATT/VATY tags), tessellation (TESS)
 
-using SHA: sha256
+using SHA: sha256, SHA2_256_CTX, update!, digest!
 using CEnum: @cenum
 using UUIDs: UUID
 using Printf: @printf
-using CodecBzip2: Bzip2Compressor, Bzip2Decompressor, Bzip2DecompressorStream
+using CodecBzip2: Bzip2DecompressorStream
 
 
 ## enums
@@ -73,7 +84,33 @@ end
 struct EmbeddedSource
     link_options::String
     working_directory::Union{Nothing,String}
+    # BZip2-compressed tarballs, kept verbatim: toolchains differ in compression level
+    # and padding (Xcode 26 emits level 6 unpadded, older ones level 9 padded to 16 KiB
+    # multiples), so recompressing would not round-trip. see `decompress_source_archive`.
     archives::Vector{Pair{String,Vector{UInt8}}}
+end
+
+# the source archives are stored as BZip2-compressed tarballs. some toolchains pad the
+# compressed stream to a multiple of 16 KiB, so stop decompressing at the stream's end.
+function decompress_source_archive(compressed::Vector{UInt8})
+    stream = Bzip2DecompressorStream(IOBuffer(compressed); stop_on_end=true)
+    read(stream, typemax(Int))
+end
+
+# derive a UUID from library contents. the official toolchain stamps every library with
+# a UUID, but generates it randomly and nothing seems to inspect the contents; deriving
+# one from the modules keeps our output deterministic.
+function content_uuid(datas::Vector{UInt8}...)
+    ctx = SHA2_256_CTX()
+    for data in datas
+        update!(ctx, data)
+    end
+    dgst = digest!(ctx)
+    u = ntoh(only(reinterpret(UInt128, dgst[1:16])))
+    # stamp the version and variant bits of a random (version 4) UUID, like Apple does
+    u = (u & ~(UInt128(0xf) << 76)) | (UInt128(0x4) << 76)
+    u = (u & ~(UInt128(0x3) << 62)) | (UInt128(0x2) << 62)
+    return UUID(u)
 end
 
 Base.@kwdef struct MetalLibFunction
@@ -97,19 +134,22 @@ Base.@kwdef struct MetalLibFunction
 end
 
 Base.@kwdef struct MetalLib
-    # even though Metal.jl only supports macOS 14+, which supports metallib v1.2.7, we don't
-    # fully support this format yet and fall back to v1.2.6 for now. this matches macOS 12,
-    # but does support newer AIR/Metal versions in the embedded bitcode.
+    # defaults to the newest file format the host supports. note that optional sections
+    # the official toolchain would emit (e.g. reflection data) are simply left out when
+    # we have nothing to put there; the loader accepts that.
     file_version::VersionNumber=metallib_target()
     file_type::FileType=FILE_EXECUTABLE
     is_macos::Bool=true
     is_stub::Bool=false
 
-    platform_version::VersionNumber=v"14"
+    platform_version::VersionNumber=macos_version()
     platform_type::PlatformType=PLATFORM_MACOS
     is_64bit::Bool=true
 
     uuid::Union{Nothing, UUID} = nothing
+
+    # name of the library, as recorded in the dynamic header (metallib v1.2.9)
+    library_name::Union{Nothing, String} = nothing
 
     functions::Vector{MetalLibFunction}
     embedded_source::Union{Nothing, EmbeddedSource} = nothing
@@ -141,10 +181,26 @@ function Base.show(io::IO, lib::MetalLib)
     end
     println(io)
 
+    if lib.library_name !== nothing
+        println(io, "  name: $(lib.library_name)")
+    end
+
     println(io, "  functions:")
 
     for fun in lib.functions
         println(io, "    $(fun.name) [AIR v$(fun.air_version), Metal v$(fun.metal_version)]")
+    end
+
+    if lib.embedded_source !== nothing
+        println(io, "  embedded source:")
+        println(io, "    link options: $(lib.embedded_source.link_options)")
+        if lib.embedded_source.working_directory !== nothing
+            println(io, "    working directory: $(lib.embedded_source.working_directory)")
+        end
+        for (id, archive) in lib.embedded_source.archives
+            tarball = decompress_source_archive(archive)
+            println(io, "    archive $(id): $(sizeof(archive)) bytes ($(sizeof(tarball)) uncompressed)")
+        end
     end
 
     print(io, ")")
@@ -267,6 +323,11 @@ tag_value_io["HSRC"] = (
     (io, _)   -> (; offset=read(io, UInt64), size=read(io, UInt64)),
     (io, val) -> write(io, UInt64[val.offset, val.size]))
 tag_value_io["HSRD"] = tag_value_io["HSRC"]
+tag_value_io["HDYN"] = (
+    # Offset and size of the dynamic header section; 2 x 64-bit unsigned integers
+    @NamedTuple{offset::UInt64, size::UInt64},
+    (io, _)   -> (; offset=read(io, UInt64), size=read(io, UInt64)),
+    (io, val) -> write(io, UInt64[val.offset, val.size]))
 tag_value_io["RLST"] = (
     # Offset and size of the reflection list section; 2 x 64-bit unsigned integers
     @NamedTuple{offset::UInt64, size::UInt64},
@@ -336,35 +397,23 @@ tag_value_io["DEPF"] = (
     end)
 ## embedded sources
 tag_value_io["SARC"] = (
-    # Source archive; an identifier (null-terminated ASCII) and BZip2-compressed tarball
+    # Source archive; an identifier (null-terminated ASCII) and BZip2-compressed tarball,
+    # which is stored as-is (see the comments on `EmbeddedSource`)
     @NamedTuple{id::String, archive::Vector{UInt8}},
     (io, nb) -> begin
         id = String(readuntil(io, UInt8(0)))
-        compressed = read(io, nb - sizeof(id) - 1)
-
-        # decompress the archive
-        #archive = transcode(Bzip2Decompressor, compressed)
-        # special handling is required to set `stop_on_end=true`,
-        # as these archives are padded to multiples of 16KB.
-        stream = Bzip2DecompressorStream(IOBuffer(compressed); stop_on_end=true)
-        archive = read(stream, typemax(Int))
-
+        archive = read(io, nb - sizeof(id) - 1)
         (; id, archive)
     end,
     (io, val) -> begin
         write(io, val.id)
         write(io, UInt8(0))
-
-        # compress and pad the archive
-        compressed = transcode(Bzip2Compressor, val.archive)
-        padding = 16*1024 - (sizeof(compressed) % (16*1024))
-        compressed = vcat(compressed, Base.zeros(UInt8, padding))
-
-        write(io, compressed)
+        write(io, val.archive)
     end)
 ## reflection lists
 tag_value_io["RBUF"] = (
-    # Reflection buffer
+    # Reflection buffer: zero-padding to align the payload to 16 bytes within the file,
+    # followed by a flatbuffer with an "AIRR" identifier (see the format notes up top)
     Vector{UInt8},
     (io, nb) -> begin
         read(io, nb)
@@ -372,13 +421,16 @@ tag_value_io["RBUF"] = (
     (io, val) -> write(io, val))
 ## script lists
 tag_value_io["SBUF"] = (
-    # Script buffer
+    # Script buffer; a flatbuffer describing pipeline descriptor scripts
     Vector{UInt8},
     (io, nb) -> begin
-        # XXX: these are probably flatbuffers; decode here?
         read(io, nb)
     end,
     (io, val) -> write(io, val))
+
+# unlike other tags, buffer tags encode the size of their value as a 32-bit field,
+# presumably so that their contents can outgrow the 16-bit size limit
+const wide_size_tags = ["RBUF", "SBUF"]
 
 function Base.read!(io::IO, tg::TagGroup)
     if tg.has_size
@@ -399,14 +451,12 @@ function Base.read!(io::IO, tg::TagGroup)
         end
 
         # read the value size and note our position
-        value_size = read(io, tg.size_type)
-        tg.offsets[tag_name] = position(io)
-
-        # XXX: there's a 2 byte mismatch between the buffers in list, and
-        #      the next token. bug in air-lld, or are we missing something?
-        if tag_name in ["RBUF", "SBUF"]
-            value_size += 2
+        value_size = if tag_name in wide_size_tags
+            read(io, UInt32)
+        else
+            read(io, tg.size_type)
         end
+        tg.offsets[tag_name] = position(io)
 
         if !haskey(tag_value_io, tag_name)
             @warn "Unknown tag: $tag_name"
@@ -451,14 +501,12 @@ function Base.write(io::IO, tg::TagGroup)
             end
             value_size = sizeof(value_bytes)
 
-            # XXX: there's a 2 byte mismatch between the buffers in list, and
-            #      the next token. bug in air-lld, or are we missing something?
-            if tag in ["RBUF", "SBUF"]
-                value_size -= 2
-            end
-
             # write the value size and the value itself
-            write(io, tg.size_type(value_size))
+            if tag in wide_size_tags
+                write(io, UInt32(value_size))
+            else
+                write(io, tg.size_type(value_size))
+            end
             tg.offsets[tag] = position(io)
             write(io, value_bytes)
         end
@@ -646,6 +694,17 @@ function Base.read(io::IO, ::Type{MetalLib})
         @assert position(io) == header_ex["SLST"].offset + header_ex["SLST"].size
     end
 
+    # dynamic header
+    #
+    # this section only records the name of the library
+    library_name = nothing
+    if header_ex !== nothing && haskey(header_ex, "HDYN")
+        seek(io, header_ex["HDYN"].offset)
+        dynamic_header = read!(io, TagGroup(has_size=false))
+        library_name = get(dynamic_header, "NAME", nothing)
+        @assert position(io) == header_ex["HDYN"].offset + header_ex["HDYN"].size
+    end
+
     # embedded source
     #
     # there can be fewer sources than functions, so preserve the function -> source mapping
@@ -721,6 +780,9 @@ function Base.read(io::IO, ::Type{MetalLib})
         # TODO: get rid of the nothing checks
         push!(optional_args, :uuid => header_ex["UUID"])
     end
+    if library_name !== nothing
+        push!(optional_args, :library_name => library_name)
+    end
 
     MetalLib(; file_version, file_type, is_macos, is_stub,
                platform_version, platform_type, is_64bit,
@@ -754,6 +816,18 @@ function Base.write(io::IO, lib::MetalLib)
                 archive_tags["SARC"] = (; id, archive)
                 write(io, archive_tags)
             end
+        end
+        take!(io)
+    end
+
+
+    ## dynamic header
+
+    dynamic_header = let io=IOBuffer()
+        if lib.library_name !== nothing
+            dynamic_header_tags = TagGroup(has_size=false)
+            dynamic_header_tags["NAME"] = lib.library_name
+            write(io, dynamic_header_tags)
         end
         take!(io)
     end
@@ -833,7 +907,7 @@ function Base.write(io::IO, lib::MetalLib)
         if fun.source_id !== nothing && haskey(embedded_source_offsets, fun.source_id)
             function_tags["SOFF"] = embedded_source_offsets[fun.source_id]
         end
-        if lib.file_version >= v"1.2.7"
+        if lib.file_version >= v"1.2.7" && !isempty(reflection_list_offsets)
             function_tags["RFLT"] = reflection_list_offsets[i]
         end
         push!(function_tag_groups, function_tags)
@@ -859,11 +933,12 @@ function Base.write(io::IO, lib::MetalLib)
             embedded_source_tag = lib.file_version >= v"1.2.6" ? "HSRD" : "HSRC"
             header_ex_tags[embedded_source_tag] = (; offset=0, size=sizeof(embedded_source))
         end
-        if lib.file_version >= v"1.2.7"
+        if sizeof(dynamic_header) > 0
+            header_ex_tags["HDYN"] = (; offset=0, size=sizeof(dynamic_header))
+        end
+        if lib.file_version >= v"1.2.7" && sizeof(reflection_list) > 0
             header_ex_tags["RLST"] = (; offset=0, size=sizeof(reflection_list))
         end
-        # XXX: placeholder; this data is invalid
-        #      it should be a UUID based on all of the module's data
         if lib.uuid !== nothing
             header_ex_tags["UUID"] = lib.uuid
         end
@@ -959,6 +1034,10 @@ function Base.write(io::IO, lib::MetalLib)
         mark_placeholder(:embedded_source_offset,
                          position(io) + offsetof(header_ex_tags, embedded_source_tag))
     end
+    if sizeof(dynamic_header) > 0
+        mark_placeholder(:dynamic_header_offset,
+                         position(io) + offsetof(header_ex_tags, "HDYN"))
+    end
     if sizeof(reflection_list) > 0
         mark_placeholder(:reflection_list_offset,
                          position(io) + offsetof(header_ex_tags, "RLST"))
@@ -983,7 +1062,11 @@ function Base.write(io::IO, lib::MetalLib)
         write(io, embedded_source)
     end
 
-    # TODO: dynamic header
+    # dynamic header
+    if sizeof(dynamic_header) > 0
+        patch_placeholder(io, :dynamic_header_offset, position(io))
+        write(io, dynamic_header)
+    end
 
     # TODO: variable list
 

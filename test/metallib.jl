@@ -1,6 +1,6 @@
 # test that we can parse and regenerate Metal libraries accurately
 
-using Metal: MetalLibFunction, MetalLib
+using Metal: MetalLibFunction, MetalLib, content_uuid
 
 using Printf: @printf
 
@@ -170,4 +170,16 @@ end
 
 @testset for metallib in metallibs
     @test compare(joinpath(metallib_dir, metallib))
+end
+
+@testset "content-derived UUID" begin
+    u = content_uuid(UInt8[1, 2, 3])
+    @test u == content_uuid(UInt8[1, 2, 3])
+    @test u != content_uuid(UInt8[1, 2, 4])
+    # multiple buffers hash like their concatenation
+    @test u == content_uuid(UInt8[1, 2], UInt8[3])
+    # well-formed version 4, variant 1 UUID
+    str = string(u)
+    @test str[15] == '4'
+    @test str[20] in ('8', '9', 'a', 'b')
 end

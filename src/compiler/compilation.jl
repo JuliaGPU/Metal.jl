@@ -80,6 +80,75 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
                    Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module, LLVM.Function},
                    job, mod, entry)
 
+    # downgrade intrinsics when targeting older AIR versions
+    if job.config.target.air < v"2.8"
+        # AIR 2.8 generalized the simdgroup matrix load/store intrinsics, replacing
+        # the elements-per-row scalar, matrix origin, and transposition flag with
+        # vectors describing the dimensions, strides and origin of the memory operand.
+        # this rewrite blindly projects onto the legacy transposed encoding, i.e.,
+        # epr = dims[2] with a swapped origin and transpose = true, because that is the
+        # only layout our device code emits (keep in sync with `simdgroup_load/store`
+        # in src/device/intrinsics/simd.jl).
+        for f in collect(functions(mod))
+            fn = LLVM.name(f)
+            m = match(r"^air\.simdgroup_matrix_8x8_(load|store)\.", fn)
+            m === nothing && continue
+            is_load = m.captures[1] == "load"
+
+            calls = [user(u) for u in uses(f)]
+            @assert all(call -> call isa LLVM.CallInst, calls)
+
+            # construct the legacy function type
+            T_i64 = LLVM.Int64Type()
+            T_vec2 = LLVM.VectorType(T_i64, 2)
+            T_bool = LLVM.Int1Type()
+            new_ft = function_type(f)
+            old_params = if is_load
+                # value pointer; elements per row; origin; transpose
+                [parameters(new_ft)[1], T_i64, T_vec2, T_bool]
+            else
+                # value; value pointer; elements per row; origin; transpose
+                [parameters(new_ft)[1:2]..., T_i64, T_vec2, T_bool]
+            end
+            old_ft = LLVM.FunctionType(LLVM.return_type(new_ft), old_params)
+
+            # redeclare the function and rewrite its calls
+            LLVM.name!(f, fn * ".air28")
+            old_f = LLVM.Function(mod, fn, old_ft)
+            # carry over the attributes (convergent etc.); they were attached before
+            # optimization, so GPUCompiler won't re-derive them for this declaration
+            for attr in collect(function_attributes(f))
+                push!(function_attributes(old_f), attr)
+            end
+            for call in calls
+                @dispose builder=IRBuilder() begin
+                    position!(builder, call)
+                    debuglocation!(builder, call)
+
+                    args = collect(arguments(call))
+                    prefix = is_load ? args[1:1] : args[1:2]
+                    dims, _, origin = args[end-2:end]
+
+                    epr = extract_element!(builder, dims, ConstantInt(Int32(1)))
+                    o1 = extract_element!(builder, origin, ConstantInt(Int32(0)))
+                    o2 = extract_element!(builder, origin, ConstantInt(Int32(1)))
+                    swapped = insert_element!(builder, UndefValue(T_vec2), o2,
+                                              ConstantInt(Int32(0)))
+                    swapped = insert_element!(builder, swapped, o1,
+                                              ConstantInt(Int32(1)))
+
+                    new_call = call!(builder, old_ft, old_f,
+                                     [prefix..., epr, swapped, ConstantInt(T_bool, true)])
+                    replace_uses!(call, new_call)
+                    erase!(call)
+                end
+            end
+
+            @assert isempty(uses(f))
+            erase!(f)
+        end
+    end
+
     # pointer type information for typed intrinsics
     # (this is consumed by the LLVM IR downgrader)
     for (jltyp, llvmtyp) in (Int32 => :i32, Int64 => :i64,
@@ -146,15 +215,19 @@ end
     # determine the versions of things to target
     if macos === nothing
         macos = macos_version()
+    else
+        macos = normalize_macos(macos)
     end
     if metal === nothing
         metal = metal_target(macos)
     end
     if air === nothing
-        air = air_target()
-        if air > air_support(macos)
-            error("""Metal.jl requires AIR $(air_target()) (macOS 14) or newer, but macOS $(macos) only supports AIR $(air_support(macos)).""")
+        air = air_target(macos)
+        if air < v"2.6"
+            error("""Metal.jl requires AIR 2.6 (macOS 14) or newer, but macOS $(macos) only supports AIR $(air_support(macos)).""")
         end
+    elseif air < v"2.6"
+        error("""Metal.jl requires AIR 2.6 (macOS 14) or newer; cannot target AIR $(air).""")
     end
 
     # create GPUCompiler objects
@@ -254,7 +327,10 @@ function compile(@nospecialize(job::CompilerJob))
             fun = MetalLibFunction(; name=entry, air_module=air,
                                      air_version=job.config.target.air,
                                      metal_version=job.config.target.metal)
-            lib = MetalLib(; functions = [fun])
+            lib = MetalLib(; functions = [fun],
+                             file_version = metallib_target(job.config.target.macos),
+                             platform_version = job.config.target.macos,
+                             uuid = content_uuid(air))
 
             io = IOBuffer()
             write(io, lib)

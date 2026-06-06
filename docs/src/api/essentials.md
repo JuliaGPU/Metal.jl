@@ -7,6 +7,9 @@ darwin_version
 Metal.metal_support
 Metal.metallib_support
 Metal.air_support
+Metal.metal_target
+Metal.metallib_target
+Metal.air_target
 ```
 
 ## Global State

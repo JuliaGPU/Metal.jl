@@ -1,5 +1,16 @@
 export macos_version, darwin_version
 
+# Julia binaries built against a pre-Tahoe SDK observe compatibility versions (macOS 26
+# reports as 16); normalize user-provided versions to the marketing version, like the
+# offline compiler normalizes the deployment target. ObjectiveC.macos_version() already
+# normalizes the host query, so this only matters for user input.
+function normalize_macos(version::VersionNumber)
+    if v"16" <= version < v"26"
+        version = VersionNumber(version.major + 10, version.minor, version.patch)
+    end
+    return version
+end
+
 """
     macos_version()::VersionNumber
 
@@ -61,8 +72,10 @@ function air_support(macos::VersionNumber = macos_version())
         v"2.8"
     elseif macos >= v"15"
         v"2.7"
-    else # macOS 14
+    elseif macos >= v"14"
         v"2.6"
+    else # macOS 13
+        v"2.5"
     end
 end
 
@@ -79,16 +92,18 @@ function metal_support(macos::VersionNumber = macos_version())
         v"4"
     elseif macos >= v"15"
         v"3.2"
-    else # macOS 14
+    elseif macos >= v"14"
         v"3.1"
+    else # macOS 13
+        v"3.0"
     end
 end
 
-# The versions Metal.jl emits by default. These mirror the `*_support` ceilings but
-# capture what the toolchain actually targets: MSL tracks the host-supported version
-# to expose the newest intrinsics, while AIR and the metallib file format are pinned
-# to conservative baselines for backward compatibility. `versioninfo` reports these,
-# and the compiler uses them as defaults (see `_compiler_config` and `MetalLib`).
+# The versions Metal.jl emits by default. These track the `*_support` ceilings, which is
+# also what the offline `metal` compiler does: compiling with `-mmacosx-version-min=N`
+# yields the AIR, MSL and metallib versions that `N` supports. Since we compile for the
+# host device only, the deployment target is the host. `versioninfo` reports these, and
+# the compiler uses them as defaults (see `_compiler_config` and `MetalLib`).
 
 """
     Metal.metal_target(macos=macos_version())::VersionNumber
@@ -99,19 +114,17 @@ host-supported version (see [`Metal.metal_support`](@ref)) to expose the newest 
 metal_target(macos::VersionNumber = macos_version()) = metal_support(macos)
 
 """
-    Metal.air_target()::VersionNumber
+    Metal.air_target(macos=macos_version())::VersionNumber
 
-Returns the embedded-AIR-bitcode version Metal.jl emits by default. Pinned to the macOS 14
-baseline (v2.6) for backward compatibility, regardless of what the host supports (see
-[`Metal.air_support`](@ref)).
+Returns the embedded-AIR-bitcode version Metal.jl emits by default, which tracks the
+host-supported version (see [`Metal.air_support`](@ref)).
 """
-air_target() = v"2.6"
+air_target(macos::VersionNumber = macos_version()) = air_support(macos)
 
 """
-    Metal.metallib_target()::VersionNumber
+    Metal.metallib_target(macos=macos_version())::VersionNumber
 
-Returns the metallib file-format version Metal.jl emits by default. Pinned to a conservative
-baseline (v1.2.6) for backward compatibility, regardless of what the host supports (see
-[`Metal.metallib_support`](@ref)).
+Returns the metallib file-format version Metal.jl emits by default, which tracks the
+host-supported version (see [`Metal.metallib_support`](@ref)).
 """
-metallib_target() = v"1.2.6"
+metallib_target(macos::VersionNumber = macos_version()) = metallib_support(macos)
