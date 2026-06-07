@@ -1,9 +1,13 @@
 using Metal, GPUArrays, LinearAlgebra, Printf, ScopedValues, AppleAccelerate
 using Plots
 using Plots.Measures
+using BFloat16s
 
 Ts=[(Int8, Float16), (Int8, Float32), (Int16, Float32),
-    (Float16, Float16), (Float16, Float32), (Float32, Float32)
+    (Float16, Float16), (Float16, Float32), (Float32, Float32),
+    (Float16, ComplexF16), (Float16, ComplexF32), (Float32, ComplexF32),
+    (ComplexF16, ComplexF16), (ComplexF16, ComplexF32), (ComplexF32, ComplexF32),
+    (BFloat16, BFloat16)
 ]
 
 testing = get(ENV, "TESTING", "false") == "true"
@@ -89,10 +93,20 @@ end
 function compare(Ns, Fs, inT, outT=inT; n_batch=1, ntrials, verbose=!testing)
     results = Dict()
 
-    newFs = if (outT == Float16 || (outT == Float32 && inT == Float16))
-        Fs
-    else
-        filter(x -> !occursin("ANE", x[2]),Fs)
+    newFs = let
+        # Apple Neural Engine only used with some types
+        _newFs = if (outT == Float16 || (outT == Float32 && inT == Float16))
+            Fs
+        else
+            filter(x -> !occursin("ANE", x[2]), Fs)
+        end
+
+        # MPS doesn't support complex values
+        if (outT <: Complex || inT <: Complex)
+            filter(x -> x[2] != "MPS", _newFs)
+        else
+            _newFs
+        end
     end
 
     for (_, info_str) in newFs
@@ -116,11 +130,11 @@ function compare(Ns, Fs, inT, outT=inT; n_batch=1, ntrials, verbose=!testing)
 end
 
 DEFAULT_FS = [
-    (mpspeakflops, "MPS"),
     (graphpeakflops, "MPSGraph"),
     (defaultpeakflops, "Default"),
     (gpuarrpeakflops, "GPUArrays"),
     (cpupeakflops, "CPU (AppleAccelerate)"),
+    (mpspeakflops, "MPS"), # Run last to prevent different line colours
     # (anepeakflops, "MPSGraph (ANE)"), # Run last to prevent different line colours
 ]
 
