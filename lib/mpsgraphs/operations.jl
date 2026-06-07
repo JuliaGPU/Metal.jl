@@ -65,6 +65,31 @@ function identityWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, name = "ide
     MPSGraphTensor(obj)
 end
 
+function negativeWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, name = "negate")
+    obj = @objc [graph::id{MPSGraph} negativeWithTensor:tensor::id{MPSGraphTensor}
+                                        name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+
+function imaginaryPartOfTensor(graph::MPSGraph, tensor::MPSGraphTensor, name = "imaginarypart")
+    obj = @objc [graph::id{MPSGraph} imaginaryPartOfTensor:tensor::id{MPSGraphTensor}
+                                     name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+
+function realPartOfTensor(graph::MPSGraph, tensor::MPSGraphTensor, name = "realpart")
+    obj = @objc [graph::id{MPSGraph} realPartOfTensor:tensor::id{MPSGraphTensor}
+                                     name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+
+function complexTensorWithRealTensor(graph::MPSGraph, realTensor::MPSGraphTensor, imaginaryTensor::MPSGraphTensor, name="complex")
+    obj = @objc [graph::id{MPSGraph} complexTensorWithRealTensor:realTensor::id{MPSGraphTensor}
+                                     imaginaryTensor:imaginaryTensor::id{MPSGraphTensor}
+                                     name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+
 function scaledDotProductAttentionWithQueryTensor(graph::MPSGraph, Q::MPSGraphTensor,
                                                   K::MPSGraphTensor, V::MPSGraphTensor,
                                                   scale::Real, name = "sdpa")

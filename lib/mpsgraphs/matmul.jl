@@ -55,13 +55,13 @@ struct MatmulGraphKey
     ndims_b::Int
     alpha::Float64
     beta::Float64
-    transpose_a::Bool
-    transpose_b::Bool
+    transpose_a::Char
+    transpose_b::Char
 end
 # Build graph key from matmul parameters
 function MatmulGraphKey(a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb}, c::MtlArray{Tc},
                           alpha::Number, beta::Number,
-                          transpose_a::Bool, transpose_b::Bool) where {Tc, Tab, Na, Nb}
+                          transpose_a::Char, transpose_b::Char) where {Tc, Tab, Na, Nb}
     MatmulGraphKey(
         size(a), size(b), size(c),
         Tab, Tc,
@@ -92,8 +92,26 @@ function CachedMatmulGraph(key::MatmulGraphKey)
     castA = castTensor(graph, placeA, castT, "castA")
     castB = castTensor(graph, placeB, castT, "castB")
 
-    transA = key.transpose_a ? transposeTensor(graph, castA, key.ndims_a - 2, key.ndims_a - 1, "transpose_a") : castA
-    transB = key.transpose_b ? transposeTensor(graph, castB, key.ndims_b - 2, key.ndims_b - 1, "transpose_b") : castB
+    adjA = if key.eltype_ab <: Complex && key.transpose_a == 'C'
+        realA = realPartOfTensor(graph, castA, "realA")
+        imagA = imaginaryPartOfTensor(graph, castA, "imagA")
+        negA = negativeWithTensor(graph, imagA, "negA")
+        complexTensorWithRealTensor(graph, realA, negA, "adjA")
+    else
+        castA
+    end
+
+    adjB = if key.eltype_ab <: Complex && key.transpose_b == 'C'
+        realB = realPartOfTensor(graph, castB, "realB")
+        imagB = imaginaryPartOfTensor(graph, castB, "imagB")
+        negB = negativeWithTensor(graph, imagB, "negB")
+        complexTensorWithRealTensor(graph, realB, negB, "adjB")
+    else
+        castB
+    end
+
+    transA = (key.transpose_a == 'T' || key.transpose_a == 'C') ? transposeTensor(graph, adjA, key.ndims_a - 2, key.ndims_a - 1, "transpose_a") : adjA
+    transB = (key.transpose_b == 'T' || key.transpose_b == 'C') ? transposeTensor(graph, adjB, key.ndims_b - 2, key.ndims_b - 1, "transpose_b") : adjB
 
     nBatchA = key.ndims_a == 2 ? 1 : key.size_a[1]
     nBatchB = key.ndims_b == 2 ? 1 : key.size_b[1]
@@ -157,10 +175,10 @@ const _matmul_graph_cache_lock = ReentrantLock()
     return c
 end
 
-function graph_matmul!(c::MtlArray{Tc, N}, a::MtlArray{Tab, N}, b::MtlArray{Tab, N}, alpha::Number = true, beta::Number = false, transpose_a = false, transpose_b = false) where {Tc, Tab, N}
+function graph_matmul!(c::MtlArray{Tc, N}, a::MtlArray{Tab, N}, b::MtlArray{Tab, N}, alpha::Number = true, beta::Number = false, transpose_a = 'N', transpose_b = 'N') where {Tc, Tab, N}
     _matmul!(c, a, b, alpha, beta, transpose_a, transpose_b)
 end
 
-function graph_matvecmul!(c::MtlVector{Tc}, a::MtlMatrix{Tab}, b::MtlVector{Tab}, alpha::Number = true, beta::Number = false, transpose = false) where {Tc, Tab}
-    _matmul!(c, a, b, alpha, beta, transpose, false)
+function graph_matvecmul!(c::MtlVector{Tc}, a::MtlMatrix{Tab}, b::MtlVector{Tab}, alpha::Number = true, beta::Number = false, transpose = 'N') where {Tc, Tab}
+    _matmul!(c, a, b, alpha, beta, transpose, 'N')
 end

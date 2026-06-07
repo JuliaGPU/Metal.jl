@@ -70,7 +70,7 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     # If possible, dispatch to MPSGraphs, then performance shaders
     if alg === :MPSGraph || (alg === :auto && mpsgraph_supported)
         mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C), false)
-        graph_matmul!(C, A, B, alpha, beta, transA, transB)
+        graph_matmul!(C, A, B, alpha, beta, tA, tB)
     elseif alg === :MPS || (alg === :auto && mps_supported)
         mps_supported || matmul_alg_error(alg, eltype(A), eltype(C), false)
         matmul!(C, A, B, alpha, beta, transA, transB)
@@ -131,7 +131,7 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
     # If possible, dispatch to MPSGraphs, then performance shaders
     if alg === :MPSGraph || (alg === :auto && mpsgraph_supported)
         mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C), true)
-        graph_matvecmul!(C, A, B, alpha, beta, transA)
+        graph_matvecmul!(C, A, B, alpha, beta, tA)
     elseif alg === :MPS || (alg === :auto && mps_supported)
         mps_supported || matmul_alg_error(alg, eltype(A), eltype(C), true)
         matvecmul!(C, A, B, alpha, beta, transA)

@@ -32,6 +32,9 @@ const MPSGRAPH_VALID_MATMUL_TYPES =
      (Float16, ComplexF16),
      (Float16, ComplexF32),
      (Float32, ComplexF32),
+     (ComplexF16, ComplexF16),
+     (ComplexF16, ComplexF32),
+     (ComplexF32, ComplexF32),
     ]
 
 const MPSGRAPH_VALID_MATVECMUL_TYPES = MPSGRAPH_VALID_MATMUL_TYPES
