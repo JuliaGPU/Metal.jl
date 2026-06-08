@@ -514,6 +514,28 @@ end
     # test that you cannot create an array with a different eltype
     marr3 = mtl(zeros(Float32, 10); storage = Metal.SharedStorage)
     @test_throws MethodError unsafe_wrap(Array{Float16}, marr3)
+
+    @testset "wrap MtlPtr as multi-dimensional array" begin
+        dims = (2, 3, 4, 5, 6)
+        n = prod(dims)
+        vec = MtlVector{Float32, Metal.SharedStorage}(undef, n)
+        vec .= Float32.(1:n)
+
+        marr = unsafe_wrap(MtlArray, pointer(vec), dims)
+        @test marr isa MtlArray{Float32,5}
+        @test size(marr) == dims
+        @test Array(marr) == reshape(Float32.(1:n), dims)
+
+        # the buffer is shared: changes are visible in both views
+        Metal.@sync marr .+= 1
+        @test Array(vec) == Float32.(2:(n + 1))
+
+        # single-dimension wrapping
+        mvec = unsafe_wrap(MtlArray, pointer(vec), n)
+        @test mvec isa MtlArray{Float32,1}
+        @test size(mvec) == (n,)
+        @test Array(mvec) == Array(vec)
+    end
 end
 
 @testset "ReshapedArray" begin

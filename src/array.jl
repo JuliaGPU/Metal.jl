@@ -585,6 +585,21 @@ function Base.unsafe_wrap(t::Type{<:Array{T}}, ptr::MtlPtr{T}, dims; own=false) 
     return unsafe_wrap(t, convert(Ptr{T}, ptr), dims; own)
 end
 
+# wrap a Metal pointer (e.g. `pointer(vec)`) in an `MtlArray` of the given shape,
+# sharing the underlying buffer. This is useful to reinterpret a vector as a
+# multi-dimensional array without copying. The resulting array does not own the
+# buffer, so the original allocation must be kept alive for as long as it is used.
+function Base.unsafe_wrap(::Type{<:MtlArray}, ptr::MtlPtr{T},
+                          dims::NTuple{N,<:Integer}) where {T,N}
+    # use a non-owning `DataRef` (no finalizer) so we never free a buffer we
+    # don't own; the original array remains responsible for the allocation.
+    data = DataRef(ptr.buffer)
+    return MtlArray{T,N}(data, Dims(dims); offset=convert(Int, ptr.offset))
+end
+function Base.unsafe_wrap(t::Type{<:MtlArray}, ptr::MtlPtr, dim::Integer)
+    return unsafe_wrap(t, ptr, (dim,))
+end
+
 function Base.unsafe_wrap(A::Type{<:MtlArray{T,N}}, arr::Array, dims=size(arr);
                           dev=device(), kwargs...) where {T,N}
     GC.@preserve arr begin
