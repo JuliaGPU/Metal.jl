@@ -10,11 +10,28 @@ GPUCompiler.method_table(::MetalCompilerJob) = method_table
 
 GPUCompiler.kernel_state_type(job::MetalCompilerJob) = KernelState
 
+# Metal 4 tensor ops (`mpp::tensor_ops`, see `device/intrinsics/tensor.jl`) lower to calls to
+# externally-defined `__tensorops_impl_*` symbols, resolved by the Metal runtime's tensor-ops
+# library at link time. They aren't `air.*` intrinsics, so whitelist them alongside the base
+# Metal prefix to keep IR validation from rejecting them as unknown functions.
+GPUCompiler.isintrinsic(@nospecialize(job::MetalCompilerJob), fn::String) =
+    invoke(GPUCompiler.isintrinsic,
+           Tuple{CompilerJob{MetalCompilerTarget}, String}, job, fn) ||
+    startswith(fn, "__tensorops_")
+
 function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
                                     mod::LLVM.Module, entry::LLVM.Function)
     entry = invoke(GPUCompiler.finish_module!,
                    Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module, LLVM.Function},
                    job, mod, entry)
+
+    # annotate Metal 4 tensor-ops runtime functions as externally defined, for the validator
+    for f in functions(mod)
+        if isdeclaration(f) && startswith(LLVM.name(f), "__tensorops_impl_")
+            section!(f, "air.externally_defined")
+            push!(function_attributes(f), EnumAttribute("convergent"))
+        end
+    end
 
     # if this kernel uses our RNG, we should prime the shared state.
     # XXX: these transformations should really happen at the Julia IR level...
