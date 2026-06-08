@@ -310,13 +310,15 @@ function gemm_tensor!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
                       alpha::Number = true, beta::Number = false,
                       cA::Char = 'N', cB::Char = 'N';
                       tile_m::Integer = 0, tile_n::Integer = 0, tile_k::Integer = 0)
-    m = size(A, 1); k = size(A, 2); n = size(B, 2)
-    tile_m = tile_m == 0 ? gemm_tensor_tile(n, GEMM_TENSOR_MN_TILES) : tile_m
-    tile_n = tile_n == 0 ? gemm_tensor_tile(m, GEMM_TENSOR_MN_TILES) : tile_n
-    tile_k = tile_k == 0 ? gemm_tensor_tile(k, GEMM_TENSOR_K_TILES)  : tile_k
+    # Apple-side dims (operands swapped, see `gemm_tensor_kernel!`); tiles are chosen and
+    # checked against these, so derive them here to keep the correspondence obvious.
+    aM, aN, aK = size(B, 2), size(A, 1), size(A, 2)
+    tile_m = tile_m == 0 ? gemm_tensor_tile(aM, GEMM_TENSOR_MN_TILES) : tile_m
+    tile_n = tile_n == 0 ? gemm_tensor_tile(aN, GEMM_TENSOR_MN_TILES) : tile_n
+    tile_k = tile_k == 0 ? gemm_tensor_tile(aK, GEMM_TENSOR_K_TILES)  : tile_k
+    @assert tile_m > 0 && tile_n > 0 && tile_k > 0 """
+        no usable tensor-ops tile for $((aM, aN, aK)); call `supports_tensor_matmul` first"""
 
-    # Apple-side dims (operands swapped, see `gemm_tensor_kernel!`).
-    aM, aN, aK = n, m, k
     fill!(C, zero(eltype(C)))   # the kernel accumulates into C
     groups = (aN ÷ tile_n, aM ÷ tile_m, 1)
     nsimd = GEMM_TENSOR_NSIMD
@@ -411,13 +413,9 @@ function gemm!(C::MtlMatrix, tA::Char, tB::Char, A::MtlMatrix, B::MtlMatrix,
     # `:auto` picks the Metal 4 tensor-ops fast path when the device and operands allow it,
     # then the portable simdgroup kernel for floats, then the scalar fallback; an
     # explicit `kernel` forces one of them.
-    use_tensor = kernel === :tensor ||
-                 (kernel === :auto && supports_tensor_matmul(C, A, B, tA, tB, alpha, beta))
-    use_simd = kernel === :simd ||
-               (kernel === :auto && supports_simd_matmul(C, A, B, tA, tB, alpha, beta))
-    if use_tensor
+    if kernel === :tensor || (kernel === :auto && supports_tensor_matmul(C, A, B, tA, tB, alpha, beta))
         gemm_tensor!(C, A, B, alpha, beta, tA, tB)
-    elseif use_simd
+    elseif kernel === :simd || (kernel === :auto && supports_simd_matmul(C, A, B, tA, tB, alpha, beta))
         gemm_simd!(C, A, B, alpha, beta, tA, tB)
     else
         gemm_scalar!(C, A, B, alpha, beta, tA, tB)

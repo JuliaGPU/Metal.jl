@@ -136,8 +136,9 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
         mps_supported || matmul_alg_error(alg, eltype(A), eltype(C), true)
         matvecmul!(C, A, B, alpha, beta, transA)
     elseif alg === :native || alg === :auto || alg === :simd || alg === :scalar
-        # matrix-vector products go through the native gemv; the tensor kernel is
-        # matrix-only, so `:simd`/`:scalar` force the kernel and `:tensor` is rejected below
+        # matrix-vector products go through the native gemv; `:simd`/`:scalar` force the
+        # kernel. The tensor kernel is matrix-only, so `:tensor` isn't handled here and
+        # falls through to the unsupported-algorithm error below.
         if is_ntc(tA)
             kernel = (alg === :simd || alg === :scalar) ? alg : :auto
             alg === :simd && !supports_simd_matmul(C, A, B, ntc_char(tA), 'N', alpha, beta) &&
