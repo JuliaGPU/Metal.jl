@@ -164,12 +164,11 @@ end
 
 ## Custom kernel with Metal 4 tensor ops (matmul2d, inline tensors)
 
-# One fused kernel per (head, batch): QKᵀ → softmax → ·V, with scores and
-# softmaxed P kept in threadgroup memory. The matmul writes its (M, N) output
-# in a layout that Julia reads as KᵀQ (the transpose of QᵀK), so we apply a
-# *column*-wise softmax — that's what corresponds to row-wise softmax of the
-# implicit QᵀK, and it's the right direction for column-major contiguous
-# memory access.
+# One fused kernel per (head, batch): QᵀK → softmax → V·Pᵀ, with the scores and
+# softmaxed P kept in threadgroup memory. The tensor ops take column-major Julia
+# operands directly (`op(A, B, C)` computes `C = A*B`), so the scores tile is the
+# real QᵀK and the softmax runs row-wise over the keys, matching the CPU
+# reference's `dims = 2`.
 function fa_tensor!(O::MtlDeviceArray{Float16, 4},
                     Q::MtlDeviceArray{Float16, 4},
                     K::MtlDeviceArray{Float16, 4},
@@ -198,46 +197,43 @@ function fa_tensor!(O::MtlDeviceArray{Float16, 4},
     S = MtlThreadGroupArray(Float32, (TN, TN))
     P = MtlThreadGroupArray(Float16, (TN, TN))
 
-    # Step 1: S = QᵀK (read as KᵀQ in Julia layout, see above).
-    let tA = MtlInlineTensor(Qb, (Int32(TD), Int32(TN))),
-        tB = MtlInlineTensor(Kb, (Int32(TD), Int32(TN))),
-        tC = MtlInlineTensor(S,  (Int32(TN), Int32(TN)))
+    # Step 1: S = QᵀK (transpose Q, the left operand).
+    let tQ = MtlInlineTensor(Qb), tK = MtlInlineTensor(Kb), tS = MtlInlineTensor(S)
         op = TensorOpsMatmul2D{matmul2d_descriptor(TN, TN, TD;
-                                                   transpose_right = true),
+                                                   transpose_left = true),
                                Int32(NSIMD)}()
-        op(tA, tB, tC)
+        op(tQ, tK, tS)
     end
     threadgroup_barrier(Metal.MemoryFlagThreadGroup)
 
-    # Step 2: column-wise softmax. TN of (NSIMD*32) threads do real work; the
-    # rest wait at the barrier below.
+    # Step 2: row-wise softmax over the keys. TN of (NSIMD*32) threads do real
+    # work; the rest wait at the barrier below.
     @inbounds if tid < Int32(TN)
-        col = tid + Int32(1)
+        row = tid + Int32(1)
         m = -Inf32
-        for i in Int32(1):Int32(TN)
-            v = S[i, col] * scale
+        for j in Int32(1):Int32(TN)
+            v = S[row, j] * scale
             m = v > m ? v : m
         end
         s = 0.0f0
-        for i in Int32(1):Int32(TN)
-            p = exp(S[i, col] * scale - m)
-            S[i, col] = p
+        for j in Int32(1):Int32(TN)
+            p = exp(S[row, j] * scale - m)
+            S[row, j] = p
             s += p
         end
         inv_s = 1.0f0 / s
-        for i in Int32(1):Int32(TN)
-            P[i, col] = Float16(S[i, col] * inv_s)
+        for j in Int32(1):Int32(TN)
+            P[row, j] = Float16(S[row, j] * inv_s)
         end
     end
     threadgroup_barrier(Metal.MemoryFlagThreadGroup)
 
-    # Step 3: O = V·P (Julia view; equivalent to V·Pᵀ in math notation because
-    # the softmax output is stored in the transposed layout).
-    let tA = MtlInlineTensor(P,  (Int32(TN), Int32(TN))),
-        tB = MtlInlineTensor(Vb, (Int32(TD), Int32(TN))),
-        tC = MtlInlineTensor(Ob, (Int32(TD), Int32(TN)))
-        op = TensorOpsMatmul2D{matmul2d_descriptor(TN, TD, TN), Int32(NSIMD)}()
-        op(tA, tB, tC)
+    # Step 3: O = V·Pᵀ (transpose P, the right operand).
+    let tV = MtlInlineTensor(Vb), tP = MtlInlineTensor(P), tO = MtlInlineTensor(Ob)
+        op = TensorOpsMatmul2D{matmul2d_descriptor(TD, TN, TN;
+                                                   transpose_right = true),
+                               Int32(NSIMD)}()
+        op(tV, tP, tO)
     end
     return
 end

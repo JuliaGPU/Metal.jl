@@ -228,24 +228,21 @@ end
 # compile-time constants. The K-loop trip count is kept dynamic (a runtime `K`, not a `Val`)
 # to avoid crashing Apple's back-end (see the note in `device/intrinsics/tensor.jl`).
 #
-# The A/B swap maps Julia's column-major `C = A*B` onto matmul2d's operand convention:
-# matmul2d's `apple_A` slot receives Julia's `B` and `apple_B` receives Julia's `A`, and the
-# (M, N) storage order matmul2d expects happens to be the transpose of how Julia reads the
-# same buffer column-major, so the two swaps cancel and the result lands in `C` as expected.
-# This lets every operand use packed strides without an explicit transpose flag.
+# One threadgroup computes one `C[TM, TN]` output tile, accumulating `A[TM,:] * B[:,TN]` over
+# the K dimension in TK-wide slices.
 function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceArray,
                              M::UInt32, N::UInt32, K::UInt32,
                              ::Val{TM}, ::Val{TN}, ::Val{TK},
                              ::Val{NSIMD}) where {TM, TN, TK, NSIMD}
-    tgid   = threadgroup_position_in_grid_3d()
-    n_off  = (Int32(tgid.x) - Int32(1)) * Int32(TN)
-    m_off  = (Int32(tgid.y) - Int32(1)) * Int32(TM)
+    tgid  = threadgroup_position_in_grid_3d()
+    m_off = (Int32(tgid.x) - Int32(1)) * Int32(TM)
+    n_off = (Int32(tgid.y) - Int32(1)) * Int32(TN)
 
-    tA = MtlInlineTensor(B, (K, M))
-    tB = MtlInlineTensor(A, (N, K))
-    tC = MtlInlineTensor(C, (N, M))
+    tA = MtlInlineTensor(A, (M, K))
+    tB = MtlInlineTensor(B, (K, N))
+    tC = MtlInlineTensor(C, (M, N))
 
-    mC = view(tC, (n_off, m_off), (Int32(TN), Int32(TM)))
+    mC = view(tC, (m_off + Int32(1), n_off + Int32(1)), (Int32(TM), Int32(TN)))
 
     op = TensorOpsMatmul2D{matmul2d_descriptor(TM, TN, TK;
                                                mode = matmul2d_multiply_accumulate),
@@ -253,8 +250,8 @@ function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceA
     nslices = Int32(K ÷ UInt32(TK))
     for s in Int32(0):(nslices - Int32(1))
         k_off = s * Int32(TK)
-        mA = view(tA, (k_off, m_off), (Int32(TK), Int32(TM)))
-        mB = view(tB, (n_off, k_off), (Int32(TN), Int32(TK)))
+        mA = view(tA, (m_off + Int32(1), k_off + Int32(1)), (Int32(TM), Int32(TK)))
+        mB = view(tB, (k_off + Int32(1), n_off + Int32(1)), (Int32(TK), Int32(TN)))
         op(mA, mB, mC)
     end
     return
@@ -292,10 +289,10 @@ function supports_tensor_matmul(C, A, B, cA::Char, cB::Char, alpha::Number, beta
     gemm_tensor_eltype(eltype(A), eltype(B), eltype(C)) || return false
     (cA === 'N' && cB === 'N') || return false
     (isone(alpha) && iszero(beta)) || return false
-    m = size(A, 1); k = size(A, 2); n = size(B, 2)
-    gemm_tensor_tile(n, GEMM_TENSOR_MN_TILES) != 0 &&
-        gemm_tensor_tile(m, GEMM_TENSOR_MN_TILES) != 0 &&
-        gemm_tensor_tile(k, GEMM_TENSOR_K_TILES)  != 0
+    M = size(A, 1); K = size(A, 2); N = size(B, 2)
+    gemm_tensor_tile(M, GEMM_TENSOR_MN_TILES) != 0 &&
+        gemm_tensor_tile(N, GEMM_TENSOR_MN_TILES) != 0 &&
+        gemm_tensor_tile(K, GEMM_TENSOR_K_TILES)  != 0
 end
 
 """
@@ -310,20 +307,18 @@ function gemm_tensor!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
                       alpha::Number = true, beta::Number = false,
                       cA::Char = 'N', cB::Char = 'N';
                       tile_m::Integer = 0, tile_n::Integer = 0, tile_k::Integer = 0)
-    # Apple-side dims (operands swapped, see `gemm_tensor_kernel!`); tiles are chosen and
-    # checked against these, so derive them here to keep the correspondence obvious.
-    aM, aN, aK = size(B, 2), size(A, 1), size(A, 2)
-    tile_m = tile_m == 0 ? gemm_tensor_tile(aM, GEMM_TENSOR_MN_TILES) : tile_m
-    tile_n = tile_n == 0 ? gemm_tensor_tile(aN, GEMM_TENSOR_MN_TILES) : tile_n
-    tile_k = tile_k == 0 ? gemm_tensor_tile(aK, GEMM_TENSOR_K_TILES)  : tile_k
+    M = size(A, 1); K = size(A, 2); N = size(B, 2)
+    tile_m = tile_m == 0 ? gemm_tensor_tile(M, GEMM_TENSOR_MN_TILES) : tile_m
+    tile_n = tile_n == 0 ? gemm_tensor_tile(N, GEMM_TENSOR_MN_TILES) : tile_n
+    tile_k = tile_k == 0 ? gemm_tensor_tile(K, GEMM_TENSOR_K_TILES)  : tile_k
     @assert tile_m > 0 && tile_n > 0 && tile_k > 0 """
-        no usable tensor-ops tile for $((aM, aN, aK)); call `supports_tensor_matmul` first"""
+        no usable tensor-ops tile for $((M, N, K)); call `supports_tensor_matmul` first"""
 
     fill!(C, zero(eltype(C)))   # the kernel accumulates into C
-    groups = (aN ÷ tile_n, aM ÷ tile_m, 1)
+    groups = (M ÷ tile_m, N ÷ tile_n, 1)
     nsimd = GEMM_TENSOR_NSIMD
     @metal threads = nsimd * 32 groups = groups gemm_tensor_kernel!(
-        C, A, B, UInt32(aM), UInt32(aN), UInt32(aK),
+        C, A, B, UInt32(M), UInt32(N), UInt32(K),
         Val(Int32(tile_m)), Val(Int32(tile_n)), Val(Int32(tile_k)), Val(Int32(nsimd)))
     return C
 end
