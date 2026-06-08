@@ -22,7 +22,7 @@ const FCs = ((identity, 'N'), (transpose, 'T'), (adjoint, 'C'))
 
             buf_a = MtlArray{input_jl_type}(arr_a)
             buf_b = MtlArray{input_jl_type}(arr_b)
-            buf_c = Metal.zeros(accum_jl_type, size(arr_c))
+            buf_c = MtlArray{accum_jl_type}(arr_c)
 
             truth_c = (alpha .* accum_jl_type.(fA(arr_a))) * accum_jl_type.(fB(arr_b)) .+ (beta .* arr_c)
 
@@ -54,8 +54,7 @@ end
 
             buf_a = MtlArray{input_jl_type}(arr_a)
             buf_b = MtlArray{input_jl_type}(arr_b)
-            buf_c = Metal.zeros(accum_jl_type, (rows_c, cols_c, batch_size))
-
+            buf_c = MtlArray{accum_jl_type}(arr_c)
             truth_c = zeros(accum_jl_type, (rows_c, cols_c, batch_size))
             for i in 1:batch_size
                 @views truth_c[:, :, i] = (alpha .* accum_jl_type.(fA(arr_a[:, :, i]))) * accum_jl_type.(fB(arr_b[:, :, i])) .+ (beta .* arr_c[:, :, i])
@@ -84,7 +83,7 @@ end
 
             buf_a = MtlArray{input_jl_type}(arr_a)
             buf_b = MtlArray{input_jl_type}(arr_b)
-            buf_c = Metal.zeros(accum_jl_type, rows)
+            buf_c = MtlArray{accum_jl_type}(arr_c)
 
             truth_c = (accum_jl_type(alpha) .* accum_jl_type.(fA(arr_a))) * accum_jl_type.(arr_b) .+ (accum_jl_type(beta) .* arr_c)
 
