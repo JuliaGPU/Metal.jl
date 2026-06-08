@@ -64,3 +64,26 @@ function identityWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, name = "ide
                                 name:name::id{NSString}]::id{MPSGraphTensor}
     MPSGraphTensor(obj)
 end
+
+function scaledDotProductAttentionWithQueryTensor(graph::MPSGraph, Q::MPSGraphTensor,
+                                                  K::MPSGraphTensor, V::MPSGraphTensor,
+                                                  scale::Real, name = "sdpa")
+    obj = @objc [graph::id{MPSGraph} scaledDotProductAttentionWithQueryTensor:Q::id{MPSGraphTensor}
+                                                            keyTensor:K::id{MPSGraphTensor}
+                                                          valueTensor:V::id{MPSGraphTensor}
+                                                                scale:scale::Cfloat
+                                                                 name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+function scaledDotProductAttentionWithQueryTensor(graph::MPSGraph, Q::MPSGraphTensor,
+                                                  K::MPSGraphTensor, V::MPSGraphTensor,
+                                                  mask::MPSGraphTensor, scale::Real,
+                                                  name = "sdpa")
+    obj = @objc [graph::id{MPSGraph} scaledDotProductAttentionWithQueryTensor:Q::id{MPSGraphTensor}
+                                                            keyTensor:K::id{MPSGraphTensor}
+                                                          valueTensor:V::id{MPSGraphTensor}
+                                                           maskTensor:mask::id{MPSGraphTensor}
+                                                                scale:scale::Cfloat
+                                                                 name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
