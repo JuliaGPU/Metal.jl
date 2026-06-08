@@ -303,7 +303,7 @@ function main()
         @test Array(O_simdgroup) ≈ O_cpu rtol = 1e-2
     end
 
-    if Metal.macos_version() >= v"26.0.0"
+    if Metal.MTL.supports_family(device(), Metal.MTL.MTLGPUFamilyMetal4)
         let D = N = 64
             Q = MtlArray(randn(T, D, N, 1, 1))
             K = MtlArray(randn(T, D, N, 1, 1))
