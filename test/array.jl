@@ -518,11 +518,11 @@ end
     @testset "wrap MtlPtr as multi-dimensional array" begin
         dims = (2, 3, 4, 5, 6)
         n = prod(dims)
-        vec = MtlVector{Float32, Metal.SharedStorage}(undef, n)
+        vec = MtlVector{Float32}(undef, n)
         vec .= Float32.(1:n)
 
         marr = unsafe_wrap(MtlArray, pointer(vec), dims)
-        @test marr isa MtlArray{Float32,5}
+        @test marr isa MtlArray{Float32, 5}
         @test size(marr) == dims
         @test Array(marr) == reshape(Float32.(1:n), dims)
 
@@ -532,7 +532,7 @@ end
 
         # single-dimension wrapping
         mvec = unsafe_wrap(MtlArray, pointer(vec), n)
-        @test mvec isa MtlArray{Float32,1}
+        @test mvec isa MtlArray{Float32, 1}
         @test size(mvec) == (n,)
         @test Array(mvec) == Array(vec)
     end
