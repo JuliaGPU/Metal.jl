@@ -1,4 +1,4 @@
-if MPS.is_supported(device()) && Metal.macos_version() >= v"14"
+if Metal.macos_version() >= v"14"
 
 using .MPS: MPSCommandBuffer, commit!, wait_completed
 using .MPSGraphs: MPSGraph, MPSGraphTensor, MPSGraphTensorData,
@@ -82,4 +82,6 @@ end
     end
 end
 
-end # MPS.is_supported(device()) && macOS 14+
+else
+    @warn "Skipping scaled dot-product attention tests; MPSGraph SDPA requires macOS 14 or later"
+end
