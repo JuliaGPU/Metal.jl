@@ -2,6 +2,7 @@ export MtlInlineTensor, matmul2d_descriptor, TensorOpsMatmul2D,
        matmul2d_multiply, matmul2d_multiply_accumulate
 
 using Core: LLVMPtr
+using BFloat16s: BFloat16
 
 # Wrappers for Metal 4 tensor-ops / `mpp::tensor_ops` device-side APIs.
 
@@ -225,7 +226,7 @@ const TENSOR_DESC_INLINE = Int32(2)   # `__tensor_ops_tensor_descriptor_type::te
 # TODO: expose the 4-bit integer formats
 tensorops_suffix(::Type{Float16})       = "f16"
 tensorops_suffix(::Type{Float32})       = "f32"
-tensorops_suffix(::Type{Core.BFloat16}) = "b16"
+tensorops_suffix(::Type{BFloat16})      = "b16"
 tensorops_suffix(::Type{Int8})          = "i8"
 tensorops_suffix(::Type{UInt8})         = "ui8"
 tensorops_suffix(::Type{Int32})         = "i32"
@@ -262,7 +263,7 @@ TensorOpsMatmul2D(desc::matmul2d_descriptor, ::Val{NSIMD}) where {NSIMD} =
           "_$(tensorops_AS_prefix(Val(AR)))_$(tensorops_suffix(TR))" *
           "_$(tensorops_AS_prefix(Val(AD)))_$(tensorops_suffix(TD))"
     quote
-        threads = Int32(NSIMD) * Int32(threads_per_simdgroup())
+        threads = Int32(NSIMD) * (threads_per_simdgroup() % Int32)
         ccall($"extern $sym", llvmcall, Cvoid,
               (Ref{matmul2d_descriptor},
                Ref{UInt8}, Int32,

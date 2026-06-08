@@ -25,6 +25,14 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
                    Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module, LLVM.Function},
                    job, mod, entry)
 
+    # annotate Metal 4 tensor-ops runtime functions as externally defined, for the validator
+    for f in functions(mod)
+        if isdeclaration(f) && startswith(LLVM.name(f), "__tensorops_impl_")
+            section!(f, "air.externally_defined")
+            push!(function_attributes(f), EnumAttribute("convergent"))
+        end
+    end
+
     # if this kernel uses our RNG, we should prime the shared state.
     # XXX: these transformations should really happen at the Julia IR level...
     if job.config.kernel && haskey(globals(mod), "global_random_keys")
