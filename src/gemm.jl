@@ -265,9 +265,9 @@ end
 @inline gemm_tensor_eltype(::Type{T}, ::Type{T}, ::Type{T}) where {T <: Union{Float16, Float32, BFloat16}} = true
 @inline gemm_tensor_eltype(::Type, ::Type, ::Type) = false
 
-# This machine class runs `tensor_ops` only when the device advertises the Metal 4 family;
-# gating the launch on it also keeps the `__tensorops_*` symbols out of modules compiled for
-# devices where the validator would reject them.
+# `tensor_ops` runs only when the device advertises the Metal 4 family; gating the launch on
+# it also keeps the `__tensorops_*` symbols out of modules compiled for devices where the
+# validator would reject them.
 @inline tensor_matmul_capable() =
     metal_support() >= v"4" && MTL.supports_family(device(), MTL.MTLGPUFamilyMetal4)
 
@@ -337,7 +337,7 @@ end
 # Operand-support predicate for the simdgroup kernel, mirroring `supports_mps_matmul` /
 # `supports_mpsgraph_matmul` / `supports_tensor_matmul`: it handles any transpose/α/β/shape/
 # offset, so it only needs a float eltype. The scalar kernel is the universal fallback and
-# handles any eltype, so it needs no such predicate — it's where `:native` lands last.
+# handles any eltype, so it needs no such predicate (it is the kernel `:native` falls back to).
 @inline supports_simd_matmul(C, A, B, cA::Char, cB::Char, alpha::Number, beta::Number) =
     gemm_simd_eltype(eltype(A), eltype(B), eltype(C))
 
@@ -388,7 +388,7 @@ Native GEMM computing `C = α·op_tA(A)·op_tB(B) + β·C` for `MtlMatrix` opera
 `tA`/`tB ∈ {'N','T','C'}`. Backs the `:native`/`:auto` matmul paths (`kernel=:auto`, picking
 the best of the tensor/simd/scalar kernels) and the `:simd`/`:scalar`/`:tensor` paths, which set
 `kernel` to force a specific kernel. Forcing a kernel that cannot handle the operands is the
-caller's responsibility (see `supports_tensor_matmul`/`gemm_simd_eltype`).
+caller's responsibility (see `supports_simd_matmul`/`supports_tensor_matmul`).
 """
 function gemm!(C::MtlMatrix, tA::Char, tB::Char, A::MtlMatrix, B::MtlMatrix,
                alpha::Number, beta::Number; kernel::Symbol = :auto)
