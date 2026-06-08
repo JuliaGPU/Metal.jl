@@ -9,7 +9,7 @@ using ObjectiveC.Foundation: NSDictionary, nil
 # Reference attention in 4-D `(head_dim, seq, num_heads, batch)` Julia layout.
 # Mask (if provided) is `(N_kv, N_q, num_heads, batch)` — that's MPS's natural
 # `(B, H, N_q, N_kv)` layout reversed for Julia col-major.
-function _ref_attention(Q, K, V, scale, mask = nothing)
+function ref_attention(Q, K, V, scale, mask = nothing)
     D, N_q, H, B = size(Q)
     N_kv = size(K, 2)
     O = similar(Q)
@@ -27,7 +27,7 @@ function _ref_attention(Q, K, V, scale, mask = nothing)
     return O
 end
 
-function _run_sdpa(Q, K, V, scale; mask = nothing)
+function run_sdpa(Q, K, V, scale; mask = nothing)
     O = similar(Q)
     graph = MPSGraph()
     qph = placeholderTensor(graph, size(Q), eltype(Q))
@@ -69,15 +69,15 @@ end
     scale = inv(sqrt(T(D)))
 
     @testset "no mask" begin
-        O = _run_sdpa(Q, K, V, scale)
-        O_ref = _ref_attention(Array(Q), Array(K), Array(V), scale)
+        O = run_sdpa(Q, K, V, scale)
+        O_ref = ref_attention(Array(Q), Array(K), Array(V), scale)
         @test Array(O) ≈ O_ref rtol = (T === Float16 ? 1e-2 : sqrt(eps(T)))
     end
 
     @testset "with mask" begin
         mask = MtlArray(randn(T, N_kv, N_q, H, B))
-        O = _run_sdpa(Q, K, V, scale; mask)
-        O_ref = _ref_attention(Array(Q), Array(K), Array(V), scale, Array(mask))
+        O = run_sdpa(Q, K, V, scale; mask)
+        O_ref = ref_attention(Array(Q), Array(K), Array(V), scale, Array(mask))
         @test Array(O) ≈ O_ref rtol = (T === Float16 ? 1e-2 : sqrt(eps(T)))
     end
 end

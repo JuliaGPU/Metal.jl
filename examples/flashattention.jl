@@ -1,64 +1,30 @@
-# Flash Attention reference implementations on Apple Silicon.
+# Flash Attention
 #
 # Four ways to spell scaled dot-product attention on Metal, illustrating
 # the programming models Metal.jl exposes:
 #
 #   attention_mps(Q, K, V)
 #       The trivial baseline. Uses standard Julia operators (`*`,
-#       broadcasting, `maximum`, `sum`, `exp`) on `MtlArray`. The matrix
-#       multiplies are dispatched to MPSGraph / MPSMatrixMultiplication by
-#       `src/linalg.jl`; the rest is GPUArrays. Not actually a Flash
-#       Attention algorithm — the full N×N scores matrix is materialized
-#       in device memory — but it's the right reference and the fastest
-#       path to "attention runs on GPU" when you don't need a custom
-#       kernel. Works on macOS 13+ / M1+.
+#       broadcasting, `maximum`, `sum`, `exp`) on `MtlArray`.
 #
 #   attention_mpsgraph(Q, K, V)
 #       The high-level MPS path. Builds a one-node MPSGraph using
 #       `scaledDotProductAttentionWithQueryTensor` (macOS 14+), which
-#       fuses Q·Kᵀ → scale → softmax → ·V into a single op. Apple uses
-#       the same op as the backbone of their own SDPA paths (MLX falls
-#       back to it; Core ML lowers attention to it), so it's the closest
-#       thing to "ask Apple for attention" that Metal.jl can give you.
+#       fuses Q·Kᵀ → scale → softmax → ·V into a single op.
 #
 #   attention_simdgroup(Q, K, V)
 #       A single-block scaled dot-product attention kernel built from
 #       `MtlSimdgroupMatrix{Float16, 8, 8}`. One simdgroup of 32 lanes
 #       does the QKᵀ and PV matrix multiplies via two `simdgroup_matrix`
 #       ops; the row-wise softmax is done in scalar code through
-#       threadgroup memory. Limited to N = D = 8, single head, single
-#       batch — illustrative, not production. See
-#       https://github.com/philipturner/metal-flash-attention for a
-#       tuned reference. Works on macOS 13+ / M1+.
+#       threadgroup memory.
 #
 #   attention_tensor(Q, K, V)
 #       One fused kernel (QKᵀ → softmax → ·V) using the Metal 4
-#       `tensor_ops::matmul2d` primitives. Single dispatch with grid =
-#       (H, B), one threadgroup per (head, batch) pair, so all heads
-#       run in parallel — the kernel reads its own `(h, b)` from
-#       `threadgroup_position_in_grid`. The kernel builds
-#       `tensor_inline` views over the `MtlDeviceArray` inputs, so the
-#       kernel signature stays buffer-shaped — no host-side `MTLTensor`
-#       / `MTL4ComputeCommandEncoder` wrapping is needed. The matmuls
-#       lower to externally-defined `__tensorops_impl_matmul2d_op_*`
-#       symbols (linked from the MetalPerformancePrimitives runtime),
-#       not `air.*` intrinsics. Scratch for the scores and softmaxed P
-#       lives in threadgroup memory for the lifetime of the kernel — no
-#       device-memory round-trip between the two matmuls. Requires
-#       macOS 26+; on M3/M4 the runtime still lowers to the same
-#       simdgroup MMA hardware. Limited to N = D = 64 because the
-#       matmul descriptor is specialized to that single 64×64 tile, and
-#       the two matmul callsites only avoid Apple's back-end
-#       "out of stack registers" crash when the `matmul2d` op is built
-#       through Metal.jl's `TensorOpsMatmul2D{DESC, NSIMD}` wrapper
-#       (descriptor + simdgroup count as type parameters, mirroring
-#       MSL's `matmul2d<desc, execution_simdgroups<N>>`).
-#       `cooperative_tensor` would keep the scores tile in registers for
-#       true postfix-fusion, but the device-side dynamic-alloca support
-#       that requires isn't wired up yet.
+#       `tensor_ops::matmul2d` primitives.
 #
 # All implementations take Julia 4-D `(head_dim, seq, num_heads, batch)`
-# inputs — MPSGraph sees these reversed as `(batch, num_heads, seq,
+# inputs. MPSGraph sees these reversed as `(batch, num_heads, seq,
 # head_dim)`, the layout Apple's SDPA expects.
 
 using Metal
@@ -122,7 +88,7 @@ end
 
 ## Custom kernel with MtlSimdgroupMatrix
 
-function _fa_kernel!(O::AbstractMatrix{Float16},
+function fa_kernel!(O::AbstractMatrix{Float16},
                     Q::AbstractMatrix{Float16},
                     K_t::AbstractMatrix{Float16},
                     V::AbstractMatrix{Float16},
@@ -191,7 +157,7 @@ function attention_simdgroup(Q::MtlArray{Float16,4}, K::MtlArray{Float16,4},
     K_t = reshape(K, 8, 8)
     O2  = similar(Q2)
 
-    Metal.@sync @metal threads = 32 _fa_kernel!(O2, Q2, K_t, V2, Float32(scale))
+    Metal.@sync @metal threads = 32 fa_kernel!(O2, Q2, K_t, V2, Float32(scale))
     return reshape(permutedims(O2, (2, 1)), 8, 8, 1, 1)
 end
 
@@ -204,13 +170,13 @@ end
 # *column*-wise softmax — that's what corresponds to row-wise softmax of the
 # implicit QᵀK, and it's the right direction for column-major contiguous
 # memory access.
-function _fa_tensor!(O::MtlDeviceArray{Float16, 4},
-                     Q::MtlDeviceArray{Float16, 4},
-                     K::MtlDeviceArray{Float16, 4},
-                     V::MtlDeviceArray{Float16, 4},
-                     scale::Float32,
-                     ::Val{TD}, ::Val{TN},
-                     ::Val{NSIMD}) where {TD, TN, NSIMD}
+function fa_tensor!(O::MtlDeviceArray{Float16, 4},
+                    Q::MtlDeviceArray{Float16, 4},
+                    K::MtlDeviceArray{Float16, 4},
+                    V::MtlDeviceArray{Float16, 4},
+                    scale::Float32,
+                    ::Val{TD}, ::Val{TN},
+                    ::Val{NSIMD}) where {TD, TN, NSIMD}
     # One threadgroup per (head, batch) pair.
     tgid = threadgroup_position_in_grid_3d()
     h    = Int32(tgid.x) - Int32(1)
@@ -294,7 +260,7 @@ function attention_tensor(Q::MtlArray{Float16,4}, K::MtlArray{Float16,4},
     # grid = (H, B). The kernel uses `threadgroup_position_in_grid` to pick its
     # slice. The matmul descriptors carry (TN, TD) — the static tile shape per
     # head.
-    Metal.@sync @metal threads = threads groups = (H, B, 1) _fa_tensor!(
+    Metal.@sync @metal threads = threads groups = (H, B, 1) fa_tensor!(
         O, Q, K, V, Float32(scale),
         Val(Int32(D)), Val(Int32(N)), Val(Int32(nsimd)))
     return O

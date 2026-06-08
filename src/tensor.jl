@@ -3,10 +3,10 @@
 # Specialized on the tile shape (TM, TN, TK) and simdgroup count (NSIMD) so the
 # matmul descriptor and execution width are compile-time constants — see
 # `TensorOpsMatmul2D`.
-function _tensor_matmul_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceArray,
-                                M::UInt32, N::UInt32, K::UInt32,
-                                ::Val{TM}, ::Val{TN}, ::Val{TK},
-                                ::Val{NSIMD}) where {TM, TN, TK, NSIMD}
+function tensor_matmul_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceArray,
+                               M::UInt32, N::UInt32, K::UInt32,
+                               ::Val{TM}, ::Val{TN}, ::Val{TK},
+                               ::Val{NSIMD}) where {TM, TN, TK, NSIMD}
     tgid    = threadgroup_position_in_grid_3d()
     n_tile  = Int32(tgid.x) - Int32(1)
     m_tile  = Int32(tgid.y) - Int32(1)
@@ -79,7 +79,7 @@ function tensor_matmul!(C::MtlMatrix{TC}, A::MtlMatrix{TA}, B::MtlMatrix{TB};
     fill!(C, zero(TC))
     groups = (aN ÷ tile_n, aM ÷ tile_m, 1)
     nsimd = 4
-    @metal threads = nsimd * 32 groups = groups _tensor_matmul_kernel!(
+    @metal threads = nsimd * 32 groups = groups tensor_matmul_kernel!(
         C, A, B,
         UInt32(aM), UInt32(aN), UInt32(aK),
         Val(Int32(tile_m)), Val(Int32(tile_n)), Val(Int32(tile_k)),
