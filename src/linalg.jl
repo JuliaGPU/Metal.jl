@@ -21,11 +21,20 @@ end
         C.offset == 0
 end
 
-# Supported values are :auto, :MPS, :MPSGraph, :GPUArrays, and :native
+# Supported values:
+#   :auto     - best available: vendor (MPSGraph/MPS) where supported, else a native kernel
+#   :MPS      - MetalPerformanceShaders
+#   :MPSGraph - MetalPerformanceShadersGraph
+#   :GPUArrays- the generic GPUArrays kernel
+#   :native   - best of Metal.jl's own kernels (tensor → simd → scalar), picked per operands
+#   :simd     - force the simdgroup_matrix kernel (Float16/Float32)
+#   :scalar     - force the scalar shared-memory kernel (any eltype)
+#   :tensor   - force the Metal 4 tensor-ops kernel (Metal4 device, plain C=A*B, float)
+# The native kernels live in src/gemm.jl.
 const matmul_alg = ScopedValue(:auto)
 matmul_alg_error(alg, inT, outT, vec) = error("Matrix-$(vec ? "Vector" : "Matrix") multiplication algorithm `:$alg` is not supported for input eltype $inT and output eltype $outT.")
 
-# the :native GEMM handles 'N'/'T'/'C'; Symmetric/Hermitian wrapper chars ('S'/'H')
+# the native GEMM kernels handle 'N'/'T'/'C'; Symmetric/Hermitian wrapper chars ('S'/'H')
 # are expanded through the generic GPUArrays path instead.
 @inline is_ntc(t) = (t == 'N') || (t == 'T') || (t == 'C')
 @inline ntc_char(t) = t == 'N' ? 'N' : (t == 'C' ? 'C' : 'T')
@@ -65,6 +74,19 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     elseif alg === :MPS || (alg === :auto && mps_supported)
         mps_supported || matmul_alg_error(alg, eltype(A), eltype(C), false)
         matmul!(C, A, B, alpha, beta, transA, transB)
+    elseif alg === :simd || alg === :scalar || alg === :tensor
+        # explicit native kernel: check it supports these operands, then force it. The scalar
+        # kernel handles any eltype, so only :simd and :tensor have an extra constraint.
+        is_ntc(tA) && is_ntc(tB) || matmul_alg_error(alg, eltype(A), eltype(C), false)
+        cA = ntc_char(tA); cB = ntc_char(tB)
+        if alg === :simd
+            supports_simd_matmul(C, A, B, cA, cB, alpha, beta) ||
+                matmul_alg_error(alg, eltype(A), eltype(C), false)
+        elseif alg === :tensor
+            supports_tensor_matmul(C, A, B, cA, cB, alpha, beta) ||
+                matmul_alg_error(alg, eltype(A), eltype(C), false)
+        end
+        gemm!(C, cA, cB, A, B, alpha, beta; kernel=alg)
     elseif alg === :native || alg === :auto
         if is_ntc(tA) && is_ntc(tB)
             gemm!(C, ntc_char(tA), ntc_char(tB), A, B, alpha, beta)
@@ -74,7 +96,7 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     elseif alg === :GPUArrays
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
     else
-        error(":$alg is not a valid matmul algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`, `:native`")
+        error(":$alg is not a valid matmul algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`, `:native`, `:simd`, `:scalar`, `:tensor`")
     end
 end
 
@@ -113,16 +135,21 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
     elseif alg === :MPS || (alg === :auto && mps_supported)
         mps_supported || matmul_alg_error(alg, eltype(A), eltype(C), true)
         matvecmul!(C, A, B, alpha, beta, transA)
-    elseif alg === :native || alg === :auto
+    elseif alg === :native || alg === :auto || alg === :simd || alg === :scalar
+        # matrix-vector products go through the native gemv; the tensor kernel is
+        # matrix-only, so `:simd`/`:scalar` force the kernel and `:tensor` is rejected below
         if is_ntc(tA)
-            gemv!(C, ntc_char(tA), A, B, alpha, beta)
+            kernel = (alg === :simd || alg === :scalar) ? alg : :auto
+            alg === :simd && !supports_simd_matmul(C, A, B, ntc_char(tA), 'N', alpha, beta) &&
+                matmul_alg_error(alg, eltype(A), eltype(C), true)
+            gemv!(C, ntc_char(tA), A, B, alpha, beta; kernel)
         else
             GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)
         end
     elseif alg === :GPUArrays
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)
     else
-        error(":$alg is not a valid matmul algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`, `:native`")
+        error(":$alg is not a valid matmul algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`, `:native`, `:simd`, `:scalar`")
     end
 end
 

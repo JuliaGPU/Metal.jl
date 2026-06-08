@@ -56,6 +56,15 @@ using LinearAlgebra, ScopedValues
         @test test_matmul(Int32, Int32; vec_b, alg=:GPUArrays)
         @test test_matmul(Int8, Float32; vec_b, alg=:GPUArrays)
         @test test_matmul(Float16, Float32; vec_b, alg=:GPUArrays)
+
+        # :simd (simdgroup kernel, Float16/Float32 only)
+        @test test_matmul(Float32, Float32; vec_b, alg=:simd)
+        @test_throws "algorithm `:simd`" test_matmul(Int32, Int32; vec_b, alg=:simd)
+        # :scalar (scalar kernel, any eltype)
+        @test test_matmul(Int32, Int32; vec_b, alg=:scalar)
+        @test test_matmul(Float32, Float32; vec_b, alg=:scalar)
+        # :tensor is matrix-only and needs tile-divisible dims; N=20 errors either way
+        @test_throws Exception test_matmul(Float32, Float32; vec_b, alg=:tensor)
         end
     end
 end
@@ -90,43 +99,44 @@ end
     mk(T, sz) = T <: Integer ? rand(T(1):T(4), sz...) : rand(T, sz...)
     tol(T) = real(T) == Float16 ? 1.0f-1 : real(T) == Float32 ? 1.0f-3 : 1e-5
 
-    # C = α·op(A)·op(B) + β·C against a CPU oracle, forcing the native path
-    function nativetest(T, M, N, K, tA, tB, α, β)
+    # C = α·op(A)·op(B) + β·C against a CPU oracle, forcing a specific native kernel
+    function nativetest(T, M, N, K, tA, tB, α, β; alg=:native)
         sA = tA == 'N' ? (M, K) : (K, M)
         sB = tB == 'N' ? (K, N) : (N, K)
         Ah = mk(T, sA); Bh = mk(T, sB); Ch = mk(T, (M, N))
         dA = MtlArray(Ah); dB = MtlArray(Bh); dC = MtlArray(copy(Ch))
         ref = α .* (op(Ah, tA) * op(Bh, tB)) .+ β .* Ch
-        @with (Metal.matmul_alg => :native) mul!(dC, op(dA, tA), op(dB, tB), α, β)
+        @with (Metal.matmul_alg => alg) mul!(dC, op(dA, tA), op(dB, tB), α, β)
         T <: Integer ? Array(dC) == ref : isapprox(Array(dC), ref; rtol=tol(T))
     end
 
-    # fast path (Float16/Float32): transpose × α/β × ragged shapes
+    # simd path (Float16/Float32): transpose × α/β × ragged shapes. Forced via `:simd` so
+    # the simdgroup kernel is exercised regardless of whether a tensor path is available.
     @testset "$T $tA$tB α=$α β=$β" for T in (Float32, Float16),
                                         (tA, tB) in (("N","N"), ("N","T"), ("T","N"), ("T","T")),
                                         (α, β) in ((T(1), T(0)), (T(2), T(0)), (T(1), T(1)), (T(2), T(3)))
-        @test nativetest(T, 64, 48, 32, only(tA), only(tB), α, β)   # aligned
-        @test nativetest(T, 65, 47, 33, only(tA), only(tB), α, β)   # ragged
+        @test nativetest(T, 64, 48, 32, only(tA), only(tB), α, β; alg=:simd)   # aligned
+        @test nativetest(T, 65, 47, 33, only(tA), only(tB), α, β; alg=:simd)   # ragged
     end
 
-    # robust path (ComplexF32, Int32): includes conjugate transpose
+    # scalar path (ComplexF32, Int32): includes conjugate transpose
     @testset "$T $tA$tB" for T in (ComplexF32, Int32),
                              (tA, tB) in (("N","N"), ("N","T"), ("T","N"), ("C","N"), ("N","C"))
         α = T(2); β = T <: Integer ? T(1) : T(1) / 2
-        @test nativetest(T, 40, 24, 16, only(tA), only(tB), α, β)
-        @test nativetest(T, 41, 25, 17, only(tA), only(tB), α, β)   # ragged
+        @test nativetest(T, 40, 24, 16, only(tA), only(tB), α, β; alg=:scalar)
+        @test nativetest(T, 41, 25, 17, only(tA), only(tB), α, β; alg=:scalar)   # ragged
     end
 
     # offset views (dense MtlMatrix with offset≠0): the case MPSGraph falls back on
     @testset "offset views" begin
-        for T in (Float32, ComplexF32)
+        for (T, alg) in ((Float32, :simd), (ComplexF32, :scalar))
             P = MtlArray(mk(T, (40, 60))); Q = MtlArray(mk(T, (32, 50)))
             A = view(P, :, 3:34)      # 40×32, offset≠0, dense
             B = view(Q, :, 2:41)      # 32×40, offset≠0, dense
             @test A isa MtlMatrix && A.offset != 0 && B isa MtlMatrix && B.offset != 0
             C = MtlArray(zeros(T, 40, 40))
             ref = Array(A) * Array(B)
-            @with (Metal.matmul_alg => :native) mul!(C, A, B)
+            @with (Metal.matmul_alg => alg) mul!(C, A, B)
             @test isapprox(Array(C), ref; rtol=tol(T))
         end
     end
@@ -160,6 +170,35 @@ end
         @with (Metal.matmul_alg => :native) mul!(Cj, A, B)
         @with (Metal.matmul_alg => :MPSGraph) mul!(Cg, A, B)
         @test isapprox(Array(Cj), Array(Cg); rtol=1.0f-3)
+    end
+
+    # Metal 4 tensor-ops path (`:tensor`): only fires on a capable device (macOS 26+ /
+    # Metal4 family), for the plain C = A·B (N/N, α=1, β=0) with tile-divisible dims and a
+    # supported eltype.
+    @testset "tensor-ops path" begin
+        if Metal.tensor_matmul_capable()
+            ttol(T) = T === Float32 ? 1.0f-3 : 1.0f-1
+            @testset "$T $M×$N×$K" for T in (Float32, Float16, BFloat16),
+                                       (M, N, K) in ((64, 64, 32), (128, 256, 64), (512, 512, 128))
+                A = MtlArray(rand(T, M, K)); B = MtlArray(rand(T, K, N))
+                ref = Array(A) * Array(B)
+                @test Metal.supports_tensor_matmul(MtlArray(zeros(T, M, N)), A, B, 'N', 'N', true, false)
+                Ct = MtlArray(zeros(T, M, N))
+                @with (Metal.matmul_alg => :tensor) mul!(Ct, A, B)
+                @test isapprox(Array(Ct), ref; rtol=ttol(T))
+            end
+
+            # forcing `:tensor` on operands it can't handle errors (like an unsupported :MPS)
+            A = MtlArray(rand(Float32, 64, 64)); B = MtlArray(rand(Float32, 64, 64))
+            @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Float32, 64, 64)), transpose(A), B))  # transpose
+            @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Float32, 64, 64)), A, B, 2f0, 1f0))  # α/β
+            Aodd = MtlArray(rand(Float32, 65, 33)); Bodd = MtlArray(rand(Float32, 33, 47))
+            @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Float32, 65, 47)), Aodd, Bodd))      # not tile-divisible
+            Ai = MtlArray(rand(Int32, 64, 64)); Bi = MtlArray(rand(Int32, 64, 64))
+            @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Int32, 64, 64)), Ai, Bi))            # unsupported eltype
+        else
+            @test_skip Metal.tensor_matmul_capable()
+        end
     end
 end
 
