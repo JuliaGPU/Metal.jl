@@ -334,5 +334,40 @@ end # @testset "shuffle functions"
         # the downgraded form executes correctly
         @metal threads=(8, 8) macos=v"14" kernel(a, b)
         @test Array(a)[3:10, 2:9] == Array(b)[2:9, 4:11]
+
+        # the non-transposed layout (`Val(false)`) swaps the dims/strides/origin vectors,
+        # so it downgrades to an *unswapped* origin and a cleared transpose flag rather
+        # than the transposed encoding above (regression test: the downgrade used to
+        # project every call onto the transposed form)
+        function kernel_nt(a, b)
+            sg = simdgroup_load(a, (3, 2), Val(false))
+            simdgroup_store(sg, b, (2, 4), Val(false))
+            return
+        end
+
+        # AIR 2.8: the non-transposed origin is *not* row/column-swapped
+        asm = sprint() do io
+            Metal.code_air(io, kernel_nt, tt; kernel=true, macos=v"26")
+        end
+        @test occursin(r"call <64 x float> @air\.simdgroup_matrix_8x8_load\.v64f32\.p1f32\(float addrspace\(1\)\* %\S+, <2 x i64> %\S+, <2 x i64> %\S+, <2 x i64> <i64 2, i64 1>\)", asm)
+        @test occursin(r"call void @air\.simdgroup_matrix_8x8_store\.v64f32\.p1f32\(<64 x float> %\S+, float addrspace\(1\)\* %\S+, <2 x i64> %\S+, <2 x i64> %\S+, <2 x i64> <i64 1, i64 3>\)", asm)
+
+        # AIR < 2.8: unswapped origin and a `false` transpose flag
+        asm = sprint() do io
+            Metal.code_air(io, kernel_nt, tt; kernel=true, macos=v"14")
+        end
+        @test occursin(r"call <64 x float> @air\.simdgroup_matrix_8x8_load\.v64f32\.p1f32\(float addrspace\(1\)\* %\S+, i64 %\S+, <2 x i64> <i64 2, i64 1>, i1 false\)", asm)
+        @test occursin(r"call void @air\.simdgroup_matrix_8x8_store\.v64f32\.p1f32\(<64 x float> %\S+, float addrspace\(1\)\* %\S+, i64 %\S+, <2 x i64> <i64 1, i64 3>, i1 false\)", asm)
+
+        # the downgraded non-transposed load executes with transpose semantics
+        function kernel_nt_exec(a, b)
+            m = simdgroup_load(a, (1, 1), Val(false))
+            simdgroup_store(m, b, (1, 1), Val(true))
+            return
+        end
+        c = MtlArray(rand(Float32, 8, 8))
+        d = MtlArray(zeros(Float32, 8, 8))
+        @metal threads=32 macos=v"14" kernel_nt_exec(c, d)
+        @test Array(d) == permutedims(Array(c))
     end
 end # End Matrix Functions

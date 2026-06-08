@@ -74,6 +74,24 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
     return entry
 end
 
+# the statically-known integer in lane `i` of a vector value, or `nothing` if that lane
+# isn't a compile-time constant. looks through the `insertelement` chains and constant
+# vectors that the simdgroup intrinsics build their dims/strides operands from.
+function static_vector_lane(v::LLVM.Value, i::Integer)
+    if v isa LLVM.InsertElementInst
+        base, elt, idx = operands(v)
+        idx isa LLVM.ConstantInt || return nothing  # unknown insert position
+        if convert(Int, idx) == i
+            return elt isa LLVM.ConstantInt ? convert(Int, elt) : nothing
+        end
+        return static_vector_lane(base, i)  # this lane is untouched by the insert
+    end
+    elref = LLVM.API.LLVMGetAggregateElement(v, UInt32(i))
+    elref == C_NULL && return nothing
+    el = LLVM.Value(elref)
+    return el isa LLVM.ConstantInt ? convert(Int, el) : nothing
+end
+
 function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
                                     mod::LLVM.Module, entry::LLVM.Function)
     entry = invoke(GPUCompiler.finish_ir!,
@@ -84,11 +102,13 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
     if job.config.target.air < v"2.8"
         # AIR 2.8 generalized the simdgroup matrix load/store intrinsics, replacing
         # the elements-per-row scalar, matrix origin, and transposition flag with
-        # vectors describing the dimensions, strides and origin of the memory operand.
-        # this rewrite blindly projects onto the legacy transposed encoding, i.e.,
-        # epr = dims[2] with a swapped origin and transpose = true, because that is the
-        # only layout our device code emits (keep in sync with `simdgroup_load/store`
-        # in src/device/intrinsics/simd.jl).
+        # vectors describing the dimensions, strides and origin of the memory operand,
+        # with transposition expressed by swapping those vectors' elements (see
+        # `simdgroup_load/store` in src/device/intrinsics/simd.jl). recover the legacy
+        # operands from the 2.8 layout: the elements-per-row is the non-unit stride, the
+        # transpose flag is statically recovered from which stride is unit (the legacy
+        # intrinsic needs it as an immediate), and the transposed layout's swapped origin
+        # is unswapped back.
         for f in collect(functions(mod))
             fn = LLVM.name(f)
             m = match(r"^air\.simdgroup_matrix_8x8_(load|store)\.", fn)
@@ -127,18 +147,36 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
 
                     args = collect(arguments(call))
                     prefix = is_load ? args[1:1] : args[1:2]
-                    dims, _, origin = args[end-2:end]
+                    _, strides, origin = args[end-2:end]
 
-                    epr = extract_element!(builder, dims, ConstantInt(Int32(1)))
-                    o1 = extract_element!(builder, origin, ConstantInt(Int32(0)))
-                    o2 = extract_element!(builder, origin, ConstantInt(Int32(1)))
-                    swapped = insert_element!(builder, UndefValue(T_vec2), o2,
-                                              ConstantInt(Int32(0)))
-                    swapped = insert_element!(builder, swapped, o1,
-                                              ConstantInt(Int32(1)))
+                    # the transposed layout has a unit stride in the second dimension;
+                    # the non-transposed one in the first. one of the two is always the
+                    # literal 1, so this is statically decidable.
+                    transposed = static_vector_lane(strides, 1) == 1
+                    @assert transposed || static_vector_lane(strides, 0) == 1 """
+                        unexpected simdgroup matrix strides $(strides); the AIR downgrade \
+                        only handles the transposed and non-transposed column-major layouts \
+                        emitted by `simdgroup_load`/`simdgroup_store`"""
+
+                    # elements per row is the non-unit (leading-dimension) stride
+                    epr = extract_element!(builder, strides,
+                                           ConstantInt(Int32(transposed ? 0 : 1)))
+
+                    # the transposed layout emits a row/column-swapped origin; unswap it
+                    # for the legacy form, which leaves the non-transposed origin as-is
+                    legacy_origin = origin
+                    if transposed
+                        o1 = extract_element!(builder, origin, ConstantInt(Int32(0)))
+                        o2 = extract_element!(builder, origin, ConstantInt(Int32(1)))
+                        legacy_origin = insert_element!(builder, UndefValue(T_vec2), o2,
+                                                        ConstantInt(Int32(0)))
+                        legacy_origin = insert_element!(builder, legacy_origin, o1,
+                                                        ConstantInt(Int32(1)))
+                    end
 
                     new_call = call!(builder, old_ft, old_f,
-                                     [prefix..., epr, swapped, ConstantInt(T_bool, true)])
+                                     [prefix..., epr, legacy_origin,
+                                      ConstantInt(T_bool, transposed)])
                     replace_uses!(call, new_call)
                     erase!(call)
                 end

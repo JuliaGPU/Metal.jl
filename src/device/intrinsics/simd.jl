@@ -9,39 +9,48 @@ function convert_origin(origin::NTuple{2, Int64})
 end
 
 # the load/store intrinsics use their newest (AIR 2.8) signature, taking dims, strides
-# and origin vectors; here always the transposed layout of a column-major matrix, i.e.,
-# dims = (8, epr), strides = (epr, 1), and a row/column-swapped origin. when targeting
-# older AIR versions, `finish_ir!` rewrites these calls to the legacy signature, relying
-# on this being the only emitted layout (keep in sync with the downgrade rule in
-# src/compiler/compilation.jl).
+# and origin vectors. AIR 2.8 expresses transposition by swapping those vectors' elements:
+# the transposed layout of a column-major matrix is dims = (8, epr), strides = (epr, 1),
+# and a row/column-swapped origin, while the non-transposed layout swaps each to
+# dims = (epr, 8), strides = (1, epr) and an unswapped origin. when targeting older AIR
+# versions, `finish_ir!` rewrites these calls to the legacy elements-per-row + transpose
+# flag signature (keep in sync with the downgrade rule in src/compiler/compilation.jl).
 for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"))
     for as in (AS.Device, AS.ThreadGroup)
         @eval begin
             @device_function simdgroup_load(
                 data::MtlDeviceArray{$jltype, <:Any, $as},
                 matrix_origin::NTuple{2, Int64} = (1, 1),
-            ) = @typed_ccall($"air.simdgroup_matrix_8x8_load.v64$suffix.p$as$suffix",
+                ::Val{transpose} = Val(true),
+            ) where {transpose} = @typed_ccall($"air.simdgroup_matrix_8x8_load.v64$suffix.p$as$suffix",
                 llvmcall, NTuple{64, VecElement{$jltype}},
                 (LLVMPtr{$jltype, $as}, NTuple{2, VecElement{Int64}},
                  NTuple{2, VecElement{Int64}}, NTuple{2, VecElement{Int64}}),
                 pointer(data),
-                (VecElement{Int64}(8), VecElement{Int64}(size(data)[1])),
-                (VecElement{Int64}(size(data)[1]), VecElement{Int64}(1)),
-                convert_origin(reverse(matrix_origin)))
+                transpose ? (VecElement{Int64}(8), VecElement{Int64}(size(data)[1])) :
+                            (VecElement{Int64}(size(data)[1]), VecElement{Int64}(8)),
+                transpose ? (VecElement{Int64}(size(data)[1]), VecElement{Int64}(1)) :
+                            (VecElement{Int64}(1), VecElement{Int64}(size(data)[1])),
+                transpose ? convert_origin(reverse(matrix_origin)) :
+                            convert_origin(matrix_origin))
 
             @device_function simdgroup_store(
                 src::NTuple{64, VecElement{$jltype}},
                 dest::MtlDeviceArray{$jltype, <:Any, $as},
                 matrix_origin::NTuple{2, Int64} = (1, 1),
-            ) = @typed_ccall($"air.simdgroup_matrix_8x8_store.v64$suffix.p$as$suffix",
+                ::Val{transpose} = Val(true),
+            ) where {transpose} = @typed_ccall($"air.simdgroup_matrix_8x8_store.v64$suffix.p$as$suffix",
                 llvmcall, Cvoid,
                 (NTuple{64, VecElement{$jltype}}, LLVMPtr{$jltype, $as},
                  NTuple{2, VecElement{Int64}}, NTuple{2, VecElement{Int64}},
                  NTuple{2, VecElement{Int64}}),
                 src, pointer(dest),
-                (VecElement{Int64}(8), VecElement{Int64}(size(dest)[1])),
-                (VecElement{Int64}(size(dest)[1]), VecElement{Int64}(1)),
-                convert_origin(reverse(matrix_origin)))
+                transpose ? (VecElement{Int64}(8), VecElement{Int64}(size(dest)[1])) :
+                            (VecElement{Int64}(size(dest)[1]), VecElement{Int64}(8)),
+                transpose ? (VecElement{Int64}(size(dest)[1]), VecElement{Int64}(1)) :
+                            (VecElement{Int64}(1), VecElement{Int64}(size(dest)[1])),
+                transpose ? convert_origin(reverse(matrix_origin)) :
+                            convert_origin(matrix_origin))
         end
     end
 
@@ -68,23 +77,29 @@ end
 ## Documentation
 
 @doc """
-    simdgroup_load(data::MtlDeviceArray{T}, matrix_origin=(1, 1))
+    simdgroup_load(data::MtlDeviceArray{T}, matrix_origin=(1, 1), Val(transpose)=Val(true))
 
 Loads data from device or threadgroup memory into an 8x8 SIMD-group matrix
 and returns it. `T` must be either `Float16` or `Float32`.
 
 # Arguments
 - `matrix_origin::NTuple{2, Int64}=(1, 1)`: origin in the source memory to load from.
+- `Val(transpose)::Val{Bool}=Val(true)`: whether to transpose the loaded matrix. The
+  default `Val(true)` treats the column-major source as a regular (non-transposed)
+  matrix; pass `Val(false)` to load the transpose.
 """ simdgroup_load
 
 @doc """
-    simdgroup_store(src, dest::MtlDeviceArray{T}, matrix_origin=(1, 1))
+    simdgroup_store(src, dest::MtlDeviceArray{T}, matrix_origin=(1, 1), Val(transpose)=Val(true))
 
 Stores data from an 8x8 SIMD-group matrix into device or threadgroup memory.
 `T` must be either `Float16` or `Float32`.
 
 # Arguments
 - `matrix_origin::NTuple{2, Int64}=(1, 1)`: origin in the destination memory to store to.
+- `Val(transpose)::Val{Bool}=Val(true)`: whether to transpose the matrix on store. The
+  default `Val(true)` matches the column-major convention; pass `Val(false)` to store the
+  transpose.
 """ simdgroup_store
 
 @doc """
