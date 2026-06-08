@@ -1,5 +1,5 @@
 export MtlInlineTensor, matmul2d_descriptor, TensorOpsMatmul2D,
-       matmul2d_multiply, matmul2d_multiply_accumulate, tensor_matmul!
+       matmul2d_multiply, matmul2d_multiply_accumulate
 
 using Core: LLVMPtr
 
