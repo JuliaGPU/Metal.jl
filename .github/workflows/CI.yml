@@ -47,3 +47,13 @@ jobs:
       - uses: julia-actions/julia-runtest@v1
         with:
           test_args: '--quickfail'
+      # On a compilation failure, Metal.jl drops the IR/AIR/metallib dumps in
+      # $RUNNER_TEMP/metal-compilation-dumps (see `dump_artifacts` in
+      # src/compiler/compilation.jl). Upload them so they can be inspected,
+      # mirroring the `buildkite-agent artifact upload` done on the buildkite CI.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: metal-compilation-dumps-${{ matrix.os }}-julia-${{ matrix.version }}
+          path: ${{ runner.temp }}/metal-compilation-dumps/
+          if-no-files-found: ignore
