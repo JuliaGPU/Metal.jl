@@ -72,6 +72,8 @@ end
     @test Adapt.adapt(MtlArray{Float32, 2}, [1 2;3 4]) isa MtlArray{Float32, 2, Metal.DefaultStorageMode}
     @test Adapt.adapt(MtlArray{Float32, 2, Metal.SharedStorage}, [1 2;3 4]) isa MtlArray{Float32, 2, Metal.SharedStorage}
     @test Adapt.adapt(MtlMatrix{ComplexF32, Metal.SharedStorage}, [1 2;3 4]) isa MtlArray{ComplexF32, 2, Metal.SharedStorage}
+    @test Adapt.adapt(MtlArray{Float32, 2, Metal.PrivateStorage}, [1 2;3 4]) isa MtlArray{Float32, 2, Metal.PrivateStorage}
+    @test Adapt.adapt(MtlMatrix{ComplexF32, Metal.PrivateStorage}, [1 2;3 4]) isa MtlArray{ComplexF32, 2, Metal.PrivateStorage}
     @test Adapt.adapt(MtlArray{Float16}, Float64[1]) isa MtlArray{Float16}
 
     # Test a few explicitly unsupported types
@@ -346,12 +348,14 @@ end
 
 # https://github.com/JuliaGPU/CUDA.jl/issues/2191
 @testset "preserving storage mode" begin
-    a = mtl([1]; storage=Metal.SharedStorage)
-    @test Metal.storagemode(a) == Metal.SharedStorage
+    altStorage = Metal.DefaultStorageMode != Metal.SharedStorage ? Metal.SharedStorage : Metal.PrivateStorage
+
+    a = mtl([1]; storage=altStorage)
+    @test Metal.storagemode(a) == altStorage
 
     # storage mode should be preserved
     b = a .+ 1
-    @test Metal.storagemode(b) == Metal.SharedStorage
+    @test Metal.storagemode(b) == altStorage
 
     # when there's a conflict, we should defer to shared memory
     c = mtl([1]; storage=Metal.PrivateStorage)
@@ -746,9 +750,9 @@ end
     end
 
     # preserving buffer types
-    let x = Metal.zeros(Float32, 1; storage=Metal.SharedStorage)
+    let x = Metal.zeros(Float32, 1; storage=Metal.PrivateStorage)
         y = x .+ 1
-        @test is_shared(y)
+        @test is_private(y)
     end
 
     # when storages are different, choose shared
