@@ -274,7 +274,7 @@ Return `data` from the thread whose SIMD lane ID is `simd_lane_id`. The `simd_la
 needs to be a valid SIMD lane ID but doesn't have to be the same for all threads in the
 SIMD-group
 
-T must be one of the following: Float32, Float16, BFloat16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
 """
 simd_shuffle
 
@@ -287,7 +287,7 @@ The value for `delta` must be the same for all threads in the SIMD-group. This f
 doesn't modify the upper `delta` lanes of `data` because it doesn't wrap values around
 the SIMD-group.
 
-T must be one of the following: Float32, Float16, BFloat16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
 """
 simd_shuffle_down
 
@@ -300,7 +300,7 @@ lane ID minus `delta`.
 The value of `delta` must be the same for all threads in a SIMD-group. This function doesn't
 modify the lower `delta` lanes of `data` because it doesn't wrap values around the SIMD-group.
 
-T must be one of the following: Float32, Float16, BFloat16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
 """
 simd_shuffle_up
 
@@ -318,7 +318,7 @@ The value of `delta` needs to be the same for all threads in a SIMD-group.
 The `modulo` parameter defines the vector width that splits the SIMD-group into separate vectors
  and must be 2, 4, 8, 16, or 32.
 
-T must be one of the following: Float32, Float16, BFloat16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
 """
 simd_shuffle_and_fill_down
 
@@ -336,7 +336,7 @@ The value of `delta` needs to be the same for all threads in a SIMD-group.
 The `modulo` parameter defines the vector width that splits the SIMD-group into separate vectors
  and must be 2, 4, 8, 16, or 32.
 
-T must be one of the following: Float32, Float16, BFloat16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
+T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
 """
 simd_shuffle_and_fill_up
 
