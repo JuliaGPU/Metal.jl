@@ -261,6 +261,19 @@ end # @testset "shuffle functions"
         @test Array(a) == Array(b)
     end
 
+    @testset "load_store transpose flag ($typ)" for typ in simdgroup_types
+        # Val(false) loads/stores the transpose of the (column-major) 8x8 block
+        function kernel(a::MtlDeviceArray{T}, b::MtlDeviceArray{T}) where {T}
+            m = simdgroup_load(a, (1, 1), Val(false))
+            simdgroup_store(m, b, (1, 1), Val(true))
+            return
+        end
+        a = MtlArray(rand(typ, 8, 8))
+        b = MtlArray(zeros(typ, 8, 8))
+        @metal threads=32 kernel(a, b)
+        @test Array(b) == permutedims(Array(a))
+    end
+
     @testset "mul($typ)" for typ in simdgroup_types
         function kernel(a::MtlDeviceArray{T}, b::MtlDeviceArray{T}, c::MtlDeviceArray{T}) where {T}
             sg_a = simdgroup_load(a)

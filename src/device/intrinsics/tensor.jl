@@ -70,21 +70,21 @@ const TensorDescriptorStorage = Base.RefValue{NTuple{TENSOR_DESCRIPTOR_SIZE, UIn
 """
     MtlInlineTensor{T, R, AS}
 
-Kernel-stack tensor view over an `MtlDeviceArray` or `MtlThreadGroupArray`. `T` is the
-element type, `R` the rank, `AS` the address space of the underlying data (`AS.Device` or
-`AS.ThreadGroup`). Backed by a thread- private byte buffer that the runtime initializes at
+Kernel-stack tensor view over an `MtlDeviceArray` or `MtlThreadGroupArray`, for the Metal 4
+`tensor_ops` primitives. `T` is the element type, `R` the rank, `AS` the address space of the
+backing data (`AS.Device` or `AS.ThreadGroup`). A thread-private descriptor is initialized at
 construction.
 
-Extents follow the MSL `dextents<int32_t, R>{e1, e2, ...}` convention (innermost dimension
-first), which is the row-major view the matmul kernel expects. For a Julia column-major
-`MtlMatrix(M, N)`, pass extents `(M, N)` if you want to treat columns as the inner
-dimension.
+Extents and strides follow Julia's column-major convention, matching the backing array: the
+first dimension is contiguous. `MtlInlineTensor(A)` views all of `A` (its `size`);
+`MtlInlineTensor(A, dims)` and `MtlInlineTensor(A, dims, strides)` set an explicit shape.
+Slice a tile with [`view`](@ref), using 1-based origins.
 """
 struct MtlInlineTensor{T, R, AS}
     storage::TensorDescriptorStorage
 end
 
-# `tensor_inline` packed-stride strides: stride(0) = 1, stride(k) = prod(extents[1:k]).
+# column-major packed strides: stride(1) = 1, stride(k) = prod(extents[1:k-1]).
 @inline function packed_strides(extents::NTuple{R, Int32}) where {R}
     ntuple(Val(R)) do k
         s = Int32(1)
@@ -142,6 +142,9 @@ end
 end
 
 # Convenience: infer rank and address space from the inputs.
+@inline MtlInlineTensor(data::MtlDeviceArray{T, <:Any, A}) where {T, A} =
+    MtlInlineTensor{T, ndims(data), A}(data, size(data))
+
 @inline MtlInlineTensor(data::MtlDeviceArray{T, <:Any, A},
                         extents::NTuple{R, <:Integer}) where {T, R, A} =
     MtlInlineTensor{T, R, A}(data, extents)
@@ -154,14 +157,15 @@ end
 Base.eltype(::Type{<:MtlInlineTensor{T}}) where {T} = T
 Base.eltype(::MtlInlineTensor{T}) where {T} = T
 
-# Slice. Origins are zero-based to match MSL semantics.
+# Slice a tile. Origins are 1-based, like Julia's `view` (the underlying intrinsic is
+# 0-based, so subtract one here).
 @device_function @inline function Base.view(
         t::MtlInlineTensor{T, R, A},
         origin::NTuple{R, <:Integer},
         extents::NTuple{R, <:Integer}) where {T, R, A}
     storage = Ref{NTuple{TENSOR_DESCRIPTOR_SIZE, UInt8}}()
     slice_private_tensor!(storage, t.storage, Int16(R),
-                          Int32.(origin), Int32.(extents))
+                          Int32.(origin) .- Int32(1), Int32.(extents))
     return MtlInlineTensor{T, R, A}(storage)
 end
 
@@ -174,23 +178,26 @@ end
 end
 
 """
-    matmul2d_descriptor(m, n, [k]; transpose_left=false, transpose_right=false,
+    matmul2d_descriptor(M, N, [K]; transpose_left=false, transpose_right=false,
                         relaxed_precision=false, mode=matmul2d_multiply)
 
-Configuration descriptor for a `tensor_ops::matmul2d` operation. `k` defaults to `-1`
-(inferred from the input tensors at runtime).
+Configuration descriptor for a `tensor_ops::matmul2d` op computing the Julia column-major
+product `C[M, N] = A[M, K] * B[K, N]`. `K` defaults to `-1` (inferred from the inputs at
+runtime). `transpose_left`/`transpose_right` transpose `A`/`B`.
 
 For an outer `K`-loop where each iteration accumulates a partial product into the
 destination, set `mode = matmul2d_multiply_accumulate` and zero the destination before the
 loop. A typical pattern:
 
 ```julia
+# C[M, N] = A[M, K] * B[K, N], accumulated over K-tiles of width TileK
 op = TensorOpsMatmul2D{matmul2d_descriptor(M, N, TileK;
                                            mode = matmul2d_multiply_accumulate),
                        Int32(NSIMD)}()
 for s in 0:(nslices - 1)
-    sA = view(tA, (Int32(s) * Int32(TileK), Int32(0)), (Int32(TileK), Int32(M)))
-    sB = view(tB, (Int32(0), Int32(s) * Int32(TileK)), (Int32(N), Int32(TileK)))
+    k0 = Int32(s) * Int32(TileK)
+    sA = view(tA, (Int32(1), k0 + Int32(1)), (Int32(M), Int32(TileK)))
+    sB = view(tB, (k0 + Int32(1), Int32(1)), (Int32(TileK), Int32(N)))
     op(sA, sB, tC)
 end
 ```
@@ -238,15 +245,15 @@ tensorops_AS_prefix(::Val{AS.ThreadGroup}) = "tg"
 """
     TensorOpsMatmul2D{DESC, NSIMD}
 
-Configured `tensor_ops::matmul2d` op. Mirrors Apple's MSL `matmul2d<desc,
-execution_simdgroups<N>>` template: `DESC` is the [`matmul2d_descriptor`](@ref) value,
-`NSIMD` is the simdgroup count (`execution_simdgroups<N>`).
+Configured `tensor_ops::matmul2d` op. `DESC` is the [`matmul2d_descriptor`](@ref) value and
+`NSIMD` the simdgroup count (`execution_simdgroups<N>` in MSL).
 
-Construct with [`TensorOpsMatmul2D(desc, Val(N))`](@ref) and invoke like a function:
+Construct with [`TensorOpsMatmul2D(desc, Val(N))`](@ref) and invoke it to compute the Julia
+column-major product `C = A*B` (or `C += A*B` in `matmul2d_multiply_accumulate` mode):
 
 ```julia
-op = TensorOpsMatmul2D(matmul2d_descriptor(64, 32, -1), Val(4))
-op(left, right, dest)            # run; mirrors `op.run(...)` in MSL
+op = TensorOpsMatmul2D(matmul2d_descriptor(64, 32), Val(4))
+op(A, B, C)            # C[64, 32] = A[64, K] * B[K, 32]
 ```
 """
 struct TensorOpsMatmul2D{DESC, NSIMD} end
@@ -255,13 +262,20 @@ TensorOpsMatmul2D(desc::matmul2d_descriptor, ::Val{NSIMD}) where {NSIMD} =
     TensorOpsMatmul2D{desc, Int32(NSIMD)}()
 
 @device_function @inline @generated function (::TensorOpsMatmul2D{DESC, NSIMD})(
-        left::MtlInlineTensor{TL, 2, AL},
-        right::MtlInlineTensor{TR, 2, AR},
-        dest::MtlInlineTensor{TD, 2, AD}) where {DESC, NSIMD, TL, TR, TD, AL, AR, AD}
+        A::MtlInlineTensor{TA, 2, AA},
+        B::MtlInlineTensor{TB, 2, AB},
+        C::MtlInlineTensor{TC, 2, AC}) where {DESC, NSIMD, TA, TB, TC, AA, AB, AC}
+    # matmul2d produces its (row-major) output as the transpose of the Julia column-major
+    # one, so `C = A*B` follows from running it with the operands swapped (its left = B, its
+    # right = A) and the descriptor's m/n (and transpose flags) swapped to match. DESC is a
+    # compile-time parameter, so this rewrite is constant-folded.
+    apple = matmul2d_descriptor(DESC.n, DESC.m, DESC.k,
+                                DESC.transpose_right, DESC.transpose_left,
+                                DESC.relaxed_precision, DESC.matmul_mode)
     sym = "__tensorops_impl_matmul2d_op_run" *
-          "_$(tensorops_AS_prefix(Val(AL)))_$(tensorops_suffix(TL))" *
-          "_$(tensorops_AS_prefix(Val(AR)))_$(tensorops_suffix(TR))" *
-          "_$(tensorops_AS_prefix(Val(AD)))_$(tensorops_suffix(TD))"
+          "_$(tensorops_AS_prefix(Val(AB)))_$(tensorops_suffix(TB))" *
+          "_$(tensorops_AS_prefix(Val(AA)))_$(tensorops_suffix(TA))" *
+          "_$(tensorops_AS_prefix(Val(AC)))_$(tensorops_suffix(TC))"
     quote
         threads = Int32(NSIMD) * (threads_per_simdgroup() % Int32)
         ccall($"extern $sym", llvmcall, Cvoid,
@@ -270,10 +284,10 @@ TensorOpsMatmul2D(desc::matmul2d_descriptor, ::Val{NSIMD}) where {NSIMD} =
                Ref{UInt8}, Int32,
                Ref{UInt8}, Int32,
                Int32),
-              $(QuoteNode(DESC)),
-              left.storage,  $TENSOR_DESC_INLINE,
-              right.storage, $TENSOR_DESC_INLINE,
-              dest.storage,  $TENSOR_DESC_INLINE,
+              $(QuoteNode(apple)),
+              B.storage, $TENSOR_DESC_INLINE,
+              A.storage, $TENSOR_DESC_INLINE,
+              C.storage, $TENSOR_DESC_INLINE,
               threads)
         return nothing
     end
