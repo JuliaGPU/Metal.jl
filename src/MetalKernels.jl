@@ -1,7 +1,7 @@
 module MetalKernels
 
 using ..Metal
-using ..Metal: @device_override, DefaultStorageMode, SharedStorage
+using ..Metal: @device_override, DefaultStorageMode, SharedStorage, PrivateStorage
 
 import KernelAbstractions as KA
 
