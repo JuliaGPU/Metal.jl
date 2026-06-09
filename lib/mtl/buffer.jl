@@ -28,7 +28,7 @@ end
 max_buffer_length(heap::MTLHeap) = max_buffer_length(heap.device)
 
 function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer;
-                   storage::Type{<:StorageMode}=SharedStorage, hazard_tracking=DefaultTracking,
+                   storage::Type{<:StorageMode}=Metal.DefaultStorageMode, hazard_tracking=DefaultTracking,
                    cache_mode=DefaultCPUCache)
     opts = convert(MTLResourceOptions, storage) | hazard_tracking | cache_mode
 
