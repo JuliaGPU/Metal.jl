@@ -1,7 +1,7 @@
 module MetalKernels
 
 using ..Metal
-using ..Metal: @device_override, DefaultStorageMode, SharedStorage, metal_support
+using ..Metal: @device_override, DefaultStorageMode, SharedStorage, PrivateStorage, metal_support
 using GPUCompiler
 
 import KernelAbstractions as KA
