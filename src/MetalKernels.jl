@@ -23,9 +23,9 @@ struct MetalBackend <: KA.GPU
 end
 
 # Ensure type stability. See JuliaGPU/KernelAbstractions#634
-@inline KA.allocate(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = MtlArray{T, length(dims), unified ? SharedStorage : DefaultStorageMode}(undef, dims)
-KA.zeros(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.zeros(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
-KA.ones(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.ones(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
+@inline KA.allocate(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = true) where T = MtlArray{T, length(dims), unified ? SharedStorage : DefaultStorageMode}(undef, dims)
+KA.zeros(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = true) where T = Metal.zeros(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
+KA.ones(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = true) where T = Metal.ones(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
 
 KA.get_backend(::MtlArray) = MetalBackend()
 KA.synchronize(::MetalBackend) = synchronize()

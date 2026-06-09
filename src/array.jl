@@ -191,17 +191,6 @@ See also `VecOrMat`(@ref) for examples.
 """
 const MtlVecOrMat{T,S} = Union{MtlVector{T,S},MtlMatrix{T,S}}
 
-# default to private memory
-const DefaultStorageMode = let str = @load_preference("default_storage", "shared")
-    if str == "shared"
-        SharedStorage
-    elseif str == "private"
-        PrivateStorage
-    else
-        error("unknown default storage mode: $default_storage")
-    end
-end
-
 MtlArray{T,N}(::UndefInitializer, dims::Dims{N}) where {T,N} =
     MtlArray{T,N,DefaultStorageMode}(undef, dims)
 

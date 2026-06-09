@@ -36,6 +36,17 @@ end
 include("version.jl")
 include("storage_type.jl")
 
+# default to private memory
+const DefaultStorageMode = let str = @load_preference("default_storage", "shared")
+    if str == "shared"
+        SharedStorage
+    elseif str == "private"
+        PrivateStorage
+    else
+        error("unknown default storage mode: $default_storage")
+    end
+end
+
 # core library
 include("../lib/mtl/MTL.jl")
 using .MTL
