@@ -192,7 +192,6 @@ end
 
 simd_shuffle_map = ((Float32, "f32"),
                     (Float16, "f16"),
-                    (BFloat16,"bf16"),
                     (Int32,   "s.i32"),
                     (UInt32,  "u.i32"),
                     (Int16,   "s.i16"),

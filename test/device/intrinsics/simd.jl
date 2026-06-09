@@ -1,7 +1,7 @@
 using Metal: metal_support
 
 @testset "shuffle functions" begin
-    shuffle_test_types = [Float32, Float16, BFloat16,
+    shuffle_test_types = [Float32, Float16,
                           Int32, UInt32, Int16, UInt16,
                           Int8, UInt8]
     @testset "simd_shuffle" begin
