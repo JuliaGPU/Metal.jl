@@ -19,7 +19,7 @@ import GPUArrays
 
 using BFloat16s: BFloat16
 
-const MtlFloat = Union{Float32, Float16, BFloat16}
+const MtlFloat = Union{Float32, Float16}
 
 const MPSShape = NSArray#{NSNumber}
 Base.convert(::Type{MPSShape}, tuple::Union{Vector{<:Integer},NTuple{N, <:Integer}}) where N = NSArray(NSNumber.(collect(tuple)))
