@@ -1,6 +1,6 @@
 using ScopedValues
 
-STORAGEMODES = [Metal.PrivateStorage, Metal.SharedStorage]
+STORAGEMODES = [Metal.SharedStorage, Metal.PrivateStorage]
 
 let arr = MtlVector{Int}(undef, 1)
     @test sizeof(arr) == 8
