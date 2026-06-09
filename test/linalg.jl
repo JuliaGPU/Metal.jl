@@ -305,7 +305,7 @@ using Metal: storagemode
     A = MtlMatrix{Float32}([1 2; 0 0])
     @test_throws SingularException lu(A)
 
-    altStorage = Metal.DefaultStorageMode != Metal.PrivateStorage ? Metal.PrivateStorage : Metal.SharedStorage
+    altStorage = Metal.DefaultStorageMode != Metal.SharedStorage ? Metal.SharedStorage : Metal.PrivateStorage
     A = MtlMatrix{Float32, altStorage}(rand(Float32, 1024, 1024))
     lua = lu(A)
     @test storagemode(lua.factors) == storagemode(lua.ipiv) == storagemode(A)
