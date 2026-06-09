@@ -356,7 +356,7 @@ using Metal: metal_support
 end # @testset "shuffle functions"
 
 @testset "matrix functions" begin
-    simdgroup_types = [Float16, Float32]#, BFloat16]
+    simdgroup_types = [Float16, Float32, BFloat16]
     @testset "load_store($typ)" for typ in simdgroup_types
         function kernel(a::MtlDeviceArray{T}, b::MtlDeviceArray{T},
                             origin_a=(1, 1), origin_b=(1, 1)) where {T}

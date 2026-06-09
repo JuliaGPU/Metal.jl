@@ -124,7 +124,7 @@ Returns `a * b + c`.
     MtlSimdgroupMatrix{T,R,C}
 
 Typed wrapper around a SIMD-group matrix fragment. `T` is the element type
-(`Float16` or `Float32`); `R` and `C` are the matrix dimensions. Only the
+(`Float16`, `Float32`, or `BFloat16`); `R` and `C` are the matrix dimensions. Only the
 8×8 shape is supported by current Apple GPUs.
 
 The fragment data is distributed across the 32 lanes of a SIMD-group; the
