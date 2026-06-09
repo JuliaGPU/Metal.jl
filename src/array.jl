@@ -40,7 +40,7 @@ end
 `N`-dimensional Metal array with storage mode `S` and elements of type `T`.
 
 `S` can be `Metal.SharedStorage` (default), `Metal.PrivateStorage`. The default
-storage mode can be changed by setting `default_storage` in LocalPreferences.
+storage mode can be changed by setting `default_storage` in LocalPreferences.toml.
 
 See the Array Programming section of the Metal.jl docs for more details.
 """
