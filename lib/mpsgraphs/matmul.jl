@@ -59,7 +59,7 @@ end
 # Build graph key from matmul parameters
 function MatmulGraphKey(a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb}, c::MtlArray{Tc},
                           alpha::Number, beta::Number,
-                          transpose_a::Char, transpose_b::Char) where {Tc, Tab, Na, Nb}
+                          transpose_a, transpose_b) where {Tc, Tab, Na, Nb}
     MatmulGraphKey{Tab, Tc}(
         size(a), size(b), size(c),
         Na, Nb,

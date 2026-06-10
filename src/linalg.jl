@@ -62,7 +62,9 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     end
 
     alg = matmul_alg[]
-    mpsgraph_supported = supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATMUL_TYPES)
+    # the MPS paths only handle plain transpose/adjoint operands
+    ntc = is_ntc(tA) && is_ntc(tB)
+    mpsgraph_supported = ntc && supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATMUL_TYPES)
     # If possible, dispatch to MPSGraphs, then performance shaders
     if alg === :MPSGraph || (alg === :auto && mpsgraph_supported)
         mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C), false)
@@ -87,7 +89,7 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
             GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
         end
     elseif alg === :MPS
-        supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES) || matmul_alg_error(alg, eltype(A), eltype(C), false)
+        (ntc && supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), false)
         transA = tA == 'T' || tA == 'C'
         transB = tB == 'T' || tB == 'C'
         matmul!(C, A, B, alpha, beta, transA, transB)
@@ -122,7 +124,9 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
     end
 
     alg = matmul_alg[]
-    mpsgraph_supported = supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATVECMUL_TYPES)
+    # the MPS paths only handle plain transpose/adjoint operands
+    ntc = is_ntc(tA)
+    mpsgraph_supported = ntc && supports_mpsgraph_matmul(A, B, C, MPSGRAPH_VALID_MATVECMUL_TYPES)
     # If possible, dispatch to MPSGraphs, then performance shaders
     if alg === :MPSGraph || (alg === :auto && mpsgraph_supported)
         mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C), true)
@@ -140,7 +144,7 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
             GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)
         end
     elseif alg === :MPS
-        supports_mps_matmul(A, B, C, MPS_VALID_MATVECMUL_TYPES) || matmul_alg_error(alg, eltype(A), eltype(C), true)
+        (ntc && supports_mps_matmul(A, B, C, MPS_VALID_MATVECMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), true)
         transA = tA == 'T' || tA == 'C'
         matvecmul!(C, A, B, alpha, beta, transA)
     elseif alg === :GPUArrays
