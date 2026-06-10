@@ -45,16 +45,14 @@ The cache key includes all parameters that affect graph structure:
 =#
 
 # Cache key for matmul graphs - includes all structural parameters
-struct MatmulGraphKey
+struct MatmulGraphKey{Tab<: Number, Tc <: Number}
     size_a::Tuple{Vararg{Int}}
     size_b::Tuple{Vararg{Int}}
     size_c::Tuple{Vararg{Int}}
-    eltype_ab::DataType
-    eltype_c::DataType
     ndims_a::Int
     ndims_b::Int
-    alpha::Float64
-    beta::Float64
+    alpha::Tab
+    beta::Tc
     transpose_a::Char
     transpose_b::Char
 end
@@ -62,11 +60,10 @@ end
 function MatmulGraphKey(a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb}, c::MtlArray{Tc},
                           alpha::Number, beta::Number,
                           transpose_a::Char, transpose_b::Char) where {Tc, Tab, Na, Nb}
-    MatmulGraphKey(
+    MatmulGraphKey{Tab, Tc}(
         size(a), size(b), size(c),
-        Tab, Tc,
         Na, Nb,
-        Float64(alpha), Float64(beta),
+        Tab(alpha), Tc(beta),
         transpose_a, transpose_b
     )
 end
@@ -80,19 +77,19 @@ struct CachedMatmulGraph
     result::MPSGraphTensor
 end
 # Build a new matmul graph (called only on cache miss)
-function CachedMatmulGraph(key::MatmulGraphKey)
+function CachedMatmulGraph(key::MatmulGraphKey{Tab, Tc}) where {Tab, Tc}
     graph = MPSGraph()
 
-    placeA = placeholderTensor(graph, key.size_a, key.eltype_ab)
-    placeB = placeholderTensor(graph, key.size_b, key.eltype_ab)
-    placeC = placeholderTensor(graph, key.size_c, key.eltype_c)
+    placeA = placeholderTensor(graph, key.size_a, Tab)
+    placeB = placeholderTensor(graph, key.size_b, Tab)
+    placeC = placeholderTensor(graph, key.size_c, Tc)
 
     # cast to output eltype if input type is an integer type
-    castT = key.eltype_ab <: Integer ? key.eltype_c : key.eltype_ab
-    castA = castTensor(graph, placeA, castT, "castA")
-    castB = castTensor(graph, placeB, castT, "castB")
+    castTab = Tab <: Integer ? Tc : Tab
+    castA = castTensor(graph, placeA, castTab, "castA")
+    castB = castTensor(graph, placeB, castTab, "castB")
 
-    adjA = if key.eltype_ab <: Complex && key.transpose_a == 'C'
+    adjA = if Tab <: Complex && key.transpose_a == 'C'
         realA = realPartOfTensor(graph, castA, "realA")
         imagA = imaginaryPartOfTensor(graph, castA, "imagA")
         negA = negativeWithTensor(graph, imagA, "negA")
@@ -101,7 +98,7 @@ function CachedMatmulGraph(key::MatmulGraphKey)
         castA
     end
 
-    adjB = if key.eltype_ab <: Complex && key.transpose_b == 'C'
+    adjB = if Tab <: Complex && key.transpose_b == 'C'
         realB = realPartOfTensor(graph, castB, "realB")
         imagB = imaginaryPartOfTensor(graph, castB, "imagB")
         negB = negativeWithTensor(graph, imagB, "negB")
@@ -129,19 +126,29 @@ function CachedMatmulGraph(key::MatmulGraphKey)
 
     matmul = matrixMultiplicationWithPrimaryTensor(graph, broadcastB, broadcastA)
 
-    afteralpha = let alphatensor = constantWithScalar(graph, key.alpha, castT)
+    afteralpha = let
+        alphatensor = if castTab <: Real
+            constantWithScalar(graph, key.alpha, castTab)
+        else
+            complexConstant(graph, key.alpha, castTab)
+        end
         multiplicationWithPrimaryTensor(graph, alphatensor, matmul)
     end
 
-    afterbeta = let betatensor = constantWithScalar(graph, key.beta, castT)
-        castplaceC = castTensor(graph, placeC, castT, "castplaceC")
+    castC = castTensor(graph, afteralpha, Tc, "castC")
+
+    afterbeta = let
+        betatensor = if Tc <: Real
+            constantWithScalar(graph, key.beta, Tc)
+        else
+            complexConstant(graph, key.beta, Tc)
+        end
+        castplaceC = castTensor(graph, placeC, Tc, "castplaceC")
         betaC = multiplicationWithPrimaryTensor(graph, betatensor, castplaceC)
-        additionWithPrimaryTensor(graph, afteralpha, betaC)
+        additionWithPrimaryTensor(graph, castC, betaC)
     end
 
-    castC = castTensor(graph, afterbeta, key.eltype_c, "castC")
-
-    CachedMatmulGraph(graph, placeC, placeA, placeB, castC)
+    CachedMatmulGraph(graph, placeC, placeA, placeB, afterbeta)
 end
 
 # Thread-safe graph cache with lock

@@ -1,4 +1,6 @@
 const FCs = ((identity, 'N'), (transpose, 'T'), (adjoint, 'C'))
+alphabeta(::Type{T}) where T <: Complex = one(T) + 1im
+alphabeta(::Type{T}) where T <: Real = one(T)
 
 @testset "mixed-precision matrix matrix multiplication" begin
     N = 10
@@ -11,10 +13,10 @@ const FCs = ((identity, 'N'), (transpose, 'T'), (adjoint, 'C'))
     rows_c = rows_a
     cols_c = cols_b
 
-    alpha = Float64(1)
-    beta  = Float64(1)
-
     @testset "$(input_jl_type) => $accum_jl_type" for (input_jl_type, accum_jl_type) in MPSGraphs.MPSGRAPH_VALID_MATMUL_TYPES
+        alpha = alphabeta(input_jl_type)
+        beta  = alphabeta(accum_jl_type)
+
         @testset "$fA, $fB" for (fA,tA) in FCs, (fB,tB) in FCs
             arr_a = rand(input_jl_type, (rows_a, cols_a))
             arr_b = rand(input_jl_type, (rows_b, cols_b))
@@ -41,10 +43,10 @@ end
 
     getsizes(_tA, _tB) = (_tA == 'N' ? (M, N) : (N, M)), (_tB == 'N' ? (N, P) : (P, N)), (M, P)
 
-    alpha = Float64(1)
-    beta = Float64(1)
-
     @testset "$(input_jl_type) => $accum_jl_type" for (input_jl_type, accum_jl_type) in MPSGraphs.MPSGRAPH_VALID_MATMUL_TYPES
+        alpha = alphabeta(input_jl_type)
+        beta  = alphabeta(accum_jl_type)
+
         @testset "$fA, $fB" for (fA,tA) in FCs, (fB,tB) in FCs
             (rows_a, cols_a), (rows_b, cols_b), (rows_c, cols_c) = getsizes(tA, tB)
 
@@ -72,10 +74,10 @@ end
     rows = N
     cols = N
 
-    alpha = Float64(1)
-    beta  = Float64(0)
-
     @testset "$(input_jl_type) => $accum_jl_type" for (input_jl_type, accum_jl_type) in MPSGraphs.MPSGRAPH_VALID_MATVECMUL_TYPES
+        alpha = alphabeta(input_jl_type)
+        beta  = zero(accum_jl_type)
+
         @testset "$fA" for (fA,tA) in FCs
             arr_a = rand(input_jl_type, (rows, cols))
             arr_b = rand(input_jl_type, rows)

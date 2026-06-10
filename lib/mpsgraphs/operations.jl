@@ -19,6 +19,15 @@ function castTensor(graph::MPSGraph, tensor::MPSGraphTensor, toType, name = "cas
     MPSGraphTensor(obj)
 end
 
+# uses the swift name
+complexConstant(graph::MPSGraph, n::Number, dataType) = complexConstant(graph::MPSGraph, reim(n)..., dataType)
+function complexConstant(graph::MPSGraph, realPart::Number, imaginaryPart::Number, dataType)
+    obj = @objc [graph::id{MPSGraph} constantWithRealPart:realPart::Float64
+                                    imaginaryPart:imaginaryPart::Float64
+                                    dataType:dataType::MPSDataType]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+
 function constantWithScalar(graph::MPSGraph, scalar::Number, dataType)
     obj = @objc [graph::id{MPSGraph} constantWithScalar:scalar::Float64
                                 dataType:dataType::MPSDataType]::id{MPSGraphTensor}
