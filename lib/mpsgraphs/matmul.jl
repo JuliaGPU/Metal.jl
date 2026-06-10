@@ -89,26 +89,20 @@ function CachedMatmulGraph(key::MatmulGraphKey{Tab, Tc}) where {Tab, Tc}
     castA = castTensor(graph, placeA, castTab, "castA")
     castB = castTensor(graph, placeB, castTab, "castB")
 
-    adjA = if Tab <: Complex && key.transpose_a == 'C'
-        realA = realPartOfTensor(graph, castA, "realA")
-        imagA = imaginaryPartOfTensor(graph, castA, "imagA")
-        negA = negativeWithTensor(graph, imagA, "negA")
-        complexTensorWithRealTensor(graph, realA, negA, "adjA")
+    conjA = if key.transpose_a == 'C'
+        conjugateWithTensor(graph, castA, "conjA")
     else
         castA
     end
 
-    adjB = if Tab <: Complex && key.transpose_b == 'C'
-        realB = realPartOfTensor(graph, castB, "realB")
-        imagB = imaginaryPartOfTensor(graph, castB, "imagB")
-        negB = negativeWithTensor(graph, imagB, "negB")
-        complexTensorWithRealTensor(graph, realB, negB, "adjB")
+    conjB = if key.transpose_b == 'C'
+        conjugateWithTensor(graph, castB, "conjB")
     else
         castB
     end
 
-    transA = (key.transpose_a == 'T' || key.transpose_a == 'C') ? transposeTensor(graph, adjA, key.ndims_a - 2, key.ndims_a - 1, "transpose_a") : adjA
-    transB = (key.transpose_b == 'T' || key.transpose_b == 'C') ? transposeTensor(graph, adjB, key.ndims_b - 2, key.ndims_b - 1, "transpose_b") : adjB
+    transA = (key.transpose_a == 'T' || key.transpose_a == 'C') ? transposeTensor(graph, conjA, key.ndims_a - 2, key.ndims_a - 1, "transpose_a") : conjA
+    transB = (key.transpose_b == 'T' || key.transpose_b == 'C') ? transposeTensor(graph, conjB, key.ndims_b - 2, key.ndims_b - 1, "transpose_b") : conjB
 
     nBatchA = key.ndims_a == 2 ? 1 : key.size_a[1]
     nBatchB = key.ndims_b == 2 ? 1 : key.size_b[1]

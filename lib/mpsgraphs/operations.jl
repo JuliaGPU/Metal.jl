@@ -74,6 +74,12 @@ function identityWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, name = "ide
     MPSGraphTensor(obj)
 end
 
+function conjugateWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, name = "conjugate")
+    obj = @objc [graph::id{MPSGraph} conjugateWithTensor:tensor::id{MPSGraphTensor}
+                                        name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+
 function negativeWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, name = "negate")
     obj = @objc [graph::id{MPSGraph} negativeWithTensor:tensor::id{MPSGraphTensor}
                                         name:name::id{NSString}]::id{MPSGraphTensor}
