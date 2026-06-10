@@ -97,7 +97,7 @@ end
 @testset "native GEMM" begin
     op(M, t) = t == 'N' ? M : t == 'C' ? adjoint(M) : transpose(M)
     mk(T, sz) = T <: Integer ? rand(T(1):T(4), sz...) : rand(T, sz...)
-    tol(T) = real(T) == Float16 ? 1.0f-1 : real(T) == Float32 ? 1.0f-3 : 1e-5
+    tol(T) = real(T) in (Float16, BFloat16) ? 1.0f-1 : real(T) == Float32 ? 1.0f-3 : 1e-5
 
     # C = α·op(A)·op(B) + β·C against a CPU oracle, forcing a specific native kernel
     function nativetest(T, M, N, K, tA, tB, α, β; alg=:native)
@@ -110,9 +110,11 @@ end
         T <: Integer ? Array(dC) == ref : isapprox(Array(dC), ref; rtol=tol(T))
     end
 
-    # simd path (Float16/Float32): transpose × α/β × ragged shapes. Forced via `:simd` so
-    # the simdgroup kernel is exercised regardless of whether a tensor path is available.
-    @testset "$T $tA$tB α=$α β=$β" for T in (Float32, Float16),
+    # simd path (Float16/Float32/BFloat16): transpose × α/β × ragged shapes. Forced via `:simd`
+    # so the simdgroup kernel is exercised regardless of whether a tensor path is available.
+    # BFloat16 routes its epilogue through f32 scratch (see `simd_direct_store`), which the
+    # β≠0 / ragged cases here exercise.
+    @testset "$T $tA$tB α=$α β=$β" for T in (Float32, Float16, BFloat16),
                                         (tA, tB) in (("N","N"), ("N","T"), ("T","N"), ("T","T")),
                                         (α, β) in ((T(1), T(0)), (T(2), T(0)), (T(1), T(1)), (T(2), T(3)))
         @test nativetest(T, 64, 48, 32, only(tA), only(tB), α, β; alg=:simd)   # aligned
