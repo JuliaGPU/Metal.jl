@@ -19,6 +19,15 @@ function castTensor(graph::MPSGraph, tensor::MPSGraphTensor, toType, name = "cas
     MPSGraphTensor(obj)
 end
 
+# uses the swift name
+complexConstant(graph::MPSGraph, n::Number, dataType) = complexConstant(graph::MPSGraph, reim(n)..., dataType)
+function complexConstant(graph::MPSGraph, realPart::Number, imaginaryPart::Number, dataType)
+    obj = @objc [graph::id{MPSGraph} constantWithRealPart:realPart::Float64
+                                    imaginaryPart:imaginaryPart::Float64
+                                    dataType:dataType::MPSDataType]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+
 function constantWithScalar(graph::MPSGraph, scalar::Number, dataType)
     obj = @objc [graph::id{MPSGraph} constantWithScalar:scalar::Float64
                                 dataType:dataType::MPSDataType]::id{MPSGraphTensor}
@@ -62,6 +71,37 @@ end
 function identityWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, name = "identity")
     obj = @objc [graph::id{MPSGraph} identityWithTensor:tensor::id{MPSGraphTensor}
                                 name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+
+function conjugateWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, name = "conjugate")
+    obj = @objc [graph::id{MPSGraph} conjugateWithTensor:tensor::id{MPSGraphTensor}
+                                        name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+
+function negativeWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, name = "negate")
+    obj = @objc [graph::id{MPSGraph} negativeWithTensor:tensor::id{MPSGraphTensor}
+                                        name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+
+function imaginaryPartOfTensor(graph::MPSGraph, tensor::MPSGraphTensor, name = "imaginarypart")
+    obj = @objc [graph::id{MPSGraph} imaginaryPartOfTensor:tensor::id{MPSGraphTensor}
+                                     name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+
+function realPartOfTensor(graph::MPSGraph, tensor::MPSGraphTensor, name = "realpart")
+    obj = @objc [graph::id{MPSGraph} realPartOfTensor:tensor::id{MPSGraphTensor}
+                                     name:name::id{NSString}]::id{MPSGraphTensor}
+    MPSGraphTensor(obj)
+end
+
+function complexTensorWithRealTensor(graph::MPSGraph, realTensor::MPSGraphTensor, imaginaryTensor::MPSGraphTensor, name="complex")
+    obj = @objc [graph::id{MPSGraph} complexTensorWithRealTensor:realTensor::id{MPSGraphTensor}
+                                     imaginaryTensor:imaginaryTensor::id{MPSGraphTensor}
+                                     name:name::id{NSString}]::id{MPSGraphTensor}
     MPSGraphTensor(obj)
 end
 

@@ -1,11 +1,13 @@
 using Metal, GPUArrays, LinearAlgebra, Printf, ScopedValues, AppleAccelerate
 using Plots
 using Plots.Measures
+using BFloat16s
 
-Ts=[
-    (Int8, Float16) (Int8, Float32) (Int16, Float32);
-    (Float16, Float16) (Float16, Float32) (Float32, Float32);
-
+Ts=[(Int8, Float16), (Int8, Float32), (Int16, Float32),
+    (Float16, Float16), (Float16, Float32), (Float32, Float32),
+    (Float16, ComplexF16), (Float16, ComplexF32), (Float32, ComplexF32),
+    (ComplexF16, ComplexF16), (ComplexF16, ComplexF32), (ComplexF32, ComplexF32),
+    (BFloat16, BFloat16)
 ]
 
 testing = get(ENV, "TESTING", "false") == "true"
@@ -91,10 +93,20 @@ end
 function compare(Ns, Fs, inT, outT=inT; n_batch=1, ntrials, verbose=!testing)
     results = Dict()
 
-    newFs = if (outT == Float16 || (outT == Float32 && inT == Float16))
-        Fs
-    else
-        filter(x -> !occursin("ANE", x[2]),Fs)
+    newFs = let
+        # Apple Neural Engine only used with some types
+        _newFs = if (outT == Float16 || (outT == Float32 && inT == Float16))
+            Fs
+        else
+            filter(x -> !occursin("ANE", x[2]), Fs)
+        end
+
+        # MPS doesn't support complex values
+        if (outT <: Complex || inT <: Complex)
+            filter(x -> x[2] != "MPS", _newFs)
+        else
+            _newFs
+        end
     end
 
     for (_, info_str) in newFs
@@ -118,11 +130,11 @@ function compare(Ns, Fs, inT, outT=inT; n_batch=1, ntrials, verbose=!testing)
 end
 
 DEFAULT_FS = [
-    (mpspeakflops, "MPS"),
     (graphpeakflops, "MPSGraph"),
     (defaultpeakflops, "Default"),
     (gpuarrpeakflops, "GPUArrays"),
     (cpupeakflops, "CPU (AppleAccelerate)"),
+    (mpspeakflops, "MPS"), # Run last to prevent different line colours
     # (anepeakflops, "MPSGraph (ANE)"), # Run last to prevent different line colours
 ]
 
@@ -134,7 +146,7 @@ function runcomparison(; Ns=DEFAULT_NS, Fs=DEFAULT_FS, n_batch=1, ntrials=5, ver
     return res
 end
 
-function plot_results(res, Fs=DEFAULT_FS; outpath=nothing, fileext="svg", plt_title=PLOT_TITLE)
+function plot_results(res, Fs=DEFAULT_FS; outpath=nothing, fileext="svg", plt_title=PLOT_TITLE, plot_width=3)
     Fs = get.(Fs, 2, "You shouldn't be reading this")
     ylim_upper = 9e12
     resplts = []
@@ -159,13 +171,13 @@ function plot_results(res, Fs=DEFAULT_FS; outpath=nothing, fileext="svg", plt_ti
         push!(n_batches, n_batch)
     end
 
-    layout = ndims(Ts) == 1 ? (length(Ts), 1) : size(Ts)
+    layout = (cld(length(Ts), plot_width), plot_width)
     finalplot = plot(resplts...; layout,
                      ylim=(0,ylim_upper),
                      plot_title=plt_title,
                      tickfonthalign=:left,
                      bottommargin=15pt,
-                     size=(500*size(Ts,2),500*size(Ts,1)))
+                     size=(500*layout[2],500*layout[1]))
     if !isnothing(outpath)
         savefig(plot(finalplot, dpi=500), joinpath(outpath, "bench_all_$(first(n_batches)).$fileext"))
     end
