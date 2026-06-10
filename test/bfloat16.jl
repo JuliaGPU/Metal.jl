@@ -54,3 +54,19 @@ if BFloat16s.llvm_arithmetic
         @test occursin("air.fabs.f32", air)
     end
 end
+
+# The simdgroup-matrix AIR intrinsics are typed `bf16`. Before Julia 1.13 `BFloat16` lowers to
+# `i16`, so these calls reach AIR with `i16` operands until GPUCompiler's `promote_bf16_intrinsics!`
+# re-types them to native `bfloat`; on 1.13+ they are native to begin with. Either way the AIR must
+# carry `<64 x bfloat>` — this asserts that on every path (and so fails if the pass regresses).
+@testset "simdgroup matrix codegen" begin
+    sg_mul(c, a, b) = (simdgroup_store(simdgroup_multiply(simdgroup_load(a), simdgroup_load(b)), c); return)
+    T = MtlDeviceMatrix{BFloat16,1}
+    air = sprint(io -> Metal.code_native(io, sg_mul, Tuple{T,T,T}; kernel=true))
+    @test occursin("simdgroup_matrix_8x8_load.v64bf16", air)
+    @test occursin("simdgroup_matrix_8x8_multiply_accumulate.v64bf16", air)
+    @test occursin("simdgroup_matrix_8x8_store.v64bf16", air)
+    # native bfloat operands, not the i16 lowering
+    @test occursin("<64 x bfloat>", air)
+    @test !occursin("<64 x i16>", air)
+end

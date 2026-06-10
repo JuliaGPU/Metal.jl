@@ -369,9 +369,12 @@ end
 
 ## host entry points
 
-@inline gemm_simd_eltype(::Type{<:Union{Float16, Float32}},
-                          ::Type{<:Union{Float16, Float32}},
-                          ::Type{<:Union{Float16, Float32}}) = true
+# The simd kernel stages A/B as Float32 and contracts in Float32, so the only eltype-specific
+# simdgroup ops are the load/store of `C`; `BFloat16` rides the same `bf16` simdgroup intrinsics
+# (re-typed from i16 by GPUCompiler before Julia 1.13). See `device/intrinsics/simd.jl`.
+@inline gemm_simd_eltype(::Type{<:Union{Float16, Float32, BFloat16}},
+                          ::Type{<:Union{Float16, Float32, BFloat16}},
+                          ::Type{<:Union{Float16, Float32, BFloat16}}) = true
 @inline gemm_simd_eltype(::Type, ::Type, ::Type) = false
 
 # Operand-support predicate for the simdgroup kernel, mirroring `supports_mps_matmul` /
