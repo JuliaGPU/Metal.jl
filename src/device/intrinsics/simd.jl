@@ -58,11 +58,9 @@ for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"), (:BFloat16, "bf16
     end
 
     @eval begin
-        # Build a fragment whose elements are all `val`, with matrix provenance. This is the
-        # `make_filled_simdgroup_matrix` builtin; unlike assembling an `NTuple` lane vector,
-        # its result is a real matrix value, which is the only form `simdgroup_store` accepts
-        # for `bfloat` (an assembled `<64 x bfloat>` stores zeros — see the MtlSimdgroupMatrix
-        # fill constructor).
+        # Build a fragment whose elements are all `val`, with matrix provenance.
+        # This is the `make_filled_simdgroup_matrix` builtin and must be used
+        # to initialize any simdgroup_matrix
         @device_function simdgroup_matrix_init_filled(val::$jltype) =
             ccall($"extern air.simdgroup_matrix_8x8_init_filled.v64$suffix.$suffix",
                 llvmcall, NTuple{64, VecElement{$jltype}}, ($jltype,), val)
@@ -157,9 +155,7 @@ Base.size(m::MtlSimdgroupMatrix) = size(typeof(m))
 Base.eltype(::Type{<:MtlSimdgroupMatrix{T}}) where {T} = T
 Base.eltype(m::MtlSimdgroupMatrix) = eltype(typeof(m))
 
-# Fill constructor: materialize a fragment whose elements are all `val`. Uses the
-# `init_filled` intrinsic rather than assembling a lane tuple so the fragment has matrix
-# provenance (required for storing `BFloat16`; see `simdgroup_matrix_init_filled`).
+# Fill constructor: materialize a fragment whose elements are all `val`.
 @inline function MtlSimdgroupMatrix{T,8,8}(val::T) where {T}
     return _unsafe_wrap_simdgroup_matrix(MtlSimdgroupMatrix{T,8,8},
                                          simdgroup_matrix_init_filled(val))

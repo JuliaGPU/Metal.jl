@@ -535,13 +535,13 @@ end # @testset "shuffle functions"
     end
 
     @testset "MtlSimdgroupMatrix type" begin
-        @testset for T in (Float16, Float32, BFloat16)
+        @testset for T in simdgroup_types
             @test eltype(MtlSimdgroupMatrix{T,8,8}) === T
             @test size(MtlSimdgroupMatrix{T,8,8}) === (8, 8)
         end
     end
 
-    @testset "MtlSimdgroupMatrix fill($T)" for T in (Float16, Float32, BFloat16)
+    @testset "MtlSimdgroupMatrix fill($T)" for T in simdgroup_types
         function kernel(out::MtlDeviceMatrix{T}, val::T) where {T}
             m = MtlSimdgroupMatrix{T,8,8}(val)
             simdgroup_store(m, out)
@@ -553,7 +553,7 @@ end # @testset "shuffle functions"
         @test all(Array(out) .== T(3.5))
     end
 
-    @testset "MtlSimdgroupMatrix zero($T)" for T in (Float16, Float32, BFloat16)
+    @testset "MtlSimdgroupMatrix zero($T)" for T in simdgroup_types
         function kernel(out::MtlDeviceMatrix{T}) where {T}
             m = zero(MtlSimdgroupMatrix{T,8,8})
             simdgroup_store(m, out)
@@ -565,7 +565,7 @@ end # @testset "shuffle functions"
         @test all(Array(out) .== zero(T))
     end
 
-    @testset "MtlSimdgroupMatrix load_store($T)" for T in (Float16, Float32, BFloat16)
+    @testset "MtlSimdgroupMatrix load_store($T)" for T in simdgroup_types
         function kernel(a::MtlDeviceMatrix{T}, b::MtlDeviceMatrix{T}) where {T}
             m = simdgroup_load(MtlSimdgroupMatrix{T,8,8}, a)
             simdgroup_store(m, b)
@@ -578,7 +578,7 @@ end # @testset "shuffle functions"
         @test Array(a) == Array(b)
     end
 
-    @testset "MtlSimdgroupMatrix load_store with origin($T)" for T in (Float16, Float32, BFloat16)
+    @testset "MtlSimdgroupMatrix load_store with origin($T)" for T in simdgroup_types
         function kernel(a::MtlDeviceMatrix{T}, b::MtlDeviceMatrix{T},
                         origin_a::NTuple{2,Int64}, origin_b::NTuple{2,Int64}) where {T}
             m = simdgroup_load(MtlSimdgroupMatrix{T,8,8}, a, origin_a)
@@ -592,7 +592,7 @@ end # @testset "shuffle functions"
         @test Array(a)[4:11, 2:9] == Array(b)[3:10, 5:12]
     end
 
-    @testset "MtlSimdgroupMatrix multiply($T)" for T in (Float16, Float32, BFloat16)
+    @testset "MtlSimdgroupMatrix multiply($T)" for T in simdgroup_types
         function kernel(a::MtlDeviceMatrix{T}, b::MtlDeviceMatrix{T}, c::MtlDeviceMatrix{T}) where {T}
             ma = simdgroup_load(MtlSimdgroupMatrix{T,8,8}, a)
             mb = simdgroup_load(MtlSimdgroupMatrix{T,8,8}, b)
@@ -607,7 +607,7 @@ end # @testset "shuffle functions"
         @test Array(a) * Array(b) ≈ Array(c) rtol=sg_rtol(T)
     end
 
-    @testset "MtlSimdgroupMatrix muladd($T)" for T in (Float16, Float32, BFloat16)
+    @testset "MtlSimdgroupMatrix muladd($T)" for T in simdgroup_types
         function kernel(a::MtlDeviceMatrix{T}, b::MtlDeviceMatrix{T},
                         c::MtlDeviceMatrix{T}, d::MtlDeviceMatrix{T}) where {T}
             ma = simdgroup_load(MtlSimdgroupMatrix{T,8,8}, a)
@@ -627,7 +627,7 @@ end # @testset "shuffle functions"
 
     # Composed K-loop GEMM: C(8×8) = A(8×K) * B(K×8) with K=32, accumulating
     # four 8×8×8 fragment MMAs.
-    @testset "MtlSimdgroupMatrix K-loop GEMM($T)" for T in (Float16, Float32, BFloat16)
+    @testset "MtlSimdgroupMatrix K-loop GEMM($T)" for T in simdgroup_types
         function kernel(A::MtlDeviceMatrix{T}, B::MtlDeviceMatrix{T}, C::MtlDeviceMatrix{T}) where {T}
             acc = zero(MtlSimdgroupMatrix{T,8,8})
             for k in 0:3
@@ -648,7 +648,7 @@ end # @testset "shuffle functions"
 
     # Threadgroup-memory variant: stage tiles through threadgroup memory, then
     # load fragments from there. Mirrors how Flash Attention stages K/V tiles.
-    @testset "MtlSimdgroupMatrix threadgroup load($T)" for T in (Float16, Float32, BFloat16)
+    @testset "MtlSimdgroupMatrix threadgroup load($T)" for T in simdgroup_types
         function kernel(a::MtlDeviceMatrix{T}, b::MtlDeviceMatrix{T}) where {T}
             pos = thread_position_in_threadgroup()
             tg = MtlThreadGroupArray(T, (8, 8))
