@@ -17,18 +17,37 @@
 #    for any eltype supporting `+`/`*`, any transpose, and any offset.
 #
 # All honor the LinearAlgebra contract `C = α·op(A)·op(B) + β·C` with the
-# transpose char in {'N','T','C'} applied to each operand.
+# operand char in {'N','T','C'} (transpose/adjoint) or {'S','s','H','h'} (the
+# LinearAlgebra wrapper chars for Symmetric/Hermitian, upper/lowercase = upper/lower
+# triangle stored) applied to each operand.
 
-## device-side operand access (transpose / conjugate applied)
+## device-side operand access (transpose / conjugate / symmetric gather applied)
 
-# op(A)[outrow, contr], reading the stored (possibly transposed) matrix
+# element (i, j) of Symmetric/Hermitian(M), reading only the stored triangle
+@inline function symherm(M, i, j, ::Val{UPPER}, ::Val{HERM}) where {UPPER, HERM}
+    if HERM && i == j
+        x = @inbounds M[i, i]
+        oftype(x, real(x))
+    elseif UPPER ? (j >= i) : (j <= i)
+        @inbounds M[i, j]
+    else
+        x = @inbounds M[j, i]
+        HERM ? conj(x) : x
+    end
+end
+
+# op(A)[outrow, contr], reading the stored (possibly transposed/wrapped) matrix
 @inline function opA(A, ::Val{TA}, outrow, contr) where {TA}
     if TA === 'N'
         @inbounds A[outrow, contr]
     elseif TA === 'C'
         @inbounds conj(A[contr, outrow])
-    else # 'T'
+    elseif TA === 'T'
         @inbounds A[contr, outrow]
+    elseif TA === 'S' || TA === 's'
+        symherm(A, outrow, contr, Val(TA === 'S'), Val(false))
+    else # 'H' / 'h'
+        symherm(A, outrow, contr, Val(TA === 'H'), Val(true))
     end
 end
 
@@ -38,8 +57,12 @@ end
         @inbounds B[contr, outcol]
     elseif TB === 'C'
         @inbounds conj(B[outcol, contr])
-    else # 'T'
+    elseif TB === 'T'
         @inbounds B[outcol, contr]
+    elseif TB === 'S' || TB === 's'
+        symherm(B, contr, outcol, Val(TB === 'S'), Val(false))
+    else # 'H' / 'h'
+        symherm(B, contr, outcol, Val(TB === 'H'), Val(true))
     end
 end
 
@@ -350,7 +373,7 @@ const GEMM_SIMD_KB = 1
 
 function gemm_simd!(C, A, B, alpha, beta, cA::Char, cB::Char)
     M = size(C, 1); N = size(C, 2)
-    K = cA === 'N' ? size(A, 2) : size(A, 1)
+    K = (cA === 'T' || cA === 'C') ? size(A, 1) : size(A, 2)
     WM = GEMM_SIMD_WM; WN = GEMM_SIMD_WN
     TM = GEMM_SIMD_TM; TN = GEMM_SIMD_TN; KB = GEMM_SIMD_KB
     BM = 8 * TM * WM; BN = 8 * TN * WN
@@ -369,7 +392,7 @@ const GEMM_SCALAR_TILE = 16
 
 function gemm_scalar!(C, A, B, alpha, beta, cA::Char, cB::Char)
     M = size(C, 1); N = size(C, 2)
-    K = cA === 'N' ? size(A, 2) : size(A, 1)
+    K = (cA === 'T' || cA === 'C') ? size(A, 1) : size(A, 2)
     TILE = GEMM_SCALAR_TILE
     threads = (TILE, TILE)
     groups = (cld(M, TILE), cld(N, TILE))
@@ -382,15 +405,19 @@ end
     Metal.gemm!(C, tA, tB, A, B, α, β; kernel=:auto)
 
 Native GEMM computing `C = α·op_tA(A)·op_tB(B) + β·C` for `MtlMatrix` operands.
-`tA`/`tB ∈ {'N','T','C'}`. Backs the `:native`/`:auto` matmul paths (`kernel=:auto`, picking
+`tA`/`tB ∈ {'N','T','C'}`, or one of the LinearAlgebra wrapper chars `{'S','s','H','h'}`
+applying a Symmetric/Hermitian view of the operand (upper/lowercase selects the stored
+triangle). Backs the `:native`/`:auto` matmul paths (`kernel=:auto`, picking
 the best of the tensor/simd/scalar kernels) and the `:simd`/`:scalar`/`:tensor` paths, which set
 `kernel` to force a specific kernel. Forcing a kernel that cannot handle the operands is the
-caller's responsibility (see `supports_simd_matmul`/`supports_tensor_matmul`).
+caller's responsibility (see `supports_simd_matmul`/`supports_tensor_matmul`); the tensor
+kernel never handles wrapper chars (it requires plain `'N'`/`'N'` operands), while the simd
+and scalar kernels gather elementwise through `opA`/`opB` and handle all of them.
 """
 function gemm!(C::MtlMatrix, tA::Char, tB::Char, A::MtlMatrix, B::MtlMatrix,
                alpha::Number, beta::Number; kernel::Symbol = :auto)
     M = size(C, 1); N = size(C, 2)
-    K = tA === 'N' ? size(A, 2) : size(A, 1)
+    K = (tA === 'T' || tA === 'C') ? size(A, 1) : size(A, 2)
 
     # nothing to compute
     (M == 0 || N == 0) && return C

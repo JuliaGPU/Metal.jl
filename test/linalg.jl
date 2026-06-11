@@ -152,6 +152,52 @@ end
         end
     end
 
+    # Symmetric/Hermitian wrapper chars ('S'/'s'/'H'/'h'): the simd and scalar kernels
+    # gather through the stored triangle, so these run natively instead of through the
+    # GPUArrays fallback. The reference uses the same wrapper on the CPU, so the random
+    # data in the non-stored triangle catches any read outside the stored one. BLAS
+    # eltypes (Float32/ComplexF32) only reach Metal's generic_matmatmul! on Julia 1.12+,
+    # where GPUArrays overrides generic_matmatmul_wrapper! away from BLAS.symm!/hemm!.
+    @testset "Symmetric/Hermitian wrappers" begin
+        check(T, dX, ref) = T <: Integer ? Array(dX) == ref : isapprox(Array(dX), ref; rtol=tol(T))
+        @testset "$W{$T} :$uplo" for T in (Float32, Float16, ComplexF32, Int32),
+                                     W in (Symmetric, Hermitian),
+                                     uplo in (:U, :L)
+            # older LinearAlgebra dispatches BLAS eltypes into BLAS.symm!/hemm!
+            T <: LinearAlgebra.BlasFloat && VERSION < v"1.12" && continue
+            n = 33
+            Ah = mk(T, (n, n)); Bh = mk(T, (n, n)); bh = mk(T, (n,))
+            dA = MtlArray(Ah); dB = MtlArray(Bh); db = MtlArray(bh)
+
+            # wrapped on the left and on the right
+            dC = MtlArray(zeros(T, n, n))
+            @with (Metal.matmul_alg => :native) mul!(dC, W(dA, uplo), dB)
+            @test check(T, dC, W(Ah, uplo) * Bh)
+            @with (Metal.matmul_alg => :native) mul!(dC, dB, W(dA, uplo))
+            @test check(T, dC, Bh * W(Ah, uplo))
+
+            # with α and β
+            Eh = mk(T, (n, n)); dE = MtlArray(copy(Eh))
+            @with (Metal.matmul_alg => :native) mul!(dE, W(dA, uplo), dB, T(2), T(3))
+            @test check(T, dE, T(2) .* (W(Ah, uplo) * Bh) .+ T(3) .* Eh)
+
+            # matrix-vector
+            dc = MtlArray(zeros(T, n))
+            @with (Metal.matmul_alg => :native) mul!(dc, W(dA, uplo), db)
+            @test check(T, dc, W(Ah, uplo) * bh)
+        end
+
+        # forcing a specific kernel works too; the tensor kernel can't handle wrappers
+        A64 = MtlArray(rand(Float32, 64, 64)); B64 = MtlArray(rand(Float32, 64, 64))
+        ref = Symmetric(Array(A64)) * Array(B64)
+        for alg in (:simd, :scalar)
+            C64 = MtlArray(zeros(Float32, 64, 64))
+            @with (Metal.matmul_alg => alg) mul!(C64, Symmetric(A64), B64)
+            @test isapprox(Array(C64), ref; rtol=tol(Float32))
+        end
+        @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Float32, 64, 64)), Symmetric(A64), B64))
+    end
+
     # degenerate shapes
     @testset "edge shapes" begin
         @test nativetest(Float32, 1, 1, 1, 'N', 'N', 1.0f0, 0.0f0)
