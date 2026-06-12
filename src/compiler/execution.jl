@@ -289,6 +289,9 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     f = kernel.f
     pipeline = kernel.pipeline
 
+    pipeline.staticThreadgroupMemoryLength > 32768 &&
+        throw(ArgumentError("Total used threadgroupMemoryLength($(pipeline.staticThreadgroupMemoryLength)) must be <= 32768 bytes."))
+
     buf = malloc_buffer(pipeline.device)
     buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, UInt64(buf.gpuAddress))
     exc = exception_info_buffer(pipeline.device)
