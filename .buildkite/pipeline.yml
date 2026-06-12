@@ -15,9 +15,7 @@ steps:
                 - src
                 - lib
         agents:
-          queue: "juliaecosystem"
-          os: "macos"
-          arch: "aarch64"
+          queue: "metal"
         if: |
           build.message =~ /\[only tests\]/ ||
           build.message =~ /\[only julia\]/ ||
@@ -47,9 +45,7 @@ steps:
                 - src
                 - lib
         agents:
-          queue: "juliaecosystem"
-          os: "macos"
-          arch: "aarch64"
+          queue: "metal"
         if: |
           build.message =~ /\[only tests\]/ ||
           build.message =~ /\[only pre\]/ ||
@@ -74,9 +70,7 @@ steps:
           - JuliaCI/julia-test#v1:
               test_args: "--quickfail --all"
         agents:
-          queue: "juliaecosystem"
-          os: "macos"
-          arch: "aarch64"
+          queue: "metal"
         if: |
           build.message =~ /\[only tests\]/ ||
           build.message =~ /\[only special\]/ ||
@@ -104,10 +98,7 @@ steps:
           # blocking synchronization is easier to validate
           echo -e "[Metal]\nnonblocking_synchronization = false" >LocalPreferences.toml
         agents:
-          queue: "juliaecosystem"
-          os: "macos"
-          arch: "aarch64"
-          macos_version: "15.0"
+          queue: "metal"
         if: |
           build.message =~ /\[only tests\]/ ||
           build.message =~ /\[only validation\]/ ||
@@ -132,10 +123,7 @@ steps:
       #     MTL_DEBUG_LAYER: '1'
       #     MTL_SHADER_VALIDATION: '1'
       #   agents:
-      #     queue: "juliaecosystem"
-      #     os: "macos"
-      #     arch: "aarch64"
-      #     macos_version: "15.0"
+      #     queue: "metal"
       #   if: |
       #     build.message =~ /\[only tests\]/ ||
       #     build.message =~ /\[only large\]/ ||
@@ -165,9 +153,8 @@ steps:
     artifact_paths:
       - "benchmarkresults.json"
     agents:
-      queue: "juliaecosystem"
-      os: "macos"
-      arch: "aarch64"
+      queue: "metal"
+      gpu: "m1"
     if: |
       build.message =~ /\[only benchmarks\]/ ||
       build.message !~ /\[only/ && !build.pull_request.draft &&

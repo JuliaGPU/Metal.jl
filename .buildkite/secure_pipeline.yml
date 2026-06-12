@@ -22,9 +22,7 @@ steps:
         println("+++ :julia: Deploying documentation")
         include("docs/deploy.jl")'
     agents:
-      queue: "juliaecosystem"
-      os: "macos"
-      arch: "aarch64"
+      queue: "metal"
     if: |
       build.message =~ /\[only docs\]/ ||
       build.message !~ /\[only/ && !build.pull_request.draft &&

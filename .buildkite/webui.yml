@@ -16,5 +16,4 @@ steps:
     command: "true"
     branches: "!gh-pages"
     agents:
-      queue: "juliaecosystem"
-      os: "linux"
+      queue: "upload"
