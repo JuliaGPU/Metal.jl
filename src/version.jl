@@ -50,7 +50,7 @@ host macOS version).
 See also [`Metal.air_support`](@ref) and [`Metal.metal_support`](@ref).
 """
 function metallib_support(macos::VersionNumber = macos_version())
-    if macos >= v"16" # Tahoe is v"26" but can report v"16" with julia versions not compiled with the Tahoe SDK
+    if macos >= v"16" # macos 26-27
         v"1.2.9"
     elseif macos >= v"15"
         v"1.2.8"
@@ -68,7 +68,9 @@ host macOS version).
 See also [`Metal.metallib_support`](@ref) and [`Metal.metal_support`](@ref).
 """
 function air_support(macos::VersionNumber = macos_version())
-    if macos >= v"16" # Tahoe is v"26" but can report v"16" with julia versions not compiled with the Tahoe SDK
+    if macos >= v"27"
+        v"2.9"
+    elseif macos >= v"16" # Tahoe is v"26" but can report v"16" with julia versions not compiled with the Tahoe SDK
         v"2.8"
     elseif macos >= v"15"
         v"2.7"
@@ -88,7 +90,9 @@ host macOS version).
 See also [`Metal.metallib_support`](@ref) and [`Metal.air_support`](@ref).
 """
 function metal_support(macos::VersionNumber = macos_version())
-    if macos >= v"16" # Tahoe is v"26" but can report v"16" with julia versions not compiled with the Tahoe SDK
+    if macos >= v"27"
+        v"4.1"
+    elseif macos >= v"16" # Tahoe is v"26" but can report v"16" with julia versions not compiled with the Tahoe SDK
         v"4"
     elseif macos >= v"15"
         v"3.2"
