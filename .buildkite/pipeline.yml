@@ -15,9 +15,7 @@ steps:
                 - src
                 - lib
         agents:
-          queue: "juliaecosystem"
-          os: "macos"
-          arch: "aarch64"
+          queue: "metal"
         if: |
           build.message =~ /\[only tests\]/ ||
           build.message =~ /\[only julia\]/ ||
@@ -47,9 +45,7 @@ steps:
                 - src
                 - lib
         agents:
-          queue: "juliaecosystem"
-          os: "macos"
-          arch: "aarch64"
+          queue: "metal"
         if: |
           build.message =~ /\[only tests\]/ ||
           build.message =~ /\[only pre\]/ ||
@@ -74,9 +70,7 @@ steps:
           - JuliaCI/julia-test#v1:
               test_args: "--quickfail --all"
         agents:
-          queue: "juliaecosystem"
-          os: "macos"
-          arch: "aarch64"
+          queue: "metal"
         if: |
           build.message =~ /\[only tests\]/ ||
           build.message =~ /\[only special\]/ ||
@@ -98,16 +92,13 @@ steps:
                 - src
                 - lib
         env:
-          MTL_DEBUG_LAYER: '1'
-          MTL_SHADER_VALIDATION: '1'
+          MTL_DEBUG_LAYER: "1"
+          MTL_SHADER_VALIDATION: "1"
         commands: |
           # blocking synchronization is easier to validate
           echo -e "[Metal]\nnonblocking_synchronization = false" >LocalPreferences.toml
         agents:
-          queue: "juliaecosystem"
-          os: "macos"
-          arch: "aarch64"
-          macos_version: "15.0"
+          queue: "metal"
         if: |
           build.message =~ /\[only tests\]/ ||
           build.message =~ /\[only validation\]/ ||
@@ -132,10 +123,7 @@ steps:
       #     MTL_DEBUG_LAYER: '1'
       #     MTL_SHADER_VALIDATION: '1'
       #   agents:
-      #     queue: "juliaecosystem"
-      #     os: "macos"
-      #     arch: "aarch64"
-      #     macos_version: "15.0"
+      #     queue: "metal"
       #   if: |
       #     build.message =~ /\[only tests\]/ ||
       #     build.message =~ /\[only large\]/ ||
@@ -145,6 +133,30 @@ steps:
       #       build.message !~ /\[skip large\]/ &&
       #       build.message !~ /\[skip special\]/
       #   timeout_in_minutes: 15
+
+  - label: ":books: Documentation"
+    depends_on: "julia"
+    plugins:
+      - JuliaCI/julia#v1:
+          version: "1.12"
+    command: |
+      julia --project -e '
+        println("--- :julia: Instantiating project")
+        using Pkg
+        Pkg.instantiate()
+        Pkg.activate("docs")
+        Pkg.instantiate()
+        push!(LOAD_PATH, @__DIR__)
+
+        println("+++ :julia: Building documentation")
+        include("docs/make.jl")'
+    agents:
+      queue: "metal"
+    if: |
+      build.message =~ /\[only docs\]/ ||
+      build.message !~ /\[only/ && !build.pull_request.draft &&
+        build.message !~ /\[skip docs\]/
+    timeout_in_minutes: 30
 
   - wait: ~
     continue_on_failure: true
@@ -165,9 +177,8 @@ steps:
     artifact_paths:
       - "benchmarkresults.json"
     agents:
-      queue: "juliaecosystem"
-      os: "macos"
-      arch: "aarch64"
+      queue: "metal"
+      gpu: "m1"
     if: |
       build.message =~ /\[only benchmarks\]/ ||
       build.message !~ /\[only/ && !build.pull_request.draft &&

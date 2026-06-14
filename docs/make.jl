@@ -45,6 +45,13 @@ function main()
             ],
         ]
     )
+
+    if ci
+        deploydocs(
+            repo = "github.com/JuliaGPU/Metal.jl.git",
+            push_preview = true
+        )
+    end
 end
 
 isinteractive() || main()
