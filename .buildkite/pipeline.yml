@@ -178,7 +178,6 @@ steps:
       - "benchmarkresults.json"
     agents:
       queue: "metal"
-      gpu: "m1"
     if: |
       build.message =~ /\[only benchmarks\]/ ||
       build.message !~ /\[only/ && !build.pull_request.draft &&
