@@ -230,8 +230,8 @@ end
                 ref = Array(A) * Array(B)
                 @test Metal.supports_tensor_matmul(MtlArray(zeros(T, M, N)), A, B, 'N', 'N', true, false)
                 Ct = MtlArray(zeros(T, M, N))
-                @with (Metal.matmul_alg => :tensor) mul!(Ct, A, B)
-                @test isapprox(Array(Ct), ref; rtol=ttol(T))
+                @test (@with (Metal.matmul_alg => :tensor) mul!(Ct, A, B)) isa MtlArray broken=VERSION<v"1.12"
+                @test isapprox(Array(Ct), ref; rtol=ttol(T)) broken=VERSION<v"1.12"
             end
 
             # forcing `:tensor` on operands it can't handle errors (like an unsupported :MPS)

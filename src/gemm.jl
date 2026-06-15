@@ -435,7 +435,7 @@ function gemm!(C::MtlMatrix, tA::Char, tB::Char, A::MtlMatrix, B::MtlMatrix,
     # `:auto` picks the Metal 4 tensor-ops fast path when the device and operands allow it,
     # then the portable simdgroup kernel for floats, then the scalar fallback; an
     # explicit `kernel` forces one of them.
-    if kernel === :tensor || (kernel === :auto && supports_tensor_matmul(C, A, B, tA, tB, alpha, beta))
+    if kernel === :tensor || (kernel === :auto && supports_tensor_matmul(C, A, B, tA, tB, alpha, beta) && VERSION >= v"1.12")
         gemm_tensor!(C, A, B, alpha, beta, tA, tB)
     elseif kernel === :simd || (kernel === :auto && supports_simd_matmul(C, A, B, tA, tB, alpha, beta))
         gemm_simd!(C, A, B, alpha, beta, tA, tB)
