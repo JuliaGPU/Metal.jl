@@ -47,7 +47,7 @@ const TensorDescriptorStorage = Base.RefValue{NTuple{TENSOR_DESCRIPTOR_SIZE, UIn
            Ref{Int32}, Ref{Int32}, Int8),
           handle, rank, data, extents, strides, contiguous)
 
-@device_function get_extent_private_tensor(handle::TensorDescriptorStorage,
+@device_function get_extent_private_tensor(handle::NTuple{TENSOR_DESCRIPTOR_SIZE, UInt8},
                                            rank::Int16, dim::Int16) =
     ccall("extern air.get_extent_private_tensor.i32", llvmcall,
           Int32, (Ref{UInt8}, Int16, Int16),
@@ -55,7 +55,7 @@ const TensorDescriptorStorage = Base.RefValue{NTuple{TENSOR_DESCRIPTOR_SIZE, UIn
 
 @device_function slice_private_tensor!(
     dst::TensorDescriptorStorage,
-    src::TensorDescriptorStorage,
+    src::NTuple{TENSOR_DESCRIPTOR_SIZE, UInt8},
     rank::Int16,
     origin::NTuple{<:Any, Int32},
     extents::NTuple{<:Any, Int32},
@@ -81,7 +81,7 @@ first dimension is contiguous. `MtlInlineTensor(A)` views all of `A` (its `size`
 Slice a tile with [`view`](@ref), using 1-based origins.
 """
 struct MtlInlineTensor{T, R, AS}
-    storage::TensorDescriptorStorage
+    storage::NTuple{TENSOR_DESCRIPTOR_SIZE, UInt8}
 end
 
 # column-major packed strides: stride(1) = 1, stride(k) = prod(extents[1:k-1]).
@@ -104,7 +104,7 @@ end
     init_strided_tensor_device!(storage, Int16(R),
                                 reinterpret(LLVMPtr{UInt8, AS.Device}, pointer(data)),
                                 e, packed_strides(e), Int8(1))
-    return MtlInlineTensor{T, R, AS.Device}(storage)
+    return MtlInlineTensor{T, R, AS.Device}(storage[])
 end
 
 @device_function @inline function MtlInlineTensor{T, R, AS.ThreadGroup}(
@@ -115,7 +115,7 @@ end
     init_strided_tensor_threadgroup!(storage, Int16(R),
                                      reinterpret(LLVMPtr{UInt8, AS.ThreadGroup}, pointer(data)),
                                      e, packed_strides(e), Int8(1))
-    return MtlInlineTensor{T, R, AS.ThreadGroup}(storage)
+    return MtlInlineTensor{T, R, AS.ThreadGroup}(storage[])
 end
 
 # Explicit-stride variants:
@@ -127,7 +127,7 @@ end
     init_strided_tensor_device!(storage, Int16(R),
                                 reinterpret(LLVMPtr{UInt8, AS.Device}, pointer(data)),
                                 Int32.(extents), Int32.(strides), Int8(0))
-    return MtlInlineTensor{T, R, AS.Device}(storage)
+    return MtlInlineTensor{T, R, AS.Device}(storage[])
 end
 
 @device_function @inline function MtlInlineTensor{T, R, AS.ThreadGroup}(
@@ -138,7 +138,7 @@ end
     init_strided_tensor_threadgroup!(storage, Int16(R),
                                      reinterpret(LLVMPtr{UInt8, AS.ThreadGroup}, pointer(data)),
                                      Int32.(extents), Int32.(strides), Int8(0))
-    return MtlInlineTensor{T, R, AS.ThreadGroup}(storage)
+    return MtlInlineTensor{T, R, AS.ThreadGroup}(storage[])
 end
 
 # Convenience: infer rank and address space from the inputs.
@@ -166,7 +166,7 @@ Base.eltype(::MtlInlineTensor{T}) where {T} = T
     storage = Ref{NTuple{TENSOR_DESCRIPTOR_SIZE, UInt8}}()
     slice_private_tensor!(storage, t.storage, Int16(R),
                           Int32.(origin) .- Int32(1), Int32.(extents))
-    return MtlInlineTensor{T, R, A}(storage)
+    return MtlInlineTensor{T, R, A}(storage[])
 end
 
 
