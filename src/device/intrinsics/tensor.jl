@@ -10,10 +10,17 @@ using BFloat16s: BFloat16
 # TODO: use a dynamic `alloca i8, i64 %sz` where `%sz` comes from `air.get_descriptor_size_tensor`.
 const TENSOR_DESCRIPTOR_SIZE = 128
 
-const TensorDescriptorStorage = Base.RefValue{NTuple{TENSOR_DESCRIPTOR_SIZE, UInt8}}
+# A tensor descriptor is an opaque, fixed-size, thread-private byte buffer. The `air.*`
+# intrinsics initialize/slice it through an out-pointer, so we hand them a `Ref` to one.
+const TensorDescriptor = NTuple{TENSOR_DESCRIPTOR_SIZE, UInt8}
+const TensorDescriptorStorage = Base.RefValue{TensorDescriptor}
 
 
 ## Tensor descriptor primitives (`air.*` intrinsics).
+
+# These thin `air.*` wrappers must inline. The constructors and `view` below hand them
+# descriptor storage through a `Ref`; that `Ref` only stays a stack `alloca` (rather than a
+# heap allocation, which GPUCompiler then rejects) as long as it never crosses a call boundary.
 
 # Returns the per-thread tensor descriptor size for the given rank/index-size.
 @device_function get_descriptor_size_tensor(rank::Int16, index_size::Int16) =
@@ -21,7 +28,7 @@ const TensorDescriptorStorage = Base.RefValue{NTuple{TENSOR_DESCRIPTOR_SIZE, UIn
           Int16, (Int16, Int16), rank, index_size)
 
 # Build an `i32`-indexed strided tensor view over a device-memory buffer.
-@device_function init_strided_tensor_device!(
+@device_function @inline init_strided_tensor_device!(
     handle::TensorDescriptorStorage,
     rank::Int16,
     data::LLVMPtr{UInt8, AS.Device},
@@ -30,11 +37,11 @@ const TensorDescriptorStorage = Base.RefValue{NTuple{TENSOR_DESCRIPTOR_SIZE, UIn
     contiguous::Int8,
 ) = ccall("extern air.init_strided_private_tensor.i32.global", llvmcall,
           Cvoid,
-          (Ref{UInt8}, Int16, LLVMPtr{UInt8, AS.Device},
+          (Ref{TensorDescriptor}, Int16, LLVMPtr{UInt8, AS.Device},
            Ref{Int32}, Ref{Int32}, Int8),
           handle, rank, data, extents, strides, contiguous)
 
-@device_function init_strided_tensor_threadgroup!(
+@device_function @inline init_strided_tensor_threadgroup!(
     handle::TensorDescriptorStorage,
     rank::Int16,
     data::LLVMPtr{UInt8, AS.ThreadGroup},
@@ -43,25 +50,25 @@ const TensorDescriptorStorage = Base.RefValue{NTuple{TENSOR_DESCRIPTOR_SIZE, UIn
     contiguous::Int8,
 ) = ccall("extern air.init_strided_private_tensor.i32.local", llvmcall,
           Cvoid,
-          (Ref{UInt8}, Int16, LLVMPtr{UInt8, AS.ThreadGroup},
+          (Ref{TensorDescriptor}, Int16, LLVMPtr{UInt8, AS.ThreadGroup},
            Ref{Int32}, Ref{Int32}, Int8),
           handle, rank, data, extents, strides, contiguous)
 
-@device_function get_extent_private_tensor(handle::NTuple{TENSOR_DESCRIPTOR_SIZE, UInt8},
-                                           rank::Int16, dim::Int16) =
+@device_function @inline get_extent_private_tensor(handle::TensorDescriptor,
+                                                   rank::Int16, dim::Int16) =
     ccall("extern air.get_extent_private_tensor.i32", llvmcall,
-          Int32, (Ref{UInt8}, Int16, Int16),
+          Int32, (Ref{TensorDescriptor}, Int16, Int16),
           handle, rank, dim)
 
-@device_function slice_private_tensor!(
+@device_function @inline slice_private_tensor!(
     dst::TensorDescriptorStorage,
-    src::NTuple{TENSOR_DESCRIPTOR_SIZE, UInt8},
+    src::TensorDescriptor,
     rank::Int16,
     origin::NTuple{<:Any, Int32},
     extents::NTuple{<:Any, Int32},
 ) = ccall("extern air.slice_private_tensor_private_tensor.s.i32", llvmcall,
           Cvoid,
-          (Ref{UInt8}, Ref{UInt8}, Int16, Ref{Int32}, Ref{Int32}),
+          (Ref{TensorDescriptor}, Ref{TensorDescriptor}, Int16, Ref{Int32}, Ref{Int32}),
           dst, src, rank, origin, extents)
 
 
@@ -81,7 +88,7 @@ first dimension is contiguous. `MtlInlineTensor(A)` views all of `A` (its `size`
 Slice a tile with [`view`](@ref), using 1-based origins.
 """
 struct MtlInlineTensor{T, R, AS}
-    storage::NTuple{TENSOR_DESCRIPTOR_SIZE, UInt8}
+    storage::TensorDescriptor
 end
 
 # column-major packed strides: stride(1) = 1, stride(k) = prod(extents[1:k-1]).
@@ -100,7 +107,7 @@ end
         data::MtlDeviceArray{T, <:Any, AS.Device},
         extents::NTuple{R, <:Integer}) where {T, R}
     e = Int32.(extents)
-    storage = Ref{NTuple{TENSOR_DESCRIPTOR_SIZE, UInt8}}()
+    storage = Ref{TensorDescriptor}()
     init_strided_tensor_device!(storage, Int16(R),
                                 reinterpret(LLVMPtr{UInt8, AS.Device}, pointer(data)),
                                 e, packed_strides(e), Int8(1))
@@ -111,7 +118,7 @@ end
         data::MtlDeviceArray{T, <:Any, AS.ThreadGroup},
         extents::NTuple{R, <:Integer}) where {T, R}
     e = Int32.(extents)
-    storage = Ref{NTuple{TENSOR_DESCRIPTOR_SIZE, UInt8}}()
+    storage = Ref{TensorDescriptor}()
     init_strided_tensor_threadgroup!(storage, Int16(R),
                                      reinterpret(LLVMPtr{UInt8, AS.ThreadGroup}, pointer(data)),
                                      e, packed_strides(e), Int8(1))
@@ -123,7 +130,7 @@ end
         data::MtlDeviceArray{T, <:Any, AS.Device},
         extents::NTuple{R, <:Integer},
         strides::NTuple{R, <:Integer}) where {T, R}
-    storage = Ref{NTuple{TENSOR_DESCRIPTOR_SIZE, UInt8}}()
+    storage = Ref{TensorDescriptor}()
     init_strided_tensor_device!(storage, Int16(R),
                                 reinterpret(LLVMPtr{UInt8, AS.Device}, pointer(data)),
                                 Int32.(extents), Int32.(strides), Int8(0))
@@ -134,7 +141,7 @@ end
         data::MtlDeviceArray{T, <:Any, AS.ThreadGroup},
         extents::NTuple{R, <:Integer},
         strides::NTuple{R, <:Integer}) where {T, R}
-    storage = Ref{NTuple{TENSOR_DESCRIPTOR_SIZE, UInt8}}()
+    storage = Ref{TensorDescriptor}()
     init_strided_tensor_threadgroup!(storage, Int16(R),
                                      reinterpret(LLVMPtr{UInt8, AS.ThreadGroup}, pointer(data)),
                                      Int32.(extents), Int32.(strides), Int8(0))
@@ -163,7 +170,7 @@ Base.eltype(::MtlInlineTensor{T}) where {T} = T
         t::MtlInlineTensor{T, R, A},
         origin::NTuple{R, <:Integer},
         extents::NTuple{R, <:Integer}) where {T, R, A}
-    storage = Ref{NTuple{TENSOR_DESCRIPTOR_SIZE, UInt8}}()
+    storage = Ref{TensorDescriptor}()
     slice_private_tensor!(storage, t.storage, Int16(R),
                           Int32.(origin) .- Int32(1), Int32.(extents))
     return MtlInlineTensor{T, R, A}(storage[])
@@ -280,9 +287,9 @@ TensorOpsMatmul2D(desc::matmul2d_descriptor, ::Val{NSIMD}) where {NSIMD} =
         threads = Int32(NSIMD) * (threads_per_simdgroup() % Int32)
         ccall($"extern $sym", llvmcall, Cvoid,
               (Ref{matmul2d_descriptor},
-               Ref{UInt8}, Int32,
-               Ref{UInt8}, Int32,
-               Ref{UInt8}, Int32,
+               Ref{TensorDescriptor}, Int32,
+               Ref{TensorDescriptor}, Int32,
+               Ref{TensorDescriptor}, Int32,
                Int32),
               $(QuoteNode(apple)),
               B.storage, $TENSOR_DESC_INLINE,
