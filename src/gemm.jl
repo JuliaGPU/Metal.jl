@@ -139,6 +139,12 @@ end
 # threadgroup covers a BM×BN = (8·TM·WM)×(8·TN·WN) tile of C. BK = 8·KB is the
 # contraction tile depth. Tiles are staged in threadgroup memory as Float32 and
 # accumulated in Float32.
+#
+# Threadgroup memory bank conflicts: Apple GPU threadgroup memory has 32 banks of 4
+# bytes each. Without padding, As (BM×BK) with BM=64 has a 64-float column stride;
+# 64%32=0 so all columns of each A-fragment map to the same bank (8-way conflict).
+# Similarly Bs (BK×BN) with BK=8 causes 2-4-way conflicts. Adding 4-float (16-byte)
+# padding to the leading dimension of each tile eliminates these conflicts.
 function gemm_simd_kernel!(C, A, B, alpha::Float32, beta::Float32,
                             M, N, K, ::Val{TA}, ::Val{TB},
                             ::Val{WM}, ::Val{WN}, ::Val{TM}, ::Val{TN},
@@ -154,9 +160,12 @@ function gemm_simd_kernel!(C, A, B, alpha::Float32, beta::Float32,
     bm0 = (Int(threadgroup_position_in_grid().x) - 1) * BM  # 0-based row origin in C
     bn0 = (Int(threadgroup_position_in_grid().y) - 1) * BN  # 0-based col origin in C
 
-    As = MtlThreadGroupArray(Float32, (BM, BK))
-    Bs = MtlThreadGroupArray(Float32, (BK, BN))
-    scratch = MtlThreadGroupArray(Float32, (8, EDGE ? 8 * WM * WN : 0))
+    # 4-float (16-byte) padding per leading dimension avoids bank conflicts.
+    # simdgroup_load/store use size(arr)[1] as the leading dimension, so they
+    # automatically pick up the padded stride.
+    As = MtlThreadGroupArray(Float32, (BM + 4, BK))
+    Bs = MtlThreadGroupArray(Float32, (BK + 4, BN))
+    scratch = MtlThreadGroupArray(Float32, (8 + 4, EDGE ? 8 * WM * WN : 0))
 
     # TM×TN accumulators (ti fastest), all zero-initialized, kept in registers
     acc = ntuple(_ -> ntuple(_ -> VecElement{Float32}(0.0f0), Val(64)), Val(TM * TN))
@@ -364,12 +373,14 @@ end
 # tile configuration for the fast path. WM×WN simdgroups per threadgroup, each with
 # a TM×TN grid of 8x8 accumulators (keep TM·TN ≤ 16 to avoid register spilling),
 # contraction depth BK = 8·KB. BM×BN = (8·TM·WM)×(8·TN·WN) output per threadgroup.
-# WM=WN=4 (512 threads) maximizes occupancy / latency hiding on current hardware.
-const GEMM_SIMD_WM = 4
-const GEMM_SIMD_WN = 4
-const GEMM_SIMD_TM = 2
-const GEMM_SIMD_TN = 2
-const GEMM_SIMD_KB = 1
+# WM=WN=2 (128 threads, 4 simdgroups): matches MLX/m5-gemm; gives 4× more concurrent
+# threadgroups per core vs WM=WN=4. TM=TN=4 gives 16 MACs per simdgroup per K-step
+# (vs 4 for TM=TN=2), maximizing arithmetic intensity. KB=2 halves barrier count.
+const GEMM_SIMD_WM = 2
+const GEMM_SIMD_WN = 2
+const GEMM_SIMD_TM = 4
+const GEMM_SIMD_TN = 4
+const GEMM_SIMD_KB = 2
 
 function gemm_simd!(C, A, B, alpha, beta, cA::Char, cB::Char)
     M = size(C, 1); N = size(C, 2)
