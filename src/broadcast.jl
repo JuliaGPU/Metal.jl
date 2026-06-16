@@ -184,7 +184,7 @@ end
         threads = min(elements, kernel.pipeline.maxTotalThreadsPerThreadgroup)
     end
 
-    groups = cld.(min.(elements, typemax(UInt32).-threads), threads)
+    groups = cld.(min.(elements, typemax(UInt32) .- (2 .* threads)), threads)
 
     kernel(dest, bc; threads, groups)
 
