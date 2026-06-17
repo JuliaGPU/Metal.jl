@@ -109,6 +109,95 @@ function static_vector_lane(v::LLVM.Value, i::Integer)
     return el isa LLVM.ConstantInt ? convert(Int, el) : nothing
 end
 
+# Follow bitcasts / zero-offset GEPs / address-space casts back to the object a pointer
+# ultimately refers to.
+function trace_to_alloca(v::LLVM.Value)
+    while true
+        if v isa LLVM.AllocaInst
+            return v
+        elseif v isa LLVM.BitCastInst || v isa LLVM.AddrSpaceCastInst
+            v = first(operands(v))
+        elseif v isa LLVM.GetElementPtrInst &&
+               all(idx -> idx isa LLVM.ConstantInt && iszero(convert(Int, idx)),
+                   operands(v)[2:end])
+            v = first(operands(v))
+        else
+            return nothing
+        end
+    end
+end
+
+function trace_to_global(v::LLVM.Value)
+    while true
+        if v isa LLVM.GlobalVariable
+            return v
+        elseif v isa LLVM.BitCastInst || v isa LLVM.AddrSpaceCastInst
+            v = first(operands(v))
+        elseif v isa LLVM.GetElementPtrInst &&
+               all(idx -> idx isa LLVM.ConstantInt && iszero(convert(Int, idx)),
+                   operands(v)[2:end])
+            v = first(operands(v))
+        else
+            return nothing
+        end
+    end
+end
+
+function is_tensor_op_descriptor_constant(gv::LLVM.GlobalVariable)
+    # Shader Validation faults if tensor-op descriptors are copied out of AIR's
+    # constant address space, so leave just those descriptor globals in AS0.
+    mod = LLVM.parent(gv)
+    descriptor_allocas = Set{LLVM.API.LLVMValueRef}()
+    for f in functions(mod)
+        startswith(LLVM.name(f), "__tensorops_impl_matmul2d_op_run_") || continue
+        for u in uses(f)
+            call = user(u)
+            call isa LLVM.CallInst || continue
+            args = collect(arguments(call))
+            isempty(args) && continue
+            storage = trace_to_alloca(args[1])
+            storage === nothing && continue
+            push!(descriptor_allocas, Base.unsafe_convert(LLVM.API.LLVMValueRef, storage))
+        end
+    end
+    isempty(descriptor_allocas) && return false
+
+    gv_key = Base.unsafe_convert(LLVM.API.LLVMValueRef, gv)
+    for f in functions(mod), bb in blocks(f), inst in instructions(bb)
+        inst isa LLVM.CallInst || continue
+        callee = called_operand(inst)
+        callee isa LLVM.Function || continue
+        startswith(LLVM.name(callee), "llvm.memcpy.") || continue
+
+        args = collect(arguments(inst))
+        length(args) == 4 || continue
+        dst = trace_to_alloca(args[1])
+        dst === nothing && continue
+        key = Base.unsafe_convert(LLVM.API.LLVMValueRef, dst)
+        key in descriptor_allocas || continue
+
+        src = trace_to_global(args[2])
+        src === nothing && continue
+        Base.unsafe_convert(LLVM.API.LLVMValueRef, src) == gv_key || continue
+        return true
+    end
+
+    return false
+end
+
+function GPUCompiler.metal_global_constant_addrspace(
+    @nospecialize(job::MetalCompilerJob),
+    @nospecialize(gv::LLVM.GlobalVariable))
+
+    if is_tensor_op_descriptor_constant(gv)
+        return 0
+    end
+
+    return invoke(GPUCompiler.metal_global_constant_addrspace,
+                  Tuple{CompilerJob{MetalCompilerTarget}, LLVM.GlobalVariable},
+                  job, gv)
+end
+
 function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
                                     mod::LLVM.Module, entry::LLVM.Function)
     entry = invoke(GPUCompiler.finish_ir!,
