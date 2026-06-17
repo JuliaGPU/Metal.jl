@@ -431,7 +431,39 @@ function compile(@nospecialize(job::CompilerJob))
     # TODO: on 1.9, this actually creates a context. cache those.
     ir, air, entry, loggingEnabled = JuliaContext() do ctx
         @signpost_interval log=log_compiler() "Generate LLVM IR" begin
-            mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)
+            mod, meta = try
+                invoke_frozen(GPUCompiler.compile, :llvm, job)
+            catch err
+                # `InvalidIRError`/`KernelError` are part of the API contract: they report
+                # unsupported user code (e.g. dynamic dispatch, a `throw`), so let them
+                # propagate unchanged rather than masking them as an internal failure.
+                (err isa GPUCompiler.InvalidIRError || err isa GPUCompiler.KernelError) &&
+                    rethrow()
+
+                # Any other failure is an unexpected compiler-internal crash (e.g. an exception
+                # in a GPUCompiler pass). The module that tripped it is buried inside GPUCompiler
+                # and isn't returned, so re-run code generation with optimization disabled to
+                # recover the un-optimized IR: re-running the optimizer on it reproduces the
+                # failure off-machine. Dump it as an artifact, like the AIR/metallib paths below.
+                ir_str = try
+                    # rebuild via the copy constructor so the original world age is preserved
+                    # (passing kwargs straight to `compile` would reset it to the frozen world).
+                    # disable validation too: the un-optimized IR still carries the
+                    # `julia.gpu.state_getter`/`julia.air.*` intrinsics that only get lowered
+                    # during optimization, and the validator would otherwise reject them.
+                    unopt_job = GPUCompiler.CompilerJob(job;
+                        config=GPUCompiler.CompilerConfig(job.config; optimize=false,
+                                                          validate=false))
+                    unopt_mod, _ = invoke_frozen(GPUCompiler.compile, :llvm, unopt_job)
+                    string(unopt_mod)
+                catch unopt_err
+                    "; recovering the un-optimized IR also failed: $(sprint(showerror, unopt_err))"
+                end
+                ir_file, = dump_artifacts(".ll" => ir_str)
+                error("""Compilation to LLVM IR failed: $(sprint(showerror, err))
+                         If you think this is a bug, please file an issue and attach $(ir_file)
+                         (the un-optimized IR; re-run the optimizer on it to reproduce).""")
+            end
         end
 
         # GPU logging is emitted as the `air.os_log` intrinsic, which requires Metal 3.2
