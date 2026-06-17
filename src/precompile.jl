@@ -1,5 +1,7 @@
 using PrecompileTools: @setup_workload, @compile_workload
 
+import REPL
+
 Sys.isapple() && @setup_workload begin
     metallib_file = joinpath(dirname(@__DIR__), "test", "dummy.metallib")
 
