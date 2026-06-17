@@ -164,11 +164,11 @@ end
 
 ## Custom kernel with Metal 4 tensor ops (matmul2d, inline tensors)
 
-# One fused kernel per (head, batch): QᵀK → softmax → V·Pᵀ, with the scores and
-# softmaxed P kept in threadgroup memory. The tensor ops take column-major Julia
-# operands directly (`op(A, B, C)` computes `C = A*B`), so the scores tile is the
-# real QᵀK and the softmax runs row-wise over the keys, matching the CPU
-# reference's `dims = 2`.
+# One fused kernel per (head, batch): QᵀK → softmax → V·Pᵀ, with a single
+# threadgroup tile holding the scores and then the softmaxed P. The tensor ops
+# take column-major Julia operands directly (`op(A, B, C)` computes `C = A*B`),
+# so the scores tile is the real QᵀK and the softmax runs row-wise over the
+# keys, matching the CPU reference's `dims = 2`.
 function fa_tensor!(O::MtlDeviceArray{Float16, 4},
                     Q::MtlDeviceArray{Float16, 4},
                     K::MtlDeviceArray{Float16, 4},
@@ -191,11 +191,14 @@ function fa_tensor!(O::MtlDeviceArray{Float16, 4},
     Vb = MtlDeviceArray{Float16, 2, Metal.AS.Device}((Int32(TD), Int32(TN)), pointer(V, slice_first))
     Ob = MtlDeviceArray{Float16, 2, Metal.AS.Device}((Int32(TD), Int32(TN)), pointer(O, slice_first))
 
-    # Scratch lives in threadgroup memory for the entire kernel: scores tile
-    # (Float32 for accumulator precision) and the softmaxed P (Float16 for the
-    # second matmul).
-    S = MtlThreadGroupArray(Float32, (TN, TN))
-    P = MtlThreadGroupArray(Float16, (TN, TN))
+    # A single Float16 tile in threadgroup memory carries the scores out of the
+    # first matmul and, after the softmax rewrites it in place, the probabilities
+    # P fed to the second. matmul2d accumulates in Float32 internally and only
+    # rounds to Float16 on store, so the scores keep accumulator precision; the
+    # softmax itself runs in Float32 registers. Reusing one tile (rather than a
+    # Float32 scores tile plus a Float16 P tile) keeps threadgroup memory within
+    # the 32 KB budget, which shader validation halves by shadowing each byte.
+    S = MtlThreadGroupArray(Float16, (TN, TN))
 
     # Step 1: S = QᵀK (transpose Q, the left operand).
     let tQ = MtlInlineTensor(Qb), tK = MtlInlineTensor(Kb), tS = MtlInlineTensor(S)
@@ -206,30 +209,30 @@ function fa_tensor!(O::MtlDeviceArray{Float16, 4},
     end
     threadgroup_barrier(Metal.MemoryFlagThreadGroup)
 
-    # Step 2: row-wise softmax over the keys. TN of (NSIMD*32) threads do real
-    # work; the rest wait at the barrier below.
+    # Step 2: row-wise softmax over the keys, rewriting S in place. TN of
+    # (NSIMD*32) threads do real work; the rest wait at the barrier below.
     @inbounds if tid < Int32(TN)
         row = tid + Int32(1)
         m = -Inf32
         for j in Int32(1):Int32(TN)
-            v = S[row, j] * scale
+            v = Float32(S[row, j]) * scale
             m = v > m ? v : m
         end
         s = 0.0f0
         for j in Int32(1):Int32(TN)
-            p = exp(S[row, j] * scale - m)
-            S[row, j] = p
+            p = exp(Float32(S[row, j]) * scale - m)
+            S[row, j] = Float16(p)
             s += p
         end
         inv_s = 1.0f0 / s
         for j in Int32(1):Int32(TN)
-            P[row, j] = Float16(S[row, j] * inv_s)
+            S[row, j] = Float16(Float32(S[row, j]) * inv_s)
         end
     end
     threadgroup_barrier(Metal.MemoryFlagThreadGroup)
 
-    # Step 3: O = V·Pᵀ (transpose P, the right operand).
-    let tV = MtlInlineTensor(Vb), tP = MtlInlineTensor(P), tO = MtlInlineTensor(Ob)
+    # Step 3: O = V·Pᵀ (transpose P, the right operand); P now lives in S.
+    let tV = MtlInlineTensor(Vb), tP = MtlInlineTensor(S), tO = MtlInlineTensor(Ob)
         op = TensorOpsMatmul2D{matmul2d_descriptor(TD, TN, TN;
                                                    transpose_right = true),
                                Int32(NSIMD)}()
