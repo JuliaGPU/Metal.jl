@@ -110,7 +110,7 @@ end
     storage = Ref{TensorDescriptor}()
     init_strided_tensor_device!(storage, Int16(R),
                                 reinterpret(LLVMPtr{UInt8, AS.Device}, pointer(data)),
-                                e, packed_strides(e), Int8(1))
+                                e, packed_strides(e), Int8(0))
     return MtlInlineTensor{T, R, AS.Device}(storage[])
 end
 
@@ -121,7 +121,7 @@ end
     storage = Ref{TensorDescriptor}()
     init_strided_tensor_threadgroup!(storage, Int16(R),
                                      reinterpret(LLVMPtr{UInt8, AS.ThreadGroup}, pointer(data)),
-                                     e, packed_strides(e), Int8(1))
+                                     e, packed_strides(e), Int8(0))
     return MtlInlineTensor{T, R, AS.ThreadGroup}(storage[])
 end
 
@@ -299,4 +299,3 @@ TensorOpsMatmul2D(desc::matmul2d_descriptor, ::Val{NSIMD}) where {NSIMD} =
         return nothing
     end
 end
-
