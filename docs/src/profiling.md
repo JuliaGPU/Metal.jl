@@ -46,8 +46,8 @@ Profiled 2 GPU operations over 421.0 µs; GPU was busy 421.0 µs (100.00%).
 └──────────┴────────────┴───────┴───────────────────┴──────────────┘
 ```
 
-To display a chronological trace of the individual operations instead of a summary, set
-`trace=true`:
+To display a chronological trace of the individual Objective-C calls and GPU operations
+instead of summaries, set `trace=true`:
 
 ```julia
 julia> Metal.@profile trace=true begin
@@ -55,6 +55,9 @@ julia> Metal.@profile trace=true begin
            c .= sqrt.(b)
        end
 ```
+
+Verbose implementation details, such as polling command-buffer status during synchronization,
+are hidden by default. Set `raw=true` to include them.
 
 To benchmark a piece of code by running it repeatedly, use `Metal.@bprofile` (which accepts an
 optional `time` keyword argument, defaulting to one second):
