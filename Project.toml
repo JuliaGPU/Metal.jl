@@ -66,3 +66,6 @@ SpecialFunctions = "2"
 StaticArrays = "1"
 UUIDs = "1"
 julia = "1.10"
+
+[sources]
+GPUCompiler = {url = "https://github.com/JuliaGPU/GPUCompiler.jl", rev = "main"}

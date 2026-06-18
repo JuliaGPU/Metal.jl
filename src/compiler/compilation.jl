@@ -441,24 +441,14 @@ function compile(@nospecialize(job::CompilerJob))
                     rethrow()
 
                 # Any other failure is an unexpected compiler-internal crash (e.g. an exception
-                # in a GPUCompiler pass). The module that tripped it is buried inside GPUCompiler
-                # and isn't returned, so re-run code generation with optimization disabled to
-                # recover the un-optimized IR: re-running the optimizer on it reproduces the
-                # failure off-machine. Dump it as an artifact, like the AIR/metallib paths below.
-                ir_str = try
-                    # rebuild via the copy constructor so the original world age is preserved
-                    # (passing kwargs straight to `compile` would reset it to the frozen world).
-                    # disable validation too: the un-optimized IR still carries the
-                    # `julia.gpu.state_getter`/`julia.air.*` intrinsics that only get lowered
-                    # during optimization, and the validator would otherwise reject them.
-                    unopt_job = GPUCompiler.CompilerJob(job;
-                        config=GPUCompiler.CompilerConfig(job.config; optimize=false,
-                                                          validate=false))
-                    unopt_mod, _ = invoke_frozen(GPUCompiler.compile, :llvm, unopt_job)
-                    string(unopt_mod)
-                catch unopt_err
-                    "; recovering the un-optimized IR also failed: $(sprint(showerror, unopt_err))"
-                end
+                # in a GPUCompiler optimization pass). GPUCompiler stashes the module as it
+                # entered `optimize!` (we opt into this in `__init__`); that snapshot is a
+                # faithful, re-optimizable reproducer. Dump it as an artifact, like the
+                # AIR/metallib paths below.
+                captured = GPUCompiler.last_optimization_input[]
+                ir_str = captured !== nothing ? captured :
+                    "; no optimizer-input IR was captured (the failure was not in `optimize!`): " *
+                    sprint(showerror, err)
                 ir_file, = dump_artifacts(".ll" => ir_str)
                 error("""Compilation to LLVM IR failed: $(sprint(showerror, err))
                          If you think this is a bug, please file an issue and attach $(ir_file)
