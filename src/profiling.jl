@@ -46,19 +46,25 @@ end
 # invoked from `MTL.commit!` for every committed command buffer while profiling is active.
 # runs synchronously on the calling (Julia) thread, so it only appends to `records`; the
 # actual GPU timestamps are read later, after synchronization (see `profile_internally`).
-function record_commit!(records, cmdbuf)
-    label = cmdbuf.label
-    # command buffers without a label (e.g. the empty sentinels committed by
-    # `nonblocking_synchronization`) are bookkeeping, not user work — skip them.
-    label === nothing && return
-    name = String(label)
-    isempty(name) && return
+function record_commit!(records, metadata, cmdbuf)
+    ops = get(metadata, cmdbuf, nothing)
+    if ops !== nothing && !isempty(ops)
+        name = String(something(get(first(ops), :name, nothing), "Metal operation"))
+    else
+        label = cmdbuf.label
+        # command buffers without a label (e.g. the empty sentinels committed by
+        # `nonblocking_synchronization`) are bookkeeping, not user work — skip them.
+        label === nothing && return
+        name = String(label)
+        isempty(name) && return
+        name = clean_label(name)
+    end
 
     # keep the command buffer alive until we've read its timestamps: Metal only retains a
     # committed buffer until it completes, and our `last_committed` slot holds just the most
     # recent one, so an intermediate buffer could otherwise be freed before we read it.
     retain(cmdbuf)
-    push!(records, (clean_label(name), cmdbuf))
+    push!(records, (name, cmdbuf))
     return
 end
 
@@ -131,7 +137,7 @@ function profile_internally(@nospecialize(f); trace::Bool=false)
     metadata = IdDict{Any,Vector{Any}}()
     prev = MTL.profile_hook[]
     MTL.profile_metadata[] = metadata
-    MTL.profile_hook[] = cmdbuf -> record_commit!(records, cmdbuf)
+    MTL.profile_hook[] = cmdbuf -> record_commit!(records, metadata, cmdbuf)
     ObjectiveC.tracing_subscribe(host)
     t_start = _mach_now()
     try

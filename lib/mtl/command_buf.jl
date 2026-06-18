@@ -74,8 +74,13 @@ const profile_hook = Ref{Any}(nothing)
 # command buffer they encode into. the cost when unset is one load + nil-check per operation.
 const profile_metadata = Ref{Any}(nothing)
 
-function note_operation!(md, cmdbuf::MTLCommandBufferLike, op)
-    push!(get!(() -> Any[], md, cmdbuf), op)
+@inline function note_operation!(md, cmdbuf::MTLCommandBufferLike, op)
+    ops = get(md, cmdbuf, nothing)
+    if ops === nothing
+        ops = Any[]
+        md[cmdbuf] = ops
+    end
+    push!(ops, op)
     return
 end
 
