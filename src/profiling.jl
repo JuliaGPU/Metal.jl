@@ -10,7 +10,7 @@
 #    per GPU operation, so per-buffer timing maps cleanly onto per-operation timing.
 #
 #  - host-side Objective-C API calls: by subscribing to ObjectiveC.jl's runtime call tracer
-#    (`ObjectiveC.subscribe`), aggregating calls per (class, selector). This surfaces host
+#    (`ObjectiveC.tracing_subscribe`), aggregating calls per (class, selector). This surfaces host
 #    behavior such as APIs being called too often — the analog of CUDA.jl's CUPTI host trace.
 
 module Profiling
@@ -129,13 +129,13 @@ function profile_internally(@nospecialize(f); trace::Bool=false)
 
     prev = MTL.profile_hook[]
     MTL.profile_hook[] = cmdbuf -> record_commit!(records, cmdbuf)
-    ObjectiveC.subscribe(host)
+    ObjectiveC.tracing_subscribe(host)
     t_start = _mach_now()
     try
         f()
     finally
         # stop host tracing before our own synchronization, so the trace reflects `f`'s calls
-        ObjectiveC.unsubscribe()
+        ObjectiveC.tracing_unsubscribe()
         MTL.profile_hook[] = prev
     end
 
