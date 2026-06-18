@@ -18,7 +18,7 @@ end
 # dims = (epr, 8), strides = (1, epr) and an unswapped origin. when targeting older AIR
 # versions, `finish_ir!` rewrites these calls to the legacy elements-per-row + transpose
 # flag signature (keep in sync with the downgrade rule in src/compiler/compilation.jl).
-for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"))
+for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"), (:BFloat16, "bf16"))
     for as in (AS.Device, AS.ThreadGroup)
         @eval begin
             @device_function simdgroup_load(
@@ -58,6 +58,13 @@ for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"))
     end
 
     @eval begin
+        # Build a fragment whose elements are all `val`, with matrix provenance.
+        # This is the `make_filled_simdgroup_matrix` builtin and must be used
+        # to initialize any simdgroup_matrix
+        @device_function simdgroup_matrix_init_filled(val::$jltype) =
+            ccall($"extern air.simdgroup_matrix_8x8_init_filled.v64$suffix.$suffix",
+                llvmcall, NTuple{64, VecElement{$jltype}}, ($jltype,), val)
+
         @device_function simdgroup_multiply(
             a::NTuple{64, VecElement{$jltype}},
             b::NTuple{64, VecElement{$jltype}},
@@ -83,7 +90,7 @@ end
     simdgroup_load(data::MtlDeviceArray{T}, matrix_origin=(1, 1), Val(transpose)=Val(true))
 
 Loads data from device or threadgroup memory into an 8x8 SIMD-group matrix
-and returns it. `T` must be either `Float16` or `Float32`.
+and returns it. `T` must be either `Float16`, `Float32`, or `BFloat16`.
 
 # Arguments
 - `matrix_origin::NTuple{2, Int64}=(1, 1)`: origin in the source memory to load from.
@@ -96,7 +103,7 @@ and returns it. `T` must be either `Float16` or `Float32`.
     simdgroup_store(src, dest::MtlDeviceArray{T}, matrix_origin=(1, 1), Val(transpose)=Val(true))
 
 Stores data from an 8x8 SIMD-group matrix into device or threadgroup memory.
-`T` must be either `Float16` or `Float32`.
+`T` must be either `Float16`, `Float32`, or `BFloat16`.
 
 # Arguments
 - `matrix_origin::NTuple{2, Int64}=(1, 1)`: origin in the destination memory to store to.
@@ -124,7 +131,7 @@ Returns `a * b + c`.
     MtlSimdgroupMatrix{T,R,C}
 
 Typed wrapper around a SIMD-group matrix fragment. `T` is the element type
-(`Float16` or `Float32`); `R` and `C` are the matrix dimensions. Only the
+(`Float16`, `Float32`, or `BFloat16`); `R` and `C` are the matrix dimensions. Only the
 8×8 shape is supported by current Apple GPUs.
 
 The fragment data is distributed across the 32 lanes of a SIMD-group; the
@@ -151,7 +158,7 @@ Base.eltype(m::MtlSimdgroupMatrix) = eltype(typeof(m))
 # Fill constructor: materialize a fragment whose elements are all `val`.
 @inline function MtlSimdgroupMatrix{T,8,8}(val::T) where {T}
     return _unsafe_wrap_simdgroup_matrix(MtlSimdgroupMatrix{T,8,8},
-                                         ntuple(_ -> VecElement{T}(val), Val(64)))
+                                         simdgroup_matrix_init_filled(val))
 end
 
 @inline Base.zero(::Type{MtlSimdgroupMatrix{T,8,8}}) where {T} =

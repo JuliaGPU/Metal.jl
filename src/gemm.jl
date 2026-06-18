@@ -90,6 +90,17 @@ end
         simdgroup_multiply_accumulate(afrag[ti], bfrag[tj], acc[idx])
     end
 
+# Whether an `R`-typed fragment assembled in registers (via `cvt`) can be written straight to
+# device memory with `simdgroup_store`. Apple's frontend only ever materializes a simdgroup
+# matrix through a matrix intrinsic (load / multiply / init_filled), never by assembling a
+# `<64 x T>` with `insertelement`. The back-end tolerates an assembled `<64 x half>`/`<64 x
+# float>` operand, but an assembled `<64 x bfloat>` stores zeros — verified on M1: Apple's own
+# `init_filled`+store of `bfloat` runs correctly, while a `cvt`-assembled fragment does not. So
+# `BFloat16` outputs route through the f32 scratch + scalar-convert epilogue, which stores the
+# f32 accumulator (matrix provenance intact) and never assembles a bfloat fragment.
+@inline simd_direct_store(::Type) = true
+@inline simd_direct_store(::Type{BFloat16}) = false
+
 # store one full (in-bounds) 8x8 fragment to C with α/β applied
 @inline function store_frag!(C::MtlDeviceArray{R}, accidx, gr, gc, alpha, beta,
                               ::Val{SIMPLE}) where {R, SIMPLE}
@@ -114,7 +125,7 @@ end
     ntuple(Val(TM * TN)) do idx
         ti = (idx - 1) % TM; tj = (idx - 1) ÷ TM
         gr = bm0 + sm0 + ti * 8; gc = bn0 + sn0 + tj * 8
-        if !EDGE || (gr + 8 <= M && gc + 8 <= N)
+        if (!EDGE || (gr + 8 <= M && gc + 8 <= N)) && simd_direct_store(R)
             store_frag!(C, acc[idx], gr, gc, alpha, beta, Val(SIMPLE))
         else
             simdgroup_store(acc[idx], scratch, (1, sc0 + 1))
@@ -358,9 +369,12 @@ end
 
 ## host entry points
 
-@inline gemm_simd_eltype(::Type{<:Union{Float16, Float32}},
-                          ::Type{<:Union{Float16, Float32}},
-                          ::Type{<:Union{Float16, Float32}}) = true
+# The simd kernel stages A/B as Float32 and contracts in Float32, so the only eltype-specific
+# simdgroup ops are the load/store of `C`; `BFloat16` rides the same `bf16` simdgroup intrinsics
+# (re-typed from i16 by GPUCompiler before Julia 1.13). See `device/intrinsics/simd.jl`.
+@inline gemm_simd_eltype(::Type{<:Union{Float16, Float32, BFloat16}},
+                          ::Type{<:Union{Float16, Float32, BFloat16}},
+                          ::Type{<:Union{Float16, Float32, BFloat16}}) = true
 @inline gemm_simd_eltype(::Type, ::Type, ::Type) = false
 
 # Operand-support predicate for the simdgroup kernel, mirroring `supports_mps_matmul` /
@@ -390,8 +404,9 @@ function gemm_simd!(C, A, B, alpha, beta, cA::Char, cB::Char)
     BM = 8 * TM * WM; BN = 8 * TN * WN
     threads = WM * WN * 32
     groups = (cld(M, BM), cld(N, BN))
-    # aligned tiles skip the bounds-checked edge path; α=1,β=0 skips the α/β arithmetic
-    edge = !(M % BM == 0 && N % BN == 0)
+    # aligned tiles skip the bounds-checked edge path; α=1,β=0 skips the α/β arithmetic.
+    # `BFloat16` outputs always need the edge path's f32 scratch (see `simd_direct_store`).
+    edge = !(M % BM == 0 && N % BN == 0) || !simd_direct_store(eltype(C))
     simple = isone(alpha) && iszero(beta)
     @metal threads=threads groups=groups gemm_simd_kernel!(
         C, A, B, Float32(alpha), Float32(beta), Int(M), Int(N), Int(K),

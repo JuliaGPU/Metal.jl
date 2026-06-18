@@ -1,7 +1,7 @@
 using Metal: metal_support
 
 @testset "shuffle functions" begin
-    shuffle_test_types = [Float32, Float16,# BFloat16,
+    shuffle_test_types = [Float32, Float16,
                           Int32, UInt32, Int16, UInt16,
                           Int8, UInt8]
     @testset "simd_shuffle" begin
@@ -356,7 +356,14 @@ using Metal: metal_support
 end # @testset "shuffle functions"
 
 @testset "matrix functions" begin
-    simdgroup_types = [Float16, Float32]#, BFloat16]
+    # BFloat16 simdgroup matrices have no native LLVM type before Julia 1.13; the `bf16` AIR
+    # intrinsics arrive with `i16` operands and are re-typed to native `bfloat` by GPUCompiler's
+    # `promote_bf16_intrinsics!`. Without that pass these kernels miscompile (load/multiply throw
+    # or store garbage), so every BFloat16 case here doubles as a regression test for it.
+    simdgroup_types = [Float16, Float32, BFloat16]
+    # bf16 carries ~3 significant bits of mantissa, so matmul results need a looser tolerance.
+    sg_rtol(::Type{BFloat16}) = 0.1
+    sg_rtol(::Type{T}) where {T} = sqrt(eps(T))
     @testset "load_store($typ)" for typ in simdgroup_types
         function kernel(a::MtlDeviceArray{T}, b::MtlDeviceArray{T},
                             origin_a=(1, 1), origin_b=(1, 1)) where {T}
@@ -430,7 +437,7 @@ end # @testset "shuffle functions"
         b = MtlArray(rand(typ, 8, 8))
         c = MtlArray(zeros(typ, 8, 8))
         @metal threads=(8, 8) kernel(a, b, c)
-        @test Array(a) * Array(b) ≈ Array(c)
+        @test Array(a) * Array(b) ≈ Array(c) rtol=sg_rtol(typ)
     end
 
     @testset "mad($typ)" for typ in simdgroup_types
@@ -449,7 +456,7 @@ end # @testset "shuffle functions"
         c = MtlArray(rand(typ, 8, 8))
         d = MtlArray(zeros(typ, 8, 8))
         @metal threads=(8, 8) kernel(a, b, c, d)
-        @test Array(a) * Array(b) + Array(c) ≈ Array(d)
+        @test Array(a) * Array(b) + Array(c) ≈ Array(d) rtol=sg_rtol(typ)
     end
 
     @testset "intrinsic ABI" begin
@@ -528,13 +535,13 @@ end # @testset "shuffle functions"
     end
 
     @testset "MtlSimdgroupMatrix type" begin
-        @testset for T in (Float16, Float32)
+        @testset for T in simdgroup_types
             @test eltype(MtlSimdgroupMatrix{T,8,8}) === T
             @test size(MtlSimdgroupMatrix{T,8,8}) === (8, 8)
         end
     end
 
-    @testset "MtlSimdgroupMatrix fill($T)" for T in (Float16, Float32)
+    @testset "MtlSimdgroupMatrix fill($T)" for T in simdgroup_types
         function kernel(out::MtlDeviceMatrix{T}, val::T) where {T}
             m = MtlSimdgroupMatrix{T,8,8}(val)
             simdgroup_store(m, out)
@@ -546,7 +553,7 @@ end # @testset "shuffle functions"
         @test all(Array(out) .== T(3.5))
     end
 
-    @testset "MtlSimdgroupMatrix zero($T)" for T in (Float16, Float32)
+    @testset "MtlSimdgroupMatrix zero($T)" for T in simdgroup_types
         function kernel(out::MtlDeviceMatrix{T}) where {T}
             m = zero(MtlSimdgroupMatrix{T,8,8})
             simdgroup_store(m, out)
@@ -558,7 +565,7 @@ end # @testset "shuffle functions"
         @test all(Array(out) .== zero(T))
     end
 
-    @testset "MtlSimdgroupMatrix load_store($T)" for T in (Float16, Float32)
+    @testset "MtlSimdgroupMatrix load_store($T)" for T in simdgroup_types
         function kernel(a::MtlDeviceMatrix{T}, b::MtlDeviceMatrix{T}) where {T}
             m = simdgroup_load(MtlSimdgroupMatrix{T,8,8}, a)
             simdgroup_store(m, b)
@@ -571,7 +578,7 @@ end # @testset "shuffle functions"
         @test Array(a) == Array(b)
     end
 
-    @testset "MtlSimdgroupMatrix load_store with origin($T)" for T in (Float16, Float32)
+    @testset "MtlSimdgroupMatrix load_store with origin($T)" for T in simdgroup_types
         function kernel(a::MtlDeviceMatrix{T}, b::MtlDeviceMatrix{T},
                         origin_a::NTuple{2,Int64}, origin_b::NTuple{2,Int64}) where {T}
             m = simdgroup_load(MtlSimdgroupMatrix{T,8,8}, a, origin_a)
@@ -585,7 +592,7 @@ end # @testset "shuffle functions"
         @test Array(a)[4:11, 2:9] == Array(b)[3:10, 5:12]
     end
 
-    @testset "MtlSimdgroupMatrix multiply($T)" for T in (Float16, Float32)
+    @testset "MtlSimdgroupMatrix multiply($T)" for T in simdgroup_types
         function kernel(a::MtlDeviceMatrix{T}, b::MtlDeviceMatrix{T}, c::MtlDeviceMatrix{T}) where {T}
             ma = simdgroup_load(MtlSimdgroupMatrix{T,8,8}, a)
             mb = simdgroup_load(MtlSimdgroupMatrix{T,8,8}, b)
@@ -597,10 +604,10 @@ end # @testset "shuffle functions"
         b = MtlArray(rand(T, 8, 8))
         c = MtlArray(zeros(T, 8, 8))
         Metal.@sync @metal threads=(8, 8) kernel(a, b, c)
-        @test Array(a) * Array(b) ≈ Array(c)
+        @test Array(a) * Array(b) ≈ Array(c) rtol=sg_rtol(T)
     end
 
-    @testset "MtlSimdgroupMatrix muladd($T)" for T in (Float16, Float32)
+    @testset "MtlSimdgroupMatrix muladd($T)" for T in simdgroup_types
         function kernel(a::MtlDeviceMatrix{T}, b::MtlDeviceMatrix{T},
                         c::MtlDeviceMatrix{T}, d::MtlDeviceMatrix{T}) where {T}
             ma = simdgroup_load(MtlSimdgroupMatrix{T,8,8}, a)
@@ -615,12 +622,12 @@ end # @testset "shuffle functions"
         c = MtlArray(rand(T, 8, 8))
         d = MtlArray(zeros(T, 8, 8))
         Metal.@sync @metal threads=(8, 8) kernel(a, b, c, d)
-        @test Array(a) * Array(b) + Array(c) ≈ Array(d)
+        @test Array(a) * Array(b) + Array(c) ≈ Array(d) rtol=sg_rtol(T)
     end
 
     # Composed K-loop GEMM: C(8×8) = A(8×K) * B(K×8) with K=32, accumulating
     # four 8×8×8 fragment MMAs.
-    @testset "MtlSimdgroupMatrix K-loop GEMM($T)" for T in (Float16, Float32)
+    @testset "MtlSimdgroupMatrix K-loop GEMM($T)" for T in simdgroup_types
         function kernel(A::MtlDeviceMatrix{T}, B::MtlDeviceMatrix{T}, C::MtlDeviceMatrix{T}) where {T}
             acc = zero(MtlSimdgroupMatrix{T,8,8})
             for k in 0:3
@@ -636,12 +643,12 @@ end # @testset "shuffle functions"
         B = MtlArray(rand(T, 32, 8))
         C = MtlArray(zeros(T, 8, 8))
         Metal.@sync @metal threads=(8, 8) kernel(A, B, C)
-        @test Array(A) * Array(B) ≈ Array(C) rtol=sqrt(eps(T))
+        @test Array(A) * Array(B) ≈ Array(C) rtol=sg_rtol(T)
     end
 
     # Threadgroup-memory variant: stage tiles through threadgroup memory, then
     # load fragments from there. Mirrors how Flash Attention stages K/V tiles.
-    @testset "MtlSimdgroupMatrix threadgroup load($T)" for T in (Float16, Float32)
+    @testset "MtlSimdgroupMatrix threadgroup load($T)" for T in simdgroup_types
         function kernel(a::MtlDeviceMatrix{T}, b::MtlDeviceMatrix{T}) where {T}
             pos = thread_position_in_threadgroup()
             tg = MtlThreadGroupArray(T, (8, 8))
