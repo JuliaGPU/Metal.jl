@@ -1,16 +1,23 @@
-# Integrated, lightweight GPU profiler.
+# Integrated, lightweight profiler.
 #
 # Unlike `Metal.@profile external=true` (which drives Xcode's `xctrace`), this profiler runs
-# entirely in-process and needs no developer tools. It works by hooking the single `commit!`
-# chokepoint that all GPU work passes through (`MTL.profile_hook`), retaining every committed
-# command buffer, and — after synchronizing — reading each buffer's `GPUStartTime`/`GPUEndTime`.
-# Metal.jl issues roughly one command buffer per GPU operation, so per-buffer timing maps
-# cleanly onto per-operation timing without any per-callsite instrumentation.
+# entirely in-process and needs no developer tools. It captures two things and shows them as
+# separate tables, both on one (mach) clock:
+#
+#  - device-side GPU operations: by hooking the single `commit!` chokepoint all GPU work
+#    passes through (`MTL.profile_hook`), retaining each committed command buffer, and reading
+#    its `GPUStartTime`/`GPUEndTime` after synchronizing. Metal.jl issues ~one command buffer
+#    per GPU operation, so per-buffer timing maps cleanly onto per-operation timing.
+#
+#  - host-side Objective-C API calls: by subscribing to ObjectiveC.jl's runtime call tracer
+#    (`ObjectiveC.subscribe`), aggregating calls per (class, selector). This surfaces host
+#    behavior such as APIs being called too often — the analog of CUDA.jl's CUPTI host trace.
 
 module Profiling
 
 import ..Metal: MTL, synchronize, device_synchronize
 
+import ObjectiveC
 using ObjectiveC.Foundation: retain, release
 using ObjectiveC: @autoreleasepool
 
@@ -19,6 +26,11 @@ using Statistics: mean, std, quantile
 
 using PrettyTables: pretty_table, TextHighlighter
 using Crayons: @crayon_str
+
+# raw monotonic clock, shared domain with `GPUStartTime` (NOT `time_ns`); convert via the
+# ObjectiveC tracer's timebase.
+@inline _mach_now() = ccall(:mach_absolute_time, UInt64, ())
+_maxthreadid() = isdefined(Threads, :maxthreadid) ? Threads.maxthreadid() : Threads.nthreads()
 
 
 #
@@ -52,45 +64,94 @@ end
 
 
 #
+# host-side Objective-C API trace
+#
+
+# running count + total time per (class, selector). bounded by the number of distinct calls
+# (so `@bprofile`'s long runs stay bounded), and accumulated per-thread to avoid locking.
+mutable struct ApiStat
+    count::Int
+    ticks::UInt64
+end
+
+struct HostCollector
+    tables::Vector{Dict{Tuple{Symbol,Symbol},ApiStat}}
+end
+HostCollector() = HostCollector([Dict{Tuple{Symbol,Symbol},ApiStat}() for _ in 1:_maxthreadid()])
+
+# the ObjectiveC tracing callback: runs on the calling thread for every `@objc` call
+@inline function (hc::HostCollector)(class::Symbol, sel::Symbol, t0::UInt64, t1::UInt64)
+    tid = Threads.threadid()
+    tid <= length(hc.tables) || return
+    tbl = @inbounds hc.tables[tid]
+    st = get!(() -> ApiStat(0, UInt64(0)), tbl, (class, sel))
+    st.count += 1
+    st.ticks += t1 - t0
+    return
+end
+
+function merge_tables(hc::HostCollector)
+    merged = Dict{Tuple{Symbol,Symbol},ApiStat}()
+    for tbl in hc.tables, (k, st) in tbl
+        m = get!(() -> ApiStat(0, UInt64(0)), merged, k)
+        m.count += st.count
+        m.ticks += st.ticks
+    end
+    return merged
+end
+
+
+#
 # results
 #
 
 struct ProfileResults
-    # one entry per captured GPU operation, in commit order
+    # device-side GPU operations, one entry per captured command buffer (commit order)
     name::Vector{String}
-    start::Vector{Float64}  # GPU start time, in seconds (host clock)
-    stop::Vector{Float64}   # GPU end time, in seconds (host clock)
+    start::Vector{Float64}  # GPU start time, in seconds (mach clock)
+    stop::Vector{Float64}   # GPU end time, in seconds (mach clock)
 
-    # display options
-    trace::Bool
+    # host-side Objective-C API calls, aggregated per "[class selector]"
+    host_name::Vector{String}
+    host_calls::Vector{Int}
+    host_time::Vector{Float64}  # total time spent in this call, in seconds
+
+    wall::Float64  # wall-clock duration of the profiled region, in seconds
+    trace::Bool    # display the device side chronologically rather than as a summary
 end
 
 function profile_internally(@nospecialize(f); trace::Bool=false)
     records = Tuple{String,Any}[]
+    host = HostCollector()
 
     # drain any work that was already in flight, so we only capture `f`'s operations
     device_synchronize()
 
     prev = MTL.profile_hook[]
     MTL.profile_hook[] = cmdbuf -> record_commit!(records, cmdbuf)
+    ObjectiveC.subscribe(host)
+    t_start = _mach_now()
     try
         f()
     finally
+        # stop host tracing before our own synchronization, so the trace reflects `f`'s calls
+        ObjectiveC.unsubscribe()
         MTL.profile_hook[] = prev
     end
 
     # wait for all captured work to finish before reading its timestamps
     device_synchronize()
+    wall = (_mach_now() - t_start) * ObjectiveC.tracing_timebase() / 1e9
 
+    # device side: read each completed buffer's GPU timestamps. `GPUStartTime`/`GPUEndTime`
+    # are only valid once completed; skip anything that errored or never ran. (We do NOT fall
+    # back to `kernelStartTime`/`kernelEndTime` — those are CPU-side scheduling latency, not
+    # GPU execution.)
     name = String[]
     start = Float64[]
     stop = Float64[]
     @autoreleasepool begin
         for (opname, cmdbuf) in records
-            # `GPUStartTime`/`GPUEndTime` are only valid once the buffer has completed; skip
-            # anything that errored or never ran. (We do NOT fall back to
-            # `kernelStartTime`/`kernelEndTime` — those measure CPU-side scheduling latency,
-            # not GPU execution.)
             if cmdbuf.status == MTL.MTLCommandBufferStatusCompleted
                 t0 = cmdbuf.GPUStartTime
                 t1 = cmdbuf.GPUEndTime
@@ -104,7 +165,18 @@ function profile_internally(@nospecialize(f); trace::Bool=false)
         end
     end
 
-    return ProfileResults(name, start, stop, trace)
+    # host side: flatten the per-thread aggregation
+    tb = ObjectiveC.tracing_timebase()
+    host_name = String[]
+    host_calls = Int[]
+    host_time = Float64[]
+    for ((class, sel), st) in merge_tables(host)
+        push!(host_name, "[$class $sel]")
+        push!(host_calls, st.count)
+        push!(host_time, st.ticks * tb / 1e9)
+    end
+
+    return ProfileResults(name, start, stop, host_name, host_calls, host_time, wall, trace)
 end
 
 
@@ -212,82 +284,93 @@ const summary_column_names = Dict(:time_ratio => "Time (%)", :time => "Total tim
                                   :calls => "Calls", :time_dist => "Time distribution",
                                   :name => "Name")
 
-function Base.show(io::IO, results::ProfileResults)
-    n = length(results.name)
-    if n == 0
-        print(io, "No GPU operations were profiled.")
-        return
+function _summary_formatter(df)
+    return function(v, i, j)
+        col = keys(df)[j]
+        if col == :time_ratio
+            format_percentage(v)
+        elseif col == :time
+            format_time(v)
+        elseif col == :time_dist
+            v === missing && return ""
+            m, s, lo, hi = format_time(v.mean, v.std, v.min, v.max)
+            @sprintf("%9s ± %-6s (%6s ‥ %s)", m, s, lo, hi)
+        else
+            v
+        end
     end
+end
 
-    trace_begin = minimum(results.start)
-    span = maximum(results.stop) - trace_begin
-    busy = busy_time(results.start, results.stop)
+function _print_summary(io, df, crop)
+    header = [summary_column_names[k] for k in keys(df)]
+    alignment = [k in (:name, :time_dist) ? :l : :r for k in keys(df)]
+    pretty_table(io, df; column_labels=header, alignment, formatters=[_summary_formatter(df)],
+                 highlighters=time_highlighters(df),
+                 fit_table_in_display_horizontally=(crop == :horizontal),
+                 fit_table_in_display_vertically=false)
+end
 
-    print(io, "Profiled $n GPU operation$(n == 1 ? "" : "s") over $(format_time(span)); ",
-          "GPU was busy $(format_time(busy)) ($(format_percentage(span == 0 ? 0.0 : busy/span))).")
-
-    # avoid a zero denominator for instantaneous traces
-    den = span == 0 ? 1.0 : span
-
-    crop = if get(io, :is_pluto, false) || get(io, :jupyter, false)
+function _crop(io)
+    if get(io, :is_pluto, false) || get(io, :jupyter, false)
         :none
     elseif io isa Base.TTY || get(io, :limit, false)::Bool
         :horizontal
     else
         :none
     end
+end
 
-    println(io)
-    if results.trace
-        # chronological trace
-        perm = sortperm(results.start)
-        df = (id    = collect(1:n),
-              start = results.start[perm] .- trace_begin,
-              time  = results.stop[perm] .- results.start[perm],
-              name  = results.name[perm])
+function Base.show(io::IO, r::ProfileResults)
+    ndev, nhost = length(r.name), length(r.host_name)
+    if ndev == 0 && nhost == 0
+        print(io, "No GPU operations or Objective-C calls were profiled.")
+        return
+    end
 
-        header = [trace_column_names[k] for k in keys(df)]
-        alignment = [k == :name ? :l : :r for k in keys(df)]
-        formatter = function(v, i, j)
-            if keys(df)[j] in (:start, :time)
-                format_time(v)
-            else
-                v
-            end
+    den = r.wall == 0 ? 1.0 : r.wall   # avoid a zero denominator
+    crop = _crop(io)
+    println(io, "Profiled over $(format_time(r.wall)).")
+
+    # host-side activity: the Objective-C API trace, grouped by call
+    if nhost > 0
+        ncalls, htotal = sum(r.host_calls), sum(r.host_time)
+        println(io, "\nHost-side activity: $ncalls Objective-C calls taking $(format_time(htotal)) ",
+                    "($(format_percentage(htotal / den)) of wall-clock)")
+        perm = sortperm(r.host_time; rev=true)
+        df = (time_ratio = r.host_time[perm] ./ den,
+              time       = r.host_time[perm],
+              calls      = r.host_calls[perm],
+              name       = r.host_name[perm])
+        _print_summary(io, df, crop)
+    end
+
+    # device-side activity: the GPU operations, as a summary or a chronological trace
+    if ndev > 0
+        busy = busy_time(r.start, r.stop)
+        println(io, "\nDevice-side activity: GPU was busy $(format_time(busy)) ",
+                    "($(format_percentage(busy / den)) of wall-clock)")
+        if r.trace
+            trace_begin = minimum(r.start)
+            perm = sortperm(r.start)
+            df = (id    = collect(1:ndev),
+                  start = r.start[perm] .- trace_begin,
+                  time  = r.stop[perm] .- r.start[perm],
+                  name  = r.name[perm])
+            header = [trace_column_names[k] for k in keys(df)]
+            alignment = [k == :name ? :l : :r for k in keys(df)]
+            formatter = (v, i, j) -> keys(df)[j] in (:start, :time) ? format_time(v) : v
+            pretty_table(io, df; column_labels=header, alignment, formatters=[formatter],
+                         highlighters=time_highlighters(df),
+                         fit_table_in_display_horizontally=(crop == :horizontal),
+                         fit_table_in_display_vertically=false)
+        else
+            s = summarize_trace(r.name, r.stop .- r.start, den)
+            columns = [:time_ratio, :time, :calls]
+            any(!ismissing, s.time_dist) && push!(columns, :time_dist)
+            push!(columns, :name)
+            df = NamedTuple{Tuple(columns)}(Tuple(s[c] for c in columns))
+            _print_summary(io, df, crop)
         end
-        pretty_table(io, df; column_labels=header, alignment, formatters=[formatter],
-                     highlighters=time_highlighters(df),
-                     fit_table_in_display_horizontally=(crop == :horizontal),
-                     fit_table_in_display_vertically=false)
-    else
-        # summary grouped by operation name
-        df = summarize_trace(results.name, results.stop .- results.start, den)
-
-        columns = [:time_ratio, :time, :calls]
-        any(!ismissing, df.time_dist) && push!(columns, :time_dist)
-        push!(columns, :name)
-        df = NamedTuple{Tuple(columns)}(Tuple(df[c] for c in columns))
-
-        header = [summary_column_names[k] for k in keys(df)]
-        alignment = [k in (:name, :time_dist) ? :l : :r for k in keys(df)]
-        formatter = function(v, i, j)
-            col = keys(df)[j]
-            if col == :time_ratio
-                format_percentage(v)
-            elseif col == :time
-                format_time(v)
-            elseif col == :time_dist
-                v === missing && return ""
-                m, s, lo, hi = format_time(v.mean, v.std, v.min, v.max)
-                @sprintf("%9s ± %-6s (%6s ‥ %s)", m, s, lo, hi)
-            else
-                v
-            end
-        end
-        pretty_table(io, df; column_labels=header, alignment, formatters=[formatter],
-                     highlighters=time_highlighters(df),
-                     fit_table_in_display_horizontally=(crop == :horizontal),
-                     fit_table_in_display_vertically=false)
     end
 end
 
@@ -324,12 +407,15 @@ There are two modes of operation, selected by the `external` keyword argument.
 
 ## Integrated profiler (`external=false`, the default)
 
-Metal.jl profiles the GPU operations performed by `code` in-process, without requiring Xcode,
-and displays the result. By default a summary of the captured GPU operations is shown, grouped
-by name. To display a chronological trace of the individual operations instead, set `trace=true`.
+Metal.jl profiles `code` in-process, without requiring Xcode, and displays two tables:
 
-Slow operations are highlighted: entries in yellow are among the slowest 25%, those in red
-among the slowest 5%.
+  - **Host-side activity**: the Objective-C API calls made while running `code`, grouped by
+    method and sorted by time. Useful to spot host inefficiencies, such as APIs being called
+    too often.
+  - **Device-side activity**: the GPU operations (kernels, blits), grouped by name. To display
+    a chronological trace of the individual operations instead, set `trace=true`.
+
+Slow entries are highlighted: yellow is among the slowest 25%, red among the slowest 5%.
 
 Note that, because Metal runs independent command buffers in parallel, operations may overlap
 in time; the reported percentages are relative to the wall-clock GPU span, not the sum of the
