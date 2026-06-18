@@ -23,7 +23,7 @@ using Metal: metal_support
         end
     end
 
-    @testset "simd_shuffle" begin
+    @testset "simd_shuffle_xor" begin
         function xor_kernel(in)
             i = thread_index_in_simdgroup()
 
@@ -121,6 +121,88 @@ using Metal: metal_support
         end
     end
 
+    @testset "quad_shuffle" begin
+        function shuffle_kernel(d)
+            i = thread_index_in_quadgroup()
+            j = 0x4 - i + 0x1
+
+            d[i] = quad_shuffle(d[i], j)
+            return
+        end
+
+        threadsPerQuadgroup = 4
+
+        @testset "$T" for T in shuffle_test_types
+            a = rand(T, threadsPerQuadgroup)
+            d_a = MtlArray(a)
+            Metal.@sync @metal threads=threadsPerQuadgroup shuffle_kernel(d_a)
+            @test Array(d_a) == reverse(a)
+        end
+    end
+
+    @testset "quad_shuffle_xor" begin
+        function xor_kernel(in)
+            i = thread_index_in_quadgroup()
+
+            new_val = quad_shuffle_xor(in[i], 1)
+
+            in[i] = new_val
+            return
+        end
+
+        threadsPerQuadgroup = 4
+
+        # tests that each pair of values a get swapped using sub_group_shuffle_xor
+        @testset "T" for T in shuffle_test_types
+            in = rand(T, threadsPerQuadgroup)
+            idxs = xor.(0:(threadsPerQuadgroup - 1), 1) .+ 1
+            d_in = MtlArray(in)
+            Metal.@sync @metal threads=threadsPerQuadgroup xor_kernel(d_in)
+            @test Array(d_in) == in[idxs]
+        end
+    end
+
+    @testset "$f" for(f,nshift) in [(quad_shuffle_and_fill_down, -2), (quad_shuffle_and_fill_up, 1)]
+        function kernel_mod(data::MtlDeviceVector{T}, filling_data::MtlDeviceVector{T}, modulo) where T
+            idx = thread_position_in_grid().x
+            idx_in_simd = thread_index_in_simdgroup() #simd_lane_id
+            simd_idx = simdgroup_index_in_threadgroup() #simd_group_id
+
+            temp_data = MtlThreadGroupArray(T, 4)
+            temp_data[idx] = data[idx]
+            temp_filling_data = MtlThreadGroupArray(T, 4)
+            temp_filling_data[idx] = filling_data[idx]
+            simdgroup_barrier(Metal.MemoryFlagThreadGroup)
+
+            if simd_idx == 1
+                dat_value = temp_data[idx_in_simd]
+                dat_fil_value = temp_filling_data[idx_in_simd]
+
+                value = f(dat_value, dat_fil_value, abs(nshift), modulo)
+
+                data[idx] = value
+            end
+            return
+        end
+
+        @testset "$typ" for typ in shuffle_test_types
+            N = 4
+            midN = N ÷ 2
+
+            data = Array{typ}(1:N)
+            mtldata = MtlArray(data)
+            mtlfilling = MtlArray(data)
+
+            Metal.@sync @metal threads=N kernel_mod(mtldata, mtlfilling, N)
+            @test Array(mtldata) == circshift(data, nshift)
+
+            mtlfilling2 = MtlArray(data)
+
+            Metal.@sync @metal threads=N kernel_mod(mtlfilling2, mtlfilling, midN)
+            @test Array(mtlfilling2) == [circshift(data[1:midN], nshift); circshift(data[midN+1:end], nshift)]
+        end
+    end
+
     @testset "simd_ballot" begin
         function ballot_kernel(output, threshold)
             idx = thread_position_in_grid().x
@@ -202,6 +284,67 @@ using Metal: metal_support
         @testset "threshold=$threshold" for threshold in [0, 1, 16, 32]
             output = MtlArray(zeros(UInt8, threads_per_simdgroup))
             Metal.@sync @metal threads = threads_per_simdgroup any_kernel(output, UInt32(threshold))
+
+            result = Array(output)
+            # Any bit set means threshold ≥ 1 (at least lane 1 voted true)
+            expected = threshold ≥ 1
+
+            @test all(result .== expected)
+        end
+    end
+        @testset "quad_vote_all" begin
+        function all_kernel(output, threshold)
+            idx = thread_position_in_grid().x
+            lane = thread_index_in_quadgroup()
+
+            # First get a ballot mask based on threshold
+            predicate = lane ≤ threshold
+            ballot = quad_ballot(predicate)
+
+            # simd_vote_all checks if all bits in the mask are set
+            result = quad_vote_all(ballot)
+
+            output[idx] = result
+            return
+        end
+
+        threads_per_quadgroup = 4
+
+        # simd_vote_all returns true only when all bits in the ballot mask are set
+        @testset "threshold=$threshold" for threshold in [0, 2, 3, 4, 5]
+            output = MtlArray(zeros(UInt8, threads_per_quadgroup))
+            Metal.@sync @metal threads = threads_per_quadgroup all_kernel(output, UInt32(threshold))
+
+            result = Array(output)
+            # All bits set means threshold ≥ 32 (all 32 lanes voted true)
+            expected = threshold ≥ threads_per_quadgroup
+
+            @test all(result .== expected)
+        end
+    end
+
+    @testset "quad_vote_any" begin
+        function any_kernel(output, threshold)
+            idx = thread_position_in_grid().x
+            lane = thread_index_in_quadgroup()
+
+            # First get a ballot mask based on threshold
+            predicate = lane ≤ threshold
+            ballot = quad_ballot(predicate)
+
+            # quad_vote_any checks if any bit in the mask is set
+            result = quad_vote_any(ballot)
+
+            output[idx] = result
+            return
+        end
+
+        threads_per_quadgroup = 4
+
+        # quad_vote_any returns true when any bit in the ballot mask is set
+        @testset "threshold=$threshold" for threshold in [0, 1, 2, 4]
+            output = MtlArray(zeros(UInt8, threads_per_quadgroup))
+            Metal.@sync @metal threads = threads_per_quadgroup any_kernel(output, UInt32(threshold))
 
             result = Array(output)
             # Any bit set means threshold ≥ 1 (at least lane 1 voted true)

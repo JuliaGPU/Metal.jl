@@ -1,7 +1,9 @@
 export simdgroup_load, simdgroup_store, simdgroup_multiply, simdgroup_multiply_accumulate,
         MtlSimdgroupMatrix,
         simd_shuffle_down, simd_shuffle_up, simd_shuffle_and_fill_down, simd_shuffle_and_fill_up,
-    simd_shuffle, simd_shuffle_xor, simd_ballot, simd_vote_all, simd_vote_any
+        simd_shuffle, simd_shuffle_xor, simd_ballot, simd_vote_all, simd_vote_any,
+        quad_shuffle_down, quad_shuffle_up, quad_shuffle_and_fill_down, quad_shuffle_and_fill_up,
+        quad_shuffle, quad_shuffle_xor, quad_ballot, quad_vote_all, quad_vote_any
 
 using Core: LLVMPtr
 
@@ -197,30 +199,36 @@ simd_shuffle_map = ((Float32, "f32"),
                     (Int8,    "s.i8"),
                     (UInt8,   "u.i8"))
 
-for (jltype, suffix) in simd_shuffle_map
+for (jltype, suffix) in simd_shuffle_map, (mod_f, prefix) in ((threads_per_simdgroup, "simd"),(()->UInt32(4), "quad"))
+    _shuffle = Symbol(prefix, :_shuffle)
+    _shuffle_xor = Symbol(prefix, :_shuffle_xor)
+    _shuffle_down = Symbol(prefix, :_shuffle_down)
+    _shuffle_up = Symbol(prefix, :_shuffle_up)
+    _shuffle_and_fill_down = Symbol(prefix, :_shuffle_and_fill_down)
+    _shuffle_and_fill_up = Symbol(prefix, :_shuffle_and_fill_up)
     @eval begin
-        @device_function simd_shuffle(data::$jltype, simd_lane_id::Integer) =
-            ccall($"extern air.simd_shuffle.$suffix",
+        @device_function $_shuffle(data::$jltype, simd_lane_id::Integer) =
+            ccall($"extern air.$(prefix)_shuffle.$suffix",
                 llvmcall, $jltype, ($jltype, Int16), data, simd_lane_id - 0x1)
 
-        @device_function simd_shuffle_xor(data::$jltype, mask::Integer) =
-            ccall($"extern air.simd_shuffle_xor.$suffix",
+        @device_function $_shuffle_xor(data::$jltype, mask::Integer) =
+            ccall($"extern air.$(prefix)_shuffle_xor.$suffix",
                 llvmcall, $jltype, ($jltype, Int16), data, mask)
 
-        @device_function simd_shuffle_down(data::$jltype, delta::Integer) =
-            ccall($"extern air.simd_shuffle_down.$suffix",
+        @device_function $_shuffle_down(data::$jltype, delta::Integer) =
+            ccall($"extern air.$(prefix)_shuffle_down.$suffix",
                 llvmcall, $jltype, ($jltype, Int16), data, delta)
 
-        @device_function simd_shuffle_up(data::$jltype, delta::Integer) =
-            ccall($"extern air.simd_shuffle_up.$suffix",
+        @device_function $_shuffle_up(data::$jltype, delta::Integer) =
+            ccall($"extern air.$(prefix)_shuffle_up.$suffix",
                 llvmcall, $jltype, ($jltype, Int16), data, delta)
 
-        @device_function simd_shuffle_and_fill_down(data::$jltype, filling_data::$jltype, delta::Integer, modulo::Integer=threads_per_simdgroup()) =
-            ccall($"extern air.simd_shuffle_and_fill_down.$suffix",
+        @device_function $_shuffle_and_fill_down(data::$jltype, filling_data::$jltype, delta::Integer, modulo::Integer=mod_f()) =
+            ccall($"extern air.$(prefix)_shuffle_and_fill_down.$suffix",
                 llvmcall, $jltype, ($jltype, $jltype, Int16, Int16), data, filling_data, delta, modulo)
 
-        @device_function simd_shuffle_and_fill_up(data::$jltype, filling_data::$jltype, delta::Integer, modulo::Integer=threads_per_simdgroup()) =
-            ccall($"extern air.simd_shuffle_and_fill_up.$suffix",
+        @device_function $_shuffle_and_fill_up(data::$jltype, filling_data::$jltype, delta::Integer, modulo::Integer=mod_f()) =
+            ccall($"extern air.$(prefix)_shuffle_and_fill_up.$suffix",
                 llvmcall, $jltype, ($jltype, $jltype, Int16, Int16), data, filling_data, delta, modulo)
     end
 end
@@ -235,6 +243,15 @@ end
 
 @device_function simd_vote_any(bitmask::UInt64) =
     ccall("extern air.simd_vote_any.i64", llvmcall, Bool, (UInt64,), bitmask)
+
+@device_function quad_ballot(predicate::Bool) =
+    ccall("extern air.quad_ballot.i64", llvmcall, UInt64, (Bool,), predicate)
+
+@device_function quad_vote_all(bitmask::UInt64) =
+    ccall("extern air.quad_vote_all.i64", llvmcall, Bool, (UInt64,), bitmask)
+
+@device_function quad_vote_any(bitmask::UInt64) =
+    ccall("extern air.quad_vote_any.i64", llvmcall, Bool, (UInt64,), bitmask)
 
 
 ## Documentation
