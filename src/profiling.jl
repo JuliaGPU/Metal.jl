@@ -110,6 +110,7 @@ struct ProfileResults
     name::Vector{String}
     start::Vector{Float64}  # GPU start time, in seconds (mach clock)
     stop::Vector{Float64}   # GPU end time, in seconds (mach clock)
+    ops::Vector{Vector{Any}}  # operations encoded into each buffer, with their metadata
 
     # host-side Objective-C API calls, aggregated per "[class selector]"
     host_name::Vector{String}
@@ -127,7 +128,9 @@ function profile_internally(@nospecialize(f); trace::Bool=false)
     # drain any work that was already in flight, so we only capture `f`'s operations
     device_synchronize()
 
+    metadata = IdDict{Any,Vector{Any}}()
     prev = MTL.profile_hook[]
+    MTL.profile_metadata[] = metadata
     MTL.profile_hook[] = cmdbuf -> record_commit!(records, cmdbuf)
     ObjectiveC.tracing_subscribe(host)
     t_start = _mach_now()
@@ -137,6 +140,7 @@ function profile_internally(@nospecialize(f); trace::Bool=false)
         # stop host tracing before our own synchronization, so the trace reflects `f`'s calls
         ObjectiveC.tracing_unsubscribe()
         MTL.profile_hook[] = prev
+        MTL.profile_metadata[] = nothing
     end
 
     # wait for all captured work to finish before reading its timestamps
@@ -150,6 +154,7 @@ function profile_internally(@nospecialize(f); trace::Bool=false)
     name = String[]
     start = Float64[]
     stop = Float64[]
+    ops = Vector{Any}[]
     @autoreleasepool begin
         for (opname, cmdbuf) in records
             if cmdbuf.status == MTL.MTLCommandBufferStatusCompleted
@@ -159,6 +164,7 @@ function profile_internally(@nospecialize(f); trace::Bool=false)
                     push!(name, opname)
                     push!(start, t0)
                     push!(stop, t1)
+                    push!(ops, get(metadata, cmdbuf, Any[]))
                 end
             end
             release(cmdbuf)
@@ -176,7 +182,7 @@ function profile_internally(@nospecialize(f); trace::Bool=false)
         push!(host_time, st.ticks * tb / 1e9)
     end
 
-    return ProfileResults(name, start, stop, host_name, host_calls, host_time, wall, trace)
+    return ProfileResults(name, start, stop, ops, host_name, host_calls, host_time, wall, trace)
 end
 
 
@@ -264,25 +270,103 @@ function summarize_trace(names, times, span)
 end
 
 # highlight slow entries (by the `:time` column): red for the slowest 5%, yellow for 25%.
+# `:time` may contain `missing` (rows for non-first operations within a buffer share timing).
 function time_highlighters(df)
-    relevant = df.time[df.time .>= 1e-8]
+    relevant = Float64[t for t in df.time if t !== missing && t >= 1e-8]
     isempty(relevant) && return TextHighlighter[]
     p75 = quantile(relevant, 0.75)
     p95 = quantile(relevant, 0.95)
 
-    hl_p95 = TextHighlighter((data, i, j) -> (keys(data)[j] == :time) && (data[j][i] >= p95),
+    atleast(v, p) = v !== missing && v >= p
+    hl_p95 = TextHighlighter((data, i, j) -> keys(data)[j] == :time && atleast(data[j][i], p95),
                              crayon"red")
-    hl_p75 = TextHighlighter((data, i, j) -> (keys(data)[j] == :time) && (data[j][i] >= p75),
+    hl_p75 = TextHighlighter((data, i, j) -> keys(data)[j] == :time && atleast(data[j][i], p75),
                              crayon"yellow")
-    hl_bold = TextHighlighter((data, i, j) -> (keys(data)[j] == :name) && (data.time[i] >= p75),
+    hl_bold = TextHighlighter((data, i, j) -> keys(data)[j] == :name && atleast(data.time[i], p75),
                               crayon"bold")
     TextHighlighter[hl_p95, hl_p75, hl_bold]
 end
 
-const trace_column_names = Dict(:id => "ID", :start => "Start", :time => "Time", :name => "Name")
+const trace_column_names = Dict(
+    :id => "ID", :start => "Start", :time => "Time",
+    :threadgroups => "Threadgroups", :threads => "Threads", :tgmem => "TG Mem",
+    :occupancy => "Occupancy", :size => "Size", :throughput => "Throughput", :name => "Name")
 const summary_column_names = Dict(:time_ratio => "Time (%)", :time => "Total time",
                                   :calls => "Calls", :time_dist => "Time distribution",
                                   :name => "Name")
+
+_field(op, k) = haskey(op, k) ? op[k] : missing
+_dims(sz) = "$(Int(sz.width))×$(Int(sz.height))×$(Int(sz.depth))"
+_volume(sz) = Int(sz.width) * Int(sz.height) * Int(sz.depth)
+
+# flatten the captured command buffers to one row per encoded operation, grouped under their
+# buffer: the buffer's id/start/time appear once (on its first operation), and each operation
+# contributes its own metadata columns. Buffers without recorded operations fall back to their
+# label. Metadata columns present for no operation are dropped.
+function _device_trace(r)
+    trace_begin = minimum(r.start)
+    cols = (id=Int[], start=Union{Missing,Float64}[], time=Union{Missing,Float64}[],
+            threadgroups=Union{Missing,String}[], threads=Union{Missing,String}[],
+            tgmem=Union{Missing,Int}[], occupancy=Union{Missing,Float64}[],
+            size=Union{Missing,Int}[], throughput=Union{Missing,Float64}[], name=String[])
+
+    for (i, bi) in enumerate(sortperm(r.start))
+        bstart, btime = r.start[bi] - trace_begin, r.stop[bi] - r.start[bi]
+        bops = r.ops[bi]
+        rows = isempty(bops) ? (nothing,) : bops  # at least one row per buffer
+        for (j, op) in enumerate(rows)
+            push!(cols.id, i)
+            push!(cols.start, j == 1 ? bstart : missing)
+            push!(cols.time, j == 1 ? btime : missing)
+            if op !== nothing && _field(op, :kind) === :kernel
+                tg, th = _field(op, :threadgroups), _field(op, :threads)
+                mt = _field(op, :maxthreads)
+                push!(cols.threadgroups, tg === missing ? missing : _dims(tg))
+                push!(cols.threads, th === missing ? missing : _dims(th))
+                push!(cols.tgmem, _field(op, :tgmem))
+                push!(cols.occupancy, (th !== missing && mt isa Integer && mt > 0) ?
+                                      _volume(th) / mt : missing)
+                push!(cols.size, missing); push!(cols.throughput, missing)
+            elseif op !== nothing  # copy / fill
+                b = _field(op, :bytes)
+                push!(cols.threadgroups, missing); push!(cols.threads, missing)
+                push!(cols.tgmem, missing); push!(cols.occupancy, missing)
+                push!(cols.size, b)
+                push!(cols.throughput, (b isa Integer && btime > 0) ? b / btime : missing)
+            else
+                for c in (cols.threadgroups, cols.threads, cols.tgmem, cols.occupancy,
+                          cols.size, cols.throughput)
+                    push!(c, missing)
+                end
+            end
+            push!(cols.name, op === nothing ? r.name[bi] : something(_field(op, :name), r.name[bi]))
+        end
+    end
+
+    # keep id/start/time/name always; keep a metadata column only if it has any data
+    keep = filter(keys(cols)) do k
+        k in (:id, :start, :time, :name) || any(!ismissing, cols[k])
+    end
+    return NamedTuple{Tuple(keep)}(Tuple(cols[k] for k in keep))
+end
+
+function _trace_formatter(df)
+    return function(v, i, j)
+        v === missing && return "-"
+        col = keys(df)[j]
+        if col in (:start, :time)
+            format_time(v)
+        elseif col in (:tgmem, :size)
+            Base.format_bytes(v)
+        elseif col === :occupancy
+            format_percentage(v)
+        elseif col === :throughput
+            "$(Base.format_bytes(round(Int, v)))/s"
+        else
+            v
+        end
+    end
+end
 
 function _summary_formatter(df)
     return function(v, i, j)
@@ -350,16 +434,10 @@ function Base.show(io::IO, r::ProfileResults)
         println(io, "\nDevice-side activity: GPU was busy $(format_time(busy)) ",
                     "($(format_percentage(busy / den)) of wall-clock)")
         if r.trace
-            trace_begin = minimum(r.start)
-            perm = sortperm(r.start)
-            df = (id    = collect(1:ndev),
-                  start = r.start[perm] .- trace_begin,
-                  time  = r.stop[perm] .- r.start[perm],
-                  name  = r.name[perm])
+            df = _device_trace(r)
             header = [trace_column_names[k] for k in keys(df)]
-            alignment = [k == :name ? :l : :r for k in keys(df)]
-            formatter = (v, i, j) -> keys(df)[j] in (:start, :time) ? format_time(v) : v
-            pretty_table(io, df; column_labels=header, alignment, formatters=[formatter],
+            alignment = [k === :name ? :l : :r for k in keys(df)]
+            pretty_table(io, df; column_labels=header, alignment, formatters=[_trace_formatter(df)],
                          highlighters=time_highlighters(df),
                          fit_table_in_display_horizontally=(crop == :horizontal),
                          fit_table_in_display_vertically=false)

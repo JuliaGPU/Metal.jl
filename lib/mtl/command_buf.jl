@@ -68,6 +68,17 @@ const last_committed_per_queue = Dict{id{MTLCommandQueue}, MTLCommandBufferLike}
 # instrumentation. the cost when unset is one load + nil-check per commit.
 const profile_hook = Ref{Any}(nothing)
 
+# optional profiling side-channel for per-operation metadata (e.g. kernel dimensions, copy
+# sizes), which is not recoverable from a committed command buffer. when set (to an `IdDict`
+# by `Metal.@profile`), operation sites associate one or more operation descriptors with the
+# command buffer they encode into. the cost when unset is one load + nil-check per operation.
+const profile_metadata = Ref{Any}(nothing)
+
+function note_operation!(md, cmdbuf::MTLCommandBufferLike, op)
+    push!(get!(() -> Any[], md, cmdbuf), op)
+    return
+end
+
 """
     last_committed(queue::MTLCommandQueue)::Union{MTLCommandBufferLike, Nothing}
 
