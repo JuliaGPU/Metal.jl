@@ -103,6 +103,14 @@ function last_committed(queue::MTLCommandQueue)
 end
 
 function commit!(cmdbuf::MTLCommandBufferLike)
+    commit_with_queue_key!(cmdbuf, pointer(cmdbuf.commandQueue))
+end
+
+function commit!(cmdbuf::MTLCommandBufferLike, queue::MTLCommandQueue)
+    commit_with_queue_key!(cmdbuf, pointer(queue))
+end
+
+function commit_with_queue_key!(cmdbuf::MTLCommandBufferLike, key::id{MTLCommandQueue})
     cmdbuf.status in [MTLCommandBufferStatusCompleted, MTLCommandBufferStatusCommitted] &&
         error("Cannot commit an already committed/completed command buffer")
     @objc [cmdbuf::id{MTLCommandBuffer} commit]::Nothing
@@ -113,7 +121,6 @@ function commit!(cmdbuf::MTLCommandBufferLike)
     # own retain the wrapper could become a dangling pointer once the GPU is
     # done. The retain on the new entry pairs with a release on the displaced one.
     Foundation.retain(cmdbuf)
-    key = pointer(cmdbuf.commandQueue)
     old = @lock last_committed_lock begin
         prev = get(last_committed_per_queue, key, nothing)
         last_committed_per_queue[key] = cmdbuf

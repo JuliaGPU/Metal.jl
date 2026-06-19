@@ -17,12 +17,26 @@ end
 
 ## allocation
 
+function max_buffer_length(dev::MTLDevice)
+    # Avoid serializing process-local Objective-C pointer keys from precompile workloads.
+    if ccall(:jl_generating_output, Cint, ()) != 0
+        return Int(dev.maxBufferLength)
+    end
+
+    key = UInt(pointer(dev))
+    @memoize key::UInt begin
+        Int(dev.maxBufferLength)
+    end::Int
+end
+
+max_buffer_length(heap::MTLHeap) = max_buffer_length(heap.device)
+
 function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer;
                    storage::Type{<:StorageMode}=PrivateStorage, hazard_tracking=DefaultTracking,
                    cache_mode=DefaultCPUCache)
     opts = convert(MTLResourceOptions, storage) | hazard_tracking | cache_mode
 
-    @assert 0 < bytesize <= dev.maxBufferLength # XXX: not supported by MTLHeap
+    @assert 0 < bytesize <= max_buffer_length(dev)
     ptr = alloc_buffer(dev, bytesize, opts)
 
     return MTLBuffer(ptr)
@@ -34,7 +48,7 @@ function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
     storage == PrivateStorage && error("Cannot allocate-and-initialize a PrivateStorage buffer")
     opts =  convert(MTLResourceOptions, storage) | hazard_tracking | cache_mode
 
-    @assert 0 < bytesize <= dev.maxBufferLength
+    @assert 0 < bytesize <= max_buffer_length(dev)
     ptr = if nocopy
         alloc_buffer_nocopy(dev, bytesize, opts, ptr)
     else

@@ -1,5 +1,5 @@
 export MTLComputeCommandEncoder
-export set_function!, set_buffer!, dispatchThreadgroups!, endEncoding!
+export set_function!, set_buffer!, set_bytes!, dispatchThreadgroups!, endEncoding!
 export append_current_function!
 
 # @objcwrapper immutable=false MTLComputeCommandEncoder <: MTLCommandEncoder
@@ -23,6 +23,12 @@ function set_buffer!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, offset, inde
     @objc [cce::id{MTLComputeCommandEncoder} setBuffer:buf::id{MTLBuffer}
                                              offset:offset::NSUInteger
                                              atIndex:(index-1)::NSUInteger]::Nothing
+end
+
+function set_bytes!(cce::MTLComputeCommandEncoder, ptr::Ptr, len::Integer, index::Integer)
+    @objc [cce::id{MTLComputeCommandEncoder} setBytes:ptr::Ptr{Cvoid}
+                                           length:len::NSUInteger
+                                          atIndex:(index-1)::NSUInteger]::Nothing
 end
 
 function dispatchThreadgroups!(cce::MTLComputeCommandEncoder, threadgroupsPerGrid, threadsPerThreadgroup)
