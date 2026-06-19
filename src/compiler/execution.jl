@@ -389,16 +389,6 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     #
     # TODO: is there a way to bind additional resources to the command buffer?
     roots = Any[f, args]
-    MTL.on_completed(cmdbuf) do buf
-        empty!(roots)
-
-        # Check for errors
-        # XXX: we cannot do this nicely, e.g. throwing an `error` or reporting with `@error`
-        #      because we're not allowed to switch tasks from this contexts.
-        if buf.status == MTL.MTLCommandBufferStatusError
-            Core.println("ERROR: Failed to submit command buffer: $(buf.error.localizedDescription)")
-        end
-    end
 
     # HACK: don't actually commit when precompiling to prevent holding onto resources
     if ccall(:jl_generating_output, Cint, ()) != 0
@@ -406,6 +396,8 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     end
 
     commit!(cmdbuf, queue)
+    defer_cleanup!(queue, cmdbuf, roots)
+
     if kernel.loggingEnabled
         # remember this so `synchronize(queue)` can drain its log handler blocks
         # (Metal delivers logs asynchronously on a libdispatch queue; only

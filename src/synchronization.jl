@@ -43,12 +43,14 @@ function nonblocking_synchronization(cmdbuf::MTL.MTLCommandBufferLike)
     end
 
     sentinel = MTLCommandBuffer(cmdbuf.commandQueue)
-    done = Base.Event()
-    on_completed(sentinel) do _
-        notify(done)
-    end
+    done = Base.AsyncCondition()
+    on_completed(sentinel, done)
     commit!(sentinel)
-    wait(done)
+    try
+        wait(done)
+    finally
+        close(done)
+    end
     return
 end
 
@@ -84,6 +86,8 @@ Wait for currently committed GPU work on `queue` to finish.
     finally
         release(last)
     end
+
+    drain_cleanups!(queue; force=true)
 
     # surface any device-side exception thrown by the work we just waited on
     check_exceptions()
