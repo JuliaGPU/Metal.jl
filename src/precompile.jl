@@ -11,6 +11,9 @@ Sys.isapple() && @setup_workload begin
         # exercise the full kernel-launch pipeline:
         @metal identity(nothing)
 
+        # exercise the integrated profiler and its display path:
+        sprint(show, @profile @metal identity(nothing))
+
         # exercise MtlArray creation and host↔device copy paths in both 1D and 2D
         for h in (Float32[0], Float32[0;;])
             a = MtlArray(h)

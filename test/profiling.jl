@@ -1,9 +1,74 @@
-# determine if we can even run these tests
-run_tests = false
+@testset "integrated profiler" begin
+    a = Metal.rand(Float32, 256, 256)
+    b = similar(a)
+
+    b .= a .+ 1f0
+    Metal.synchronize()
+
+    res = Metal.@profile b .= a .+ 1f0
+    @test res isa Metal.Profiling.ProfileResults
+    @test !isempty(sprint(show, res))
+    @test isempty(res.host_trace.name)
+
+    res_trace = Metal.@profile trace=true (b .= a .+ 1f0)
+    @test res_trace isa Metal.Profiling.ProfileResults
+    trace_output = sprint(show, res_trace)
+    @test !isempty(trace_output)
+    if !isempty(res_trace.host.name)
+        @test !isempty(res_trace.host_trace.name)
+        @test occursin("ID", trace_output)
+        @test occursin("Start", trace_output)
+        @test !occursin("Calls │ Name", trace_output)
+    end
+
+    function profile_result(raw, names=["[MTLCommandBuffer status]", "[NSObject retain]",
+                                        "[NSAutoreleasePool drain]",
+                                        "[MTLDevice newBufferWithLength:options:]"])
+        Metal.Profiling.ProfileResults(;
+            device=(name=String[], start=Float64[], stop=Float64[], ops=Vector{Any}[]),
+            host=(name=names, calls=fill(1, length(names)), time=fill(1e-6, length(names))),
+            host_trace=(id=collect(1:length(names)), start=collect(1:length(names)) .* 1e-6,
+                        time=fill(1e-6, length(names)), tid=fill(1, length(names)),
+                        name=names),
+            trace_start=0.0, wall=1e-3, trace=true, raw)
+    end
+    filtered = profile_result(false)
+    filtered_output = sprint(show, filtered)
+    @test !occursin("[MTLCommandBuffer status]", filtered_output)
+    @test !occursin("[NSObject retain]", filtered_output)
+    @test !occursin("[NSAutoreleasePool drain]", filtered_output)
+    @test occursin("[MTLDevice newBufferWithLength:options:]", filtered_output)
+
+    filtered_only = profile_result(false, ["[MTLCommandBuffer status]",
+                                           "[NSObject retain]"])
+    @test occursin("No host-side activity was recorded", sprint(show, filtered_only))
+
+    raw = profile_result(true)
+    raw_output = sprint(show, raw)
+    @test occursin("[MTLCommandBuffer status]", raw_output)
+    @test occursin("[NSObject retain]", raw_output)
+    @test occursin("[NSAutoreleasePool drain]", raw_output)
+
+    if !isempty(res.device.name)
+        @test any(n -> occursin("broadcast", n), res.device.name)
+        @test all(>(0), res.device.stop .- res.device.start)
+    end
+
+    res_empty = Metal.@profile (1 + 1)
+    @test occursin("No GPU operations", sprint(show, res_empty))
+
+    res_bench = Metal.@bprofile time=0.1 (b .= a .+ 1f0)
+    @test res_bench isa Metal.Profiling.ProfileResults
+
+    @test_throws ArgumentError @macroexpand Metal.@profile external=1 (1 + 1)
+    @test_throws ArgumentError @macroexpand Metal.@bprofile external=true (1 + 1)
+end
+
+run_external = false
 if parse(Bool, get(ENV, "CI", "false"))
-    @warn "Skipping profiling tests on CI due to sandboxing issues"
+    @warn "Skipping external profiling tests on CI due to sandboxing issues"
 elseif !success(`xctrace version`)
-    @warn "Skipping profiling tests because xctrace is not available; please install Xcode first"
+    @warn "Skipping external profiling tests because xctrace is not available; please install Xcode first"
 else
     version_output = chomp(read(`xctrace version`, String))
     m = match(r"xctrace version (\d+).(\d+)", version_output)
@@ -11,23 +76,21 @@ else
         error("Could not parse xctrace version output:\n$version_output")
     else
         xcode_version = VersionNumber(parse(Int, m.captures[1]), parse(Int, m.captures[2]))
-        if MTL.is_m1(device()) && Metal.macos_version() >= v"14.4" && xcode_version < v"15.3"
-            @warn "Skipping profiling tests because of an M1-related bug on macOS 14.4 and Xcode < 15.3; please upgrade Xcode first"
+        if Metal.MTL.is_m1(device()) && Metal.macos_version() >= v"14.4" && xcode_version < v"15.3"
+            @warn "Skipping external profiling tests because of an M1-related bug on macOS 14.4 and Xcode < 15.3; please upgrade Xcode first"
         else
-            run_tests = true
+            run_external = true
         end
     end
 end
 
-if run_tests
-mktempdir() do tmpdir
-cd(tmpdir) do
-
-@testset "macro" begin
-    Metal.@profile identity(nothing)
-    @test isdir("julia_1.trace")
+if run_external
+    @testset "external profiler" begin
+        mktempdir() do tmpdir
+            cd(tmpdir) do
+                Metal.@profile external=true identity(nothing)
+                @test isdir("julia_1.trace")
+            end
+        end
+    end
 end
-
-end # cd(tmpdir) do
-end # mktempdir() do tmpdir
-end # if run_tests

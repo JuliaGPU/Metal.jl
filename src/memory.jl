@@ -98,6 +98,11 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
             @autoreleasepool begin
                 chunk_size = 2^31
                 cmdbuf = MTLCommandBuffer(queue)
+                cmdbuf.label = "copyto!"
+                let md = MTL.profile_metadata[]
+                    md === nothing || MTL.note_operation!(md, cmdbuf,
+                        (; kind = :copy, name = "copyto!", bytes = Int(N * sizeof(T))))
+                end
                 MTLBlitCommandEncoder(cmdbuf) do enc
                     offset = 0
 
@@ -122,6 +127,11 @@ end
                                        async::Bool=false) where T
     if N > 0
         cmdbuf = MTLCommandBuffer(queue)
+        cmdbuf.label = "fill!"
+        let md = MTL.profile_metadata[]
+            md === nothing || MTL.note_operation!(md, cmdbuf,
+                (; kind = :fill, name = "fill!", bytes = Int(N * sizeof(T))))
+        end
         MTLBlitCommandEncoder(cmdbuf) do enc
             append_fillbuffer!(enc, dst.buffer, value, N * sizeof(T), dst.offset)
         end

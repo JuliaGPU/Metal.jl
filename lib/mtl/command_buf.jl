@@ -62,6 +62,33 @@ end
 const last_committed_lock = ReentrantLock()
 const last_committed_per_queue = Dict{id{MTLCommandQueue}, MTLCommandBufferLike}()
 
+# optional profiling hook. when set, it is invoked for every committed command buffer.
+const profile_hook = Ref{Any}(nothing)
+
+# optional profiling data for operation metadata (e.g. kernel dimensions, copy sizes).
+const profile_metadata = Ref{Any}(nothing)
+
+struct ProfileCollector
+    lock::ReentrantLock
+    metadata::IdDict{Any,Vector{Any}}
+    records::Vector{Tuple{String,Any}}
+end
+
+ProfileCollector() = ProfileCollector(ReentrantLock(), IdDict{Any,Vector{Any}}(),
+                                      Tuple{String,Any}[])
+
+@inline function note_operation!(collector::ProfileCollector, cmdbuf::MTLCommandBufferLike, op)
+    @lock collector.lock begin
+        ops = get(collector.metadata, cmdbuf, nothing)
+        if ops === nothing
+            ops = Any[]
+            collector.metadata[cmdbuf] = ops
+        end
+        push!(ops, op)
+    end
+    return
+end
+
 """
     last_committed(queue::MTLCommandQueue)::Union{MTLCommandBufferLike, Nothing}
 
@@ -93,6 +120,8 @@ function commit!(cmdbuf::MTLCommandBufferLike)
         prev
     end
     old === nothing || release(old)
+    hook = profile_hook[]
+    hook === nothing || hook(cmdbuf)
     return
 end
 

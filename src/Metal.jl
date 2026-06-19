@@ -88,6 +88,7 @@ include("linalg.jl")
 
 # array implementation
 include("utilities.jl")
+include("profiling.jl")
 include("broadcast.jl")
 include("mapreduce.jl")
 include("accumulate.jl")

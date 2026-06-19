@@ -333,6 +333,13 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         MTLCommandBuffer(queue)
     end
     cmdbuf.label = "MTLCommandBuffer($(nameof(f)))"
+    let md = MTL.profile_metadata[]
+        md === nothing || MTL.note_operation!(md, cmdbuf,
+            (; kind = :kernel, name = string(nameof(f)),
+               threadgroups = gs, threads = ts,
+               tgmem = Int(pipeline.staticThreadgroupMemoryLength),
+               maxthreads = Int(pipeline.maxTotalThreadsPerThreadgroup)))
+    end
     cce = MTLComputeCommandEncoder(cmdbuf)
     argument_buffers = try
         MTL.set_function!(cce, pipeline)

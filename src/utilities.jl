@@ -291,25 +291,8 @@ function profiled(f)
     end
 end
 
-"""
-    Metal.@profile [kwargs...] ex
+## COV_EXCL_STOP
 
-Analyze GPU work using Metal's system trace capabilities.
-
-Running under `Metal.@profile` will use Xcode to record a trace of the GPU work performed by
-the given expression. The resulting trace can be opened in the Instruments app, and offers a
-high-level overview of the GPU work, and how it was launched from the CPU.
-"""
-macro profile(ex...)
-    code = ex[end]
-    kwargs = ex[1:end-1]
-    @assert isempty(kwargs)
-
-    quote
-        $profiled() do
-            $(esc(code))
-        end
-    end
-end
-## COV_EXCL_START
+# NOTE: the `Metal.@profile` and `Metal.@bprofile` macros are defined in `profiling.jl`.
+#       `external=true` routes to `profiled()` above; the default is the integrated profiler.
 
