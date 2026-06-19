@@ -6,3 +6,7 @@
 # whether to use a nonblocking synchronization mechanism,
 # making it possible to do use cooperative multitasking.
 #nonblocking_synchronization = true
+
+# whether to label Metal resources and command buffers.
+# defaults to true when running Julia with -g2, and false otherwise.
+#label_resources = true

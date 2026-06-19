@@ -5,11 +5,16 @@ log_compiler(args...)   = log_compiler()(args...)
 log_array()             = OSLog("org.juliagpu.metal", "Array")
 log_array(args...)      = log_array()(args...)
 
-const LABEL_RESOURCES = @load_preference("label_resources", false)
+const LABEL_RESOURCES = @load_preference("label_resources", nothing)
+
+@inline function label_resources()
+    LABEL_RESOURCES === nothing && return Base.JLOptions().debug_level >= 2
+    return LABEL_RESOURCES
+end
 
 macro label!(obj, str)
     quote
-        if LABEL_RESOURCES
+        if label_resources()
             $(esc(obj)).label = $(esc(str))
         end
         nothing
