@@ -108,11 +108,6 @@ end
 
 # Fast residency path; collapse this to `true` when macOS 14 support is dropped.
 function can_use_residency_sets(dev::MTLDevice)
-    # Avoid serializing process-local Objective-C pointer keys from precompile workloads.
-    if ccall(:jl_generating_output, Cint, ()) != 0
-        return is_macos(v"15") && !is_virtual(dev)
-    end
-
     key = UInt(pointer(dev))
     @memoize key::UInt begin
         is_macos(v"15") && !is_virtual(dev)

@@ -18,11 +18,6 @@ end
 ## allocation
 
 function max_buffer_length(dev::MTLDevice)
-    # Avoid serializing process-local Objective-C pointer keys from precompile workloads.
-    if ccall(:jl_generating_output, Cint, ()) != 0
-        return Int(dev.maxBufferLength)
-    end
-
     key = UInt(pointer(dev))
     @memoize key::UInt begin
         Int(dev.maxBufferLength)
