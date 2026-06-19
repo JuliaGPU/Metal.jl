@@ -530,7 +530,9 @@ function Base.show(io::IO, r::ProfileResults)
         host_name = host.name[shown]
         host_calls = host.calls[shown]
         host_time = host.time[shown]
-        if !isempty(host_name)
+        if isempty(host_name)
+            println(io, "\nNo host-side activity was recorded.")
+        else
             ncalls, htotal = sum(host_calls), sum(host_time)
             println(io, "\nHost-side activity: $ncalls Objective-C calls taking $(format_time(htotal)) ",
                         "($(format_percentage(htotal / den)) of wall-clock)")

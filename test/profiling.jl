@@ -25,15 +25,14 @@
     end
 
     # verbose synchronization polling is hidden unless raw=true is requested
-    function result_with_host_calls(raw)
-        names = ["[MTLCommandBuffer status]", "[NSObject retain]",
-                 "[NSAutoreleasePool drain]",
-                 "[MTLDevice newBufferWithLength:options:]"]
+    function result_with_host_calls(raw, names=["[MTLCommandBuffer status]", "[NSObject retain]",
+                                               "[NSAutoreleasePool drain]",
+                                               "[MTLDevice newBufferWithLength:options:]"])
         Metal.Profiling.ProfileResults(;
             device=(name=String[], start=Float64[], stop=Float64[], ops=Vector{Any}[]),
-            host=(name=names, calls=[10, 3, 2, 1], time=[1e-6, 1e-6, 1e-6, 2e-6]),
-            host_trace=(id=[1, 2, 3, 4], start=[1e-6, 2e-6, 3e-6, 4e-6],
-                        time=[1e-6, 1e-6, 1e-6, 2e-6], tid=[1, 1, 1, 1],
+            host=(name=names, calls=fill(1, length(names)), time=fill(1e-6, length(names))),
+            host_trace=(id=collect(1:length(names)), start=collect(1:length(names)) .* 1e-6,
+                        time=fill(1e-6, length(names)), tid=fill(1, length(names)),
                         name=names),
             trace_start=0.0, wall=1e-3, trace=true, raw)
     end
@@ -43,6 +42,10 @@
     @test !occursin("[NSObject retain]", filtered_output)
     @test !occursin("[NSAutoreleasePool drain]", filtered_output)
     @test occursin("[MTLDevice newBufferWithLength:options:]", filtered_output)
+
+    filtered_only = result_with_host_calls(false, ["[MTLCommandBuffer status]",
+                                                  "[NSObject retain]"])
+    @test occursin("No host-side activity was recorded", sprint(show, filtered_only))
 
     raw = result_with_host_calls(true)
     raw_output = sprint(show, raw)
