@@ -26,19 +26,15 @@ Get a handle to a compute device.
 """
 MTLDevice(i::Integer) = devices()[i]
 
-function max_threadgroup_threads(dev::MTLDevice)
+function threadgroup_limits(dev::MTLDevice)
     key = UInt(pointer(dev))
     @memoize key::UInt begin
-        Int(dev.maxThreadsPerThreadgroup.width)
-    end::Int
+        (Int(dev.maxThreadsPerThreadgroup.width), Int(dev.maxThreadgroupMemoryLength))
+    end::Tuple{Int,Int}
 end
 
-function max_threadgroup_memory(dev::MTLDevice)
-    key = UInt(pointer(dev))
-    @memoize key::UInt begin
-        Int(dev.maxThreadgroupMemoryLength)
-    end::Int
-end
+max_threadgroup_threads(dev::MTLDevice) = first(threadgroup_limits(dev))
+max_threadgroup_memory(dev::MTLDevice) = last(threadgroup_limits(dev))
 
 
 #

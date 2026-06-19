@@ -218,8 +218,8 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     grain = contiguous ? prevpow(2, cld(16, sizeof(T))) : 1
 
     # the maximum number of threads is limited by the hardware
-    maxthreads = min(MTL.max_threadgroup_threads(dev),
-                     MTL.max_threadgroup_memory(dev) ÷ sizeof(T))
+    threadgroup_threads, threadgroup_memory = MTL.threadgroup_limits(dev)
+    maxthreads = min(threadgroup_threads, threadgroup_memory ÷ sizeof(T))
 
     # also want to make sure the grain size is not too high as to starve threads of work.
     # as a simple heuristic, ensure we can launch the maximum number of threads.
