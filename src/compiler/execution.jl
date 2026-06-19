@@ -338,8 +338,7 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
             (; kind = :kernel, name = string(nameof(f)),
                threadgroups = gs, threads = ts,
                tgmem = Int(pipeline.staticThreadgroupMemoryLength),
-               maxthreads = Int(pipeline.maxTotalThreadsPerThreadgroup),
-               execwidth = Int(pipeline.threadExecutionWidth)))
+               maxthreads = Int(pipeline.maxTotalThreadsPerThreadgroup)))
     end
     cce = MTLComputeCommandEncoder(cmdbuf)
     argument_buffers = try
