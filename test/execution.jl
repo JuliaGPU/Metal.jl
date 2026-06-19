@@ -166,6 +166,29 @@ vecA = unsafe_wrap(Vector{Int}, pointer(bufferA), tuple(bufferSize))
     @test all(vecA .== Int(5))
 end
 
+@testset "kernel launch cleanup" begin
+    function scalar_arg_kernel(A, val)
+        A[1] = val
+        return
+    end
+
+    A = MtlArray{Int32}(undef, 1)
+    kernel = @metal launch=false scalar_arg_kernel(A, Int32(1))
+
+    kernel(A, Int32(1))
+    synchronize()
+
+    stats0 = copy(Metal.alloc_stats)
+    kernel(A, Int32(2))
+    synchronize()
+    stats1 = copy(Metal.alloc_stats)
+    diff = stats1 - stats0
+
+    @test Array(A) == Int32[2]
+    @test diff.alloc_count == diff.free_count
+    @test diff.alloc_bytes == diff.free_bytes
+end
+
 @testset "device synchronization" begin
     t = @async begin
         @metal threads=(bufferSize) tester(bufferA)

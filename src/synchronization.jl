@@ -85,6 +85,8 @@ Wait for currently committed GPU work on `queue` to finish.
         release(last)
     end
 
+    drain_cleanups!(queue; force=true)
+
     # surface any device-side exception thrown by the work we just waited on
     check_exceptions()
     return

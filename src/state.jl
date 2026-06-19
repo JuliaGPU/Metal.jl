@@ -159,6 +159,58 @@ function install_queue_residency!(queue::MTLCommandQueue, dev::MTLDevice)
 end
 
 
+# Per-launch cleanup used to be performed from a Metal completion-handler
+# block. Those handlers run on libdispatch worker threads, where compiling or
+# running Julia code can overflow the small foreign stack. Keep the command
+# buffer alive and drain the Julia-side cleanup from normal managed threads.
+struct PendingCleanup
+    cmdbuf::MTLCommandBuffer
+    roots::Vector{Any}
+end
+
+const _pending_cleanups = IdDict{MTLCommandQueue,Vector{PendingCleanup}}()
+const _pending_cleanups_lock = ReentrantLock()
+
+function defer_cleanup!(queue::MTLCommandQueue, cmdbuf::MTLCommandBuffer, roots::Vector{Any})
+    retain(cmdbuf)
+    Base.@lock _pending_cleanups_lock begin
+        push!(get!(() -> PendingCleanup[], _pending_cleanups, queue),
+              PendingCleanup(cmdbuf, roots))
+    end
+    return
+end
+
+function drain_cleanups!(queue::MTLCommandQueue; force::Bool=false)
+    cleanups = Base.@lock _pending_cleanups_lock begin
+        list = get(_pending_cleanups, queue, nothing)
+        list === nothing && return
+
+        n = 0
+        for cleanup in list
+            if !(force || cleanup.cmdbuf.status >= MTL.MTLCommandBufferStatusCompleted)
+                break
+            end
+            n += 1
+        end
+        n == 0 && return
+
+        completed = list[1:n]
+        deleteat!(list, 1:n)
+        isempty(list) && delete!(_pending_cleanups, queue)
+        completed
+    end
+
+    for cleanup in cleanups
+        if cleanup.cmdbuf.status == MTL.MTLCommandBufferStatusError
+            @error "Command buffer failed" reason=cleanup.cmdbuf.error.localizedDescription
+        end
+        empty!(cleanup.roots)
+        release(cleanup.cmdbuf)
+    end
+    return
+end
+
+
 ## dynamic-memory allocator buffer
 #
 # kernels that perform dynamic memory allocations bump-allocate out of a per-
