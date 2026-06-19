@@ -301,10 +301,10 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     tgmem > 32768 &&
         throw(ArgumentError("Total used threadgroupMemoryLength($tgmem) must be <= 32768 bytes."))
 
-    buf = malloc_buffer(dev)
-    buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, UInt64(buf.gpuAddress))
-    exc = exception_info_buffer(dev)
-    exc_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, UInt64(exc.gpuAddress))
+    buf, buf_addr = malloc_buffer_info(dev)
+    buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, buf_addr)
+    exc, exc_addr = exception_info_buffer_info(dev)
+    exc_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, exc_addr)
     kernel_state = KernelState(Random.rand(UInt32), buf_ptr, exc_ptr)
 
     cmdbuf = if kernel.loggingEnabled

@@ -48,12 +48,12 @@ end
 # device-side exceptions are reported through a host-visible mailbox: an `ExceptionInfo_st`
 # in a shared (CPU+GPU) buffer whose GPU address is handed to each kernel via the
 # `KernelState`. see `device/runtime.jl` for the layout and how the GPU fills it.
-const device_exception_info = Dict{MTLDevice, Tuple{MTLBuffer, Ptr{ExceptionInfo_st}}}()
+const device_exception_info = Dict{MTLDevice, Tuple{MTLBuffer, Ptr{ExceptionInfo_st}, UInt64}}()
 const device_exception_lock = ReentrantLock()
 
-function exception_info_buffer(dev::MTLDevice)
+function exception_info_buffer_info(dev::MTLDevice)
     Base.@lock device_exception_lock begin
-        buf, _ = get!(device_exception_info, dev) do
+        buf, _, gpuaddr = get!(device_exception_info, dev) do
             # `newBufferWithLength:` (a `new*` method) returns retain-count-1, non-autoreleased
             # per Apple's ARC naming convention, so the buffer survives the pool drain. the
             # pool is here to catch any intermediates the alloc call autoreleases internally.
@@ -61,18 +61,20 @@ function exception_info_buffer(dev::MTLDevice)
                 buf = MTLBuffer(dev, sizeof(ExceptionInfo_st); storage=SharedStorage)
                 ptr = convert(Ptr{ExceptionInfo_st}, MTL.contents(buf))
                 unsafe_store!(ptr, ExceptionInfo_st())
-                (buf, ptr)
+                (buf, ptr, UInt64(buf.gpuAddress))
             end
         end
-        return buf
+        return buf, gpuaddr
     end
 end
+
+exception_info_buffer(dev::MTLDevice) = first(exception_info_buffer_info(dev))
 
 # check the exception mailbox of all devices, rethrowing host-side if one was set.
 # the caller is responsible for running inside an autorelease pool (`synchronize` is).
 function check_exceptions()
     Base.@lock device_exception_lock begin
-        for (dev, (_, ptr)) in device_exception_info
+        for (dev, (_, ptr, _)) in device_exception_info
             status_ptr = convert(Ptr{Int32}, ptr)
             # atomic read-and-clear of `status` so concurrent `synchronize`s on the same
             # device can't both observe the set flag and throw duplicate exceptions, nor
