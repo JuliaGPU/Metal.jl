@@ -162,6 +162,10 @@ struct HostKernel{F,TT}
     f::F
     pipeline::MTLComputePipelineState
     loggingEnabled::Bool
+    device::MTLDevice
+    maxthreads::Int
+    tgmem::Int
+    exec_width::Int
 end
 
 const mtlfunction_lock = ReentrantLock()
@@ -195,7 +199,11 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
         kernel = get(_kernel_instances, h, nothing)
         if kernel === nothing
             # create the kernel state object
-            kernel = HostKernel{F, tt}(f, pipeline, loggingEnabled)
+            kernel = HostKernel{F, tt}(f, pipeline, loggingEnabled,
+                                       pipeline.device,
+                                       Int(pipeline.maxTotalThreadsPerThreadgroup),
+                                       Int(pipeline.staticThreadgroupMemoryLength),
+                                       Int(pipeline.threadExecutionWidth))
             _kernel_instances[h] = kernel
         end
         return kernel::HostKernel{F,tt}
@@ -273,8 +281,10 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     (ts.width>0 && ts.height>0 && ts.depth>0) ||
         throw(ArgumentError("All thread dimensions should be non-zero"))
 
-    (ts.width * ts.height * ts.depth) > kernel.pipeline.maxTotalThreadsPerThreadgroup &&
-        throw(ArgumentError("Number of threads in group ($(ts.width * ts.height * ts.depth)) should not exceed $(kernel.pipeline.maxTotalThreadsPerThreadgroup)"))
+    maxthreads = kernel.maxthreads
+    nthreads = ts.width * ts.height * ts.depth
+    nthreads > maxthreads &&
+        throw(ArgumentError("Number of threads in group ($nthreads) should not exceed $maxthreads"))
 
     (gs.width * ts.width) > typemax(UInt32) &&
         throw(ArgumentError("Total threads per grid in a dimension (threads.width($(gs.width)) * groups.width($(ts.width)) = $(gs.width * ts.width)) must not exceed $(typemax(UInt32))"))
@@ -285,13 +295,15 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
 
     f = kernel.f
     pipeline = kernel.pipeline
+    dev = kernel.device
+    tgmem = kernel.tgmem
 
-    pipeline.staticThreadgroupMemoryLength > 32768 &&
-        throw(ArgumentError("Total used threadgroupMemoryLength($(pipeline.staticThreadgroupMemoryLength)) must be <= 32768 bytes."))
+    tgmem > 32768 &&
+        throw(ArgumentError("Total used threadgroupMemoryLength($tgmem) must be <= 32768 bytes."))
 
-    buf = malloc_buffer(pipeline.device)
+    buf = malloc_buffer(dev)
     buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, UInt64(buf.gpuAddress))
-    exc = exception_info_buffer(pipeline.device)
+    exc = exception_info_buffer(dev)
     exc_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, UInt64(exc.gpuAddress))
     kernel_state = KernelState(Random.rand(UInt32), buf_ptr, exc_ptr)
 
@@ -334,8 +346,7 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         md === nothing || MTL.note_operation!(md, cmdbuf,
             (; kind = :kernel, name = string(nameof(f)),
                threadgroups = gs, threads = ts,
-               tgmem = Int(pipeline.staticThreadgroupMemoryLength),
-               maxthreads = Int(pipeline.maxTotalThreadsPerThreadgroup)))
+               tgmem, maxthreads))
     end
     cce = MTLComputeCommandEncoder(cmdbuf)
     try
@@ -403,7 +414,17 @@ function nextwarp(pipe::MTLComputePipelineState, threads::Integer)
     return threads + (ws - threads % ws) % ws
 end
 
+function nextwarp(kernel::HostKernel, threads::Integer)
+    ws = kernel.exec_width
+    return threads + (ws - threads % ws) % ws
+end
+
 @doc (@doc nextwarp) function prevwarp(pipe::MTLComputePipelineState, threads::Integer)
     ws = pipe.threadExecutionWidth
+    return threads - Base.rem(threads, ws)
+end
+
+@doc (@doc nextwarp) function prevwarp(kernel::HostKernel, threads::Integer)
+    ws = kernel.exec_width
     return threads - Base.rem(threads, ws)
 end
