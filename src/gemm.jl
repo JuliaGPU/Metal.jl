@@ -308,8 +308,13 @@ end
 # `tensor_ops` runs only when the device advertises the Metal 4 family; gating the launch on
 # it also keeps the `__tensorops_*` symbols out of modules compiled for devices where the
 # validator would reject them.
-@inline tensor_matmul_capable() =
-    metal_support() >= v"4" && MTL.supports_family(device(), MTL.MTLGPUFamilyMetal4)
+@inline function tensor_matmul_capable()
+    dev = device()
+    key = UInt(pointer(dev))
+    @memoize key::UInt begin
+        metal_support() >= v"4" && MTL.supports_family(dev, MTL.MTLGPUFamilyMetal4)
+    end::Bool
+end
 
 # matmul2d needs each dimension covered by whole tiles. Pick the largest validated tile that
 # divides the dimension; 0 means "no usable tile" (dimension not a multiple of the smallest).

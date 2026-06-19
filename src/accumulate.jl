@@ -121,8 +121,8 @@ function scan!(f::Function, output::WrappedMtlArray{T}, input::WrappedMtlArray;
 
     # the maximum number of threads is limited by the hardware
     dev = device()
-    maxthreads = min(Int(dev.maxThreadsPerThreadgroup.width),
-                     Int(dev.maxThreadgroupMemoryLength) ÷ sizeof(T) ÷ 2)
+    maxthreads = min(MTL.max_threadgroup_threads(dev),
+                     MTL.max_threadgroup_memory(dev) ÷ sizeof(T) ÷ 2)
 
     # determine how many threads we can launch for the scan kernel
     kernel = @metal launch=false partial_scan(f, output, input, Rdim, Rpre, Rpost, Rother, neutral, init, Val(maxthreads), Val(true))

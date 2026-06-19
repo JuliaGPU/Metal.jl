@@ -172,7 +172,7 @@ function serial_mapreduce_threshold(dev)
     # don't expose an `AGXAccelerator` IOService). fall back to a conservative estimate so the
     # heuristic below doesn't degenerate into always picking the serial path.
     cores == 0 && (cores = 8)
-    return dev.maxThreadsPerThreadgroup.width * cores
+    return MTL.max_threadgroup_threads(dev) * cores
 end
 
 function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
@@ -218,8 +218,8 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     grain = contiguous ? prevpow(2, cld(16, sizeof(T))) : 1
 
     # the maximum number of threads is limited by the hardware
-    maxthreads = min(Int(dev.maxThreadsPerThreadgroup.width),
-                     Int(dev.maxThreadgroupMemoryLength) ÷ sizeof(T))
+    maxthreads = min(MTL.max_threadgroup_threads(dev),
+                     MTL.max_threadgroup_memory(dev) ÷ sizeof(T))
 
     # also want to make sure the grain size is not too high as to starve threads of work.
     # as a simple heuristic, ensure we can launch the maximum number of threads.
