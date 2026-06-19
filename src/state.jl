@@ -101,6 +101,42 @@ function drain_logging_cmdbufs!(queue::MTLCommandQueue)
 end
 
 
+## scratch-buffer residency
+
+const _can_use_residency_sets = Dict{MTLDevice,Bool}()
+const _can_use_residency_sets_lock = ReentrantLock()
+
+# Fast residency path; collapse this to `true` when macOS 14 support is dropped.
+function can_use_residency_sets(dev::MTLDevice)
+    Base.@lock _can_use_residency_sets_lock begin
+        get!(() -> is_macos(v"15") && !is_virtual(dev), _can_use_residency_sets, dev)
+    end
+end
+
+const _queue_residency_sets = WeakKeyDict{MTLCommandQueue,MTLResidencySet}()
+const _queue_residency_sets_lock = ReentrantLock()
+
+function ensure_queue_residency!(queue::MTLCommandQueue, dev::MTLDevice,
+                                 malloc_buf::MTLBuffer, exc_buf::MTLBuffer)
+    Base.@lock _queue_residency_sets_lock begin
+        resset = get(_queue_residency_sets, queue, nothing)
+        resset === nothing || return resset
+
+        desc = MTLResidencySetDescriptor()
+        desc.initialCapacity = 2
+        @label! desc "Metal scratch buffers"
+
+        resset = MTLResidencySet(dev, desc)
+        MTL.add_allocation!(resset, malloc_buf)
+        MTL.add_allocation!(resset, exc_buf)
+        MTL.commit!(resset)
+        MTL.add_residency_set!(queue, resset)
+        _queue_residency_sets[queue] = resset
+        return resset
+    end
+end
+
+
 ## dynamic-memory allocator buffer
 #
 # kernels that perform dynamic memory allocations bump-allocate out of a per-

@@ -29,3 +29,7 @@ function MTLCommandQueue(dev::MTLDevice)
     finalizer(release, obj)
     return obj
 end
+
+function add_residency_set!(queue::MTLCommandQueue, resset::MTLResidencySet)
+    @objc [queue::id{MTLCommandQueue} addResidencySet:resset::id{MTLResidencySet}]::Nothing
+end

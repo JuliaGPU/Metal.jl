@@ -354,8 +354,13 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         # the kernel state holds GPU addresses to per-device scratch buffers (malloc bump
         # allocator, exception mailbox) that aren't otherwise bound to the encoder. declare
         # them so Metal Shader Validation tracks the accesses instead of dropping them.
-        MTL.use!(cce, buf, MTL.ReadWriteUsage)
-        MTL.use!(cce, exc, MTL.ReadWriteUsage)
+        if can_use_residency_sets(dev)
+            ensure_queue_residency!(queue, dev, buf, exc)
+        else
+            # DROP-MACOS14: per-launch residency for macOS 14 / virtual GPUs.
+            MTL.use!(cce, buf, MTL.ReadWriteUsage)
+            MTL.use!(cce, exc, MTL.ReadWriteUsage)
+        end
         encode_arguments_nospec!(cce, kernel, kernel_state, f, args)
         MTL.append_current_function!(cce, gs, ts)
     finally
