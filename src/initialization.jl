@@ -79,10 +79,6 @@ function __init__()
         return
     end
 
-    # snapshot the IR entering `optimize!` so a crash in a GPUCompiler optimization pass can
-    # dump a faithful, re-optimizable reproducer (see `compile` in compiler/compilation.jl)
-    GPUCompiler.capture_optimization_input[] = true
-
     # ensure that operations executed by the REPL back-end finish before returning,
     # because displaying values happens on a different task
     if isdefined(Base, :active_repl_backend) && !isnothing(Base.active_repl_backend)
