@@ -74,13 +74,24 @@ const profile_hook = Ref{Any}(nothing)
 # command buffer they encode into. the cost when unset is one load + nil-check per operation.
 const profile_metadata = Ref{Any}(nothing)
 
-@inline function note_operation!(md, cmdbuf::MTLCommandBufferLike, op)
-    ops = get(md, cmdbuf, nothing)
-    if ops === nothing
-        ops = Any[]
-        md[cmdbuf] = ops
+struct ProfileCollector
+    lock::ReentrantLock
+    metadata::IdDict{Any,Vector{Any}}
+    records::Vector{Tuple{String,Any}}
+end
+
+ProfileCollector() = ProfileCollector(ReentrantLock(), IdDict{Any,Vector{Any}}(),
+                                      Tuple{String,Any}[])
+
+@inline function note_operation!(collector::ProfileCollector, cmdbuf::MTLCommandBufferLike, op)
+    @lock collector.lock begin
+        ops = get(collector.metadata, cmdbuf, nothing)
+        if ops === nothing
+            ops = Any[]
+            collector.metadata[cmdbuf] = ops
+        end
+        push!(ops, op)
     end
-    push!(ops, op)
     return
 end
 

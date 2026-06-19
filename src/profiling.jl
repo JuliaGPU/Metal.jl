@@ -44,37 +44,42 @@ function clean_label(name::String)
 end
 
 # invoked from `MTL.commit!` for every committed command buffer while profiling is active.
-# runs synchronously on the calling (Julia) thread, so it only appends to `records`; the
-# actual GPU timestamps are read later, after synchronization (see `profile_internally`).
-function record_commit!(records, metadata, cmdbuf)
-    ops = get(metadata, cmdbuf, nothing)
-    if ops !== nothing && !isempty(ops)
-        name = String(something(get(first(ops), :name, nothing), "Metal operation"))
-    else
-        label = cmdbuf.label
-        # command buffers without a label (e.g. the empty sentinels committed by
-        # `nonblocking_synchronization`) are bookkeeping, not user work — skip them.
-        label === nothing && return
-        name = String(label)
-        isempty(name) && return
-        name = clean_label(name)
-    end
+# The actual GPU timestamps are read later, after synchronization (see `profile_internally`).
+function record_commit!(collector::MTL.ProfileCollector, cmdbuf)
+    @lock collector.lock begin
+        ops = get(collector.metadata, cmdbuf, nothing)
+        if ops !== nothing && !isempty(ops)
+            name = String(something(get(first(ops), :name, nothing), "Metal operation"))
+        else
+            label = cmdbuf.label
+            # command buffers without a label (e.g. the empty sentinels committed by
+            # `nonblocking_synchronization`) are bookkeeping, not user work — skip them.
+            label === nothing && return
+            name = String(label)
+            isempty(name) && return
+            name = clean_label(name)
+        end
 
-    # keep the command buffer alive until we've read its timestamps: Metal only retains a
-    # committed buffer until it completes, and our `last_committed` slot holds just the most
-    # recent one, so an intermediate buffer could otherwise be freed before we read it.
-    retain(cmdbuf)
-    push!(records, (name, cmdbuf))
+        # keep the command buffer alive until we've read its timestamps: Metal only retains a
+        # committed buffer until it completes, and our `last_committed` slot holds just the most
+        # recent one, so an intermediate buffer could otherwise be freed before we read it.
+        retain(cmdbuf)
+        push!(collector.records, (name, cmdbuf))
+    end
     return
 end
 
-function release_records!(records)
+function release_records!(collector::MTL.ProfileCollector)
+    records = @lock collector.lock begin
+        records = copy(collector.records)
+        empty!(collector.records)
+        records
+    end
     @autoreleasepool begin
         for (_, cmdbuf) in records
             release(cmdbuf)
         end
     end
-    empty!(records)
     return
 end
 
@@ -185,20 +190,19 @@ struct ProfileResults
 end
 
 function profile_internally(@nospecialize(f); trace::Bool=false, raw::Bool=false)
-    records = Tuple{String,Any}[]
+    collector = MTL.ProfileCollector()
     host = HostCollector(trace)
 
     # drain any work that was already in flight, so we only capture `f`'s operations
     device_synchronize()
 
-    metadata = IdDict{Any,Vector{Any}}()
     prev_hook = MTL.profile_hook[]
     prev_metadata = MTL.profile_metadata[]
     subscribed = false
     t_start = UInt64(0)
     try
-        MTL.profile_metadata[] = metadata
-        MTL.profile_hook[] = cmdbuf -> record_commit!(records, metadata, cmdbuf)
+        MTL.profile_metadata[] = collector
+        MTL.profile_hook[] = cmdbuf -> record_commit!(collector, cmdbuf)
         ObjectiveC.tracing_subscribe(host)
         subscribed = true
         t_start = _mach_now()
@@ -226,6 +230,11 @@ function profile_internally(@nospecialize(f); trace::Bool=false, raw::Bool=false
         start = Float64[]
         stop = Float64[]
         ops = Vector{Any}[]
+        records = @lock collector.lock begin
+            records = copy(collector.records)
+            empty!(collector.records)
+            records
+        end
         @autoreleasepool begin
             for (opname, cmdbuf) in records
                 if cmdbuf.status == MTL.MTLCommandBufferStatusCompleted
@@ -235,13 +244,12 @@ function profile_internally(@nospecialize(f); trace::Bool=false, raw::Bool=false
                         push!(name, opname)
                         push!(start, t0)
                         push!(stop, t1)
-                        push!(ops, get(metadata, cmdbuf, Any[]))
+                        push!(ops, get(collector.metadata, cmdbuf, Any[]))
                     end
                 end
                 release(cmdbuf)
             end
         end
-        empty!(records)
 
         # host side: flatten the per-thread aggregation
         tb = ObjectiveC.tracing_timebase()
@@ -263,7 +271,7 @@ function profile_internally(@nospecialize(f); trace::Bool=false, raw::Bool=false
         MTL.profile_hook[] = prev_hook
         MTL.profile_metadata[] = prev_metadata
         subscribed && ObjectiveC.tracing_unsubscribe()
-        release_records!(records)
+        release_records!(collector)
     end
 end
 
