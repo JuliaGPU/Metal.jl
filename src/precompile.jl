@@ -27,7 +27,7 @@ Sys.isapple() && @setup_workload begin
     # the entries before precompilation finalizes.
     empty!(_compiler_caches)
     empty!(_compiler_configs)
-    empty!(_kernel_instances)
+    empty!(kernel_instances)
     empty!(global_queues)
     empty!(MTL.last_committed_per_queue)
     empty!(device_exception_info)

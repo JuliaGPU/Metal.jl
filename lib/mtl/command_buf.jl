@@ -103,14 +103,14 @@ function last_committed(queue::MTLCommandQueue)
 end
 
 function commit!(cmdbuf::MTLCommandBufferLike)
-    _commit!(cmdbuf, pointer(cmdbuf.commandQueue))
+    commit_with_queue_key!(cmdbuf, pointer(cmdbuf.commandQueue))
 end
 
 function commit!(cmdbuf::MTLCommandBufferLike, queue::MTLCommandQueue)
-    _commit!(cmdbuf, pointer(queue))
+    commit_with_queue_key!(cmdbuf, pointer(queue))
 end
 
-function _commit!(cmdbuf::MTLCommandBufferLike, key::id{MTLCommandQueue})
+function commit_with_queue_key!(cmdbuf::MTLCommandBufferLike, key::id{MTLCommandQueue})
     cmdbuf.status in [MTLCommandBufferStatusCompleted, MTLCommandBufferStatusCommitted] &&
         error("Cannot commit an already committed/completed command buffer")
     @objc [cmdbuf::id{MTLCommandBuffer} commit]::Nothing

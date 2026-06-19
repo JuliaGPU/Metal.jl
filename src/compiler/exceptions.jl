@@ -51,7 +51,7 @@ end
 const device_exception_info = Dict{MTLDevice, Tuple{MTLBuffer, Ptr{ExceptionInfo_st}, UInt64}}()
 const device_exception_lock = ReentrantLock()
 
-function exception_info_buffer_info(dev::MTLDevice)
+function exception_info_buffer_and_gpu_address(dev::MTLDevice)
     Base.@lock device_exception_lock begin
         buf, _, gpuaddr = get!(device_exception_info, dev) do
             # `newBufferWithLength:` (a `new*` method) returns retain-count-1, non-autoreleased
@@ -68,7 +68,7 @@ function exception_info_buffer_info(dev::MTLDevice)
     end
 end
 
-exception_info_buffer(dev::MTLDevice) = first(exception_info_buffer_info(dev))
+exception_info_buffer(dev::MTLDevice) = first(exception_info_buffer_and_gpu_address(dev))
 
 # check the exception mailbox of all devices, rethrowing host-side if one was set.
 # the caller is responsible for running inside an autorelease pool (`synchronize` is).

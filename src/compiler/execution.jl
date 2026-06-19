@@ -197,7 +197,7 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
         # create a callable object that captures the function instance. we don't need to think
         # about world age here, as GPUCompiler already does and will return a different object
         h = hash(pipeline, hash(f, hash(tt)))
-        kernel = get(_kernel_instances, h, nothing)
+        kernel = get(kernel_instances, h, nothing)
         if kernel === nothing
             # create the kernel state object
             dev = pipeline.device
@@ -207,14 +207,14 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
                                        Int(pipeline.staticThreadgroupMemoryLength),
                                        Int(pipeline.threadExecutionWidth),
                                        can_use_residency_sets(dev))
-            _kernel_instances[h] = kernel
+            kernel_instances[h] = kernel
         end
         return kernel::HostKernel{F,tt}
     end
 end
 
 # cache of kernel instances
-const _kernel_instances = Dict{UInt, Any}()
+const kernel_instances = Dict{UInt, Any}()
 
 
 ## kernel launching and argument encoding
@@ -304,9 +304,9 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     tgmem > 32768 &&
         throw(ArgumentError("Total used threadgroupMemoryLength($tgmem) must be <= 32768 bytes."))
 
-    buf, buf_addr = malloc_buffer_info(dev)
+    buf, buf_addr = malloc_buffer_and_gpu_address(dev)
     buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, buf_addr)
-    exc, exc_addr = exception_info_buffer_info(dev)
+    exc, exc_addr = exception_info_buffer_and_gpu_address(dev)
     exc_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, exc_addr)
     kernel_state = KernelState(Random.rand(UInt32), buf_ptr, exc_ptr)
 

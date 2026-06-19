@@ -71,16 +71,16 @@ end
 # `synchronize` can wait on it and thereby drain its `addLogHandler:` blocks
 # (Metal dispatches log delivery asynchronously and offers no flush primitive;
 # `waitUntilCompleted` on the specific cmdbuf is what processes its pending blocks).
-const _logging_cmdbufs = IdDict{MTLCommandQueue,MTLCommandBuffer}()
-const _logging_cmdbufs_lock = ReentrantLock()
+const logging_cmdbufs = IdDict{MTLCommandQueue,MTLCommandBuffer}()
+const logging_cmdbufs_lock = ReentrantLock()
 
 function track_logging_cmdbuf!(queue::MTLCommandQueue, cmdbuf::MTLCommandBuffer)
     # the surrounding `@autoreleasepool` in `(::HostKernel)()` will release the
     # caller's reference on return, so retain a fresh one for the tracking slot.
     retain(cmdbuf)
-    old = Base.@lock _logging_cmdbufs_lock begin
-        prev = get(_logging_cmdbufs, queue, nothing)
-        _logging_cmdbufs[queue] = cmdbuf
+    old = Base.@lock logging_cmdbufs_lock begin
+        prev = get(logging_cmdbufs, queue, nothing)
+        logging_cmdbufs[queue] = cmdbuf
         prev
     end
     old === nothing || release(old)
@@ -88,9 +88,9 @@ function track_logging_cmdbuf!(queue::MTLCommandQueue, cmdbuf::MTLCommandBuffer)
 end
 
 function drain_logging_cmdbufs!(queue::MTLCommandQueue)
-    cmdbuf = Base.@lock _logging_cmdbufs_lock begin
-        prev = get(_logging_cmdbufs, queue, nothing)
-        delete!(_logging_cmdbufs, queue)
+    cmdbuf = Base.@lock logging_cmdbufs_lock begin
+        prev = get(logging_cmdbufs, queue, nothing)
+        delete!(logging_cmdbufs, queue)
         prev
     end
     if cmdbuf !== nothing
@@ -116,13 +116,13 @@ function can_use_residency_sets(dev::MTLDevice)
     end::Bool
 end
 
-const _queue_residency_sets = WeakKeyDict{MTLCommandQueue,MTLResidencySet}()
-const _queue_residency_sets_lock = ReentrantLock()
+const queue_residency_sets = WeakKeyDict{MTLCommandQueue,MTLResidencySet}()
+const queue_residency_sets_lock = ReentrantLock()
 
 function ensure_queue_residency!(queue::MTLCommandQueue, dev::MTLDevice,
                                  malloc_buf::MTLBuffer, exc_buf::MTLBuffer)
-    Base.@lock _queue_residency_sets_lock begin
-        resset = get(_queue_residency_sets, queue, nothing)
+    Base.@lock queue_residency_sets_lock begin
+        resset = get(queue_residency_sets, queue, nothing)
         resset === nothing || return resset
 
         desc = MTLResidencySetDescriptor()
@@ -134,7 +134,7 @@ function ensure_queue_residency!(queue::MTLCommandQueue, dev::MTLDevice,
         MTL.add_allocation!(resset, exc_buf)
         MTL.commit!(resset)
         MTL.add_residency_set!(queue, resset)
-        _queue_residency_sets[queue] = resset
+        queue_residency_sets[queue] = resset
         return resset
     end
 end
@@ -155,7 +155,7 @@ const MALLOC_BUF_SIZE = 1024 * 1024
 const device_malloc_bufs = Dict{MTLDevice, Tuple{MTLBuffer, UInt64}}()
 const device_malloc_lock = ReentrantLock()
 
-function malloc_buffer_info(dev::MTLDevice)
+function malloc_buffer_and_gpu_address(dev::MTLDevice)
     Base.@lock device_malloc_lock begin
         get!(device_malloc_bufs, dev) do
             buf = @autoreleasepool MTLBuffer(dev, MALLOC_BUF_SIZE;
@@ -168,4 +168,4 @@ function malloc_buffer_info(dev::MTLDevice)
     end
 end
 
-malloc_buffer(dev::MTLDevice) = first(malloc_buffer_info(dev))
+malloc_buffer(dev::MTLDevice) = first(malloc_buffer_and_gpu_address(dev))
