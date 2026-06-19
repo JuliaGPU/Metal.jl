@@ -53,19 +53,9 @@ function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
     return MTLBuffer(ptr)
 end
 
-@static if isdefined(Base, :OncePerProcess) # VERSION >= v"1.12.0-DEV.1421"
-    const page_size = OncePerProcess{Int}() do
-        Int(ccall(:getpagesize, Cint, ()))
-    end
-else
-    const _page_size::Ref{Int} = Ref{Int}(0)
-    function page_size()
-        if _page_size[] == 0
-            _page_size[] = Int(ccall(:getpagesize, Cint, ()))
-        end
-        _page_size[]
-    end
-end
+page_size() = @memoize begin
+    Int(ccall(:getpagesize, Cint, ()))
+end::Int
 
 function can_alloc_nocopy(ptr::Ptr, bytesize::Integer)
     # newBufferWithBytesNoCopy has several restrictions:

@@ -26,11 +26,9 @@ function check_functional()
         false
     end
 end
-@static if isdefined(Base, :OncePerProcess) # VERSION >= v"1.12.0-DEV.1421"
-    const functional = OncePerProcess{Bool}(check_functional)
-else
-    functional() = check_functional()
-end
+functional() = @memoize begin
+    check_functional()
+end::Bool
 
 """
     Metal.functional()
