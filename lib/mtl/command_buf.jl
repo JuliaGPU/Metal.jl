@@ -252,3 +252,14 @@ function on_completed(f::Base.Callable, cmdbuf::MTLCommandBufferLike)
     block = _command_buffer_callback(f)
     @objc [cmdbuf::id{MTLCommandBuffer} addCompletedHandler:block::id{NSBlock}]::Nothing
 end
+
+"""
+    on_completed(cmdbuf::MTLCommandBuffer, cond::Base.AsyncCondition)
+
+Signal `cond` when execution of the command buffer is completed, without running
+Julia code on Metal's completion-handler thread.
+"""
+function on_completed(cmdbuf::MTLCommandBufferLike, cond::Base.AsyncCondition)
+    block = @objcasyncblock(cond)
+    @objc [cmdbuf::id{MTLCommandBuffer} addCompletedHandler:block::id{NSBlock}]::Nothing
+end

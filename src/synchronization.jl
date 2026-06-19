@@ -43,12 +43,14 @@ function nonblocking_synchronization(cmdbuf::MTL.MTLCommandBufferLike)
     end
 
     sentinel = MTLCommandBuffer(cmdbuf.commandQueue)
-    done = Base.Event()
-    on_completed(sentinel) do _
-        notify(done)
-    end
+    done = Base.AsyncCondition()
+    on_completed(sentinel, done)
     commit!(sentinel)
-    wait(done)
+    try
+        wait(done)
+    finally
+        close(done)
+    end
     return
 end
 
