@@ -166,6 +166,7 @@ struct HostKernel{F,TT}
     maxthreads::Int
     tgmem::Int
     exec_width::Int
+    use_residency_sets::Bool
 end
 
 const mtlfunction_lock = ReentrantLock()
@@ -199,11 +200,13 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
         kernel = get(_kernel_instances, h, nothing)
         if kernel === nothing
             # create the kernel state object
+            dev = pipeline.device
             kernel = HostKernel{F, tt}(f, pipeline, loggingEnabled,
-                                       pipeline.device,
+                                       dev,
                                        Int(pipeline.maxTotalThreadsPerThreadgroup),
                                        Int(pipeline.staticThreadgroupMemoryLength),
-                                       Int(pipeline.threadExecutionWidth))
+                                       Int(pipeline.threadExecutionWidth),
+                                       can_use_residency_sets(dev))
             _kernel_instances[h] = kernel
         end
         return kernel::HostKernel{F,tt}
@@ -354,7 +357,7 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         # the kernel state holds GPU addresses to per-device scratch buffers (malloc bump
         # allocator, exception mailbox) that aren't otherwise bound to the encoder. declare
         # them so Metal Shader Validation tracks the accesses instead of dropping them.
-        if can_use_residency_sets(dev)
+        if kernel.use_residency_sets
             ensure_queue_residency!(queue, dev, buf, exc)
         else
             # DROP-MACOS14: per-launch residency for macOS 14 / virtual GPUs.

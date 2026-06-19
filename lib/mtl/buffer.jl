@@ -17,13 +17,16 @@ end
 
 ## allocation
 
-const _max_buffer_length = Dict{MTLDevice, Int}()
-const _max_buffer_length_lock = ReentrantLock()
-
 function max_buffer_length(dev::MTLDevice)
-    Base.@lock _max_buffer_length_lock begin
-        get!(() -> Int(dev.maxBufferLength), _max_buffer_length, dev)
+    # Avoid serializing process-local Objective-C pointer keys from precompile workloads.
+    if ccall(:jl_generating_output, Cint, ()) != 0
+        return Int(dev.maxBufferLength)
     end
+
+    key = UInt(pointer(dev))
+    @memoize key::UInt begin
+        Int(dev.maxBufferLength)
+    end::Int
 end
 
 max_buffer_length(heap::MTLHeap) = max_buffer_length(heap.device)
