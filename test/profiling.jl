@@ -10,51 +10,41 @@
     res = Metal.@profile b .= a .+ 1f0
     @test res isa Metal.Profiling.ProfileResults
     @test !isempty(sprint(show, res))
-    @test isempty(res.host_trace_name)
+    @test isempty(res.host_trace.name)
 
     # trace mode renders host calls and device operations chronologically
     res_trace = Metal.@profile trace=true (b .= a .+ 1f0)
     @test res_trace isa Metal.Profiling.ProfileResults
     trace_output = sprint(show, res_trace)
     @test !isempty(trace_output)
-    if !isempty(res_trace.host_name)
-        @test !isempty(res_trace.host_trace_name)
+    if !isempty(res_trace.host.name)
+        @test !isempty(res_trace.host_trace.name)
         @test occursin("ID", trace_output)
         @test occursin("Start", trace_output)
         @test !occursin("Calls │ Name", trace_output)
     end
 
     # verbose synchronization polling is hidden unless raw=true is requested
-    filtered = Metal.Profiling.ProfileResults(
-        String[], Float64[], Float64[], Vector{Any}[],
-        ["[MTLCommandBuffer status]", "[NSObject retain]",
-         "[NSAutoreleasePool drain]",
-         "[MTLDevice newBufferWithLength:options:]"],
-        [10, 3, 2, 1], [1e-6, 1e-6, 1e-6, 2e-6],
-        [1, 2, 3, 4], [1e-6, 2e-6, 3e-6, 4e-6],
-        [1e-6, 1e-6, 1e-6, 2e-6], [1, 1, 1, 1],
-        ["[MTLCommandBuffer status]", "[NSObject retain]",
-         "[NSAutoreleasePool drain]",
-         "[MTLDevice newBufferWithLength:options:]"],
-        0.0, 1e-3, true, false)
+    function result_with_host_calls(raw)
+        names = ["[MTLCommandBuffer status]", "[NSObject retain]",
+                 "[NSAutoreleasePool drain]",
+                 "[MTLDevice newBufferWithLength:options:]"]
+        Metal.Profiling.ProfileResults(;
+            device=(name=String[], start=Float64[], stop=Float64[], ops=Vector{Any}[]),
+            host=(name=names, calls=[10, 3, 2, 1], time=[1e-6, 1e-6, 1e-6, 2e-6]),
+            host_trace=(id=[1, 2, 3, 4], start=[1e-6, 2e-6, 3e-6, 4e-6],
+                        time=[1e-6, 1e-6, 1e-6, 2e-6], tid=[1, 1, 1, 1],
+                        name=names),
+            trace_start=0.0, wall=1e-3, trace=true, raw)
+    end
+    filtered = result_with_host_calls(false)
     filtered_output = sprint(show, filtered)
     @test !occursin("[MTLCommandBuffer status]", filtered_output)
     @test !occursin("[NSObject retain]", filtered_output)
     @test !occursin("[NSAutoreleasePool drain]", filtered_output)
     @test occursin("[MTLDevice newBufferWithLength:options:]", filtered_output)
 
-    raw = Metal.Profiling.ProfileResults(
-        String[], Float64[], Float64[], Vector{Any}[],
-        ["[MTLCommandBuffer status]", "[NSObject retain]",
-         "[NSAutoreleasePool drain]",
-         "[MTLDevice newBufferWithLength:options:]"],
-        [10, 3, 2, 1], [1e-6, 1e-6, 1e-6, 2e-6],
-        [1, 2, 3, 4], [1e-6, 2e-6, 3e-6, 4e-6],
-        [1e-6, 1e-6, 1e-6, 2e-6], [1, 1, 1, 1],
-        ["[MTLCommandBuffer status]", "[NSObject retain]",
-         "[NSAutoreleasePool drain]",
-         "[MTLDevice newBufferWithLength:options:]"],
-        0.0, 1e-3, true, true)
+    raw = result_with_host_calls(true)
     raw_output = sprint(show, raw)
     @test occursin("[MTLCommandBuffer status]", raw_output)
     @test occursin("[NSObject retain]", raw_output)
@@ -62,9 +52,9 @@
 
     # when the device reports GPU timestamps, the kernel and its timing should show up
     # (a paravirtualized GPU may not, so only assert when something was captured)
-    if !isempty(res.name)
-        @test any(n -> occursin("broadcast", n), res.name)
-        @test all(>(0), res.stop .- res.start)
+    if !isempty(res.device.name)
+        @test any(n -> occursin("broadcast", n), res.device.name)
+        @test all(>(0), res.device.stop .- res.device.start)
     end
 
     # an empty region is handled gracefully

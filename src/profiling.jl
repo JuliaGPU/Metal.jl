@@ -162,27 +162,13 @@ end
 # results
 #
 
-struct ProfileResults
-    # device-side GPU operations, one entry per captured command buffer (commit order)
-    name::Vector{String}
-    start::Vector{Float64}  # GPU start time, in seconds (mach clock)
-    stop::Vector{Float64}   # GPU end time, in seconds (mach clock)
-    ops::Vector{Vector{Any}}  # operations encoded into each buffer, with their metadata
+Base.@kwdef struct ProfileResults
+    # captured data (NamedTuples of vectors)
+    device::NamedTuple
+    host::NamedTuple
+    host_trace::NamedTuple
 
-    # host-side Objective-C API calls, aggregated per "[class selector]"
-    host_name::Vector{String}
-    host_calls::Vector{Int}
-    host_time::Vector{Float64}  # total time spent in this call, in seconds
-
-    # host-side Objective-C API calls, one entry per call in chronological order.
-    # Populated only for trace mode, so regular `@profile` and `@bprofile` stay bounded by
-    # the number of distinct calls.
-    host_trace_id::Vector{Int}
-    host_trace_start::Vector{Float64}
-    host_trace_time::Vector{Float64}
-    host_trace_tid::Vector{Int}
-    host_trace_name::Vector{String}
-
+    # display properties set by `@profile` kwargs
     trace_start::Float64  # mach clock, in seconds; common zero point for trace tables
     wall::Float64  # wall-clock duration of the profiled region, in seconds
     trace::Bool    # display host/device activity chronologically rather than as summaries
@@ -263,9 +249,10 @@ function profile_internally(@nospecialize(f); trace::Bool=false, raw::Bool=false
         end
         host_trace = flatten_calls(host, t_start, tb)
 
-        return ProfileResults(name, start, stop, ops, host_name, host_calls, host_time,
-                              host_trace.id, host_trace.start, host_trace.time,
-                              host_trace.tid, host_trace.name, t_start * tb / 1e9,
+        device = (; name, start, stop, ops)
+        host = (name=host_name, calls=host_calls, time=host_time)
+        return ProfileResults(; device, host, host_trace,
+                              trace_start=t_start * tb / 1e9,
                               wall, trace, raw)
     finally
         MTL.profile_hook[] = prev_hook
@@ -415,14 +402,15 @@ _volume(sz) = Int(sz.width) * Int(sz.height) * Int(sz.depth)
 # contributes its own metadata columns. Buffers without recorded operations fall back to their
 # label. Metadata columns present for no operation are dropped.
 function _device_trace(r)
+    device = r.device
     cols = (id=Int[], start=Union{Missing,Float64}[], time=Union{Missing,Float64}[],
             threadgroups=Union{Missing,String}[], threads=Union{Missing,String}[],
             tgmem=Union{Missing,Int}[], occupancy=Union{Missing,Float64}[],
             size=Union{Missing,Int}[], throughput=Union{Missing,Float64}[], name=String[])
 
-    for (i, bi) in enumerate(sortperm(r.start))
-        bstart, btime = r.start[bi] - r.trace_start, r.stop[bi] - r.start[bi]
-        bops = r.ops[bi]
+    for (i, bi) in enumerate(sortperm(device.start))
+        bstart, btime = device.start[bi] - r.trace_start, device.stop[bi] - device.start[bi]
+        bops = device.ops[bi]
         rows = isempty(bops) ? (nothing,) : bops  # at least one row per buffer
         for (j, op) in enumerate(rows)
             push!(cols.id, i)
@@ -449,7 +437,8 @@ function _device_trace(r)
                     push!(c, missing)
                 end
             end
-            push!(cols.name, op === nothing ? r.name[bi] : something(_field(op, :name), r.name[bi]))
+            push!(cols.name, op === nothing ? device.name[bi] :
+                                  something(_field(op, :name), device.name[bi]))
         end
     end
 
@@ -524,7 +513,8 @@ function _crop(io)
 end
 
 function Base.show(io::IO, r::ProfileResults)
-    ndev, nhost = length(r.name), length(r.host_name)
+    device, host, host_trace = r.device, r.host, r.host_trace
+    ndev, nhost = length(device.name), length(host.name)
     if ndev == 0 && nhost == 0
         print(io, "No GPU operations or Objective-C calls were profiled.")
         return
@@ -536,21 +526,21 @@ function Base.show(io::IO, r::ProfileResults)
 
     # host-side activity: the Objective-C API trace, grouped by call
     if nhost > 0
-        shown = [_host_call_shown(name, r.raw) for name in r.host_name]
-        host_name = r.host_name[shown]
-        host_calls = r.host_calls[shown]
-        host_time = r.host_time[shown]
+        shown = [_host_call_shown(name, r.raw) for name in host.name]
+        host_name = host.name[shown]
+        host_calls = host.calls[shown]
+        host_time = host.time[shown]
         if !isempty(host_name)
             ncalls, htotal = sum(host_calls), sum(host_time)
             println(io, "\nHost-side activity: $ncalls Objective-C calls taking $(format_time(htotal)) ",
                         "($(format_percentage(htotal / den)) of wall-clock)")
-            if r.trace && !isempty(r.host_trace_name)
-                trace_shown = [_host_call_shown(name, r.raw) for name in r.host_trace_name]
-                host = (id    = r.host_trace_id[trace_shown],
-                        start = r.host_trace_start[trace_shown],
-                        time  = r.host_trace_time[trace_shown],
-                        tid   = r.host_trace_tid[trace_shown],
-                        name  = r.host_trace_name[trace_shown])
+            if r.trace && !isempty(host_trace.name)
+                trace_shown = [_host_call_shown(name, r.raw) for name in host_trace.name]
+                host = (id    = host_trace.id[trace_shown],
+                        start = host_trace.start[trace_shown],
+                        time  = host_trace.time[trace_shown],
+                        tid   = host_trace.tid[trace_shown],
+                        name  = host_trace.name[trace_shown])
                 columns = [:id, :start, :time]
                 length(unique(host.tid)) > 1 && push!(columns, :tid)
                 push!(columns, :name)
@@ -569,14 +559,14 @@ function Base.show(io::IO, r::ProfileResults)
 
     # device-side activity: the GPU operations, as a summary or a chronological trace
     if ndev > 0
-        busy = busy_time(r.start, r.stop)
+        busy = busy_time(device.start, device.stop)
         println(io, "\nDevice-side activity: GPU was busy $(format_time(busy)) ",
                     "($(format_percentage(busy / den)) of wall-clock)")
         if r.trace
             df = _device_trace(r)
             _print_trace(io, df, crop)
         else
-            s = summarize_trace(r.name, r.stop .- r.start, den)
+            s = summarize_trace(device.name, device.stop .- device.start, den)
             columns = [:time_ratio, :time, :calls]
             any(!ismissing, s.time_dist) && push!(columns, :time_dist)
             push!(columns, :name)
