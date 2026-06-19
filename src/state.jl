@@ -7,10 +7,7 @@ log_array(args...)      = log_array()(args...)
 
 const LABEL_RESOURCES = @load_preference("label_resources", nothing)
 
-@inline function label_resources()
-    LABEL_RESOURCES === nothing && return Base.JLOptions().debug_level >= 2
-    return LABEL_RESOURCES
-end
+@inline label_resources() = @something(LABEL_RESOURCES, Base.JLOptions().debug_level >= 2)
 
 macro label!(obj, str)
     quote
