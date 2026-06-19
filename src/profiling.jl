@@ -68,6 +68,16 @@ function record_commit!(records, metadata, cmdbuf)
     return
 end
 
+function release_records!(records)
+    @autoreleasepool begin
+        for (_, cmdbuf) in records
+            release(cmdbuf)
+        end
+    end
+    empty!(records)
+    return
+end
+
 
 #
 # host-side Objective-C API trace
@@ -182,64 +192,79 @@ function profile_internally(@nospecialize(f); trace::Bool=false, raw::Bool=false
     device_synchronize()
 
     metadata = IdDict{Any,Vector{Any}}()
-    prev = MTL.profile_hook[]
-    MTL.profile_metadata[] = metadata
-    MTL.profile_hook[] = cmdbuf -> record_commit!(records, metadata, cmdbuf)
-    ObjectiveC.tracing_subscribe(host)
-    t_start = _mach_now()
+    prev_hook = MTL.profile_hook[]
+    prev_metadata = MTL.profile_metadata[]
+    subscribed = false
+    t_start = UInt64(0)
     try
-        f()
-    finally
-        # stop host tracing before our own synchronization, so the trace reflects `f`'s calls
-        ObjectiveC.tracing_unsubscribe()
-        MTL.profile_hook[] = prev
-        MTL.profile_metadata[] = nothing
-    end
-
-    # wait for all captured work to finish before reading its timestamps
-    device_synchronize()
-    wall = (_mach_now() - t_start) * ObjectiveC.tracing_timebase() / 1e9
-
-    # device side: read each completed buffer's GPU timestamps. `GPUStartTime`/`GPUEndTime`
-    # are only valid once completed; skip anything that errored or never ran. (We do NOT fall
-    # back to `kernelStartTime`/`kernelEndTime` — those are CPU-side scheduling latency, not
-    # GPU execution.)
-    name = String[]
-    start = Float64[]
-    stop = Float64[]
-    ops = Vector{Any}[]
-    @autoreleasepool begin
-        for (opname, cmdbuf) in records
-            if cmdbuf.status == MTL.MTLCommandBufferStatusCompleted
-                t0 = cmdbuf.GPUStartTime
-                t1 = cmdbuf.GPUEndTime
-                if t1 > t0
-                    push!(name, opname)
-                    push!(start, t0)
-                    push!(stop, t1)
-                    push!(ops, get(metadata, cmdbuf, Any[]))
-                end
+        MTL.profile_metadata[] = metadata
+        MTL.profile_hook[] = cmdbuf -> record_commit!(records, metadata, cmdbuf)
+        ObjectiveC.tracing_subscribe(host)
+        subscribed = true
+        t_start = _mach_now()
+        try
+            f()
+        finally
+            # stop host tracing before our own synchronization, so the trace reflects `f`'s calls
+            if subscribed
+                ObjectiveC.tracing_unsubscribe()
+                subscribed = false
             end
-            release(cmdbuf)
+            MTL.profile_hook[] = prev_hook
+            MTL.profile_metadata[] = prev_metadata
         end
-    end
 
-    # host side: flatten the per-thread aggregation
-    tb = ObjectiveC.tracing_timebase()
-    host_name = String[]
-    host_calls = Int[]
-    host_time = Float64[]
-    for ((class, sel), st) in merge_tables(host)
-        push!(host_name, "[$class $sel]")
-        push!(host_calls, st.count)
-        push!(host_time, st.ticks * tb / 1e9)
-    end
-    host_trace = flatten_calls(host, t_start, tb)
+        # wait for all captured work to finish before reading its timestamps
+        device_synchronize()
+        wall = (_mach_now() - t_start) * ObjectiveC.tracing_timebase() / 1e9
 
-    return ProfileResults(name, start, stop, ops, host_name, host_calls, host_time,
-                          host_trace.id, host_trace.start, host_trace.time,
-                          host_trace.tid, host_trace.name, t_start * tb / 1e9,
-                          wall, trace, raw)
+        # device side: read each completed buffer's GPU timestamps. `GPUStartTime`/`GPUEndTime`
+        # are only valid once completed; skip anything that errored or never ran. (We do NOT fall
+        # back to `kernelStartTime`/`kernelEndTime` — those are CPU-side scheduling latency, not
+        # GPU execution.)
+        name = String[]
+        start = Float64[]
+        stop = Float64[]
+        ops = Vector{Any}[]
+        @autoreleasepool begin
+            for (opname, cmdbuf) in records
+                if cmdbuf.status == MTL.MTLCommandBufferStatusCompleted
+                    t0 = cmdbuf.GPUStartTime
+                    t1 = cmdbuf.GPUEndTime
+                    if t1 > t0
+                        push!(name, opname)
+                        push!(start, t0)
+                        push!(stop, t1)
+                        push!(ops, get(metadata, cmdbuf, Any[]))
+                    end
+                end
+                release(cmdbuf)
+            end
+        end
+        empty!(records)
+
+        # host side: flatten the per-thread aggregation
+        tb = ObjectiveC.tracing_timebase()
+        host_name = String[]
+        host_calls = Int[]
+        host_time = Float64[]
+        for ((class, sel), st) in merge_tables(host)
+            push!(host_name, "[$class $sel]")
+            push!(host_calls, st.count)
+            push!(host_time, st.ticks * tb / 1e9)
+        end
+        host_trace = flatten_calls(host, t_start, tb)
+
+        return ProfileResults(name, start, stop, ops, host_name, host_calls, host_time,
+                              host_trace.id, host_trace.start, host_trace.time,
+                              host_trace.tid, host_trace.name, t_start * tb / 1e9,
+                              wall, trace, raw)
+    finally
+        MTL.profile_hook[] = prev_hook
+        MTL.profile_metadata[] = prev_metadata
+        subscribed && ObjectiveC.tracing_unsubscribe()
+        release_records!(records)
+    end
 end
 
 
