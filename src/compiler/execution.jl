@@ -209,9 +209,7 @@ const _kernel_instances = Dict{UInt, Any}()
 ## kernel launching and argument encoding
 
 @inline @generated function encode_arguments!(cce, kernel, args::Vararg{Any,N}) where {N}
-    ex = quote
-        buffers = MTLBuffer[]
-    end
+    ex = quote end
 
     # the arguments passed into this function have not been `mtlconvert`ed, because we need
     # to retain the top-level MTLBuffer and MtlPtr objects. eager conversion of nested
@@ -230,36 +228,35 @@ const _kernel_instances = Dict{UInt, Any}()
         elseif isghosttype(argtyp) || Core.Compiler.isconstType(argtyp)
             continue
         else
-            # everything else is passed by reference, in an argument buffer
+            # everything else is passed by reference, copied into Metal's transient buffer
             append!(ex.args, (quote
-                buf = encode_argument!(kernel, mtlconvert($(argex), cce))
-                set_buffer!(cce, buf, 0, $idx)
-                push!(buffers, buf)
+                set_argument!(cce, mtlconvert($(argex), cce), $idx)
             end).args)
         end
         idx += 1
     end
 
-    push!(ex.args, :(return buffers))
+    push!(ex.args, :(return nothing))
 
     ex
 end
 
-@inline function encode_argument!(@nospecialize(kernel), arg)
+@inline function set_argument!(cce::MTLComputeCommandEncoder, arg, idx::Integer)
     argtyp = typeof(arg)
 
     # replace non-isbits arguments (they should be unused, or compilation
     # would have failed) by a dummy reference
     if !isbitstype(argtyp)
-        arg = C_NULL
         argtyp = Ptr{Any}
+        arg = convert(argtyp, C_NULL)
     end
 
-    # pass by reference, in an argument buffer
-    argument_buffer = alloc(kernel.pipeline.device, sizeof(argtyp); storage=SharedStorage)
-    argument_buffer.label = "MTLBuffer for kernel argument"
-    unsafe_store!(convert(Ptr{argtyp}, argument_buffer), arg)
-    return argument_buffer
+    ref = Base.RefValue(arg)
+    GC.@preserve ref begin
+        ptr = Base.unsafe_convert(Ptr{argtyp}, ref)
+        set_bytes!(cce, reinterpret(Ptr{Cvoid}, ptr), sizeof(argtyp), idx)
+    end
+    return
 end
 
 # wraps a single function call, keeping its closure body small.
@@ -341,32 +338,29 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
                maxthreads = Int(pipeline.maxTotalThreadsPerThreadgroup)))
     end
     cce = MTLComputeCommandEncoder(cmdbuf)
-    argument_buffers = try
+    try
         MTL.set_function!(cce, pipeline)
         # the kernel state holds GPU addresses to per-device scratch buffers (malloc bump
         # allocator, exception mailbox) that aren't otherwise bound to the encoder. declare
         # them so Metal Shader Validation tracks the accesses instead of dropping them.
         MTL.use!(cce, buf, MTL.ReadWriteUsage)
         MTL.use!(cce, exc, MTL.ReadWriteUsage)
-        bufs = encode_arguments_nospec!(cce, kernel, kernel_state, f, args)
+        encode_arguments_nospec!(cce, kernel, kernel_state, f, args)
         MTL.append_current_function!(cce, gs, ts)
-        bufs
     finally
         close(cce)
     end
 
-    # the command buffer retains resources that are explicitly encoded (i.e. direct buffer
-    # arguments, or the buffers allocated for each other argument), but that doesn't keep
-    # other resources alive for which we've encoded the GPU address ourselves. since it's
-    # possible for buffers to go out of scope while the kernel is still running, which
-    # triggers validation failures, keep track of things we need to keep alive until the
-    # kernel has actually completed.
+    # The command buffer retains explicitly encoded buffers, but that doesn't keep other
+    # resources alive for which we've encoded the GPU address ourselves. Since it's possible
+    # for buffers to go out of scope while the kernel is still running, which triggers
+    # validation failures, keep track of things we need to keep alive until the kernel has
+    # actually completed.
     #
     # TODO: is there a way to bind additional resources to the command buffer?
     roots = Any[f, args]
     MTL.on_completed(cmdbuf) do buf
         empty!(roots)
-        foreach(free, argument_buffers)
 
         # Check for errors
         # XXX: we cannot do this nicely, e.g. throwing an `error` or reporting with `@error`
