@@ -386,7 +386,7 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         return
     end
 
-    commit!(cmdbuf)
+    commit!(cmdbuf, queue)
     if kernel.loggingEnabled
         # remember this so `synchronize(queue)` can drain its log handler blocks
         # (Metal delivers logs asynchronously on a libdispatch queue; only
