@@ -1,17 +1,4 @@
-# Integrated, lightweight profiler.
-#
-# Unlike `Metal.@profile external=true` (which drives Xcode's `xctrace`), this profiler runs
-# entirely in-process and needs no developer tools. It captures two things and shows them as
-# separate tables, both on one (mach) clock:
-#
-#  - device-side GPU operations: by hooking the single `commit!` chokepoint all GPU work
-#    passes through (`MTL.profile_hook`), retaining each committed command buffer, and reading
-#    its `GPUStartTime`/`GPUEndTime` after synchronizing. Metal.jl issues ~one command buffer
-#    per GPU operation, so per-buffer timing maps cleanly onto per-operation timing.
-#
-#  - host-side Objective-C API calls: by subscribing to ObjectiveC.jl's runtime call tracer
-#    (`ObjectiveC.tracing_subscribe`), aggregating calls per (class, selector). This surfaces host
-#    behavior such as APIs being called too often — the analog of CUDA.jl's CUPTI host trace.
+# Integrated profiler.
 
 module Profiling
 
@@ -27,24 +14,19 @@ using Statistics: mean, std, quantile
 using PrettyTables: pretty_table, TextHighlighter
 using Crayons: @crayon_str
 
-# raw monotonic clock, shared domain with `GPUStartTime` (NOT `time_ns`); convert via the
-# ObjectiveC tracer's timebase.
-@inline _mach_now() = ccall(:mach_absolute_time, UInt64, ())
-_maxthreadid() = isdefined(Threads, :maxthreadid) ? Threads.maxthreadid() : Threads.nthreads()
+@inline mach_time() = ccall(:mach_absolute_time, UInt64, ())
+max_thread_id() = isdefined(Threads, :maxthreadid) ? Threads.maxthreadid() : Threads.nthreads()
 
 
 #
 # data collection
 #
 
-# kernel labels are set as "MTLCommandBuffer(<fn>)"; show just the operation name.
 function clean_label(name::String)
     m = match(r"^MTLCommandBuffer\((.*)\)$", name)
     m === nothing ? name : String(m.captures[1])
 end
 
-# invoked from `MTL.commit!` for every committed command buffer while profiling is active.
-# The actual GPU timestamps are read later, after synchronization (see `profile_internally`).
 function record_commit!(collector::MTL.ProfileCollector, cmdbuf)
     @lock collector.lock begin
         ops = get(collector.metadata, cmdbuf, nothing)
@@ -52,17 +34,14 @@ function record_commit!(collector::MTL.ProfileCollector, cmdbuf)
             name = String(something(get(first(ops), :name, nothing), "Metal operation"))
         else
             label = cmdbuf.label
-            # command buffers without a label (e.g. the empty sentinels committed by
-            # `nonblocking_synchronization`) are bookkeeping, not user work — skip them.
+            # skip unlabeled synchronization sentinels
             label === nothing && return
             name = String(label)
             isempty(name) && return
             name = clean_label(name)
         end
 
-        # keep the command buffer alive until we've read its timestamps: Metal only retains a
-        # committed buffer until it completes, and our `last_committed` slot holds just the most
-        # recent one, so an intermediate buffer could otherwise be freed before we read it.
+        # keep the command buffer alive until the timestamps have been read.
         retain(cmdbuf)
         push!(collector.records, (name, cmdbuf))
     end
@@ -88,7 +67,6 @@ end
 # host-side Objective-C API trace
 #
 
-# running count + total time per (class, selector), accumulated per-thread to avoid locking.
 mutable struct ApiStat
     count::Int
     ticks::UInt64
@@ -108,13 +86,12 @@ struct HostCollector
 end
 
 function HostCollector(trace::Bool=false)
-    ntids = _maxthreadid()
+    ntids = max_thread_id()
     tables = [Dict{Tuple{Symbol,Symbol},ApiStat}() for _ in 1:ntids]
     calls = trace ? [ApiCall[] for _ in 1:ntids] : nothing
     return HostCollector(tables, calls)
 end
 
-# the ObjectiveC tracing callback: runs on the calling thread for every `@objc` call
 @inline function (hc::HostCollector)(class::Symbol, sel::Symbol, t0::UInt64, t1::UInt64)
     tid = Threads.threadid()
     tid <= length(hc.tables) || return
@@ -163,23 +140,20 @@ end
 #
 
 Base.@kwdef struct ProfileResults
-    # captured data (NamedTuples of vectors)
     device::NamedTuple
     host::NamedTuple
     host_trace::NamedTuple
 
-    # display properties set by `@profile` kwargs
-    trace_start::Float64  # mach clock, in seconds; common zero point for trace tables
-    wall::Float64  # wall-clock duration of the profiled region, in seconds
-    trace::Bool    # display host/device activity chronologically rather than as summaries
-    raw::Bool      # include verbose host-side implementation details
+    trace_start::Float64
+    wall::Float64
+    trace::Bool
+    raw::Bool
 end
 
 function profile_internally(@nospecialize(f); trace::Bool=false, raw::Bool=false)
     collector = MTL.ProfileCollector()
     host = HostCollector(trace)
 
-    # drain any work that was already in flight, so we only capture `f`'s operations
     device_synchronize()
 
     prev_hook = MTL.profile_hook[]
@@ -191,11 +165,10 @@ function profile_internally(@nospecialize(f); trace::Bool=false, raw::Bool=false
         MTL.profile_hook[] = cmdbuf -> record_commit!(collector, cmdbuf)
         ObjectiveC.tracing_subscribe(host)
         subscribed = true
-        t_start = _mach_now()
+        t_start = mach_time()
         try
             f()
         finally
-            # stop host tracing before our own synchronization, so the trace reflects `f`'s calls
             if subscribed
                 ObjectiveC.tracing_unsubscribe()
                 subscribed = false
@@ -204,14 +177,9 @@ function profile_internally(@nospecialize(f); trace::Bool=false, raw::Bool=false
             MTL.profile_metadata[] = prev_metadata
         end
 
-        # wait for all captured work to finish before reading its timestamps
         device_synchronize()
-        wall = (_mach_now() - t_start) * ObjectiveC.tracing_timebase() / 1e9
+        wall = (mach_time() - t_start) * ObjectiveC.tracing_timebase() / 1e9
 
-        # device side: read each completed buffer's GPU timestamps. `GPUStartTime`/`GPUEndTime`
-        # are only valid once completed; skip anything that errored or never ran. (We do NOT fall
-        # back to `kernelStartTime`/`kernelEndTime` — those are CPU-side scheduling latency, not
-        # GPU execution.)
         name = String[]
         start = Float64[]
         stop = Float64[]
@@ -237,7 +205,6 @@ function profile_internally(@nospecialize(f); trace::Bool=false, raw::Bool=false
             end
         end
 
-        # host side: flatten the per-thread aggregation
         tb = ObjectiveC.tracing_timebase()
         host_name = String[]
         host_calls = Int[]
@@ -270,7 +237,6 @@ end
 format_percentage(x::Number) = @sprintf("%.2f%%", x * 100)
 
 function format_time(ts::Number...)
-    # the first number determines the scale and unit
     t = ts[1]
     range, unit = if abs(t) < 1e-6
         1e9, "ns"
@@ -297,9 +263,6 @@ function format_time(ts::Number...)
     length(strs) == 1 ? strs[1] : strs
 end
 
-# the GPU time actually spent busy, as the union of all (possibly overlapping) operation
-# intervals — Metal runs independent command buffers in parallel, so summing durations would
-# overcount. Used only for the informational header.
 function busy_time(start, stop)
     isempty(start) && return 0.0
     perm = sortperm(start)
@@ -318,9 +281,6 @@ function busy_time(start, stop)
     total + (cur_stop - cur_start)
 end
 
-# group per-operation times by name into total/calls/distribution/ratio, sorted by ratio.
-# `span` (wall-clock GPU span) is the ratio denominator, NOT the sum of times: with
-# overlapping command buffers a sum-based denominator could push ratios past 100%.
 function summarize_trace(names, times, span)
     groups = Dict{String,Vector{Float64}}()
     for (name, t) in zip(names, times)
@@ -346,8 +306,6 @@ function summarize_trace(names, times, span)
             time_dist=out_dist[perm], time_ratio=out_ratio[perm])
 end
 
-# highlight slow entries (by the `:time` column): red for the slowest 5%, yellow for 25%.
-# `:time` may contain `missing` (rows for non-first operations within a buffer share timing).
 function time_highlighters(df)
     relevant = Float64[t for t in df.time if t !== missing && t >= 1e-8]
     isempty(relevant) && return TextHighlighter[]
@@ -387,21 +345,17 @@ const filtered_host_calls = Set([
 ])
 const filtered_host_call_prefixes = ("[NSAutoreleasePool ",)
 
-function _host_call_shown(name::String, raw::Bool)
+function show_host_call(name::String, raw::Bool)
     raw && return true
     name in filtered_host_calls && return false
     return !any(prefix -> startswith(name, prefix), filtered_host_call_prefixes)
 end
 
-_field(op, k) = haskey(op, k) ? op[k] : missing
-_dims(sz) = "$(Int(sz.width))×$(Int(sz.height))×$(Int(sz.depth))"
-_volume(sz) = Int(sz.width) * Int(sz.height) * Int(sz.depth)
+opfield(op, k) = haskey(op, k) ? op[k] : missing
+format_dims(sz) = "$(Int(sz.width))×$(Int(sz.height))×$(Int(sz.depth))"
+volume(sz) = Int(sz.width) * Int(sz.height) * Int(sz.depth)
 
-# flatten the captured command buffers to one row per encoded operation, grouped under their
-# buffer: the buffer's id/start/time appear once (on its first operation), and each operation
-# contributes its own metadata columns. Buffers without recorded operations fall back to their
-# label. Metadata columns present for no operation are dropped.
-function _device_trace(r)
+function device_trace(r)
     device = r.device
     cols = (id=Int[], start=Union{Missing,Float64}[], time=Union{Missing,Float64}[],
             threadgroups=Union{Missing,String}[], threads=Union{Missing,String}[],
@@ -416,17 +370,17 @@ function _device_trace(r)
             push!(cols.id, i)
             push!(cols.start, j == 1 ? bstart : missing)
             push!(cols.time, j == 1 ? btime : missing)
-            if op !== nothing && _field(op, :kind) === :kernel
-                tg, th = _field(op, :threadgroups), _field(op, :threads)
-                mt = _field(op, :maxthreads)
-                push!(cols.threadgroups, tg === missing ? missing : _dims(tg))
-                push!(cols.threads, th === missing ? missing : _dims(th))
-                push!(cols.tgmem, _field(op, :tgmem))
+            if op !== nothing && opfield(op, :kind) === :kernel
+                tg, th = opfield(op, :threadgroups), opfield(op, :threads)
+                mt = opfield(op, :maxthreads)
+                push!(cols.threadgroups, tg === missing ? missing : format_dims(tg))
+                push!(cols.threads, th === missing ? missing : format_dims(th))
+                push!(cols.tgmem, opfield(op, :tgmem))
                 push!(cols.occupancy, (th !== missing && mt isa Integer && mt > 0) ?
-                                      _volume(th) / mt : missing)
+                                      volume(th) / mt : missing)
                 push!(cols.size, missing); push!(cols.throughput, missing)
             elseif op !== nothing  # copy / fill
-                b = _field(op, :bytes)
+                b = opfield(op, :bytes)
                 push!(cols.threadgroups, missing); push!(cols.threads, missing)
                 push!(cols.tgmem, missing); push!(cols.occupancy, missing)
                 push!(cols.size, b)
@@ -438,18 +392,17 @@ function _device_trace(r)
                 end
             end
             push!(cols.name, op === nothing ? device.name[bi] :
-                                  something(_field(op, :name), device.name[bi]))
+                                  something(opfield(op, :name), device.name[bi]))
         end
     end
 
-    # keep id/start/time/name always; keep a metadata column only if it has any data
     keep = filter(keys(cols)) do k
         k in (:id, :start, :time, :name) || any(!ismissing, cols[k])
     end
     return NamedTuple{Tuple(keep)}(Tuple(cols[k] for k in keep))
 end
 
-function _trace_formatter(df)
+function trace_formatter(df)
     return function(v, i, j)
         v === missing && return "-"
         col = keys(df)[j]
@@ -467,16 +420,16 @@ function _trace_formatter(df)
     end
 end
 
-function _print_trace(io, df, crop)
+function print_trace(io, df, crop)
     header = [trace_column_names[k] for k in keys(df)]
     alignment = [k === :name ? :l : :r for k in keys(df)]
-    pretty_table(io, df; column_labels=header, alignment, formatters=[_trace_formatter(df)],
+    pretty_table(io, df; column_labels=header, alignment, formatters=[trace_formatter(df)],
                  highlighters=time_highlighters(df),
                  fit_table_in_display_horizontally=(crop == :horizontal),
                  fit_table_in_display_vertically=false)
 end
 
-function _summary_formatter(df)
+function summary_formatter(df)
     return function(v, i, j)
         col = keys(df)[j]
         if col == :time_ratio
@@ -493,16 +446,16 @@ function _summary_formatter(df)
     end
 end
 
-function _print_summary(io, df, crop)
+function print_summary(io, df, crop)
     header = [summary_column_names[k] for k in keys(df)]
     alignment = [k in (:name, :time_dist) ? :l : :r for k in keys(df)]
-    pretty_table(io, df; column_labels=header, alignment, formatters=[_summary_formatter(df)],
+    pretty_table(io, df; column_labels=header, alignment, formatters=[summary_formatter(df)],
                  highlighters=time_highlighters(df),
                  fit_table_in_display_horizontally=(crop == :horizontal),
                  fit_table_in_display_vertically=false)
 end
 
-function _crop(io)
+function table_crop(io)
     if get(io, :is_pluto, false) || get(io, :jupyter, false)
         :none
     elseif io isa Base.TTY || get(io, :limit, false)::Bool
@@ -521,12 +474,12 @@ function Base.show(io::IO, r::ProfileResults)
     end
 
     den = r.wall == 0 ? 1.0 : r.wall   # avoid a zero denominator
-    crop = _crop(io)
+    crop = table_crop(io)
     println(io, "Profiled over $(format_time(r.wall)).")
 
     # host-side activity: the Objective-C API trace, grouped by call
     if nhost > 0
-        shown = [_host_call_shown(name, r.raw) for name in host.name]
+        shown = [show_host_call(name, r.raw) for name in host.name]
         host_name = host.name[shown]
         host_calls = host.calls[shown]
         host_time = host.time[shown]
@@ -537,7 +490,7 @@ function Base.show(io::IO, r::ProfileResults)
             println(io, "\nHost-side activity: $ncalls Objective-C calls taking $(format_time(htotal)) ",
                         "($(format_percentage(htotal / den)) of wall-clock)")
             if r.trace && !isempty(host_trace.name)
-                trace_shown = [_host_call_shown(name, r.raw) for name in host_trace.name]
+                trace_shown = [show_host_call(name, r.raw) for name in host_trace.name]
                 host = (id    = host_trace.id[trace_shown],
                         start = host_trace.start[trace_shown],
                         time  = host_trace.time[trace_shown],
@@ -547,14 +500,14 @@ function Base.show(io::IO, r::ProfileResults)
                 length(unique(host.tid)) > 1 && push!(columns, :tid)
                 push!(columns, :name)
                 df = NamedTuple{Tuple(columns)}(Tuple(host[c] for c in columns))
-                _print_trace(io, df, crop)
+                print_trace(io, df, crop)
             else
                 perm = sortperm(host_time; rev=true)
                 df = (time_ratio = host_time[perm] ./ den,
                       time       = host_time[perm],
                       calls      = host_calls[perm],
                       name       = host_name[perm])
-                _print_summary(io, df, crop)
+                print_summary(io, df, crop)
             end
         end
     end
@@ -565,15 +518,15 @@ function Base.show(io::IO, r::ProfileResults)
         println(io, "\nDevice-side activity: GPU was busy $(format_time(busy)) ",
                     "($(format_percentage(busy / den)) of wall-clock)")
         if r.trace
-            df = _device_trace(r)
-            _print_trace(io, df, crop)
+            df = device_trace(r)
+            print_trace(io, df, crop)
         else
             s = summarize_trace(device.name, device.stop .- device.start, den)
             columns = [:time_ratio, :time, :calls]
             any(!ismissing, s.time_dist) && push!(columns, :time_dist)
             push!(columns, :name)
             df = NamedTuple{Tuple(columns)}(Tuple(s[c] for c in columns))
-            _print_summary(io, df, crop)
+            print_summary(io, df, crop)
         end
     end
 end
@@ -621,8 +574,8 @@ Metal.jl profiles `code` in-process, without requiring Xcode, and displays two t
 To display a chronological trace of individual Objective-C calls and GPU operations instead,
 set `trace=true`.
 
-Verbose implementation details, such as polling command-buffer status during synchronization,
-are hidden by default. Set `raw=true` to include them.
+Runtime calls used by Metal.jl itself, such as synchronization polling, are hidden by default.
+Set `raw=true` to include them.
 
 Slow entries are highlighted: yellow is among the slowest 25%, red among the slowest 5%.
 

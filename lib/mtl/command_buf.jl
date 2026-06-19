@@ -62,16 +62,10 @@ end
 const last_committed_lock = ReentrantLock()
 const last_committed_per_queue = Dict{id{MTLCommandQueue}, MTLCommandBufferLike}()
 
-# optional profiling hook. when set (by `Metal.@profile`), it is invoked with every
-# committed command buffer so the profiler can record it for timing. kept here, at the
-# single chokepoint all GPU work passes through, so the profiler needs no per-callsite
-# instrumentation. the cost when unset is one load + nil-check per commit.
+# optional profiling hook. when set, it is invoked for every committed command buffer.
 const profile_hook = Ref{Any}(nothing)
 
-# optional profiling side-channel for per-operation metadata (e.g. kernel dimensions, copy
-# sizes), which is not recoverable from a committed command buffer. when set (to an `IdDict`
-# by `Metal.@profile`), operation sites associate one or more operation descriptors with the
-# command buffer they encode into. the cost when unset is one load + nil-check per operation.
+# optional profiling data for operation metadata (e.g. kernel dimensions, copy sizes).
 const profile_metadata = Ref{Any}(nothing)
 
 struct ProfileCollector

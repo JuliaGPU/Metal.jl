@@ -37,23 +37,10 @@ julia> Metal.@profile begin
            b .= a .+ 1f0
            c .= sqrt.(b)
        end
-Profiled over 421.0 µs.
-
-Host-side activity: 42 Objective-C calls taking 91.2 µs (21.66% of wall-clock)
-┌──────────┬────────────┬───────┬──────────────────────────────────────┐
-│ Time (%) │ Total time │ Calls │ Name                                 │
-├──────────┼────────────┼───────┼──────────────────────────────────────┤
-│   12.40% │   52.2 µs  │     2 │ [MTLCommandBuffer commit]            │
-│    6.96% │   29.3 µs  │     2 │ [MTLCommandQueue commandBuffer]      │
-└──────────┴────────────┴───────┴──────────────────────────────────────┘
-
-Device-side activity: GPU was busy 421.0 µs (100.00% of wall-clock)
-┌──────────┬────────────┬───────┬────────────────────────────┬──────────────┐
-│ Time (%) │ Total time │ Calls │ Time distribution          │ Name         │
-├──────────┼────────────┼───────┼────────────────────────────┼──────────────┤
-│  100.00% │  421.0 µs  │     2 │ 210.5 µs ± ...            │ broadcast_2d │
-└──────────┴────────────┴───────┴────────────────────────────┴──────────────┘
 ```
+
+The output contains separate host-side and device-side tables. The host table groups
+Objective-C API calls, while the device table groups kernels and blit operations by name.
 
 To display a chronological trace of the individual Objective-C calls and GPU operations
 instead of summaries, set `trace=true`:
@@ -65,8 +52,8 @@ julia> Metal.@profile trace=true begin
        end
 ```
 
-Verbose implementation details, such as polling command-buffer status during synchronization,
-are hidden by default. Set `raw=true` to include them.
+Runtime calls used by Metal.jl itself, such as synchronization polling, are hidden by default.
+Set `raw=true` to include them.
 
 To benchmark a piece of code by running it repeatedly, use `Metal.@bprofile` (which accepts an
 optional `time` keyword argument, defaulting to one second):
