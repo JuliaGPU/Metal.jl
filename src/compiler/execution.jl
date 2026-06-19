@@ -341,7 +341,7 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     else
         MTLCommandBuffer(queue)
     end
-    cmdbuf.label = "MTLCommandBuffer($(nameof(f)))"
+    @label! cmdbuf "MTLCommandBuffer($(nameof(f)))"
     let md = MTL.profile_metadata[]
         md === nothing || MTL.note_operation!(md, cmdbuf,
             (; kind = :kernel, name = string(nameof(f)),

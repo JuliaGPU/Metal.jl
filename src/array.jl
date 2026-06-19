@@ -73,7 +73,7 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
                 free(buf)
             end
         end
-        data[].label = "MtlArray{$(T),$(N),$(S)}(dims=$dims)"
+        @label! data[] "MtlArray{$(T),$(N),$(S)}(dims=$dims)"
 
         obj = new{T,N,S}(data, maxsize, 0, dims)
         finalizer(unsafe_free!, obj)

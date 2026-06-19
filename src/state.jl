@@ -5,6 +5,17 @@ log_compiler(args...)   = log_compiler()(args...)
 log_array()             = OSLog("org.juliagpu.metal", "Array")
 log_array(args...)      = log_array()(args...)
 
+const LABEL_RESOURCES = @load_preference("label_resources", false)
+
+macro label!(obj, str)
+    quote
+        if LABEL_RESOURCES
+            $(esc(obj)).label = $(esc(str))
+        end
+        nothing
+    end
+end
+
 """
     device()::MTLDevice
 
