@@ -272,13 +272,24 @@ end
 
 # wraps a single function call, keeping its closure body small.
 @autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
-                                               queue=global_queue(device()))
+                                               queue=nothing)
     # function barrier to avoid capturing the `@autoreleasepool` in the generated code
-    launch(kernel, MTLSize(groups), MTLSize(threads), queue, args)
+    launch_with_queue(kernel, queue, MTLSize(groups), MTLSize(threads), args)
+end
+
+@inline function launch_with_queue(@nospecialize(kernel::HostKernel), ::Nothing,
+                                   gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple))
+    launch(kernel, gs, ts, global_queue(device()), args, true)
+end
+
+@inline function launch_with_queue(@nospecialize(kernel::HostKernel), queue::MTLCommandQueue,
+                                   gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple))
+    launch(kernel, gs, ts, queue, args, false)
 end
 
 function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
-                queue::MTLCommandQueue, @nospecialize(args::Tuple))
+                queue::MTLCommandQueue, @nospecialize(args::Tuple),
+                queue_residency_ready::Bool)
     (gs.width>0 && gs.height>0 && gs.depth>0) ||
         throw(ArgumentError("All group dimensions should be non-zero"))
     (ts.width>0 && ts.height>0 && ts.depth>0) ||
@@ -358,7 +369,7 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         # allocator, exception mailbox) that aren't otherwise bound to the encoder. declare
         # them so Metal Shader Validation tracks the accesses instead of dropping them.
         if kernel.use_residency_sets
-            ensure_queue_residency!(queue, dev, buf, exc)
+            queue_residency_ready || install_queue_residency!(queue, dev)
         else
             # DROP-MACOS14: per-launch residency for macOS 14 / virtual GPUs.
             MTL.use!(cce, buf, MTL.ReadWriteUsage)

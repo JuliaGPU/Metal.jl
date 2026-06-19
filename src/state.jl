@@ -62,6 +62,7 @@ function global_queue(dev::MTLDevice)
             queue = MTLCommandQueue(dev)
             queue.label = "global_queue($(current_task()))"
             global_queues[queue] = nothing
+            can_use_residency_sets(dev) && install_queue_residency!(queue, dev)
             queue
         end
     end::MTLCommandQueue
@@ -116,13 +117,23 @@ function can_use_residency_sets(dev::MTLDevice)
     end::Bool
 end
 
-const queue_residency_sets = WeakKeyDict{MTLCommandQueue,MTLResidencySet}()
+const queue_residency_sets = Dict{UInt,MTLResidencySet}()
 const queue_residency_sets_lock = ReentrantLock()
 
-function ensure_queue_residency!(queue::MTLCommandQueue, dev::MTLDevice,
-                                 malloc_buf::MTLBuffer, exc_buf::MTLBuffer)
+command_queue_key(queue::MTLCommandQueue) = UInt(pointer(queue))
+
+function install_queue_residency!(queue::MTLCommandQueue, dev::MTLDevice)
+    key = command_queue_key(queue)
     Base.@lock queue_residency_sets_lock begin
-        resset = get(queue_residency_sets, queue, nothing)
+        resset = get(queue_residency_sets, key, nothing)
+        resset === nothing || return resset
+    end
+
+    malloc_buf = malloc_buffer(dev)
+    exc_buf = exception_info_buffer(dev)
+
+    Base.@lock queue_residency_sets_lock begin
+        resset = get(queue_residency_sets, key, nothing)
         resset === nothing || return resset
 
         desc = MTLResidencySetDescriptor()
@@ -134,7 +145,13 @@ function ensure_queue_residency!(queue::MTLCommandQueue, dev::MTLDevice,
         MTL.add_allocation!(resset, exc_buf)
         MTL.commit!(resset)
         MTL.add_residency_set!(queue, resset)
-        queue_residency_sets[queue] = resset
+        queue_residency_sets[key] = resset
+        finalizer(queue) do _
+            Base.@lock queue_residency_sets_lock begin
+                get(queue_residency_sets, key, nothing) === resset &&
+                    delete!(queue_residency_sets, key)
+            end
+        end
         return resset
     end
 end
