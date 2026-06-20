@@ -397,20 +397,32 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         return
     end
 
-    cce = compute_encoder(bq)
-    set_pipeline!(bq, cce, pipeline)
+    try
+        cce = compute_encoder(bq)
+        set_pipeline!(bq, cce, pipeline)
 
-    # The kernel state holds GPU addresses to per-device scratch buffers (malloc bump
-    # allocator, exception mailbox) that aren't otherwise bound to the encoder. Declare
-    # them so Metal Shader Validation tracks the accesses instead of dropping them.
-    if !kernel.use_residency_sets
-        # DROP-MACOS14: per-launch residency for macOS 14 / virtual GPUs.
-        MTL.use!(cce, buf, MTL.ReadWriteUsage)
-        MTL.use!(cce, exc, MTL.ReadWriteUsage)
+        # The kernel state holds GPU addresses to per-device scratch buffers (malloc bump
+        # allocator, exception mailbox) that aren't otherwise bound to the encoder. Declare
+        # them so Metal Shader Validation tracks the accesses instead of dropping them.
+        if !kernel.use_residency_sets
+            # DROP-MACOS14: per-launch residency for macOS 14 / virtual GPUs.
+            MTL.use!(cce, buf, MTL.ReadWriteUsage)
+            MTL.use!(cce, exc, MTL.ReadWriteUsage)
+        end
+
+        encode_arguments_nospec!(cce, kernel, kernel_state, f, args)
+        MTL.append_current_function!(cce, gs, ts)
+    catch
+        # The failing launch has not been recorded yet. Keep any earlier
+        # operations in this batch, but close encoder state dirtied by the
+        # failed encode and drop an otherwise empty command buffer.
+        end_encoder!(bq)
+        if bq.nops == 0
+            cmdbuf = bq.cmdbuf
+            cmdbuf === nothing || reset_open_cmdbuf!(bq, cmdbuf)
+        end
+        rethrow()
     end
-
-    encode_arguments_nospec!(cce, kernel, kernel_state, f, args)
-    MTL.append_current_function!(cce, gs, ts)
 
     # The command buffer retains explicitly encoded buffers, but that doesn't keep other
     # resources alive for which we've encoded the GPU address ourselves.

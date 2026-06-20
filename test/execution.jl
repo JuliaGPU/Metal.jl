@@ -160,6 +160,20 @@ bufferSize = 8
 bufferA = MtlArray{Int,1,Metal.SharedStorage}(undef, tuple(bufferSize))
 vecA = unsafe_wrap(Vector{Int}, pointer(bufferA), tuple(bufferSize))
 
+struct EncodeFailure
+    x::Int32
+end
+
+Adapt.adapt_structure(to::Metal.Adaptor, x::EncodeFailure) =
+    to.cce === nothing ? x : error("intentional encode failure")
+
+failed_encode_kernel(x) = return
+
+function failed_batch_increment_kernel(A)
+    A[1] += Int32(1)
+    return
+end
+
 @testset "synchronization" begin
     @metal threads=(bufferSize) tester(bufferA)
     synchronize()
@@ -225,6 +239,31 @@ end
     MTL.commit!(cmdbuf)
     synchronize(queue)
     @test Array(D) == UInt8[3]
+end
+
+@testset "failed batch encoding" begin
+    queue = global_queue(device())
+    synchronize(queue)
+
+    @test_throws ErrorException @metal threads=1 queue=queue failed_encode_kernel(EncodeFailure(1))
+    @test queue.cmdbuf === nothing
+    @test queue.encoder === nothing
+    @test queue.nops == 0
+
+    A = MtlArray(Int32[0])
+    @metal threads=1 queue=queue failed_batch_increment_kernel(A)
+    @test_throws ErrorException @metal threads=1 queue=queue failed_encode_kernel(EncodeFailure(2))
+
+    if Metal.command_batching() && !Metal.profiling_command_buffers() &&
+       Metal.command_batching_ops() > 1
+        @test queue.cmdbuf !== nothing
+        @test queue.encoder === nothing
+        @test queue.nops == 1
+    end
+
+    @metal threads=1 queue=queue failed_batch_increment_kernel(A)
+    synchronize(queue)
+    @test Array(A) == Int32[2]
 end
 
 @testset "kernel launch cleanup" begin
