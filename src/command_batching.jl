@@ -139,6 +139,11 @@ raw_queue(queue::MTLCommandQueue) = queue
 profiling_command_buffers() =
     MTL.profile_hook[] !== nothing || MTL.profile_metadata[] !== nothing
 
+function Base.cconvert(::Type{<:id{MTLCommandQueue}}, bq::BatchedCommandQueue)
+    flush!(bq)
+    return bq.queue
+end
+
 Base.:(==)(bq::BatchedCommandQueue, queue::MTLCommandQueue) = bq.queue == queue
 Base.:(==)(queue::MTLCommandQueue, bq::BatchedCommandQueue) = queue == bq.queue
 Base.:(==)(bq::BatchedCommandQueue, obj::NSObject) = bq.queue == obj
