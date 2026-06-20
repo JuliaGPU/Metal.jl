@@ -59,6 +59,11 @@ Program order is preserved across flushes: command buffers execute in commit ord
 and dispatches within an encoder run serially. At most `command_batching_inflight()`
 command buffers are kept in flight; further submissions block until the GPU drains
 one. Obtain the current task's batched queue with [`global_queue`](@ref).
+
+`BatchedCommandQueue`s are task-local and mutated lock-free by their owning task.
+Sharing a raw `MTLCommandQueue` across tasks is unsupported. [`device_synchronize`](@ref)
+may flush batches owned by other tasks after those tasks have yielded or completed,
+which supports `@async` work and the REPL synchronization hook.
 """
 mutable struct BatchedCommandQueue
     queue::MTLCommandQueue

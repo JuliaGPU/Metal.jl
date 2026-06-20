@@ -105,7 +105,7 @@ Wait for currently committed GPU work on `queue` to finish.
         release(last)
     end
 
-    drain_cleanups!(queue; force=true)
+    drain_cleanups!(bq; force=true)
 
     # surface any device-side exception thrown by the work we just waited on
     check_exceptions()
@@ -127,10 +127,38 @@ Synchronize all committed GPU work across all global queues.
 """
 function device_synchronize()
     flush_batched_queues!()
-    for bq in keys(global_queues)
-        synchronize(bq)
+
+    for queue in keys(global_queues)
+        drain_logging_cmdbufs!(raw_queue(queue))
     end
     for bq in active_batched_queues()
-        synchronize(bq)
+        drain_logging_cmdbufs!(bq.queue)
     end
+
+    cmdbufs = Base.@lock MTL.last_committed_lock begin
+        bufs = collect(values(MTL.last_committed_per_queue))
+        foreach(retain, bufs)
+        bufs
+    end
+
+    for cmdbuf in cmdbufs
+        try
+            if !is_completed(cmdbuf)
+                if use_nonblocking_synchronization
+                    spinning_synchronization(cmdbuf) || nonblocking_synchronization(cmdbuf)
+                else
+                    wait_completed(cmdbuf)
+                end
+            end
+        finally
+            release(cmdbuf)
+        end
+    end
+
+    for bq in active_batched_queues()
+        drain_cleanups!(bq; force=true)
+    end
+
+    check_exceptions()
+    return
 end
