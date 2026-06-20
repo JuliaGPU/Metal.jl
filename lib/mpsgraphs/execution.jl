@@ -26,6 +26,7 @@ function run(graph::MPSGraph, feeds::MPSGraphTensorDataDictionary, targetTensors
 end
 
 function run(graph::MPSGraph, commandQueue, feeds::MPSGraphTensorDataDictionary, targetTensors::NSArray)
+    Metal.flush!(commandQueue)
     obj = @objc [graph::id{MPSGraph} runWithMTLCommandQueue:commandQueue::id{MTLCommandQueue}
                                                     feeds:feeds::id{MPSGraphTensorDataDictionary}
                                             targetTensors:targetTensors::id{NSArray}

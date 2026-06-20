@@ -166,9 +166,14 @@ vecA = unsafe_wrap(Vector{Int}, pointer(bufferA), tuple(bufferSize))
     @test all(vecA .== Int(5))
 end
 
-@testset "command stream" begin
+@testset "command queue batching" begin
     function increment_kernel(A)
         A[1] = A[1] + Int32(1)
+        return
+    end
+
+    function write_kernel(A, value)
+        A[1] = value
         return
     end
 
@@ -201,6 +206,21 @@ end
     Metal.unsafe_fill!(device(C), pointer(C), UInt8(3), length(C); queue, async=true)
     synchronize(queue)
     @test Array(C) == fill(UInt8(3), 4)
+
+    D = MtlArray(UInt8[0])
+    @metal threads=1 queue=queue write_kernel(D, UInt8(1))
+    cmdbuf = MTL.MTLCommandBuffer(queue)
+    if Metal.command_batch_max_ops() > 1 && !Metal.profiling_command_buffers()
+        @test queue.nops == 1
+    end
+    @metal threads=1 queue=queue write_kernel(D, UInt8(2))
+    MTL.MTLBlitCommandEncoder(cmdbuf) do enc
+        buf = Base.unsafe_convert(MTL.MTLBuffer, D)
+        MTL.append_fillbuffer!(enc, buf, UInt8(3), sizeof(D), D.offset)
+    end
+    MTL.commit!(cmdbuf)
+    synchronize(queue)
+    @test Array(D) == UInt8[3]
 end
 
 @testset "kernel launch cleanup" begin

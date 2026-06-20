@@ -59,8 +59,9 @@ Return the [`BatchedCommandQueue`](@ref) associated with the current Julia task.
 This is a *batched* queue: kernel launches and blit operations accumulate into a
 single command buffer and are submitted lazily, rather than one command buffer per
 operation. It is a drop-in for a raw `MTLCommandQueue` — using it as one (e.g. to
-derive a command buffer, or for MPS) first drains any pending batch. Call
-[`synchronize`](@ref) to wait for submitted work to finish. See
+derive a command buffer, or for MPS) preserves program order by draining pending
+batches when command buffers are enqueued or committed. Call [`synchronize`](@ref)
+to wait for submitted work to finish. See
 [`BatchedCommandQueue`](@ref) for the full draining semantics.
 """
 function global_queue(dev::MTLDevice)

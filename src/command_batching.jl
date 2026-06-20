@@ -35,15 +35,12 @@ submission latency. Kernel launches (`@metal`) and GPU-side blit operations
 lazily, instead of one command buffer per operation.
 
 It wraps, and is a drop-in for, the `MTLCommandQueue` it batches: properties that
-aren't its own (e.g. `label`) forward to the underlying queue, and using it
-anywhere an `MTLCommandQueue` is expected first drains the pending batch.
+aren't its own (e.g. `label`) forward to the underlying queue.
 
 The open batch is committed ("flushed") when any of the following happens:
 
   * [`synchronize`](@ref) is called on the queue (or on one of its command buffers);
-  * it is used as a raw `MTLCommandQueue` — e.g. to derive an `MTLCommandBuffer` or
-    `MPSCommandBuffer`, or in any other Metal API call (handled transparently via
-    `Base.cconvert`);
+  * a command buffer derived from the queue is enqueued or committed;
   * the batch reaches `command_batch_max_ops()` operations or
     `command_batch_max_bytes()` of blit traffic;
   * a GPU profiler is attached, in which case batching is disabled (each operation
@@ -131,17 +128,14 @@ profiling_command_buffers() =
     MTL.profile_hook[] !== nothing || MTL.profile_metadata[] !== nothing
 
 function Base.cconvert(::Type{<:id{MTLCommandQueue}}, bq::BatchedCommandQueue)
-    flush!(bq)
     return bq.queue
 end
 
 function MTL.MTLCommandBuffer(bq::BatchedCommandQueue)
-    flush!(bq)
     return MTLCommandBuffer(bq.queue)
 end
 
 function MTL.MTLCommandBuffer(bq::BatchedCommandQueue, desc::MTLCommandBufferDescriptor)
-    flush!(bq)
     return MTLCommandBuffer(bq.queue, desc)
 end
 
@@ -152,14 +146,11 @@ function MTL.MTLCommandBuffer(f::Base.Callable, bq::BatchedCommandQueue,
     return cmdbuf
 end
 
-function MTL.commit!(cmdbuf::MTL.MTLCommandBufferLike, bq::BatchedCommandQueue)
-    flush!(bq)
-    return commit!(cmdbuf, bq.queue)
-end
-
-function MTL.last_committed(bq::BatchedCommandQueue)
-    flush!(bq)
-    return MTL.last_committed(bq.queue)
+function flush_open_batch(cmdbuf)
+    queue = cmdbuf.commandQueue
+    bq = get(task_local_storage(), batched_queue_key(queue), nothing)
+    bq === nothing || flush!(bq)
+    return
 end
 
 function MTL.MTLCaptureScope(bq::BatchedCommandQueue, manager=MTLCaptureManager())
@@ -343,7 +334,7 @@ function flush!(bq::BatchedCommandQueue)
     end_encoder!(bq)
     register_operations!(bq, cmdbuf)
     roots = bq.roots
-    commit!(cmdbuf, bq.queue)
+    MTL.commit_with_queue_key!(cmdbuf, pointer(bq.queue))
     defer_cleanup!(bq, cmdbuf, roots)
     reset_open_cmdbuf!(bq, cmdbuf)
     limit_inflight!(bq)

@@ -15,8 +15,8 @@ High-level interface for executing code on a GPU.
 The `@metal` macro should prefix a call, with `func` a callable function or object that
 should return nothing. It will be compiled to a Metal function upon first use, and to a
 certain extent arguments will be converted and managed automatically using `mtlconvert`.
-Finally, a call to `mtlcall` is performed, creating a command buffer in the current global
-command queue then committing it.
+Finally, a call to `mtlcall` is performed, encoding the kernel onto the selected command
+queue and submitting according to that queue's batching policy.
 
 There are a few keyword arguments that influence the behavior of `@metal`:
 
@@ -25,7 +25,7 @@ There are a few keyword arguments that influence the behavior of `@metal`:
 - `name`: the name of the kernel in the generated code. Defaults to an automatically-
   generated name.
 - `queue`: the command queue to use for this kernel. Defaults to the global command queue.
-- `submit`: whether to submit the current command stream immediately after encoding this
+- `submit`: whether to submit the current command batch immediately after encoding this
   kernel. Defaults to `false`.
 """
 macro metal(ex...)
