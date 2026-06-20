@@ -33,22 +33,24 @@ Possible values:
 end
 
 
-"""
+@device_function @inline threadgroup_barrier(flag=MemoryFlagNone) =
+    ccall("extern air.wg.barrier", llvmcall, Cvoid, (Cuint, Cuint, ), flag, UInt32(1))
+
+@device_function @inline simdgroup_barrier(flag=MemoryFlagNone) =
+    ccall("extern air.simdgroup.barrier", llvmcall, Cvoid, (Cuint, Cuint, ), flag, UInt32(1))
+
+@doc """
     threadgroup_barrier(flag=MemoryFlagNone)
 
 Synchronize all threads in a threadgroup.
 
 Possible flags that affect the memory synchronization behavior are found in [`MemoryFlags`](@ref)
-"""
-@inline threadgroup_barrier(flag=MemoryFlagNone) =
-    ccall("extern air.wg.barrier", llvmcall, Cvoid, (Cuint, Cuint, ), flag, UInt32(1))
+""" threadgroup_barrier
 
-"""
+@doc """
     simdgroup_barrier(flag=MemoryFlagNone)
 
 Synchronize all threads in a SIMD-group.
 
 Possible flags that affect the memory synchronization behavior are found in [`MemoryFlags`](@ref)
-"""
-@inline simdgroup_barrier(flag=MemoryFlagNone) =
-    ccall("extern air.simdgroup.barrier", llvmcall, Cvoid, (Cuint, Cuint, ), flag, UInt32(1))
+""" simdgroup_barrier

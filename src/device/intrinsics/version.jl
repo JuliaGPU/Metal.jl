@@ -3,7 +3,7 @@
 export metal_version, air_version, @sv_str
 
 for var in ["metal_major", "metal_minor", "air_major", "air_minor"]
-    @eval @inline $(Symbol(var))() =
+    @eval @device_function @inline $(Symbol(var))() =
         Base.llvmcall(
             $("""@$var = external global i32
                  define i32 @entry() #0 {
