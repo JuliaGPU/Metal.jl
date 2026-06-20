@@ -414,7 +414,8 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
 
     # The command buffer retains explicitly encoded buffers, but that doesn't keep other
     # resources alive for which we've encoded the GPU address ourselves.
-    record_operation!(bq, f, args; op=kernel_operation(kernel, gs, ts))
+    op = MTL.profile_metadata[] === nothing ? nothing : kernel_operation(kernel, gs, ts)
+    record_operation!(bq, f, args; op=op)
 
     submit ? flush!(bq) : maybe_autoflush!(bq)
     return

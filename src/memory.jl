@@ -109,9 +109,10 @@ end
                 nbytes -= transfer_bytes
             end
 
+            op = MTL.profile_metadata[] === nothing ? nothing :
+                 (; kind = :copy, name = "copyto!", bytes = Int(total_bytes))
             record_operation!(bq, dst.buffer, src.buffer;
-                              bytes=total_bytes,
-                              op=(; kind = :copy, name = "copyto!", bytes = Int(total_bytes)))
+                              bytes=total_bytes, op=op)
 
             if async
                 maybe_autoflush!(bq)
@@ -134,9 +135,9 @@ end
         enc = blit_encoder(bq)
         append_fillbuffer!(enc, dst.buffer, value, nbytes, dst.offset)
 
-        record_operation!(bq, dst.buffer;
-                          bytes=nbytes,
-                          op=(; kind = :fill, name = "fill!", bytes = Int(nbytes)))
+        op = MTL.profile_metadata[] === nothing ? nothing :
+             (; kind = :fill, name = "fill!", bytes = Int(nbytes))
+        record_operation!(bq, dst.buffer; bytes=nbytes, op=op)
 
         if async
             maybe_autoflush!(bq)
