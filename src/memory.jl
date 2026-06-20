@@ -84,10 +84,10 @@ end
 # Split up copies > 2GiB to avoid silent failures when copying buffers > 4Gib
 # to fix JuliaGPU/Metal.jl#710. Solution inspired by
 # https://github.com/pytorch/pytorch/pull/126104
-function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
-                                              src::MtlPtr{T}, N::Integer;
-                                              queue=global_queue(dev),
-                                              async::Bool=false) where T
+@autoreleasepool function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
+                                                              src::MtlPtr{T}, N::Integer;
+                                                              queue=global_queue(dev),
+                                                              async::Bool=false) where T
     if N > 0
         nbytes = N * sizeof(T)
         # For small copies of Shared memory arrays, CPU memcpy avoids GPU command buffer overhead.
