@@ -327,7 +327,7 @@ function wait_oldest_cleanup!(bq::BatchedCommandQueue)
     cmdbuf = first(bq.cleanups).cmdbuf
     retain(cmdbuf)
     try
-        wait_completed(cmdbuf)
+        wait_cmdbuf!(cmdbuf)
     finally
         release(cmdbuf)
     end

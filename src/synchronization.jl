@@ -54,6 +54,26 @@ function nonblocking_synchronization(cmdbuf::MTL.MTLCommandBufferLike)
     return
 end
 
+function wait_cmdbuf!(cmdbuf::MTL.MTLCommandBufferLike)
+    is_completed(cmdbuf) && return
+
+    precompiling = ccall(:jl_generating_output, Cint, ()) != 0
+    if use_nonblocking_synchronization && !precompiling
+        spinning_synchronization(cmdbuf) && return
+
+        done = Base.AsyncCondition()
+        on_completed(cmdbuf, done)
+        try
+            wait(done)
+        finally
+            close(done)
+        end
+    else
+        wait_completed(cmdbuf)
+    end
+    return
+end
+
 
 #
 # public API
@@ -79,14 +99,8 @@ Wait for currently committed GPU work on `queue` to finish.
 
     retain(last)
     try
-        # Fast path: cmdbuf has already completed; queue is drained.
-        if !is_completed(last)
-            if use_nonblocking_synchronization
-                spinning_synchronization(last) || nonblocking_synchronization(last)
-            else
-                wait_completed(last)
-            end
-        end
+        # Handles the already-completed fast path internally.
+        wait_cmdbuf!(last)
     finally
         release(last)
     end
