@@ -16,6 +16,7 @@ using .MPS: MPSMatrixLike, MPSVectorLike
 using BFloat16s
 
 using CEnum
+using GPUToolbox: @memoize
 using ObjectiveC, .Foundation, .Dispatch
 
 # Valid combination of input (A and B matrices) and output (C) types

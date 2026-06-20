@@ -9,7 +9,7 @@ refer to the [official Apple documentation](https://developer.apple.com/document
 module MTL
 
 using CEnum
-using GPUToolbox: @memoize, LazyInitialized
+using GPUToolbox: @memoize
 using ObjectiveC, .Foundation, .Dispatch
 
 using ..Metal

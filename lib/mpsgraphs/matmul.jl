@@ -4,8 +4,8 @@ Creates a default MPSGraphExecutionDescriptor with a MPSGraphCompilationDescript
  on eltypes <= 16 bytes to be executed on the ANE instead of the GPU, leading to worse
  performance and hangs when the matrices are too big
 =#
-@static if isdefined(Base, :OncePerProcess) # VERSION >= v"1.12.0-DEV.1421"
-    const default_exec_desc = OncePerProcess{MPSGraphExecutionDescriptor}() do
+function default_exec_desc()
+    @memoize begin
         compDesc = MPSGraphCompilationDescriptor()
         # Use optimization level 0 to avoid operations being moved to the neural engine
         compDesc.optimizationLevel = MPSGraphOptimizationLevel0
@@ -13,21 +13,7 @@ Creates a default MPSGraphExecutionDescriptor with a MPSGraphCompilationDescript
         execDesc = MPSGraphExecutionDescriptor()
         execDesc.compilationDescriptor = compDesc
         execDesc
-    end
-else
-    const _default_exec_desc = Ref{Union{Nothing,MPSGraphExecutionDescriptor}}(nothing)
-    function default_exec_desc()
-        if _default_exec_desc[] === nothing
-            compDesc = MPSGraphCompilationDescriptor()
-            # Use optimization level 0 to avoid operations being moved to the neural engine
-            compDesc.optimizationLevel = MPSGraphOptimizationLevel0
-
-            execDesc = MPSGraphExecutionDescriptor()
-            execDesc.compilationDescriptor = compDesc
-            _default_exec_desc[] = execDesc
-        end
-        _default_exec_desc[]::MPSGraphExecutionDescriptor
-    end
+    end::MPSGraphExecutionDescriptor
 end
 
 
