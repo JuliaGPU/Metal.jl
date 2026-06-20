@@ -1620,7 +1620,7 @@ struct MTLStageInRegionIndirectArguments
     stageInSize::NTuple{3, UInt32}
 end
 
-@objcwrapper managed = true MTLComputeCommandEncoder <: MTLCommandEncoder
+@objcwrapper MTLComputeCommandEncoder <: MTLCommandEncoder
 
 @objcproperties MTLComputeCommandEncoder begin
     @autoproperty dispatchType::MTLDispatchType

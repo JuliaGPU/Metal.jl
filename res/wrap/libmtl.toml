@@ -67,9 +67,6 @@ managed=true
     [api.MTLCompileOptions.proptype]
     languageVersion="VersionNumber"
 
-[api.MTLComputeCommandEncoder]
-managed=true
-
 [api.MTL4ComputeCommandEncoder]
 managed=true
 
