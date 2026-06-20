@@ -8,9 +8,7 @@ export MTLBinaryArchiveDescriptor
 
 function MTLBinaryArchiveDescriptor()
     handle = @objc [MTLBinaryArchiveDescriptor new]::id{MTLBinaryArchiveDescriptor}
-    obj = MTLBinaryArchiveDescriptor(handle)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLBinaryArchiveDescriptor, handle)
 end
 
 
@@ -28,9 +26,7 @@ function MTLBinaryArchive(dev::MTLDevice, desc::MTLBinaryArchiveDescriptor)
                                        error:err::Ptr{id{NSError}}]::id{MTLBinaryArchive}
     err[] == nil || throw_error(err[])
 
-    obj = MTLBinaryArchive(handle)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLBinaryArchive, handle)
 end
 
 function add_functions!(bin::MTLBinaryArchive, desc::MTLComputePipelineDescriptor)

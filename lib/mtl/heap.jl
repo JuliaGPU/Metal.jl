@@ -8,9 +8,7 @@ export MTLHeapDescriptor
 
 function MTLHeapDescriptor()
     handle = @objc [MTLHeapDescriptor new]::id{MTLHeapDescriptor}
-    obj = MTLHeapDescriptor(handle)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLHeapDescriptor, handle)
 end
 
 
@@ -24,7 +22,5 @@ export MTLHeap
 
 function MTLHeap(dev::MTLDevice, desc::MTLHeapDescriptor)
     handle = @objc [dev::id{MTLDevice} newHeapWithDescriptor:desc::id{MTLHeapDescriptor}]::id{MTLHeap}
-    obj = MTLHeap(handle)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLHeap, handle)
 end

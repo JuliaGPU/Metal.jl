@@ -88,6 +88,9 @@ managed=true
 [api.MTLEvent]
 managed=true
 
+[api.MTLSharedEventHandle]
+managed=true
+
 [api.MTLFence]
 managed=true
 

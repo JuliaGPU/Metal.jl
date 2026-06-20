@@ -8,9 +8,7 @@ export MTLFunctionDescriptor
 
 function MTLFunctionDescriptor()
     handle = @objc [MTLFunctionDescriptor new]::id{MTLFunctionDescriptor}
-    obj = MTLFunctionDescriptor(handle)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLFunctionDescriptor, handle)
 end
 
 
@@ -27,7 +25,5 @@ export MTLFunction
 function MTLFunction(lib::MTLLibrary, name)
     handle = @objc [lib::id{MTLLibrary} newFunctionWithName:name::id{NSString}]::id{MTLFunction}
     handle == nil && throw(KeyError(name))
-    obj = MTLFunction(handle)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLFunction, handle)
 end

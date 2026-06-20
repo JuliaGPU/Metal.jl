@@ -62,9 +62,7 @@ MTLCaptureDescriptor
 
 function MTLCaptureDescriptor()
     handle = @objc [MTLCaptureDescriptor new]::id{MTLCaptureDescriptor}
-    obj = MTLCaptureDescriptor(handle)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLCaptureDescriptor, handle)
 end
 
 # TODO: Add capture state

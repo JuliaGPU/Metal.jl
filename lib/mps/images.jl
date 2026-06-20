@@ -25,8 +25,7 @@ export MPSImageGaussianBlur, encode!
 
 function MPSImageGaussianBlur(dev, sigma)
     kernel = @objc [MPSImageGaussianBlur alloc]::id{MPSImageGaussianBlur}
-    obj = MPSImageGaussianBlur(kernel)
-    finalizer(release, obj)
+    obj = adopt(MPSImageGaussianBlur, kernel)
     @objc [obj::id{MPSImageGaussianBlur} initWithDevice:dev::id{MTLDevice}
                                   sigma:sigma::Float32]::id{MPSImageGaussianBlur}
     return obj
@@ -41,8 +40,7 @@ export MPSImageBox
 
 function MPSImageBox(dev, kernelWidth, kernelHeight)
     kernel = @objc [MPSImageBox alloc]::id{MPSImageBox}
-    obj = MPSImageBox(kernel)
-    finalizer(release, obj)
+    obj = adopt(MPSImageBox, kernel)
     @objc [obj::id{MPSImageBox} initWithDevice:dev::id{MTLDevice}
                                 kernelWidth:kernelWidth::Int
                                 kernelHeight:kernelHeight::Int]::id{MPSImageBox}

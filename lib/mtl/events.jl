@@ -8,9 +8,7 @@ export MTLEvent
 
 function MTLEvent(dev::MTLDevice)
     ptr = @objc [dev::id{MTLDevice} newEvent]::id{MTLEvent}
-    obj = MTLEvent(ptr)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLEvent, ptr)
 end
 
 
@@ -24,9 +22,7 @@ export MTLSharedEvent, MTLSharedEventHandle
 
 function MTLSharedEvent(dev::MTLDevice)
     ptr = @objc [dev::id{MTLDevice} newSharedEvent]::id{MTLSharedEvent}
-    obj = MTLSharedEvent(ptr)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLSharedEvent, ptr)
 end
 
 function waitUntilSignaledValue(ev::MTLSharedEvent, value, timeoutMS=typemax(UInt64))
@@ -36,11 +32,9 @@ end
 
 ## shared event handle
 
-# @objcwrapper MTLSharedEventHandle <: MTLEvent
+# @objcwrapper managed = true MTLSharedEventHandle <: MTLEvent
 
 function MTLSharedEventHandle(ev::MTLSharedEvent)
     ptr = @objc [ev::id{MTLSharedEvent} newSharedEventHandle]::id{MTLSharedEventHandle}
-    obj = MTLSharedEventHandle(ptr)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLSharedEventHandle, ptr)
 end

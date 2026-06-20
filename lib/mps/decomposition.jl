@@ -6,8 +6,7 @@ export MPSMatrixDecompositionLU, encode!
 
 function MPSMatrixDecompositionLU(dev, rows, columns)
     kernel = @objc [MPSMatrixDecompositionLU alloc]::id{MPSMatrixDecompositionLU}
-    obj = MPSMatrixDecompositionLU(kernel)
-    finalizer(release, obj)
+    obj = adopt(MPSMatrixDecompositionLU, kernel)
     @objc [obj::id{MPSMatrixDecompositionLU} initWithDevice:dev::id{MTLDevice}
                                              rows:rows::NSUInteger
                                              columns:columns::NSUInteger]::id{MPSMatrixDecompositionLU}
@@ -31,8 +30,7 @@ export MPSMatrixDecompositionCholesky, encode!
 
 function MPSMatrixDecompositionCholesky(dev, lower, order)
     kernel = @objc [MPSMatrixDecompositionCholesky alloc]::id{MPSMatrixDecompositionCholesky}
-    obj = MPSMatrixDecompositionCholesky(kernel)
-    finalizer(release, obj)
+    obj = adopt(MPSMatrixDecompositionCholesky, kernel)
     @objc [obj::id{MPSMatrixDecompositionCholesky} initWithDevice:dev::id{MTLDevice}
                                                    lower:lower::Bool
                                                    order:order::NSUInteger]::id{MPSMatrixDecompositionCholesky}

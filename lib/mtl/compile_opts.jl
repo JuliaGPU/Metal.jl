@@ -40,7 +40,5 @@ export MTLCompileOptions
 
 function MTLCompileOptions()
     handle = @objc [MTLCompileOptions new]::id{MTLCompileOptions}
-    obj = MTLCompileOptions(handle)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLCompileOptions, handle)
 end

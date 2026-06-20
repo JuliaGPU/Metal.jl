@@ -2878,7 +2878,7 @@ end
     @autoproperty signaledValue::UInt64 setter = setSignaledValue
 end
 
-@objcwrapper MTLSharedEventHandle <: NSObject
+@objcwrapper managed = true MTLSharedEventHandle <: NSObject
 
 @objcproperties MTLSharedEventHandle begin
     @autoproperty label::id{NSString}

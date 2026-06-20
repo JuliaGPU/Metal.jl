@@ -8,9 +8,7 @@ export MTLCommandBufferDescriptor
 
 function MTLCommandBufferDescriptor()
     handle = @objc [MTLCommandBufferDescriptor new]::id{MTLCommandBufferDescriptor}
-    obj = MTLCommandBufferDescriptor(handle)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLCommandBufferDescriptor, handle)
 end
 
 

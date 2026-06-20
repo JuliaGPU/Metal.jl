@@ -11,9 +11,7 @@ function MTLResidencySet(device::MTLDevice, desc::MTLResidencySetDescriptor)
     handle = @objc [device::id{MTLDevice} newResidencySetWithDescriptor:desc::id{MTLResidencySetDescriptor}
                                                                     error:err::Ptr{id{NSError}}]::id{MTLResidencySet}
     err[] == nil || throw_error(err[])
-    obj = MTLResidencySet(handle)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLResidencySet, handle)
 end
 
 # Buffer Arguments

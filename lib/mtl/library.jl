@@ -10,9 +10,7 @@ function MTLLibrary(dev::MTLDevice, src::String,
                                           error:err::Ptr{id{NSError}}]::id{MTLLibrary}
     err[] == nil || throw_error(err[])
 
-    obj = MTLLibrary(handle)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLLibrary, handle)
 end
 
 function MTLLibraryFromFile(dev::MTLDevice, path::String)
@@ -24,9 +22,7 @@ function MTLLibraryFromFile(dev::MTLDevice, path::String)
     end
     err[] == nil || throw_error(err[])
 
-    obj = MTLLibrary(handle)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLLibrary, handle)
 end
 
 function MTLLibraryFromData(dev::MTLDevice, input_data)
@@ -38,7 +34,5 @@ function MTLLibraryFromData(dev::MTLDevice, input_data)
     end
     err[] == nil || throw_error(err[])
 
-    obj = MTLLibrary(handle)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLLibrary, handle)
 end

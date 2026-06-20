@@ -56,15 +56,13 @@ for R in [:MPSMatrixRandomMTGP32, :MPSMatrixRandomPhilox]
     @eval begin
         function $R(device)
             kernel = @objc [$R alloc]::id{$R}
-            obj = $R(kernel)
-            finalizer(release, obj)
+            obj = adopt($R, kernel)
             @objc [obj::id{$R} initWithDevice:device::id{MTLDevice}]::id{$R}
             return obj
         end
         function $R(device, destinationDataType, seed)
             kernel = @objc [$R alloc]::id{$R}
-            obj = $R(kernel)
-            finalizer(release, obj)
+            obj = adopt($R, kernel)
             @objc [obj::id{$R} initWithDevice:device::id{MTLDevice}
                                 destinationDataType:destinationDataType::MPSDataType
                                 seed:seed::NSUInteger]::id{$R}
@@ -72,8 +70,7 @@ for R in [:MPSMatrixRandomMTGP32, :MPSMatrixRandomPhilox]
         end
         function $R(device, destinationDataType, seed, distributionDescriptor)
             kernel = @objc [$R alloc]::id{$R}
-            obj = $R(kernel)
-            finalizer(release, obj)
+            obj = adopt($R, kernel)
             @objc [obj::id{$R} initWithDevice:device::id{MTLDevice}
                                 destinationDataType:destinationDataType::MPSDataType
                                 seed:seed::NSUInteger

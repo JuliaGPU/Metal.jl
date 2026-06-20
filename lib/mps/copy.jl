@@ -20,8 +20,7 @@ export MPSMatrixCopy, encode!
 
 function MPSMatrixCopy(dev, copyRows, copyColumns, sourcesAreTransposed, destinationsAreTransposed)
     kernel = @objc [MPSMatrixCopy alloc]::id{MPSMatrixCopy}
-    obj = MPSMatrixCopy(kernel)
-    finalizer(release, obj)
+    obj = adopt(MPSMatrixCopy, kernel)
     @objc [obj::id{MPSMatrixCopy} initWithDevice:dev::id{MTLDevice}
                                   copyRows:copyRows::NSUInteger
                                   copyColumns:copyColumns::NSUInteger

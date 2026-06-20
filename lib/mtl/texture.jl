@@ -17,10 +17,7 @@ function MTLTextureDescriptor(pixelFormat, width, height, mipmapped=false)
                                           width:width::NSUInteger
                                           height:height::NSUInteger
                                           mipmapped:mipmapped::Bool]::id{MTLTextureDescriptor}
-    obj = MTLTextureDescriptor(desc)
-    finalizer(release, obj)
-
-    return obj
+    return retain(MTLTextureDescriptor, desc)
 end
 
 # @objcwrapper managed = true MTLTexture <: NSObject
@@ -29,16 +26,10 @@ function MTLTexture(buffer, descriptor, offset, bytesPerRow)
     texture = @objc [buffer::id{MTLBuffer} newTextureWithDescriptor:descriptor::id{MTLTextureDescriptor}
                                           offset:offset::NSUInteger
                                           bytesPerRow:bytesPerRow::NSUInteger]::id{MTLTexture}
-    obj = MTLTexture(texture)
-    finalizer(release, obj)
-
-    return obj
+    return adopt(MTLTexture, texture)
 end
 
 function MTLTexture(dev, descriptor)
     texture = @objc [dev::id{MTLDevice} newTextureWithDescriptor:descriptor::id{MTLTextureDescriptor}]::id{MTLTexture}
-    obj = MTLTexture(texture)
-    finalizer(release, obj)
-
-    return obj
+    return adopt(MTLTexture, texture)
 end

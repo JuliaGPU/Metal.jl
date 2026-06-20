@@ -6,8 +6,7 @@ export MTLLogStateDescriptor
 
 function MTLLogStateDescriptor()
     handle = @objc [MTLLogStateDescriptor alloc]::id{MTLLogStateDescriptor}
-    obj = MTLLogStateDescriptor(handle)
-    finalizer(release, obj)
+    obj = adopt(MTLLogStateDescriptor, handle)
     @objc [obj::id{MTLLogStateDescriptor} init]::id{MTLLogStateDescriptor}
     return obj
 end

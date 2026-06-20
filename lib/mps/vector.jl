@@ -29,8 +29,7 @@ export MPSVector
 
 function MPSVector(buf, descriptor::MPSVectorDescriptor, offset::Integer=0)
     vec = @objc [MPSVector alloc]::id{MPSVector}
-    obj = MPSVector(vec)
-    finalizer(release, obj)
+    obj = adopt(MPSVector, vec)
     @objc [obj::id{MPSVector} initWithBuffer:buf::id{MTLBuffer}
                               offset:offset::NSUInteger
                               descriptor:descriptor::id{MPSVectorDescriptor}]::id{MPSVector}
@@ -39,8 +38,7 @@ end
 
 function MPSVector(dev::MTLDevice, descriptor::MPSVectorDescriptor)
     vec = @objc [MPSVector alloc]::id{MPSVector}
-    obj = MPSVector(vec)
-    finalizer(release, obj)
+    obj = adopt(MPSVector, vec)
     @objc [obj::id{MPSVector} initWithDevice:dev::id{MTLDevice}
                               descriptor:descriptor::id{MPSVectorDescriptor}]::id{MPSVector}
     return obj
@@ -74,8 +72,7 @@ export MPSMatrixVectorMultiplication, encode!, matvecmul!
 
 function MPSMatrixVectorMultiplication(dev, transpose, rows, columns, alpha, beta)
     kernel = @objc [MPSMatrixVectorMultiplication alloc]::id{MPSMatrixVectorMultiplication}
-    obj = MPSMatrixVectorMultiplication(kernel)
-    finalizer(release, obj)
+    obj = adopt(MPSMatrixVectorMultiplication, kernel)
     @objc [obj::id{MPSMatrixVectorMultiplication} initWithDevice:dev::id{MTLDevice}
                                                   transpose:transpose::Bool
                                                   rows:rows::NSUInteger

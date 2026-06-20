@@ -8,9 +8,7 @@ export MTLComputePipelineDescriptor
 
 function MTLComputePipelineDescriptor()
     handle = @objc [MTLComputePipelineDescriptor new]::id{MTLComputePipelineDescriptor}
-    obj = MTLComputePipelineDescriptor(handle)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLComputePipelineDescriptor, handle)
 end
 
 #
@@ -27,9 +25,7 @@ function MTLComputePipelineState(dev::MTLDevice, fun::MTLFunction)
                                        error:err::Ptr{id{NSError}}]::id{MTLComputePipelineState}
     err[] == nil || throw_error(err[])
 
-    obj = MTLComputePipelineState(handle)
-    finalizer(release, obj)
-    return obj
+    return adopt(MTLComputePipelineState, handle)
 end
 
 # TODO: MTLComputePipelineState(d::MTLDevice, desc::MTLComputePipelineDescriptor, ...)

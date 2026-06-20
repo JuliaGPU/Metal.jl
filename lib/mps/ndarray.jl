@@ -80,8 +80,7 @@ May not contain more than 16 dimensions.
 """
 function MPSNDArray(device::MTLDevice, desc::MPSNDArrayDescriptor)
     arrayaddr = @objc [MPSNDArray alloc]::id{MPSNDArray}
-    obj = MPSNDArray(arrayaddr)
-    finalizer(release, obj)
+    obj = adopt(MPSNDArray, arrayaddr)
     @objc [obj::MPSNDArray initWithDevice:device::id{MTLDevice}
                                  descriptor:desc::id{MPSNDArrayDescriptor}]::id{MPSNDArray}
     return obj
@@ -89,8 +88,7 @@ end
 
 function MPSNDArray(device::MTLDevice, scalar)
     arrayaddr = @objc [MPSNDArray alloc]::id{MPSNDArray}
-    obj = MPSNDArray(arrayaddr)
-    finalizer(release, obj)
+    obj = adopt(MPSNDArray, arrayaddr)
     @objc [obj::MPSNDArray initWithDevice:device::id{MTLDevice}
                                  scalar:scalar::Float64]::id{MPSNDArray}
     return obj
@@ -99,8 +97,7 @@ end
 @static if Metal.is_macos(v"15")
     function MPSNDArray(buffer::MTLBuffer, offset::UInt, descriptor::MPSNDArrayDescriptor)
         arrayaddr = @objc [MPSNDArray alloc]::id{MPSNDArray}
-        obj = MPSNDArray(arrayaddr)
-        finalizer(release, obj)
+        obj = adopt(MPSNDArray, arrayaddr)
         @objc [obj::MPSNDArray initWithBuffer:buffer::id{MTLBuffer}
                                 offset:offset::NSUInteger
                                 descriptor:descriptor::id{MPSNDArrayDescriptor}]::id{MPSNDArray}
@@ -191,8 +188,7 @@ export MPSNDArrayMultiaryKernel
 
 function MPSNDArrayMultiaryKernel(device, sourceCount)
     kernel = @objc [MPSNDArrayMultiaryKernel alloc]::id{MPSNDArrayMultiaryKernel}
-    obj = MPSNDArrayMultiaryKernel(kernel)
-    finalizer(release, obj)
+    obj = adopt(MPSNDArrayMultiaryKernel, kernel)
     @objc [obj::id{MPSNDArrayMultiaryKernel} initWithDevice:device::id{MTLDevice}
                                   sourceCount:sourceCount::NSUInteger]::id{MPSNDArrayMultiaryKernel}
     return obj
@@ -227,8 +223,7 @@ export MPSNDArrayUnaryKernel
 
 function MPSNDArrayUnaryKernel(device)
     kernel = @objc [MPSNDArrayUnaryKernel alloc]::id{MPSNDArrayUnaryKernel}
-    obj = MPSNDArrayUnaryKernel(kernel)
-    finalizer(release, obj)
+    obj = adopt(MPSNDArrayUnaryKernel, kernel)
     @objc [obj::id{MPSNDArrayUnaryKernel} initWithDevice:device::id{MTLDevice}]::id{MPSNDArrayUnaryKernel}
     return obj
 end
@@ -262,8 +257,7 @@ export MPSNDArrayBinaryKernel
 
 function MPSNDArrayBinaryKernel(device)
     kernel = @objc [MPSNDArrayBinaryKernel alloc]::id{MPSNDArrayBinaryKernel}
-    obj = MPSNDArrayBinaryKernel(kernel)
-    finalizer(release, obj)
+    obj = adopt(MPSNDArrayBinaryKernel, kernel)
     @objc [obj::id{MPSNDArrayBinaryKernel} initWithDevice:device::id{MTLDevice}]::id{MPSNDArrayBinaryKernel}
     return obj
 end
@@ -299,8 +293,7 @@ end
 
 function MPSNDArrayMatrixMultiplication(device, sourceCount)
     kernel = @objc [MPSNDArrayMatrixMultiplication alloc]::id{MPSNDArrayMatrixMultiplication}
-    obj = MPSNDArrayMatrixMultiplication(kernel)
-    finalizer(release, obj)
+    obj = adopt(MPSNDArrayMatrixMultiplication, kernel)
     @objc [obj::id{MPSNDArrayMatrixMultiplication} initWithDevice:device::id{MTLDevice}
                     sourceCount:sourceCount::NSUInteger]::id{MPSNDArrayMatrixMultiplication}
     return obj

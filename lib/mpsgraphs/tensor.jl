@@ -36,8 +36,7 @@ end
 
 function MPSGraphTensorData(buffer::MTLBuffer, shape::MPSShape, dataType)
     obj = @objc [MPSGraphTensorData alloc]::id{MPSGraphTensorData}
-    tensor = MPSGraphTensorData(obj)
-    finalizer(release, tensor)
+    tensor = adopt(MPSGraphTensorData, obj)
     @objc [tensor::id{MPSGraphTensorData} initWithMTLBuffer:buffer::id{MTLBuffer}
                                     shape:shape::id{MPSShape}
                                     dataType:dataType::MPSDataType]::id{MPSGraphTensorData}
@@ -45,8 +44,7 @@ function MPSGraphTensorData(buffer::MTLBuffer, shape::MPSShape, dataType)
 end
 function MPSGraphTensorData(buffer::MTLBuffer, shape::MPSShape, dataType, rowBytes)
     obj = @objc [MPSGraphTensorData alloc]::id{MPSGraphTensorData}
-    tensor = MPSGraphTensorData(obj)
-    finalizer(release, tensor)
+    tensor = adopt(MPSGraphTensorData, obj)
     @objc [tensor::id{MPSGraphTensorData} initWithMTLBuffer:buffer::id{MTLBuffer}
                                     shape:shape::id{MPSShape}
                                     dataType:dataType::MPSDataType
@@ -57,8 +55,7 @@ MPSGraphTensorData(matrix::MtlArray{T}) where T = MPSGraphTensorData(matrix.data
 
 function MPSGraphTensorData(matrix::MPSMatrixLike)
     obj = @objc [MPSGraphTensorData alloc]::id{MPSGraphTensorData}
-    tensor = MPSGraphTensorData(obj)
-    finalizer(release, tensor)
+    tensor = adopt(MPSGraphTensorData, obj)
     @objc [tensor::id{MPSGraphTensorData} initWithMPSMatrix:matrix::id{MPSMatrix}]::id{MPSGraphTensorData}
     return tensor
 end
@@ -67,8 +64,7 @@ function MPSGraphTensorData(matrix::MPSMatrixLike, rank)
     1 <= rank <= 16 || throw(ArgumentError("`rank` must be between 1 and 16 inclusive"))
 
     obj = @objc [MPSGraphTensorData alloc]::id{MPSGraphTensorData}
-    tensor = MPSGraphTensorData(obj)
-    finalizer(release, tensor)
+    tensor = adopt(MPSGraphTensorData, obj)
     @objc [tensor::id{MPSGraphTensorData} initWithMPSMatrix:matrix::id{MPSMatrix}
                               rank:rank::NSUInteger]::id{MPSGraphTensorData}
     return tensor
@@ -76,8 +72,7 @@ end
 
 function MPSGraphTensorData(vector::MPSVectorLike)
     obj = @objc [MPSGraphTensorData alloc]::id{MPSGraphTensorData}
-    tensor = MPSGraphTensorData(obj)
-    finalizer(release, tensor)
+    tensor = adopt(MPSGraphTensorData, obj)
     @objc [tensor::id{MPSGraphTensorData} initWithMPSVector:vector::id{MPSVector}]::id{MPSGraphTensorData}
     return tensor
 end
@@ -86,8 +81,7 @@ function MPSGraphTensorData(vector::MPSVectorLike, rank)
     1 <= rank <= 16 || throw(ArgumentError("`rank` must be between 1 and 16 inclusive"))
 
     obj = @objc [MPSGraphTensorData alloc]::id{MPSGraphTensorData}
-    tensor = MPSGraphTensorData(obj)
-    finalizer(release, tensor)
+    tensor = adopt(MPSGraphTensorData, obj)
     @objc [tensor::id{MPSGraphTensorData} initWithMPSMatrix:vector::id{MPSVector}
                                           rank:rank::NSUInteger]::id{MPSGraphTensorData}
     return tensor
@@ -95,18 +89,16 @@ end
 
 function MPSGraphTensorData(ndarr::MPSNDArray)
     obj = @objc [MPSGraphTensorData alloc]::id{MPSGraphTensorData}
-    tensor = MPSGraphTensorData(obj)
-    finalizer(release, tensor)
+    tensor = adopt(MPSGraphTensorData, obj)
     @objc [tensor::id{MPSGraphTensorData} initWithMPSNDArray:ndarr::id{MPSNDArray}]::id{MPSGraphTensorData}
     return tensor
 end
 # TODO: MPSImage is not yet implemented
 # function MPSGraphTensorData(imgbatch::MPSImageBatch)
 #     obj = @objc [MPSGraphTensorData alloc]::id{MPSGraphTensorData}
-#     tensor = MPSGraphTensorData(obj)
-#     finalizer(release, tensor)
+#     tensor = adopt(MPSGraphTensorData, obj)
 #     @objc [tensor::id{MPSGraphTensorData} initWithMPSImageBatch:imgbatch::id{MPSImageBatch}]::id{MPSGraphTensorData}
-#     MPSGraphTensorData(obj)
+#     return tensor
 # end
 
 """
