@@ -8,10 +8,10 @@ end
 
 function MTLResidencySet(device::MTLDevice, desc::MTLResidencySetDescriptor)
     err = Ref{id{NSError}}(nil)
-    handle = @objc [device::id{MTLDevice} newResidencySetWithDescriptor:desc::id{MTLResidencySetDescriptor}
-                                                                    error:err::Ptr{id{NSError}}]::id{MTLResidencySet}
-    err[] == nil || throw_error(err[])
-    return adopt(MTLResidencySet, handle)
+    resset = @objc [device::id{MTLDevice} newResidencySetWithDescriptor:desc::id{MTLResidencySetDescriptor}
+                                                                    error:err::Ptr{id{NSError}}]::Union{Nothing,MTLResidencySet}
+    resset === nothing && throw_error(err[])
+    return resset
 end
 
 # Buffer Arguments

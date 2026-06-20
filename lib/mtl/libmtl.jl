@@ -195,7 +195,7 @@ end
     @autoproperty maximumConcurrentCompilationTaskCount::UInt64
 end
 
-@objcwrapper managed = false MTLCommandEncoder <: NSObject
+@objcwrapper MTLCommandEncoder <: NSObject
 
 @objcproperties MTLCommandEncoder begin
     @autoproperty device::id{MTLDevice}
@@ -1347,7 +1347,7 @@ struct MTLMapIndirectArguments
     sliceId::UInt32
 end
 
-@objcwrapper managed = false MTLResourceStateCommandEncoder <: MTLCommandEncoder
+@objcwrapper MTLResourceStateCommandEncoder <: MTLCommandEncoder
 
 struct MTLClearColor
     red::Cdouble
@@ -1501,7 +1501,7 @@ end
     MTLBlitOptionRowLinearPVRTC = 0x0000000000000004
 end
 
-@objcwrapper managed = false MTLBlitCommandEncoder <: MTLCommandEncoder
+@objcwrapper MTLBlitCommandEncoder <: MTLCommandEncoder
 
 @cenum MTLCommandBufferStatus::UInt64 begin
     MTLCommandBufferStatusNotEnqueued = 0x0000000000000000
@@ -1572,7 +1572,7 @@ end
 
 @objcwrapper MTLLogContainer <: NSObject
 
-@objcwrapper managed = false MTLCommandBuffer <: NSObject
+@objcwrapper MTLCommandBuffer <: NSObject
 
 @objcproperties MTLCommandBuffer begin
     @autoproperty device::id{MTLDevice}
@@ -1620,7 +1620,7 @@ struct MTLStageInRegionIndirectArguments
     stageInSize::NTuple{3, UInt32}
 end
 
-@objcwrapper managed = false MTLComputeCommandEncoder <: MTLCommandEncoder
+@objcwrapper MTLComputeCommandEncoder <: MTLCommandEncoder
 
 @objcproperties MTLComputeCommandEncoder begin
     @autoproperty dispatchType::MTLDispatchType
@@ -2052,7 +2052,7 @@ end
     MTLRenderStageMesh = 0x0000000000000010
 end
 
-@objcwrapper managed = false MTLRenderCommandEncoder <: MTLCommandEncoder
+@objcwrapper MTLRenderCommandEncoder <: MTLCommandEncoder
 
 @objcproperties MTLRenderCommandEncoder begin
     @autoproperty tileWidth::UInt64
@@ -2314,7 +2314,7 @@ end
     @autoproperty requiredThreadsPerMeshThreadgroup::MTLSize setter = setRequiredThreadsPerMeshThreadgroup availability = macos(v"26.0.0")
 end
 
-@objcwrapper managed = false MTLParallelRenderCommandEncoder <: MTLCommandEncoder
+@objcwrapper MTLParallelRenderCommandEncoder <: MTLCommandEncoder
 
 @cenum MTLSamplerMinMagFilter::UInt64 begin
     MTLSamplerMinMagFilterNearest = 0x0000000000000000
@@ -2826,14 +2826,14 @@ end
     MTL4VisibilityOptionResourceAlias = 0x0000000000000002
 end
 
-@objcwrapper managed = false availability = macos(v"26.0.0") MTL4CommandBuffer <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4CommandBuffer <: NSObject
 
 @objcproperties MTL4CommandBuffer begin
     @autoproperty device::id{MTLDevice}
     @autoproperty label::id{NSString} setter = setLabel
 end
 
-@objcwrapper managed = false availability = macos(v"26.0.0") MTL4CommandEncoder <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4CommandEncoder <: NSObject
 
 @objcproperties MTL4CommandEncoder begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -2846,7 +2846,7 @@ end
     MTL4RenderEncoderOptionResuming = 0x0000000000000002
 end
 
-@objcwrapper managed = false availability = macos(v"26.0.0") MTL4RenderCommandEncoder <: MTL4CommandEncoder
+@objcwrapper availability = macos(v"26.0.0") MTL4RenderCommandEncoder <: MTL4CommandEncoder
 
 @objcproperties MTL4RenderCommandEncoder begin
     @autoproperty tileWidth::UInt64
@@ -3049,7 +3049,7 @@ end
     @autoproperty column::UInt64
 end
 
-@objcwrapper managed = false MTLAccelerationStructureCommandEncoder <: MTLCommandEncoder
+@objcwrapper MTLAccelerationStructureCommandEncoder <: MTLCommandEncoder
 
 @objcwrapper MTLAccelerationStructurePassSampleBufferAttachmentDescriptor <: NSObject
 
@@ -3264,7 +3264,7 @@ end
     MTLIOStatusComplete = 3
 end
 
-@objcwrapper managed = false MTLIOCommandBuffer <: NSObject
+@objcwrapper MTLIOCommandBuffer <: NSObject
 
 @objcproperties MTLIOCommandBuffer begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -3523,9 +3523,9 @@ end
     @autoproperty motionTransformStride::UInt64 setter = setMotionTransformStride
 end
 
-@objcwrapper managed = false availability = macos(v"26.0.0") MTL4ComputeCommandEncoder <: MTL4CommandEncoder
+@objcwrapper availability = macos(v"26.0.0") MTL4ComputeCommandEncoder <: MTL4CommandEncoder
 
-@objcwrapper managed = false availability = macos(v"26.0.0") MTL4MachineLearningCommandEncoder <: MTL4CommandEncoder
+@objcwrapper availability = macos(v"26.0.0") MTL4MachineLearningCommandEncoder <: MTL4CommandEncoder
 
 @objcwrapper availability = macos(v"26.0.0") MTL4LibraryDescriptor <: NSObject
 

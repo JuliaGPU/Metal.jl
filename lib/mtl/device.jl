@@ -6,6 +6,8 @@ export MTLDevice, MTLCreateSystemDefaultDevice, devices
 
 # @objcwrapper MTLDevice <: NSObject
 
+# MTLDevice is deliberately unmanaged: system devices are borrowed process-level
+# handles, and `devices()` benefits from returning dense isbits wrapper values.
 MTLCreateSystemDefaultDevice() =
     MTLDevice(@ccall libmtl.MTLCreateSystemDefaultDevice()::id{MTLDevice})
 

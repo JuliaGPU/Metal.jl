@@ -21,11 +21,11 @@ export MTLBinaryArchive, add_functions!
 
 function MTLBinaryArchive(dev::MTLDevice, desc::MTLBinaryArchiveDescriptor)
     err = Ref{id{NSError}}(nil)
-    handle = @objc [dev::id{MTLDevice} newBinaryArchiveWithDescriptor:desc::id{MTLBinaryArchiveDescriptor}
-                                       error:err::Ptr{id{NSError}}]::id{MTLBinaryArchive}
-    err[] == nil || throw_error(err[])
+    archive = @objc [dev::id{MTLDevice} newBinaryArchiveWithDescriptor:desc::id{MTLBinaryArchiveDescriptor}
+                                        error:err::Ptr{id{NSError}}]::Union{Nothing,MTLBinaryArchive}
+    archive === nothing && throw_error(err[])
 
-    return adopt(MTLBinaryArchive, handle)
+    return archive
 end
 
 function add_functions!(bin::MTLBinaryArchive, desc::MTLComputePipelineDescriptor)

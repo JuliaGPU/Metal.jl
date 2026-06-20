@@ -6,13 +6,11 @@ export append_current_function!
 
 function MTLComputeCommandEncoder(cmdbuf::MTLCommandBuffer;
                                   dispatch_type::Union{Nothing,MTLDispatchType} = nothing)
-    handle = if isnothing(dispatch_type)
-        @objc [cmdbuf::id{MTLCommandBuffer} computeCommandEncoder]::id{MTLComputeCommandEncoder}
+    if isnothing(dispatch_type)
+        @objc [cmdbuf::id{MTLCommandBuffer} computeCommandEncoder]::MTLComputeCommandEncoder
     else
-        @objc [cmdbuf::id{MTLCommandBuffer} computeCommandEncoderWithDispatchType:dispatch_type::MTLDispatchType]::id{MTLComputeCommandEncoder}
+        @objc [cmdbuf::id{MTLCommandBuffer} computeCommandEncoderWithDispatchType:dispatch_type::MTLDispatchType]::MTLComputeCommandEncoder
     end
-
-    MTLComputeCommandEncoder(handle)
 end
 
 function set_function!(cce::MTLComputeCommandEncoder, pip::MTLComputePipelineState)

@@ -5,6 +5,8 @@ export MTLBuffer, contents
 
 # @objcwrapper MTLBuffer <: MTLResource
 
+# MTLBuffer is deliberately unmanaged: buffer lifetime is owned by the pool/DataRef
+# layer, so wrappers stay cheap isbits handles that can be shared by views.
 Base.sizeof(buf::MTLBuffer) = Int(buf.length)
 
 contents(buf::MTLBuffer) = @objc [buf::id{MTLBuffer} contents]::Ptr{Cvoid}

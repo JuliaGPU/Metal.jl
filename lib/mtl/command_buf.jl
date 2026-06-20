@@ -22,13 +22,11 @@ export MTLCommandBuffer, enqueue!, wait_scheduled, wait_completed, encode_signal
 # @objcwrapper MTLCommandBuffer <: NSObject
 
 function MTLCommandBuffer(queue::MTLCommandQueue)
-    handle = @objc [queue::id{MTLCommandQueue} commandBuffer]::id{MTLCommandBuffer}
-    MTLCommandBuffer(handle)
+    @objc [queue::id{MTLCommandQueue} commandBuffer]::MTLCommandBuffer
 end
 
 function MTLCommandBuffer(queue::MTLCommandQueue, desc::MTLCommandBufferDescriptor)
-    handle = @objc [queue::id{MTLCommandQueue} commandBufferWithDescriptor:desc::id{MTLCommandBufferDescriptor}]::id{MTLCommandBuffer}
-    MTLCommandBuffer(handle)
+    @objc [queue::id{MTLCommandQueue} commandBufferWithDescriptor:desc::id{MTLCommandBufferDescriptor}]::MTLCommandBuffer
 end
 
 function MTLCommandBuffer(f::Base.Callable, queue::MTLCommandQueue,
@@ -123,17 +121,10 @@ function commit_with_queue_key!(cmdbuf::MTLCommandBufferLike, key::id{MTLCommand
     @objc [cmdbuf::id{MTLCommandBuffer} commit]::Nothing
     # Record the commit so synchronize(queue) can wait on this cmdbuf instead
     # of allocating a fresh sentinel. The slot is overwritten on every commit,
-    # so the dict stays bounded at one cmdbuf per queue. Retain explicitly:
-    # MTL retains a committed cmdbuf only until it completes, so without our
-    # own retain the wrapper could become a dangling pointer once the GPU is
-    # done. The retain on the new entry pairs with a release on the displaced one.
-    Foundation.retain(cmdbuf)
-    old = @lock last_committed_lock begin
-        prev = get(last_committed_per_queue, key, nothing)
+    # so the dict stays bounded at one cmdbuf per queue.
+    @lock last_committed_lock begin
         last_committed_per_queue[key] = cmdbuf
-        prev
     end
-    old === nothing || release(old)
     hook = profile_hook[]
     hook === nothing || hook(cmdbuf)
     return

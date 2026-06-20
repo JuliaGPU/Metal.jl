@@ -5,34 +5,34 @@ export MTLLibrary, MTLLibraryFromFile, MTLLibraryFromData
 function MTLLibrary(dev::MTLDevice, src::String,
                     opts::MTLCompileOptions=MTLCompileOptions())
     err = Ref{id{NSError}}(nil)
-    handle = @objc [dev::id{MTLDevice} newLibraryWithSource:src::id{NSString}
-                                          options:opts::id{MTLCompileOptions}
-                                          error:err::Ptr{id{NSError}}]::id{MTLLibrary}
-    err[] == nil || throw_error(err[])
+    lib = @objc [dev::id{MTLDevice} newLibraryWithSource:src::id{NSString}
+                                       options:opts::id{MTLCompileOptions}
+                                       error:err::Ptr{id{NSError}}]::Union{Nothing,MTLLibrary}
+    lib === nothing && throw_error(err[])
 
-    return adopt(MTLLibrary, handle)
+    return lib
 end
 
 function MTLLibraryFromFile(dev::MTLDevice, path::String)
     err = Ref{id{NSError}}(nil)
-    handle = let
+    lib = let
         url = NSFileURL(path)
         @objc [dev::id{MTLDevice} newLibraryWithURL:url::id{NSURL}
-                                     error:err::Ptr{id{NSError}}]::id{MTLLibrary}
+                                     error:err::Ptr{id{NSError}}]::Union{Nothing,MTLLibrary}
     end
-    err[] == nil || throw_error(err[])
+    lib === nothing && throw_error(err[])
 
-    return adopt(MTLLibrary, handle)
+    return lib
 end
 
 function MTLLibraryFromData(dev::MTLDevice, input_data)
     err = Ref{id{NSError}}(nil)
-    GC.@preserve input_data begin
+    lib = GC.@preserve input_data begin
         data = dispatch_data(pointer(input_data), sizeof(input_data))
-        handle = @objc [dev::id{MTLDevice} newLibraryWithData:data::dispatch_data_t
-                                              error:err::Ptr{id{NSError}}]::id{MTLLibrary}
+        @objc [dev::id{MTLDevice} newLibraryWithData:data::dispatch_data_t
+                                      error:err::Ptr{id{NSError}}]::Union{Nothing,MTLLibrary}
     end
-    err[] == nil || throw_error(err[])
+    lib === nothing && throw_error(err[])
 
-    return adopt(MTLLibrary, handle)
+    return lib
 end

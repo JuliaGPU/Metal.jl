@@ -20,11 +20,11 @@ export MTLComputePipelineState
 
 function MTLComputePipelineState(dev::MTLDevice, fun::MTLFunction)
     err = Ref{id{NSError}}(nil)
-    handle = @objc [dev::id{MTLDevice} newComputePipelineStateWithFunction:fun::id{MTLFunction}
-                                       error:err::Ptr{id{NSError}}]::id{MTLComputePipelineState}
-    err[] == nil || throw_error(err[])
+    pipeline = @objc [dev::id{MTLDevice} newComputePipelineStateWithFunction:fun::id{MTLFunction}
+                                          error:err::Ptr{id{NSError}}]::Union{Nothing,MTLComputePipelineState}
+    pipeline === nothing && throw_error(err[])
 
-    return adopt(MTLComputePipelineState, handle)
+    return pipeline
 end
 
 # TODO: MTLComputePipelineState(d::MTLDevice, desc::MTLComputePipelineDescriptor, ...)

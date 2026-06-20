@@ -5,8 +5,6 @@ module Profiling
 import ..Metal: MTL, synchronize, device_synchronize
 
 import ObjectiveC
-using ObjectiveC.Foundation: retain, release
-using ObjectiveC: @autoreleasepool
 
 using Printf: @sprintf
 using Statistics: mean, std, quantile
@@ -41,23 +39,14 @@ function record_commit!(collector::MTL.ProfileCollector, cmdbuf)
             name = clean_label(name)
         end
 
-        # keep the command buffer alive until the timestamps have been read.
-        retain(cmdbuf)
         push!(collector.records, (name, cmdbuf))
     end
     return
 end
 
 function release_records!(collector::MTL.ProfileCollector)
-    records = @lock collector.lock begin
-        records = copy(collector.records)
+    @lock collector.lock begin
         empty!(collector.records)
-        records
-    end
-    @autoreleasepool begin
-        for (_, cmdbuf) in records
-            release(cmdbuf)
-        end
     end
     return
 end
@@ -189,19 +178,16 @@ function profile_internally(@nospecialize(f); trace::Bool=false, raw::Bool=false
             empty!(collector.records)
             records
         end
-        @autoreleasepool begin
-            for (opname, cmdbuf) in records
-                if cmdbuf.status == MTL.MTLCommandBufferStatusCompleted
-                    t0 = cmdbuf.GPUStartTime
-                    t1 = cmdbuf.GPUEndTime
-                    if t1 > t0
-                        push!(name, opname)
-                        push!(start, t0)
-                        push!(stop, t1)
-                        push!(ops, get(collector.metadata, cmdbuf, Any[]))
-                    end
+        for (opname, cmdbuf) in records
+            if cmdbuf.status == MTL.MTLCommandBufferStatusCompleted
+                t0 = cmdbuf.GPUStartTime
+                t1 = cmdbuf.GPUEndTime
+                if t1 > t0
+                    push!(name, opname)
+                    push!(start, t0)
+                    push!(stop, t1)
+                    push!(ops, get(collector.metadata, cmdbuf, Any[]))
                 end
-                release(cmdbuf)
             end
         end
 

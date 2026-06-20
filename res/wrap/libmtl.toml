@@ -32,59 +32,17 @@ macro_mode = "disable"
 # Adjustments to the expressions done by the rewriter in wrap.jl
 # Sorted in alphabetical order. For more info on the options, see
 # the comment in wrap.jl
-[api.MTL4CommandBuffer]
-managed=false
-
-[api.MTL4CommandEncoder]
-managed=false
-
-[api.MTL4ComputeCommandEncoder]
-managed=false
-
-[api.MTL4MachineLearningCommandEncoder]
-managed=false
-
-[api.MTL4RenderCommandEncoder]
-managed=false
-
-[api.MTLAccelerationStructureCommandEncoder]
-managed=false
-
-[api.MTLBlitCommandEncoder]
-managed=false
-
 [api.MTLBuffer]
 managed=false
 
 [api.MTLBuffer.proptype]
 gpuAddress="Ptr{Cvoid}"
 
-[api.MTLCommandBuffer]
-managed=false
-
-[api.MTLCommandEncoder]
-managed=false
-
 [api.MTLCompileOptions.proptype]
 languageVersion="VersionNumber"
-
-[api.MTLComputeCommandEncoder]
-managed=false
 
 [api.MTLDevice]
 managed=false
 
 [api.MTLDrawable]
-managed=false
-
-[api.MTLIOCommandBuffer]
-managed=false
-
-[api.MTLParallelRenderCommandEncoder]
-managed=false
-
-[api.MTLRenderCommandEncoder]
-managed=false
-
-[api.MTLResourceStateCommandEncoder]
 managed=false
