@@ -29,6 +29,7 @@ Sys.isapple() && @setup_workload begin
     empty!(_compiler_configs)
     empty!(kernel_instances)
     empty!(global_queues)
+    Base.@lock batched_queues_lock empty!(batched_queues)
     empty!(queue_residency_sets)
     empty!(device_malloc_bufs)
     empty!(MTL.last_committed_per_queue)

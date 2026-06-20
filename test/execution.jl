@@ -160,10 +160,132 @@ bufferSize = 8
 bufferA = MtlArray{Int,1,Metal.SharedStorage}(undef, tuple(bufferSize))
 vecA = unsafe_wrap(Vector{Int}, pointer(bufferA), tuple(bufferSize))
 
+struct EncodeFailure
+    x::Int32
+end
+
+Adapt.adapt_structure(to::Metal.Adaptor, x::EncodeFailure) =
+    to.cce === nothing ? x : error("intentional encode failure")
+
+failed_encode_kernel(x) = return
+
+function failed_batch_increment_kernel(A)
+    A[1] += Int32(1)
+    return
+end
+
 @testset "synchronization" begin
     @metal threads=(bufferSize) tester(bufferA)
     synchronize()
     @test all(vecA .== Int(5))
+end
+
+@testset "command queue batching" begin
+    function increment_kernel(A)
+        A[1] = A[1] + Int32(1)
+        return
+    end
+
+    function write_kernel(A, value)
+        A[1] = value
+        return
+    end
+
+    queue = global_queue(device())
+    A = MtlArray(Int32[0])
+    synchronize(queue)
+
+    for _ in 1:8
+        @metal threads=1 queue=queue increment_kernel(A)
+    end
+    if !Metal.command_batching() || Metal.profiling_command_buffers()
+        @test queue.cmdbuf === nothing
+    elseif Metal.command_batching_ops() > 1
+        @test queue.nops == 8
+    end
+    synchronize(queue)
+    @test Array(A) == Int32[8]
+    @test queue.cmdbuf === nothing
+
+    @metal threads=1 queue=queue submit=true increment_kernel(A)
+    @test queue.cmdbuf === nothing
+    synchronize(queue)
+    @test Array(A) == Int32[9]
+
+    B = MtlArray(Int32[0])
+    Metal.unsafe_copyto!(device(B), pointer(B), pointer(A), 1; queue, async=true)
+    @metal threads=1 queue=queue increment_kernel(B)
+    synchronize(queue)
+    @test Array(B) == Int32[10]
+
+    C = MtlArray{UInt8}(undef, 4)
+    Metal.unsafe_fill!(device(C), pointer(C), UInt8(3), length(C); queue, async=true)
+    synchronize(queue)
+    @test Array(C) == fill(UInt8(3), 4)
+
+    D = MtlArray(UInt8[0])
+    @metal threads=1 queue=queue write_kernel(D, UInt8(1))
+    cmdbuf = MTL.MTLCommandBuffer(queue)
+    if !Metal.command_batching() || Metal.profiling_command_buffers()
+        @test queue.cmdbuf === nothing
+    elseif Metal.command_batching_ops() > 1
+        @test queue.nops == 1
+    end
+    @metal threads=1 queue=queue write_kernel(D, UInt8(2))
+    MTL.MTLBlitCommandEncoder(cmdbuf) do enc
+        buf = Base.unsafe_convert(MTL.MTLBuffer, D)
+        MTL.append_fillbuffer!(enc, buf, UInt8(3), sizeof(D), D.offset)
+    end
+    MTL.commit!(cmdbuf)
+    synchronize(queue)
+    @test Array(D) == UInt8[3]
+end
+
+@testset "command batching tunables" begin
+    env = "JULIA_METAL_TEST_BATCHING_TUNABLE"
+    withenv(env => nothing) do
+        @test Metal.load_command_batching_tunable("test_tunable", env, 7) == 7
+        @test_throws ArgumentError Metal.load_command_batching_tunable("test_tunable", env, 0)
+        @test_throws ArgumentError Metal.load_command_batching_tunable("test_tunable", env, "7")
+    end
+
+    withenv(env => "9") do
+        @test Metal.load_command_batching_tunable("test_tunable", env, 7) == 9
+    end
+    withenv(env => "0") do
+        @test_throws ArgumentError Metal.load_command_batching_tunable("test_tunable", env, 7)
+    end
+    withenv(env => "-1") do
+        @test_throws ArgumentError Metal.load_command_batching_tunable("test_tunable", env, 7)
+    end
+    withenv(env => "not-an-int") do
+        @test_throws ArgumentError Metal.load_command_batching_tunable("test_tunable", env, 7)
+    end
+end
+
+@testset "failed batch encoding" begin
+    queue = global_queue(device())
+    synchronize(queue)
+
+    @test_throws ErrorException @metal threads=1 queue=queue failed_encode_kernel(EncodeFailure(1))
+    @test queue.cmdbuf === nothing
+    @test queue.encoder === nothing
+    @test queue.nops == 0
+
+    A = MtlArray(Int32[0])
+    @metal threads=1 queue=queue failed_batch_increment_kernel(A)
+    @test_throws ErrorException @metal threads=1 queue=queue failed_encode_kernel(EncodeFailure(2))
+
+    if Metal.command_batching() && !Metal.profiling_command_buffers() &&
+       Metal.command_batching_ops() > 1
+        @test queue.cmdbuf !== nothing
+        @test queue.encoder === nothing
+        @test queue.nops == 1
+    end
+
+    @metal threads=1 queue=queue failed_batch_increment_kernel(A)
+    synchronize(queue)
+    @test Array(A) == Int32[2]
 end
 
 @testset "kernel launch cleanup" begin
@@ -196,6 +318,35 @@ end
     wait(t)
     device_synchronize()
     @test all(vecA .== Int(5))
+end
+
+@testset "REPL task synchronization" begin
+    synchronize()
+
+    tls = task_local_storage()
+    had_device = haskey(tls, :MTLDevice)
+    old_device = had_device ? tls[:MTLDevice] : nothing
+    had_device && delete!(tls, :MTLDevice)
+
+    try
+        A = Core.eval(@__MODULE__, Metal.synchronize_metal_tasks(quote
+            function repl_task_sync_kernel(A)
+                A[1] = Int32(1)
+                return
+            end
+
+            t = @async begin
+                A = MtlArray(Int32[0])
+                @metal threads=1 repl_task_sync_kernel(A)
+                A
+            end
+            fetch(t)
+        end))
+
+        @test Array(A) == Int32[1]
+    finally
+        had_device && task_local_storage(:MTLDevice, old_device)
+    end
 end
 
 @testset "device-side exceptions" begin

@@ -1,4 +1,4 @@
-export device, device!, global_queue
+export device, device!, global_queue, BatchedCommandQueue
 
 log_compiler()          = OSLog("org.juliagpu.metal", "Compiler")
 log_compiler(args...)   = log_compiler()(args...)
@@ -49,25 +49,34 @@ Sets the Metal GPU device associated with the current Julia task.
 """
 device!(dev::MTLDevice) = task_local_storage(:MTLDevice, dev)
 
-const global_queues = WeakKeyDict{MTLCommandQueue,Nothing}()
+const global_queues = WeakKeyDict{Any,Nothing}()
 
 """
-    global_queue(dev::MTLDevice)::MTLCommandQueue
+    global_queue(dev::MTLDevice)::BatchedCommandQueue
 
-Return the Metal command queue associated with the current Julia thread.
+Return the [`BatchedCommandQueue`](@ref) associated with the current Julia task.
+
+This is a *batched* queue: kernel launches and blit operations accumulate into a
+single command buffer and are submitted lazily, rather than one command buffer per
+operation. It is a drop-in for a raw `MTLCommandQueue` — using it as one (e.g. to
+derive a command buffer, or for MPS) preserves program order by draining pending
+batches when command buffers are enqueued or committed. Call [`synchronize`](@ref)
+to wait for submitted work to finish. See
+[`BatchedCommandQueue`](@ref) for the full draining semantics.
 """
 function global_queue(dev::MTLDevice)
-    get!(task_local_storage(), (:MTLCommandQueue, dev)) do
+    get!(task_local_storage(), (:BatchedCommandQueue, dev)) do
         @autoreleasepool begin
             # NOTE: MTLCommandQueue itself is manually reference-counted,
             #       the release pool is for resources used during its construction.
             queue = MTLCommandQueue(dev)
             queue.label = "global_queue($(current_task()))"
-            global_queues[queue] = nothing
-            can_use_residency_sets(dev) && install_queue_residency!(queue, dev)
-            queue
+            bq = BatchedCommandQueue(queue)
+            task_local_storage(batched_queue_key(queue), bq)
+            global_queues[bq] = nothing
+            bq
         end
-    end::MTLCommandQueue
+    end::BatchedCommandQueue
 end
 
 # tracks the most recently launched logging-enabled cmdbuf per queue, so that
@@ -151,58 +160,6 @@ function install_queue_residency!(queue::MTLCommandQueue, dev::MTLDevice)
         end
         return resset
     end
-end
-
-
-# Per-launch cleanup used to be performed from a Metal completion-handler
-# block. Those handlers run on libdispatch worker threads, where compiling or
-# running Julia code can overflow the small foreign stack. Keep the command
-# buffer alive and drain the Julia-side cleanup from normal managed threads.
-struct PendingCleanup
-    cmdbuf::MTLCommandBuffer
-    roots::Vector{Any}
-end
-
-const _pending_cleanups = IdDict{MTLCommandQueue,Vector{PendingCleanup}}()
-const _pending_cleanups_lock = ReentrantLock()
-
-function defer_cleanup!(queue::MTLCommandQueue, cmdbuf::MTLCommandBuffer, roots::Vector{Any})
-    retain(cmdbuf)
-    Base.@lock _pending_cleanups_lock begin
-        push!(get!(() -> PendingCleanup[], _pending_cleanups, queue),
-              PendingCleanup(cmdbuf, roots))
-    end
-    return
-end
-
-function drain_cleanups!(queue::MTLCommandQueue; force::Bool=false)
-    cleanups = Base.@lock _pending_cleanups_lock begin
-        list = get(_pending_cleanups, queue, nothing)
-        list === nothing && return
-
-        n = 0
-        for cleanup in list
-            if !(force || cleanup.cmdbuf.status >= MTL.MTLCommandBufferStatusCompleted)
-                break
-            end
-            n += 1
-        end
-        n == 0 && return
-
-        completed = list[1:n]
-        deleteat!(list, 1:n)
-        isempty(list) && delete!(_pending_cleanups, queue)
-        completed
-    end
-
-    for cleanup in cleanups
-        if cleanup.cmdbuf.status == MTL.MTLCommandBufferStatusError
-            @error "Command buffer failed" reason=cleanup.cmdbuf.error.localizedDescription
-        end
-        empty!(cleanup.roots)
-        release(cleanup.cmdbuf)
-    end
-    return
 end
 
 

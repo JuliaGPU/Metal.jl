@@ -49,6 +49,10 @@ function versioninfo(io::IO=stdout)
         "default_storage" => load_preference(Metal, "default_storage"),
         "label_resources" => load_preference(Metal, "label_resources"),
         "nonblocking_synchronization" => load_preference(Metal, "nonblocking_synchronization"),
+        "command_batching" => load_preference(Metal, "command_batching"),
+        "command_batching_ops" => load_preference(Metal, "command_batching_ops"),
+        "command_batching_bytes" => load_preference(Metal, "command_batching_bytes"),
+        "command_batching_inflight" => load_preference(Metal, "command_batching_inflight"),
     ]
     if any(x->!isnothing(x[2]), prefs)
         println(io, "Preferences:")
@@ -128,6 +132,15 @@ function capture_dir()
     end
 end
 
+function flush_capture_object!(object)
+    if applicable(raw_queue, object)
+        flush!(object)
+    else
+        flush_batched_queues!()
+    end
+    return
+end
+
 function captured(f; dest=MTL.MTLCaptureDestinationGPUTraceDocument,
                      object=global_queue(device()))
     if !haskey(ENV, "METAL_CAPTURE_ENABLED") || ENV["METAL_CAPTURE_ENABLED"] != "1"
@@ -137,10 +150,13 @@ function captured(f; dest=MTL.MTLCaptureDestinationGPUTraceDocument,
 
     folder = capture_dir()
     scope = MTLCaptureScope(object)
+    flush_capture_object!(object)
     startCapture(scope, dest; folder)
     try
+        flush_capture_object!(object)
         beginScope(scope)
         f()
+        flush_capture_object!(object)
         endScope(scope)
         synchronize()
     finally

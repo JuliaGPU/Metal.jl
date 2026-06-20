@@ -13,7 +13,7 @@ function MPSCommandBuffer(commandBuffer::MTLCommandBufferLike)
     MPSCommandBuffer(handle)
 end
 
-function MPSCommandBuffer(commandQueue::MTLCommandQueueLike)
+function MPSCommandBuffer(commandQueue)
     handle = @objc [MPSCommandBuffer commandBufferFromCommandQueue:commandQueue::id{MTLCommandQueue}]::id{MPSCommandBuffer}
     MPSCommandBuffer(handle)
 end
@@ -36,8 +36,11 @@ end
 
 export commitAndContinue!
 
-commitAndContinue!(cmdbuf::MPSCommandBuffer) =
+function commitAndContinue!(cmdbuf::MPSCommandBuffer)
+    hook = MTL.submit_hook[]
+    hook === nothing || hook(cmdbuf.commandBuffer)
     @objc [cmdbuf::id{MPSCommandBuffer} commitAndContinue]::Nothing
+end
 
 function commitAndContinue!(f::Base.Callable, cmdbuf::MPSCommandBuffer)
     enqueue!(cmdbuf)
