@@ -50,10 +50,9 @@ function versioninfo(io::IO=stdout)
         "label_resources" => load_preference(Metal, "label_resources"),
         "nonblocking_synchronization" => load_preference(Metal, "nonblocking_synchronization"),
         "command_batching" => load_preference(Metal, "command_batching"),
-        "command_batch_max_ops" => load_preference(Metal, "command_batch_max_ops"),
-        "command_batch_max_bytes" => load_preference(Metal, "command_batch_max_bytes"),
-        "command_batch_max_inflight" => load_preference(Metal, "command_batch_max_inflight"),
-        "command_max_inflight" => load_preference(Metal, "command_max_inflight"),
+        "command_batching_ops" => load_preference(Metal, "command_batching_ops"),
+        "command_batching_bytes" => load_preference(Metal, "command_batching_bytes"),
+        "command_batching_inflight" => load_preference(Metal, "command_batching_inflight"),
     ]
     if any(x->!isnothing(x[2]), prefs)
         println(io, "Preferences:")

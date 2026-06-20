@@ -25,12 +25,12 @@
 # maximum number of operations to batch into one command buffer before
 # committing. lower values reduce latency-to-first-result and the memory held by
 # in-flight work; higher values improve throughput. defaults to 32.
-#command_batch_max_ops = 32
+#command_batching_ops = 32
 
 # maximum amount of blit traffic (in bytes) to batch before committing, bounding
 # the memory pinned by an open batch. defaults to 67108864 (64 MiB).
-#command_batch_max_bytes = 67108864
+#command_batching_bytes = 67108864
 
 # maximum number of committed-but-incomplete command buffers kept in flight;
 # further submissions block until the GPU drains one. defaults to 3.
-#command_batch_max_inflight = 3
+#command_batching_inflight = 3

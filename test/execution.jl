@@ -186,7 +186,7 @@ end
     end
     if !Metal.command_batching() || Metal.profiling_command_buffers()
         @test queue.cmdbuf === nothing
-    elseif Metal.command_batch_max_ops() > 1
+    elseif Metal.command_batching_ops() > 1
         @test queue.nops == 8
     end
     synchronize(queue)
@@ -214,7 +214,7 @@ end
     cmdbuf = MTL.MTLCommandBuffer(queue)
     if !Metal.command_batching() || Metal.profiling_command_buffers()
         @test queue.cmdbuf === nothing
-    elseif Metal.command_batch_max_ops() > 1
+    elseif Metal.command_batching_ops() > 1
         @test queue.nops == 1
     end
     @metal threads=1 queue=queue write_kernel(D, UInt8(2))

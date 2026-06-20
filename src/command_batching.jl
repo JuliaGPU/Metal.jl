@@ -9,25 +9,20 @@ const COMMAND_BATCHING = @load_preference("command_batching", true)
 
 @inline command_batching() = COMMAND_BATCHING
 
-command_batch_max_ops() = @memoize begin
-    s = get(ENV, "JULIA_METAL_COMMAND_BATCH_MAX_OPS", nothing)
-    s === nothing ? @load_preference("command_batch_max_ops", 32) : parse(Int, s)
+command_batching_ops() = @memoize begin
+    s = get(ENV, "JULIA_METAL_COMMAND_BATCHING_OPS", nothing)
+    s === nothing ? @load_preference("command_batching_ops", 32) : parse(Int, s)
 end::Int
 
-command_batch_max_bytes() = @memoize begin
-    s = get(ENV, "JULIA_METAL_COMMAND_BATCH_MAX_BYTES", nothing)
-    s === nothing ? @load_preference("command_batch_max_bytes", 64 * 1024 * 1024) : parse(Int, s)
+command_batching_bytes() = @memoize begin
+    s = get(ENV, "JULIA_METAL_COMMAND_BATCHING_BYTES", nothing)
+    s === nothing ? @load_preference("command_batching_bytes", 64 * 1024 * 1024) : parse(Int, s)
 end::Int
 
-command_batch_max_inflight() = @memoize begin
-    s = get(ENV, "JULIA_METAL_COMMAND_BATCH_MAX_INFLIGHT",
-            get(ENV, "JULIA_METAL_COMMAND_MAX_INFLIGHT", nothing))
-    pref = @load_preference("command_batch_max_inflight",
-                            @load_preference("command_max_inflight", 3))
-    s === nothing ? pref : parse(Int, s)
+command_batching_inflight() = @memoize begin
+    s = get(ENV, "JULIA_METAL_COMMAND_BATCHING_INFLIGHT", nothing)
+    s === nothing ? @load_preference("command_batching_inflight", 3) : parse(Int, s)
 end::Int
-
-command_max_inflight() = command_batch_max_inflight()
 
 # Completion handlers run on libdispatch worker threads, where compiling or
 # running Julia code can overflow the small foreign stack. Keep command buffers
@@ -53,15 +48,15 @@ The open batch is committed ("flushed") when any of the following happens:
   * [`synchronize`](@ref) is called on the queue (or on one of its command buffers);
   * a command buffer derived from the queue is enqueued or committed;
   * command batching is disabled with the `command_batching = false` preference;
-  * the batch reaches `command_batch_max_ops()` operations or
-    `command_batch_max_bytes()` of blit traffic;
+  * the batch reaches `command_batching_ops()` operations or
+    `command_batching_bytes()` of blit traffic;
   * a GPU profiler is attached, in which case batching is disabled (each operation
     gets its own command buffer) so per-operation GPU timing is preserved;
   * an immediate submission is requested via `@metal ... submit=true`, or
     `Metal.flush!` is called explicitly.
 
 Program order is preserved across flushes: command buffers execute in commit order
-and dispatches within an encoder run serially. At most `command_batch_max_inflight()`
+and dispatches within an encoder run serially. At most `command_batching_inflight()`
 command buffers are kept in flight; further submissions block until the GPU drains
 one. Obtain the current task's batched queue with [`global_queue`](@ref).
 """
@@ -342,7 +337,7 @@ end
 
 function limit_inflight!(bq::BatchedCommandQueue)
     drain_cleanups!(bq)
-    while pending_cleanup_count(bq) >= command_batch_max_inflight()
+    while pending_cleanup_count(bq) >= command_batching_inflight()
         wait_oldest_cleanup!(bq)
     end
     return
@@ -392,8 +387,8 @@ end
 function maybe_autoflush!(bq::BatchedCommandQueue)
     if !command_batching() ||
        profiling_command_buffers() ||
-       bq.nops >= command_batch_max_ops() ||
-       bq.nbytes >= command_batch_max_bytes()
+       bq.nops >= command_batching_ops() ||
+       bq.nbytes >= command_batching_bytes()
         flush!(bq)
     end
     return
