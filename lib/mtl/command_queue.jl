@@ -1,7 +1,7 @@
 
 export MTLCommandQueueDescriptor
 
-# @objcwrapper immutable=false MTLCommandQueueDescriptor <: NSObject
+# @objcwrapper managed = true MTLCommandQueueDescriptor <: NSObject
 
 function MTLCommandQueueDescriptor()
     handle = @objc [MTLCommandQueueDescriptor alloc]::id{MTLCommandQueueDescriptor}
@@ -21,7 +21,7 @@ end
 
 export MTLCommandQueue
 
-# @objcwrapper immutable=false MTLCommandQueue <: NSObject
+# @objcwrapper managed = true MTLCommandQueue <: NSObject
 
 function MTLCommandQueue(dev::MTLDevice)
     handle = @objc [dev::id{MTLDevice} newCommandQueue]::id{MTLCommandQueue}

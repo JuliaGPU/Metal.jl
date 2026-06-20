@@ -10,6 +10,6 @@
     K(reinterpret(id{K}, obj))
 end
 
-# @objcwrapper immutable=false MPSMatrixUnaryKernel <: MPSKernel
+# @objcwrapper managed = true MPSMatrixUnaryKernel <: MPSKernel
 
-# @objcwrapper immutable=false MPSMatrixBinaryKernel <: MPSKernel
+# @objcwrapper managed = true MPSMatrixBinaryKernel <: MPSKernel

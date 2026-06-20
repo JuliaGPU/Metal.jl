@@ -1,6 +1,6 @@
 export MTLLibrary, MTLLibraryFromFile, MTLLibraryFromData
 
-# @objcwrapper immutable=false MTLLibrary <: NSObject
+# @objcwrapper managed = true MTLLibrary <: NSObject
 
 function MTLLibrary(dev::MTLDevice, src::String,
                     opts::MTLCompileOptions=MTLCompileOptions())

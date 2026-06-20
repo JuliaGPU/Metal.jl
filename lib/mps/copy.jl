@@ -16,7 +16,7 @@ end
 
 export MPSMatrixCopy, encode!
 
-# @objcwrapper immutable=false MPSMatrixCopy <: MPSKernel
+# @objcwrapper managed = true MPSMatrixCopy <: MPSKernel
 
 function MPSMatrixCopy(dev, copyRows, copyColumns, sourcesAreTransposed, destinationsAreTransposed)
     kernel = @objc [MPSMatrixCopy alloc]::id{MPSMatrixCopy}

@@ -167,7 +167,7 @@ Changes various expression nodes from `ctx` based on the contents of `options`
 Currently supported options:
 
     [api.<symbol>]
-        - immutable::Bool     # Set the mutability of the Obj-C object.
+        - managed::Bool       # Enable managed/finalizer-capable Obj-C wrappers.
         - supertype::String   # Set the supertype of the Obj-C object.
 
     [api.<symbol>.proptype]
@@ -175,6 +175,16 @@ Currently supported options:
 """
 function rewriter!(ctx, options)
     haskey(options, "api") || return
+
+    function wrapper_kwarg(expr, name)
+        findfirst(expr.args) do arg
+            arg isa Expr && arg.head == :(=) && arg.args[1] == name
+        end
+    end
+
+    wrapper_def_arg(expr) = findlast(expr.args) do arg
+        arg isa Symbol || Meta.isexpr(arg, :(<:))
+    end
 
     for node in get_nodes(ctx.dag)
         nodename = string(node.id)
@@ -190,12 +200,22 @@ function rewriter!(ctx, options)
 
             declexpr = nostatic_exprs[1]
 
-            if haskey(nodedict, "immutable")
-                con = nodedict["immutable"]
-                declexpr.args[3].args[2] = con
+            immutable_idx = wrapper_kwarg(declexpr, :immutable)
+            managed = get(nodedict, "managed", false)
+            if immutable_idx !== nothing
+                if managed
+                    declexpr.args[immutable_idx].args[1] = :managed
+                    declexpr.args[immutable_idx].args[2] = true
+                else
+                    deleteat!(declexpr.args, immutable_idx)
+                end
+            elseif managed
+                insert!(declexpr.args, 3, Expr(:(=), :managed, true))
             end
             if haskey(nodedict, "supertype")
-                expr2 = declexpr.args[4]
+                expr2_idx = wrapper_def_arg(declexpr)
+                expr2_idx === nothing && error("could not find @objcwrapper declaration for $nodename")
+                expr2 = declexpr.args[expr2_idx]
                 typ = nodedict["supertype"] |> Meta.parse
 
                 expr2.args[2] = typ

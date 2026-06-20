@@ -27,7 +27,7 @@ end
 
 export MPSMatrix
 
-# @objcwrapper immutable=false MPSMatrix <: NSObject
+# @objcwrapper managed = true MPSMatrix <: NSObject
 
 function MPSMatrix(buf, descriptor::MPSMatrixDescriptor, offset::Integer=0)
     mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
@@ -103,7 +103,7 @@ end
 
 export MPSMatrixMultiplication, encode!, matmul!
 
-# @objcwrapper immutable=false MPSMatrixMultiplication <: MPSKernel
+# @objcwrapper managed = true MPSMatrixMultiplication <: MPSKernel
 
 function MPSMatrixMultiplication(dev, transposeLeft, transposeRight, resultRows,
                                  resultColumns, interiorColumns, alpha, beta)
@@ -170,7 +170,7 @@ end
 
 export MPSMatrixFindTopK, encode!
 
-# @objcwrapper immutable=false MPSMatrixFindTopK <: MPSMatrixUnaryKernel
+# @objcwrapper managed = true MPSMatrixFindTopK <: MPSMatrixUnaryKernel
 
 function MPSMatrixFindTopK(dev, numberOfTopKValues)
     kernel = @objc [MPSMatrixFindTopK alloc]::id{MPSMatrixFindTopK}
@@ -260,8 +260,8 @@ end
 
 export MPSMatrixSoftMax, MPSMatrixLogSoftMax, encode!
 
-# @objcwrapper immutable=false MPSMatrixSoftMax <: MPSMatrixUnaryKernel
-# @objcwrapper immutable=false MPSMatrixLogSoftMax <: MPSMatrixSoftMax
+# @objcwrapper managed = true MPSMatrixSoftMax <: MPSMatrixUnaryKernel
+# @objcwrapper managed = true MPSMatrixLogSoftMax <: MPSMatrixSoftMax
 
 for f in (:MPSMatrixSoftMax, :MPSMatrixLogSoftMax)
     fLike = Symbol(f, :Like)

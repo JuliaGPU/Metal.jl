@@ -4,7 +4,7 @@
 
 export MTLHeapDescriptor
 
-# @objcwrapper immutable=false MTLHeapDescriptor <: NSObject
+# @objcwrapper managed = true MTLHeapDescriptor <: NSObject
 
 function MTLHeapDescriptor()
     handle = @objc [MTLHeapDescriptor new]::id{MTLHeapDescriptor}
@@ -20,7 +20,7 @@ end
 
 export MTLHeap
 
-# @objcwrapper immutable=false MTLHeap <: MTLAllocation
+# @objcwrapper managed = true MTLHeap <: MTLAllocation
 
 function MTLHeap(dev::MTLDevice, desc::MTLHeapDescriptor)
     handle = @objc [dev::id{MTLDevice} newHeapWithDescriptor:desc::id{MTLHeapDescriptor}]::id{MTLHeap}

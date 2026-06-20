@@ -1,6 +1,6 @@
 export endEncoding!
 
-# @objcwrapper immutable=false MTLCommandEncoder <: NSObject
+# @objcwrapper managed = true MTLCommandEncoder <: NSObject
 
 endEncoding!(ce::MTLCommandEncoderLike) =
     @objc [ce::id{MTLCommandEncoder} endEncoding]::Nothing

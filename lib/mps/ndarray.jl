@@ -4,7 +4,7 @@
 
 export MPSNDArrayDescriptor
 
-# @objcwrapper immutable=false MPSNDArrayDescriptor <: NSObject
+# @objcwrapper managed = true MPSNDArrayDescriptor <: NSObject
 
 function MPSNDArrayDescriptor(dataType::DataType, dimensionCount, dimensionSizes::Ptr)
     1 <= dimensionCount <= 16 || throw(ArgumentError("`dimensionCount` must be between 1 and 16 inclusive"))
@@ -40,7 +40,7 @@ end
 
 export MPSNDArray
 
-# @objcwrapper immutable=false MPSNDArray <: NSObject
+# @objcwrapper managed = true MPSNDArray <: NSObject
 
 @static if Metal.is_macos(v"15")
     function userBuffer(ndarr::MPSNDArrayLike)::Union{Nothing, MTLBuffer}
@@ -63,7 +63,7 @@ function Base.size(ndarr::MPSNDArrayLike)
     Tuple([Int(lengthOfDimension(ndarr,i)) for i in 0:ndims-1])
 end
 
-# @objcwrapper immutable=false MPSTemporaryNDArray <: MPSNDArray
+# @objcwrapper managed = true MPSTemporaryNDArray <: MPSNDArray
 
 function MPSTemporaryNDArray(cmdbuf::MTLCommandBufferLike, descriptor::MPSNDArrayDescriptor)
     obj = @objc [MPSTemporaryNDArray temporaryNDArrayWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
@@ -183,11 +183,11 @@ synchronizeOnCommandBuffer(ndarr::MPSNDArrayLike, q) =
 
 export MPSNDArrayMultiaryBase
 
-# @objcwrapper immutable=false MPSNDArrayMultiaryBase <: MPSKernel
+# @objcwrapper managed = true MPSNDArrayMultiaryBase <: MPSKernel
 
 export MPSNDArrayMultiaryKernel
 
-# @objcwrapper immutable=false MPSNDArrayMultiaryKernel <: MPSNDArrayMultiaryBase
+# @objcwrapper managed = true MPSNDArrayMultiaryKernel <: MPSNDArrayMultiaryBase
 
 function MPSNDArrayMultiaryKernel(device, sourceCount)
     kernel = @objc [MPSNDArrayMultiaryKernel alloc]::id{MPSNDArrayMultiaryKernel}
@@ -223,7 +223,7 @@ end
 
 export MPSNDArrayUnaryKernel
 
-# @objcwrapper immutable=false MPSNDArrayUnaryKernel <: MPSNDArrayMultiaryKernel
+# @objcwrapper managed = true MPSNDArrayUnaryKernel <: MPSNDArrayMultiaryKernel
 
 function MPSNDArrayUnaryKernel(device)
     kernel = @objc [MPSNDArrayUnaryKernel alloc]::id{MPSNDArrayUnaryKernel}
@@ -258,7 +258,7 @@ end
 
 export MPSNDArrayBinaryKernel
 
-# @objcwrapper immutable=false MPSNDArrayBinaryKernel <: MPSNDArrayMultiaryKernel
+# @objcwrapper managed = true MPSNDArrayBinaryKernel <: MPSNDArrayMultiaryKernel
 
 function MPSNDArrayBinaryKernel(device)
     kernel = @objc [MPSNDArrayBinaryKernel alloc]::id{MPSNDArrayBinaryKernel}
@@ -295,7 +295,7 @@ end
 #                                      outputStateIsTemporary:outputStateIsTemporary::Bool]::MPSNDArray
 # end
 
-# @objcwrapper immutable=false MPSNDArrayMatrixMultiplication <: MPSNDArrayMultiaryKernel
+# @objcwrapper managed = true MPSNDArrayMatrixMultiplication <: MPSNDArrayMultiaryKernel
 
 function MPSNDArrayMatrixMultiplication(device, sourceCount)
     kernel = @objc [MPSNDArrayMatrixMultiplication alloc]::id{MPSNDArrayMatrixMultiplication}

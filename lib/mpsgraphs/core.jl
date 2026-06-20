@@ -9,7 +9,7 @@ function MPSGraph()
     MPSGraph(@objc [MPSGraph new]::id{MPSGraph})
 end
 
-# @objcwrapper immutable=true MPSGraphShapedType <: MPSGraphType
+# @objcwrapper MPSGraphShapedType <: MPSGraphType
 
 MPSGraphShapedType(shape, dataType) = MPSGraphShapedType(convert(MPSShape, shape), dataType)
 function MPSGraphShapedType(shape::MPSShape, dataType)

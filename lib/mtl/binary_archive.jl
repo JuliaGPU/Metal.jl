@@ -4,7 +4,7 @@
 
 export MTLBinaryArchiveDescriptor
 
-# @objcwrapper immutable=false MTLBinaryArchiveDescriptor <: NSObject
+# @objcwrapper managed = true MTLBinaryArchiveDescriptor <: NSObject
 
 function MTLBinaryArchiveDescriptor()
     handle = @objc [MTLBinaryArchiveDescriptor new]::id{MTLBinaryArchiveDescriptor}
@@ -20,7 +20,7 @@ end
 
 export MTLBinaryArchive, add_functions!
 
-# @objcwrapper immutable=false MTLBinaryArchive <: NSObject
+# @objcwrapper managed = true MTLBinaryArchive <: NSObject
 
 function MTLBinaryArchive(dev::MTLDevice, desc::MTLBinaryArchiveDescriptor)
     err = Ref{id{NSError}}(nil)

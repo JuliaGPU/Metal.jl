@@ -46,7 +46,7 @@ macro_mode = "disable"
 # Sorted in alphabetical order. For more info on the options, see
 # the comment in wrap.jl
 [api.MPSBinaryImageKernel]
-immutable=false
+managed=true
 
 [api.MPSCommandBuffer]
 supertype="MTLCommandBuffer"
@@ -55,85 +55,85 @@ supertype="MTLCommandBuffer"
 supertype="NSObject"
 
 [api.MPSImageBox]
-immutable=false
+managed=true
 
 [api.MPSImageGaussianBlur]
-immutable=false
+managed=true
 
 [api.MPSMatrix]
-immutable=false
+managed=true
 
 [api.MPSMatrixBinaryKernel]
-immutable=false
+managed=true
 
 [api.MPSMatrixCopy]
-immutable=false
+managed=true
 
 [api.MPSMatrixDecompositionCholesky]
-immutable=false
+managed=true
 
 [api.MPSMatrixDecompositionLU]
-immutable=false
+managed=true
 
 [api.MPSMatrixFindTopK]
-immutable=false
+managed=true
 
 [api.MPSMatrixLogSoftMax]
-immutable=false
+managed=true
 
 [api.MPSMatrixMultiplication]
-immutable=false
+managed=true
 
 [api.MPSMatrixRandom]
-immutable=false
+managed=true
 
 [api.MPSMatrixRandomDistributionDescriptor]
-immutable=false
+managed=true
 
 [api.MPSMatrixRandomMTGP32]
-immutable=false
+managed=true
 
 [api.MPSMatrixRandomPhilox]
-immutable=false
+managed=true
 
 [api.MPSMatrixSoftMax]
-immutable=false
+managed=true
 
 [api.MPSMatrixUnaryKernel]
-immutable=false
+managed=true
 
 [api.MPSMatrixVectorMultiplication]
-immutable=false
+managed=true
 
 [api.MPSNDArray]
-immutable=false
+managed=true
 
 [api.MPSNDArrayBinaryKernel]
-immutable=false
+managed=true
 
 [api.MPSNDArrayDescriptor]
-immutable=false
+managed=true
 
 [api.MPSNDArrayMatrixMultiplication]
-immutable=false
+managed=true
 
 [api.MPSNDArrayMultiaryBase]
-immutable=false
+managed=true
 
 [api.MPSNDArrayMultiaryKernel]
-immutable=false
+managed=true
 
 [api.MPSNDArrayUnaryKernel]
-immutable=false
+managed=true
 
 [api.MPSTemporaryNDArray]
-immutable=false
+managed=true
 
 [api.MPSTemporaryVector]
-immutable=false
+managed=true
 
 [api.MPSUnaryImageKernel]
-immutable=false
+managed=true
 
 [api.MPSVector]
-immutable=false
+managed=true

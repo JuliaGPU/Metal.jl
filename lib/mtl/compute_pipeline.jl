@@ -4,7 +4,7 @@
 
 export MTLComputePipelineDescriptor
 
-# @objcwrapper immutable=false MTLComputePipelineDescriptor <: NSObject
+# @objcwrapper managed = true MTLComputePipelineDescriptor <: NSObject
 
 function MTLComputePipelineDescriptor()
     handle = @objc [MTLComputePipelineDescriptor new]::id{MTLComputePipelineDescriptor}
@@ -19,7 +19,7 @@ end
 
 export MTLComputePipelineState
 
-# @objcwrapper immutable=false MTLComputePipelineState <: NSObject
+# @objcwrapper managed = true MTLComputePipelineState <: NSObject
 
 function MTLComputePipelineState(dev::MTLDevice, fun::MTLFunction)
     err = Ref{id{NSError}}(nil)

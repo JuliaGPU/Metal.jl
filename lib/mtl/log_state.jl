@@ -2,7 +2,7 @@ export MTLLogLevel
 
 export MTLLogStateDescriptor
 
-# @objcwrapper immutable = false MTLLogStateDescriptor <: NSObject
+# @objcwrapper managed = true MTLLogStateDescriptor <: NSObject
 
 function MTLLogStateDescriptor()
     handle = @objc [MTLLogStateDescriptor alloc]::id{MTLLogStateDescriptor}
@@ -15,7 +15,7 @@ end
 
 export MTLLogState
 
-# @objcwrapper immutable = true MTLLogState <: NSObject
+# @objcwrapper MTLLogState <: NSObject
 
 function MTLLogState(dev::MTLDevice, descriptor::MTLLogStateDescriptor)
     err = Ref{id{NSError}}(nil)

@@ -25,7 +25,7 @@ function placeholderTensor(graph::MPSGraph, shape::MPSShape, dataType::Type, nam
 end
 
 ## MPSGraphTensorData.h
-# @objcwrapper immutable=false MPSGraphTensorData <: MPSGraphObject
+# @objcwrapper managed = true MPSGraphTensorData <: MPSGraphObject
 
 function Base.size(td::MPSGraphTensorData)
     temp = map(td.shape) do nsnum

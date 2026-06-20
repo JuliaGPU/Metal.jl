@@ -4,7 +4,7 @@
 
 export MTLFunctionDescriptor
 
-# @objcwrapper immutable=false MTLFunctionDescriptor <: NSObject
+# @objcwrapper managed = true MTLFunctionDescriptor <: NSObject
 
 function MTLFunctionDescriptor()
     handle = @objc [MTLFunctionDescriptor new]::id{MTLFunctionDescriptor}
@@ -21,7 +21,7 @@ end
 
 export MTLFunction
 
-# @objcwrapper immutable=false MTLFunction <: NSObject
+# @objcwrapper managed = true MTLFunction <: NSObject
 
 # Get a handle to a kernel function in a Metal Library.
 function MTLFunction(lib::MTLLibrary, name)

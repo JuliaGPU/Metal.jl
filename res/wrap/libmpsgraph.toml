@@ -25,7 +25,7 @@ always_NUL_terminated_string = true
 macro_mode = "disable"
 
 [api.MPSGraphTensorData]
-immutable=false
+managed=true
 
 [api.MPSGraphShapedType]
-immutable=false
+managed=true

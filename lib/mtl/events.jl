@@ -4,7 +4,7 @@
 
 export MTLEvent
 
-# @objcwrapper immutable=false MTLEvent <: NSObject
+# @objcwrapper managed = true MTLEvent <: NSObject
 
 function MTLEvent(dev::MTLDevice)
     ptr = @objc [dev::id{MTLDevice} newEvent]::id{MTLEvent}
@@ -20,7 +20,7 @@ end
 
 export MTLSharedEvent, MTLSharedEventHandle
 
-# @objcwrapper immutable=false MTLSharedEvent <: MTLEvent
+# @objcwrapper managed = true MTLSharedEvent <: MTLEvent
 
 function MTLSharedEvent(dev::MTLDevice)
     ptr = @objc [dev::id{MTLDevice} newSharedEvent]::id{MTLSharedEvent}

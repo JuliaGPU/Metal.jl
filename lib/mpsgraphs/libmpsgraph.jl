@@ -8,11 +8,11 @@ const MPSGraphCallableMap = NSDictionary
 const MPSGraphTensorDataDictionary = NSDictionary
 
 
-@objcwrapper immutable = true MPSGraphObject <: NSObject
+@objcwrapper MPSGraphObject <: NSObject
 
-@objcwrapper immutable = true MPSGraphType <: MPSGraphObject
+@objcwrapper MPSGraphType <: MPSGraphObject
 
-@objcwrapper immutable = false MPSGraphShapedType <: MPSGraphType
+@objcwrapper managed = true MPSGraphShapedType <: MPSGraphType
 
 @objcproperties MPSGraphShapedType begin
     @autoproperty shape::id{MPSShape} setter = setShape
@@ -64,7 +64,7 @@ end
     MPSGraphDeviceTypeMetal = 0x0000000000000000
 end
 
-@objcwrapper immutable = true MPSGraphDevice <: MPSGraphObject
+@objcwrapper MPSGraphDevice <: MPSGraphObject
 
 @objcproperties MPSGraphDevice begin
     @autoproperty type::MPSGraphDeviceType
@@ -78,14 +78,14 @@ end
     MPSGraphOptionsDefault = 0x0000000000000001
 end
 
-@objcwrapper immutable = true MPSGraph <: MPSGraphObject
+@objcwrapper MPSGraph <: MPSGraphObject
 
 @objcproperties MPSGraph begin
     @autoproperty options::MPSGraphOptions setter = setOptions
     @autoproperty placeholderTensors::id{NSArray} type = Vector{MPSGraphTensor}
 end
 
-@objcwrapper immutable = true MPSGraphOperation <: MPSGraphObject
+@objcwrapper MPSGraphOperation <: MPSGraphObject
 
 @objcproperties MPSGraphOperation begin
     @autoproperty inputTensors::id{NSArray} type = Vector{MPSGraphTensor}
@@ -95,7 +95,7 @@ end
     @autoproperty name::id{NSString}
 end
 
-@objcwrapper immutable = true MPSGraphTensor <: MPSGraphObject
+@objcwrapper MPSGraphTensor <: MPSGraphObject
 
 @objcproperties MPSGraphTensor begin
     @autoproperty shape::id{MPSShape}
@@ -103,7 +103,7 @@ end
     @autoproperty operation::id{MPSGraphOperation}
 end
 
-@objcwrapper immutable = false MPSGraphTensorData <: MPSGraphObject
+@objcwrapper managed = true MPSGraphTensorData <: MPSGraphObject
 
 @objcproperties MPSGraphTensorData begin
     @autoproperty shape::id{MPSShape}
@@ -133,7 +133,7 @@ end
     MPSGraphReducedPrecisionFastMathDefault = 0x0000000000000000
 end
 
-@objcwrapper immutable = true MPSGraphCompilationDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphCompilationDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphCompilationDescriptor begin
     @autoproperty optimizationLevel::MPSGraphOptimization setter = setOptimizationLevel
@@ -145,7 +145,7 @@ end
     @autoproperty reducedPrecisionFastMath::MPSGraphReducedPrecisionFastMath setter = setReducedPrecisionFastMath availability = macos(v"26.0.0")
 end
 
-@objcwrapper immutable = true MPSGraphExecutionDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphExecutionDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphExecutionDescriptor begin
     #= setter = setScheduledHandler:Skipping property scheduledHandler because it is a CLBlockPointer void (^)(NSDictionary<MPSGraphTensor *,MPSGraphTensorData *> *, NSError *) =#
@@ -154,7 +154,7 @@ end
     @autoproperty compilationDescriptor::id{MPSGraphCompilationDescriptor} setter = setCompilationDescriptor
 end
 
-@objcwrapper immutable = true MPSGraphExecutableExecutionDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphExecutableExecutionDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphExecutableExecutionDescriptor begin
     #= setter = setScheduledHandler:Skipping property scheduledHandler because it is a CLBlockPointer void (^)(NSArray<MPSGraphTensorData *> *, NSError *) =#
@@ -169,7 +169,7 @@ end
     MPSGraphDeploymentPlatformVisionOS = 0x0000000000000003
 end
 
-@objcwrapper immutable = true MPSGraphExecutableSerializationDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphExecutableSerializationDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphExecutableSerializationDescriptor begin
     @autoproperty append::Bool setter = setAppend
@@ -177,7 +177,7 @@ end
     @autoproperty minimumDeploymentTarget::id{NSString} setter = setMinimumDeploymentTarget
 end
 
-@objcwrapper immutable = true MPSGraphExecutable <: MPSGraphObject
+@objcwrapper MPSGraphExecutable <: MPSGraphObject
 
 @objcproperties MPSGraphExecutable begin
     @autoproperty options::MPSGraphOptions setter = setOptions
@@ -185,7 +185,7 @@ end
     @autoproperty targetTensors::id{NSArray} type = Vector{MPSGraphTensor}
 end
 
-@objcwrapper immutable = true MPSGraphConvolution2DOpDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphConvolution2DOpDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphConvolution2DOpDescriptor begin
     @autoproperty strideInX::UInt64 setter = setStrideInX
@@ -202,7 +202,7 @@ end
     @autoproperty groups::UInt64 setter = setGroups
 end
 
-@objcwrapper immutable = true MPSGraphConvolution3DOpDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphConvolution3DOpDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphConvolution3DOpDescriptor begin
     @autoproperty strideInX::UInt64 setter = setStrideInX
@@ -223,7 +223,7 @@ end
     @autoproperty groups::UInt64 setter = setGroups
 end
 
-@objcwrapper immutable = true MPSGraphDepthwiseConvolution2DOpDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphDepthwiseConvolution2DOpDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphDepthwiseConvolution2DOpDescriptor begin
     @autoproperty strideInX::UInt64 setter = setStrideInX
@@ -239,7 +239,7 @@ end
     @autoproperty weightsLayout::MPSGraphTensorNamedDataLayout setter = setWeightsLayout
 end
 
-@objcwrapper immutable = true MPSGraphDepthwiseConvolution3DOpDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphDepthwiseConvolution3DOpDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphDepthwiseConvolution3DOpDescriptor begin
     @autoproperty strides::id{NSArray} type = Vector{NSNumber} setter = setStrides
@@ -255,7 +255,7 @@ end
     MPSGraphFFTScalingModeUnitary = 0x0000000000000002
 end
 
-@objcwrapper immutable = true MPSGraphFFTDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphFFTDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphFFTDescriptor begin
     @autoproperty inverse::Bool setter = setInverse
@@ -263,7 +263,7 @@ end
     @autoproperty roundToOddHermitean::Bool setter = setRoundToOddHermitean
 end
 
-@objcwrapper immutable = true MPSGraphImToColOpDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphImToColOpDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphImToColOpDescriptor begin
     @autoproperty kernelWidth::UInt64 setter = setKernelWidth
@@ -286,7 +286,7 @@ end
     MPSGraphLossReductionTypeMean = 0x0000000000000002
 end
 
-@objcwrapper immutable = true MPSGraphVariableOp <: MPSGraphOperation
+@objcwrapper MPSGraphVariableOp <: MPSGraphOperation
 
 @objcproperties MPSGraphVariableOp begin
     @autoproperty shape::id{MPSShape}
@@ -312,7 +312,7 @@ end
     MPSGraphPoolingReturnIndicesLocalFlatten4D = 0x0000000000000008
 end
 
-@objcwrapper immutable = true MPSGraphPooling2DOpDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphPooling2DOpDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphPooling2DOpDescriptor begin
     @autoproperty kernelWidth::UInt64 setter = setKernelWidth
@@ -333,7 +333,7 @@ end
     @autoproperty includeZeroPadToAverage::Bool setter = setIncludeZeroPadToAverage
 end
 
-@objcwrapper immutable = true MPSGraphPooling4DOpDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphPooling4DOpDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphPooling4DOpDescriptor begin
     @autoproperty kernelSizes::id{NSArray} type = Vector{NSNumber} setter = setKernelSizes
@@ -358,7 +358,7 @@ end
     MPSGraphRandomNormalSamplingBoxMuller = 0x0000000000000001
 end
 
-@objcwrapper immutable = true MPSGraphRandomOpDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphRandomOpDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphRandomOpDescriptor begin
     @autoproperty distribution::MPSGraphRandomDistribution setter = setDistribution
@@ -394,7 +394,7 @@ end
     MPSGraphRNNActivationHardSigmoid = 0x0000000000000004
 end
 
-@objcwrapper immutable = true MPSGraphSingleGateRNNDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphSingleGateRNNDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphSingleGateRNNDescriptor begin
     @autoproperty reverse::Bool setter = setReverse
@@ -403,7 +403,7 @@ end
     @autoproperty activation::MPSGraphRNNActivation setter = setActivation
 end
 
-@objcwrapper immutable = true MPSGraphLSTMDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphLSTMDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphLSTMDescriptor begin
     @autoproperty reverse::Bool setter = setReverse
@@ -418,7 +418,7 @@ end
     @autoproperty activation::MPSGraphRNNActivation setter = setActivation
 end
 
-@objcwrapper immutable = true MPSGraphGRUDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphGRUDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphGRUDescriptor begin
     @autoproperty reverse::Bool setter = setReverse
@@ -448,14 +448,14 @@ end
     MPSGraphSparseStorageCSR = 0x0000000000000002
 end
 
-@objcwrapper immutable = true MPSGraphCreateSparseOpDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphCreateSparseOpDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphCreateSparseOpDescriptor begin
     @autoproperty sparseStorageType::MPSGraphSparseStorageType setter = setSparseStorageType
     @autoproperty dataType::MPSDataType setter = setDataType
 end
 
-@objcwrapper immutable = true MPSGraphStencilOpDescriptor <: MPSGraphObject
+@objcwrapper MPSGraphStencilOpDescriptor <: MPSGraphObject
 
 @objcproperties MPSGraphStencilOpDescriptor begin
     @autoproperty reductionMode::MPSGraphReductionMode setter = setReductionMode

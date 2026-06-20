@@ -4,7 +4,7 @@
 
 export MPSMatrixRandomDistributionDescriptor
 
-# @objcwrapper immutable=false MPSMatrixRandomDistributionDescriptor <: NSObject
+# @objcwrapper managed = true MPSMatrixRandomDistributionDescriptor <: NSObject
 
 function MPSMatrixRandomDefaultDistributionDescriptor()
     desc = @objc [MPSMatrixRandomDistributionDescriptor defaultDistributionDescriptor]::id{MPSMatrixRandomDistributionDescriptor}
@@ -38,7 +38,7 @@ function MPSMatrixRandomUniformDistributionDescriptor(minimum, maximum)
     return obj
 end
 
-# @objcwrapper immutable=false MPSMatrixRandom <: MPSKernel
+# @objcwrapper managed = true MPSMatrixRandom <: MPSKernel
 
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSMatrixRandomLike, destinationMatrix::MPSMatrixLike)
     @objc [kernel::id{MPSMatrixRandom} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
@@ -49,8 +49,8 @@ function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSMatrixRandomLike, dest
                          destinationVector:destinationVector::id{MPSVector}]::Nothing
 end
 
-# @objcwrapper immutable=false MPSMatrixRandomMTGP32 <: MPSMatrixRandom
-# @objcwrapper immutable=false MPSMatrixRandomPhilox <: MPSMatrixRandom
+# @objcwrapper managed = true MPSMatrixRandomMTGP32 <: MPSMatrixRandom
+# @objcwrapper managed = true MPSMatrixRandomPhilox <: MPSMatrixRandom
 
 for R in [:MPSMatrixRandomMTGP32, :MPSMatrixRandomPhilox]
     @eval begin

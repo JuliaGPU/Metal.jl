@@ -36,7 +36,7 @@ end
 
 export MTLCompileOptions
 
-# @objcwrapper immutable=false MTLCompileOptions <: NSObject
+# @objcwrapper managed = true MTLCompileOptions <: NSObject
 
 function MTLCompileOptions()
     handle = @objc [MTLCompileOptions new]::id{MTLCompileOptions}

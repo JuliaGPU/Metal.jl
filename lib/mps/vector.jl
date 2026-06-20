@@ -25,7 +25,7 @@ end
 
 export MPSVector
 
-# @objcwrapper immutable=false MPSVector <: NSObject
+# @objcwrapper managed = true MPSVector <: NSObject
 
 function MPSVector(buf, descriptor::MPSVectorDescriptor, offset::Integer=0)
     vec = @objc [MPSVector alloc]::id{MPSVector}
@@ -57,7 +57,7 @@ function MPSVector(arr::MtlVector{T}) where T
     return MPSVector(arr, desc, offset)
 end
 
-# @objcwrapper immutable=false MPSTemporaryVector <: MPSVector
+# @objcwrapper managed = true MPSTemporaryVector <: MPSVector
 
 function MPSTemporaryVector(commandBuffer::MTLCommandBufferLike, descriptor::MPSVectorDescriptor)
     obj = @objc [MPSTemporaryVector temporaryVectorWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}
@@ -70,7 +70,7 @@ end
 
 export MPSMatrixVectorMultiplication, encode!, matvecmul!
 
-# @objcwrapper immutable=false MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
+# @objcwrapper managed = true MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
 
 function MPSMatrixVectorMultiplication(dev, transpose, rows, columns, alpha, beta)
     kernel = @objc [MPSMatrixVectorMultiplication alloc]::id{MPSMatrixVectorMultiplication}

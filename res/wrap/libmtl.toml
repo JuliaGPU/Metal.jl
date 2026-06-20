@@ -33,93 +33,93 @@ macro_mode = "disable"
 # Sorted in alphabetical order. For more info on the options, see
 # the comment in wrap.jl
 [api.MTLBinaryArchive]
-immutable=false
+managed=true
 
 [api.MTLBinaryArchiveDescriptor]
-immutable=false
+managed=true
 
 [api.MTLBuffer.proptype]
 gpuAddress="Ptr{Cvoid}"
 
 [api.MTLCaptureDescriptor]
-immutable=false
+managed=true
 
 [api.MTLCommandBufferDescriptor]
-immutable=false
+managed=true
 
 [api.MTLCommandQueue]
-immutable=false
+managed=true
 
 [api.MTLCommandQueueDescriptor]
-immutable=false
+managed=true
 
 [api.MTL4CommandQueueDescriptor]
-immutable=false
+managed=true
 
 [api.MTL4CommandQueue]
-immutable=false
+managed=true
 
 [api.MTL4CommitOptions]
-immutable=false
+managed=true
 
 [api.MTLCompileOptions]
-immutable=false
+managed=true
     [api.MTLCompileOptions.proptype]
     languageVersion="VersionNumber"
 
 [api.MTLComputeCommandEncoder]
-immutable=false
+managed=true
 
 [api.MTL4ComputeCommandEncoder]
-immutable=false
+managed=true
 
 [api.MTL4CommandAllocatorDescriptor]
-immutable=false
+managed=true
 
 [api.MTL4CommandAllocator]
-immutable=false
+managed=true
 
 [api.MTLComputePipelineDescriptor]
-immutable=false
+managed=true
 
 [api.MTLComputePipelineState]
-immutable=false
+managed=true
 
 [api.MTLEvent]
-immutable=false
+managed=true
 
 [api.MTLFence]
-immutable=false
+managed=true
 
 [api.MTLFunction]
-immutable=false
+managed=true
 
 [api.MTLFunctionDescriptor]
-immutable=false
+managed=true
 
 [api.MTL4FunctionDescriptor]
-immutable=false
+managed=true
 
 [api.MTLHeap]
-immutable=false
+managed=true
 
 [api.MTLHeapDescriptor]
-immutable=false
+managed=true
 
 [api.MTLLibrary]
-immutable=false
+managed=true
 
 [api.MTLLogStateDescriptor]
-immutable=false
+managed=true
 
 [api.MTLResidencySet]
-immutable=false
+managed=true
 
 [api.MTLSharedEvent]
-immutable=false
+managed=true
 
 [api.MTLTexture]
-immutable=false
+managed=true
 
 [api.MTLTextureDescriptor]
-immutable=false
+managed=true

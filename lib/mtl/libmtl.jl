@@ -110,7 +110,7 @@ end
     MTLStageAll = 0x7fffffffffffffff
 end
 
-@objcwrapper immutable = true MTLArchitecture <: NSObject
+@objcwrapper MTLArchitecture <: NSObject
 
 @objcproperties MTLArchitecture begin
     @autoproperty name::id{NSString}
@@ -134,20 +134,20 @@ end
     MTLArgumentBuffersTier2 = 0x0000000000000001
 end
 
-@objcwrapper immutable = true MTLCounter <: NSObject
+@objcwrapper MTLCounter <: NSObject
 
 @objcproperties MTLCounter begin
     @autoproperty name::id{NSString}
 end
 
-@objcwrapper immutable = true MTLCounterSet <: NSObject
+@objcwrapper MTLCounterSet <: NSObject
 
 @objcproperties MTLCounterSet begin
     @autoproperty name::id{NSString}
     @autoproperty counters::id{NSArray} type = Vector{MTLCounter}
 end
 
-@objcwrapper immutable = true MTLDevice <: NSObject
+@objcwrapper MTLDevice <: NSObject
 
 @objcproperties MTLDevice begin
     @autoproperty name::id{NSString}
@@ -195,14 +195,14 @@ end
     @autoproperty maximumConcurrentCompilationTaskCount::UInt64
 end
 
-@objcwrapper immutable = true MTLCommandEncoder <: NSObject
+@objcwrapper MTLCommandEncoder <: NSObject
 
 @objcproperties MTLCommandEncoder begin
     @autoproperty device::id{MTLDevice}
     @autoproperty label::id{NSString} setter = setLabel
 end
 
-@objcwrapper immutable = true availability = macos(v"15.0.0") MTLAllocation <: NSObject
+@objcwrapper availability = macos(v"15.0.0") MTLAllocation <: NSObject
 
 @objcproperties MTLAllocation begin
     @autoproperty allocatedSize::UInt64
@@ -270,7 +270,7 @@ end
     MTLHeapTypeSparse = 2
 end
 
-@objcwrapper immutable = false MTLHeap <: MTLAllocation
+@objcwrapper managed = true MTLHeap <: MTLAllocation
 
 @objcproperties MTLHeap begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -285,7 +285,7 @@ end
     @autoproperty type::MTLHeapType
 end
 
-@objcwrapper immutable = true MTLResource <: MTLAllocation
+@objcwrapper MTLResource <: MTLAllocation
 
 @objcproperties MTLResource begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -557,7 +557,7 @@ end
     MTLTensorDataTypeUInt4 = 144
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTLTensorExtents <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTLTensorExtents <: NSObject
 
 @objcproperties MTLTensorExtents begin
     @autoproperty rank::UInt64
@@ -575,7 +575,7 @@ end
     MTLTensorUsageMachineLearning = 0x0000000000000004
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTLTensorDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTLTensorDescriptor <: NSObject
 
 @objcproperties MTLTensorDescriptor begin
     @autoproperty dimensions::id{MTLTensorExtents} setter = setDimensions
@@ -588,7 +588,7 @@ end
     @autoproperty hazardTrackingMode::MTLHazardTrackingMode setter = setHazardTrackingMode
 end
 
-@objcwrapper immutable = true MTLBuffer <: MTLResource
+@objcwrapper MTLBuffer <: MTLResource
 
 @objcproperties MTLBuffer begin
     @autoproperty length::UInt64
@@ -597,7 +597,7 @@ end
     @autoproperty sparseBufferTier::MTLBufferSparseTier availability = macos(v"26.0.0")
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTLTensor <: MTLResource
+@objcwrapper availability = macos(v"26.0.0") MTLTensor <: MTLResource
 
 @objcproperties MTLTensor begin
     @autoproperty gpuResourceID::MTLResourceID
@@ -624,7 +624,7 @@ const MTLGPUAddress = UInt64
     MTLTextureTypeTextureBuffer = 0x0000000000000009
 end
 
-@objcwrapper immutable = true MTLSharedTextureHandle <: NSObject
+@objcwrapper MTLSharedTextureHandle <: NSObject
 
 @objcproperties MTLSharedTextureHandle begin
     @autoproperty device::id{MTLDevice}
@@ -645,7 +645,7 @@ end
     MTLTextureCompressionTypeLossy = 1
 end
 
-@objcwrapper immutable = false MTLTextureDescriptor <: NSObject
+@objcwrapper managed = true MTLTextureDescriptor <: NSObject
 
 @objcproperties MTLTextureDescriptor begin
     @autoproperty textureType::MTLTextureType setter = setTextureType
@@ -667,7 +667,7 @@ end
     @autoproperty placementSparsePageSize::MTLSparsePageSize setter = setPlacementSparsePageSize availability = macos(v"26.0.0")
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTLTextureViewDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTLTextureViewDescriptor <: NSObject
 
 @objcproperties MTLTextureViewDescriptor begin
     @autoproperty pixelFormat::MTLPixelFormat setter = setPixelFormat
@@ -677,7 +677,7 @@ end
     @autoproperty swizzle::MTLTextureSwizzleChannels setter = setSwizzle
 end
 
-@objcwrapper immutable = false MTLTexture <: MTLResource
+@objcwrapper managed = true MTLTexture <: MTLResource
 
 @objcproperties MTLTexture begin
     @autoproperty rootResource::id{MTLResource}
@@ -755,13 +755,13 @@ end
 
 const MTLArgumentAccess = MTLBindingAccess
 
-@objcwrapper immutable = true MTLType <: NSObject
+@objcwrapper MTLType <: NSObject
 
 @objcproperties MTLType begin
     @autoproperty dataType::MTLDataType
 end
 
-@objcwrapper immutable = true MTLStructMember <: NSObject
+@objcwrapper MTLStructMember <: NSObject
 
 @objcproperties MTLStructMember begin
     @autoproperty name::id{NSString}
@@ -770,13 +770,13 @@ end
     @autoproperty argumentIndex::UInt64
 end
 
-@objcwrapper immutable = true MTLStructType <: MTLType
+@objcwrapper MTLStructType <: MTLType
 
 @objcproperties MTLStructType begin
     @autoproperty members::id{NSArray} type = Vector{MTLStructMember}
 end
 
-@objcwrapper immutable = true MTLArrayType <: MTLType
+@objcwrapper MTLArrayType <: MTLType
 
 @objcproperties MTLArrayType begin
     @autoproperty elementType::MTLDataType
@@ -785,7 +785,7 @@ end
     @autoproperty argumentIndexStride::UInt64
 end
 
-@objcwrapper immutable = true MTLPointerType <: MTLType
+@objcwrapper MTLPointerType <: MTLType
 
 @objcproperties MTLPointerType begin
     @autoproperty elementType::MTLDataType
@@ -795,7 +795,7 @@ end
     @autoproperty elementIsArgumentBuffer::Bool
 end
 
-@objcwrapper immutable = true MTLTextureReferenceType <: MTLType
+@objcwrapper MTLTextureReferenceType <: MTLType
 
 @objcproperties MTLTextureReferenceType begin
     @autoproperty textureDataType::MTLDataType
@@ -804,7 +804,7 @@ end
     @autoproperty isDepthTexture::Bool
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTLTensorReferenceType <: MTLType
+@objcwrapper availability = macos(v"26.0.0") MTLTensorReferenceType <: MTLType
 
 @objcproperties MTLTensorReferenceType begin
     @autoproperty tensorDataType::MTLTensorDataType
@@ -813,7 +813,7 @@ end
     @autoproperty access::MTLBindingAccess
 end
 
-@objcwrapper immutable = true MTLArgument <: NSObject
+@objcwrapper MTLArgument <: NSObject
 
 @objcproperties MTLArgument begin
     @autoproperty name::id{NSString}
@@ -834,7 +834,7 @@ end
     @autoproperty arrayLength::UInt64
 end
 
-@objcwrapper immutable = true MTLBinding <: NSObject
+@objcwrapper MTLBinding <: NSObject
 
 @objcproperties MTLBinding begin
     @autoproperty name::id{NSString}
@@ -845,7 +845,7 @@ end
     @autoproperty argument::Bool getter = isArgument
 end
 
-@objcwrapper immutable = true MTLBufferBinding <: MTLBinding
+@objcwrapper MTLBufferBinding <: MTLBinding
 
 @objcproperties MTLBufferBinding begin
     @autoproperty bufferAlignment::UInt64
@@ -855,14 +855,14 @@ end
     @autoproperty bufferPointerType::id{MTLPointerType}
 end
 
-@objcwrapper immutable = true MTLThreadgroupBinding <: MTLBinding
+@objcwrapper MTLThreadgroupBinding <: MTLBinding
 
 @objcproperties MTLThreadgroupBinding begin
     @autoproperty threadgroupMemoryAlignment::UInt64
     @autoproperty threadgroupMemoryDataSize::UInt64
 end
 
-@objcwrapper immutable = true MTLTextureBinding <: MTLBinding
+@objcwrapper MTLTextureBinding <: MTLBinding
 
 @objcproperties MTLTextureBinding begin
     @autoproperty textureType::MTLTextureType
@@ -871,14 +871,14 @@ end
     @autoproperty arrayLength::UInt64
 end
 
-@objcwrapper immutable = true MTLObjectPayloadBinding <: MTLBinding
+@objcwrapper MTLObjectPayloadBinding <: MTLBinding
 
 @objcproperties MTLObjectPayloadBinding begin
     @autoproperty objectPayloadAlignment::UInt64
     @autoproperty objectPayloadDataSize::UInt64
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTLTensorBinding <: MTLBinding
+@objcwrapper availability = macos(v"26.0.0") MTLTensorBinding <: MTLBinding
 
 @objcproperties MTLTensorBinding begin
     @autoproperty tensorDataType::MTLTensorDataType
@@ -886,7 +886,7 @@ end
     @autoproperty dimensions::id{MTLTensorExtents}
 end
 
-@objcwrapper immutable = true MTLFunctionConstantValues <: NSObject
+@objcwrapper MTLFunctionConstantValues <: NSObject
 
 @cenum MTLFunctionOptions::UInt64 begin
     MTLFunctionOptionNone = 0x0000000000000000
@@ -897,14 +897,14 @@ end
     MTLFunctionOptionPipelineIndependent = 0x0000000000000008
 end
 
-@objcwrapper immutable = false MTLBinaryArchive <: NSObject
+@objcwrapper managed = true MTLBinaryArchive <: NSObject
 
 @objcproperties MTLBinaryArchive begin
     @autoproperty label::id{NSString} setter = setLabel
     @autoproperty device::id{MTLDevice}
 end
 
-@objcwrapper immutable = false MTLFunctionDescriptor <: NSObject
+@objcwrapper managed = true MTLFunctionDescriptor <: NSObject
 
 @objcproperties MTLFunctionDescriptor begin
     @autoproperty name::id{NSString} setter = setName
@@ -914,7 +914,7 @@ end
     @autoproperty binaryArchives::id{NSArray} type = Vector{MTLBinaryArchive} setter = setBinaryArchives
 end
 
-@objcwrapper immutable = true MTLIntersectionFunctionDescriptor <: MTLFunctionDescriptor
+@objcwrapper MTLIntersectionFunctionDescriptor <: MTLFunctionDescriptor
 
 @cenum MTLPatchType::UInt64 begin
     MTLPatchTypeNone = 0x0000000000000000
@@ -922,7 +922,7 @@ end
     MTLPatchTypeQuad = 0x0000000000000002
 end
 
-@objcwrapper immutable = true MTLVertexAttribute <: NSObject
+@objcwrapper MTLVertexAttribute <: NSObject
 
 @objcproperties MTLVertexAttribute begin
     @autoproperty name::id{NSString}
@@ -933,7 +933,7 @@ end
     @autoproperty patchControlPointData::Bool getter = isPatchControlPointData
 end
 
-@objcwrapper immutable = true MTLAttribute <: NSObject
+@objcwrapper MTLAttribute <: NSObject
 
 @objcproperties MTLAttribute begin
     @autoproperty name::id{NSString}
@@ -954,7 +954,7 @@ end
     MTLFunctionTypeObject = 0x0000000000000008
 end
 
-@objcwrapper immutable = true MTLFunctionConstant <: NSObject
+@objcwrapper MTLFunctionConstant <: NSObject
 
 @objcproperties MTLFunctionConstant begin
     @autoproperty name::id{NSString}
@@ -963,7 +963,7 @@ end
     @autoproperty required::Bool
 end
 
-@objcwrapper immutable = false MTLFunction <: NSObject
+@objcwrapper managed = true MTLFunction <: NSObject
 
 @objcproperties MTLFunction begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -1019,7 +1019,7 @@ end
     MTLMathFloatingPointFunctionsPrecise = 1
 end
 
-@objcwrapper immutable = true MTLDynamicLibrary <: NSObject
+@objcwrapper MTLDynamicLibrary <: NSObject
 
 @objcproperties MTLDynamicLibrary begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -1027,7 +1027,7 @@ end
     @autoproperty installName::id{NSString}
 end
 
-@objcwrapper immutable = false MTLCompileOptions <: NSObject
+@objcwrapper managed = true MTLCompileOptions <: NSObject
 
 @objcproperties MTLCompileOptions begin
     @autoproperty preprocessorMacros::id{NSDictionary} setter = setPreprocessorMacros
@@ -1047,7 +1047,7 @@ end
     @autoproperty enableLogging::Bool setter = setEnableLogging availability = macos(v"15.0.0")
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTLFunctionReflection <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTLFunctionReflection <: NSObject
 
 @objcproperties MTLFunctionReflection begin
     @autoproperty bindings::id{NSArray} type = Vector{MTLBinding}
@@ -1063,7 +1063,7 @@ end
     MTLLibraryErrorFileNotFound = 0x0000000000000006
 end
 
-@objcwrapper immutable = false MTLLibrary <: NSObject
+@objcwrapper managed = true MTLLibrary <: NSObject
 
 @objcproperties MTLLibrary begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -1097,7 +1097,7 @@ struct MTLCounterResultStatistic
     computeKernelInvocations::UInt64
 end
 
-@objcwrapper immutable = true MTLCounterSampleBufferDescriptor <: NSObject
+@objcwrapper MTLCounterSampleBufferDescriptor <: NSObject
 
 @objcproperties MTLCounterSampleBufferDescriptor begin
     @autoproperty counterSet::id{MTLCounterSet} setter = setCounterSet
@@ -1106,7 +1106,7 @@ end
     @autoproperty sampleCount::UInt64 setter = setSampleCount
 end
 
-@objcwrapper immutable = true MTLCounterSampleBuffer <: NSObject
+@objcwrapper MTLCounterSampleBuffer <: NSObject
 
 @objcproperties MTLCounterSampleBuffer begin
     @autoproperty device::id{MTLDevice}
@@ -1127,9 +1127,9 @@ end
     MTL4CompilerTaskStatusFinished = 3
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4PipelineDataSetSerializer <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4PipelineDataSetSerializer <: NSObject
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4Compiler <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4Compiler <: NSObject
 
 @objcproperties MTL4Compiler begin
     @autoproperty device::id{MTLDevice}
@@ -1137,27 +1137,27 @@ end
     @autoproperty pipelineDataSetSerializer::id{MTL4PipelineDataSetSerializer}
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4CompilerTask <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4CompilerTask <: NSObject
 
 @objcproperties MTL4CompilerTask begin
     @autoproperty compiler::id{MTL4Compiler}
     @autoproperty status::MTL4CompilerTaskStatus
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4CompilerDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4CompilerDescriptor <: NSObject
 
 @objcproperties MTL4CompilerDescriptor begin
     @autoproperty label::id{NSString} setter = setLabel
     @autoproperty pipelineDataSetSerializer::id{MTL4PipelineDataSetSerializer} setter = setPipelineDataSetSerializer
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4Archive <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4Archive <: NSObject
 
 @objcproperties MTL4Archive begin
     @autoproperty label::id{NSString} setter = setLabel
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4CompilerTaskOptions <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4CompilerTaskOptions <: NSObject
 
 @objcproperties MTL4CompilerTaskOptions begin
     @autoproperty lookupArchives::id{NSArray} type = Vector{MTL4Archive} setter = setLookupArchives
@@ -1177,14 +1177,14 @@ end
     MTL4TimestampGranularityPrecise = 1
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4CounterHeapDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4CounterHeapDescriptor <: NSObject
 
 @objcproperties MTL4CounterHeapDescriptor begin
     @autoproperty type::MTL4CounterHeapType setter = setType
     @autoproperty count::UInt64 setter = setCount
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4CounterHeap <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4CounterHeap <: NSObject
 
 @objcproperties MTL4CounterHeap begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -1295,7 +1295,7 @@ struct MTLSizeAndAlign
     align::NSUInteger
 end
 
-@objcwrapper immutable = true MTLArgumentDescriptor <: NSObject
+@objcwrapper MTLArgumentDescriptor <: NSObject
 
 @objcproperties MTLArgumentDescriptor begin
     @autoproperty dataType::MTLDataType setter = setDataType
@@ -1308,14 +1308,14 @@ end
 
 const MTLTimestamp = UInt64
 
-@objcwrapper immutable = false MTLFence <: NSObject
+@objcwrapper managed = true MTLFence <: NSObject
 
 @objcproperties MTLFence begin
     @autoproperty device::id{MTLDevice}
     @autoproperty label::id{NSString} setter = setLabel
 end
 
-@objcwrapper immutable = true MTLResourceStatePassSampleBufferAttachmentDescriptor <: NSObject
+@objcwrapper MTLResourceStatePassSampleBufferAttachmentDescriptor <: NSObject
 
 @objcproperties MTLResourceStatePassSampleBufferAttachmentDescriptor begin
     @autoproperty sampleBuffer::id{MTLCounterSampleBuffer} setter = setSampleBuffer
@@ -1323,9 +1323,9 @@ end
     @autoproperty endOfEncoderSampleIndex::UInt64 setter = setEndOfEncoderSampleIndex
 end
 
-@objcwrapper immutable = true MTLResourceStatePassSampleBufferAttachmentDescriptorArray <: NSObject
+@objcwrapper MTLResourceStatePassSampleBufferAttachmentDescriptorArray <: NSObject
 
-@objcwrapper immutable = true MTLResourceStatePassDescriptor <: NSObject
+@objcwrapper MTLResourceStatePassDescriptor <: NSObject
 
 @objcproperties MTLResourceStatePassDescriptor begin
     @autoproperty sampleBufferAttachments::id{MTLResourceStatePassSampleBufferAttachmentDescriptorArray}
@@ -1347,7 +1347,7 @@ struct MTLMapIndirectArguments
     sliceId::UInt32
 end
 
-@objcwrapper immutable = true MTLResourceStateCommandEncoder <: MTLCommandEncoder
+@objcwrapper MTLResourceStateCommandEncoder <: MTLCommandEncoder
 
 struct MTLClearColor
     red::Cdouble
@@ -1385,7 +1385,7 @@ end
     MTLVisibilityResultTypeAccumulate = 1
 end
 
-@objcwrapper immutable = true MTLRenderPassAttachmentDescriptor <: NSObject
+@objcwrapper MTLRenderPassAttachmentDescriptor <: NSObject
 
 @objcproperties MTLRenderPassAttachmentDescriptor begin
     @autoproperty texture::id{MTLTexture} setter = setTexture
@@ -1401,7 +1401,7 @@ end
     @autoproperty storeActionOptions::MTLStoreActionOptions setter = setStoreActionOptions
 end
 
-@objcwrapper immutable = true MTLRenderPassColorAttachmentDescriptor <: MTLRenderPassAttachmentDescriptor
+@objcwrapper MTLRenderPassColorAttachmentDescriptor <: MTLRenderPassAttachmentDescriptor
 
 @objcproperties MTLRenderPassColorAttachmentDescriptor begin
     @autoproperty clearColor::MTLClearColor setter = setClearColor
@@ -1413,7 +1413,7 @@ end
     MTLMultisampleDepthResolveFilterMax = 0x0000000000000002
 end
 
-@objcwrapper immutable = true MTLRenderPassDepthAttachmentDescriptor <: MTLRenderPassAttachmentDescriptor
+@objcwrapper MTLRenderPassDepthAttachmentDescriptor <: MTLRenderPassAttachmentDescriptor
 
 @objcproperties MTLRenderPassDepthAttachmentDescriptor begin
     @autoproperty clearDepth::Cdouble setter = setClearDepth
@@ -1425,16 +1425,16 @@ end
     MTLMultisampleStencilResolveFilterDepthResolvedSample = 0x0000000000000001
 end
 
-@objcwrapper immutable = true MTLRenderPassStencilAttachmentDescriptor <: MTLRenderPassAttachmentDescriptor
+@objcwrapper MTLRenderPassStencilAttachmentDescriptor <: MTLRenderPassAttachmentDescriptor
 
 @objcproperties MTLRenderPassStencilAttachmentDescriptor begin
     @autoproperty clearStencil::UInt32 setter = setClearStencil
     @autoproperty stencilResolveFilter::MTLMultisampleStencilResolveFilter setter = setStencilResolveFilter
 end
 
-@objcwrapper immutable = true MTLRenderPassColorAttachmentDescriptorArray <: NSObject
+@objcwrapper MTLRenderPassColorAttachmentDescriptorArray <: NSObject
 
-@objcwrapper immutable = true MTLRenderPassSampleBufferAttachmentDescriptor <: NSObject
+@objcwrapper MTLRenderPassSampleBufferAttachmentDescriptor <: NSObject
 
 @objcproperties MTLRenderPassSampleBufferAttachmentDescriptor begin
     @autoproperty sampleBuffer::id{MTLCounterSampleBuffer} setter = setSampleBuffer
@@ -1444,9 +1444,9 @@ end
     @autoproperty endOfFragmentSampleIndex::UInt64 setter = setEndOfFragmentSampleIndex
 end
 
-@objcwrapper immutable = true MTLRenderPassSampleBufferAttachmentDescriptorArray <: NSObject
+@objcwrapper MTLRenderPassSampleBufferAttachmentDescriptorArray <: NSObject
 
-@objcwrapper immutable = true MTLRasterizationRateMap <: NSObject
+@objcwrapper MTLRasterizationRateMap <: NSObject
 
 @objcproperties MTLRasterizationRateMap begin
     @autoproperty device::id{MTLDevice}
@@ -1457,7 +1457,7 @@ end
     @autoproperty parameterBufferSizeAndAlign::MTLSizeAndAlign
 end
 
-@objcwrapper immutable = true MTLRenderPassDescriptor <: NSObject
+@objcwrapper MTLRenderPassDescriptor <: NSObject
 
 @objcproperties MTLRenderPassDescriptor begin
     @autoproperty colorAttachments::id{MTLRenderPassColorAttachmentDescriptorArray}
@@ -1478,7 +1478,7 @@ end
     @autoproperty supportColorAttachmentMapping::Bool setter = setSupportColorAttachmentMapping availability = macos(v"26.0.0")
 end
 
-@objcwrapper immutable = true MTLBlitPassSampleBufferAttachmentDescriptor <: NSObject
+@objcwrapper MTLBlitPassSampleBufferAttachmentDescriptor <: NSObject
 
 @objcproperties MTLBlitPassSampleBufferAttachmentDescriptor begin
     @autoproperty sampleBuffer::id{MTLCounterSampleBuffer} setter = setSampleBuffer
@@ -1486,9 +1486,9 @@ end
     @autoproperty endOfEncoderSampleIndex::UInt64 setter = setEndOfEncoderSampleIndex
 end
 
-@objcwrapper immutable = true MTLBlitPassSampleBufferAttachmentDescriptorArray <: NSObject
+@objcwrapper MTLBlitPassSampleBufferAttachmentDescriptorArray <: NSObject
 
-@objcwrapper immutable = true MTLBlitPassDescriptor <: NSObject
+@objcwrapper MTLBlitPassDescriptor <: NSObject
 
 @objcproperties MTLBlitPassDescriptor begin
     @autoproperty sampleBufferAttachments::id{MTLBlitPassSampleBufferAttachmentDescriptorArray}
@@ -1501,7 +1501,7 @@ end
     MTLBlitOptionRowLinearPVRTC = 0x0000000000000004
 end
 
-@objcwrapper immutable = true MTLBlitCommandEncoder <: MTLCommandEncoder
+@objcwrapper MTLBlitCommandEncoder <: MTLCommandEncoder
 
 @cenum MTLCommandBufferStatus::UInt64 begin
     MTLCommandBufferStatusNotEnqueued = 0x0000000000000000
@@ -1540,9 +1540,9 @@ end
     MTLCommandEncoderErrorStateFaulted = 4
 end
 
-@objcwrapper immutable = true availability = macos(v"15.0.0") MTLLogState <: NSObject
+@objcwrapper availability = macos(v"15.0.0") MTLLogState <: NSObject
 
-@objcwrapper immutable = false MTLCommandBufferDescriptor <: NSObject
+@objcwrapper managed = true MTLCommandBufferDescriptor <: NSObject
 
 @objcproperties MTLCommandBufferDescriptor begin
     @autoproperty retainedReferences::Bool setter = setRetainedReferences
@@ -1550,7 +1550,7 @@ end
     @autoproperty logState::id{MTLLogState} setter = setLogState availability = macos(v"15.0.0")
 end
 
-@objcwrapper immutable = true MTLCommandBufferEncoderInfo <: NSObject
+@objcwrapper MTLCommandBufferEncoderInfo <: NSObject
 
 @objcproperties MTLCommandBufferEncoderInfo begin
     @autoproperty label::id{NSString}
@@ -1563,16 +1563,16 @@ end
     MTLDispatchTypeConcurrent = 0x0000000000000001
 end
 
-@objcwrapper immutable = false MTLCommandQueue <: NSObject
+@objcwrapper managed = true MTLCommandQueue <: NSObject
 
 @objcproperties MTLCommandQueue begin
     @autoproperty label::id{NSString} setter = setLabel
     @autoproperty device::id{MTLDevice}
 end
 
-@objcwrapper immutable = true MTLLogContainer <: NSObject
+@objcwrapper MTLLogContainer <: NSObject
 
-@objcwrapper immutable = true MTLCommandBuffer <: NSObject
+@objcwrapper MTLCommandBuffer <: NSObject
 
 @objcproperties MTLCommandBuffer begin
     @autoproperty device::id{MTLDevice}
@@ -1589,7 +1589,7 @@ end
     @autoproperty error::id{NSError}
 end
 
-@objcwrapper immutable = true MTLComputePassSampleBufferAttachmentDescriptor <: NSObject
+@objcwrapper MTLComputePassSampleBufferAttachmentDescriptor <: NSObject
 
 @objcproperties MTLComputePassSampleBufferAttachmentDescriptor begin
     @autoproperty sampleBuffer::id{MTLCounterSampleBuffer} setter = setSampleBuffer
@@ -1597,9 +1597,9 @@ end
     @autoproperty endOfEncoderSampleIndex::UInt64 setter = setEndOfEncoderSampleIndex
 end
 
-@objcwrapper immutable = true MTLComputePassSampleBufferAttachmentDescriptorArray <: NSObject
+@objcwrapper MTLComputePassSampleBufferAttachmentDescriptorArray <: NSObject
 
-@objcwrapper immutable = true MTLComputePassDescriptor <: NSObject
+@objcwrapper MTLComputePassDescriptor <: NSObject
 
 @objcproperties MTLComputePassDescriptor begin
     @autoproperty dispatchType::MTLDispatchType setter = setDispatchType
@@ -1620,13 +1620,13 @@ struct MTLStageInRegionIndirectArguments
     stageInSize::NTuple{3, UInt32}
 end
 
-@objcwrapper immutable = false MTLComputeCommandEncoder <: MTLCommandEncoder
+@objcwrapper managed = true MTLComputeCommandEncoder <: MTLCommandEncoder
 
 @objcproperties MTLComputeCommandEncoder begin
     @autoproperty dispatchType::MTLDispatchType
 end
 
-@objcwrapper immutable = false availability = macos(v"15.0.0") MTLCommandQueueDescriptor <: NSObject
+@objcwrapper managed = true availability = macos(v"15.0.0") MTLCommandQueueDescriptor <: NSObject
 
 @objcproperties MTLCommandQueueDescriptor begin
     @autoproperty maxCommandBufferCount::UInt64 setter = setMaxCommandBufferCount
@@ -1659,7 +1659,7 @@ end
     MTLStencilOperationDecrementWrap = 0x0000000000000007
 end
 
-@objcwrapper immutable = true MTLStencilDescriptor <: NSObject
+@objcwrapper MTLStencilDescriptor <: NSObject
 
 @objcproperties MTLStencilDescriptor begin
     @autoproperty stencilCompareFunction::MTLCompareFunction setter = setStencilCompareFunction
@@ -1670,7 +1670,7 @@ end
     @autoproperty writeMask::UInt32 setter = setWriteMask
 end
 
-@objcwrapper immutable = true MTLDepthStencilDescriptor <: NSObject
+@objcwrapper MTLDepthStencilDescriptor <: NSObject
 
 @objcproperties MTLDepthStencilDescriptor begin
     @autoproperty depthCompareFunction::MTLCompareFunction setter = setDepthCompareFunction
@@ -1680,7 +1680,7 @@ end
     @autoproperty label::id{NSString} setter = setLabel
 end
 
-@objcwrapper immutable = true MTLDepthStencilState <: NSObject
+@objcwrapper MTLDepthStencilState <: NSObject
 
 @objcproperties MTLDepthStencilState begin
     @autoproperty label::id{NSString}
@@ -1688,7 +1688,7 @@ end
     @autoproperty gpuResourceID::MTLResourceID availability = macos(v"26.0.0")
 end
 
-@objcwrapper immutable = true MTLDrawable <: NSObject
+@objcwrapper MTLDrawable <: NSObject
 
 @objcproperties MTLDrawable begin
     @autoproperty presentedTime::Cdouble
@@ -1760,7 +1760,7 @@ end
     MTLVertexStepFunctionPerPatchControlPoint = 0x0000000000000004
 end
 
-@objcwrapper immutable = true MTLVertexBufferLayoutDescriptor <: NSObject
+@objcwrapper MTLVertexBufferLayoutDescriptor <: NSObject
 
 @objcproperties MTLVertexBufferLayoutDescriptor begin
     @autoproperty stride::UInt64 setter = setStride
@@ -1768,9 +1768,9 @@ end
     @autoproperty stepRate::UInt64 setter = setStepRate
 end
 
-@objcwrapper immutable = true MTLVertexBufferLayoutDescriptorArray <: NSObject
+@objcwrapper MTLVertexBufferLayoutDescriptorArray <: NSObject
 
-@objcwrapper immutable = true MTLVertexAttributeDescriptor <: NSObject
+@objcwrapper MTLVertexAttributeDescriptor <: NSObject
 
 @objcproperties MTLVertexAttributeDescriptor begin
     @autoproperty format::MTLVertexFormat setter = setFormat
@@ -1778,9 +1778,9 @@ end
     @autoproperty bufferIndex::UInt64 setter = setBufferIndex
 end
 
-@objcwrapper immutable = true MTLVertexAttributeDescriptorArray <: NSObject
+@objcwrapper MTLVertexAttributeDescriptorArray <: NSObject
 
-@objcwrapper immutable = true MTLVertexDescriptor <: NSObject
+@objcwrapper MTLVertexDescriptor <: NSObject
 
 @objcproperties MTLVertexDescriptor begin
     @autoproperty layouts::id{MTLVertexBufferLayoutDescriptorArray}
@@ -1856,7 +1856,7 @@ end
     MTLStepFunctionThreadPositionInGridYIndexed = 0x0000000000000008
 end
 
-@objcwrapper immutable = true MTLBufferLayoutDescriptor <: NSObject
+@objcwrapper MTLBufferLayoutDescriptor <: NSObject
 
 @objcproperties MTLBufferLayoutDescriptor begin
     @autoproperty stride::UInt64 setter = setStride
@@ -1864,9 +1864,9 @@ end
     @autoproperty stepRate::UInt64 setter = setStepRate
 end
 
-@objcwrapper immutable = true MTLBufferLayoutDescriptorArray <: NSObject
+@objcwrapper MTLBufferLayoutDescriptorArray <: NSObject
 
-@objcwrapper immutable = true MTLAttributeDescriptor <: NSObject
+@objcwrapper MTLAttributeDescriptor <: NSObject
 
 @objcproperties MTLAttributeDescriptor begin
     @autoproperty format::MTLAttributeFormat setter = setFormat
@@ -1874,9 +1874,9 @@ end
     @autoproperty bufferIndex::UInt64 setter = setBufferIndex
 end
 
-@objcwrapper immutable = true MTLAttributeDescriptorArray <: NSObject
+@objcwrapper MTLAttributeDescriptorArray <: NSObject
 
-@objcwrapper immutable = true MTLStageInputOutputDescriptor <: NSObject
+@objcwrapper MTLStageInputOutputDescriptor <: NSObject
 
 @objcproperties MTLStageInputOutputDescriptor begin
     @autoproperty layouts::id{MTLBufferLayoutDescriptorArray}
@@ -1897,15 +1897,15 @@ end
     MTLShaderValidationDisabled = 2
 end
 
-@objcwrapper immutable = true MTLPipelineBufferDescriptor <: NSObject
+@objcwrapper MTLPipelineBufferDescriptor <: NSObject
 
 @objcproperties MTLPipelineBufferDescriptor begin
     @autoproperty mutability::MTLMutability setter = setMutability
 end
 
-@objcwrapper immutable = true MTLPipelineBufferDescriptorArray <: NSObject
+@objcwrapper MTLPipelineBufferDescriptorArray <: NSObject
 
-@objcwrapper immutable = true MTLLinkedFunctions <: NSObject
+@objcwrapper MTLLinkedFunctions <: NSObject
 
 @objcproperties MTLLinkedFunctions begin
     @autoproperty functions::id{NSArray} type = Vector{MTLFunction} setter = setFunctions
@@ -1914,14 +1914,14 @@ end
     @autoproperty privateFunctions::id{NSArray} type = Vector{MTLFunction} setter = setPrivateFunctions
 end
 
-@objcwrapper immutable = true MTLComputePipelineReflection <: NSObject
+@objcwrapper MTLComputePipelineReflection <: NSObject
 
 @objcproperties MTLComputePipelineReflection begin
     @autoproperty bindings::id{NSArray} type = Vector{MTLBinding}
     @autoproperty arguments::id{NSArray} type = Vector{MTLArgument}
 end
 
-@objcwrapper immutable = false MTLComputePipelineDescriptor <: NSObject
+@objcwrapper managed = true MTLComputePipelineDescriptor <: NSObject
 
 @objcproperties MTLComputePipelineDescriptor begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -1941,7 +1941,7 @@ end
     @autoproperty requiredThreadsPerThreadgroup::MTLSize setter = setRequiredThreadsPerThreadgroup availability = macos(v"26.0.0")
 end
 
-@objcwrapper immutable = false MTLComputePipelineState <: MTLAllocation
+@objcwrapper managed = true MTLComputePipelineState <: MTLAllocation
 
 @objcproperties MTLComputePipelineState begin
     @autoproperty label::id{NSString}
@@ -2052,14 +2052,14 @@ end
     MTLRenderStageMesh = 0x0000000000000010
 end
 
-@objcwrapper immutable = true MTLRenderCommandEncoder <: MTLCommandEncoder
+@objcwrapper MTLRenderCommandEncoder <: MTLCommandEncoder
 
 @objcproperties MTLRenderCommandEncoder begin
     @autoproperty tileWidth::UInt64
     @autoproperty tileHeight::UInt64
 end
 
-@objcwrapper immutable = true MTLFunctionHandle <: NSObject
+@objcwrapper MTLFunctionHandle <: NSObject
 
 @objcproperties MTLFunctionHandle begin
     @autoproperty functionType::MTLFunctionType
@@ -2068,13 +2068,13 @@ end
     @autoproperty gpuResourceID::MTLResourceID availability = macos(v"26.0.0")
 end
 
-@objcwrapper immutable = true MTLVisibleFunctionTableDescriptor <: NSObject
+@objcwrapper MTLVisibleFunctionTableDescriptor <: NSObject
 
 @objcproperties MTLVisibleFunctionTableDescriptor begin
     @autoproperty functionCount::UInt64 setter = setFunctionCount
 end
 
-@objcwrapper immutable = true MTLVisibleFunctionTable <: MTLResource
+@objcwrapper MTLVisibleFunctionTable <: MTLResource
 
 @objcproperties MTLVisibleFunctionTable begin
     @autoproperty gpuResourceID::MTLResourceID
@@ -2153,7 +2153,7 @@ end
     MTLTessellationControlPointIndexTypeUInt32 = 0x0000000000000002
 end
 
-@objcwrapper immutable = true MTLRenderPipelineColorAttachmentDescriptor <: NSObject
+@objcwrapper MTLRenderPipelineColorAttachmentDescriptor <: NSObject
 
 @objcproperties MTLRenderPipelineColorAttachmentDescriptor begin
     @autoproperty pixelFormat::MTLPixelFormat setter = setPixelFormat
@@ -2167,9 +2167,9 @@ end
     @autoproperty writeMask::MTLColorWriteMask setter = setWriteMask
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTLLogicalToPhysicalColorAttachmentMap <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTLLogicalToPhysicalColorAttachmentMap <: NSObject
 
-@objcwrapper immutable = true MTLRenderPipelineReflection <: NSObject
+@objcwrapper MTLRenderPipelineReflection <: NSObject
 
 @objcproperties MTLRenderPipelineReflection begin
     @autoproperty vertexBindings::id{NSArray} type = Vector{MTLBinding}
@@ -2182,9 +2182,9 @@ end
     @autoproperty tileArguments::id{NSArray} type = Vector{MTLArgument}
 end
 
-@objcwrapper immutable = true MTLRenderPipelineColorAttachmentDescriptorArray <: NSObject
+@objcwrapper MTLRenderPipelineColorAttachmentDescriptorArray <: NSObject
 
-@objcwrapper immutable = true MTLRenderPipelineDescriptor <: NSObject
+@objcwrapper MTLRenderPipelineDescriptor <: NSObject
 
 @objcproperties MTLRenderPipelineDescriptor begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -2223,7 +2223,7 @@ end
     @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation availability = macos(v"15.0.0")
 end
 
-@objcwrapper immutable = true MTLRenderPipelineFunctionsDescriptor <: NSObject
+@objcwrapper MTLRenderPipelineFunctionsDescriptor <: NSObject
 
 @objcproperties MTLRenderPipelineFunctionsDescriptor begin
     @autoproperty vertexAdditionalBinaryFunctions::id{NSArray} type = Vector{MTLFunction} setter = setVertexAdditionalBinaryFunctions
@@ -2231,7 +2231,7 @@ end
     @autoproperty tileAdditionalBinaryFunctions::id{NSArray} type = Vector{MTLFunction} setter = setTileAdditionalBinaryFunctions
 end
 
-@objcwrapper immutable = true MTLRenderPipelineState <: MTLAllocation
+@objcwrapper MTLRenderPipelineState <: MTLAllocation
 
 @objcproperties MTLRenderPipelineState begin
     @autoproperty label::id{NSString}
@@ -2253,15 +2253,15 @@ end
     @autoproperty requiredThreadsPerMeshThreadgroup::MTLSize availability = macos(v"26.0.0")
 end
 
-@objcwrapper immutable = true MTLTileRenderPipelineColorAttachmentDescriptor <: NSObject
+@objcwrapper MTLTileRenderPipelineColorAttachmentDescriptor <: NSObject
 
 @objcproperties MTLTileRenderPipelineColorAttachmentDescriptor begin
     @autoproperty pixelFormat::MTLPixelFormat setter = setPixelFormat
 end
 
-@objcwrapper immutable = true MTLTileRenderPipelineColorAttachmentDescriptorArray <: NSObject
+@objcwrapper MTLTileRenderPipelineColorAttachmentDescriptorArray <: NSObject
 
-@objcwrapper immutable = true MTLTileRenderPipelineDescriptor <: NSObject
+@objcwrapper MTLTileRenderPipelineDescriptor <: NSObject
 
 @objcproperties MTLTileRenderPipelineDescriptor begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -2280,7 +2280,7 @@ end
     @autoproperty requiredThreadsPerThreadgroup::MTLSize setter = setRequiredThreadsPerThreadgroup availability = macos(v"26.0.0")
 end
 
-@objcwrapper immutable = true MTLMeshRenderPipelineDescriptor <: NSObject
+@objcwrapper MTLMeshRenderPipelineDescriptor <: NSObject
 
 @objcproperties MTLMeshRenderPipelineDescriptor begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -2314,7 +2314,7 @@ end
     @autoproperty requiredThreadsPerMeshThreadgroup::MTLSize setter = setRequiredThreadsPerMeshThreadgroup availability = macos(v"26.0.0")
 end
 
-@objcwrapper immutable = true MTLParallelRenderCommandEncoder <: MTLCommandEncoder
+@objcwrapper MTLParallelRenderCommandEncoder <: MTLCommandEncoder
 
 @cenum MTLSamplerMinMagFilter::UInt64 begin
     MTLSamplerMinMagFilterNearest = 0x0000000000000000
@@ -2348,7 +2348,7 @@ end
     MTLSamplerReductionModeMaximum = 0x0000000000000002
 end
 
-@objcwrapper immutable = true MTLSamplerDescriptor <: NSObject
+@objcwrapper MTLSamplerDescriptor <: NSObject
 
 @objcproperties MTLSamplerDescriptor begin
     @autoproperty minFilter::MTLSamplerMinMagFilter setter = setMinFilter
@@ -2370,7 +2370,7 @@ end
     @autoproperty label::id{NSString} setter = setLabel
 end
 
-@objcwrapper immutable = true MTLSamplerState <: NSObject
+@objcwrapper MTLSamplerState <: NSObject
 
 @objcproperties MTLSamplerState begin
     @autoproperty label::id{NSString}
@@ -2537,13 +2537,13 @@ end
     MTLMatrixLayoutRowMajor = 1
 end
 
-@objcwrapper immutable = true MTLAccelerationStructureDescriptor <: NSObject
+@objcwrapper MTLAccelerationStructureDescriptor <: NSObject
 
 @objcproperties MTLAccelerationStructureDescriptor begin
     @autoproperty usage::MTLAccelerationStructureUsage setter = setUsage
 end
 
-@objcwrapper immutable = true MTLAccelerationStructureGeometryDescriptor <: NSObject
+@objcwrapper MTLAccelerationStructureGeometryDescriptor <: NSObject
 
 @objcproperties MTLAccelerationStructureGeometryDescriptor begin
     @autoproperty intersectionFunctionTableOffset::UInt64 setter = setIntersectionFunctionTableOffset
@@ -2561,7 +2561,7 @@ end
     MTLMotionBorderModeVanish = 0x0000000000000001
 end
 
-@objcwrapper immutable = true MTLPrimitiveAccelerationStructureDescriptor <: MTLAccelerationStructureDescriptor
+@objcwrapper MTLPrimitiveAccelerationStructureDescriptor <: MTLAccelerationStructureDescriptor
 
 @objcproperties MTLPrimitiveAccelerationStructureDescriptor begin
     @autoproperty geometryDescriptors::id{NSArray} type = Vector{MTLAccelerationStructureGeometryDescriptor} setter = setGeometryDescriptors
@@ -2572,7 +2572,7 @@ end
     @autoproperty motionKeyframeCount::UInt64 setter = setMotionKeyframeCount
 end
 
-@objcwrapper immutable = true MTLAccelerationStructureTriangleGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
+@objcwrapper MTLAccelerationStructureTriangleGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
 
 @objcproperties MTLAccelerationStructureTriangleGeometryDescriptor begin
     @autoproperty vertexBuffer::id{MTLBuffer} setter = setVertexBuffer
@@ -2588,7 +2588,7 @@ end
     @autoproperty transformationMatrixLayout::MTLMatrixLayout setter = setTransformationMatrixLayout availability = macos(v"15.0.0")
 end
 
-@objcwrapper immutable = true MTLAccelerationStructureBoundingBoxGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
+@objcwrapper MTLAccelerationStructureBoundingBoxGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
 
 @objcproperties MTLAccelerationStructureBoundingBoxGeometryDescriptor begin
     @autoproperty boundingBoxBuffer::id{MTLBuffer} setter = setBoundingBoxBuffer
@@ -2597,14 +2597,14 @@ end
     @autoproperty boundingBoxCount::UInt64 setter = setBoundingBoxCount
 end
 
-@objcwrapper immutable = true MTLMotionKeyframeData <: NSObject
+@objcwrapper MTLMotionKeyframeData <: NSObject
 
 @objcproperties MTLMotionKeyframeData begin
     @autoproperty buffer::id{MTLBuffer} setter = setBuffer
     @autoproperty offset::UInt64 setter = setOffset
 end
 
-@objcwrapper immutable = true MTLAccelerationStructureMotionTriangleGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
+@objcwrapper MTLAccelerationStructureMotionTriangleGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
 
 @objcproperties MTLAccelerationStructureMotionTriangleGeometryDescriptor begin
     @autoproperty vertexBuffers::id{NSArray} type = Vector{MTLMotionKeyframeData} setter = setVertexBuffers
@@ -2619,7 +2619,7 @@ end
     @autoproperty transformationMatrixLayout::MTLMatrixLayout setter = setTransformationMatrixLayout availability = macos(v"15.0.0")
 end
 
-@objcwrapper immutable = true MTLAccelerationStructureMotionBoundingBoxGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
+@objcwrapper MTLAccelerationStructureMotionBoundingBoxGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
 
 @objcproperties MTLAccelerationStructureMotionBoundingBoxGeometryDescriptor begin
     @autoproperty boundingBoxBuffers::id{NSArray} type = Vector{MTLMotionKeyframeData} setter = setBoundingBoxBuffers
@@ -2645,7 +2645,7 @@ end
     MTLCurveEndCapsSphere = 2
 end
 
-@objcwrapper immutable = true MTLAccelerationStructureCurveGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
+@objcwrapper MTLAccelerationStructureCurveGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
 
 @objcproperties MTLAccelerationStructureCurveGeometryDescriptor begin
     @autoproperty controlPointBuffer::id{MTLBuffer} setter = setControlPointBuffer
@@ -2667,7 +2667,7 @@ end
     @autoproperty curveEndCaps::MTLCurveEndCaps setter = setCurveEndCaps
 end
 
-@objcwrapper immutable = true MTLAccelerationStructureMotionCurveGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
+@objcwrapper MTLAccelerationStructureMotionCurveGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
 
 @objcproperties MTLAccelerationStructureMotionCurveGeometryDescriptor begin
     @autoproperty controlPointBuffers::id{NSArray} type = Vector{MTLMotionKeyframeData} setter = setControlPointBuffers
@@ -2754,14 +2754,14 @@ end
     MTLTransformTypeComponent = 1
 end
 
-@objcwrapper immutable = true MTLAccelerationStructure <: MTLResource
+@objcwrapper MTLAccelerationStructure <: MTLResource
 
 @objcproperties MTLAccelerationStructure begin
     @autoproperty size::UInt64
     @autoproperty gpuResourceID::MTLResourceID
 end
 
-@objcwrapper immutable = true MTLInstanceAccelerationStructureDescriptor <: MTLAccelerationStructureDescriptor
+@objcwrapper MTLInstanceAccelerationStructureDescriptor <: MTLAccelerationStructureDescriptor
 
 @objcproperties MTLInstanceAccelerationStructureDescriptor begin
     @autoproperty instanceDescriptorBuffer::id{MTLBuffer} setter = setInstanceDescriptorBuffer
@@ -2778,7 +2778,7 @@ end
     @autoproperty motionTransformStride::UInt64 setter = setMotionTransformStride availability = macos(v"15.0.0")
 end
 
-@objcwrapper immutable = true MTLIndirectInstanceAccelerationStructureDescriptor <: MTLAccelerationStructureDescriptor
+@objcwrapper MTLIndirectInstanceAccelerationStructureDescriptor <: MTLAccelerationStructureDescriptor
 
 @objcproperties MTLIndirectInstanceAccelerationStructureDescriptor begin
     @autoproperty instanceDescriptorBuffer::id{MTLBuffer} setter = setInstanceDescriptorBuffer
@@ -2798,7 +2798,7 @@ end
     @autoproperty motionTransformStride::UInt64 setter = setMotionTransformStride availability = macos(v"15.0.0")
 end
 
-@objcwrapper immutable = false MTLHeapDescriptor <: NSObject
+@objcwrapper managed = true MTLHeapDescriptor <: NSObject
 
 @objcproperties MTLHeapDescriptor begin
     @autoproperty size::UInt64 setter = setSize
@@ -2811,7 +2811,7 @@ end
     @autoproperty maxCompatiblePlacementSparsePageSize::MTLSparsePageSize setter = setMaxCompatiblePlacementSparsePageSize availability = macos(v"26.0.0")
 end
 
-@objcwrapper immutable = true MTLArgumentEncoder <: NSObject
+@objcwrapper MTLArgumentEncoder <: NSObject
 
 @objcproperties MTLArgumentEncoder begin
     @autoproperty device::id{MTLDevice}
@@ -2826,14 +2826,14 @@ end
     MTL4VisibilityOptionResourceAlias = 0x0000000000000002
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4CommandBuffer <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4CommandBuffer <: NSObject
 
 @objcproperties MTL4CommandBuffer begin
     @autoproperty device::id{MTLDevice}
     @autoproperty label::id{NSString} setter = setLabel
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4CommandEncoder <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4CommandEncoder <: NSObject
 
 @objcproperties MTL4CommandEncoder begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -2846,45 +2846,45 @@ end
     MTL4RenderEncoderOptionResuming = 0x0000000000000002
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4RenderCommandEncoder <: MTL4CommandEncoder
+@objcwrapper availability = macos(v"26.0.0") MTL4RenderCommandEncoder <: MTL4CommandEncoder
 
 @objcproperties MTL4RenderCommandEncoder begin
     @autoproperty tileWidth::UInt64
     @autoproperty tileHeight::UInt64
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4CommandBufferOptions <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4CommandBufferOptions <: NSObject
 
 @objcproperties MTL4CommandBufferOptions begin
     @autoproperty logState::id{MTLLogState} setter = setLogState
 end
 
-@objcwrapper immutable = false MTLEvent <: NSObject
+@objcwrapper managed = true MTLEvent <: NSObject
 
 @objcproperties MTLEvent begin
     @autoproperty device::id{MTLDevice}
     @autoproperty label::id{NSString} setter = setLabel
 end
 
-@objcwrapper immutable = true MTLSharedEventListener <: NSObject
+@objcwrapper MTLSharedEventListener <: NSObject
 
 @objcproperties MTLSharedEventListener begin
     @autoproperty dispatchQueue::id{dispatch_queue_t}
 end
 
-@objcwrapper immutable = false MTLSharedEvent <: MTLEvent
+@objcwrapper managed = true MTLSharedEvent <: MTLEvent
 
 @objcproperties MTLSharedEvent begin
     @autoproperty signaledValue::UInt64 setter = setSignaledValue
 end
 
-@objcwrapper immutable = true MTLSharedEventHandle <: NSObject
+@objcwrapper MTLSharedEventHandle <: NSObject
 
 @objcproperties MTLSharedEventHandle begin
     @autoproperty label::id{NSString}
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4CommitFeedback <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4CommitFeedback <: NSObject
 
 @objcproperties MTL4CommitFeedback begin
     @autoproperty error::id{NSError}
@@ -2902,9 +2902,9 @@ end
     MTL4CommandQueueErrorInternal = 6
 end
 
-@objcwrapper immutable = false availability = macos(v"26.0.0") MTL4CommitOptions <: NSObject
+@objcwrapper managed = true availability = macos(v"26.0.0") MTL4CommitOptions <: NSObject
 
-@objcwrapper immutable = false availability = macos(v"26.0.0") MTL4CommandQueueDescriptor <: NSObject
+@objcwrapper managed = true availability = macos(v"26.0.0") MTL4CommandQueueDescriptor <: NSObject
 
 @objcproperties MTL4CommandQueueDescriptor begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -2939,7 +2939,7 @@ struct MTL4CopySparseBufferMappingOperation
     destinationOffset::NSUInteger
 end
 
-@objcwrapper immutable = false availability = macos(v"26.0.0") MTL4CommandQueue <: NSObject
+@objcwrapper managed = true availability = macos(v"26.0.0") MTL4CommandQueue <: NSObject
 
 @objcproperties MTL4CommandQueue begin
     @autoproperty device::id{MTLDevice}
@@ -2957,7 +2957,7 @@ end
     MTLCaptureDestinationGPUTraceDocument = 2
 end
 
-@objcwrapper immutable = false MTLCaptureDescriptor <: NSObject
+@objcwrapper managed = true MTLCaptureDescriptor <: NSObject
 
 @objcproperties MTLCaptureDescriptor begin
     @autoproperty captureObject::id{NSObject} setter = setCaptureObject
@@ -2965,7 +2965,7 @@ end
     @autoproperty outputURL::id{NSURL} setter = setOutputURL
 end
 
-@objcwrapper immutable = true MTLCaptureScope <: NSObject
+@objcwrapper MTLCaptureScope <: NSObject
 
 @objcproperties MTLCaptureScope begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -2974,16 +2974,16 @@ end
     @autoproperty mtl4CommandQueue::id{MTL4CommandQueue}
 end
 
-@objcwrapper immutable = true MTLCaptureManager <: NSObject
+@objcwrapper MTLCaptureManager <: NSObject
 
 @objcproperties MTLCaptureManager begin
     @autoproperty defaultCaptureScope::id{MTLCaptureScope} setter = setDefaultCaptureScope
     @autoproperty isCapturing::Bool
 end
 
-@objcwrapper immutable = true MTLIndirectRenderCommand <: NSObject
+@objcwrapper MTLIndirectRenderCommand <: NSObject
 
-@objcwrapper immutable = true MTLIndirectComputeCommand <: NSObject
+@objcwrapper MTLIndirectComputeCommand <: NSObject
 
 @cenum MTLIndirectCommandType::UInt64 begin
     MTLIndirectCommandTypeDraw = 0x0000000000000001
@@ -3005,7 +3005,7 @@ function MTLIndirectCommandBufferExecutionRangeMake(location, length)
     return @ccall libmtl.MTLIndirectCommandBufferExecutionRangeMake(location::UInt32, length::UInt32)::MTLIndirectCommandBufferExecutionRange
 end
 
-@objcwrapper immutable = true MTLIndirectCommandBufferDescriptor <: NSObject
+@objcwrapper MTLIndirectCommandBufferDescriptor <: NSObject
 
 @objcproperties MTLIndirectCommandBufferDescriptor begin
     @autoproperty commandTypes::MTLIndirectCommandType setter = setCommandTypes
@@ -3029,7 +3029,7 @@ end
     @autoproperty supportColorAttachmentMapping::Bool setter = setSupportColorAttachmentMapping availability = macos(v"26.0.0")
 end
 
-@objcwrapper immutable = true MTLIndirectCommandBuffer <: MTLResource
+@objcwrapper MTLIndirectCommandBuffer <: MTLResource
 
 @objcproperties MTLIndirectCommandBuffer begin
     @autoproperty size::UInt64
@@ -3040,7 +3040,7 @@ end
     MTLFunctionLogTypeValidation = 0x0000000000000000
 end
 
-@objcwrapper immutable = true MTLFunctionLogDebugLocation <: NSObject
+@objcwrapper MTLFunctionLogDebugLocation <: NSObject
 
 @objcproperties MTLFunctionLogDebugLocation begin
     @autoproperty functionName::id{NSString}
@@ -3049,9 +3049,9 @@ end
     @autoproperty column::UInt64
 end
 
-@objcwrapper immutable = true MTLAccelerationStructureCommandEncoder <: MTLCommandEncoder
+@objcwrapper MTLAccelerationStructureCommandEncoder <: MTLCommandEncoder
 
-@objcwrapper immutable = true MTLAccelerationStructurePassSampleBufferAttachmentDescriptor <: NSObject
+@objcwrapper MTLAccelerationStructurePassSampleBufferAttachmentDescriptor <: NSObject
 
 @objcproperties MTLAccelerationStructurePassSampleBufferAttachmentDescriptor begin
     @autoproperty sampleBuffer::id{MTLCounterSampleBuffer} setter = setSampleBuffer
@@ -3059,17 +3059,17 @@ end
     @autoproperty endOfEncoderSampleIndex::UInt64 setter = setEndOfEncoderSampleIndex
 end
 
-@objcwrapper immutable = true MTLAccelerationStructurePassSampleBufferAttachmentDescriptorArray <: NSObject
+@objcwrapper MTLAccelerationStructurePassSampleBufferAttachmentDescriptorArray <: NSObject
 
-@objcwrapper immutable = true MTLAccelerationStructurePassDescriptor <: NSObject
+@objcwrapper MTLAccelerationStructurePassDescriptor <: NSObject
 
 @objcproperties MTLAccelerationStructurePassDescriptor begin
     @autoproperty sampleBufferAttachments::id{MTLAccelerationStructurePassSampleBufferAttachmentDescriptorArray}
 end
 
-@objcwrapper immutable = true MTLRasterizationRateSampleArray <: NSObject
+@objcwrapper MTLRasterizationRateSampleArray <: NSObject
 
-@objcwrapper immutable = true MTLRasterizationRateLayerDescriptor <: NSObject
+@objcwrapper MTLRasterizationRateLayerDescriptor <: NSObject
 
 @objcproperties MTLRasterizationRateLayerDescriptor begin
     @autoproperty sampleCount::MTLSize
@@ -3080,9 +3080,9 @@ end
     @autoproperty vertical::id{MTLRasterizationRateSampleArray}
 end
 
-@objcwrapper immutable = true MTLRasterizationRateLayerArray <: NSObject
+@objcwrapper MTLRasterizationRateLayerArray <: NSObject
 
-@objcwrapper immutable = true MTLRasterizationRateMapDescriptor <: NSObject
+@objcwrapper MTLRasterizationRateMapDescriptor <: NSObject
 
 @objcproperties MTLRasterizationRateMapDescriptor begin
     @autoproperty layers::id{MTLRasterizationRateLayerArray}
@@ -3109,7 +3109,7 @@ end
     MTLLogLevelFault = 5
 end
 
-@objcwrapper immutable = false availability = macos(v"15.0.0") MTLLogStateDescriptor <: NSObject
+@objcwrapper managed = true availability = macos(v"15.0.0") MTLLogStateDescriptor <: NSObject
 
 @objcproperties MTLLogStateDescriptor begin
     @autoproperty level::MTLLogLevel setter = setLevel
@@ -3129,7 +3129,7 @@ end
     MTLBinaryArchiveErrorInternalError = 0x0000000000000004
 end
 
-@objcwrapper immutable = false MTLBinaryArchiveDescriptor <: NSObject
+@objcwrapper managed = true MTLBinaryArchiveDescriptor <: NSObject
 
 @objcproperties MTLBinaryArchiveDescriptor begin
     @autoproperty url::id{NSURL} setter = setUrl
@@ -3155,13 +3155,13 @@ end
     MTLIntersectionFunctionSignatureUserData = 0x0000000000000200
 end
 
-@objcwrapper immutable = true MTLIntersectionFunctionTableDescriptor <: NSObject
+@objcwrapper MTLIntersectionFunctionTableDescriptor <: NSObject
 
 @objcproperties MTLIntersectionFunctionTableDescriptor begin
     @autoproperty functionCount::UInt64 setter = setFunctionCount
 end
 
-@objcwrapper immutable = true MTLIntersectionFunctionTable <: MTLResource
+@objcwrapper MTLIntersectionFunctionTable <: MTLResource
 
 @objcproperties MTLIntersectionFunctionTable begin
     @autoproperty gpuResourceID::MTLResourceID
@@ -3173,19 +3173,19 @@ end
     MTLStitchedLibraryOptionStoreLibraryInMetalPipelinesScript = 0x0000000000000002
 end
 
-@objcwrapper immutable = true MTLFunctionStitchingAttribute <: NSObject
+@objcwrapper MTLFunctionStitchingAttribute <: NSObject
 
-@objcwrapper immutable = true MTLFunctionStitchingAttributeAlwaysInline <: NSObject
+@objcwrapper MTLFunctionStitchingAttributeAlwaysInline <: NSObject
 
-@objcwrapper immutable = true MTLFunctionStitchingNode <: NSObject
+@objcwrapper MTLFunctionStitchingNode <: NSObject
 
-@objcwrapper immutable = true MTLFunctionStitchingInputNode <: NSObject
+@objcwrapper MTLFunctionStitchingInputNode <: NSObject
 
 @objcproperties MTLFunctionStitchingInputNode begin
     @autoproperty argumentIndex::UInt64 setter = setArgumentIndex
 end
 
-@objcwrapper immutable = true MTLFunctionStitchingFunctionNode <: NSObject
+@objcwrapper MTLFunctionStitchingFunctionNode <: NSObject
 
 @objcproperties MTLFunctionStitchingFunctionNode begin
     @autoproperty name::id{NSString} setter = setName
@@ -3193,7 +3193,7 @@ end
     @autoproperty controlDependencies::id{NSArray} type = Vector{MTLFunctionStitchingFunctionNode} setter = setControlDependencies
 end
 
-@objcwrapper immutable = true MTLFunctionStitchingGraph <: NSObject
+@objcwrapper MTLFunctionStitchingGraph <: NSObject
 
 @objcproperties MTLFunctionStitchingGraph begin
     @autoproperty functionName::id{NSString} setter = setFunctionName
@@ -3202,7 +3202,7 @@ end
     @autoproperty attributes::id{NSArray} type = Vector{MTLFunctionStitchingAttribute} setter = setAttributes
 end
 
-@objcwrapper immutable = true MTLStitchedLibraryDescriptor <: NSObject
+@objcwrapper MTLStitchedLibraryDescriptor <: NSObject
 
 @objcproperties MTLStitchedLibraryDescriptor begin
     @autoproperty functionGraphs::id{NSArray} type = Vector{MTLFunctionStitchingGraph} setter = setFunctionGraphs
@@ -3227,21 +3227,21 @@ end
     MTLIOErrorInternal = 2
 end
 
-@objcwrapper immutable = true MTLIOCommandQueue <: NSObject
+@objcwrapper MTLIOCommandQueue <: NSObject
 
 @objcproperties MTLIOCommandQueue begin
     @autoproperty label::id{NSString} setter = setLabel
 end
 
-@objcwrapper immutable = true MTLIOScratchBuffer <: NSObject
+@objcwrapper MTLIOScratchBuffer <: NSObject
 
 @objcproperties MTLIOScratchBuffer begin
     @autoproperty buffer::id{MTLBuffer}
 end
 
-@objcwrapper immutable = true MTLIOScratchBufferAllocator <: NSObject
+@objcwrapper MTLIOScratchBufferAllocator <: NSObject
 
-@objcwrapper immutable = true MTLIOCommandQueueDescriptor <: NSObject
+@objcwrapper MTLIOCommandQueueDescriptor <: NSObject
 
 @objcproperties MTLIOCommandQueueDescriptor begin
     @autoproperty maxCommandBufferCount::UInt64 setter = setMaxCommandBufferCount
@@ -3251,7 +3251,7 @@ end
     @autoproperty scratchBufferAllocator::id{MTLIOScratchBufferAllocator} setter = setScratchBufferAllocator
 end
 
-@objcwrapper immutable = true MTLIOFileHandle <: NSObject
+@objcwrapper MTLIOFileHandle <: NSObject
 
 @objcproperties MTLIOFileHandle begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -3264,7 +3264,7 @@ end
     MTLIOStatusComplete = 3
 end
 
-@objcwrapper immutable = true MTLIOCommandBuffer <: NSObject
+@objcwrapper MTLIOCommandBuffer <: NSObject
 
 @objcproperties MTLIOCommandBuffer begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -3295,14 +3295,14 @@ function MTLIOFlushAndDestroyCompressionContext(context)
     return @ccall libmtl.MTLIOFlushAndDestroyCompressionContext(context::MTLIOCompressionContext)::MTLIOCompressionStatus
 end
 
-@objcwrapper immutable = true availability = macos(v"15.0.0") MTLResidencySetDescriptor <: NSObject
+@objcwrapper availability = macos(v"15.0.0") MTLResidencySetDescriptor <: NSObject
 
 @objcproperties MTLResidencySetDescriptor begin
     @autoproperty label::id{NSString} setter = setLabel
     @autoproperty initialCapacity::UInt64 setter = setInitialCapacity
 end
 
-@objcwrapper immutable = false availability = macos(v"15.0.0") MTLResidencySet <: NSObject
+@objcwrapper managed = true availability = macos(v"15.0.0") MTLResidencySet <: NSObject
 
 @objcproperties MTLResidencySet begin
     @autoproperty device::id{MTLDevice}
@@ -3312,14 +3312,14 @@ end
     @autoproperty allocationCount::UInt64
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTLResourceViewPoolDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTLResourceViewPoolDescriptor <: NSObject
 
 @objcproperties MTLResourceViewPoolDescriptor begin
     @autoproperty resourceViewCount::UInt64 setter = setResourceViewCount
     @autoproperty label::id{NSString} setter = setLabel
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTLResourceViewPool <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTLResourceViewPool <: NSObject
 
 @objcproperties MTLResourceViewPool begin
     @autoproperty baseResourceID::MTLResourceID
@@ -3328,9 +3328,9 @@ end
     @autoproperty label::id{NSString}
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTLTextureViewPool <: MTLResourceViewPool
+@objcwrapper availability = macos(v"26.0.0") MTLTextureViewPool <: MTLResourceViewPool
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4ArgumentTableDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4ArgumentTableDescriptor <: NSObject
 
 @objcproperties MTL4ArgumentTableDescriptor begin
     @autoproperty maxBufferBindCount::UInt64 setter = setMaxBufferBindCount
@@ -3341,34 +3341,34 @@ end
     @autoproperty label::id{NSString} setter = setLabel
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4ArgumentTable <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4ArgumentTable <: NSObject
 
 @objcproperties MTL4ArgumentTable begin
     @autoproperty device::id{MTLDevice}
     @autoproperty label::id{NSString}
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4BinaryFunction <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4BinaryFunction <: NSObject
 
 @objcproperties MTL4BinaryFunction begin
     @autoproperty name::id{NSString}
     @autoproperty functionType::MTLFunctionType
 end
 
-@objcwrapper immutable = false availability = macos(v"26.0.0") MTL4CommandAllocatorDescriptor <: NSObject
+@objcwrapper managed = true availability = macos(v"26.0.0") MTL4CommandAllocatorDescriptor <: NSObject
 
 @objcproperties MTL4CommandAllocatorDescriptor begin
     @autoproperty label::id{NSString} setter = setLabel
 end
 
-@objcwrapper immutable = false availability = macos(v"26.0.0") MTL4CommandAllocator <: NSObject
+@objcwrapper managed = true availability = macos(v"26.0.0") MTL4CommandAllocator <: NSObject
 
 @objcproperties MTL4CommandAllocator begin
     @autoproperty device::id{MTLDevice}
     @autoproperty label::id{NSString}
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4RenderPassDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4RenderPassDescriptor <: NSObject
 
 @objcproperties MTL4RenderPassDescriptor begin
     @autoproperty colorAttachments::id{MTLRenderPassColorAttachmentDescriptorArray}
@@ -3388,9 +3388,9 @@ end
     @autoproperty supportColorAttachmentMapping::Bool setter = setSupportColorAttachmentMapping
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4AccelerationStructureDescriptor <: MTLAccelerationStructureDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4AccelerationStructureDescriptor <: MTLAccelerationStructureDescriptor
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4AccelerationStructureGeometryDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4AccelerationStructureGeometryDescriptor <: NSObject
 
 @objcproperties MTL4AccelerationStructureGeometryDescriptor begin
     @autoproperty intersectionFunctionTableOffset::UInt64 setter = setIntersectionFunctionTableOffset
@@ -3402,7 +3402,7 @@ end
     @autoproperty primitiveDataElementSize::UInt64 setter = setPrimitiveDataElementSize
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4PrimitiveAccelerationStructureDescriptor <: MTL4AccelerationStructureDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4PrimitiveAccelerationStructureDescriptor <: MTL4AccelerationStructureDescriptor
 
 @objcproperties MTL4PrimitiveAccelerationStructureDescriptor begin
     @autoproperty geometryDescriptors::id{NSArray} type = Vector{MTL4AccelerationStructureGeometryDescriptor} setter = setGeometryDescriptors
@@ -3413,7 +3413,7 @@ end
     @autoproperty motionKeyframeCount::UInt64 setter = setMotionKeyframeCount
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4AccelerationStructureTriangleGeometryDescriptor <: MTL4AccelerationStructureGeometryDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4AccelerationStructureTriangleGeometryDescriptor <: MTL4AccelerationStructureGeometryDescriptor
 
 @objcproperties MTL4AccelerationStructureTriangleGeometryDescriptor begin
     @autoproperty vertexBuffer::MTL4BufferRange setter = setVertexBuffer
@@ -3426,7 +3426,7 @@ end
     @autoproperty transformationMatrixLayout::MTLMatrixLayout setter = setTransformationMatrixLayout
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4AccelerationStructureBoundingBoxGeometryDescriptor <: MTL4AccelerationStructureGeometryDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4AccelerationStructureBoundingBoxGeometryDescriptor <: MTL4AccelerationStructureGeometryDescriptor
 
 @objcproperties MTL4AccelerationStructureBoundingBoxGeometryDescriptor begin
     @autoproperty boundingBoxBuffer::MTL4BufferRange setter = setBoundingBoxBuffer
@@ -3434,7 +3434,7 @@ end
     @autoproperty boundingBoxCount::UInt64 setter = setBoundingBoxCount
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4AccelerationStructureMotionTriangleGeometryDescriptor <: MTL4AccelerationStructureGeometryDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4AccelerationStructureMotionTriangleGeometryDescriptor <: MTL4AccelerationStructureGeometryDescriptor
 
 @objcproperties MTL4AccelerationStructureMotionTriangleGeometryDescriptor begin
     @autoproperty vertexBuffers::MTL4BufferRange setter = setVertexBuffers
@@ -3447,7 +3447,7 @@ end
     @autoproperty transformationMatrixLayout::MTLMatrixLayout setter = setTransformationMatrixLayout
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4AccelerationStructureMotionBoundingBoxGeometryDescriptor <: MTL4AccelerationStructureGeometryDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4AccelerationStructureMotionBoundingBoxGeometryDescriptor <: MTL4AccelerationStructureGeometryDescriptor
 
 @objcproperties MTL4AccelerationStructureMotionBoundingBoxGeometryDescriptor begin
     @autoproperty boundingBoxBuffers::MTL4BufferRange setter = setBoundingBoxBuffers
@@ -3455,7 +3455,7 @@ end
     @autoproperty boundingBoxCount::UInt64 setter = setBoundingBoxCount
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4AccelerationStructureCurveGeometryDescriptor <: MTL4AccelerationStructureGeometryDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4AccelerationStructureCurveGeometryDescriptor <: MTL4AccelerationStructureGeometryDescriptor
 
 @objcproperties MTL4AccelerationStructureCurveGeometryDescriptor begin
     @autoproperty controlPointBuffer::MTL4BufferRange setter = setControlPointBuffer
@@ -3474,7 +3474,7 @@ end
     @autoproperty curveEndCaps::MTLCurveEndCaps setter = setCurveEndCaps
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4AccelerationStructureMotionCurveGeometryDescriptor <: MTL4AccelerationStructureGeometryDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4AccelerationStructureMotionCurveGeometryDescriptor <: MTL4AccelerationStructureGeometryDescriptor
 
 @objcproperties MTL4AccelerationStructureMotionCurveGeometryDescriptor begin
     @autoproperty controlPointBuffers::MTL4BufferRange setter = setControlPointBuffers
@@ -3493,7 +3493,7 @@ end
     @autoproperty curveEndCaps::MTLCurveEndCaps setter = setCurveEndCaps
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4InstanceAccelerationStructureDescriptor <: MTL4AccelerationStructureDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4InstanceAccelerationStructureDescriptor <: MTL4AccelerationStructureDescriptor
 
 @objcproperties MTL4InstanceAccelerationStructureDescriptor begin
     @autoproperty instanceDescriptorBuffer::MTL4BufferRange setter = setInstanceDescriptorBuffer
@@ -3507,7 +3507,7 @@ end
     @autoproperty motionTransformStride::UInt64 setter = setMotionTransformStride
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4IndirectInstanceAccelerationStructureDescriptor <: MTL4AccelerationStructureDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4IndirectInstanceAccelerationStructureDescriptor <: MTL4AccelerationStructureDescriptor
 
 @objcproperties MTL4IndirectInstanceAccelerationStructureDescriptor begin
     @autoproperty instanceDescriptorBuffer::MTL4BufferRange setter = setInstanceDescriptorBuffer
@@ -3523,11 +3523,11 @@ end
     @autoproperty motionTransformStride::UInt64 setter = setMotionTransformStride
 end
 
-@objcwrapper immutable = false availability = macos(v"26.0.0") MTL4ComputeCommandEncoder <: MTL4CommandEncoder
+@objcwrapper managed = true availability = macos(v"26.0.0") MTL4ComputeCommandEncoder <: MTL4CommandEncoder
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4MachineLearningCommandEncoder <: MTL4CommandEncoder
+@objcwrapper availability = macos(v"26.0.0") MTL4MachineLearningCommandEncoder <: MTL4CommandEncoder
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4LibraryDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4LibraryDescriptor <: NSObject
 
 @objcproperties MTL4LibraryDescriptor begin
     @autoproperty source::id{NSString} setter = setSource
@@ -3535,16 +3535,16 @@ end
     @autoproperty name::id{NSString} setter = setName
 end
 
-@objcwrapper immutable = false availability = macos(v"26.0.0") MTL4FunctionDescriptor <: NSObject
+@objcwrapper managed = true availability = macos(v"26.0.0") MTL4FunctionDescriptor <: NSObject
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4LibraryFunctionDescriptor <: MTL4FunctionDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4LibraryFunctionDescriptor <: MTL4FunctionDescriptor
 
 @objcproperties MTL4LibraryFunctionDescriptor begin
     @autoproperty name::id{NSString} setter = setName
     @autoproperty library::id{MTLLibrary} setter = setLibrary
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4SpecializedFunctionDescriptor <: MTL4FunctionDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4SpecializedFunctionDescriptor <: MTL4FunctionDescriptor
 
 @objcproperties MTL4SpecializedFunctionDescriptor begin
     @autoproperty functionDescriptor::id{MTL4FunctionDescriptor} setter = setFunctionDescriptor
@@ -3552,7 +3552,7 @@ end
     @autoproperty constantValues::id{MTLFunctionConstantValues} setter = setConstantValues
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4StitchedFunctionDescriptor <: MTL4FunctionDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4StitchedFunctionDescriptor <: MTL4FunctionDescriptor
 
 @objcproperties MTL4StitchedFunctionDescriptor begin
     @autoproperty functionGraph::id{MTLFunctionStitchingGraph} setter = setFunctionGraph
@@ -3586,21 +3586,21 @@ end
     MTL4IndirectCommandBufferSupportStateEnabled = 1
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4PipelineOptions <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4PipelineOptions <: NSObject
 
 @objcproperties MTL4PipelineOptions begin
     @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation
     @autoproperty shaderReflection::MTL4ShaderReflection setter = setShaderReflection
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4PipelineDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4PipelineDescriptor <: NSObject
 
 @objcproperties MTL4PipelineDescriptor begin
     @autoproperty label::id{NSString} setter = setLabel
     @autoproperty options::id{MTL4PipelineOptions} setter = setOptions
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4StaticLinkingDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4StaticLinkingDescriptor <: NSObject
 
 @objcproperties MTL4StaticLinkingDescriptor begin
     @autoproperty functionDescriptors::id{NSArray} type = Vector{MTL4FunctionDescriptor} setter = setFunctionDescriptors
@@ -3608,7 +3608,7 @@ end
     @autoproperty groups::id{NSDictionary} setter = setGroups
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4ComputePipelineDescriptor <: MTL4PipelineDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4ComputePipelineDescriptor <: MTL4PipelineDescriptor
 
 @objcproperties MTL4ComputePipelineDescriptor begin
     @autoproperty computeFunctionDescriptor::id{MTL4FunctionDescriptor} setter = setComputeFunctionDescriptor
@@ -3625,7 +3625,7 @@ end
     MTL4LogicalToPhysicalColorAttachmentMappingStateInherited = 1
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4RenderPipelineColorAttachmentDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4RenderPipelineColorAttachmentDescriptor <: NSObject
 
 @objcproperties MTL4RenderPipelineColorAttachmentDescriptor begin
     @autoproperty pixelFormat::MTLPixelFormat setter = setPixelFormat
@@ -3639,9 +3639,9 @@ end
     @autoproperty writeMask::MTLColorWriteMask setter = setWriteMask
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4RenderPipelineColorAttachmentDescriptorArray <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4RenderPipelineColorAttachmentDescriptorArray <: NSObject
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4RenderPipelineBinaryFunctionsDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4RenderPipelineBinaryFunctionsDescriptor <: NSObject
 
 @objcproperties MTL4RenderPipelineBinaryFunctionsDescriptor begin
     @autoproperty vertexAdditionalBinaryFunctions::id{NSArray} type = Vector{MTL4BinaryFunction} setter = setVertexAdditionalBinaryFunctions
@@ -3651,7 +3651,7 @@ end
     @autoproperty meshAdditionalBinaryFunctions::id{NSArray} type = Vector{MTL4BinaryFunction} setter = setMeshAdditionalBinaryFunctions
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4RenderPipelineDescriptor <: MTL4PipelineDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4RenderPipelineDescriptor <: MTL4PipelineDescriptor
 
 @objcproperties MTL4RenderPipelineDescriptor begin
     @autoproperty vertexFunctionDescriptor::id{MTL4FunctionDescriptor} setter = setVertexFunctionDescriptor
@@ -3672,20 +3672,20 @@ end
     @autoproperty supportIndirectCommandBuffers::MTL4IndirectCommandBufferSupportState setter = setSupportIndirectCommandBuffers
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4MachineLearningPipelineDescriptor <: MTL4PipelineDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4MachineLearningPipelineDescriptor <: MTL4PipelineDescriptor
 
 @objcproperties MTL4MachineLearningPipelineDescriptor begin
     @autoproperty label::id{NSString} setter = setLabel
     @autoproperty machineLearningFunctionDescriptor::id{MTL4FunctionDescriptor} setter = setMachineLearningFunctionDescriptor
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4MachineLearningPipelineReflection <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4MachineLearningPipelineReflection <: NSObject
 
 @objcproperties MTL4MachineLearningPipelineReflection begin
     @autoproperty bindings::id{NSArray} type = Vector{MTLBinding}
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4MachineLearningPipelineState <: MTLAllocation
+@objcwrapper availability = macos(v"26.0.0") MTL4MachineLearningPipelineState <: MTLAllocation
 
 @objcproperties MTL4MachineLearningPipelineState begin
     @autoproperty label::id{NSString}
@@ -3694,7 +3694,7 @@ end
     @autoproperty intermediatesHeapSize::UInt64
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4TileRenderPipelineDescriptor <: MTL4PipelineDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4TileRenderPipelineDescriptor <: MTL4PipelineDescriptor
 
 @objcproperties MTL4TileRenderPipelineDescriptor begin
     @autoproperty tileFunctionDescriptor::id{MTL4FunctionDescriptor} setter = setTileFunctionDescriptor
@@ -3707,7 +3707,7 @@ end
     @autoproperty supportBinaryLinking::Bool setter = setSupportBinaryLinking
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4MeshRenderPipelineDescriptor <: MTL4PipelineDescriptor
+@objcwrapper availability = macos(v"26.0.0") MTL4MeshRenderPipelineDescriptor <: MTL4PipelineDescriptor
 
 @objcproperties MTL4MeshRenderPipelineDescriptor begin
     @autoproperty objectFunctionDescriptor::id{MTL4FunctionDescriptor} setter = setObjectFunctionDescriptor
@@ -3742,7 +3742,7 @@ end
     MTL4PipelineDataSetSerializerConfigurationCaptureBinaries = 0x0000000000000002
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4PipelineDataSetSerializerDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4PipelineDataSetSerializerDescriptor <: NSObject
 
 @objcproperties MTL4PipelineDataSetSerializerDescriptor begin
     @autoproperty configuration::MTL4PipelineDataSetSerializerConfiguration setter = setConfiguration
@@ -3753,7 +3753,7 @@ end
     MTL4BinaryFunctionOptionPipelineIndependent = 0x0000000000000002
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4BinaryFunctionDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4BinaryFunctionDescriptor <: NSObject
 
 @objcproperties MTL4BinaryFunctionDescriptor begin
     @autoproperty name::id{NSString} setter = setName
@@ -3761,7 +3761,7 @@ end
     @autoproperty options::MTL4BinaryFunctionOptions setter = setOptions
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4PipelineStageDynamicLinkingDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4PipelineStageDynamicLinkingDescriptor <: NSObject
 
 @objcproperties MTL4PipelineStageDynamicLinkingDescriptor begin
     @autoproperty maxCallStackDepth::UInt64 setter = setMaxCallStackDepth
@@ -3769,7 +3769,7 @@ end
     @autoproperty preloadedLibraries::id{NSArray} type = Vector{MTLDynamicLibrary} setter = setPreloadedLibraries
 end
 
-@objcwrapper immutable = true availability = macos(v"26.0.0") MTL4RenderPipelineDynamicLinkingDescriptor <: NSObject
+@objcwrapper availability = macos(v"26.0.0") MTL4RenderPipelineDynamicLinkingDescriptor <: NSObject
 
 @objcproperties MTL4RenderPipelineDynamicLinkingDescriptor begin
     @autoproperty vertexLinkingDescriptor::id{MTL4PipelineStageDynamicLinkingDescriptor}
