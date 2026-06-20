@@ -797,3 +797,26 @@ end
   actual = sum(c, dims=2)
   @test expected == Array(actual)
 end
+
+@testset "1-byte reduce over a length-2 dim" begin
+  # Reducing a 2-row array along dims=2 launches the partial-reduction kernel on exactly two
+  # threadgroups, addressing its result/input through a chained byte `getelementptr`. The AGX
+  # back-end miscompiles a 1-byte access made that way (it drops the first threadgroup) unless
+  # GPUCompiler coalesces the GEP chain (`merge_byte_gep_chains!`); without it the first row
+  # comes back corrupted. Covers both the 1-byte output store (`maximum`/`minimum`/`any`/`all`)
+  # and the 1-byte input load on the non-shuffle path (`sum` of `Int8`/`UInt8`, whose output is
+  # promoted to `Int64`). Deterministic inputs so a dropped first row always shows up.
+  @testset "n=$n" for n in (2, 3, 4, 8, 16)
+    @testset "$T" for T in (Int8, UInt8)
+      a = reshape(T.(1:2n), 2, n)        # row 1 = odds, row 2 = evens
+      c = MtlArray(a)
+      @test Array(maximum(c; dims=2)) == maximum(a; dims=2)
+      @test Array(minimum(c; dims=2)) == minimum(a; dims=2)
+      @test Array(sum(c; dims=2))     == sum(a; dims=2)
+    end
+    b = falses(2, n); b[1, :] .= true    # row 1 all true, row 2 all false
+    d = MtlArray(b)
+    @test Array(any(d; dims=2)) == any(b; dims=2)
+    @test Array(all(d; dims=2)) == all(b; dims=2)
+  end
+end
