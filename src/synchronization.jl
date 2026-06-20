@@ -60,12 +60,14 @@ end
 #
 
 """
-    synchronize(queue::MTLCommandQueue=global_queue(device()))
+    synchronize(queue=global_queue(device()))
 
 Wait for currently committed GPU work on `queue` to finish.
 """
-@autoreleasepool function synchronize(queue::MTLCommandQueue = global_queue(device()))
-    flush_command_streams!(queue)
+@autoreleasepool function synchronize(queue = global_queue(device()))
+    bq = batched_queue(queue)
+    flush!(bq)
+    queue = bq.queue
 
     # flush any pending log handlers from logging-enabled kernels on this queue
     # (Metal delivers logs asynchronously; `wait_completed` on the specific cmdbuf
@@ -110,11 +112,11 @@ synchronize(cmdbuf::MTL.MTLCommandBufferLike) = synchronize(cmdbuf.commandQueue)
 Synchronize all committed GPU work across all global queues.
 """
 function device_synchronize()
-    flush_command_streams!()
-    for queue in keys(global_queues)
-        synchronize(queue)
+    flush_batched_queues!()
+    for bq in keys(global_queues)
+        synchronize(bq)
     end
-    for s in active_command_streams()
-        synchronize(s.queue)
+    for bq in active_batched_queues()
+        synchronize(bq)
     end
 end

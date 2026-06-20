@@ -1,4 +1,4 @@
-export device, device!, global_queue
+export device, device!, global_queue, BatchedCommandQueue
 
 log_compiler()          = OSLog("org.juliagpu.metal", "Compiler")
 log_compiler(args...)   = log_compiler()(args...)
@@ -49,25 +49,26 @@ Sets the Metal GPU device associated with the current Julia task.
 """
 device!(dev::MTLDevice) = task_local_storage(:MTLDevice, dev)
 
-const global_queues = WeakKeyDict{MTLCommandQueue,Nothing}()
+const global_queues = WeakKeyDict{Any,Nothing}()
 
 """
-    global_queue(dev::MTLDevice)::MTLCommandQueue
+    global_queue(dev::MTLDevice)::BatchedCommandQueue
 
-Return the Metal command queue associated with the current Julia thread.
+Return the batched Metal command queue associated with the current Julia task.
 """
 function global_queue(dev::MTLDevice)
-    get!(task_local_storage(), (:MTLCommandQueue, dev)) do
+    get!(task_local_storage(), (:BatchedCommandQueue, dev)) do
         @autoreleasepool begin
             # NOTE: MTLCommandQueue itself is manually reference-counted,
             #       the release pool is for resources used during its construction.
             queue = MTLCommandQueue(dev)
             queue.label = "global_queue($(current_task()))"
-            global_queues[queue] = nothing
-            can_use_residency_sets(dev) && install_queue_residency!(queue, dev)
-            queue
+            bq = BatchedCommandQueue(queue)
+            task_local_storage(batched_queue_key(queue), bq)
+            global_queues[bq] = nothing
+            bq
         end
-    end::MTLCommandQueue
+    end
 end
 
 # tracks the most recently launched logging-enabled cmdbuf per queue, so that

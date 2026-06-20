@@ -131,8 +131,14 @@ function capture_dir()
     end
 end
 
-flush_capture_object!(object) =
-    object isa MTLCommandQueue ? flush!(object) : flush_command_streams!()
+function flush_capture_object!(object)
+    if applicable(raw_queue, object)
+        flush!(object)
+    else
+        flush_batched_queues!()
+    end
+    return
+end
 
 function captured(f; dest=MTL.MTLCaptureDestinationGPUTraceDocument,
                      object=global_queue(device()))

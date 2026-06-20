@@ -283,7 +283,7 @@ const _fft_graph_cache_lock = ReentrantLock()
         cached.result => MPSGraphTensorData(y)
     )
 
-    cmdbuf = MPS.MPSCommandBuffer(external_cmdbuf(global_queue(device())))
+    cmdbuf = MPS.MPSCommandBuffer(global_queue(device()))
     MPS.encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(resultdict), nil, MPSGraphs.default_exec_desc())
     commit!(cmdbuf)
     synchronize(cmdbuf)

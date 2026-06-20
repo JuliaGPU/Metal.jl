@@ -129,7 +129,7 @@ end
 function exportToMtlArray!(arr::MtlArray{T}, ndarr::MPSNDArrayLike; async=false) where T
     dev = device(arr)
 
-    cmdBuf = Metal.external_cmdbuf(global_queue(dev)) do cmdBuf
+    cmdBuf = MTLCommandBuffer(global_queue(dev)) do cmdBuf
         exportDataWithCommandBuffer(ndarr, cmdBuf, arr.data[], T, arr.offset)
     end
 

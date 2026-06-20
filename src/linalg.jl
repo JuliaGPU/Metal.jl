@@ -194,7 +194,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{<:Any, CPUStorage}, maxi::Integer) =
     mps_a = MPSMatrix(A)
     mps_at = MPSMatrix(At)
 
-    cmdbuf = MPSCommandBuffer(external_cmdbuf(queue)) do cbuf
+    cmdbuf = MPSCommandBuffer(queue) do cbuf
         kernel = MPSMatrixCopy(dev, N, M, false, true)
         descriptor = MPSMatrixCopyDescriptor(mps_a, mps_at)
         encode!(cbuf, kernel, descriptor)
@@ -252,7 +252,7 @@ end
     mps_a = MPSMatrix(A)
     mps_at = MPSMatrix(At)
 
-    cmdbuf = MPSCommandBuffer(external_cmdbuf(queue)) do cbuf
+    cmdbuf = MPSCommandBuffer(queue) do cbuf
         kernel = MPSMatrixCopy(dev, N, M, false, true)
         descriptor = MPSMatrixCopyDescriptor(mps_a, mps_at)
         encode!(cbuf, kernel, descriptor)
@@ -292,7 +292,7 @@ end
     M, N = size(A)
     dev = device()
     queue = global_queue(dev)
-    cmdbuf = external_cmdbuf(queue)
+    cmdbuf = MTLCommandBuffer(queue)
 
     mps_a = MPSMatrix(A)
     mps_b = MPSMatrix(B)

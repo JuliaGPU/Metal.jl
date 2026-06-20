@@ -37,7 +37,7 @@ Base.Int(ptr::MtlPtr) = Int(UInt(ptr))
 
 # CPU -> GPU
 function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T}, src::Ptr{T}, N::Integer;
-                             queue::MTLCommandQueue=global_queue(dev), async::Bool=false) where T
+                             queue=global_queue(dev), async::Bool=false) where T
     storage_type = dst.buffer.storageMode
     if storage_type == MTL.MTLStorageModePrivate
         # stage through a shared buffer
@@ -56,7 +56,7 @@ end
 
 # GPU -> CPU
 function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPtr{T}, N::Integer;
-                             queue::MTLCommandQueue=global_queue(dev), async::Bool=false) where T
+                             queue=global_queue(dev), async::Bool=false) where T
     storage_type = src.buffer.storageMode
     if storage_type == MTL.MTLStorageModePrivate
         # stage through a shared buffer
@@ -86,7 +86,7 @@ end
 # https://github.com/pytorch/pytorch/pull/126104
 function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
                                               src::MtlPtr{T}, N::Integer;
-                                              queue::MTLCommandQueue=global_queue(dev),
+                                              queue=global_queue(dev),
                                               async::Bool=false) where T
     if N > 0
         nbytes = N * sizeof(T)
@@ -97,8 +97,8 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
         else
             total_bytes = nbytes
             chunk_size = 2^31
-            s = command_stream(queue)
-            enc = blit_encoder(s)
+            bq = batched_queue(queue)
+            enc = blit_encoder(bq)
             offset = 0
 
             while nbytes > 0
@@ -109,16 +109,15 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
                 nbytes -= transfer_bytes
             end
 
-            push!(s.roots, dst.buffer, src.buffer)
-            note_operation!(s, (; kind = :copy, name = "copyto!", bytes = Int(total_bytes)))
-            s.nops += 1
-            s.nbytes += total_bytes
+            record_operation!(bq, dst.buffer, src.buffer;
+                              bytes=total_bytes,
+                              op=(; kind = :copy, name = "copyto!", bytes = Int(total_bytes)))
 
             if async
-                maybe_autoflush!(s)
+                maybe_autoflush!(bq)
             else
-                flush!(s)
-                synchronize(queue)
+                flush!(bq)
+                synchronize(bq)
             end
         end
     end
@@ -127,24 +126,23 @@ end
 
 @autoreleasepool function unsafe_fill!(dev::MTLDevice, dst::MtlPtr{T},
                                        value::Union{UInt8,Int8}, N::Integer;
-                                       queue::MTLCommandQueue=global_queue(dev),
+                                       queue=global_queue(dev),
                                        async::Bool=false) where T
     if N > 0
         nbytes = N * sizeof(T)
-        s = command_stream(queue)
-        enc = blit_encoder(s)
+        bq = batched_queue(queue)
+        enc = blit_encoder(bq)
         append_fillbuffer!(enc, dst.buffer, value, nbytes, dst.offset)
 
-        push!(s.roots, dst.buffer)
-        note_operation!(s, (; kind = :fill, name = "fill!", bytes = Int(nbytes)))
-        s.nops += 1
-        s.nbytes += nbytes
+        record_operation!(bq, dst.buffer;
+                          bytes=nbytes,
+                          op=(; kind = :fill, name = "fill!", bytes = Int(nbytes)))
 
         if async
-            maybe_autoflush!(s)
+            maybe_autoflush!(bq)
         else
-            flush!(s)
-            synchronize(queue)
+            flush!(bq)
+            synchronize(bq)
         end
     end
     return dst

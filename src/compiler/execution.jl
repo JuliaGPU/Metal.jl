@@ -282,13 +282,13 @@ end
 @inline function launch_with_queue(@nospecialize(kernel::HostKernel), ::Nothing,
                                    gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple),
                                    submit::Bool)
-    launch(kernel, gs, ts, global_queue(device()), args, true, submit)
+    launch(kernel, gs, ts, global_queue(device()), args, submit)
 end
 
-@inline function launch_with_queue(@nospecialize(kernel::HostKernel), queue::MTLCommandQueue,
+@inline function launch_with_queue(@nospecialize(kernel::HostKernel), queue,
                                    gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple),
                                    submit::Bool)
-    launch(kernel, gs, ts, queue, args, false, submit)
+    launch(kernel, gs, ts, batched_queue(queue), args, submit)
 end
 
 function kernel_operation(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize)
@@ -298,9 +298,10 @@ function kernel_operation(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MT
 end
 
 function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
-                         queue::MTLCommandQueue, @nospecialize(args::Tuple),
-                         queue_residency_ready::Bool, kernel_state, buf, exc)
-    flush!(queue)
+                         bq::BatchedCommandQueue, @nospecialize(args::Tuple),
+                         kernel_state, buf, exc)
+    flush!(bq)
+    queue = bq.queue
 
     is_macos(v"15") ||
         error("Capturing GPU log output requires macOS 15 or higher.")
@@ -338,9 +339,7 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
     cce = MTLComputeCommandEncoder(cmdbuf)
     try
         MTL.set_function!(cce, kernel.pipeline)
-        if kernel.use_residency_sets
-            queue_residency_ready || install_queue_residency!(queue, kernel.device)
-        else
+        if !kernel.use_residency_sets
             # DROP-MACOS14: per-launch residency for macOS 14 / virtual GPUs.
             MTL.use!(cce, buf, MTL.ReadWriteUsage)
             MTL.use!(cce, exc, MTL.ReadWriteUsage)
@@ -352,14 +351,13 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
     end
 
     commit!(cmdbuf, queue)
-    defer_cleanup!(queue, cmdbuf, Any[kernel.f, args])
+    defer_cleanup!(bq, cmdbuf, Any[kernel.f, args])
     track_logging_cmdbuf!(queue, cmdbuf)
     return
 end
 
 function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
-                queue::MTLCommandQueue, @nospecialize(args::Tuple),
-                queue_residency_ready::Bool, submit::Bool)
+                bq::BatchedCommandQueue, @nospecialize(args::Tuple), submit::Bool)
     # HACK: don't actually launch when precompiling to prevent holding onto resources.
     ccall(:jl_generating_output, Cint, ()) != 0 && return
 
@@ -395,24 +393,17 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     kernel_state = KernelState(Random.rand(UInt32), buf_ptr, exc_ptr)
 
     if kernel.loggingEnabled
-        launch_logging!(kernel, gs, ts, queue, args, queue_residency_ready,
-                        kernel_state, buf, exc)
+        launch_logging!(kernel, gs, ts, bq, args, kernel_state, buf, exc)
         return
     end
 
-    s = command_stream(queue)
-    cce = compute_encoder(s)
-    if s.last_pipeline !== pipeline
-        MTL.set_function!(cce, pipeline)
-        s.last_pipeline = pipeline
-    end
+    cce = compute_encoder(bq)
+    set_pipeline!(bq, cce, pipeline)
 
     # The kernel state holds GPU addresses to per-device scratch buffers (malloc bump
     # allocator, exception mailbox) that aren't otherwise bound to the encoder. Declare
     # them so Metal Shader Validation tracks the accesses instead of dropping them.
-    if kernel.use_residency_sets
-        queue_residency_ready || install_queue_residency!(queue, dev)
-    else
+    if !kernel.use_residency_sets
         # DROP-MACOS14: per-launch residency for macOS 14 / virtual GPUs.
         MTL.use!(cce, buf, MTL.ReadWriteUsage)
         MTL.use!(cce, exc, MTL.ReadWriteUsage)
@@ -423,12 +414,9 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
 
     # The command buffer retains explicitly encoded buffers, but that doesn't keep other
     # resources alive for which we've encoded the GPU address ourselves.
-    push!(s.roots, f)
-    push!(s.roots, args)
-    note_operation!(s, kernel_operation(kernel, gs, ts))
-    s.nops += 1
+    record_operation!(bq, f, args; op=kernel_operation(kernel, gs, ts))
 
-    submit ? flush!(s) : maybe_autoflush!(s)
+    submit ? flush!(bq) : maybe_autoflush!(bq)
     return
 end
 

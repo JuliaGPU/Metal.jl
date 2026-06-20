@@ -89,18 +89,18 @@ synchronize_state(kern::MPSMatrixRandomMTGP32, cmdbuf::MTLCommandBufferLike) =
 
 @inline function _mpsmat_rand!(randkern::MPSMatrixRandomLike,
                         dest::MtlArray{T}, ::Type{T2};
-                        queue::MTLCommandQueue = global_queue(randkern.device),
+                        queue = global_queue(randkern.device),
                         async::Bool=false) where {T,T2}
     bytesize = sizeof(dest)
 
     cmdbuf = if bytesize % 16 == 0 && dest.offset == 0
-        Metal.external_cmdbuf(queue) do cmdbuf
+        MTLCommandBuffer(queue) do cmdbuf
             vecDesc = MPSVectorDescriptor(bytesize ÷ sizeof(T2), T2)
             mpsdest = MPSVector(dest, vecDesc)
             encode!(cmdbuf, randkern, mpsdest)
         end
     else
-        Metal.external_cmdbuf(queue) do cmdbuf
+        MTLCommandBuffer(queue) do cmdbuf
             len = UInt(ceil(bytesize / sizeof(T2)) * 4)
             vecDesc = MPSVectorDescriptor(len, T2)
             tempVec = MPSTemporaryVector(cmdbuf, vecDesc)

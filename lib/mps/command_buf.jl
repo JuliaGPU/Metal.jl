@@ -13,7 +13,7 @@ function MPSCommandBuffer(commandBuffer::MTLCommandBufferLike)
     MPSCommandBuffer(handle)
 end
 
-function MPSCommandBuffer(commandQueue::MTLCommandQueueLike)
+function MPSCommandBuffer(commandQueue)
     handle = @objc [MPSCommandBuffer commandBufferFromCommandQueue:commandQueue::id{MTLCommandQueue}]::id{MPSCommandBuffer}
     MPSCommandBuffer(handle)
 end

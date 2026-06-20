@@ -43,7 +43,7 @@ export MTL
 
 # essential stuff
 include("state.jl")
-include("command_stream.jl")
+include("command_queue.jl")
 include("synchronization.jl")
 include("initialization.jl")
 

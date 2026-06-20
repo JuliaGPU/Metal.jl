@@ -180,14 +180,14 @@ end
         @metal threads=1 queue=queue increment_kernel(A)
     end
     if Metal.COMMAND_BATCH_MAX_OPS[] > 1 && !Metal.profiling_command_buffers()
-        @test Metal.command_stream(queue).nops == 8
+        @test queue.nops == 8
     end
     synchronize(queue)
     @test Array(A) == Int32[8]
-    @test Metal.command_stream(queue).cmdbuf === nothing
+    @test queue.cmdbuf === nothing
 
     @metal threads=1 queue=queue submit=true increment_kernel(A)
-    @test Metal.command_stream(queue).cmdbuf === nothing
+    @test queue.cmdbuf === nothing
     synchronize(queue)
     @test Array(A) == Int32[9]
 

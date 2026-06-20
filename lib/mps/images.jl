@@ -71,7 +71,7 @@ function blur(image, kernel; pixelFormat=MTL.MTLPixelFormatRGBA8Unorm)
     textDesc2.usage = MTL.MTLTextureUsageShaderRead | MTL.MTLTextureUsageShaderWrite
     text2 = MTL.MTLTexture(res.data.rc.obj, textDesc2, 0, bytesPerRow)
 
-    cmdbuf = Metal.external_cmdbuf(global_queue(device()))
+    cmdbuf = MTLCommandBuffer(global_queue(device()))
     encode!(cmdbuf, kernel, text1, text2)
     commit!(cmdbuf)
 
