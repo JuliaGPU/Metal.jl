@@ -438,11 +438,15 @@ pipeline_desc = MTLComputePipelineDescriptor()
 pipeline_desc.computeFunction = fun
 
 add_functions!(bin, pipeline_desc)
-mktempdir() do dir
-    path = joinpath(dir, "kernel.bin")
-    write(path, bin)
-    @test isfile(path)
-    @test filesize(path) > 0
+# paravirtualized GPUs cannot reliably compile functions into a serializable form,
+# leaving the archive with no items eligible for serialization
+if !MTL.is_virtual(dev)
+    mktempdir() do dir
+        path = joinpath(dir, "kernel.bin")
+        write(path, bin)
+        @test isfile(path)
+        @test filesize(path) > 0
+    end
 end
 
 end
