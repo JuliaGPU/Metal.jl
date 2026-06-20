@@ -7,8 +7,7 @@ export MTLCommandBufferDescriptor
 # @objcwrapper managed = true MTLCommandBufferDescriptor <: NSObject
 
 function MTLCommandBufferDescriptor()
-    handle = @objc [MTLCommandBufferDescriptor new]::id{MTLCommandBufferDescriptor}
-    return adopt(MTLCommandBufferDescriptor, handle)
+    return @objc [MTLCommandBufferDescriptor new]::MTLCommandBufferDescriptor
 end
 
 

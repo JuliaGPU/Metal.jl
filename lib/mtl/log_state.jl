@@ -5,10 +5,7 @@ export MTLLogStateDescriptor
 # @objcwrapper managed = true MTLLogStateDescriptor <: NSObject
 
 function MTLLogStateDescriptor()
-    handle = @objc [MTLLogStateDescriptor alloc]::id{MTLLogStateDescriptor}
-    obj = adopt(MTLLogStateDescriptor, handle)
-    @objc [obj::id{MTLLogStateDescriptor} init]::id{MTLLogStateDescriptor}
-    return obj
+    return @objc [[MTLLogStateDescriptor alloc]::id{MTLLogStateDescriptor} init]::MTLLogStateDescriptor
 end
 
 

@@ -13,11 +13,8 @@ end
 
 MPSGraphShapedType(shape, dataType) = MPSGraphShapedType(convert(MPSShape, shape), dataType)
 function MPSGraphShapedType(shape::MPSShape, dataType)
-    tmp = @objc [MPSGraphShapedType alloc]::id{MPSGraphShapedType}
-    obj = adopt(MPSGraphShapedType, tmp)
-    @objc [obj::id{MPSGraphShapedType} initWithShape:shape::id{MPSShape}
-                                       dataType:dataType::MPSDataType]::id{MPSGraphShapedType}
-    return obj
+    return @objc [[MPSGraphShapedType alloc]::id{MPSGraphShapedType} initWithShape:shape::id{MPSShape}
+                                                               dataType:dataType::MPSDataType]::MPSGraphShapedType
 end
 
 ## MPSGraphDevice.h

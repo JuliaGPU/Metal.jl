@@ -7,8 +7,7 @@ export MTLComputePipelineDescriptor
 # @objcwrapper managed = true MTLComputePipelineDescriptor <: NSObject
 
 function MTLComputePipelineDescriptor()
-    handle = @objc [MTLComputePipelineDescriptor new]::id{MTLComputePipelineDescriptor}
-    return adopt(MTLComputePipelineDescriptor, handle)
+    return @objc [MTLComputePipelineDescriptor new]::MTLComputePipelineDescriptor
 end
 
 #

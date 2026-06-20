@@ -28,20 +28,14 @@ export MPSVector
 # @objcwrapper managed = true MPSVector <: NSObject
 
 function MPSVector(buf, descriptor::MPSVectorDescriptor, offset::Integer=0)
-    vec = @objc [MPSVector alloc]::id{MPSVector}
-    obj = adopt(MPSVector, vec)
-    @objc [obj::id{MPSVector} initWithBuffer:buf::id{MTLBuffer}
-                              offset:offset::NSUInteger
-                              descriptor:descriptor::id{MPSVectorDescriptor}]::id{MPSVector}
-    return obj
+    return @objc [[MPSVector alloc]::id{MPSVector} initWithBuffer:buf::id{MTLBuffer}
+                                             offset:offset::NSUInteger
+                                             descriptor:descriptor::id{MPSVectorDescriptor}]::MPSVector
 end
 
 function MPSVector(dev::MTLDevice, descriptor::MPSVectorDescriptor)
-    vec = @objc [MPSVector alloc]::id{MPSVector}
-    obj = adopt(MPSVector, vec)
-    @objc [obj::id{MPSVector} initWithDevice:dev::id{MTLDevice}
-                              descriptor:descriptor::id{MPSVectorDescriptor}]::id{MPSVector}
-    return obj
+    return @objc [[MPSVector alloc]::id{MPSVector} initWithDevice:dev::id{MTLDevice}
+                                             descriptor:descriptor::id{MPSVectorDescriptor}]::MPSVector
 end
 
 """
@@ -71,15 +65,12 @@ export MPSMatrixVectorMultiplication, encode!, matvecmul!
 # @objcwrapper managed = true MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
 
 function MPSMatrixVectorMultiplication(dev, transpose, rows, columns, alpha, beta)
-    kernel = @objc [MPSMatrixVectorMultiplication alloc]::id{MPSMatrixVectorMultiplication}
-    obj = adopt(MPSMatrixVectorMultiplication, kernel)
-    @objc [obj::id{MPSMatrixVectorMultiplication} initWithDevice:dev::id{MTLDevice}
-                                                  transpose:transpose::Bool
-                                                  rows:rows::NSUInteger
-                                                  columns:columns::NSUInteger
-                                                  alpha:alpha::Cdouble
-                                                  beta:beta::Cdouble]::id{MPSMatrixVectorMultiplication}
-    return obj
+    return @objc [[MPSMatrixVectorMultiplication alloc]::id{MPSMatrixVectorMultiplication} initWithDevice:dev::id{MTLDevice}
+                                                                                     transpose:transpose::Bool
+                                                                                     rows:rows::NSUInteger
+                                                                                     columns:columns::NSUInteger
+                                                                                     alpha:alpha::Cdouble
+                                                                                     beta:beta::Cdouble]::MPSMatrixVectorMultiplication
 end
 
 function encode!(cmdbuf::MTLCommandBufferLike, matvecmul::MPSMatrixVectorMultiplicationLike, inputMatrix, inputVector, resultVector)

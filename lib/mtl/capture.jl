@@ -61,8 +61,7 @@ MTLCaptureDescriptor
 # @objcwrapper managed = true MTLCaptureDescriptor <: NSObject
 
 function MTLCaptureDescriptor()
-    handle = @objc [MTLCaptureDescriptor new]::id{MTLCaptureDescriptor}
-    return adopt(MTLCaptureDescriptor, handle)
+    return @objc [MTLCaptureDescriptor new]::MTLCaptureDescriptor
 end
 
 # TODO: Add capture state

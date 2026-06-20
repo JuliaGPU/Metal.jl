@@ -13,23 +13,20 @@ Base.convert(::Type{MTLTextureUsage}, x::Integer) = MTLTextureUsage(x)
 # @objcwrapper managed = true MTLTextureDescriptor <: NSObject
 
 function MTLTextureDescriptor(pixelFormat, width, height, mipmapped=false)
-    desc = @objc [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat::MTLPixelFormat
+    return @objc [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat::MTLPixelFormat
                                           width:width::NSUInteger
                                           height:height::NSUInteger
-                                          mipmapped:mipmapped::Bool]::id{MTLTextureDescriptor}
-    return retain(MTLTextureDescriptor, desc)
+                                          mipmapped:mipmapped::Bool]::MTLTextureDescriptor
 end
 
 # @objcwrapper managed = true MTLTexture <: NSObject
 
 function MTLTexture(buffer, descriptor, offset, bytesPerRow)
-    texture = @objc [buffer::id{MTLBuffer} newTextureWithDescriptor:descriptor::id{MTLTextureDescriptor}
+    return @objc [buffer::id{MTLBuffer} newTextureWithDescriptor:descriptor::id{MTLTextureDescriptor}
                                           offset:offset::NSUInteger
-                                          bytesPerRow:bytesPerRow::NSUInteger]::id{MTLTexture}
-    return adopt(MTLTexture, texture)
+                                          bytesPerRow:bytesPerRow::NSUInteger]::MTLTexture
 end
 
 function MTLTexture(dev, descriptor)
-    texture = @objc [dev::id{MTLDevice} newTextureWithDescriptor:descriptor::id{MTLTextureDescriptor}]::id{MTLTexture}
-    return adopt(MTLTexture, texture)
+    return @objc [dev::id{MTLDevice} newTextureWithDescriptor:descriptor::id{MTLTextureDescriptor}]::MTLTexture
 end

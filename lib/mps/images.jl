@@ -24,11 +24,8 @@ export MPSImageGaussianBlur, encode!
 # @objcwrapper managed = true MPSImageGaussianBlur <: MPSUnaryImageKernel
 
 function MPSImageGaussianBlur(dev, sigma)
-    kernel = @objc [MPSImageGaussianBlur alloc]::id{MPSImageGaussianBlur}
-    obj = adopt(MPSImageGaussianBlur, kernel)
-    @objc [obj::id{MPSImageGaussianBlur} initWithDevice:dev::id{MTLDevice}
-                                  sigma:sigma::Float32]::id{MPSImageGaussianBlur}
-    return obj
+    return @objc [[MPSImageGaussianBlur alloc]::id{MPSImageGaussianBlur} initWithDevice:dev::id{MTLDevice}
+                                                                   sigma:sigma::Float32]::MPSImageGaussianBlur
 end
 
 
@@ -39,12 +36,9 @@ export MPSImageBox
 # @objcwrapper managed = true MPSImageBox <: MPSUnaryImageKernel
 
 function MPSImageBox(dev, kernelWidth, kernelHeight)
-    kernel = @objc [MPSImageBox alloc]::id{MPSImageBox}
-    obj = adopt(MPSImageBox, kernel)
-    @objc [obj::id{MPSImageBox} initWithDevice:dev::id{MTLDevice}
-                                kernelWidth:kernelWidth::Int
-                                kernelHeight:kernelHeight::Int]::id{MPSImageBox}
-    return obj
+    return @objc [[MPSImageBox alloc]::id{MPSImageBox} initWithDevice:dev::id{MTLDevice}
+                                                 kernelWidth:kernelWidth::Int
+                                                 kernelHeight:kernelHeight::Int]::MPSImageBox
 end
 
 

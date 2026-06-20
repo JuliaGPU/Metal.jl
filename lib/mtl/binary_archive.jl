@@ -7,8 +7,7 @@ export MTLBinaryArchiveDescriptor
 # @objcwrapper managed = true MTLBinaryArchiveDescriptor <: NSObject
 
 function MTLBinaryArchiveDescriptor()
-    handle = @objc [MTLBinaryArchiveDescriptor new]::id{MTLBinaryArchiveDescriptor}
-    return adopt(MTLBinaryArchiveDescriptor, handle)
+    return @objc [MTLBinaryArchiveDescriptor new]::MTLBinaryArchiveDescriptor
 end
 
 

@@ -30,20 +30,14 @@ export MPSMatrix
 # @objcwrapper managed = true MPSMatrix <: NSObject
 
 function MPSMatrix(buf, descriptor::MPSMatrixDescriptor, offset::Integer=0)
-    mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
-    obj = adopt(MPSMatrix, mat)
-    @objc [obj::id{MPSMatrix} initWithBuffer:buf::id{MTLBuffer}
-                              offset:offset::NSUInteger
-                              descriptor:descriptor::id{MPSMatrixDescriptor}]::id{MPSMatrix}
-    return obj
+    return @objc [[MPSMatrix alloc]::id{MPSMatrix} initWithBuffer:buf::id{MTLBuffer}
+                                             offset:offset::NSUInteger
+                                             descriptor:descriptor::id{MPSMatrixDescriptor}]::MPSMatrix
 end
 
 function MPSMatrix(dev::MTLDevice, descriptor::MPSMatrixDescriptor)
-    mat = @objc [MPSMatrix alloc]::id{MPSMatrix}
-    obj = adopt(MPSMatrix, mat)
-    @objc [obj::id{MPSMatrix} initWithDevice:dev::id{MTLDevice}
-                              descriptor:descriptor::id{MPSMatrixDescriptor}]::id{MPSMatrix}
-    return obj
+    return @objc [[MPSMatrix alloc]::id{MPSMatrix} initWithDevice:dev::id{MTLDevice}
+                                             descriptor:descriptor::id{MPSMatrixDescriptor}]::MPSMatrix
 end
 
 """
@@ -105,17 +99,14 @@ export MPSMatrixMultiplication, encode!, matmul!
 
 function MPSMatrixMultiplication(dev, transposeLeft, transposeRight, resultRows,
                                  resultColumns, interiorColumns, alpha, beta)
-    kernel = @objc [MPSMatrixMultiplication alloc]::id{MPSMatrixMultiplication}
-    obj = adopt(MPSMatrixMultiplication, kernel)
-    @objc [obj::id{MPSMatrixMultiplication} initWithDevice:dev::id{MTLDevice}
-                                            transposeLeft:transposeLeft::Bool
-                                            transposeRight:transposeRight::Bool
-                                            resultRows:resultRows::NSUInteger
-                                            resultColumns:resultColumns::NSUInteger
-                                            interiorColumns:interiorColumns::NSUInteger
-                                            alpha:alpha::Cdouble
-                                            beta:beta::Cdouble]::id{MPSMatrixMultiplication}
-    return obj
+    return @objc [[MPSMatrixMultiplication alloc]::id{MPSMatrixMultiplication} initWithDevice:dev::id{MTLDevice}
+                                                                         transposeLeft:transposeLeft::Bool
+                                                                         transposeRight:transposeRight::Bool
+                                                                         resultRows:resultRows::NSUInteger
+                                                                         resultColumns:resultColumns::NSUInteger
+                                                                         interiorColumns:interiorColumns::NSUInteger
+                                                                         alpha:alpha::Cdouble
+                                                                         beta:beta::Cdouble]::MPSMatrixMultiplication
 end
 
 function encode!(cmdbuf::MTLCommandBufferLike, matmul::MPSMatrixMultiplicationLike, left, right, result)
@@ -170,11 +161,8 @@ export MPSMatrixFindTopK, encode!
 # @objcwrapper managed = true MPSMatrixFindTopK <: MPSMatrixUnaryKernel
 
 function MPSMatrixFindTopK(dev, numberOfTopKValues)
-    kernel = @objc [MPSMatrixFindTopK alloc]::id{MPSMatrixFindTopK}
-    obj = adopt(MPSMatrixFindTopK, kernel)
-    @objc [obj::id{MPSMatrixFindTopK} initWithDevice:dev::id{MTLDevice}
-                                                   numberOfTopKValues:numberOfTopKValues::NSUInteger]::id{MPSMatrixFindTopK}
-    return obj
+    return @objc [[MPSMatrixFindTopK alloc]::id{MPSMatrixFindTopK} initWithDevice:dev::id{MTLDevice}
+                                                             numberOfTopKValues:numberOfTopKValues::NSUInteger]::MPSMatrixFindTopK
 end
 
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSMatrixFindTopKLike, inputMatrix, resultIndexMatrix, resultValueMatrix)
@@ -263,10 +251,7 @@ for f in (:MPSMatrixSoftMax, :MPSMatrixLogSoftMax)
     fLike = Symbol(f, :Like)
     @eval begin
         function $(f)(dev)
-            kernel = @objc [$(f) alloc]::id{$(f)}
-            obj = adopt($(f), kernel)
-            @objc [obj::id{$(f)} initWithDevice:dev::id{MTLDevice}]::id{$(f)}
-            return obj
+            return @objc [[$(f) alloc]::id{$(f)} initWithDevice:dev::id{MTLDevice}]::$(f)
         end
 
         function encode!(cmdbuf::MTLCommandBufferLike, kernel::$(fLike), inputMatrix, resultMatrix)

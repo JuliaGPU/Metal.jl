@@ -79,29 +79,20 @@ Metal ndarray representation used in Performance Shaders.
 May not contain more than 16 dimensions.
 """
 function MPSNDArray(device::MTLDevice, desc::MPSNDArrayDescriptor)
-    arrayaddr = @objc [MPSNDArray alloc]::id{MPSNDArray}
-    obj = adopt(MPSNDArray, arrayaddr)
-    @objc [obj::MPSNDArray initWithDevice:device::id{MTLDevice}
-                                 descriptor:desc::id{MPSNDArrayDescriptor}]::id{MPSNDArray}
-    return obj
+    return @objc [[MPSNDArray alloc]::id{MPSNDArray} initWithDevice:device::id{MTLDevice}
+                                               descriptor:desc::id{MPSNDArrayDescriptor}]::MPSNDArray
 end
 
 function MPSNDArray(device::MTLDevice, scalar)
-    arrayaddr = @objc [MPSNDArray alloc]::id{MPSNDArray}
-    obj = adopt(MPSNDArray, arrayaddr)
-    @objc [obj::MPSNDArray initWithDevice:device::id{MTLDevice}
-                                 scalar:scalar::Float64]::id{MPSNDArray}
-    return obj
+    return @objc [[MPSNDArray alloc]::id{MPSNDArray} initWithDevice:device::id{MTLDevice}
+                                               scalar:scalar::Float64]::MPSNDArray
 end
 
 @static if Metal.is_macos(v"15")
     function MPSNDArray(buffer::MTLBuffer, offset::UInt, descriptor::MPSNDArrayDescriptor)
-        arrayaddr = @objc [MPSNDArray alloc]::id{MPSNDArray}
-        obj = adopt(MPSNDArray, arrayaddr)
-        @objc [obj::MPSNDArray initWithBuffer:buffer::id{MTLBuffer}
-                                offset:offset::NSUInteger
-                                descriptor:descriptor::id{MPSNDArrayDescriptor}]::id{MPSNDArray}
-        return obj
+        return @objc [[MPSNDArray alloc]::id{MPSNDArray} initWithBuffer:buffer::id{MTLBuffer}
+                                                   offset:offset::NSUInteger
+                                                   descriptor:descriptor::id{MPSNDArrayDescriptor}]::MPSNDArray
     end
 else
     function MPSNDArray(_::MTLBuffer, _::UInt, _::MPSNDArrayDescriptor)
@@ -187,11 +178,8 @@ export MPSNDArrayMultiaryKernel
 # @objcwrapper managed = true MPSNDArrayMultiaryKernel <: MPSNDArrayMultiaryBase
 
 function MPSNDArrayMultiaryKernel(device, sourceCount)
-    kernel = @objc [MPSNDArrayMultiaryKernel alloc]::id{MPSNDArrayMultiaryKernel}
-    obj = adopt(MPSNDArrayMultiaryKernel, kernel)
-    @objc [obj::id{MPSNDArrayMultiaryKernel} initWithDevice:device::id{MTLDevice}
-                                  sourceCount:sourceCount::NSUInteger]::id{MPSNDArrayMultiaryKernel}
-    return obj
+    return @objc [[MPSNDArrayMultiaryKernel alloc]::id{MPSNDArrayMultiaryKernel} initWithDevice:device::id{MTLDevice}
+                                                                           sourceCount:sourceCount::NSUInteger]::MPSNDArrayMultiaryKernel
 end
 
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSNDArrayMultiaryKernelLike, sourceArrays)
@@ -222,10 +210,7 @@ export MPSNDArrayUnaryKernel
 # @objcwrapper managed = true MPSNDArrayUnaryKernel <: MPSNDArrayMultiaryKernel
 
 function MPSNDArrayUnaryKernel(device)
-    kernel = @objc [MPSNDArrayUnaryKernel alloc]::id{MPSNDArrayUnaryKernel}
-    obj = adopt(MPSNDArrayUnaryKernel, kernel)
-    @objc [obj::id{MPSNDArrayUnaryKernel} initWithDevice:device::id{MTLDevice}]::id{MPSNDArrayUnaryKernel}
-    return obj
+    return @objc [[MPSNDArrayUnaryKernel alloc]::id{MPSNDArrayUnaryKernel} initWithDevice:device::id{MTLDevice}]::MPSNDArrayUnaryKernel
 end
 
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSNDArrayUnaryKernelLike, sourceArray)
@@ -256,10 +241,7 @@ export MPSNDArrayBinaryKernel
 # @objcwrapper managed = true MPSNDArrayBinaryKernel <: MPSNDArrayMultiaryKernel
 
 function MPSNDArrayBinaryKernel(device)
-    kernel = @objc [MPSNDArrayBinaryKernel alloc]::id{MPSNDArrayBinaryKernel}
-    obj = adopt(MPSNDArrayBinaryKernel, kernel)
-    @objc [obj::id{MPSNDArrayBinaryKernel} initWithDevice:device::id{MTLDevice}]::id{MPSNDArrayBinaryKernel}
-    return obj
+    return @objc [[MPSNDArrayBinaryKernel alloc]::id{MPSNDArrayBinaryKernel} initWithDevice:device::id{MTLDevice}]::MPSNDArrayBinaryKernel
 end
 
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSNDArrayBinaryKernelLike, primarySourceArray, secondarySourceArray)
@@ -292,9 +274,6 @@ end
 # @objcwrapper managed = true MPSNDArrayMatrixMultiplication <: MPSNDArrayMultiaryKernel
 
 function MPSNDArrayMatrixMultiplication(device, sourceCount)
-    kernel = @objc [MPSNDArrayMatrixMultiplication alloc]::id{MPSNDArrayMatrixMultiplication}
-    obj = adopt(MPSNDArrayMatrixMultiplication, kernel)
-    @objc [obj::id{MPSNDArrayMatrixMultiplication} initWithDevice:device::id{MTLDevice}
-                    sourceCount:sourceCount::NSUInteger]::id{MPSNDArrayMatrixMultiplication}
-    return obj
+    return @objc [[MPSNDArrayMatrixMultiplication alloc]::id{MPSNDArrayMatrixMultiplication} initWithDevice:device::id{MTLDevice}
+                                                                                       sourceCount:sourceCount::NSUInteger]::MPSNDArrayMatrixMultiplication
 end

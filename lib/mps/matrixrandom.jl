@@ -7,35 +7,27 @@ export MPSMatrixRandomDistributionDescriptor
 # @objcwrapper managed = true MPSMatrixRandomDistributionDescriptor <: NSObject
 
 function MPSMatrixRandomDefaultDistributionDescriptor()
-    desc = @objc [MPSMatrixRandomDistributionDescriptor defaultDistributionDescriptor]::id{MPSMatrixRandomDistributionDescriptor}
-    obj = MPSMatrixRandomDistributionDescriptor(desc)
-    return obj
+    return @objc [MPSMatrixRandomDistributionDescriptor defaultDistributionDescriptor]::MPSMatrixRandomDistributionDescriptor
 end
 
 # Default constructor
 MPSMatrixRandomDistributionDescriptor() = MPSMatrixRandomDefaultDistributionDescriptor()
 
 function MPSMatrixRandomNormalDistributionDescriptor(mean, standardDeviation)
-    desc = @objc [MPSMatrixRandomDistributionDescriptor normalDistributionDescriptorWithMean:mean::Float32
-                                                        standardDeviation:standardDeviation::Float32]::id{MPSMatrixRandomDistributionDescriptor}
-    obj = MPSMatrixRandomDistributionDescriptor(desc)
-    return obj
+    return @objc [MPSMatrixRandomDistributionDescriptor normalDistributionDescriptorWithMean:mean::Float32
+                                                        standardDeviation:standardDeviation::Float32]::MPSMatrixRandomDistributionDescriptor
 end
 
 function MPSMatrixRandomNormalDistributionDescriptor(mean, standardDeviation, minimum, maximum)
-    desc = @objc [MPSMatrixRandomDistributionDescriptor normalDistributionDescriptorWithMean:mean::Float32
+    return @objc [MPSMatrixRandomDistributionDescriptor normalDistributionDescriptorWithMean:mean::Float32
                                                         standardDeviation:standardDeviation::Float32
                                                         minimum:minimum::Float32
-                                                        maximum:maximum::Float32]::id{MPSMatrixRandomDistributionDescriptor}
-    obj = MPSMatrixRandomDistributionDescriptor(desc)
-    return obj
+                                                        maximum:maximum::Float32]::MPSMatrixRandomDistributionDescriptor
 end
 
 function MPSMatrixRandomUniformDistributionDescriptor(minimum, maximum)
-    desc = @objc [MPSMatrixRandomDistributionDescriptor uniformDistributionDescriptorWithMinimum:minimum::Float32
-                                                        maximum:maximum::Float32]::id{MPSMatrixRandomDistributionDescriptor}
-    obj = MPSMatrixRandomDistributionDescriptor(desc)
-    return obj
+    return @objc [MPSMatrixRandomDistributionDescriptor uniformDistributionDescriptorWithMinimum:minimum::Float32
+                                                        maximum:maximum::Float32]::MPSMatrixRandomDistributionDescriptor
 end
 
 # @objcwrapper managed = true MPSMatrixRandom <: MPSKernel
@@ -55,27 +47,18 @@ end
 for R in [:MPSMatrixRandomMTGP32, :MPSMatrixRandomPhilox]
     @eval begin
         function $R(device)
-            kernel = @objc [$R alloc]::id{$R}
-            obj = adopt($R, kernel)
-            @objc [obj::id{$R} initWithDevice:device::id{MTLDevice}]::id{$R}
-            return obj
+            return @objc [[$R alloc]::id{$R} initWithDevice:device::id{MTLDevice}]::$R
         end
         function $R(device, destinationDataType, seed)
-            kernel = @objc [$R alloc]::id{$R}
-            obj = adopt($R, kernel)
-            @objc [obj::id{$R} initWithDevice:device::id{MTLDevice}
-                                destinationDataType:destinationDataType::MPSDataType
-                                seed:seed::NSUInteger]::id{$R}
-            return obj
+            return @objc [[$R alloc]::id{$R} initWithDevice:device::id{MTLDevice}
+                                      destinationDataType:destinationDataType::MPSDataType
+                                      seed:seed::NSUInteger]::$R
         end
         function $R(device, destinationDataType, seed, distributionDescriptor)
-            kernel = @objc [$R alloc]::id{$R}
-            obj = adopt($R, kernel)
-            @objc [obj::id{$R} initWithDevice:device::id{MTLDevice}
-                                destinationDataType:destinationDataType::MPSDataType
-                                seed:seed::NSUInteger
-                                distributionDescriptor:distributionDescriptor::id{MPSMatrixRandomDistributionDescriptor}]::id{$R}
-            return obj
+            return @objc [[$R alloc]::id{$R} initWithDevice:device::id{MTLDevice}
+                                      destinationDataType:destinationDataType::MPSDataType
+                                      seed:seed::NSUInteger
+                                      distributionDescriptor:distributionDescriptor::id{MPSMatrixRandomDistributionDescriptor}]::$R
         end
     end
 end

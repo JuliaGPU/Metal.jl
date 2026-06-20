@@ -7,8 +7,7 @@ export MTLFunctionDescriptor
 # @objcwrapper managed = true MTLFunctionDescriptor <: NSObject
 
 function MTLFunctionDescriptor()
-    handle = @objc [MTLFunctionDescriptor new]::id{MTLFunctionDescriptor}
-    return adopt(MTLFunctionDescriptor, handle)
+    return @objc [MTLFunctionDescriptor new]::MTLFunctionDescriptor
 end
 
 
