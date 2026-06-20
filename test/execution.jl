@@ -190,6 +190,17 @@ end
     @test Metal.command_stream(queue).cmdbuf === nothing
     synchronize(queue)
     @test Array(A) == Int32[9]
+
+    B = MtlArray(Int32[0])
+    Metal.unsafe_copyto!(device(B), pointer(B), pointer(A), 1; queue, async=true)
+    @metal threads=1 queue=queue increment_kernel(B)
+    synchronize(queue)
+    @test Array(B) == Int32[10]
+
+    C = MtlArray{UInt8}(undef, 4)
+    Metal.unsafe_fill!(device(C), pointer(C), UInt8(3), length(C); queue, async=true)
+    synchronize(queue)
+    @test Array(C) == fill(UInt8(3), 4)
 end
 
 @testset "kernel launch cleanup" begin

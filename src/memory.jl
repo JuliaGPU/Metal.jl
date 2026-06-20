@@ -95,26 +95,30 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
         if dst.buffer.storageMode == src.buffer.storageMode == MTL.MTLStorageModeShared && nbytes < 2^25
             unsafe_copyto!(convert(Ptr{T}, dst), convert(Ptr{T}, src), N)
         else
-            @autoreleasepool begin
-                chunk_size = 2^31
-                cmdbuf = external_cmdbuf(queue)
-                @label! cmdbuf "copyto!"
-                let md = MTL.profile_metadata[]
-                    md === nothing || MTL.note_operation!(md, cmdbuf,
-                        (; kind = :copy, name = "copyto!", bytes = Int(N * sizeof(T))))
-                end
-                MTLBlitCommandEncoder(cmdbuf) do enc
-                    offset = 0
+            total_bytes = nbytes
+            chunk_size = 2^31
+            s = command_stream(queue)
+            enc = blit_encoder(s)
+            offset = 0
 
-                    while nbytes > 0
-                        transfer_bytes = min(nbytes, chunk_size)
-                        append_copy!(enc, dst.buffer, dst.offset + offset, src.buffer, src.offset + offset, transfer_bytes)
-                        offset += transfer_bytes
-                        nbytes -= transfer_bytes
-                    end
-                end
-                commit!(cmdbuf)
-                async || synchronize(cmdbuf)
+            while nbytes > 0
+                transfer_bytes = min(nbytes, chunk_size)
+                append_copy!(enc, dst.buffer, dst.offset + offset,
+                             src.buffer, src.offset + offset, transfer_bytes)
+                offset += transfer_bytes
+                nbytes -= transfer_bytes
+            end
+
+            push!(s.roots, dst.buffer, src.buffer)
+            note_operation!(s, (; kind = :copy, name = "copyto!", bytes = Int(total_bytes)))
+            s.nops += 1
+            s.nbytes += total_bytes
+
+            if async
+                maybe_autoflush!(s)
+            else
+                flush!(s)
+                synchronize(queue)
             end
         end
     end
@@ -126,17 +130,22 @@ end
                                        queue::MTLCommandQueue=global_queue(dev),
                                        async::Bool=false) where T
     if N > 0
-        cmdbuf = external_cmdbuf(queue)
-        @label! cmdbuf "fill!"
-        let md = MTL.profile_metadata[]
-            md === nothing || MTL.note_operation!(md, cmdbuf,
-                (; kind = :fill, name = "fill!", bytes = Int(N * sizeof(T))))
+        nbytes = N * sizeof(T)
+        s = command_stream(queue)
+        enc = blit_encoder(s)
+        append_fillbuffer!(enc, dst.buffer, value, nbytes, dst.offset)
+
+        push!(s.roots, dst.buffer)
+        note_operation!(s, (; kind = :fill, name = "fill!", bytes = Int(nbytes)))
+        s.nops += 1
+        s.nbytes += nbytes
+
+        if async
+            maybe_autoflush!(s)
+        else
+            flush!(s)
+            synchronize(queue)
         end
-        MTLBlitCommandEncoder(cmdbuf) do enc
-            append_fillbuffer!(enc, dst.buffer, value, N * sizeof(T), dst.offset)
-        end
-        commit!(cmdbuf)
-        async || synchronize(cmdbuf)
     end
     return dst
 end
