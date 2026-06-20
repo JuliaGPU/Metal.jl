@@ -51,7 +51,7 @@ end
 # alive and drain Julia roots from normal managed threads instead.
 mutable struct BatchedCommandQueue
     queue::MTLCommandQueue
-    dev::MTLDevice
+    device::MTLDevice
     cmdbuf::Union{Nothing,MTLCommandBuffer}
     encoder::Union{Nothing,MTLComputeCommandEncoder,MTLBlitCommandEncoder}
     kind::EncoderKind
@@ -70,15 +70,16 @@ function BatchedCommandQueue(queue::MTLCommandQueue)
                         Any[], nothing, 0, 0, Any[], PendingCommand[])
 end
 
-function Base.getproperty(bq::BatchedCommandQueue, name::Symbol)
-    name === :device && return getfield(bq, :dev)
-    name === :label && return getproperty(getfield(bq, :queue), :label)
-    return getfield(bq, name)
+# Properties that aren't our own fields (e.g. `label`) forward to the wrapped
+# queue, so a BatchedCommandQueue is a drop-in for the MTLCommandQueue it batches.
+@inline function Base.getproperty(bq::BatchedCommandQueue, name::Symbol)
+    hasfield(BatchedCommandQueue, name) && return getfield(bq, name)
+    return getproperty(getfield(bq, :queue), name)
 end
 
-function Base.setproperty!(bq::BatchedCommandQueue, name::Symbol, value)
-    name === :label && return setproperty!(getfield(bq, :queue), :label, value)
-    return setfield!(bq, name, value)
+@inline function Base.setproperty!(bq::BatchedCommandQueue, name::Symbol, value)
+    hasfield(BatchedCommandQueue, name) && return setfield!(bq, name, value)
+    return setproperty!(getfield(bq, :queue), name, value)
 end
 
 const batched_queues = IdDict{BatchedCommandQueue,Nothing}()
