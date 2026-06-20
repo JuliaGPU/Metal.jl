@@ -13,8 +13,9 @@
 
 # command-buffer batching (see `BatchedCommandQueue`): kernel launches and blit
 # operations accumulate into a single command buffer that is committed lazily,
-# amortizing Metal's per-command-buffer submission latency. these settings can
-# also be overridden at run time with the matching JULIA_METAL_* env vars.
+# amortizing Metal's per-command-buffer submission latency. each setting can also
+# be set for one run via the matching JULIA_METAL_* env var (read once at startup),
+# which is convenient for benchmarking.
 
 # maximum number of operations to batch into one command buffer before
 # committing. lower values reduce latency-to-first-result and the memory held by

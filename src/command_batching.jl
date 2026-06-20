@@ -1,45 +1,22 @@
 @enum EncoderKind NoEncoder ComputeEncoder BlitEncoder
 
-const COMMAND_BATCH_MAX_OPS_PREF = @load_preference("command_batch_max_ops", nothing)
-const COMMAND_BATCH_MAX_BYTES_PREF = @load_preference("command_batch_max_bytes", nothing)
-const COMMAND_MAX_INFLIGHT_PREF = @load_preference("command_max_inflight", nothing)
+# Tunables for command batching (see `BatchedCommandQueue`), read once per process
+# from the environment, else Preferences, else a default. Set the env var before
+# launching Julia to tune without recompiling (handy for benchmarking).
+command_batch_max_ops() = @memoize begin
+    s = get(ENV, "JULIA_METAL_COMMAND_BATCH_MAX_OPS", nothing)
+    s === nothing ? @load_preference("command_batch_max_ops", 32) : parse(Int, s)
+end::Int
 
-function positive_int_setting(env, pref, default)
-    value = if haskey(ENV, env)
-        parsed = tryparse(Int, ENV[env])
-        parsed === nothing &&
-            error("$env must be a positive integer, got $(repr(ENV[env]))")
-        parsed
-    elseif pref !== nothing
-        pref isa Integer ||
-            error("Preference must be a positive integer, got $(repr(pref))")
-        Int(pref)
-    else
-        default
-    end
+command_batch_max_bytes() = @memoize begin
+    s = get(ENV, "JULIA_METAL_COMMAND_BATCH_MAX_BYTES", nothing)
+    s === nothing ? @load_preference("command_batch_max_bytes", 64 * 1024 * 1024) : parse(Int, s)
+end::Int
 
-    value > 0 || error("Setting must be a positive integer, got $value")
-    return value
-end
-
-const COMMAND_BATCH_MAX_OPS = Ref{Int}(32)
-const COMMAND_BATCH_MAX_BYTES = Ref{Int}(64 * 1024 * 1024)
-const COMMAND_MAX_INFLIGHT = Ref{Int}(3)
-
-function initialize_command_batching_settings!()
-    COMMAND_BATCH_MAX_OPS[] =
-        positive_int_setting("JULIA_METAL_COMMAND_BATCH_MAX_OPS",
-                             COMMAND_BATCH_MAX_OPS_PREF, 32)
-    COMMAND_BATCH_MAX_BYTES[] =
-        positive_int_setting("JULIA_METAL_COMMAND_BATCH_MAX_BYTES",
-                             COMMAND_BATCH_MAX_BYTES_PREF, 64 * 1024 * 1024)
-    COMMAND_MAX_INFLIGHT[] =
-        positive_int_setting("JULIA_METAL_COMMAND_MAX_INFLIGHT",
-                             COMMAND_MAX_INFLIGHT_PREF, 3)
-    return
-end
-
-initialize_command_batching_settings!()
+command_max_inflight() = @memoize begin
+    s = get(ENV, "JULIA_METAL_COMMAND_MAX_INFLIGHT", nothing)
+    s === nothing ? @load_preference("command_max_inflight", 3) : parse(Int, s)
+end::Int
 
 # Completion handlers run on libdispatch worker threads, where compiling or
 # running Julia code can overflow the small foreign stack. Keep command buffers
@@ -67,15 +44,15 @@ The open batch is committed ("flushed") when any of the following happens:
   * it is used as a raw `MTLCommandQueue` — e.g. to derive an `MTLCommandBuffer` or
     `MPSCommandBuffer`, or in any other Metal API call (handled transparently via
     `Base.cconvert`);
-  * the batch reaches `COMMAND_BATCH_MAX_OPS` operations or `COMMAND_BATCH_MAX_BYTES`
-    of blit traffic;
+  * the batch reaches `command_batch_max_ops()` operations or
+    `command_batch_max_bytes()` of blit traffic;
   * a GPU profiler is attached, in which case batching is disabled (each operation
     gets its own command buffer) so per-operation GPU timing is preserved;
   * an immediate submission is requested via `@metal ... submit=true`, or
     `Metal.flush!` is called explicitly.
 
 Program order is preserved across flushes: command buffers execute in commit order
-and dispatches within an encoder run serially. At most `COMMAND_MAX_INFLIGHT`
+and dispatches within an encoder run serially. At most `command_max_inflight()`
 command buffers are kept in flight; further submissions block until the GPU drains
 one. Obtain the current task's batched queue with [`global_queue`](@ref).
 """
@@ -342,7 +319,7 @@ end
 
 function limit_inflight!(bq::BatchedCommandQueue)
     drain_cleanups!(bq)
-    while pending_cleanup_count(bq) >= COMMAND_MAX_INFLIGHT[]
+    while pending_cleanup_count(bq) >= command_max_inflight()
         wait_oldest_cleanup!(bq)
     end
     return
@@ -391,8 +368,8 @@ end
 
 function maybe_autoflush!(bq::BatchedCommandQueue)
     if profiling_command_buffers() ||
-       bq.nops >= COMMAND_BATCH_MAX_OPS[] ||
-       bq.nbytes >= COMMAND_BATCH_MAX_BYTES[]
+       bq.nops >= command_batch_max_ops() ||
+       bq.nbytes >= command_batch_max_bytes()
         flush!(bq)
     end
     return
