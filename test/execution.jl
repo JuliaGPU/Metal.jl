@@ -259,6 +259,35 @@ end
     @test all(vecA .== Int(5))
 end
 
+@testset "REPL task synchronization" begin
+    synchronize()
+
+    tls = task_local_storage()
+    had_device = haskey(tls, :MTLDevice)
+    old_device = had_device ? tls[:MTLDevice] : nothing
+    had_device && delete!(tls, :MTLDevice)
+
+    try
+        A = Core.eval(@__MODULE__, Metal.synchronize_metal_tasks(quote
+            function repl_task_sync_kernel(A)
+                A[1] = Int32(1)
+                return
+            end
+
+            t = @async begin
+                A = MtlArray(Int32[0])
+                @metal threads=1 repl_task_sync_kernel(A)
+                A
+            end
+            fetch(t)
+        end))
+
+        @test Array(A) == Int32[1]
+    finally
+        had_device && task_local_storage(:MTLDevice, old_device)
+    end
+end
+
 @testset "device-side exceptions" begin
     # a device exception must not wedge the GPU (JuliaGPU/Metal.jl#433); it should
     # complete cleanly and surface to the host as a `KernelException` on synchronize.

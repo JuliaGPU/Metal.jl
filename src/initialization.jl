@@ -93,7 +93,7 @@ function synchronize_metal_tasks(ex)
         try
             $(ex)
         finally
-            if haskey($task_local_storage(), :MTLDevice)
+            if haskey($task_local_storage(), :MTLDevice) || $has_active_batched_queues()
                 $device_synchronize()
             end
         end

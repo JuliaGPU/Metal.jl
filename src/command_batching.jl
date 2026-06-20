@@ -125,6 +125,9 @@ function active_batched_queues()
     Base.@lock batched_queues_lock collect(keys(batched_queues))
 end
 
+has_active_batched_queues() =
+    Base.@lock batched_queues_lock !isempty(batched_queues)
+
 batched_queue(bq::BatchedCommandQueue) = bq
 
 function batched_queue(queue::MTLCommandQueue)
