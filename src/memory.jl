@@ -117,7 +117,6 @@ end
             if async
                 maybe_autoflush!(bq)
             else
-                flush!(bq)
                 synchronize(bq)
             end
         end
@@ -142,7 +141,6 @@ end
         if async
             maybe_autoflush!(bq)
         else
-            flush!(bq)
             synchronize(bq)
         end
     end
