@@ -41,14 +41,44 @@ end
 
 initialize_command_batching_settings!()
 
+# Completion handlers run on libdispatch worker threads, where compiling or
+# running Julia code can overflow the small foreign stack. Keep command buffers
+# alive and drain Julia roots from normal managed threads instead.
 struct PendingCommand
     cmdbuf::MTL.MTLCommandBufferLike
     roots::Vector{Any}
 end
 
-# Completion handlers run on libdispatch worker threads, where compiling or
-# running Julia code can overflow the small foreign stack. Keep command buffers
-# alive and drain Julia roots from normal managed threads instead.
+"""
+    BatchedCommandQueue
+
+A command queue that batches GPU work to amortize Metal's per-command-buffer
+submission latency. Kernel launches (`@metal`) and GPU-side blit operations
+(`copyto!`, `fill!`) are encoded into a single open command buffer and committed
+lazily, instead of one command buffer per operation.
+
+It wraps, and is a drop-in for, the `MTLCommandQueue` it batches: properties that
+aren't its own (e.g. `label`) forward to the underlying queue, and using it
+anywhere an `MTLCommandQueue` is expected first drains the pending batch.
+
+The open batch is committed ("flushed") when any of the following happens:
+
+  * [`synchronize`](@ref) is called on the queue (or on one of its command buffers);
+  * it is used as a raw `MTLCommandQueue` — e.g. to derive an `MTLCommandBuffer` or
+    `MPSCommandBuffer`, or in any other Metal API call (handled transparently via
+    `Base.cconvert`);
+  * the batch reaches `COMMAND_BATCH_MAX_OPS` operations or `COMMAND_BATCH_MAX_BYTES`
+    of blit traffic;
+  * a GPU profiler is attached, in which case batching is disabled (each operation
+    gets its own command buffer) so per-operation GPU timing is preserved;
+  * an immediate submission is requested via `@metal ... submit=true`, or
+    `Metal.flush!` is called explicitly.
+
+Program order is preserved across flushes: command buffers execute in commit order
+and dispatches within an encoder run serially. At most `COMMAND_MAX_INFLIGHT`
+command buffers are kept in flight; further submissions block until the GPU drains
+one. Obtain the current task's batched queue with [`global_queue`](@ref).
+"""
 mutable struct BatchedCommandQueue
     queue::MTLCommandQueue
     device::MTLDevice
