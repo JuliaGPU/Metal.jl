@@ -158,7 +158,7 @@ function matmul!(c::MtlArray{T1,N}, a::MtlArray{T2,N}, b::MtlArray{T3,N},
 
 
     # Encode and commit matmul kernel
-    cmdbuf = MTLCommandBuffer(global_queue(device()))
+    cmdbuf = Metal.external_cmdbuf(global_queue(device()))
     encode!(cmdbuf, mat_mul_kernel, mps_b, mps_a, mps_c)
     commit!(cmdbuf)
 
@@ -225,7 +225,7 @@ end
     topk_kernel.indexOffset = 1
 
     # Encode and commit topk kernel
-    cmdbuf = MTLCommandBuffer(global_queue(device()))
+    cmdbuf = Metal.external_cmdbuf(global_queue(device()))
     encode!(cmdbuf, topk_kernel, mps_a, mps_i, mps_v)
     commit!(cmdbuf)
 

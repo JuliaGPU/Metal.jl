@@ -97,7 +97,7 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
         else
             @autoreleasepool begin
                 chunk_size = 2^31
-                cmdbuf = MTLCommandBuffer(queue)
+                cmdbuf = external_cmdbuf(queue)
                 @label! cmdbuf "copyto!"
                 let md = MTL.profile_metadata[]
                     md === nothing || MTL.note_operation!(md, cmdbuf,
@@ -126,7 +126,7 @@ end
                                        queue::MTLCommandQueue=global_queue(dev),
                                        async::Bool=false) where T
     if N > 0
-        cmdbuf = MTLCommandBuffer(queue)
+        cmdbuf = external_cmdbuf(queue)
         @label! cmdbuf "fill!"
         let md = MTL.profile_metadata[]
             md === nothing || MTL.note_operation!(md, cmdbuf,

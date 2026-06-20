@@ -5,7 +5,7 @@ export @metal
 
 const MACRO_KWARGS = [:launch]
 const COMPILER_KWARGS = [:kernel, :name, :always_inline, :debug_level, :macos, :air, :metal]
-const LAUNCH_KWARGS = [:groups, :threads, :queue]
+const LAUNCH_KWARGS = [:groups, :threads, :queue, :submit]
 
 """
     @metal threads=... groups=... [kwargs...] func(args...)
@@ -25,6 +25,8 @@ There are a few keyword arguments that influence the behavior of `@metal`:
 - `name`: the name of the kernel in the generated code. Defaults to an automatically-
   generated name.
 - `queue`: the command queue to use for this kernel. Defaults to the global command queue.
+- `submit`: whether to submit the current command stream immediately after encoding this
+  kernel. Defaults to `false`.
 """
 macro metal(ex...)
     call = ex[end]
@@ -272,24 +274,95 @@ end
 
 # wraps a single function call, keeping its closure body small.
 @autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
-                                               queue=nothing)
+                                               queue=nothing, submit::Bool=false)
     # function barrier to avoid capturing the `@autoreleasepool` in the generated code
-    launch_with_queue(kernel, queue, MTLSize(groups), MTLSize(threads), args)
+    launch_with_queue(kernel, queue, MTLSize(groups), MTLSize(threads), args, submit)
 end
 
 @inline function launch_with_queue(@nospecialize(kernel::HostKernel), ::Nothing,
-                                   gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple))
-    launch(kernel, gs, ts, global_queue(device()), args, true)
+                                   gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple),
+                                   submit::Bool)
+    launch(kernel, gs, ts, global_queue(device()), args, true, submit)
 end
 
 @inline function launch_with_queue(@nospecialize(kernel::HostKernel), queue::MTLCommandQueue,
-                                   gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple))
-    launch(kernel, gs, ts, queue, args, false)
+                                   gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple),
+                                   submit::Bool)
+    launch(kernel, gs, ts, queue, args, false, submit)
+end
+
+function kernel_operation(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize)
+    (; kind = :kernel, name = string(nameof(kernel.f)),
+       threadgroups = gs, threads = ts,
+       tgmem = kernel.tgmem, maxthreads = kernel.maxthreads)
+end
+
+function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
+                         queue::MTLCommandQueue, @nospecialize(args::Tuple),
+                         queue_residency_ready::Bool, kernel_state, buf, exc)
+    flush!(queue)
+
+    is_macos(v"15") ||
+        error("Capturing GPU log output requires macOS 15 or higher.")
+
+    if is_virtual(queue.device)
+        # `MTLLogState` needs a residency set, which the paravirtualized GPU driver
+        # cannot create (failing with `MTLLogStateErrorDomain` code 2). Bail out here
+        # with a clear host error instead of surfacing that opaque `NSError`.
+        error("Capturing GPU log output is not supported on virtualized GPUs.")
+    end
+
+    MTLCaptureManager().isCapturing &&
+        error("Logging is not supported while GPU frame capturing")
+
+    log_state_descriptor = MTLLogStateDescriptor()
+    log_state_descriptor.level = MTL.MTLLogLevelDebug
+    log_state = MTLLogState(queue.device, log_state_descriptor)
+
+    function log_handler(subSystem, category, logLevel, message)
+        Core.print(String(NSString(message)))
+        return nothing
+    end
+
+    block = @objcblock(log_handler, Nothing, (id{NSString}, id{NSString}, NSInteger, id{NSString}))
+    @objc [log_state::id{MTLLogState} addLogHandler:block::id{NSBlock}]::Nothing
+
+    cmdbuf_descriptor = MTLCommandBufferDescriptor()
+    cmdbuf_descriptor.logState = log_state
+    cmdbuf = MTLCommandBuffer(queue, cmdbuf_descriptor)
+    @label! cmdbuf "MTLCommandBuffer($(nameof(kernel.f)))"
+    let md = MTL.profile_metadata[]
+        md === nothing || MTL.note_operation!(md, cmdbuf, kernel_operation(kernel, gs, ts))
+    end
+
+    cce = MTLComputeCommandEncoder(cmdbuf)
+    try
+        MTL.set_function!(cce, kernel.pipeline)
+        if kernel.use_residency_sets
+            queue_residency_ready || install_queue_residency!(queue, kernel.device)
+        else
+            # DROP-MACOS14: per-launch residency for macOS 14 / virtual GPUs.
+            MTL.use!(cce, buf, MTL.ReadWriteUsage)
+            MTL.use!(cce, exc, MTL.ReadWriteUsage)
+        end
+        encode_arguments_nospec!(cce, kernel, kernel_state, kernel.f, args)
+        MTL.append_current_function!(cce, gs, ts)
+    finally
+        close(cce)
+    end
+
+    commit!(cmdbuf, queue)
+    defer_cleanup!(queue, cmdbuf, Any[kernel.f, args])
+    track_logging_cmdbuf!(queue, cmdbuf)
+    return
 end
 
 function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
                 queue::MTLCommandQueue, @nospecialize(args::Tuple),
-                queue_residency_ready::Bool)
+                queue_residency_ready::Bool, submit::Bool)
+    # HACK: don't actually launch when precompiling to prevent holding onto resources.
+    ccall(:jl_generating_output, Cint, ()) != 0 && return
+
     (gs.width>0 && gs.height>0 && gs.depth>0) ||
         throw(ArgumentError("All group dimensions should be non-zero"))
     (ts.width>0 && ts.height>0 && ts.depth>0) ||
@@ -321,89 +394,41 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     exc_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, exc_addr)
     kernel_state = KernelState(Random.rand(UInt32), buf_ptr, exc_ptr)
 
-    cmdbuf = if kernel.loggingEnabled
-        if !is_macos(v"15")
-            error("Capturing GPU log output requires macOS 15 or higher.")
-        end
-
-        if is_virtual(queue.device)
-            # `MTLLogState` needs a residency set, which the paravirtualized GPU driver
-            # cannot create (failing with `MTLLogStateErrorDomain` code 2). Bail out here
-            # with a clear host error instead of surfacing that opaque `NSError`.
-            error("Capturing GPU log output is not supported on virtualized GPUs.")
-        end
-
-        if MTLCaptureManager().isCapturing
-            error("Logging is not supported while GPU frame capturing")
-        end
-
-        log_state_descriptor = MTLLogStateDescriptor()
-        log_state_descriptor.level = MTL.MTLLogLevelDebug
-        log_state = MTLLogState(queue.device, log_state_descriptor)
-
-        function log_handler(subSystem, category, logLevel, message)
-            Core.print(String(NSString(message)))
-            return nothing
-        end
-
-        block = @objcblock(log_handler, Nothing, (id{NSString}, id{NSString}, NSInteger, id{NSString}))
-        @objc [log_state::id{MTLLogState} addLogHandler:block::id{NSBlock}]::Nothing
-
-        cmdbuf_descriptor = MTLCommandBufferDescriptor()
-        cmdbuf_descriptor.logState = log_state
-        MTLCommandBuffer(queue, cmdbuf_descriptor)
-    else
-        MTLCommandBuffer(queue)
-    end
-    @label! cmdbuf "MTLCommandBuffer($(nameof(f)))"
-    let md = MTL.profile_metadata[]
-        md === nothing || MTL.note_operation!(md, cmdbuf,
-            (; kind = :kernel, name = string(nameof(f)),
-               threadgroups = gs, threads = ts,
-               tgmem, maxthreads))
-    end
-    cce = MTLComputeCommandEncoder(cmdbuf)
-    try
-        MTL.set_function!(cce, pipeline)
-        # the kernel state holds GPU addresses to per-device scratch buffers (malloc bump
-        # allocator, exception mailbox) that aren't otherwise bound to the encoder. declare
-        # them so Metal Shader Validation tracks the accesses instead of dropping them.
-        if kernel.use_residency_sets
-            queue_residency_ready || install_queue_residency!(queue, dev)
-        else
-            # DROP-MACOS14: per-launch residency for macOS 14 / virtual GPUs.
-            MTL.use!(cce, buf, MTL.ReadWriteUsage)
-            MTL.use!(cce, exc, MTL.ReadWriteUsage)
-        end
-        encode_arguments_nospec!(cce, kernel, kernel_state, f, args)
-        MTL.append_current_function!(cce, gs, ts)
-    finally
-        close(cce)
-    end
-
-    # The command buffer retains explicitly encoded buffers, but that doesn't keep other
-    # resources alive for which we've encoded the GPU address ourselves. Since it's possible
-    # for buffers to go out of scope while the kernel is still running, which triggers
-    # validation failures, keep track of things we need to keep alive until the kernel has
-    # actually completed.
-    #
-    # TODO: is there a way to bind additional resources to the command buffer?
-    roots = Any[f, args]
-
-    # HACK: don't actually commit when precompiling to prevent holding onto resources
-    if ccall(:jl_generating_output, Cint, ()) != 0
+    if kernel.loggingEnabled
+        launch_logging!(kernel, gs, ts, queue, args, queue_residency_ready,
+                        kernel_state, buf, exc)
         return
     end
 
-    commit!(cmdbuf, queue)
-    defer_cleanup!(queue, cmdbuf, roots)
-
-    if kernel.loggingEnabled
-        # remember this so `synchronize(queue)` can drain its log handler blocks
-        # (Metal delivers logs asynchronously on a libdispatch queue; only
-        # `waitUntilCompleted` on this specific cmdbuf flushes them.)
-        track_logging_cmdbuf!(queue, cmdbuf)
+    s = command_stream(queue)
+    cce = compute_encoder(s)
+    if s.last_pipeline !== pipeline
+        MTL.set_function!(cce, pipeline)
+        s.last_pipeline = pipeline
     end
+
+    # The kernel state holds GPU addresses to per-device scratch buffers (malloc bump
+    # allocator, exception mailbox) that aren't otherwise bound to the encoder. Declare
+    # them so Metal Shader Validation tracks the accesses instead of dropping them.
+    if kernel.use_residency_sets
+        queue_residency_ready || install_queue_residency!(queue, dev)
+    else
+        # DROP-MACOS14: per-launch residency for macOS 14 / virtual GPUs.
+        MTL.use!(cce, buf, MTL.ReadWriteUsage)
+        MTL.use!(cce, exc, MTL.ReadWriteUsage)
+    end
+
+    encode_arguments_nospec!(cce, kernel, kernel_state, f, args)
+    MTL.append_current_function!(cce, gs, ts)
+
+    # The command buffer retains explicitly encoded buffers, but that doesn't keep other
+    # resources alive for which we've encoded the GPU address ourselves.
+    push!(s.roots, f)
+    push!(s.roots, args)
+    note_operation!(s, kernel_operation(kernel, gs, ts))
+    s.nops += 1
+
+    submit ? flush!(s) : maybe_autoflush!(s)
     return
 end
 

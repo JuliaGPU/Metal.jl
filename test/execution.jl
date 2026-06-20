@@ -166,6 +166,32 @@ vecA = unsafe_wrap(Vector{Int}, pointer(bufferA), tuple(bufferSize))
     @test all(vecA .== Int(5))
 end
 
+@testset "command stream" begin
+    function increment_kernel(A)
+        A[1] = A[1] + Int32(1)
+        return
+    end
+
+    queue = global_queue(device())
+    A = MtlArray(Int32[0])
+    synchronize(queue)
+
+    for _ in 1:8
+        @metal threads=1 queue=queue increment_kernel(A)
+    end
+    if Metal.COMMAND_BATCH_MAX_OPS > 1 && !Metal.profiling_command_buffers()
+        @test Metal.command_stream(queue).nops == 8
+    end
+    synchronize(queue)
+    @test Array(A) == Int32[8]
+    @test Metal.command_stream(queue).cmdbuf === nothing
+
+    @metal threads=1 queue=queue submit=true increment_kernel(A)
+    @test Metal.command_stream(queue).cmdbuf === nothing
+    synchronize(queue)
+    @test Array(A) == Int32[9]
+end
+
 @testset "kernel launch cleanup" begin
     function scalar_arg_kernel(A, val)
         A[1] = val

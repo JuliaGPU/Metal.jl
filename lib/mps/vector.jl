@@ -117,7 +117,7 @@ function matvecmul!(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha::Number=true
                                                       alpha, beta)
 
     # Encode and commit matmul kernel
-    cmdbuf = MTLCommandBuffer(global_queue(device()))
+    cmdbuf = Metal.external_cmdbuf(global_queue(device()))
     encode!(cmdbuf, matvec_mul_kernel, mps_a, mps_b, mps_c)
     commit!(cmdbuf)
 

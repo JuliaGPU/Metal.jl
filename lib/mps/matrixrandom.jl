@@ -94,13 +94,13 @@ synchronize_state(kern::MPSMatrixRandomMTGP32, cmdbuf::MTLCommandBufferLike) =
     bytesize = sizeof(dest)
 
     cmdbuf = if bytesize % 16 == 0 && dest.offset == 0
-        MTLCommandBuffer(queue) do cmdbuf
+        Metal.external_cmdbuf(queue) do cmdbuf
             vecDesc = MPSVectorDescriptor(bytesize ÷ sizeof(T2), T2)
             mpsdest = MPSVector(dest, vecDesc)
             encode!(cmdbuf, randkern, mpsdest)
         end
     else
-        MTLCommandBuffer(queue) do cmdbuf
+        Metal.external_cmdbuf(queue) do cmdbuf
             len = UInt(ceil(bytesize / sizeof(T2)) * 4)
             vecDesc = MPSVectorDescriptor(len, T2)
             tempVec = MPSTemporaryVector(cmdbuf, vecDesc)

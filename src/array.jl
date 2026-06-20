@@ -273,11 +273,13 @@ end
 ## indexing
 function Base.getindex(x::MtlArray{T,N,S}, I::Int) where {T,N,S<:SharedStorage}
     @boundscheck checkbounds(x, I)
+    flush!(global_queue(device(x)))
     unsafe_load(pointer(x, I; storage=S))
 end
 
 function Base.setindex!(x::MtlArray{T,N,S}, v, I::Int) where {T,N,S<:SharedStorage}
     @boundscheck checkbounds(x, I)
+    flush!(global_queue(device(x)))
     unsafe_store!(pointer(x, I; storage=S), v)
 end
 
