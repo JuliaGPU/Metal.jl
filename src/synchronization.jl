@@ -30,6 +30,13 @@ function spinning_synchronization(cmdbuf::MTL.MTLCommandBufferLike)
     return false
 end
 
+function yielding_synchronization(cmdbuf::MTL.MTLCommandBufferLike)
+    while !is_completed(cmdbuf)
+        yield()
+    end
+    return
+end
+
 # slow-path wakeup: commit a fresh empty sentinel cmdbuf and wait on it
 function nonblocking_synchronization(cmdbuf::MTL.MTLCommandBufferLike)
 
@@ -59,15 +66,7 @@ function wait_cmdbuf!(cmdbuf::MTL.MTLCommandBufferLike)
 
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     if use_nonblocking_synchronization && !precompiling
-        spinning_synchronization(cmdbuf) && return
-
-        done = Base.AsyncCondition()
-        on_completed(cmdbuf, done)
-        try
-            wait(done)
-        finally
-            close(done)
-        end
+        spinning_synchronization(cmdbuf) || yielding_synchronization(cmdbuf)
     else
         wait_completed(cmdbuf)
     end
