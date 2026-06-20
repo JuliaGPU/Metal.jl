@@ -358,8 +358,7 @@ end
 
 function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
                 bq::BatchedCommandQueue, @nospecialize(args::Tuple), submit::Bool)
-    # HACK: don't actually launch when precompiling to prevent holding onto resources.
-    ccall(:jl_generating_output, Cint, ()) != 0 && return
+    precompiling = ccall(:jl_generating_output, Cint, ()) != 0
 
     (gs.width>0 && gs.height>0 && gs.depth>0) ||
         throw(ArgumentError("All group dimensions should be non-zero"))
@@ -393,6 +392,7 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     kernel_state = KernelState(Random.rand(UInt32), buf_ptr, exc_ptr)
 
     if kernel.loggingEnabled
+        precompiling && return
         launch_logging!(kernel, gs, ts, bq, args, kernel_state, buf, exc)
         return
     end
@@ -416,6 +416,13 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     # resources alive for which we've encoded the GPU address ourselves.
     op = MTL.profile_metadata[] === nothing ? nothing : kernel_operation(kernel, gs, ts)
     record_operation!(bq, f, args; op=op)
+
+    if precompiling
+        cmdbuf = bq.cmdbuf
+        end_encoder!(bq)
+        cmdbuf === nothing || reset_open_cmdbuf!(bq, cmdbuf)
+        return
+    end
 
     submit ? flush!(bq) : maybe_autoflush!(bq)
     return
