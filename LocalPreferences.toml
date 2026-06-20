@@ -10,3 +10,21 @@
 # whether to label Metal resources and command buffers.
 # defaults to true when running Julia with -g2, and false otherwise.
 #label_resources = true
+
+# command-buffer batching (see `BatchedCommandQueue`): kernel launches and blit
+# operations accumulate into a single command buffer that is committed lazily,
+# amortizing Metal's per-command-buffer submission latency. these settings can
+# also be overridden at run time with the matching JULIA_METAL_* env vars.
+
+# maximum number of operations to batch into one command buffer before
+# committing. lower values reduce latency-to-first-result and the memory held by
+# in-flight work; higher values improve throughput. defaults to 32.
+#command_batch_max_ops = 32
+
+# maximum amount of blit traffic (in bytes) to batch before committing, bounding
+# the memory pinned by an open batch. defaults to 67108864 (64 MiB).
+#command_batch_max_bytes = 67108864
+
+# maximum number of committed-but-incomplete command buffers kept in flight;
+# further submissions block until the GPU drains one. defaults to 3.
+#command_max_inflight = 3
