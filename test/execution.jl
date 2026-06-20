@@ -241,6 +241,28 @@ end
     @test Array(D) == UInt8[3]
 end
 
+@testset "command batching tunables" begin
+    env = "JULIA_METAL_TEST_BATCHING_TUNABLE"
+    withenv(env => nothing) do
+        @test Metal.load_command_batching_tunable("test_tunable", env, 7) == 7
+        @test_throws ArgumentError Metal.load_command_batching_tunable("test_tunable", env, 0)
+        @test_throws ArgumentError Metal.load_command_batching_tunable("test_tunable", env, "7")
+    end
+
+    withenv(env => "9") do
+        @test Metal.load_command_batching_tunable("test_tunable", env, 7) == 9
+    end
+    withenv(env => "0") do
+        @test_throws ArgumentError Metal.load_command_batching_tunable("test_tunable", env, 7)
+    end
+    withenv(env => "-1") do
+        @test_throws ArgumentError Metal.load_command_batching_tunable("test_tunable", env, 7)
+    end
+    withenv(env => "not-an-int") do
+        @test_throws ArgumentError Metal.load_command_batching_tunable("test_tunable", env, 7)
+    end
+end
+
 @testset "failed batch encoding" begin
     queue = global_queue(device())
     synchronize(queue)

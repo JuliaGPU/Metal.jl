@@ -9,19 +9,34 @@ const COMMAND_BATCHING = @load_preference("command_batching", true)
 
 @inline command_batching() = COMMAND_BATCHING
 
+function load_command_batching_tunable(name::String, env::String, pref)
+    s = get(ENV, env, nothing)
+    value = s === nothing ? pref : parse(Int, s)
+    source = s === nothing ? "preference `$name`" : "environment variable `$env`"
+    value isa Integer ||
+        throw(ArgumentError("$source must be a positive integer, got $(repr(value))"))
+    value = Int(value)
+    value > 0 ||
+        throw(ArgumentError("$source must be a positive integer, got $value"))
+    return value
+end
+
 command_batching_ops() = @memoize begin
-    s = get(ENV, "JULIA_METAL_COMMAND_BATCHING_OPS", nothing)
-    s === nothing ? @load_preference("command_batching_ops", 32) : parse(Int, s)
+    load_command_batching_tunable("command_batching_ops",
+                                  "JULIA_METAL_COMMAND_BATCHING_OPS",
+                                  @load_preference("command_batching_ops", 32))
 end::Int
 
 command_batching_bytes() = @memoize begin
-    s = get(ENV, "JULIA_METAL_COMMAND_BATCHING_BYTES", nothing)
-    s === nothing ? @load_preference("command_batching_bytes", 64 * 1024 * 1024) : parse(Int, s)
+    load_command_batching_tunable("command_batching_bytes",
+                                  "JULIA_METAL_COMMAND_BATCHING_BYTES",
+                                  @load_preference("command_batching_bytes", 64 * 1024 * 1024))
 end::Int
 
 command_batching_inflight() = @memoize begin
-    s = get(ENV, "JULIA_METAL_COMMAND_BATCHING_INFLIGHT", nothing)
-    s === nothing ? @load_preference("command_batching_inflight", 3) : parse(Int, s)
+    load_command_batching_tunable("command_batching_inflight",
+                                  "JULIA_METAL_COMMAND_BATCHING_INFLIGHT",
+                                  @load_preference("command_batching_inflight", 3))
 end::Int
 
 # Completion handlers run on libdispatch worker threads, where compiling or
