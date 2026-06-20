@@ -76,7 +76,7 @@ function global_queue(dev::MTLDevice)
             global_queues[bq] = nothing
             bq
         end
-    end
+    end::BatchedCommandQueue
 end
 
 # tracks the most recently launched logging-enabled cmdbuf per queue, so that

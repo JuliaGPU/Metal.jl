@@ -13,9 +13,14 @@
 
 # command-buffer batching (see `BatchedCommandQueue`): kernel launches and blit
 # operations accumulate into a single command buffer that is committed lazily,
-# amortizing Metal's per-command-buffer submission latency. each setting can also
-# be set for one run via the matching JULIA_METAL_* env var (read once at startup),
-# which is convenient for benchmarking.
+# amortizing Metal's per-command-buffer submission latency.
+
+# whether to batch command submissions. when false, Metal.jl still uses the
+# batched command queue abstraction, but flushes after every operation.
+#command_batching = true
+
+# numeric settings can also be set for one run via the matching JULIA_METAL_*
+# env var (read once at startup), which is convenient for benchmarking.
 
 # maximum number of operations to batch into one command buffer before
 # committing. lower values reduce latency-to-first-result and the memory held by
@@ -28,4 +33,4 @@
 
 # maximum number of committed-but-incomplete command buffers kept in flight;
 # further submissions block until the GPU drains one. defaults to 3.
-#command_max_inflight = 3
+#command_batch_max_inflight = 3

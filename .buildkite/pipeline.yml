@@ -80,6 +80,23 @@ steps:
         timeout_in_minutes: 60
         commands: |
           echo -e "[Metal]\ndefault_storage = \"shared\"" >LocalPreferences.toml
+      - label: ":fast_forward: Immediate Command Submission"
+        plugins:
+          - JuliaCI/julia#v1:
+              version: "1.12"
+          - JuliaCI/julia-test#v1:
+              test_args: "--quickfail --all --verbose"
+        agents:
+          queue: "metal"
+        if: |
+          build.message =~ /\[only tests\]/ ||
+          build.message =~ /\[only special\]/ ||
+          build.message !~ /\[only/ && !build.pull_request.draft &&
+            build.message !~ /\[skip tests\]/ &&
+            build.message !~ /\[skip special\]/
+        timeout_in_minutes: 60
+        commands: |
+          echo -e "[Metal]\ncommand_batching = false" >LocalPreferences.toml
       - label: ":mag: API validation"
         plugins:
           - JuliaCI/julia#v1:

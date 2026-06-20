@@ -184,7 +184,9 @@ end
     for _ in 1:8
         @metal threads=1 queue=queue increment_kernel(A)
     end
-    if Metal.command_batch_max_ops() > 1 && !Metal.profiling_command_buffers()
+    if !Metal.command_batching() || Metal.profiling_command_buffers()
+        @test queue.cmdbuf === nothing
+    elseif Metal.command_batch_max_ops() > 1
         @test queue.nops == 8
     end
     synchronize(queue)
@@ -210,7 +212,9 @@ end
     D = MtlArray(UInt8[0])
     @metal threads=1 queue=queue write_kernel(D, UInt8(1))
     cmdbuf = MTL.MTLCommandBuffer(queue)
-    if Metal.command_batch_max_ops() > 1 && !Metal.profiling_command_buffers()
+    if !Metal.command_batching() || Metal.profiling_command_buffers()
+        @test queue.cmdbuf === nothing
+    elseif Metal.command_batch_max_ops() > 1
         @test queue.nops == 1
     end
     @metal threads=1 queue=queue write_kernel(D, UInt8(2))
