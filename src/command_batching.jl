@@ -26,7 +26,7 @@ const COMMAND_BATCH_MAX_OPS = Ref{Int}(32)
 const COMMAND_BATCH_MAX_BYTES = Ref{Int}(64 * 1024 * 1024)
 const COMMAND_MAX_INFLIGHT = Ref{Int}(3)
 
-function initialize_command_queue_settings!()
+function initialize_command_batching_settings!()
     COMMAND_BATCH_MAX_OPS[] =
         positive_int_setting("JULIA_METAL_COMMAND_BATCH_MAX_OPS",
                              COMMAND_BATCH_MAX_OPS_PREF, 32)
@@ -39,7 +39,7 @@ function initialize_command_queue_settings!()
     return
 end
 
-initialize_command_queue_settings!()
+initialize_command_batching_settings!()
 
 struct PendingCommand
     cmdbuf::MTL.MTLCommandBufferLike
