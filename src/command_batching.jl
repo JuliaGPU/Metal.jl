@@ -127,9 +127,10 @@ raw_queue(queue::MTLCommandQueue) = queue
 profiling_command_buffers() =
     MTL.profile_hook[] !== nothing || MTL.profile_metadata[] !== nothing
 
-function Base.cconvert(::Type{<:id{MTLCommandQueue}}, bq::BatchedCommandQueue)
-    return bq.queue
-end
+Base.:(==)(bq::BatchedCommandQueue, queue::MTLCommandQueue) = bq.queue == queue
+Base.:(==)(queue::MTLCommandQueue, bq::BatchedCommandQueue) = queue == bq.queue
+Base.:(==)(bq::BatchedCommandQueue, obj::NSObject) = bq.queue == obj
+Base.:(==)(obj::NSObject, bq::BatchedCommandQueue) = obj == bq.queue
 
 function MTL.MTLCommandBuffer(bq::BatchedCommandQueue)
     return MTLCommandBuffer(bq.queue)
@@ -156,6 +157,25 @@ end
 function MTL.MTLCaptureScope(bq::BatchedCommandQueue, manager=MTLCaptureManager())
     flush!(bq)
     return MTLCaptureScope(bq.queue, manager)
+end
+
+function Base.setproperty!(desc::MTLCaptureDescriptor, name::Symbol, bq::BatchedCommandQueue)
+    name === :captureObject && return setproperty!(desc, name, bq.queue)
+    return invoke(Base.setproperty!, Tuple{MTLCaptureDescriptor, Symbol, Any},
+                  desc, name, bq)
+end
+
+function MTL.MTLCaptureDescriptor(bq::BatchedCommandQueue,
+                                  destination::MTL.MTLCaptureDestination;
+                                  folder::String=nothing)
+    return MTLCaptureDescriptor(bq.queue, destination; folder)
+end
+
+function MTL.startCapture(bq::BatchedCommandQueue,
+                          destination::MTL.MTLCaptureDestination=MTL.MTLCaptureDestinationGPUTraceDocument;
+                          folder::String=nothing)
+    flush!(bq)
+    return MTL.startCapture(bq.queue, destination; folder)
 end
 
 function ensure_cmdbuf!(bq::BatchedCommandQueue)
