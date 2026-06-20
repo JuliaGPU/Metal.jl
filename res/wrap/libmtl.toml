@@ -32,94 +32,59 @@ macro_mode = "disable"
 # Adjustments to the expressions done by the rewriter in wrap.jl
 # Sorted in alphabetical order. For more info on the options, see
 # the comment in wrap.jl
-[api.MTLBinaryArchive]
-managed=true
+[api.MTL4CommandBuffer]
+managed=false
 
-[api.MTLBinaryArchiveDescriptor]
-managed=true
+[api.MTL4CommandEncoder]
+managed=false
+
+[api.MTL4ComputeCommandEncoder]
+managed=false
+
+[api.MTL4MachineLearningCommandEncoder]
+managed=false
+
+[api.MTL4RenderCommandEncoder]
+managed=false
+
+[api.MTLAccelerationStructureCommandEncoder]
+managed=false
+
+[api.MTLBlitCommandEncoder]
+managed=false
+
+[api.MTLBuffer]
+managed=false
 
 [api.MTLBuffer.proptype]
 gpuAddress="Ptr{Cvoid}"
 
-[api.MTLCaptureDescriptor]
-managed=true
+[api.MTLCommandBuffer]
+managed=false
 
-[api.MTLCommandBufferDescriptor]
-managed=true
+[api.MTLCommandEncoder]
+managed=false
 
-[api.MTLCommandQueue]
-managed=true
+[api.MTLCompileOptions.proptype]
+languageVersion="VersionNumber"
 
-[api.MTLCommandQueueDescriptor]
-managed=true
+[api.MTLComputeCommandEncoder]
+managed=false
 
-[api.MTL4CommandQueueDescriptor]
-managed=true
+[api.MTLDevice]
+managed=false
 
-[api.MTL4CommandQueue]
-managed=true
+[api.MTLDrawable]
+managed=false
 
-[api.MTL4CommitOptions]
-managed=true
+[api.MTLIOCommandBuffer]
+managed=false
 
-[api.MTLCompileOptions]
-managed=true
-    [api.MTLCompileOptions.proptype]
-    languageVersion="VersionNumber"
+[api.MTLParallelRenderCommandEncoder]
+managed=false
 
-[api.MTL4ComputeCommandEncoder]
-managed=true
+[api.MTLRenderCommandEncoder]
+managed=false
 
-[api.MTL4CommandAllocatorDescriptor]
-managed=true
-
-[api.MTL4CommandAllocator]
-managed=true
-
-[api.MTLComputePipelineDescriptor]
-managed=true
-
-[api.MTLComputePipelineState]
-managed=true
-
-[api.MTLEvent]
-managed=true
-
-[api.MTLSharedEventHandle]
-managed=true
-
-[api.MTLFence]
-managed=true
-
-[api.MTLFunction]
-managed=true
-
-[api.MTLFunctionDescriptor]
-managed=true
-
-[api.MTL4FunctionDescriptor]
-managed=true
-
-[api.MTLHeap]
-managed=true
-
-[api.MTLHeapDescriptor]
-managed=true
-
-[api.MTLLibrary]
-managed=true
-
-[api.MTLLogStateDescriptor]
-managed=true
-
-[api.MTLResidencySet]
-managed=true
-
-[api.MTLSharedEvent]
-managed=true
-
-[api.MTLTexture]
-managed=true
-
-[api.MTLTextureDescriptor]
-managed=true
+[api.MTLResourceStateCommandEncoder]
+managed=false

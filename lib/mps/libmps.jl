@@ -240,7 +240,7 @@ end
     @autoproperty vectorBytes::UInt64
 end
 
-@objcwrapper managed = true MPSMatrix <: NSObject
+@objcwrapper MPSMatrix <: NSObject
 
 @objcproperties MPSMatrix begin
     @autoproperty device::id{MTLDevice}
@@ -254,7 +254,7 @@ end
     @autoproperty data::id{MTLBuffer}
 end
 
-@objcwrapper managed = true MPSVector <: NSObject
+@objcwrapper MPSVector <: NSObject
 
 @objcproperties MPSVector begin
     @autoproperty device::id{MTLDevice}
@@ -272,7 +272,7 @@ end
     @autoproperty readCount::UInt64 setter = setReadCount
 end
 
-@objcwrapper managed = true MPSTemporaryVector <: MPSVector
+@objcwrapper MPSTemporaryVector <: MPSVector
 
 @objcproperties MPSTemporaryVector begin
     @autoproperty readCount::UInt64 setter = setReadCount
@@ -382,7 +382,7 @@ struct MPSCustomKernelArgumentCount
     broadcastTextureCount::Culong
 end
 
-@objcwrapper managed = true MPSNDArrayDescriptor <: NSObject
+@objcwrapper MPSNDArrayDescriptor <: NSObject
 
 @objcproperties MPSNDArrayDescriptor begin
     @autoproperty dataType::MPSDataType setter = setDataType
@@ -392,7 +392,7 @@ end
 
 @objcwrapper MPSNDArrayAllocator <: NSObject
 
-@objcwrapper managed = true MPSNDArray <: NSObject
+@objcwrapper MPSNDArray <: NSObject
 
 @objcproperties MPSNDArray begin
     @autoproperty label::id{NSString} setter = setLabel
@@ -403,7 +403,7 @@ end
     @autoproperty parent::id{MPSNDArray}
 end
 
-@objcwrapper managed = true MPSTemporaryNDArray <: MPSNDArray
+@objcwrapper MPSTemporaryNDArray <: MPSNDArray
 
 @objcproperties MPSTemporaryNDArray begin
     @autoproperty readCount::UInt64 setter = setReadCount
@@ -415,7 +415,7 @@ end
     MPSAlphaTypePremultiplied = 0x0000000000000002
 end
 
-@objcwrapper managed = true MPSUnaryImageKernel <: MPSKernel
+@objcwrapper MPSUnaryImageKernel <: MPSKernel
 
 @objcproperties MPSUnaryImageKernel begin
     @autoproperty offset::MPSOffset setter = setOffset
@@ -423,7 +423,7 @@ end
     @autoproperty edgeMode::MPSImageEdgeMode setter = setEdgeMode
 end
 
-@objcwrapper managed = true MPSBinaryImageKernel <: MPSKernel
+@objcwrapper MPSBinaryImageKernel <: MPSKernel
 
 @objcproperties MPSBinaryImageKernel begin
     @autoproperty primaryOffset::MPSOffset setter = setPrimaryOffset
@@ -454,7 +454,7 @@ end
     @autoproperty bias::Cfloat setter = setBias
 end
 
-@objcwrapper managed = true MPSImageBox <: MPSUnaryImageKernel
+@objcwrapper MPSImageBox <: MPSUnaryImageKernel
 
 @objcproperties MPSImageBox begin
     @autoproperty kernelHeight::UInt64
@@ -463,7 +463,7 @@ end
 
 @objcwrapper MPSImageTent <: MPSImageBox
 
-@objcwrapper managed = true MPSImageGaussianBlur <: MPSUnaryImageKernel
+@objcwrapper MPSImageGaussianBlur <: MPSUnaryImageKernel
 
 @objcproperties MPSImageGaussianBlur begin
     @autoproperty sigma::Cfloat
@@ -505,7 +505,7 @@ end
 
 @objcwrapper MPSImageLaplacianPyramidAdd <: MPSImageLaplacianPyramid
 
-@objcwrapper managed = true MPSMatrixUnaryKernel <: MPSKernel
+@objcwrapper MPSMatrixUnaryKernel <: MPSKernel
 
 @objcproperties MPSMatrixUnaryKernel begin
     @autoproperty sourceMatrixOrigin::MTLOrigin setter = setSourceMatrixOrigin
@@ -514,7 +514,7 @@ end
     @autoproperty batchSize::UInt64 setter = setBatchSize
 end
 
-@objcwrapper managed = true MPSMatrixBinaryKernel <: MPSKernel
+@objcwrapper MPSMatrixBinaryKernel <: MPSKernel
 
 @objcproperties MPSMatrixBinaryKernel begin
     @autoproperty primarySourceMatrixOrigin::MTLOrigin setter = setPrimarySourceMatrixOrigin
@@ -524,7 +524,7 @@ end
     @autoproperty batchSize::UInt64 setter = setBatchSize
 end
 
-@objcwrapper managed = true MPSMatrixMultiplication <: MPSKernel
+@objcwrapper MPSMatrixMultiplication <: MPSKernel
 
 @objcproperties MPSMatrixMultiplication begin
     @autoproperty resultMatrixOrigin::MTLOrigin setter = setResultMatrixOrigin
@@ -534,7 +534,7 @@ end
     @autoproperty batchSize::UInt64 setter = setBatchSize
 end
 
-@objcwrapper managed = true MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
+@objcwrapper MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
 
 @objcwrapper MPSMatrixSolveTriangular <: MPSMatrixBinaryKernel
 
@@ -549,9 +549,9 @@ end
     MPSMatrixDecompositionStatusNonPositiveDefinite = -3
 end
 
-@objcwrapper managed = true MPSMatrixDecompositionLU <: MPSMatrixUnaryKernel
+@objcwrapper MPSMatrixDecompositionLU <: MPSMatrixUnaryKernel
 
-@objcwrapper managed = true MPSMatrixDecompositionCholesky <: MPSMatrixUnaryKernel
+@objcwrapper MPSMatrixDecompositionCholesky <: MPSMatrixUnaryKernel
 
 struct MPSMatrixCopyOffsets
     sourceRowOffset::UInt32
@@ -562,7 +562,7 @@ end
 
 @objcwrapper MPSMatrixCopyDescriptor <: NSObject
 
-@objcwrapper managed = true MPSMatrixCopy <: MPSKernel
+@objcwrapper MPSMatrixCopy <: MPSKernel
 
 @objcproperties MPSMatrixCopy begin
     @autoproperty copyRows::UInt64
@@ -571,14 +571,14 @@ end
     @autoproperty destinationsAreTransposed::Bool
 end
 
-@objcwrapper managed = true MPSMatrixSoftMax <: MPSMatrixUnaryKernel
+@objcwrapper MPSMatrixSoftMax <: MPSMatrixUnaryKernel
 
 @objcproperties MPSMatrixSoftMax begin
     @autoproperty sourceRows::UInt64 setter = setSourceRows
     @autoproperty sourceColumns::UInt64 setter = setSourceColumns
 end
 
-@objcwrapper managed = true MPSMatrixLogSoftMax <: MPSMatrixSoftMax
+@objcwrapper MPSMatrixLogSoftMax <: MPSMatrixSoftMax
 
 @objcwrapper MPSMatrixSoftMaxGradient <: MPSMatrixBinaryKernel
 
@@ -589,7 +589,7 @@ end
 
 @objcwrapper MPSMatrixLogSoftMaxGradient <: MPSMatrixSoftMaxGradient
 
-@objcwrapper managed = true MPSMatrixFindTopK <: MPSMatrixUnaryKernel
+@objcwrapper MPSMatrixFindTopK <: MPSMatrixUnaryKernel
 
 @objcproperties MPSMatrixFindTopK begin
     @autoproperty sourceRows::UInt64 setter = setSourceRows
@@ -604,7 +604,7 @@ end
     MPSMatrixRandomDistributionNormal = 0x0000000000000003
 end
 
-@objcwrapper managed = true MPSMatrixRandomDistributionDescriptor <: NSObject
+@objcwrapper MPSMatrixRandomDistributionDescriptor <: NSObject
 
 @objcproperties MPSMatrixRandomDistributionDescriptor begin
     @autoproperty distributionType::MPSMatrixRandomDistribution setter = setDistributionType
@@ -614,7 +614,7 @@ end
     @autoproperty standardDeviation::Cfloat setter = setStandardDeviation
 end
 
-@objcwrapper managed = true MPSMatrixRandom <: MPSKernel
+@objcwrapper MPSMatrixRandom <: MPSKernel
 
 @objcproperties MPSMatrixRandom begin
     @autoproperty destinationDataType::MPSDataType
@@ -623,9 +623,9 @@ end
     @autoproperty batchSize::UInt64 setter = setBatchSize
 end
 
-@objcwrapper managed = true MPSMatrixRandomMTGP32 <: MPSMatrixRandom
+@objcwrapper MPSMatrixRandomMTGP32 <: MPSMatrixRandom
 
-@objcwrapper managed = true MPSMatrixRandomPhilox <: MPSMatrixRandom
+@objcwrapper MPSMatrixRandomPhilox <: MPSMatrixRandom
 
 @objcwrapper MPSImageCopyToMatrix <: MPSKernel
 
@@ -2474,17 +2474,17 @@ struct MPSNDArraySizes
     dimensions::NTuple{16, NSUInteger}
 end
 
-@objcwrapper managed = true MPSNDArrayMultiaryBase <: MPSKernel
+@objcwrapper MPSNDArrayMultiaryBase <: MPSKernel
 
 @objcproperties MPSNDArrayMultiaryBase begin
     @autoproperty destinationArrayAllocator::id{MPSNDArrayAllocator} setter = setDestinationArrayAllocator
 end
 
-@objcwrapper managed = true MPSNDArrayMultiaryKernel <: MPSNDArrayMultiaryBase
+@objcwrapper MPSNDArrayMultiaryKernel <: MPSNDArrayMultiaryBase
 
 @objcwrapper MPSNDArrayMultiaryGradientKernel <: MPSNDArrayMultiaryBase
 
-@objcwrapper managed = true MPSNDArrayUnaryKernel <: MPSNDArrayMultiaryKernel
+@objcwrapper MPSNDArrayUnaryKernel <: MPSNDArrayMultiaryKernel
 
 @objcproperties MPSNDArrayUnaryKernel begin
     @autoproperty offsets::MPSNDArrayOffsets
@@ -2496,7 +2496,7 @@ end
 
 @objcwrapper MPSNDArrayUnaryGradientKernel <: MPSNDArrayMultiaryGradientKernel
 
-@objcwrapper managed = true MPSNDArrayBinaryKernel <: MPSNDArrayMultiaryKernel
+@objcwrapper MPSNDArrayBinaryKernel <: MPSNDArrayMultiaryKernel
 
 @objcproperties MPSNDArrayBinaryKernel begin
     @autoproperty primaryOffsets::MPSNDArrayOffsets
@@ -2517,7 +2517,7 @@ end
 
 @objcwrapper MPSNDArrayGradientState <: MPSState
 
-@objcwrapper managed = true MPSNDArrayMatrixMultiplication <: MPSNDArrayMultiaryKernel
+@objcwrapper MPSNDArrayMatrixMultiplication <: MPSNDArrayMultiaryKernel
 
 @objcproperties MPSNDArrayMatrixMultiplication begin
     @autoproperty alpha::Cdouble setter = setAlpha

@@ -12,7 +12,7 @@ const MPSGraphTensorDataDictionary = NSDictionary
 
 @objcwrapper MPSGraphType <: MPSGraphObject
 
-@objcwrapper managed = true MPSGraphShapedType <: MPSGraphType
+@objcwrapper MPSGraphShapedType <: MPSGraphType
 
 @objcproperties MPSGraphShapedType begin
     @autoproperty shape::id{MPSShape} setter = setShape
@@ -103,7 +103,7 @@ end
     @autoproperty operation::id{MPSGraphOperation}
 end
 
-@objcwrapper managed = true MPSGraphTensorData <: MPSGraphObject
+@objcwrapper MPSGraphTensorData <: MPSGraphObject
 
 @objcproperties MPSGraphTensorData begin
     @autoproperty shape::id{MPSShape}

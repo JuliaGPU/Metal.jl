@@ -21,9 +21,9 @@ Possible (undocumented) values for this enum can be iterated using the MTLTypeIn
 ```julia
 load_framework("Metal")
 
-@objcwrapper managed = true MTLType <: NSObject
+@objcwrapper MTLType <: NSObject
 
-@objcwrapper managed = true MTLTypeInternal <: MTLType
+@objcwrapper MTLTypeInternal <: MTLType
 
 @objcproperties MTLTypeInternal begin
     @autoproperty dataType::UInt64
