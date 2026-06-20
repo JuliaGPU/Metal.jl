@@ -179,7 +179,7 @@ end
     for _ in 1:8
         @metal threads=1 queue=queue increment_kernel(A)
     end
-    if Metal.COMMAND_BATCH_MAX_OPS > 1 && !Metal.profiling_command_buffers()
+    if Metal.COMMAND_BATCH_MAX_OPS[] > 1 && !Metal.profiling_command_buffers()
         @test Metal.command_stream(queue).nops == 8
     end
     synchronize(queue)

@@ -22,15 +22,24 @@ function positive_int_setting(env, pref, default)
     return value
 end
 
-const COMMAND_BATCH_MAX_OPS =
-    positive_int_setting("JULIA_METAL_COMMAND_BATCH_MAX_OPS",
-                         COMMAND_BATCH_MAX_OPS_PREF, 64)
-const COMMAND_BATCH_MAX_BYTES =
-    positive_int_setting("JULIA_METAL_COMMAND_BATCH_MAX_BYTES",
-                         COMMAND_BATCH_MAX_BYTES_PREF, 64 * 1024 * 1024)
-const COMMAND_MAX_INFLIGHT =
-    positive_int_setting("JULIA_METAL_COMMAND_MAX_INFLIGHT",
-                         COMMAND_MAX_INFLIGHT_PREF, 3)
+const COMMAND_BATCH_MAX_OPS = Ref{Int}(64)
+const COMMAND_BATCH_MAX_BYTES = Ref{Int}(64 * 1024 * 1024)
+const COMMAND_MAX_INFLIGHT = Ref{Int}(3)
+
+function initialize_command_stream_settings!()
+    COMMAND_BATCH_MAX_OPS[] =
+        positive_int_setting("JULIA_METAL_COMMAND_BATCH_MAX_OPS",
+                             COMMAND_BATCH_MAX_OPS_PREF, 64)
+    COMMAND_BATCH_MAX_BYTES[] =
+        positive_int_setting("JULIA_METAL_COMMAND_BATCH_MAX_BYTES",
+                             COMMAND_BATCH_MAX_BYTES_PREF, 64 * 1024 * 1024)
+    COMMAND_MAX_INFLIGHT[] =
+        positive_int_setting("JULIA_METAL_COMMAND_MAX_INFLIGHT",
+                             COMMAND_MAX_INFLIGHT_PREF, 3)
+    return
+end
+
+initialize_command_stream_settings!()
 
 struct PendingCommand
     cmdbuf::MTL.MTLCommandBufferLike
@@ -234,7 +243,7 @@ end
 
 function limit_inflight!(s::CommandStream)
     drain_cleanups!(s)
-    while pending_cleanup_count(s) >= COMMAND_MAX_INFLIGHT
+    while pending_cleanup_count(s) >= COMMAND_MAX_INFLIGHT[]
         wait_oldest_cleanup!(s)
     end
     return
@@ -281,8 +290,8 @@ end
 
 function maybe_autoflush!(s::CommandStream)
     if profiling_command_buffers() ||
-       s.nops >= COMMAND_BATCH_MAX_OPS ||
-       s.nbytes >= COMMAND_BATCH_MAX_BYTES
+       s.nops >= COMMAND_BATCH_MAX_OPS[] ||
+       s.nbytes >= COMMAND_BATCH_MAX_BYTES[]
         flush!(s)
     end
     return
