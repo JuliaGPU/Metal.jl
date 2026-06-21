@@ -161,7 +161,7 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
 end
 
 @inline checkpositivedefinite(status) =
-    status == MPS.MPSMatrixDecompositionStatusNonPositiveDefinite || throw(PosDefException(status))
+    status != MPS.MPSMatrixDecompositionStatusNonPositiveDefinite || throw(PosDefException(status))
 @inline checknonsingular(status) =
     status != MPS.MPSMatrixDecompositionStatusSingular || throw(SingularException(status))
 
@@ -304,4 +304,82 @@ end
     commit!(cmdbuf)
 
     return B
+end
+
+# square dense solves; non-square problems stay on Base's generic least-squares path.
+function Base.:\(A::MtlMatrix{T}, B::MtlVecOrMat{T}) where {T<:MtlFloat}
+    size(A, 1) == size(A, 2) ||
+        return invoke(\, Tuple{AbstractMatrix, AbstractVecOrMat}, A, B)
+    return MPS.solve_lu(A, B)
+end
+
+function LinearAlgebra.ldiv!(F::LU{T,<:MtlMatrix{T}},
+                             B::MtlVecOrMat{T}) where {T<:MtlFloat}
+    return MPS.solve_lu(F, B)
+end
+
+function Base.:\(F::LU{T,<:MtlMatrix{T}},
+                 B::MtlVecOrMat{T}) where {T<:MtlFloat}
+    return ldiv!(F, copy(B))
+end
+
+function LinearAlgebra.cholesky!(A::MtlMatrix{T},
+                                 ::LinearAlgebra.NoPivot=LinearAlgebra.NoPivot();
+                                 check::Bool=true) where {T<:MtlFloat}
+    factors, info = MPS.decompose_cholesky!(A; uplo='U')
+    check && checkpositivedefinite(info)
+    return LinearAlgebra.Cholesky(factors, 'U', info)
+end
+
+function LinearAlgebra.cholesky(A::MtlMatrix{T},
+                                ::LinearAlgebra.NoPivot=LinearAlgebra.NoPivot();
+                                check::Bool=true) where {T<:MtlFloat}
+    return cholesky!(copy(A), LinearAlgebra.NoPivot(); check)
+end
+
+for wrapper in (:Symmetric, :Hermitian)
+    @eval begin
+        function LinearAlgebra.cholesky!(A::$wrapper{T,<:MtlMatrix{T}},
+                                         ::LinearAlgebra.NoPivot=LinearAlgebra.NoPivot();
+                                         check::Bool=true) where {T<:MtlFloat}
+            factors, info = MPS.decompose_cholesky!(parent(A); uplo=A.uplo)
+            check && checkpositivedefinite(info)
+            return LinearAlgebra.Cholesky(factors, A.uplo, info)
+        end
+
+        function LinearAlgebra.cholesky(A::$wrapper{T,<:MtlMatrix{T}},
+                                        ::LinearAlgebra.NoPivot=LinearAlgebra.NoPivot();
+                                        check::Bool=true) where {T<:MtlFloat}
+            factors, info = MPS.decompose_cholesky(parent(A); uplo=A.uplo)
+            check && checkpositivedefinite(info)
+            return LinearAlgebra.Cholesky(factors, A.uplo, info)
+        end
+    end
+end
+
+function LinearAlgebra.ldiv!(C::Cholesky{T,<:MtlMatrix{T}},
+                             B::MtlVecOrMat{T}) where {T<:MtlFloat}
+    return MPS.solve_cholesky(C, B)
+end
+
+function Base.:\(C::Cholesky{T,<:MtlMatrix{T}},
+                 B::MtlVecOrMat{T}) where {T<:MtlFloat}
+    return ldiv!(C, copy(B))
+end
+
+for (triangle, upper, unit) in ((:UpperTriangular, true, false),
+                                (:UnitUpperTriangular, true, true),
+                                (:LowerTriangular, false, false),
+                                (:UnitLowerTriangular, false, true))
+    @eval begin
+        function LinearAlgebra.ldiv!(A::$triangle{T,<:MtlMatrix{T}},
+                                     B::MtlVecOrMat{T}) where {T<:MtlFloat}
+            return MPS.solve_triangular(parent(A), B; upper=$upper, unit=$unit)
+        end
+
+        function Base.:\(A::$triangle{T,<:MtlMatrix{T}},
+                         B::MtlVecOrMat{T}) where {T<:MtlFloat}
+            return ldiv!(A, copy(B))
+        end
+    end
 end
