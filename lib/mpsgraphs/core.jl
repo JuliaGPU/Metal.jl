@@ -6,7 +6,7 @@
 
 # @objcwrapper MPSGraph <: MPSGraphObject
 function MPSGraph()
-    MPSGraph(@objc [MPSGraph new]::id{MPSGraph})
+    @objc [MPSGraph new]::MPSGraph
 end
 
 # @objcwrapper MPSGraphShapedType <: MPSGraphType
@@ -21,18 +21,17 @@ end
 # @objcwrapper MPSGraphDevice <: MPSGraphType
 
 function MPSGraphDevice(device::MTLDevice)
-    obj = @objc [MPSGraphDevice deviceWithMTLDevice:device::id{MTLDevice}]::id{MPSGraphDevice}
-    MPSGraphDevice(obj)
+    @objc [MPSGraphDevice deviceWithMTLDevice:device::id{MTLDevice}]::MPSGraphDevice
 end
 
 # @objcwrapper MPSGraphExecutionDescriptor <: MPSGraphObject
 
 function MPSGraphExecutionDescriptor()
-    MPSGraphExecutionDescriptor(@objc [MPSGraphExecutionDescriptor new]::id{MPSGraphExecutionDescriptor})
+    @objc [MPSGraphExecutionDescriptor new]::MPSGraphExecutionDescriptor
 end
 
 # @objcwrapper MPSGraphCompilationDescriptor <: MPSGraphObject
 
 function MPSGraphCompilationDescriptor()
-    MPSGraphCompilationDescriptor(@objc [MPSGraphCompilationDescriptor new]::id{MPSGraphCompilationDescriptor})
+    @objc [MPSGraphCompilationDescriptor new]::MPSGraphCompilationDescriptor
 end

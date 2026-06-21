@@ -18,10 +18,9 @@ function placeholderTensor(graph::MPSGraph, shape::Union{Vector, Tuple}, args...
     return placeholderTensor(graph, mpsshape, args...)
 end
 function placeholderTensor(graph::MPSGraph, shape::MPSShape, dataType::Type, name = "placeholder tensor")
-    obj = @objc [graph::id{MPSGraph} placeholderWithShape:shape::id{MPSShape}
-                                dataType:dataType::MPSDataType
-                                name:name::id{NSString}]::id{MPSGraphTensor}
-    return MPSGraphTensor(obj)
+    return @objc [graph::id{MPSGraph} placeholderWithShape:shape::id{MPSShape}
+                                 dataType:dataType::MPSDataType
+                                     name:name::id{NSString}]::MPSGraphTensor
 end
 
 ## MPSGraphTensorData.h
@@ -85,6 +84,5 @@ Return an MPSNDArray object.
 Will copy contents if the contents are not stored in an MPS ndarray.
 """
 function MPS.MPSNDArray(tensor::MPSGraphTensorData)
-    arr = @objc [tensor::id{MPSNDArray} mpsndarray]::id{MPSNDArray}
-    MPSNDArray(arr)
+    @objc [tensor::id{MPSGraphTensorData} mpsndarray]::MPSNDArray
 end
