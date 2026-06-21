@@ -364,6 +364,12 @@ function reset_open_cmdbuf!(bq::BatchedCommandQueue, cmdbuf)
     return
 end
 
+function discard_open_cmdbuf!(bq::BatchedCommandQueue, cmdbuf)
+    reset_open_cmdbuf!(bq, cmdbuf)
+    release(cmdbuf)
+    return
+end
+
 function flush!(bq::BatchedCommandQueue)
     cmdbuf = bq.cmdbuf
     cmdbuf === nothing && return
