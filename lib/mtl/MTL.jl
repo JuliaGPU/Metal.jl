@@ -20,7 +20,7 @@ import ..Metal: StorageMode, SharedStorage, ManagedStorage, PrivateStorage, Memo
 function throw_error(err::id{NSError})
     # NSError arrives through an `error:` out-parameter, not as an Objective-C
     # return value, so nullable ARC return handling cannot retain it for us.
-    throw(Foundation.retain(NSError, err))
+    throw(retain(NSError, err))
 end
 
 

@@ -8,7 +8,7 @@ function Base.close(ce::MTLCommandEncoderLike)
     try
         endEncoding!(ce)
     finally
-        Foundation.release(ce)
+        release(ce)
     end
     return nothing
 end

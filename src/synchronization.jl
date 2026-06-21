@@ -58,7 +58,7 @@ function nonblocking_synchronization(cmdbuf::MTL.MTLCommandBufferLike)
         wait(done)
     finally
         close(done)
-        Foundation.release(sentinel)
+        release(sentinel)
     end
     return
 end
