@@ -27,7 +27,7 @@ Foundation.set_managed_release!(release)
 function throw_error(err::id{NSError})
     # NSError arrives through an `error:` out-parameter, not as an Objective-C
     # return value, so nullable ARC return handling cannot retain it for us.
-    throw(retain(NSError, err))
+    throw(Foundation.retain(NSError, err))
 end
 
 
