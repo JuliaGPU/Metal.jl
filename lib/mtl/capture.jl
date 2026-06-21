@@ -13,12 +13,10 @@ Use [`beginScope()`](@ref) and [`endScope()`](@ref) to set the boundaries for a 
 MTLCaptureScope
 
 function MTLCaptureScope(queue::MTLDevice, manager=MTLCaptureManager())
-    handle = @objc [manager::id{MTLCaptureManager} newCaptureScopeWithDevice:queue::id{MTLDevice}]::id{MTLCaptureScope}
-    MTLCaptureScope(handle)
+    @objc [manager::id{MTLCaptureManager} newCaptureScopeWithDevice:queue::id{MTLDevice}]::MTLCaptureScope
 end
 function MTLCaptureScope(queue::MTLCommandQueue, manager=MTLCaptureManager())
-    handle = @objc [manager::id{MTLCaptureManager} newCaptureScopeWithCommandQueue:queue::id{MTLCommandQueue}]::id{MTLCaptureScope}
-    MTLCaptureScope(handle)
+    @objc [manager::id{MTLCaptureManager} newCaptureScopeWithCommandQueue:queue::id{MTLCommandQueue}]::MTLCaptureScope
 end
 
 # @objcwrapper MTLCaptureScope <: NSObject
@@ -58,13 +56,10 @@ Create a GPU frame capture descriptor to alter the parameters of a profiling ses
 """
 MTLCaptureDescriptor
 
-# @objcwrapper immutable=false MTLCaptureDescriptor <: NSObject
+# @objcwrapper managed = true MTLCaptureDescriptor <: NSObject
 
 function MTLCaptureDescriptor()
-    handle = @objc [MTLCaptureDescriptor new]::id{MTLCaptureDescriptor}
-    obj = MTLCaptureDescriptor(handle)
-    finalizer(release, obj)
-    return obj
+    return @objc [MTLCaptureDescriptor new]::MTLCaptureDescriptor
 end
 
 # TODO: Add capture state
@@ -108,8 +103,7 @@ function MTLCaptureManager()
     # Without this, two separate capture managers are potentially handled
     # One with capture enabled and one without
     MTLDevice(1)
-    handle = @objc [MTLCaptureManager sharedCaptureManager]::id{MTLCaptureManager}
-    MTLCaptureManager(handle)
+    @objc [MTLCaptureManager sharedCaptureManager]::MTLCaptureManager
 end
 
 """

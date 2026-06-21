@@ -4,13 +4,10 @@
 
 export MTLFunctionDescriptor
 
-# @objcwrapper immutable=false MTLFunctionDescriptor <: NSObject
+# @objcwrapper managed = true MTLFunctionDescriptor <: NSObject
 
 function MTLFunctionDescriptor()
-    handle = @objc [MTLFunctionDescriptor new]::id{MTLFunctionDescriptor}
-    obj = MTLFunctionDescriptor(handle)
-    finalizer(release, obj)
-    return obj
+    return @objc [MTLFunctionDescriptor new]::MTLFunctionDescriptor
 end
 
 
@@ -21,13 +18,11 @@ end
 
 export MTLFunction
 
-# @objcwrapper immutable=false MTLFunction <: NSObject
+# @objcwrapper managed = true MTLFunction <: NSObject
 
 # Get a handle to a kernel function in a Metal Library.
 function MTLFunction(lib::MTLLibrary, name)
-    handle = @objc [lib::id{MTLLibrary} newFunctionWithName:name::id{NSString}]::id{MTLFunction}
-    handle == nil && throw(KeyError(name))
-    obj = MTLFunction(handle)
-    finalizer(release, obj)
-    return obj
+    fun = @objc [lib::id{MTLLibrary} newFunctionWithName:name::id{NSString}]::Union{Nothing,MTLFunction}
+    fun === nothing && throw(KeyError(name))
+    return fun
 end

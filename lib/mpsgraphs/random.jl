@@ -1,4 +1,4 @@
-# @objcwrapper immutable=false MPSGraphRandomOpDescriptor <: MPSGraphObject
+# @objcwrapper managed = true MPSGraphRandomOpDescriptor <: MPSGraphObject
 
 function MPSGraphRandomOpDescriptor(distribution::MPSGraphRandomDistribution, dataType)
     desc = @objc [MPSGraphRandomOpDescriptor descriptorWithDistribution:distribution::MPSGraphRandomDistribution

@@ -1,6 +1,7 @@
 # Not necessary, but removes some errors that don't seem to affect the output
 using Clang_unified_jll
-Clang_unified_jll.libclang = "/Applications/Xcode.app/Contents/Frameworks/libclang.dylib"
+const DEVELOPER_DIR = `xcode-select -p` |> open |> readchomp |> String
+Clang_unified_jll.libclang = joinpath(dirname(DEVELOPER_DIR), "Frameworks", "libclang.dylib")
 
 using Clang.Generators
 using Clang
@@ -108,7 +109,7 @@ create_objc_context(header::AbstractString, args=String[], ops=Dict()) = create_
 function create_objc_context(headers::Vector, args::Vector=String[], options::Dict=Dict())
     system_dirs = [
                     SDK_PATH,
-                    "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain"
+                    joinpath(DEVELOPER_DIR, "Toolchains/XcodeDefault.xctoolchain")
                   ]
 
     regen = if haskey(options, "general") && haskey(options["general"], "regenerate_dependent_headers")
@@ -167,18 +168,28 @@ Changes various expression nodes from `ctx` based on the contents of `options`
 Currently supported options:
 
     [api.<symbol>]
-        - immutable::Bool     # Set the mutability of the Obj-C object.
+        - managed::Bool       # Override managed/finalizer-capable Obj-C wrappers (default true).
         - supertype::String   # Set the supertype of the Obj-C object.
 
     [api.<symbol>.proptype]
         - <property>::String  # Adds a `type` definition to <property> in the Obj-C `@objcproperties` definition
 """
 function rewriter!(ctx, options)
-    haskey(options, "api") || return
+    api_options = get(options, "api", Dict())
+
+    function wrapper_kwarg(expr, name)
+        findfirst(expr.args) do arg
+            arg isa Expr && arg.head in (:(=), :kw) && arg.args[1] == name
+        end
+    end
+
+    wrapper_def_arg(expr) = findlast(expr.args) do arg
+        arg isa Symbol || Meta.isexpr(arg, :(<:))
+    end
 
     for node in get_nodes(ctx.dag)
         nodename = string(node.id)
-        nodedict = get(options["api"], nodename, Dict())
+        nodedict = get(api_options, nodename, Dict())
 
         nodetype = typeof(node)
         if nodetype <: Generators.ExprNode{<:Generators.AbstractObjCObjNodeType}
@@ -190,12 +201,22 @@ function rewriter!(ctx, options)
 
             declexpr = nostatic_exprs[1]
 
-            if haskey(nodedict, "immutable")
-                con = nodedict["immutable"]
-                declexpr.args[3].args[2] = con
+            immutable_idx = wrapper_kwarg(declexpr, :immutable)
+            managed = get(nodedict, "managed", true)
+            if immutable_idx !== nothing
+                if managed
+                    deleteat!(declexpr.args, immutable_idx)
+                else
+                    declexpr.args[immutable_idx].args[1] = :managed
+                    declexpr.args[immutable_idx].args[2] = false
+                end
+            elseif !managed
+                insert!(declexpr.args, 3, Expr(:(=), :managed, false))
             end
             if haskey(nodedict, "supertype")
-                expr2 = declexpr.args[4]
+                expr2_idx = wrapper_def_arg(declexpr)
+                expr2_idx === nothing && error("could not find @objcwrapper declaration for $nodename")
+                expr2 = declexpr.args[expr2_idx]
                 typ = nodedict["supertype"] |> Meta.parse
 
                 expr2.args[2] = typ

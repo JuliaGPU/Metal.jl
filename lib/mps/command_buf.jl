@@ -9,13 +9,11 @@
 export MPSCommandBuffer
 
 function MPSCommandBuffer(commandBuffer::MTLCommandBufferLike)
-    handle = @objc [MPSCommandBuffer commandBufferWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}]::id{MPSCommandBuffer}
-    MPSCommandBuffer(handle)
+    @objc [MPSCommandBuffer commandBufferWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}]::MPSCommandBuffer
 end
 
 function MPSCommandBuffer(commandQueue)
-    handle = @objc [MPSCommandBuffer commandBufferFromCommandQueue:commandQueue::id{MTLCommandQueue}]::id{MPSCommandBuffer}
-    MPSCommandBuffer(handle)
+    @objc [MPSCommandBuffer commandBufferFromCommandQueue:commandQueue::id{MTLCommandQueue}]::MPSCommandBuffer
 end
 
 function MPSCommandBuffer(f::Base.Callable, queueOrBuf)

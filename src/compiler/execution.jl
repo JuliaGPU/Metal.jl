@@ -419,7 +419,7 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         end_encoder!(bq)
         if bq.nops == 0
             cmdbuf = bq.cmdbuf
-            cmdbuf === nothing || reset_open_cmdbuf!(bq, cmdbuf)
+            cmdbuf === nothing || discard_open_cmdbuf!(bq, cmdbuf)
         end
         rethrow()
     end
@@ -432,7 +432,7 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     if precompiling
         cmdbuf = bq.cmdbuf
         end_encoder!(bq)
-        cmdbuf === nothing || reset_open_cmdbuf!(bq, cmdbuf)
+        cmdbuf === nothing || discard_open_cmdbuf!(bq, cmdbuf)
         return
     end
 

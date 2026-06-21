@@ -6,37 +6,32 @@
 
 # @objcwrapper MPSGraph <: MPSGraphObject
 function MPSGraph()
-    MPSGraph(@objc [MPSGraph new]::id{MPSGraph})
+    @objc [MPSGraph new]::MPSGraph
 end
 
-# @objcwrapper immutable=true MPSGraphShapedType <: MPSGraphType
+# @objcwrapper MPSGraphShapedType <: MPSGraphType
 
 MPSGraphShapedType(shape, dataType) = MPSGraphShapedType(convert(MPSShape, shape), dataType)
 function MPSGraphShapedType(shape::MPSShape, dataType)
-    tmp = @objc [MPSGraphShapedType alloc]::id{MPSGraphShapedType}
-    obj = MPSGraphShapedType(tmp)
-    finalizer(release, obj)
-    @objc [obj::id{MPSGraphShapedType} initWithShape:shape::id{MPSShape}
-                                       dataType:dataType::MPSDataType]::id{MPSGraphShapedType}
-    return obj
+    return @objc [[MPSGraphShapedType alloc]::id{MPSGraphShapedType} initWithShape:shape::id{MPSShape}
+                                                               dataType:dataType::MPSDataType]::MPSGraphShapedType
 end
 
 ## MPSGraphDevice.h
 # @objcwrapper MPSGraphDevice <: MPSGraphType
 
 function MPSGraphDevice(device::MTLDevice)
-    obj = @objc [MPSGraphDevice deviceWithMTLDevice:device::id{MTLDevice}]::id{MPSGraphDevice}
-    MPSGraphDevice(obj)
+    @objc [MPSGraphDevice deviceWithMTLDevice:device::id{MTLDevice}]::MPSGraphDevice
 end
 
 # @objcwrapper MPSGraphExecutionDescriptor <: MPSGraphObject
 
 function MPSGraphExecutionDescriptor()
-    MPSGraphExecutionDescriptor(@objc [MPSGraphExecutionDescriptor new]::id{MPSGraphExecutionDescriptor})
+    @objc [MPSGraphExecutionDescriptor new]::MPSGraphExecutionDescriptor
 end
 
 # @objcwrapper MPSGraphCompilationDescriptor <: MPSGraphObject
 
 function MPSGraphCompilationDescriptor()
-    MPSGraphCompilationDescriptor(@objc [MPSGraphCompilationDescriptor new]::id{MPSGraphCompilationDescriptor})
+    @objc [MPSGraphCompilationDescriptor new]::MPSGraphCompilationDescriptor
 end

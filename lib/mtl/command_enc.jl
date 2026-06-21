@@ -1,7 +1,14 @@
 export endEncoding!
 
-# @objcwrapper immutable=false MTLCommandEncoder <: NSObject
+# @objcwrapper managed = true MTLCommandEncoder <: NSObject
 
 endEncoding!(ce::MTLCommandEncoderLike) =
     @objc [ce::id{MTLCommandEncoder} endEncoding]::Nothing
-Base.close(ce::MTLCommandEncoderLike) = endEncoding!(ce)
+function Base.close(ce::MTLCommandEncoderLike)
+    try
+        endEncoding!(ce)
+    finally
+        release(ce)
+    end
+    return nothing
+end

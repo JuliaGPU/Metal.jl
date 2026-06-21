@@ -17,25 +17,10 @@ using ..Metal
 # Import the bindings that are not used in MTL for backward compatibility
 import ..Metal: StorageMode, SharedStorage, ManagedStorage, PrivateStorage, Memoryless, CPUStorage
 
-# Metal APIs generally expect to be running under an autorelease pool.
-# In most cases, we handle this in the code calling into the MTL module,
-# however, finalizers are out of the caller's control, so we need to
-# ensure here already that they are running under an autorelease pool.
-release(obj) = @autoreleasepool unsafe=true Foundation.release(obj)
-
-# `NSError` objects returned through `error:` out-parameters are autoreleased.
-# Throwing one as a Julia exception lets it escape the surrounding
-# `@autoreleasepool`; once that pool drains the object is freed, and later
-# displaying the exception (`showerror` reads `localizedDescription` etc.)
-# dereferences a dangling pointer — a segfault, or an "unrecognized selector"
-# abort once the memory is reused by another Objective-C object. Retain the
-# error so the thrown exception keeps it alive. This intentionally leaks the
-# error object on the (rare) failure path; managing its lifetime properly would
-# require the `NSError` wrapper itself to retain and finalize.
 function throw_error(err::id{NSError})
-    obj = NSError(err)
-    Foundation.retain(obj)
-    throw(obj)
+    # NSError arrives through an `error:` out-parameter, not as an Objective-C
+    # return value, so nullable ARC return handling cannot retain it for us.
+    throw(retain(NSError, err))
 end
 
 

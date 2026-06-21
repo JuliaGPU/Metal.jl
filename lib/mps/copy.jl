@@ -16,18 +16,14 @@ end
 
 export MPSMatrixCopy, encode!
 
-# @objcwrapper immutable=false MPSMatrixCopy <: MPSKernel
+# @objcwrapper managed = true MPSMatrixCopy <: MPSKernel
 
 function MPSMatrixCopy(dev, copyRows, copyColumns, sourcesAreTransposed, destinationsAreTransposed)
-    kernel = @objc [MPSMatrixCopy alloc]::id{MPSMatrixCopy}
-    obj = MPSMatrixCopy(kernel)
-    finalizer(release, obj)
-    @objc [obj::id{MPSMatrixCopy} initWithDevice:dev::id{MTLDevice}
-                                  copyRows:copyRows::NSUInteger
-                                  copyColumns:copyColumns::NSUInteger
-                                  sourcesAreTransposed:sourcesAreTransposed::Bool
-                                  destinationsAreTransposed:destinationsAreTransposed::Bool]::id{MPSMatrixCopy}
-    return obj
+    return @objc [[MPSMatrixCopy alloc]::id{MPSMatrixCopy} initWithDevice:dev::id{MTLDevice}
+                                                      copyRows:copyRows::NSUInteger
+                                                      copyColumns:copyColumns::NSUInteger
+                                                      sourcesAreTransposed:sourcesAreTransposed::Bool
+                                                      destinationsAreTransposed:destinationsAreTransposed::Bool]::MPSMatrixCopy
 end
 
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSMatrixCopyLike, copyDescriptor)

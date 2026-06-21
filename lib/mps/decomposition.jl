@@ -2,16 +2,12 @@
 
 export MPSMatrixDecompositionLU, encode!
 
-# @objcwrapper immutable=false MPSMatrixDecompositionLU <: MPSMatrixUnaryKernel
+# @objcwrapper managed = true MPSMatrixDecompositionLU <: MPSMatrixUnaryKernel
 
 function MPSMatrixDecompositionLU(dev, rows, columns)
-    kernel = @objc [MPSMatrixDecompositionLU alloc]::id{MPSMatrixDecompositionLU}
-    obj = MPSMatrixDecompositionLU(kernel)
-    finalizer(release, obj)
-    @objc [obj::id{MPSMatrixDecompositionLU} initWithDevice:dev::id{MTLDevice}
-                                             rows:rows::NSUInteger
-                                             columns:columns::NSUInteger]::id{MPSMatrixDecompositionLU}
-    return obj
+    return @objc [[MPSMatrixDecompositionLU alloc]::id{MPSMatrixDecompositionLU} initWithDevice:dev::id{MTLDevice}
+                                                                           rows:rows::NSUInteger
+                                                                           columns:columns::NSUInteger]::MPSMatrixDecompositionLU
 end
 
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSMatrixDecompositionLULike, sourceMatrix, resultMatrix, pivotIndices, status)
@@ -27,16 +23,12 @@ end
 
 export MPSMatrixDecompositionCholesky, encode!
 
-# @objcwrapper immutable=false MPSMatrixDecompositionCholesky <: MPSMatrixUnaryKernel
+# @objcwrapper managed = true MPSMatrixDecompositionCholesky <: MPSMatrixUnaryKernel
 
 function MPSMatrixDecompositionCholesky(dev, lower, order)
-    kernel = @objc [MPSMatrixDecompositionCholesky alloc]::id{MPSMatrixDecompositionCholesky}
-    obj = MPSMatrixDecompositionCholesky(kernel)
-    finalizer(release, obj)
-    @objc [obj::id{MPSMatrixDecompositionCholesky} initWithDevice:dev::id{MTLDevice}
-                                                   lower:lower::Bool
-                                                   order:order::NSUInteger]::id{MPSMatrixDecompositionCholesky}
-    return obj
+    return @objc [[MPSMatrixDecompositionCholesky alloc]::id{MPSMatrixDecompositionCholesky} initWithDevice:dev::id{MTLDevice}
+                                                                                       lower:lower::Bool
+                                                                                       order:order::NSUInteger]::MPSMatrixDecompositionCholesky
 end
 
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSMatrixDecompositionCholeskyLike, sourceMatrix, resultMatrix, status)

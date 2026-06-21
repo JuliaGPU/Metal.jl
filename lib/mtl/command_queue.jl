@@ -1,33 +1,23 @@
 
 export MTLCommandQueueDescriptor
 
-# @objcwrapper immutable=false MTLCommandQueueDescriptor <: NSObject
+# @objcwrapper managed = true MTLCommandQueueDescriptor <: NSObject
 
 function MTLCommandQueueDescriptor()
-    handle = @objc [MTLCommandQueueDescriptor alloc]::id{MTLCommandQueueDescriptor}
-    obj = MTLCommandQueueDescriptor(handle)
-    finalizer(release, obj)
-    @objc [obj::id{MTLCommandQueueDescriptor} init]::id{MTLCommandQueueDescriptor}
-    return obj
+    return @objc [[MTLCommandQueueDescriptor alloc]::id{MTLCommandQueueDescriptor} init]::MTLCommandQueueDescriptor
 end
 
 function MTLCommandQueue(dev::MTLDevice, descriptor::MTLCommandQueueDescriptor)
-    handle = @objc [dev::id{MTLDevice} newCommandQueueWithDescriptor:descriptor::id{MTLCommandQueueDescriptor}]::id{MTLCommandQueue}
-    obj = MTLCommandQueue(handle)
-    finalizer(release, obj)
-    return obj
+    return @objc [dev::id{MTLDevice} newCommandQueueWithDescriptor:descriptor::id{MTLCommandQueueDescriptor}]::MTLCommandQueue
 end
 
 
 export MTLCommandQueue
 
-# @objcwrapper immutable=false MTLCommandQueue <: NSObject
+# @objcwrapper managed = true MTLCommandQueue <: NSObject
 
 function MTLCommandQueue(dev::MTLDevice)
-    handle = @objc [dev::id{MTLDevice} newCommandQueue]::id{MTLCommandQueue}
-    obj = MTLCommandQueue(handle)
-    finalizer(release, obj)
-    return obj
+    return @objc [dev::id{MTLDevice} newCommandQueue]::MTLCommandQueue
 end
 
 function add_residency_set!(queue::MTLCommandQueue, resset::MTLResidencySet)

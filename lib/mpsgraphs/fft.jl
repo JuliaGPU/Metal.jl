@@ -7,8 +7,7 @@
 Create an MPSGraphFFTDescriptor with the specified parameters.
 """
 function MPSGraphFFTDescriptor(; inverse::Bool = false, scalingMode::MPSGraphFFTScalingMode = MPSGraphFFTScalingModeNone)
-    obj = @objc [MPSGraphFFTDescriptor descriptor]::id{MPSGraphFFTDescriptor}
-    desc = MPSGraphFFTDescriptor(obj)
+    desc = @objc [MPSGraphFFTDescriptor descriptor]::MPSGraphFFTDescriptor
     desc.inverse = inverse
     desc.scalingMode = scalingMode
     return desc
@@ -16,25 +15,22 @@ end
 
 ## MPSGraph FFT operations
 function fastFourierTransformWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, axes::NSArray, descriptor::MPSGraphFFTDescriptor, name = "fft")
-    obj = @objc [graph::id{MPSGraph} fastFourierTransformWithTensor:tensor::id{MPSGraphTensor}
-                                axes:axes::id{NSArray}
-                                descriptor:descriptor::id{MPSGraphFFTDescriptor}
-                                name:name::id{NSString}]::id{MPSGraphTensor}
-    MPSGraphTensor(obj)
+    @objc [graph::id{MPSGraph} fastFourierTransformWithTensor:tensor::id{MPSGraphTensor}
+                                    axes:axes::id{NSArray}
+                              descriptor:descriptor::id{MPSGraphFFTDescriptor}
+                                    name:name::id{NSString}]::MPSGraphTensor
 end
 
 function realToHermiteanFFTWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, axes::NSArray, descriptor::MPSGraphFFTDescriptor, name = "rfft")
-    obj = @objc [graph::id{MPSGraph} realToHermiteanFFTWithTensor:tensor::id{MPSGraphTensor}
-                                axes:axes::id{NSArray}
-                                descriptor:descriptor::id{MPSGraphFFTDescriptor}
-                                name:name::id{NSString}]::id{MPSGraphTensor}
-    MPSGraphTensor(obj)
+    @objc [graph::id{MPSGraph} realToHermiteanFFTWithTensor:tensor::id{MPSGraphTensor}
+                                  axes:axes::id{NSArray}
+                            descriptor:descriptor::id{MPSGraphFFTDescriptor}
+                                  name:name::id{NSString}]::MPSGraphTensor
 end
 
 function HermiteanToRealFFTWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, axes::NSArray, descriptor::MPSGraphFFTDescriptor, name = "irfft")
-    obj = @objc [graph::id{MPSGraph} HermiteanToRealFFTWithTensor:tensor::id{MPSGraphTensor}
-                                axes:axes::id{NSArray}
-                                descriptor:descriptor::id{MPSGraphFFTDescriptor}
-                                name:name::id{NSString}]::id{MPSGraphTensor}
-    MPSGraphTensor(obj)
+    @objc [graph::id{MPSGraph} HermiteanToRealFFTWithTensor:tensor::id{MPSGraphTensor}
+                                  axes:axes::id{NSArray}
+                            descriptor:descriptor::id{MPSGraphFFTDescriptor}
+                                  name:name::id{NSString}]::MPSGraphTensor
 end

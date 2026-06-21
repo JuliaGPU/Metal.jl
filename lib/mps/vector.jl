@@ -25,25 +25,17 @@ end
 
 export MPSVector
 
-# @objcwrapper immutable=false MPSVector <: NSObject
+# @objcwrapper managed = true MPSVector <: NSObject
 
 function MPSVector(buf, descriptor::MPSVectorDescriptor, offset::Integer=0)
-    vec = @objc [MPSVector alloc]::id{MPSVector}
-    obj = MPSVector(vec)
-    finalizer(release, obj)
-    @objc [obj::id{MPSVector} initWithBuffer:buf::id{MTLBuffer}
-                              offset:offset::NSUInteger
-                              descriptor:descriptor::id{MPSVectorDescriptor}]::id{MPSVector}
-    return obj
+    return @objc [[MPSVector alloc]::id{MPSVector} initWithBuffer:buf::id{MTLBuffer}
+                                             offset:offset::NSUInteger
+                                             descriptor:descriptor::id{MPSVectorDescriptor}]::MPSVector
 end
 
 function MPSVector(dev::MTLDevice, descriptor::MPSVectorDescriptor)
-    vec = @objc [MPSVector alloc]::id{MPSVector}
-    obj = MPSVector(vec)
-    finalizer(release, obj)
-    @objc [obj::id{MPSVector} initWithDevice:dev::id{MTLDevice}
-                              descriptor:descriptor::id{MPSVectorDescriptor}]::id{MPSVector}
-    return obj
+    return @objc [[MPSVector alloc]::id{MPSVector} initWithDevice:dev::id{MTLDevice}
+                                             descriptor:descriptor::id{MPSVectorDescriptor}]::MPSVector
 end
 
 """
@@ -57,7 +49,7 @@ function MPSVector(arr::MtlVector{T}) where T
     return MPSVector(arr, desc, offset)
 end
 
-# @objcwrapper immutable=false MPSTemporaryVector <: MPSVector
+# @objcwrapper managed = true MPSTemporaryVector <: MPSVector
 
 function MPSTemporaryVector(commandBuffer::MTLCommandBufferLike, descriptor::MPSVectorDescriptor)
     obj = @objc [MPSTemporaryVector temporaryVectorWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}
@@ -70,19 +62,15 @@ end
 
 export MPSMatrixVectorMultiplication, encode!, matvecmul!
 
-# @objcwrapper immutable=false MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
+# @objcwrapper managed = true MPSMatrixVectorMultiplication <: MPSMatrixBinaryKernel
 
 function MPSMatrixVectorMultiplication(dev, transpose, rows, columns, alpha, beta)
-    kernel = @objc [MPSMatrixVectorMultiplication alloc]::id{MPSMatrixVectorMultiplication}
-    obj = MPSMatrixVectorMultiplication(kernel)
-    finalizer(release, obj)
-    @objc [obj::id{MPSMatrixVectorMultiplication} initWithDevice:dev::id{MTLDevice}
-                                                  transpose:transpose::Bool
-                                                  rows:rows::NSUInteger
-                                                  columns:columns::NSUInteger
-                                                  alpha:alpha::Cdouble
-                                                  beta:beta::Cdouble]::id{MPSMatrixVectorMultiplication}
-    return obj
+    return @objc [[MPSMatrixVectorMultiplication alloc]::id{MPSMatrixVectorMultiplication} initWithDevice:dev::id{MTLDevice}
+                                                                                     transpose:transpose::Bool
+                                                                                     rows:rows::NSUInteger
+                                                                                     columns:columns::NSUInteger
+                                                                                     alpha:alpha::Cdouble
+                                                                                     beta:beta::Cdouble]::MPSMatrixVectorMultiplication
 end
 
 function encode!(cmdbuf::MTLCommandBufferLike, matvecmul::MPSMatrixVectorMultiplicationLike, inputMatrix, inputVector, resultVector)

@@ -23,9 +23,3 @@ always_NUL_terminated_string = true
 # if you'd like to skip all of the macros, please set this entry to "disable".
 # if you'd like to translate function-like macros to Julia, please set this entry to "aggressive".
 macro_mode = "disable"
-
-[api.MPSGraphTensorData]
-immutable=false
-
-[api.MPSGraphShapedType]
-immutable=false

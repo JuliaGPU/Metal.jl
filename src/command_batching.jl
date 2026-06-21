@@ -217,10 +217,6 @@ function ensure_cmdbuf!(bq::BatchedCommandQueue)
     cmdbuf = bq.cmdbuf
     if cmdbuf === nothing
         cmdbuf = MTLCommandBuffer(bq.queue)
-        # `commandBuffer` and command encoders are autoreleased. A batched
-        # queue can outlive the surrounding autorelease pool, so hold explicit
-        # references while they are open.
-        retain(cmdbuf)
         @label! cmdbuf "MTLCommandBuffer(batched queue)"
         bq.cmdbuf = cmdbuf
         register_queue!(bq)
@@ -235,11 +231,7 @@ function end_encoder!(bq::BatchedCommandQueue)
     bq.encoder = nothing
     bq.kind = NoEncoder
     bq.last_pipeline = nothing
-    try
-        close(enc)
-    finally
-        release(enc)
-    end
+    close(enc)
     return
 end
 
@@ -250,7 +242,6 @@ function compute_encoder(bq::BatchedCommandQueue)
 
     end_encoder!(bq)
     enc = MTLComputeCommandEncoder(ensure_cmdbuf!(bq))
-    retain(enc)
     bq.encoder = enc
     bq.kind = ComputeEncoder
     return enc
@@ -263,7 +254,6 @@ function blit_encoder(bq::BatchedCommandQueue)
 
     end_encoder!(bq)
     enc = MTLBlitCommandEncoder(ensure_cmdbuf!(bq))
-    retain(enc)
     bq.encoder = enc
     bq.kind = BlitEncoder
     return enc
@@ -303,7 +293,6 @@ end
 
 function defer_cleanup!(bq::BatchedCommandQueue, cmdbuf::MTL.MTLCommandBufferLike,
                         roots::Vector{Any})
-    retain(cmdbuf)
     push!(bq.cleanups, PendingCommand(cmdbuf, roots))
     register_queue!(bq)
     return
@@ -330,7 +319,6 @@ function drain_cleanups!(bq::BatchedCommandQueue; force::Bool=false)
             @error "Command buffer failed" reason=cleanup.cmdbuf.error.localizedDescription
         end
         empty!(cleanup.roots)
-        release(cleanup.cmdbuf)
     end
 
     unregister_queue_if_idle!(bq)
@@ -353,12 +341,7 @@ end
 function wait_oldest_cleanup!(bq::BatchedCommandQueue)
     isempty(bq.cleanups) && return
     cmdbuf = first(bq.cleanups).cmdbuf
-    retain(cmdbuf)
-    try
-        wait_cmdbuf!(cmdbuf)
-    finally
-        release(cmdbuf)
-    end
+    wait_cmdbuf!(cmdbuf)
     drain_cleanups!(bq)
     return
 end
@@ -377,8 +360,13 @@ function reset_open_cmdbuf!(bq::BatchedCommandQueue, cmdbuf)
     bq.pending_ops = Any[]
     bq.nops = 0
     bq.nbytes = 0
-    release(cmdbuf)
     unregister_queue_if_idle!(bq)
+    return
+end
+
+function discard_open_cmdbuf!(bq::BatchedCommandQueue, cmdbuf)
+    reset_open_cmdbuf!(bq, cmdbuf)
+    release(cmdbuf)
     return
 end
 

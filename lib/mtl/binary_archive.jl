@@ -4,13 +4,10 @@
 
 export MTLBinaryArchiveDescriptor
 
-# @objcwrapper immutable=false MTLBinaryArchiveDescriptor <: NSObject
+# @objcwrapper managed = true MTLBinaryArchiveDescriptor <: NSObject
 
 function MTLBinaryArchiveDescriptor()
-    handle = @objc [MTLBinaryArchiveDescriptor new]::id{MTLBinaryArchiveDescriptor}
-    obj = MTLBinaryArchiveDescriptor(handle)
-    finalizer(release, obj)
-    return obj
+    return @objc [MTLBinaryArchiveDescriptor new]::MTLBinaryArchiveDescriptor
 end
 
 
@@ -20,17 +17,15 @@ end
 
 export MTLBinaryArchive, add_functions!
 
-# @objcwrapper immutable=false MTLBinaryArchive <: NSObject
+# @objcwrapper managed = true MTLBinaryArchive <: NSObject
 
 function MTLBinaryArchive(dev::MTLDevice, desc::MTLBinaryArchiveDescriptor)
     err = Ref{id{NSError}}(nil)
-    handle = @objc [dev::id{MTLDevice} newBinaryArchiveWithDescriptor:desc::id{MTLBinaryArchiveDescriptor}
-                                       error:err::Ptr{id{NSError}}]::id{MTLBinaryArchive}
-    err[] == nil || throw_error(err[])
+    archive = @objc [dev::id{MTLDevice} newBinaryArchiveWithDescriptor:desc::id{MTLBinaryArchiveDescriptor}
+                                        error:err::Ptr{id{NSError}}]::Union{Nothing,MTLBinaryArchive}
+    archive === nothing && throw_error(err[])
 
-    obj = MTLBinaryArchive(handle)
-    finalizer(release, obj)
-    return obj
+    return archive
 end
 
 function add_functions!(bin::MTLBinaryArchive, desc::MTLComputePipelineDescriptor)

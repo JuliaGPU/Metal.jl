@@ -87,15 +87,9 @@ const logging_cmdbufs = IdDict{MTLCommandQueue,MTLCommandBuffer}()
 const logging_cmdbufs_lock = ReentrantLock()
 
 function track_logging_cmdbuf!(queue::MTLCommandQueue, cmdbuf::MTLCommandBuffer)
-    # the surrounding `@autoreleasepool` in `(::HostKernel)()` will release the
-    # caller's reference on return, so retain a fresh one for the tracking slot.
-    retain(cmdbuf)
-    old = Base.@lock logging_cmdbufs_lock begin
-        prev = get(logging_cmdbufs, queue, nothing)
+    Base.@lock logging_cmdbufs_lock begin
         logging_cmdbufs[queue] = cmdbuf
-        prev
     end
-    old === nothing || release(old)
     return
 end
 
@@ -107,7 +101,6 @@ function drain_logging_cmdbufs!(queue::MTLCommandQueue)
     end
     if cmdbuf !== nothing
         MTL.wait_completed(cmdbuf)
-        release(cmdbuf)
     end
     return
 end

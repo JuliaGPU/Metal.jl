@@ -52,11 +52,13 @@ function nonblocking_synchronization(cmdbuf::MTL.MTLCommandBufferLike)
     sentinel = MTLCommandBuffer(cmdbuf.commandQueue)
     done = Base.AsyncCondition()
     on_completed(sentinel, done)
-    commit!(sentinel)
+    # Private sentinel: do not store it in last_committed before releasing it.
+    @objc [sentinel::id{MTLCommandBuffer} commit]::Nothing
     try
         wait(done)
     finally
         close(done)
+        release(sentinel)
     end
     return
 end
@@ -96,13 +98,8 @@ Wait for currently committed GPU work on `queue` to finish.
     last = MTL.last_committed(queue)
     last === nothing && return
 
-    retain(last)
-    try
-        # Handles the already-completed fast path internally.
-        wait_cmdbuf!(last)
-    finally
-        release(last)
-    end
+    # Handles the already-completed fast path internally.
+    wait_cmdbuf!(last)
 
     drain_cleanups!(bq; force=true)
 
@@ -135,22 +132,16 @@ function device_synchronize()
     end
 
     cmdbufs = Base.@lock MTL.last_committed_lock begin
-        bufs = collect(values(MTL.last_committed_per_queue))
-        foreach(retain, bufs)
-        bufs
+        collect(values(MTL.last_committed_per_queue))
     end
 
     for cmdbuf in cmdbufs
-        try
-            if !is_completed(cmdbuf)
-                if use_nonblocking_synchronization
-                    spinning_synchronization(cmdbuf) || nonblocking_synchronization(cmdbuf)
-                else
-                    wait_completed(cmdbuf)
-                end
+        if !is_completed(cmdbuf)
+            if use_nonblocking_synchronization
+                spinning_synchronization(cmdbuf) || nonblocking_synchronization(cmdbuf)
+            else
+                wait_completed(cmdbuf)
             end
-        finally
-            release(cmdbuf)
         end
     end
 

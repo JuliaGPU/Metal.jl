@@ -4,16 +4,14 @@
 
 export MPSNDArrayDescriptor
 
-# @objcwrapper immutable=false MPSNDArrayDescriptor <: NSObject
+# @objcwrapper managed = true MPSNDArrayDescriptor <: NSObject
 
 function MPSNDArrayDescriptor(dataType::DataType, dimensionCount, dimensionSizes::Ptr)
     1 <= dimensionCount <= 16 || throw(ArgumentError("`dimensionCount` must be between 1 and 16 inclusive"))
 
-    desc = @objc [MPSNDArrayDescriptor descriptorWithDataType:dataType::MPSDataType
-                                      dimensionCount:dimensionCount::NSUInteger
-                                      dimensionSizes:dimensionSizes::Ptr{NSUInteger}]::id{MPSNDArrayDescriptor}
-    obj = MPSNDArrayDescriptor(desc)
-    return obj
+    return @objc [MPSNDArrayDescriptor descriptorWithDataType:dataType::MPSDataType
+                                               dimensionCount:dimensionCount::NSUInteger
+                                               dimensionSizes:dimensionSizes::Ptr{NSUInteger}]::MPSNDArrayDescriptor
 end
 
 function MPSNDArrayDescriptor(dataType::DataType, shape::DenseVector{T}) where {T<:Union{Int,UInt}}
@@ -40,12 +38,11 @@ end
 
 export MPSNDArray
 
-# @objcwrapper immutable=false MPSNDArray <: NSObject
+# @objcwrapper managed = true MPSNDArray <: NSObject
 
 @static if Metal.is_macos(v"15")
     function userBuffer(ndarr::MPSNDArrayLike)::Union{Nothing, MTLBuffer}
-        res = @objc [ndarr::id{MPSNDArray} userBuffer]::id{MTLBuffer}
-        return res == nil ? nothing : MTLBuffer(res)
+        return @objc [ndarr::id{MPSNDArray} userBuffer]::Union{Nothing,MTLBuffer}
     end
 end
 
@@ -53,9 +50,8 @@ function resourceSize(ndarr::MPSNDArrayLike)
     return @objc [ndarr::id{MPSNDArray} resourceSize]::NSUInteger
 end
 
-function descriptor(ndarr::MPSNDArrayLike)::MPSNDArrayDescriptor
-    res = @objc [ndarr::id{MPSNDArray} descriptor]::id{MPSNDArrayDescriptor}
-    return res == nil ? nothing : MPSNDArrayDescriptor(res)
+function descriptor(ndarr::MPSNDArrayLike)::Union{Nothing,MPSNDArrayDescriptor}
+    return @objc [ndarr::id{MPSNDArray} descriptor]::Union{Nothing,MPSNDArrayDescriptor}
 end
 
 function Base.size(ndarr::MPSNDArrayLike)
@@ -63,12 +59,11 @@ function Base.size(ndarr::MPSNDArrayLike)
     Tuple([Int(lengthOfDimension(ndarr,i)) for i in 0:ndims-1])
 end
 
-# @objcwrapper immutable=false MPSTemporaryNDArray <: MPSNDArray
+# @objcwrapper managed = true MPSTemporaryNDArray <: MPSNDArray
 
 function MPSTemporaryNDArray(cmdbuf::MTLCommandBufferLike, descriptor::MPSNDArrayDescriptor)
-    obj = @objc [MPSTemporaryNDArray temporaryNDArrayWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
-                                 descriptor:descriptor::id{MPSNDArrayDescriptor}]::id{MPSTemporaryNDArray}
-    return MPSTemporaryNDArray(obj)
+    return @objc [MPSTemporaryNDArray temporaryNDArrayWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+                                                             descriptor:descriptor::id{MPSNDArrayDescriptor}]::MPSTemporaryNDArray
 end
 
 """
@@ -79,32 +74,20 @@ Metal ndarray representation used in Performance Shaders.
 May not contain more than 16 dimensions.
 """
 function MPSNDArray(device::MTLDevice, desc::MPSNDArrayDescriptor)
-    arrayaddr = @objc [MPSNDArray alloc]::id{MPSNDArray}
-    obj = MPSNDArray(arrayaddr)
-    finalizer(release, obj)
-    @objc [obj::MPSNDArray initWithDevice:device::id{MTLDevice}
-                                 descriptor:desc::id{MPSNDArrayDescriptor}]::id{MPSNDArray}
-    return obj
+    return @objc [[MPSNDArray alloc]::id{MPSNDArray} initWithDevice:device::id{MTLDevice}
+                                               descriptor:desc::id{MPSNDArrayDescriptor}]::MPSNDArray
 end
 
 function MPSNDArray(device::MTLDevice, scalar)
-    arrayaddr = @objc [MPSNDArray alloc]::id{MPSNDArray}
-    obj = MPSNDArray(arrayaddr)
-    finalizer(release, obj)
-    @objc [obj::MPSNDArray initWithDevice:device::id{MTLDevice}
-                                 scalar:scalar::Float64]::id{MPSNDArray}
-    return obj
+    return @objc [[MPSNDArray alloc]::id{MPSNDArray} initWithDevice:device::id{MTLDevice}
+                                               scalar:scalar::Float64]::MPSNDArray
 end
 
 @static if Metal.is_macos(v"15")
     function MPSNDArray(buffer::MTLBuffer, offset::UInt, descriptor::MPSNDArrayDescriptor)
-        arrayaddr = @objc [MPSNDArray alloc]::id{MPSNDArray}
-        obj = MPSNDArray(arrayaddr)
-        finalizer(release, obj)
-        @objc [obj::MPSNDArray initWithBuffer:buffer::id{MTLBuffer}
-                                offset:offset::NSUInteger
-                                descriptor:descriptor::id{MPSNDArrayDescriptor}]::id{MPSNDArray}
-        return obj
+        return @objc [[MPSNDArray alloc]::id{MPSNDArray} initWithBuffer:buffer::id{MTLBuffer}
+                                                   offset:offset::NSUInteger
+                                                   descriptor:descriptor::id{MPSNDArrayDescriptor}]::MPSNDArray
     end
 else
     function MPSNDArray(_::MTLBuffer, _::UInt, _::MPSNDArrayDescriptor)
@@ -183,24 +166,20 @@ synchronizeOnCommandBuffer(ndarr::MPSNDArrayLike, q) =
 
 export MPSNDArrayMultiaryBase
 
-# @objcwrapper immutable=false MPSNDArrayMultiaryBase <: MPSKernel
+# @objcwrapper managed = true MPSNDArrayMultiaryBase <: MPSKernel
 
 export MPSNDArrayMultiaryKernel
 
-# @objcwrapper immutable=false MPSNDArrayMultiaryKernel <: MPSNDArrayMultiaryBase
+# @objcwrapper managed = true MPSNDArrayMultiaryKernel <: MPSNDArrayMultiaryBase
 
 function MPSNDArrayMultiaryKernel(device, sourceCount)
-    kernel = @objc [MPSNDArrayMultiaryKernel alloc]::id{MPSNDArrayMultiaryKernel}
-    obj = MPSNDArrayMultiaryKernel(kernel)
-    finalizer(release, obj)
-    @objc [obj::id{MPSNDArrayMultiaryKernel} initWithDevice:device::id{MTLDevice}
-                                  sourceCount:sourceCount::NSUInteger]::id{MPSNDArrayMultiaryKernel}
-    return obj
+    return @objc [[MPSNDArrayMultiaryKernel alloc]::id{MPSNDArrayMultiaryKernel} initWithDevice:device::id{MTLDevice}
+                                                                           sourceCount:sourceCount::NSUInteger]::MPSNDArrayMultiaryKernel
 end
 
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSNDArrayMultiaryKernelLike, sourceArrays)
     @objc [kernel::id{MPSNDArrayMultiaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
-                                     sourceArrays:sourceArrays::id{NSArray}]::id{MPSNDArray}
+                                                          sourceArrays:sourceArrays::id{NSArray}]::MPSNDArray
 end
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSNDArrayMultiaryKernelLike, sourceArrays, destinationArray)
     @objc [kernel::id{MPSNDArrayMultiaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
@@ -223,19 +202,15 @@ end
 
 export MPSNDArrayUnaryKernel
 
-# @objcwrapper immutable=false MPSNDArrayUnaryKernel <: MPSNDArrayMultiaryKernel
+# @objcwrapper managed = true MPSNDArrayUnaryKernel <: MPSNDArrayMultiaryKernel
 
 function MPSNDArrayUnaryKernel(device)
-    kernel = @objc [MPSNDArrayUnaryKernel alloc]::id{MPSNDArrayUnaryKernel}
-    obj = MPSNDArrayUnaryKernel(kernel)
-    finalizer(release, obj)
-    @objc [obj::id{MPSNDArrayUnaryKernel} initWithDevice:device::id{MTLDevice}]::id{MPSNDArrayUnaryKernel}
-    return obj
+    return @objc [[MPSNDArrayUnaryKernel alloc]::id{MPSNDArrayUnaryKernel} initWithDevice:device::id{MTLDevice}]::MPSNDArrayUnaryKernel
 end
 
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSNDArrayUnaryKernelLike, sourceArray)
     @objc [kernel::id{MPSNDArrayUnaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
-                                     sourceArray:sourceArray::id{MPSNDArray}]::id{MPSNDArray}
+                                                       sourceArray:sourceArray::id{MPSNDArray}]::MPSNDArray
 end
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSNDArrayUnaryKernelLike, sourceArray, destinationArray)
     @objc [kernel::id{MPSNDArrayUnaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
@@ -258,20 +233,16 @@ end
 
 export MPSNDArrayBinaryKernel
 
-# @objcwrapper immutable=false MPSNDArrayBinaryKernel <: MPSNDArrayMultiaryKernel
+# @objcwrapper managed = true MPSNDArrayBinaryKernel <: MPSNDArrayMultiaryKernel
 
 function MPSNDArrayBinaryKernel(device)
-    kernel = @objc [MPSNDArrayBinaryKernel alloc]::id{MPSNDArrayBinaryKernel}
-    obj = MPSNDArrayBinaryKernel(kernel)
-    finalizer(release, obj)
-    @objc [obj::id{MPSNDArrayBinaryKernel} initWithDevice:device::id{MTLDevice}]::id{MPSNDArrayBinaryKernel}
-    return obj
+    return @objc [[MPSNDArrayBinaryKernel alloc]::id{MPSNDArrayBinaryKernel} initWithDevice:device::id{MTLDevice}]::MPSNDArrayBinaryKernel
 end
 
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSNDArrayBinaryKernelLike, primarySourceArray, secondarySourceArray)
     @objc [kernel::id{MPSNDArrayBinaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
-                                     secondarySourceArray:secondarySourceArray::id{MPSNDArray}
-                                     primarySourceArray:primarySourceArray::id{MPSNDArray}]::id{MPSNDArray}
+                                               secondarySourceArray:secondarySourceArray::id{MPSNDArray}
+                                                 primarySourceArray:primarySourceArray::id{MPSNDArray}]::MPSNDArray
 end
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSNDArrayBinaryKernelLike, primarySourceArray, secondarySourceArray, destinationArray)
     @objc [kernel::id{MPSNDArrayBinaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
@@ -295,13 +266,9 @@ end
 #                                      outputStateIsTemporary:outputStateIsTemporary::Bool]::MPSNDArray
 # end
 
-# @objcwrapper immutable=false MPSNDArrayMatrixMultiplication <: MPSNDArrayMultiaryKernel
+# @objcwrapper managed = true MPSNDArrayMatrixMultiplication <: MPSNDArrayMultiaryKernel
 
 function MPSNDArrayMatrixMultiplication(device, sourceCount)
-    kernel = @objc [MPSNDArrayMatrixMultiplication alloc]::id{MPSNDArrayMatrixMultiplication}
-    obj = MPSNDArrayMatrixMultiplication(kernel)
-    finalizer(release, obj)
-    @objc [obj::id{MPSNDArrayMatrixMultiplication} initWithDevice:device::id{MTLDevice}
-                    sourceCount:sourceCount::NSUInteger]::id{MPSNDArrayMatrixMultiplication}
-    return obj
+    return @objc [[MPSNDArrayMatrixMultiplication alloc]::id{MPSNDArrayMatrixMultiplication} initWithDevice:device::id{MTLDevice}
+                                                                                       sourceCount:sourceCount::NSUInteger]::MPSNDArrayMatrixMultiplication
 end

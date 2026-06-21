@@ -4,13 +4,10 @@
 
 export MTLComputePipelineDescriptor
 
-# @objcwrapper immutable=false MTLComputePipelineDescriptor <: NSObject
+# @objcwrapper managed = true MTLComputePipelineDescriptor <: NSObject
 
 function MTLComputePipelineDescriptor()
-    handle = @objc [MTLComputePipelineDescriptor new]::id{MTLComputePipelineDescriptor}
-    obj = MTLComputePipelineDescriptor(handle)
-    finalizer(release, obj)
-    return obj
+    return @objc [MTLComputePipelineDescriptor new]::MTLComputePipelineDescriptor
 end
 
 #
@@ -19,17 +16,15 @@ end
 
 export MTLComputePipelineState
 
-# @objcwrapper immutable=false MTLComputePipelineState <: NSObject
+# @objcwrapper managed = true MTLComputePipelineState <: NSObject
 
 function MTLComputePipelineState(dev::MTLDevice, fun::MTLFunction)
     err = Ref{id{NSError}}(nil)
-    handle = @objc [dev::id{MTLDevice} newComputePipelineStateWithFunction:fun::id{MTLFunction}
-                                       error:err::Ptr{id{NSError}}]::id{MTLComputePipelineState}
-    err[] == nil || throw_error(err[])
+    pipeline = @objc [dev::id{MTLDevice} newComputePipelineStateWithFunction:fun::id{MTLFunction}
+                                          error:err::Ptr{id{NSError}}]::Union{Nothing,MTLComputePipelineState}
+    pipeline === nothing && throw_error(err[])
 
-    obj = MTLComputePipelineState(handle)
-    finalizer(release, obj)
-    return obj
+    return pipeline
 end
 
 # TODO: MTLComputePipelineState(d::MTLDevice, desc::MTLComputePipelineDescriptor, ...)
