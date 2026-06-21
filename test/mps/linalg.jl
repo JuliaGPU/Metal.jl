@@ -1,3 +1,5 @@
+using LinearAlgebra
+
 @testset "mixed-precision matrix matrix multiplication" begin
     N = 10
     rows_a = N
@@ -94,6 +96,57 @@ end
 
         @test Array(buf_c) ≈ truth_c
     end
+end
+
+@testset "MPS linear solvers" begin
+    T = Float32
+    n = 32
+    nrhs = 3
+
+    A = rand(T, n, n)
+    A .+= T(n) .* Matrix{T}(I, n, n)
+    b = rand(T, n)
+    B = rand(T, n, nrhs)
+
+    dA = MtlMatrix(A)
+    db = MtlVector(b)
+    dB = MtlMatrix(B)
+
+    x = MPS.solve_lu(dA, db)
+    X = MPS.solve_lu(dA, dB)
+    @test Array(x) ≈ A \ b rtol=1f-4
+    @test Array(X) ≈ A \ B rtol=1f-4
+    @test Array(dA * x) ≈ b rtol=1f-4
+    @test Array(dA * X) ≈ B rtol=1f-4
+
+    F = lu(dA)
+    xreuse = MPS.solve_lu(F, db; out=copy(db))
+    Xreuse = MPS.solve_lu(F, dB; out=copy(dB))
+    @test Array(xreuse) ≈ A \ b rtol=1f-4
+    @test Array(Xreuse) ≈ A \ B rtol=1f-4
+
+    M = rand(T, n, n)
+    SPD = M'M + T(n) .* Matrix{T}(I, n, n)
+    dSPD = MtlMatrix(SPD)
+    xc = MPS.solve_cholesky(dSPD, db)
+    Xc = MPS.solve_cholesky(dSPD, dB)
+    @test Array(xc) ≈ SPD \ b rtol=1f-4
+    @test Array(Xc) ≈ SPD \ B rtol=1f-4
+
+    C = cholesky(Symmetric(dSPD, :U))
+    xcreuse = MPS.solve_cholesky(C, db; out=copy(db))
+    Xcreuse = MPS.solve_cholesky(C, dB; out=copy(dB))
+    @test Array(xcreuse) ≈ SPD \ b rtol=1f-4
+    @test Array(Xcreuse) ≈ SPD \ B rtol=1f-4
+
+    U = triu(A)
+    L = tril(A)
+    dU = MtlMatrix(U)
+    dL = MtlMatrix(L)
+    @test Array(MPS.solve_triangular(dU, dB; upper=true, unit=false, out=copy(dB))) ≈
+          UpperTriangular(U) \ B rtol=1f-4
+    @test Array(MPS.solve_triangular(dL, dB; upper=false, unit=false, out=copy(dB))) ≈
+          LowerTriangular(L) \ B rtol=1f-4
 end
 
 @testset "topk & topk!" begin

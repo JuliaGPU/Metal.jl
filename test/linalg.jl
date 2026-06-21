@@ -281,6 +281,77 @@ using Metal: storagemode
     @test storagemode(lua.factors) == storagemode(lua.ipiv) == storagemode(A)
 end
 
+@testset "linear solve" begin
+    T = Float32
+    n = 64
+    nrhs = 3
+
+    @testset "$S" for S in (Metal.PrivateStorage, Metal.SharedStorage)
+        A = rand(T, n, n)
+        A .+= T(n) .* Matrix{T}(I, n, n)
+        b = rand(T, n)
+        B = rand(T, n, nrhs)
+
+        dA = MtlMatrix{T,S}(A)
+        db = MtlVector{T,S}(b)
+        dB = MtlMatrix{T,S}(B)
+
+        @test Array(dA \ db) ≈ A \ b rtol=1f-4
+        @test Array(dA \ dB) ≈ A \ B rtol=1f-4
+
+        Ap = T[0 2 1; 1 1 0; 2 0 1]
+        bp = T[1, 2, 3]
+        dAp = MtlMatrix{T,S}(Ap)
+        dbp = MtlVector{T,S}(bp)
+        Fp = lu(dAp)
+        @test Array(Fp \ dbp) ≈ Ap \ bp rtol=1f-4
+        xp = copy(dbp)
+        ldiv!(Fp, xp)
+        @test Array(xp) ≈ Ap \ bp rtol=1f-4
+
+        F = lu(dA)
+        @test Array(F \ db) ≈ A \ b rtol=1f-4
+        @test Array(F \ dB) ≈ A \ B rtol=1f-4
+        x = copy(db)
+        ldiv!(F, x)
+        @test Array(x) ≈ A \ b rtol=1f-4
+
+        M = rand(T, n, n)
+        SPD = M'M + T(n) .* Matrix{T}(I, n, n)
+        dSPD = MtlMatrix{T,S}(SPD)
+        C = cholesky(dSPD)
+        @test Array(C \ db) ≈ SPD \ b rtol=1f-4
+
+        CS = cholesky(Symmetric(dSPD, :L))
+        @test Array(CS \ dB) ≈ SPD \ B rtol=1f-4
+
+        CH = cholesky(Hermitian(dSPD, :U))
+        yc = copy(db)
+        ldiv!(CH, yc)
+        @test Array(yc) ≈ SPD \ b rtol=1f-4
+
+        for (triangle, cpuA) in ((UpperTriangular, triu(A)),
+                                (LowerTriangular, tril(A)),
+                                (UnitUpperTriangular, triu(A)),
+                                (UnitLowerTriangular, tril(A)))
+            dT = triangle(MtlMatrix{T,S}(cpuA))
+            cT = triangle(cpuA)
+            @test Array(dT \ db) ≈ cT \ b rtol=1f-4
+            @test Array(dT \ dB) ≈ cT \ B rtol=1f-4
+            y = copy(db)
+            ldiv!(dT, y)
+            @test Array(y) ≈ cT \ b rtol=1f-4
+        end
+
+        dsing = MtlMatrix{T,S}(T[1 2; 2 4])
+        bsing = MtlVector{T,S}(T[1, 2])
+        @test_throws SingularException dsing \ bsing
+
+        dnonposdef = MtlMatrix{T,S}(T[1 2; 2 1])
+        @test_throws PosDefException cholesky(dnonposdef)
+    end
+end
+
 @testset "transpose" begin
     A = MtlMatrix(rand(Float32, 0, 1024))
     B = Metal.zeros(Float32, 1024, 0)
