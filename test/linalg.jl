@@ -293,13 +293,25 @@ end
     A .+= T(n) .* Matrix{T}(I, n, n)
     b = rand(T, n)
     B = rand(T, n, nrhs)
+    BR = rand(T, nrhs, n)
 
     dA = MtlMatrix(A)
     db = MtlVector(b)
     dB = MtlMatrix(B)
+    dBR = MtlMatrix(BR)
 
     @test Array(dA \ db) ≈ A \ b rtol=1f-4
     @test Array(dA \ dB) ≈ A \ B rtol=1f-4
+
+    Als = rand(T, 8, 7)
+    bls = rand(T, 8)
+    dAls = MtlMatrix(Als)
+    dbls = MtlVector(bls)
+    if Metal.DefaultStorageMode == Metal.PrivateStorage
+        @test_throws ErrorException dAls \ dbls
+    else
+        @test dAls \ dbls ≈ Als \ bls rtol=1f-4
+    end
 
     Ap = T[0 2 1; 1 1 0; 2 0 1]
     bp = T[1, 2, 3]
@@ -340,9 +352,19 @@ end
         cT = triangle(cpuA)
         @test Array(dT \ db) ≈ cT \ b rtol=1f-4
         @test Array(dT \ dB) ≈ cT \ B rtol=1f-4
+        @test Array(transpose(dT) \ db) ≈ transpose(cT) \ b rtol=1f-4
+        @test Array(transpose(dT) \ dB) ≈ transpose(cT) \ B rtol=1f-4
+        @test Array(dBR / dT) ≈ BR / cT rtol=1f-4
+        @test Array(dBR / transpose(dT)) ≈ BR / transpose(cT) rtol=1f-4
         y = copy(db)
         ldiv!(dT, y)
         @test Array(y) ≈ cT \ b rtol=1f-4
+        Y = copy(dBR)
+        rdiv!(Y, dT)
+        @test Array(Y) ≈ BR / cT rtol=1f-4
+        Yt = copy(dBR)
+        rdiv!(Yt, transpose(dT))
+        @test Array(Yt) ≈ BR / transpose(cT) rtol=1f-4
     end
 
     dsing = MtlMatrix(T[1 2; 2 4])

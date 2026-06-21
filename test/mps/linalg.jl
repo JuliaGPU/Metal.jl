@@ -141,12 +141,20 @@ end
 
     U = triu(A)
     L = tril(A)
+    BR = rand(T, nrhs, n)
     dU = MtlMatrix(U)
     dL = MtlMatrix(L)
+    dBR = MtlMatrix(BR)
     @test Array(MPS.solve_triangular(dU, dB; upper=true, unit=false, out=copy(dB))) ≈
           UpperTriangular(U) \ B rtol=1f-4
     @test Array(MPS.solve_triangular(dL, dB; upper=false, unit=false, out=copy(dB))) ≈
           LowerTriangular(L) \ B rtol=1f-4
+    @test Array(MPS.solve_triangular(dU, dB; upper=true, unit=false, transpose=true,
+                                     out=copy(dB))) ≈
+          transpose(UpperTriangular(U)) \ B rtol=1f-4
+    @test Array(MPS.solve_triangular(dU, dBR; upper=true, unit=false, right=true,
+                                     out=copy(dBR))) ≈
+          BR / UpperTriangular(U) rtol=1f-4
 end
 
 @testset "topk & topk!" begin

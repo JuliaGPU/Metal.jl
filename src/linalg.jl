@@ -306,11 +306,12 @@ end
     return B
 end
 
-# square dense solves; non-square problems stay on Base's generic least-squares path.
 function Base.:\(A::MtlMatrix{T}, B::MtlVecOrMat{T}) where {T<:MtlFloat}
-    size(A, 1) == size(A, 2) ||
-        return invoke(\, Tuple{AbstractMatrix, AbstractVecOrMat}, A, B)
-    return MPS.solve_lu(A, B)
+    if size(A, 1) == size(A, 2)
+        return MPS.solve_lu(A, B)
+    else
+        return invoke(Base.:\, Tuple{AbstractMatrix, AbstractVecOrMat}, A, B)
+    end
 end
 
 function LinearAlgebra.ldiv!(F::LU{T,<:MtlMatrix{T}},
@@ -367,6 +368,41 @@ function Base.:\(C::Cholesky{T,<:MtlMatrix{T}},
     return ldiv!(C, copy(B))
 end
 
+@inline function triangular_upper(uplo::AbstractChar)
+    uplo == 'U' && return true
+    uplo == 'L' && return false
+    throw(ArgumentError("invalid triangular storage: $uplo"))
+end
+
+@inline function triangular_unit(diag::AbstractChar)
+    diag == 'U' && return true
+    diag == 'N' && return false
+    throw(ArgumentError("invalid triangular diagonal: $diag"))
+end
+
+@inline function triangular_transpose(tfun::Function)
+    tfun === identity && return false
+    (tfun === transpose || tfun === adjoint) && return true
+    throw(ArgumentError("unsupported triangular operation"))
+end
+
+function LinearAlgebra.generic_trimatdiv!(C::MtlVecOrMat{T}, uploc, isunitc,
+                                          tfun::Function, A::MtlMatrix{T},
+                                          B::MtlVecOrMat{T}) where {T<:MtlFloat}
+    return MPS.solve_triangular(A, B; upper=triangular_upper(uploc),
+                                unit=triangular_unit(isunitc),
+                                transpose=triangular_transpose(tfun), out=C)
+end
+
+function LinearAlgebra.generic_mattridiv!(C::MtlMatrix{T}, uploc, isunitc,
+                                          tfun::Function, A::MtlMatrix{T},
+                                          B::MtlMatrix{T}) where {T<:MtlFloat}
+    return MPS.solve_triangular(B, A; upper=triangular_upper(uploc),
+                                unit=triangular_unit(isunitc),
+                                transpose=triangular_transpose(tfun),
+                                right=true, out=C)
+end
+
 for (triangle, upper, unit) in ((:UpperTriangular, true, false),
                                 (:UnitUpperTriangular, true, true),
                                 (:LowerTriangular, false, false),
@@ -380,6 +416,19 @@ for (triangle, upper, unit) in ((:UpperTriangular, true, false),
         function Base.:\(A::$triangle{T,<:MtlMatrix{T}},
                          B::MtlVecOrMat{T}) where {T<:MtlFloat}
             return ldiv!(A, copy(B))
+        end
+
+        function LinearAlgebra.rdiv!(B::MtlMatrix{T},
+                                     A::$triangle{T,<:MtlMatrix{T}}) where {T<:MtlFloat}
+            return MPS.solve_triangular(parent(A), B; upper=$upper, unit=$unit,
+                                        right=true)
+        end
+
+        function LinearAlgebra.rdiv!(B::MtlMatrix{T},
+                                     A::$triangle{T,<:Union{Transpose{T,<:MtlMatrix{T}},
+                                                            Adjoint{T,<:MtlMatrix{T}}}}) where {T<:MtlFloat}
+            return MPS.solve_triangular(parent(parent(A)), B; upper=$(!upper),
+                                        unit=$unit, transpose=true, right=true)
         end
     end
 end
