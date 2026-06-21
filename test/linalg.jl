@@ -286,70 +286,78 @@ end
     n = 64
     nrhs = 3
 
-    @testset "$S" for S in (Metal.PrivateStorage, Metal.SharedStorage)
-        A = rand(T, n, n)
-        A .+= T(n) .* Matrix{T}(I, n, n)
-        b = rand(T, n)
-        B = rand(T, n, nrhs)
+    # storage mode is transparent to the solve kernels, and CI runs the whole suite
+    # under both the private- and shared-default storage modes, so the numerical tests
+    # just use the default storage. A separate check below pins storage propagation.
+    A = rand(T, n, n)
+    A .+= T(n) .* Matrix{T}(I, n, n)
+    b = rand(T, n)
+    B = rand(T, n, nrhs)
 
-        dA = MtlMatrix{T,S}(A)
-        db = MtlVector{T,S}(b)
-        dB = MtlMatrix{T,S}(B)
+    dA = MtlMatrix(A)
+    db = MtlVector(b)
+    dB = MtlMatrix(B)
 
-        @test Array(dA \ db) ≈ A \ b rtol=1f-4
-        @test Array(dA \ dB) ≈ A \ B rtol=1f-4
+    @test Array(dA \ db) ≈ A \ b rtol=1f-4
+    @test Array(dA \ dB) ≈ A \ B rtol=1f-4
 
-        Ap = T[0 2 1; 1 1 0; 2 0 1]
-        bp = T[1, 2, 3]
-        dAp = MtlMatrix{T,S}(Ap)
-        dbp = MtlVector{T,S}(bp)
-        Fp = lu(dAp)
-        @test Array(Fp \ dbp) ≈ Ap \ bp rtol=1f-4
-        xp = copy(dbp)
-        ldiv!(Fp, xp)
-        @test Array(xp) ≈ Ap \ bp rtol=1f-4
+    Ap = T[0 2 1; 1 1 0; 2 0 1]
+    bp = T[1, 2, 3]
+    dAp = MtlMatrix(Ap)
+    dbp = MtlVector(bp)
+    Fp = lu(dAp)
+    @test Array(Fp \ dbp) ≈ Ap \ bp rtol=1f-4
+    xp = copy(dbp)
+    ldiv!(Fp, xp)
+    @test Array(xp) ≈ Ap \ bp rtol=1f-4
 
-        F = lu(dA)
-        @test Array(F \ db) ≈ A \ b rtol=1f-4
-        @test Array(F \ dB) ≈ A \ B rtol=1f-4
-        x = copy(db)
-        ldiv!(F, x)
-        @test Array(x) ≈ A \ b rtol=1f-4
+    F = lu(dA)
+    @test Array(F \ db) ≈ A \ b rtol=1f-4
+    @test Array(F \ dB) ≈ A \ B rtol=1f-4
+    x = copy(db)
+    ldiv!(F, x)
+    @test Array(x) ≈ A \ b rtol=1f-4
 
-        M = rand(T, n, n)
-        SPD = M'M + T(n) .* Matrix{T}(I, n, n)
-        dSPD = MtlMatrix{T,S}(SPD)
-        C = cholesky(dSPD)
-        @test Array(C \ db) ≈ SPD \ b rtol=1f-4
+    M = rand(T, n, n)
+    SPD = M'M + T(n) .* Matrix{T}(I, n, n)
+    dSPD = MtlMatrix(SPD)
+    C = cholesky(dSPD)
+    @test Array(C \ db) ≈ SPD \ b rtol=1f-4
 
-        CS = cholesky(Symmetric(dSPD, :L))
-        @test Array(CS \ dB) ≈ SPD \ B rtol=1f-4
+    CS = cholesky(Symmetric(dSPD, :L))
+    @test Array(CS \ dB) ≈ SPD \ B rtol=1f-4
 
-        CH = cholesky(Hermitian(dSPD, :U))
-        yc = copy(db)
-        ldiv!(CH, yc)
-        @test Array(yc) ≈ SPD \ b rtol=1f-4
+    CH = cholesky(Hermitian(dSPD, :U))
+    yc = copy(db)
+    ldiv!(CH, yc)
+    @test Array(yc) ≈ SPD \ b rtol=1f-4
 
-        for (triangle, cpuA) in ((UpperTriangular, triu(A)),
-                                (LowerTriangular, tril(A)),
-                                (UnitUpperTriangular, triu(A)),
-                                (UnitLowerTriangular, tril(A)))
-            dT = triangle(MtlMatrix{T,S}(cpuA))
-            cT = triangle(cpuA)
-            @test Array(dT \ db) ≈ cT \ b rtol=1f-4
-            @test Array(dT \ dB) ≈ cT \ B rtol=1f-4
-            y = copy(db)
-            ldiv!(dT, y)
-            @test Array(y) ≈ cT \ b rtol=1f-4
-        end
-
-        dsing = MtlMatrix{T,S}(T[1 2; 2 4])
-        bsing = MtlVector{T,S}(T[1, 2])
-        @test_throws SingularException dsing \ bsing
-
-        dnonposdef = MtlMatrix{T,S}(T[1 2; 2 1])
-        @test_throws PosDefException cholesky(dnonposdef)
+    for (triangle, cpuA) in ((UpperTriangular, triu(A)),
+                            (LowerTriangular, tril(A)),
+                            (UnitUpperTriangular, triu(A)),
+                            (UnitLowerTriangular, tril(A)))
+        dT = triangle(MtlMatrix(cpuA))
+        cT = triangle(cpuA)
+        @test Array(dT \ db) ≈ cT \ b rtol=1f-4
+        @test Array(dT \ dB) ≈ cT \ B rtol=1f-4
+        y = copy(db)
+        ldiv!(dT, y)
+        @test Array(y) ≈ cT \ b rtol=1f-4
     end
+
+    dsing = MtlMatrix(T[1 2; 2 4])
+    bsing = MtlVector(T[1, 2])
+    @test_throws SingularException dsing \ bsing
+
+    dnonposdef = MtlMatrix(T[1 2; 2 1])
+    @test_throws PosDefException cholesky(dnonposdef)
+
+    # outputs should inherit the storage mode of the inputs
+    altStorage = Metal.DefaultStorageMode != Metal.PrivateStorage ? Metal.PrivateStorage : Metal.SharedStorage
+    aA = MtlMatrix{T,altStorage}(A)
+    ab = MtlVector{T,altStorage}(b)
+    @test storagemode(aA \ ab) == altStorage
+    @test storagemode(cholesky(MtlMatrix{T,altStorage}(SPD)).factors) == altStorage
 end
 
 @testset "transpose" begin
