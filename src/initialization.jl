@@ -85,6 +85,22 @@ function __init__()
         push!(Base.active_repl_backend.ast_transforms, synchronize_metal_tasks)
     end
 
+    # an open batch holds a live command encoder; releasing it from a finalizer
+    # without `endEncoding` aborts Metal. end it and drop its uncommitted buffer
+    # at exit, without committing or waiting on the GPU.
+    atexit() do
+        has_active_batched_queues() || return
+        try
+            @autoreleasepool for bq in active_batched_queues()
+                cmdbuf = bq.cmdbuf
+                end_encoder!(bq)
+                cmdbuf === nothing || reset_open_cmdbuf!(bq, cmdbuf)
+            end
+        catch err
+            @error "Failed to close open batched command queues at exit" exception=(err, catch_backtrace())
+        end
+    end
+
     initialization_world[] = Base.get_world_counter()
 end
 
