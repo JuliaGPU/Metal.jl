@@ -28,6 +28,11 @@ end
 
 max_buffer_length(heap::MTLHeap) = max_buffer_length(heap.device)
 
+function checked_buffer(ptr::id{MTLBuffer})
+    iszero(UInt(ptr)) && throw(OutOfMemoryError())
+    return MTLBuffer(ptr)
+end
+
 function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer;
                    storage::Type{<:StorageMode}=PrivateStorage, hazard_tracking=DefaultTracking,
                    cache_mode=DefaultCPUCache)
@@ -36,7 +41,7 @@ function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer;
     @assert 0 < bytesize <= max_buffer_length(dev)
     ptr = alloc_buffer(dev, bytesize, opts)
 
-    return MTLBuffer(ptr)
+    return checked_buffer(ptr)
 end
 
 function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
@@ -52,7 +57,7 @@ function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
         alloc_buffer(dev, bytesize, opts, ptr)
     end
 
-    return MTLBuffer(ptr)
+    return checked_buffer(ptr)
 end
 
 page_size() = @memoize begin
