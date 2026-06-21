@@ -50,7 +50,7 @@ desc.outputURL = NSFileURL(path)
 queue = MTLCommandQueue(device())
 default_scope = manager.defaultCaptureScope
 @test default_scope === nothing
-new_scope = MTLCaptureScope(@objc [manager::id{MTLCaptureManager} newCaptureScopeWithCommandQueue:queue::id{MTLCommandQueue}]::id{MTLCaptureScope})
+new_scope = MTLCaptureScope(queue, manager)
 @test new_scope.commandQueue == queue
 @test new_scope.device == device()
 @test new_scope.label === nothing
@@ -74,7 +74,6 @@ Metal.@sync @metal threads=4 tester(bufferA)
 stopCapture(manager)
 @test manager.isCapturing == false
 @test isdir(path)
-release(new_scope)
 
 # Profile Macro
 @testset "macro" begin

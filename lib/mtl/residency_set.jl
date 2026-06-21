@@ -1,9 +1,7 @@
 export MTLResidencySet, MTLResidencySetDescriptor
 
 function MTLResidencySetDescriptor()
-    desc = @objc [MTLResidencySetDescriptor alloc]::id{MTLResidencySetDescriptor}
-    obj = MTLResidencySetDescriptor(desc)
-    return obj
+    return @objc [MTLResidencySetDescriptor alloc]::MTLResidencySetDescriptor
 end
 
 function MTLResidencySet(device::MTLDevice, desc::MTLResidencySetDescriptor)
