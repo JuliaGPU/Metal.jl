@@ -35,6 +35,8 @@ function MTLBuffer(dev::Union{MTLDevice,MTLHeap}, bytesize::Integer;
 
     @assert 0 < bytesize <= max_buffer_length(dev)
     ptr = alloc_buffer(dev, bytesize, opts)
+    # Metal signals allocation failure by returning nil
+    iszero(UInt(ptr)) && throw(OutOfMemoryError())
 
     return MTLBuffer(ptr)
 end
@@ -51,6 +53,8 @@ function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
     else
         alloc_buffer(dev, bytesize, opts, ptr)
     end
+    # Metal signals allocation failure by returning nil
+    iszero(UInt(ptr)) && throw(OutOfMemoryError())
 
     return MTLBuffer(ptr)
 end

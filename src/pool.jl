@@ -50,8 +50,10 @@ Note that `PrivateStorage` buffers can't be directly accessed from the CPU, ther
 use this option if you pass a ptr to initialize the memory.
 """
 function alloc(dev::Union{MTLDevice,MTLHeap}, sz::Integer, args...; kwargs...)
+    maybe_collect(dev)
+
     time = Base.@elapsed begin
-        buf = @autoreleasepool MTLBuffer(dev, sz, args...; kwargs...)
+        buf = alloc_buffer_with_retry(dev, sz, args...; kwargs...)
     end
 
     Base.@atomic alloc_stats.alloc_count + 1
@@ -59,6 +61,17 @@ function alloc(dev::Union{MTLDevice,MTLHeap}, sz::Integer, args...; kwargs...)
     Base.@atomic alloc_stats.total_time + time
 
     return buf
+end
+
+function alloc_buffer_with_retry(dev::Union{MTLDevice,MTLHeap}, sz::Integer, args...; kwargs...)
+    try
+        return @autoreleasepool MTLBuffer(dev, sz, args...; kwargs...)
+    catch err
+        err isa OutOfMemoryError || rethrow()
+        GC.gc(true)
+        device_synchronize()
+        return @autoreleasepool MTLBuffer(dev, sz, args...; kwargs...)
+    end
 end
 
 """

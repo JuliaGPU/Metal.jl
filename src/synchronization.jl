@@ -89,6 +89,7 @@ Wait for currently committed GPU work on `queue` to finish.
     bq = batched_queue(queue)
     flush!(bq)
     queue = bq.queue
+    maybe_collect(queue.device; will_block=true)
 
     # flush any pending log handlers from logging-enabled kernels on this queue
     # (Metal delivers logs asynchronously; `wait_completed` on the specific cmdbuf
@@ -123,6 +124,7 @@ Synchronize all committed GPU work across all global queues.
 """
 function device_synchronize()
     flush_batched_queues!()
+    maybe_collect(device(); will_block=true)
 
     for queue in keys(global_queues)
         drain_logging_cmdbufs!(raw_queue(queue))

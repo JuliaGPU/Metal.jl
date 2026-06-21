@@ -31,6 +31,8 @@ full_str = sprint(io->show(io, MIME"text/plain"(), dev))
 @test dev.maxBufferLength isa Integer
 
 @test dev.currentAllocatedSize isa Integer
+@test Metal.total_memory(dev) == Int(dev.recommendedMaxWorkingSetSize)
+@test Metal.free_memory(dev) == max(Metal.total_memory(dev) - Int(dev.currentAllocatedSize), 0)
 
 @test is_m1(dev) isa Bool
 @test is_m2(dev) isa Bool
