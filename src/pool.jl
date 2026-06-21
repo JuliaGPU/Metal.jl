@@ -71,7 +71,7 @@ function free(buf::MTLBuffer)
     sz::Int = buf.length
 
     time = Base.@elapsed begin
-        MTL.release(buf)
+        Foundation.release(buf)
     end
 
     Base.@atomic alloc_stats.free_count + 1

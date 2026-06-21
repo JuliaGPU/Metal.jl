@@ -17,13 +17,6 @@ using ..Metal
 # Import the bindings that are not used in MTL for backward compatibility
 import ..Metal: StorageMode, SharedStorage, ManagedStorage, PrivateStorage, Memoryless, CPUStorage
 
-# Metal APIs generally expect to be running under an autorelease pool.
-# In most cases, we handle this in the code calling into the MTL module,
-# however, finalizers are out of the caller's control, so we need to
-# ensure here already that they are running under an autorelease pool.
-release(obj) = @autoreleasepool unsafe=true Foundation.release(obj)
-Foundation.set_managed_release!(release)
-
 function throw_error(err::id{NSError})
     # NSError arrives through an `error:` out-parameter, not as an Objective-C
     # return value, so nullable ARC return handling cannot retain it for us.
