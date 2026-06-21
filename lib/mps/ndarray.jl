@@ -9,11 +9,9 @@ export MPSNDArrayDescriptor
 function MPSNDArrayDescriptor(dataType::DataType, dimensionCount, dimensionSizes::Ptr)
     1 <= dimensionCount <= 16 || throw(ArgumentError("`dimensionCount` must be between 1 and 16 inclusive"))
 
-    desc = @objc [MPSNDArrayDescriptor descriptorWithDataType:dataType::MPSDataType
-                                      dimensionCount:dimensionCount::NSUInteger
-                                      dimensionSizes:dimensionSizes::Ptr{NSUInteger}]::id{MPSNDArrayDescriptor}
-    obj = MPSNDArrayDescriptor(desc)
-    return obj
+    return @objc [MPSNDArrayDescriptor descriptorWithDataType:dataType::MPSDataType
+                                               dimensionCount:dimensionCount::NSUInteger
+                                               dimensionSizes:dimensionSizes::Ptr{NSUInteger}]::MPSNDArrayDescriptor
 end
 
 function MPSNDArrayDescriptor(dataType::DataType, shape::DenseVector{T}) where {T<:Union{Int,UInt}}
@@ -44,8 +42,7 @@ export MPSNDArray
 
 @static if Metal.is_macos(v"15")
     function userBuffer(ndarr::MPSNDArrayLike)::Union{Nothing, MTLBuffer}
-        res = @objc [ndarr::id{MPSNDArray} userBuffer]::id{MTLBuffer}
-        return res == nil ? nothing : MTLBuffer(res)
+        return @objc [ndarr::id{MPSNDArray} userBuffer]::Union{Nothing,MTLBuffer}
     end
 end
 
@@ -53,9 +50,8 @@ function resourceSize(ndarr::MPSNDArrayLike)
     return @objc [ndarr::id{MPSNDArray} resourceSize]::NSUInteger
 end
 
-function descriptor(ndarr::MPSNDArrayLike)::MPSNDArrayDescriptor
-    res = @objc [ndarr::id{MPSNDArray} descriptor]::id{MPSNDArrayDescriptor}
-    return res == nil ? nothing : MPSNDArrayDescriptor(res)
+function descriptor(ndarr::MPSNDArrayLike)::Union{Nothing,MPSNDArrayDescriptor}
+    return @objc [ndarr::id{MPSNDArray} descriptor]::Union{Nothing,MPSNDArrayDescriptor}
 end
 
 function Base.size(ndarr::MPSNDArrayLike)
@@ -66,9 +62,8 @@ end
 # @objcwrapper managed = true MPSTemporaryNDArray <: MPSNDArray
 
 function MPSTemporaryNDArray(cmdbuf::MTLCommandBufferLike, descriptor::MPSNDArrayDescriptor)
-    obj = @objc [MPSTemporaryNDArray temporaryNDArrayWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
-                                 descriptor:descriptor::id{MPSNDArrayDescriptor}]::id{MPSTemporaryNDArray}
-    return MPSTemporaryNDArray(obj)
+    return @objc [MPSTemporaryNDArray temporaryNDArrayWithCommandBuffer:cmdbuf::id{MTLCommandBuffer}
+                                                             descriptor:descriptor::id{MPSNDArrayDescriptor}]::MPSTemporaryNDArray
 end
 
 """
@@ -184,7 +179,7 @@ end
 
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSNDArrayMultiaryKernelLike, sourceArrays)
     @objc [kernel::id{MPSNDArrayMultiaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
-                                     sourceArrays:sourceArrays::id{NSArray}]::id{MPSNDArray}
+                                                          sourceArrays:sourceArrays::id{NSArray}]::MPSNDArray
 end
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSNDArrayMultiaryKernelLike, sourceArrays, destinationArray)
     @objc [kernel::id{MPSNDArrayMultiaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
@@ -215,7 +210,7 @@ end
 
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSNDArrayUnaryKernelLike, sourceArray)
     @objc [kernel::id{MPSNDArrayUnaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
-                                     sourceArray:sourceArray::id{MPSNDArray}]::id{MPSNDArray}
+                                                       sourceArray:sourceArray::id{MPSNDArray}]::MPSNDArray
 end
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSNDArrayUnaryKernelLike, sourceArray, destinationArray)
     @objc [kernel::id{MPSNDArrayUnaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
@@ -246,8 +241,8 @@ end
 
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSNDArrayBinaryKernelLike, primarySourceArray, secondarySourceArray)
     @objc [kernel::id{MPSNDArrayBinaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
-                                     secondarySourceArray:secondarySourceArray::id{MPSNDArray}
-                                     primarySourceArray:primarySourceArray::id{MPSNDArray}]::id{MPSNDArray}
+                                               secondarySourceArray:secondarySourceArray::id{MPSNDArray}
+                                                 primarySourceArray:primarySourceArray::id{MPSNDArray}]::MPSNDArray
 end
 function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSNDArrayBinaryKernelLike, primarySourceArray, secondarySourceArray, destinationArray)
     @objc [kernel::id{MPSNDArrayBinaryKernel} encodeToCommandBuffer:cmdbuf::id{MTLCommandBuffer}
