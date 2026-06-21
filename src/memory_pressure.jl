@@ -53,22 +53,7 @@ end
 memory_pressure_device(dev::MTLDevice) = dev
 memory_pressure_device(heap::MTLHeap) = heap.device
 
-const _early_gc = Ref{Union{Nothing,Bool}}(nothing)
-
-function early_gc()
-    enabled = _early_gc[]
-    if enabled === nothing
-        enabled = parse(Bool, get(ENV, "JULIA_METAL_GC_EARLY", "true"))
-        if ccall(:jl_generating_output, Cint, ()) == 0
-            _early_gc[] = enabled
-        end
-    end
-    return enabled
-end
-
 function maybe_collect(dev::Union{MTLDevice,MTLHeap}=device(); will_block::Bool=false)
-    early_gc() || return
-
     dev = memory_pressure_device(dev)
     working_set = working_set_size(dev)
     working_set == 0 && return

@@ -32,7 +32,6 @@ Sys.isapple() && @setup_workload begin
     Base.@lock batched_queues_lock empty!(batched_queues)
     empty!(queue_residency_sets)
     Base.@lock memory_pressure_stats_lock empty!(_memory_pressure_stats)
-    _early_gc[] = nothing
     empty!(device_malloc_bufs)
     empty!(MTL.last_committed_per_queue)
     empty!(device_exception_info)

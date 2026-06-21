@@ -53,7 +53,6 @@ function __init__()
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     precompiling && return
 
-    _early_gc[] = nothing
     MTL.submit_hook[] = flush_open_batch
 
     if !Sys.isapple() || Sys.ARCH != :aarch64

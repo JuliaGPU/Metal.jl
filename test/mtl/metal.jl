@@ -34,24 +34,6 @@ full_str = sprint(io->show(io, MIME"text/plain"(), dev))
 @test Metal.total_memory(dev) == Int(dev.recommendedMaxWorkingSetSize)
 @test Metal.free_memory(dev) == max(Metal.total_memory(dev) - Int(dev.currentAllocatedSize), 0)
 
-let old_env = get(ENV, "JULIA_METAL_GC_EARLY", nothing),
-    old_cache = Metal._early_gc[]
-    try
-        delete!(ENV, "JULIA_METAL_GC_EARLY")
-        Metal._early_gc[] = nothing
-        @test Metal.early_gc()
-
-        ENV["JULIA_METAL_GC_EARLY"] = "false"
-        Metal._early_gc[] = nothing
-        @test !Metal.early_gc()
-        @test Metal._early_gc[] === false
-    finally
-        old_env === nothing ? delete!(ENV, "JULIA_METAL_GC_EARLY") :
-                              (ENV["JULIA_METAL_GC_EARLY"] = old_env)
-        Metal._early_gc[] = old_cache
-    end
-end
-
 @test is_m1(dev) isa Bool
 @test is_m2(dev) isa Bool
 @test is_m3(dev) isa Bool
