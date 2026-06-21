@@ -52,11 +52,13 @@ function nonblocking_synchronization(cmdbuf::MTL.MTLCommandBufferLike)
     sentinel = MTLCommandBuffer(cmdbuf.commandQueue)
     done = Base.AsyncCondition()
     on_completed(sentinel, done)
-    commit!(sentinel)
+    # Private sentinel: do not store it in last_committed before releasing it.
+    @objc [sentinel::id{MTLCommandBuffer} commit]::Nothing
     try
         wait(done)
     finally
         close(done)
+        Foundation.release(sentinel)
     end
     return
 end
