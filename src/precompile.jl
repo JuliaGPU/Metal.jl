@@ -19,6 +19,17 @@ Sys.isapple() && @setup_workload begin
             a = MtlArray(h)
             Array(a)
         end
+
+        # exercise real computational kernels, not just the empty identity kernel
+        let a = MtlArray([1, 2, 3])
+            a .+ 1
+            synchronize()
+        end
+        let a = MtlArray(Float32[1, 2, 3])
+            a .+ 1f0
+            sum(a)
+            synchronize()
+        end
     end
 
     # Caches populated by the workload hold ObjectiveC handles whose underlying
