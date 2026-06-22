@@ -29,6 +29,13 @@ function castTensor(graph::MPSGraph, tensor::MPSGraphTensor, toType, name = "cas
                                       name:name::id{NSString}]::MPSGraphTensor
 end
 
+function reshapeTensor(graph::MPSGraph, tensor::MPSGraphTensor, shape::MPSShape,
+                       name = "reshape")
+    @objc [graph::id{MPSGraph} reshapeTensor:tensor::id{MPSGraphTensor}
+                                   withShape:shape::id{MPSShape}
+                                        name:name::id{NSString}]::MPSGraphTensor
+end
+
 # uses the swift name
 complexConstant(graph::MPSGraph, n::Number, dataType) = complexConstant(graph::MPSGraph, reim(n)..., dataType)
 function complexConstant(graph::MPSGraph, realPart::Number, imaginaryPart::Number, dataType)

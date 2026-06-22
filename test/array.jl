@@ -643,6 +643,29 @@ end
     end
 end
 
+@testset "reduced dimensions" begin
+    reduce_input = reshape(Float32.(1:24) ./ 10, 3, 4, 2)
+    for alg in (:native, :MPS), dims in 1:3
+        @with (Metal.reduce_alg => alg) begin
+            @test Array(sum(MtlArray(reduce_input); dims)) ≈
+                sum(reduce_input; dims)
+            @test Array(prod(MtlArray(reduce_input); dims)) ≈
+                prod(reduce_input; dims)
+            @test Array(maximum(MtlArray(reduce_input); dims)) ≈
+                maximum(reduce_input; dims)
+            @test Array(minimum(MtlArray(reduce_input); dims)) ≈
+                minimum(reduce_input; dims)
+        end
+    end
+
+    @with (Metal.reduce_alg => :MPS) begin
+        int_input = reshape(Int32.(1:12), 3, 4)
+        @test Array(sum(MtlArray(int_input); dims=2)) == sum(int_input; dims=2)
+        @test Array(sum(abs2, MtlArray(reduce_input); dims=2)) ≈
+            sum(abs2, reduce_input; dims=2)
+    end
+end
+
 @testset "findall" begin
     # 1D
     @test testf(x->findall(x), rand(Bool, 1000))
