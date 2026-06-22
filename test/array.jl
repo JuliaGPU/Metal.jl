@@ -1,3 +1,5 @@
+using ScopedValues
+
 STORAGEMODES = [Metal.PrivateStorage, Metal.SharedStorage]
 
 let arr = MtlVector{Int}(undef, 1)
@@ -614,6 +616,31 @@ end
     # specialized
     @test testf(cumsum, rand(Float32, 2))
     @test testf(cumprod, rand(Float32, 2))
+
+    scan_input = reshape(Float32[2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37], 3, 4)
+    product_input = scan_input ./ 10
+    for alg in (:native, :MPS), dims in 1:2
+        @with (Metal.scan_alg => alg) begin
+            @test Array(accumulate(+, MtlArray(scan_input); dims)) ≈
+                accumulate(+, scan_input; dims)
+            @test Array(accumulate(*, MtlArray(product_input); dims)) ≈
+                accumulate(*, product_input; dims)
+            @test Array(accumulate(max, MtlArray(scan_input); dims)) ≈
+                accumulate(max, scan_input; dims)
+            @test Array(accumulate(min, MtlArray(scan_input); dims)) ≈
+                accumulate(min, scan_input; dims)
+            @test Array(cumsum(MtlArray(scan_input); dims)) ≈ cumsum(scan_input; dims)
+            @test Array(cumprod(MtlArray(product_input); dims)) ≈
+                cumprod(product_input; dims)
+        end
+    end
+
+    @with (Metal.scan_alg => :MPS) begin
+        int_input = Int32[1, 2, 3, 4]
+        @test Array(accumulate(+, MtlArray(int_input))) == accumulate(+, int_input)
+        @test Array(accumulate(+, MtlArray(scan_input); dims=1, init=1.0f0)) ≈
+            accumulate(+, scan_input; dims=1, init=1.0f0)
+    end
 end
 
 @testset "findall" begin

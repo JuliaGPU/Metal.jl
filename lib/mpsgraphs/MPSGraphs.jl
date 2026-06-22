@@ -51,5 +51,6 @@ include("random.jl")
 include("matmul.jl")
 include("fft.jl")
 include("sort.jl")
+include("scan.jl")
 
 end
