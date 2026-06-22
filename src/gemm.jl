@@ -21,6 +21,10 @@
 # LinearAlgebra wrapper chars for Symmetric/Hermitian, upper/lowercase = upper/lower
 # triangle stored) applied to each operand.
 
+const MtlMatrixRangeView{T} =
+    SubArray{T,2,<:MtlArray{T},<:Tuple{Vararg{Union{Base.RangeIndex,Base.ReshapedUnitRange}}}}
+const MtlMatrixOperand{T} = Union{MtlMatrix{T},MtlMatrixRangeView{T}}
+
 ## device-side operand access (transpose / conjugate / symmetric gather applied)
 
 # element (i, j) of Symmetric/Hermitian(M), reading only the stored triangle
@@ -332,7 +336,10 @@ end
 # Whether `gemm_tensor!` can compute `C = α·op(A)·op(B) + β·C` for these operands: the kernel
 # only realizes the plain `C = A*B` (no transpose, α=1, β=0) for a Metal4 device and a
 # supported eltype, with dims that tile evenly.
-function supports_tensor_matmul(C, A, B, cA::Char, cB::Char, alpha::Number, beta::Number)
+@inline supports_tensor_matmul(C, A, B, cA::Char, cB::Char, alpha::Number, beta::Number) = false
+
+function supports_tensor_matmul(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
+                                cA::Char, cB::Char, alpha::Number, beta::Number)
     tensor_matmul_capable() || return false
     gemm_tensor_eltype(eltype(A), eltype(B), eltype(C)) || return false
     (cA === 'N' && cB === 'N') || return false
@@ -445,7 +452,8 @@ caller's responsibility (see `supports_simd_matmul`/`supports_tensor_matmul`); t
 kernel never handles wrapper chars (it requires plain `'N'`/`'N'` operands), while the simd
 and scalar kernels gather elementwise through `opA`/`opB` and handle all of them.
 """
-function gemm!(C::MtlMatrix, tA::Char, tB::Char, A::MtlMatrix, B::MtlMatrix,
+function gemm!(C::MtlMatrix, tA::Char, tB::Char,
+               A::MtlMatrixOperand, B::MtlMatrixOperand,
                alpha::Number, beta::Number; kernel::Symbol = :auto)
     M = size(C, 1); N = size(C, 2)
     K = (tA === 'T' || tA === 'C') ? size(A, 1) : size(A, 2)
@@ -466,7 +474,11 @@ function gemm!(C::MtlMatrix, tA::Char, tB::Char, A::MtlMatrix, B::MtlMatrix,
     # `:auto` picks the Metal 4 tensor-ops fast path when the device and operands allow it,
     # then the portable simdgroup kernel for floats, then the scalar fallback; an
     # explicit `kernel` forces one of them.
-    if kernel === :tensor || (kernel === :auto && supports_tensor_matmul(C, A, B, tA, tB, alpha, beta))
+    if kernel === :tensor
+        supports_tensor_matmul(C, A, B, tA, tB, alpha, beta) ||
+            error("tensor-ops GEMM is not supported for these operands")
+        gemm_tensor!(C, A, B, alpha, beta, tA, tB)
+    elseif kernel === :auto && supports_tensor_matmul(C, A, B, tA, tB, alpha, beta)
         gemm_tensor!(C, A, B, alpha, beta, tA, tB)
     elseif kernel === :simd || (kernel === :auto && supports_simd_matmul(C, A, B, tA, tB, alpha, beta))
         gemm_simd!(C, A, B, alpha, beta, tA, tB)
