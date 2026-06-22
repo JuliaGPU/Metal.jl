@@ -94,6 +94,31 @@ end
     @test Array(mtl_view_c) ≈ view_c
 end
 
+@testset "matrix multiplication of range views" begin
+    x = ones(Float32, 2, 2)
+    y = ones(Float32, 4, 2)
+    dx = MtlArray(x)
+    dy = MtlArray(y)
+    @test Array(dx * view(dy, 1:2, :)) ≈ x * view(y, 1:2, :)
+
+    a = rand(Float32, 4, 3)
+    b = rand(Float32, 3, 5)
+    da = MtlArray(a)
+    db = MtlArray(b)
+    av = view(da, 2:3, :)
+    bv = view(db, :, 2:4)
+
+    for alg in (:auto, :simd, :scalar)
+        C = MtlArray(zeros(Float32, 2, 5))
+        @with (Metal.matmul_alg => alg) mul!(C, av, db)
+        @test Array(C) ≈ view(a, 2:3, :) * b
+
+        C = MtlArray(zeros(Float32, 4, 3))
+        @with (Metal.matmul_alg => alg) mul!(C, da, bv)
+        @test Array(C) ≈ a * view(b, :, 2:4)
+    end
+end
+
 @testset "native GEMM" begin
     op(M, t) = t == 'N' ? M : t == 'C' ? adjoint(M) : transpose(M)
     mk(T, sz) = T <: Integer ? rand(T(1):T(4), sz...) : rand(T, sz...)

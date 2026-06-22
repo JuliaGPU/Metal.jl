@@ -105,6 +105,64 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     end
 end
 
+LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB,
+                                 A::MtlMatrixOperand, B::MtlMatrixOperand,
+                                 _add::MulAddMul) =
+    LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
+@autoreleasepool function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB,
+                                                           A::MtlMatrixOperand,
+                                                           B::MtlMatrixOperand,
+                                                           alpha::Number, beta::Number)
+    mA, nA = LinearAlgebra.lapack_size(tA, A)
+    mB, nB = LinearAlgebra.lapack_size(tB, B)
+
+    if nA != mB
+        throw(DimensionMismatch("A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
+    end
+
+    if C === A || B === C
+        throw(ArgumentError("output matrix must not be aliased with input matrix"))
+    end
+
+    if mA == 0 || nA == 0 || nB == 0
+        if size(C) != (mA, nB)
+            throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
+        end
+    end
+
+    alg = matmul_alg[]
+    if alg === :native || alg === :auto || alg === :simd || alg === :scalar || alg === :tensor
+        is_gemm_char(tA) && is_gemm_char(tB) || matmul_alg_error(alg, eltype(A), eltype(C), false)
+        cA = gemm_char(tA); cB = gemm_char(tB)
+        if alg === :simd
+            supports_simd_matmul(C, A, B, cA, cB, alpha, beta) ||
+                matmul_alg_error(alg, eltype(A), eltype(C), false)
+        elseif alg === :tensor
+            supports_tensor_matmul(C, A, B, cA, cB, alpha, beta) ||
+                matmul_alg_error(alg, eltype(A), eltype(C), false)
+        end
+        kernel = (alg === :simd || alg === :scalar || alg === :tensor) ? alg : :auto
+        gemm!(C, cA, cB, A, B, alpha, beta; kernel)
+    elseif alg === :GPUArrays
+        GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
+    elseif alg === :MPS || alg === :MPSGraph
+        matmul_alg_error(alg, eltype(A), eltype(C), false)
+    else
+        error(":$alg is not a valid matmul algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`, `:native`, `:simd`, `:scalar`, `:tensor`")
+    end
+end
+
+if isdefined(LinearAlgebra, :generic_matmatmul_wrapper!)
+    function LinearAlgebra.generic_matmatmul_wrapper!(C::MtlMatrix{T},
+                                                      tA::AbstractChar, tB::AbstractChar,
+                                                      A::MtlMatrixOperand{T},
+                                                      B::MtlMatrixOperand{T},
+                                                      alpha::Number, beta::Number,
+                                                      val::LinearAlgebra.BlasFlag.SyrkHerkGemm) where {T<:LinearAlgebra.BlasFloat}
+        LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, alpha, beta)
+    end
+end
+
 LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, _add::MulAddMul) =
     LinearAlgebra.generic_matvecmul!(C, tA, A, B, _add.alpha, _add.beta)
 @autoreleasepool function LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar,
