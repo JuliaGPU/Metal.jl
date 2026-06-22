@@ -45,13 +45,6 @@ function reductionMaximumWithTensor(graph::MPSGraph, tensor::MPSGraphTensor,
                                                      name:name::id{NSString}]::MPSGraphTensor
 end
 
-function reshapeTensor(graph::MPSGraph, tensor::MPSGraphTensor, shape::MPSShape,
-                       name = "reshape")
-    @objc [graph::id{MPSGraph} reshapeTensor:tensor::id{MPSGraphTensor}
-                                   withShape:shape::id{MPSShape}
-                                        name:name::id{NSString}]::MPSGraphTensor
-end
-
 function reverseTensor(graph::MPSGraph, tensor::MPSGraphTensor, axes::Vector{Int},
                        name = "reverse")
     @objc [graph::id{MPSGraph} reverseTensor:tensor::id{MPSGraphTensor}
