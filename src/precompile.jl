@@ -20,15 +20,25 @@ Sys.isapple() && @setup_workload begin
             Array(a)
         end
 
-        # exercise real computational kernels, not just the empty identity kernel
-        let a = MtlArray([1, 2, 3])
-            a .+ 1
-            synchronize()
-        end
-        let a = MtlArray(Float32[1, 2, 3])
-            a .+ 1f0
-            sum(a)
-            synchronize()
+        # exercise real computational kernels, not just the empty identity kernel.
+        #
+        # only do so on 1.11+: unlike the identity kernel, broadcast and reduction kernels
+        # reuse the same generic `Base` methods that host code does. before Julia 1.11
+        # GPUCompiler cannot tag its inferred `CodeInstance`s with a cache owner
+        # (`CodeInstance.owner` does not exist yet), so the device-context results for
+        # those shared methods leak into the package image and shadow the host versions,
+        # crashing the host with unresolved `julia.air.*` intrinsics when it later
+        # compiles the corresponding `Base` method.
+        @static if VERSION >= v"1.11"
+            let a = MtlArray([1, 2, 3])
+                a .+ 1
+                synchronize()
+            end
+            let a = MtlArray(Float32[1, 2, 3])
+                a .+ 1f0
+                sum(a)
+                synchronize()
+            end
         end
     end
 
