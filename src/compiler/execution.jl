@@ -4,7 +4,7 @@ export @metal
 ## high-level @metal interface
 
 const MACRO_KWARGS = [:launch]
-const COMPILER_KWARGS = [:kernel, :name, :always_inline, :debug_level, :macos, :air, :metal]
+const COMPILER_KWARGS = [:kernel, :name, :always_inline, :debug_level, :opt_level, :macos, :air, :metal]
 const LAUNCH_KWARGS = [:groups, :threads, :queue, :submit]
 
 """
@@ -24,6 +24,8 @@ There are a few keyword arguments that influence the behavior of `@metal`:
   kernel object should be launched by calling it and passing arguments again.
 - `name`: the name of the kernel in the generated code. Defaults to an automatically-
   generated name.
+- `opt_level`: the optimization level used when compiling the kernel, an integer from `0`
+  to `3`. Defaults to `2`, independent of the host session's `-O` level.
 - `queue`: the command queue to use for this kernel. Defaults to the global command queue.
 - `submit`: whether to submit the current command batch immediately after encoding this
   kernel. Defaults to `false`.
