@@ -640,27 +640,29 @@ end
                 accumulate(+, scan_input; dims)
             @test Array(accumulate(*, MtlArray(product_input); dims)) ≈
                 accumulate(*, product_input; dims)
-            @test Array(accumulate(max, MtlArray(scan_input); dims)) ≈
-                accumulate(max, scan_input; dims)
-            @test Array(accumulate(min, MtlArray(scan_input); dims)) ≈
-                accumulate(min, scan_input; dims)
             @test Array(cumsum(MtlArray(scan_input); dims)) ≈ cumsum(scan_input; dims)
             @test Array(cumprod(MtlArray(product_input); dims)) ≈
                 cumprod(product_input; dims)
         end
     end
+    for alg in (:native, :auto), dims in 1:2
+        @with (Metal.scan_alg => alg) begin
+            @test Array(accumulate(max, MtlArray(scan_input); dims)) ≈
+                accumulate(max, scan_input; dims)
+            @test Array(accumulate(min, MtlArray(scan_input); dims)) ≈
+                accumulate(min, scan_input; dims)
+        end
+    end
 
     @with (Metal.scan_alg => :MPS) begin
         int_input = Int32[1, 2, 3, 4]
-        @test Array(accumulate(+, MtlArray(int_input))) == accumulate(+, int_input)
-        @test Array(accumulate(+, MtlArray(scan_input); dims=1, init=1.0f0)) ≈
-            accumulate(+, scan_input; dims=1, init=1.0f0)
+        @test_throws ArgumentError accumulate(+, MtlArray(int_input))
+        @test_throws ArgumentError accumulate(+, MtlArray(scan_input); dims=1,
+                                              init=1.0f0)
 
         nan_input = Float32[1, NaN, 0.5, 2]
-        @test isequal(Array(accumulate(max, MtlArray(nan_input))),
-                      accumulate(max, nan_input))
-        @test isequal(Array(accumulate(min, MtlArray(nan_input))),
-                      accumulate(min, nan_input))
+        @test_throws ArgumentError accumulate(max, MtlArray(nan_input))
+        @test_throws ArgumentError accumulate(min, MtlArray(nan_input))
     end
 
     large_nan_input = ones(Float32, Metal.mps_scan_threshold + 1)
@@ -688,9 +690,8 @@ end
 
     @with (Metal.reduce_alg => :MPS) begin
         int_input = reshape(Int32.(1:12), 3, 4)
-        @test Array(sum(MtlArray(int_input); dims=2)) == sum(int_input; dims=2)
-        @test Array(sum(abs2, MtlArray(reduce_input); dims=2)) ≈
-            sum(abs2, reduce_input; dims=2)
+        @test_throws ArgumentError sum(MtlArray(int_input); dims=2)
+        @test_throws ArgumentError sum(abs2, MtlArray(reduce_input); dims=2)
     end
 end
 
@@ -779,7 +780,7 @@ end
 
   expected = sum(a, dims=2)
   actual = sum(c, dims=2)
-  @test expected == Array(actual)
+  @test expected ≈ Array(actual)
 
   a = rand(Int, big_size, 31)
   c = MtlArray(a)

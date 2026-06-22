@@ -44,10 +44,8 @@ scan_operation(::typeof(+)) = :sum
 scan_operation(::typeof(Base.add_sum)) = :sum
 scan_operation(::typeof(*)) = :product
 scan_operation(::typeof(Base.mul_prod)) = :product
-scan_operation(::typeof(max)) = :maximum
-scan_operation(::typeof(min)) = :minimum
 scan_operation(op) =
-    throw(ArgumentError("MPSGraph scan supports +, *, max, and min"))
+    throw(ArgumentError("MPSGraph scan supports + and *"))
 
 function scanWithTensor(graph::MPSGraph, op::Symbol, tensor::MPSGraphTensor,
                         axis::Integer, name = "scan")
@@ -55,12 +53,8 @@ function scanWithTensor(graph::MPSGraph, op::Symbol, tensor::MPSGraphTensor,
         cumulativeSumWithTensor(graph, tensor, axis, false, false, name)
     elseif op === :product
         cumulativeProductWithTensor(graph, tensor, axis, false, false, name)
-    elseif op === :maximum
-        cumulativeMaximumWithTensor(graph, tensor, axis, false, false, name)
-    elseif op === :minimum
-        cumulativeMinimumWithTensor(graph, tensor, axis, false, false, name)
     else
-        throw(ArgumentError("MPSGraph scan supports +, *, max, and min"))
+        throw(ArgumentError("MPSGraph scan supports + and *"))
     end
 end
 

@@ -190,14 +190,26 @@ end
 
 mps_scan_supported(op, output, input, dims::Integer, init) = false
 
+function mps_scan!(op, output::MtlArray{T}, input::MtlArray{T}; dims::Integer,
+                   init) where {T}
+    init === nothing ||
+        throw(ArgumentError("MPSGraph scan does not support init"))
+    return MPSGraphs.graph_scan!(op, output, input; dim=dims)
+end
+
+function mps_scan!(op, output, input; dims::Integer, init)
+    throw(ArgumentError("MPSGraph scan does not support this accumulate query"))
+end
+
 function scan_with_algorithm!(op, output::WrappedMtlArray, input::WrappedMtlArray;
                               dims::Integer, init=nothing)
     alg = scan_alg[]
     supported = mps_scan_supported(op, output, input, dims, init)
-    if alg === :MPS && supported ||
-       alg === :auto && supported && length(input) >= mps_scan_threshold
+    if alg === :MPS
+        return mps_scan!(op, output, input; dims, init)
+    elseif alg === :auto && supported && length(input) >= mps_scan_threshold
         return MPSGraphs.graph_scan!(op, output, input; dim=dims)
-    elseif alg === :MPS || alg === :auto || alg === :native
+    elseif alg === :auto || alg === :native
         return scan!(op, output, input; dims, init)
     else
         error(":$alg is not a valid scan algorithm. Options are: `:auto`, `:MPS`, `:native`")

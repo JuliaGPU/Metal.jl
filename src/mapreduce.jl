@@ -185,6 +185,12 @@ reduction_operation(::typeof(max)) = :maximum
 reduction_operation(::typeof(min)) = :minimum
 reduction_operation(op) = nothing
 
+function mps_reduction_init_supported(op, ::Type{T}, init) where {T}
+    init === nothing && return true
+    reduction_operation(op) === nothing && return false
+    return isequal(init, GPUArrays.neutral_element(op, T))
+end
+
 function reduced_dimensions(R::MtlArray, A::MtlArray)
     ndims(R) == ndims(A) || return nothing
     dims = Int[]
@@ -201,10 +207,11 @@ function reduced_dimensions(R::MtlArray, A::MtlArray)
 end
 
 function mps_reduce_dimensions(f, op, R::MtlArray{T}, A::MtlArray{T},
-                               init::Nothing) where {T}
+                               init) where {T}
     f === identity || return nothing
     reduction_operation(op) === nothing && return nothing
     T <: MPSGraphs.MPSGRAPH_VALID_REDUCTION_TYPES || return nothing
+    mps_reduction_init_supported(op, T, init) || return nothing
     R.offset == 0 && A.offset == 0 || return nothing
     return reduced_dimensions(R, A)
 end
@@ -213,6 +220,19 @@ mps_reduce_dimensions(f, op, R, A, init) = nothing
 
 function mps_reduce_auto(R::MtlArray, A::MtlArray, dims)
     length(R) > 1 && any(dim -> dim > 1 && size(A, dim) > 1, dims)
+end
+
+function mps_mapreducedim!(f, op, R::MtlArray{T}, A::MtlArray{T};
+                           init) where {T}
+    f === identity ||
+        throw(ArgumentError("MPSGraph reduction only supports identity mapping"))
+    mps_reduction_init_supported(op, T, init) ||
+        throw(ArgumentError("MPSGraph reduction does not support this initializer"))
+    return MPSGraphs.graph_mapreducedim!(op, R, A)
+end
+
+function mps_mapreducedim!(f, op, R, A; init)
+    throw(ArgumentError("MPSGraph reduction does not support this mapreduce query"))
 end
 
 function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
@@ -236,8 +256,9 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
         error(":$alg is not a valid reduction algorithm. Options are: `:auto`, `:MPS`, `:native`")
     end
     dims = mps_reduce_dimensions(f, op, R, A, init)
-    if dims !== nothing &&
-       (alg === :MPS || alg === :auto && mps_reduce_auto(R, A, dims))
+    if alg === :MPS
+        return mps_mapreducedim!(f, op, R, A; init)
+    elseif dims !== nothing && alg === :auto && mps_reduce_auto(R, A, dims)
         return MPSGraphs.graph_mapreducedim!(op, R, A)
     end
 
