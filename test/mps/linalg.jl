@@ -155,6 +155,36 @@ end
     @test Array(MPS.solve_triangular(dU, dBR; upper=true, unit=false, right=true,
                                      out=copy(dBR))) ≈
           BR / UpperTriangular(U) rtol=1f-4
+
+    # Regression coverage for JuliaGPU/Metal.jl#145: older MPS solve code reported
+    # blocks of NaNs for systems larger than 128x128.
+    nlarge = 160
+    Alarge = rand(T, nlarge, nlarge)
+    Alarge .+= T(nlarge) .* Matrix{T}(I, nlarge, nlarge)
+    Blarge = rand(T, nlarge, nlarge)
+    dAlarge = MtlMatrix(Alarge)
+    dBlarge = MtlMatrix(Blarge)
+
+    Xlarge = Array(MPS.solve_lu(dAlarge, dBlarge))
+    @test all(isfinite, Xlarge)
+    @test Xlarge ≈ Alarge \ Blarge rtol=1f-4
+
+    Flarge = lu(dAlarge)
+    Xlarge = Array(MPS.solve_lu(Flarge, dBlarge; out=copy(dBlarge)))
+    @test all(isfinite, Xlarge)
+    @test Xlarge ≈ Alarge \ Blarge rtol=1f-4
+
+    Ularge = triu(Alarge)
+    Xlarge = Array(MPS.solve_triangular(MtlMatrix(Ularge), dBlarge;
+                                        upper=true, unit=false, out=copy(dBlarge)))
+    @test all(isfinite, Xlarge)
+    @test Xlarge ≈ UpperTriangular(Ularge) \ Blarge rtol=1f-4
+
+    Llarge = tril(Alarge)
+    Xlarge = Array(MPS.solve_triangular(MtlMatrix(Llarge), dBlarge;
+                                        upper=false, unit=false, out=copy(dBlarge)))
+    @test all(isfinite, Xlarge)
+    @test Xlarge ≈ LowerTriangular(Llarge) \ Blarge rtol=1f-4
 end
 
 @testset "topk & topk!" begin

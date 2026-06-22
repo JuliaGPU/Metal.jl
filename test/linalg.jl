@@ -328,6 +328,30 @@ end
     @test Array(dA \ db) ≈ A \ b rtol=1f-4
     @test Array(dA \ dB) ≈ A \ B rtol=1f-4
 
+    # Regression coverage for JuliaGPU/Metal.jl#145: older MPS solve code reported
+    # blocks of NaNs for systems larger than 128x128.
+    nlarge = 160
+    Alarge = rand(T, nlarge, nlarge)
+    Alarge .+= T(nlarge) .* Matrix{T}(I, nlarge, nlarge)
+    Blarge = rand(T, nlarge, nlarge)
+    dAlarge = MtlMatrix(Alarge)
+    dBlarge = MtlMatrix(Blarge)
+    xlarge = Array(dAlarge \ dBlarge)
+    @test all(isfinite, xlarge)
+    @test xlarge ≈ Alarge \ Blarge rtol=1f-4
+    Flarge = lu(dAlarge)
+    xlarge = Array(Flarge \ dBlarge)
+    @test all(isfinite, xlarge)
+    @test xlarge ≈ Alarge \ Blarge rtol=1f-4
+    Ularge = UpperTriangular(MtlMatrix(triu(Alarge)))
+    xlarge = Array(Ularge \ dBlarge)
+    @test all(isfinite, xlarge)
+    @test xlarge ≈ UpperTriangular(triu(Alarge)) \ Blarge rtol=1f-4
+    Llarge = LowerTriangular(MtlMatrix(tril(Alarge)))
+    xlarge = Array(Llarge \ dBlarge)
+    @test all(isfinite, xlarge)
+    @test xlarge ≈ LowerTriangular(tril(Alarge)) \ Blarge rtol=1f-4
+
     Als = rand(T, 8, 7)
     bls = rand(T, 8)
     dAls = MtlMatrix(Als)
