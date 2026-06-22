@@ -281,6 +281,169 @@ using Metal: storagemode
     @test storagemode(lua.factors) == storagemode(lua.ipiv) == storagemode(A)
 end
 
+@testset "linear solve" begin
+    T = Float32
+    n = 64
+    nrhs = 3
+
+    # storage mode is transparent to the solve kernels, and CI runs the whole suite
+    # under both the private- and shared-default storage modes, so the numerical tests
+    # just use the default storage. A separate check below pins storage propagation.
+    A = rand(T, n, n)
+    A .+= T(n) .* Matrix{T}(I, n, n)
+    b = rand(T, n)
+    B = rand(T, n, nrhs)
+    BR = rand(T, nrhs, n)
+
+    dA = MtlMatrix(A)
+    db = MtlVector(b)
+    dB = MtlMatrix(B)
+    dBR = MtlMatrix(BR)
+
+    @test Array(dA \ db) ≈ A \ b rtol=1f-4
+    @test Array(dA \ dB) ≈ A \ B rtol=1f-4
+
+    Als = rand(T, 8, 7)
+    bls = rand(T, 8)
+    dAls = MtlMatrix(Als)
+    dbls = MtlVector(bls)
+    if Metal.DefaultStorageMode == Metal.PrivateStorage
+        @test_throws ErrorException dAls \ dbls
+    else
+        @test dAls \ dbls ≈ Als \ bls rtol=1f-4
+    end
+
+    Ap = T[0 2 1; 1 1 0; 2 0 1]
+    bp = T[1, 2, 3]
+    dAp = MtlMatrix(Ap)
+    dbp = MtlVector(bp)
+    Fp = lu(dAp)
+    @test Array(Fp \ dbp) ≈ Ap \ bp rtol=1f-4
+    xp = copy(dbp)
+    ldiv!(Fp, xp)
+    @test Array(xp) ≈ Ap \ bp rtol=1f-4
+
+    F = lu(dA)
+    @test Array(F \ db) ≈ A \ b rtol=1f-4
+    @test Array(F \ dB) ≈ A \ B rtol=1f-4
+    x = copy(db)
+    ldiv!(F, x)
+    @test Array(x) ≈ A \ b rtol=1f-4
+
+    M = rand(T, n, n)
+    SPD = M'M + T(n) .* Matrix{T}(I, n, n)
+    dSPD = MtlMatrix(SPD)
+    C = cholesky(dSPD)
+    @test Array(C \ db) ≈ SPD \ b rtol=1f-4
+
+    CS = cholesky(Symmetric(dSPD, :L))
+    @test Array(CS \ dB) ≈ SPD \ B rtol=1f-4
+
+    CH = cholesky(Hermitian(dSPD, :U))
+    yc = copy(db)
+    ldiv!(CH, yc)
+    @test Array(yc) ≈ SPD \ b rtol=1f-4
+
+    for (triangle, cpuA) in ((UpperTriangular, triu(A)),
+                            (LowerTriangular, tril(A)),
+                            (UnitUpperTriangular, triu(A)),
+                            (UnitLowerTriangular, tril(A)))
+        dT = triangle(MtlMatrix(cpuA))
+        cT = triangle(cpuA)
+        @test Array(dT \ db) ≈ cT \ b rtol=1f-4
+        @test Array(dT \ dB) ≈ cT \ B rtol=1f-4
+        @test Array(transpose(dT) \ db) ≈ transpose(cT) \ b rtol=1f-4
+        @test Array(transpose(dT) \ dB) ≈ transpose(cT) \ B rtol=1f-4
+        @test Array(dBR / dT) ≈ BR / cT rtol=1f-4
+        @test Array(dBR / transpose(dT)) ≈ BR / transpose(cT) rtol=1f-4
+        y = copy(db)
+        ldiv!(dT, y)
+        @test Array(y) ≈ cT \ b rtol=1f-4
+        Y = copy(dBR)
+        rdiv!(Y, dT)
+        @test Array(Y) ≈ BR / cT rtol=1f-4
+        Yt = copy(dBR)
+        rdiv!(Yt, transpose(dT))
+        @test Array(Yt) ≈ BR / transpose(cT) rtol=1f-4
+    end
+
+    dsing = MtlMatrix(T[1 2; 2 4])
+    bsing = MtlVector(T[1, 2])
+    @test_throws SingularException dsing \ bsing
+
+    dnonposdef = MtlMatrix(T[1 2; 2 1])
+    @test_throws PosDefException cholesky(dnonposdef)
+
+    # outputs should inherit the storage mode of the inputs
+    altStorage = Metal.DefaultStorageMode != Metal.PrivateStorage ? Metal.PrivateStorage : Metal.SharedStorage
+    aA = MtlMatrix{T,altStorage}(A)
+    ab = MtlVector{T,altStorage}(b)
+    @test storagemode(aA \ ab) == altStorage
+    @test storagemode(cholesky(MtlMatrix{T,altStorage}(SPD)).factors) == altStorage
+end
+
+@testset "derived" begin
+    T = Float32
+    n = 16
+
+    A = rand(T, n, n)
+    A .+= T(n) .* Matrix{T}(I, n, n)
+    dA = MtlMatrix(A)
+
+    F = lu(dA)
+    cF = lu(A)
+    @test det(dA) ≈ det(A) rtol=1f-4
+    @test det(F) ≈ det(cF) rtol=1f-4
+
+    logabs, sgndet = logabsdet(dA)
+    clogabs, csgndet = logabsdet(A)
+    @test logabs ≈ clogabs rtol=1f-4
+    @test sgndet ≈ csgndet
+    flogabs, fsgndet = logabsdet(F)
+    cflogabs, fcsgndet = logabsdet(cF)
+    @test flogabs ≈ cflogabs rtol=1f-4
+    @test fsgndet ≈ fcsgndet
+    @test logdet(dA) ≈ logdet(A) rtol=1f-4
+    @test logdet(F) ≈ logdet(cF) rtol=1f-4
+
+    invA = inv(dA)
+    @test Array(invA) ≈ inv(A) rtol=1f-4
+    @test Array(inv(F)) ≈ inv(cF) rtol=1f-4
+    @test Array(invA * dA) ≈ Matrix{T}(I, n, n) rtol=1f-4
+
+    M = rand(T, n, n)
+    SPD = M'M + T(n) .* Matrix{T}(I, n, n)
+    dSPD = MtlMatrix(SPD)
+    C = cholesky(dSPD)
+    cC = cholesky(SPD)
+    @test det(C) ≈ det(cC) rtol=1f-4
+    @test logdet(C) ≈ logdet(cC) rtol=1f-4
+    clogabs, csgndet = logabsdet(C)
+    cclogabs, ccsgndet = logabsdet(cC)
+    @test clogabs ≈ cclogabs rtol=1f-4
+    @test csgndet ≈ ccsgndet
+    @test Array(inv(C)) ≈ inv(cC) rtol=1f-4
+
+    pivotA = T[0 1; 1 0]
+    dpivotA = MtlMatrix(pivotA)
+    @test det(dpivotA) ≈ det(pivotA)
+    _, pivotsign = logabsdet(dpivotA)
+    @test pivotsign ≈ -one(T)
+
+    dsing = MtlMatrix(T[1 2; 2 4])
+    @test det(dsing) == zero(T)
+
+    altStorage = Metal.DefaultStorageMode != Metal.PrivateStorage ? Metal.PrivateStorage : Metal.SharedStorage
+    aA = MtlMatrix{T,altStorage}(A)
+    aSPD = MtlMatrix{T,altStorage}(SPD)
+    @test storagemode(inv(aA)) == altStorage
+    @test storagemode(inv(lu(aA))) == altStorage
+    @test storagemode(inv(cholesky(aSPD))) == altStorage
+
+    @test tr(dA) ≈ tr(A)
+    @test det(UpperTriangular(dA)) ≈ det(UpperTriangular(A)) rtol=1f-4
+end
+
 @testset "transpose" begin
     A = MtlMatrix(rand(Float32, 0, 1024))
     B = Metal.zeros(Float32, 1024, 0)

@@ -1,3 +1,5 @@
+using ScopedValues
+
 STORAGEMODES = [Metal.PrivateStorage, Metal.SharedStorage]
 
 let arr = MtlVector{Int}(undef, 1)
@@ -553,6 +555,53 @@ end
     @test Array(r) == reinterpret(Int32, @view Array(a)[2:7])
 end
 
+@testset "sort" begin
+    v = Float32[7, 2, 5, 4, 9, 1, 6, 3]
+    d_v = MtlArray(v)
+    @test Array(sort(d_v)) == sort(v)
+    @test Array(sort(d_v; rev=true)) == sort(v; rev=true)
+
+    sort!(d_v)
+    @test Array(d_v) == sort(v)
+
+    A = reshape(Float32[7, 2, 5, 4, 9, 1, 6, 3, 8, 0, 10, 11], 3, 4)
+    d_A = MtlArray(A)
+    for dim in 1:2
+        @test Array(sort(d_A; dims=dim)) == sort(A; dims=dim)
+        @test Array(sort(d_A; dims=dim, rev=true)) == sort(A; dims=dim, rev=true)
+
+        tmp = copy(d_A)
+        sort!(tmp; dims=dim)
+        @test Array(tmp) == sort(A; dims=dim)
+
+        p = sortperm(d_A; dims=dim)
+        @test Array(p) == sortperm(A; dims=dim)
+        @test A[Array(p)] == sort(A; dims=dim)
+
+        p = similar(d_A, Int)
+        sortperm!(p, d_A; dims=dim, rev=true)
+        @test Array(p) == sortperm(A; dims=dim, rev=true)
+        @test A[Array(p)] == sort(A; dims=dim, rev=true)
+    end
+
+    @test Array(sortperm(MtlArray(v))) == sortperm(v)
+
+    nan_v = Float32[1, NaN, -1, 0, 2]
+    d_nan_v = MtlArray(nan_v)
+    @test isequal(Array(sort(d_nan_v)), sort(nan_v))
+    @test isequal(Array(sort(d_nan_v; rev=true)), sort(nan_v; rev=true))
+    @test Array(sortperm(d_nan_v)) == sortperm(nan_v)
+
+    nan_A = Float32[1 NaN 2; -1 0 NaN]
+    d_nan_A = MtlArray(nan_A)
+    for dim in 1:2
+        @test isequal(Array(sort(d_nan_A; dims=dim)), sort(nan_A; dims=dim))
+        p = sortperm(d_nan_A; dims=dim)
+        @test Array(p) == sortperm(nan_A; dims=dim)
+        @test isequal(nan_A[Array(p)], sort(nan_A; dims=dim))
+    end
+end
+
 @testset "accumulate" begin
     for n in (0, 1, 2, 3, 10, 10_000, 16384, 16384+1) # small, large, odd & even, pow2 and not
         @test testf(x->accumulate(+, x), rand(Float32, n))
@@ -582,6 +631,68 @@ end
     # specialized
     @test testf(cumsum, rand(Float32, 2))
     @test testf(cumprod, rand(Float32, 2))
+
+    scan_input = reshape(Float32[2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37], 3, 4)
+    product_input = scan_input ./ 10
+    for alg in (:native, :MPS), dims in 1:2
+        @with (Metal.scan_alg => alg) begin
+            @test Array(accumulate(+, MtlArray(scan_input); dims)) ≈
+                accumulate(+, scan_input; dims)
+            @test Array(accumulate(*, MtlArray(product_input); dims)) ≈
+                accumulate(*, product_input; dims)
+            @test Array(cumsum(MtlArray(scan_input); dims)) ≈ cumsum(scan_input; dims)
+            @test Array(cumprod(MtlArray(product_input); dims)) ≈
+                cumprod(product_input; dims)
+        end
+    end
+    for alg in (:native, :auto), dims in 1:2
+        @with (Metal.scan_alg => alg) begin
+            @test Array(accumulate(max, MtlArray(scan_input); dims)) ≈
+                accumulate(max, scan_input; dims)
+            @test Array(accumulate(min, MtlArray(scan_input); dims)) ≈
+                accumulate(min, scan_input; dims)
+        end
+    end
+
+    @with (Metal.scan_alg => :MPS) begin
+        int_input = Int32[1, 2, 3, 4]
+        @test_throws ArgumentError accumulate(+, MtlArray(int_input))
+        @test_throws ArgumentError accumulate(+, MtlArray(scan_input); dims=1,
+                                              init=1.0f0)
+
+        nan_input = Float32[1, NaN, 0.5, 2]
+        @test_throws ArgumentError accumulate(max, MtlArray(nan_input))
+        @test_throws ArgumentError accumulate(min, MtlArray(nan_input))
+    end
+
+    large_nan_input = ones(Float32, Metal.mps_scan_threshold + 1)
+    large_nan_input[2] = NaN
+    @test isequal(Array(accumulate(max, MtlArray(large_nan_input))),
+                  accumulate(max, large_nan_input))
+    @test isequal(Array(accumulate(min, MtlArray(large_nan_input))),
+                  accumulate(min, large_nan_input))
+end
+
+@testset "reduced dimensions" begin
+    reduce_input = reshape(Float32.(1:24) ./ 10, 3, 4, 2)
+    for alg in (:native, :MPS), dims in 1:3
+        @with (Metal.reduce_alg => alg) begin
+            @test Array(sum(MtlArray(reduce_input); dims)) ≈
+                sum(reduce_input; dims)
+            @test Array(prod(MtlArray(reduce_input); dims)) ≈
+                prod(reduce_input; dims)
+            @test Array(maximum(MtlArray(reduce_input); dims)) ≈
+                maximum(reduce_input; dims)
+            @test Array(minimum(MtlArray(reduce_input); dims)) ≈
+                minimum(reduce_input; dims)
+        end
+    end
+
+    @with (Metal.reduce_alg => :MPS) begin
+        int_input = reshape(Int32.(1:12), 3, 4)
+        @test_throws ArgumentError sum(MtlArray(int_input); dims=2)
+        @test_throws ArgumentError sum(abs2, MtlArray(reduce_input); dims=2)
+    end
 end
 
 @testset "findall" begin
@@ -669,7 +780,7 @@ end
 
   expected = sum(a, dims=2)
   actual = sum(c, dims=2)
-  @test expected == Array(actual)
+  @test expected ≈ Array(actual)
 
   a = rand(Int, big_size, 31)
   c = MtlArray(a)

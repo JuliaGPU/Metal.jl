@@ -10,10 +10,30 @@ function broadcastTensor(graph::MPSGraph, tensor::MPSGraphTensor, shapeTensor::M
                                            name:name::id{NSString}]::MPSGraphTensor
 end
 
+function mps_axis(ndims::Integer, dim::Integer)
+    1 <= dim <= ndims || throw(ArgumentError("dimension out of range"))
+    return ndims - dim
+end
+
+mps_axis(shape::Tuple, dim::Integer) = mps_axis(length(shape), dim)
+
+function check_mpsgraph_offsets(arrays::MtlArray...)
+    all(A -> A.offset == 0, arrays) ||
+        throw(ArgumentError("MPSGraph operations require zero-offset Metal arrays"))
+    return nothing
+end
+
 function castTensor(graph::MPSGraph, tensor::MPSGraphTensor, toType, name = "cast")
     @objc [graph::id{MPSGraph} castTensor:tensor::id{MPSGraphTensor}
                                     toType:toType::MPSDataType
                                       name:name::id{NSString}]::MPSGraphTensor
+end
+
+function reshapeTensor(graph::MPSGraph, tensor::MPSGraphTensor, shape::MPSShape,
+                       name = "reshape")
+    @objc [graph::id{MPSGraph} reshapeTensor:tensor::id{MPSGraphTensor}
+                                   withShape:shape::id{MPSShape}
+                                        name:name::id{NSString}]::MPSGraphTensor
 end
 
 # uses the swift name

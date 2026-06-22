@@ -55,6 +55,7 @@ include("vector.jl")
 include("matrixrandom.jl")
 include("ndarray.jl")
 include("decomposition.jl")
+include("solve.jl")
 include("copy.jl")
 
 # integrations

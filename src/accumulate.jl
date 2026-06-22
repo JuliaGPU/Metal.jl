@@ -169,17 +169,64 @@ end
 
 ## Base interface
 
+const scan_alg = ScopedValue(:auto)
+const mps_scan_threshold = 64 * 1024
+
+# MPS cumulative max/min ignore NaNs; Base accumulate(max/min) propagates them.
+mps_scan_operation(::typeof(+)) = :sum
+mps_scan_operation(::typeof(Base.add_sum)) = :sum
+mps_scan_operation(::typeof(*)) = :product
+mps_scan_operation(::typeof(Base.mul_prod)) = :product
+mps_scan_operation(op) = nothing
+
+function mps_scan_supported(op, output::MtlArray{T}, input::MtlArray{T},
+                            dims::Integer, init::Nothing) where {T}
+    mps_scan_operation(op) === nothing && return false
+    T <: MPSGraphs.MPSGRAPH_VALID_SCAN_TYPES || return false
+    axes(output) == axes(input) || return false
+    1 <= dims <= ndims(input) || return false
+    return output.offset == 0 && input.offset == 0
+end
+
+mps_scan_supported(op, output, input, dims::Integer, init) = false
+
+function mps_scan!(op, output::MtlArray{T}, input::MtlArray{T}; dims::Integer,
+                   init) where {T}
+    init === nothing ||
+        throw(ArgumentError("MPSGraph scan does not support init"))
+    return MPSGraphs.graph_scan!(op, output, input; dim=dims)
+end
+
+function mps_scan!(op, output, input; dims::Integer, init)
+    throw(ArgumentError("MPSGraph scan does not support this accumulate query"))
+end
+
+function scan_with_algorithm!(op, output::WrappedMtlArray, input::WrappedMtlArray;
+                              dims::Integer, init=nothing)
+    alg = scan_alg[]
+    supported = mps_scan_supported(op, output, input, dims, init)
+    if alg === :MPS
+        return mps_scan!(op, output, input; dims, init)
+    elseif alg === :auto && supported && length(input) >= mps_scan_threshold
+        return MPSGraphs.graph_scan!(op, output, input; dim=dims)
+    elseif alg === :auto || alg === :native
+        return scan!(op, output, input; dims, init)
+    else
+        error(":$alg is not a valid scan algorithm. Options are: `:auto`, `:MPS`, `:native`")
+    end
+end
+
 Base._accumulate!(op, output::WrappedMtlArray, input::WrappedMtlVector, dims::Nothing, init::Nothing) =
-    scan!(op, output, input; dims=1)
+    scan_with_algorithm!(op, output, input; dims=1, init)
 
 Base._accumulate!(op, output::WrappedMtlArray, input::WrappedMtlArray, dims::Integer, init::Nothing) =
-    scan!(op, output, input; dims=dims)
+    scan_with_algorithm!(op, output, input; dims=dims, init)
 
 Base._accumulate!(op, output::WrappedMtlArray, input::MtlVector, dims::Nothing, init::Some) =
-    scan!(op, output, input; dims=1, init=init)
+    scan_with_algorithm!(op, output, input; dims=1, init)
 
 Base._accumulate!(op, output::WrappedMtlArray, input::WrappedMtlArray, dims::Integer, init::Some) =
-    scan!(op, output, input; dims=dims, init=init)
+    scan_with_algorithm!(op, output, input; dims=dims, init)
 
 Base.accumulate_pairwise!(op, result::WrappedMtlVector, v::WrappedMtlVector) = accumulate!(op, result, v)
 
