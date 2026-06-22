@@ -47,20 +47,25 @@ end
 end
 
 function ref_conv2d(x, w; stride=(1, 1), padding=(0, 0, 0, 0),
-                    dilation=(1, 1), flipkernel=false)
+                    dilation=(1, 1), groups=1, flipkernel=false)
     W, H, C, N = size(x)
-    KW, KH, _, O = size(w)
+    KW, KH, CG, O = size(w)
     OW = (W + padding[1] + padding[2] - (KW - 1) * dilation[1] - 1) ÷ stride[1] + 1
     OH = (H + padding[3] + padding[4] - (KH - 1) * dilation[2] - 1) ÷ stride[2] + 1
     y = zeros(eltype(x), OW, OH, O, N)
     kproj(k, n) = flipkernel ? k : n - k + 1
+    out_per_group = O ÷ groups
+    @assert C == CG * groups
     for n in 1:N, o in 1:O, oh in 1:OH, ow in 1:OW
         acc = zero(eltype(x))
-        for c in 1:C, kh in 1:KH, kw in 1:KW
+        group = (o - 1) ÷ out_per_group
+        for cg in 1:CG, kh in 1:KH, kw in 1:KW
+            c = group * CG + cg
             iw = (ow - 1) * stride[1] - padding[1] + 1 + (kw - 1) * dilation[1]
             ih = (oh - 1) * stride[2] - padding[3] + 1 + (kh - 1) * dilation[2]
             if 1 <= iw <= W && 1 <= ih <= H
-                acc = muladd(x[iw, ih, c, n], w[kproj(kw, KW), kproj(kh, KH), c, o], acc)
+                acc = muladd(x[iw, ih, c, n],
+                             w[kproj(kw, KW), kproj(kh, KH), cg, o], acc)
             end
         end
         y[ow, oh, o, n] = acc
@@ -69,19 +74,23 @@ function ref_conv2d(x, w; stride=(1, 1), padding=(0, 0, 0, 0),
 end
 
 function ref_conv2d_data_grad(dy, w, size_x; stride=(1, 1), padding=(0, 0, 0, 0),
-                              dilation=(1, 1), flipkernel=false)
+                              dilation=(1, 1), groups=1, flipkernel=false)
     W, H, C, N = size_x
-    KW, KH, _, O = size(w)
+    KW, KH, CG, O = size(w)
     OW, OH = size(dy, 1), size(dy, 2)
     dx = zeros(eltype(dy), size_x)
     kproj(k, n) = flipkernel ? k : n - k + 1
+    out_per_group = O ÷ groups
+    @assert C == CG * groups
     for n in 1:N, o in 1:O, oh in 1:OH, ow in 1:OW
-        for c in 1:C, kh in 1:KH, kw in 1:KW
+        group = (o - 1) ÷ out_per_group
+        for cg in 1:CG, kh in 1:KH, kw in 1:KW
+            c = group * CG + cg
             iw = (ow - 1) * stride[1] - padding[1] + 1 + (kw - 1) * dilation[1]
             ih = (oh - 1) * stride[2] - padding[3] + 1 + (kh - 1) * dilation[2]
             if 1 <= iw <= W && 1 <= ih <= H
                 dx[iw, ih, c, n] +=
-                    dy[ow, oh, o, n] * w[kproj(kw, KW), kproj(kh, KH), c, o]
+                    dy[ow, oh, o, n] * w[kproj(kw, KW), kproj(kh, KH), cg, o]
             end
         end
     end
@@ -89,18 +98,22 @@ function ref_conv2d_data_grad(dy, w, size_x; stride=(1, 1), padding=(0, 0, 0, 0)
 end
 
 function ref_conv2d_filter_grad(x, dy, size_w; stride=(1, 1), padding=(0, 0, 0, 0),
-                                dilation=(1, 1), flipkernel=false)
+                                dilation=(1, 1), groups=1, flipkernel=false)
     W, H, C, N = size(x)
-    KW, KH, _, O = size_w
+    KW, KH, CG, O = size_w
     OW, OH = size(dy, 1), size(dy, 2)
     dw = zeros(eltype(x), size_w)
     kproj(k, n) = flipkernel ? k : n - k + 1
+    out_per_group = O ÷ groups
+    @assert C == CG * groups
     for n in 1:N, o in 1:O, oh in 1:OH, ow in 1:OW
-        for c in 1:C, kh in 1:KH, kw in 1:KW
+        group = (o - 1) ÷ out_per_group
+        for cg in 1:CG, kh in 1:KH, kw in 1:KW
+            c = group * CG + cg
             iw = (ow - 1) * stride[1] - padding[1] + 1 + (kw - 1) * dilation[1]
             ih = (oh - 1) * stride[2] - padding[3] + 1 + (kh - 1) * dilation[2]
             if 1 <= iw <= W && 1 <= ih <= H
-                dw[kproj(kw, KW), kproj(kh, KH), c, o] +=
+                dw[kproj(kw, KW), kproj(kh, KH), cg, o] +=
                     x[iw, ih, c, n] * dy[ow, oh, o, n]
             end
         end
@@ -163,34 +176,39 @@ function ref_pool2d_grad(op, dy, x; kernel, stride, padding=(0, 0, 0, 0),
 end
 
 @testset "conv2d ($T)" for T in (Float16, Float32)
-    x = randn(T, 7, 6, 2, 3)
-    w = randn(T, 3, 2, 2, 4)
+    configs = (
+        (randn(T, 7, 6, 2, 3), randn(T, 3, 2, 2, 4), 1),
+        (randn(T, 7, 6, 4, 3), randn(T, 3, 2, 2, 6), 2),
+        (randn(T, 7, 6, 4, 3), randn(T, 3, 2, 1, 8), 4),
+    )
 
-    @testset "flipkernel=$flipkernel" for flipkernel in (false, true)
+    @testset "groups=$groups, flipkernel=$flipkernel" for (x, w, groups) in configs,
+                                                            flipkernel in (false, true)
         y_ref = ref_conv2d(x, w; stride=(2, 1), padding=(1, 1, 0, 1),
-                           dilation=(1, 1), flipkernel)
+                           dilation=(1, 1), groups, flipkernel)
         y = MtlArray(similar(y_ref))
         MPSGraphs.graph_conv!(y, MtlArray(x), MtlArray(w); stride=(2, 1),
-                              padding=(1, 1, 0, 1), dilation=(1, 1), flipkernel)
+                              padding=(1, 1, 0, 1), dilation=(1, 1), groups,
+                              flipkernel)
         @test Array(y) ≈ y_ref
 
         dy = randn(T, size(y_ref))
         dx_ref = ref_conv2d_data_grad(dy, w, size(x); stride=(2, 1),
                                       padding=(1, 1, 0, 1), dilation=(1, 1),
-                                      flipkernel)
+                                      groups, flipkernel)
         dx = MtlArray(similar(x))
         MPSGraphs.graph_conv_data_grad!(dx, MtlArray(dy), MtlArray(w);
                                         stride=(2, 1), padding=(1, 1, 0, 1),
-                                        dilation=(1, 1), flipkernel)
+                                        dilation=(1, 1), groups, flipkernel)
         @test Array(dx) ≈ dx_ref
 
         dw_ref = ref_conv2d_filter_grad(x, dy, size(w); stride=(2, 1),
                                         padding=(1, 1, 0, 1), dilation=(1, 1),
-                                        flipkernel)
+                                        groups, flipkernel)
         dw = MtlArray(similar(w))
         MPSGraphs.graph_conv_filter_grad!(dw, MtlArray(x), MtlArray(dy);
                                           stride=(2, 1), padding=(1, 1, 0, 1),
-                                          dilation=(1, 1), flipkernel)
+                                          dilation=(1, 1), groups, flipkernel)
         @test Array(dw) ≈ dw_ref
     end
 end
