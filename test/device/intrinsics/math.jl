@@ -790,6 +790,15 @@ end
     vecA = Array(sqrt.(bufferA))
     @test vecA ≈ sqrt.(a)
 
+    # Complex power
+    let
+        x = ComplexF32[1 + 2im, -3 + 4im, 2 - 0.5im]
+        dx = MtlArray(x)
+
+        @test Array(dx .^ 0.5f0) ≈ x .^ 0.5f0
+        @test Array(dx .^ ComplexF32(0.5, -0.25)) ≈ x .^ ComplexF32(0.5, -0.25)
+    end
+
     # Division
     let
         N = 10

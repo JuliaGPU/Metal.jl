@@ -234,6 +234,9 @@ end
 @device_override Base.:(^)(x::Float32, y::Float32) = ccall("extern air.pow.f32", llvmcall, Cfloat, (Cfloat, Cfloat), x, y)
 @device_override Base.:(^)(x::Float16, y::Float16) = ccall("extern air.pow.f16", llvmcall, Float16, (Float16, Float16), x, y)
 
+@device_override @inline Base._cpow(z::ComplexF32, p::Float32) = exp(p * log(z))
+@device_override @inline Base._cpow(z::ComplexF32, p::ComplexF32) = exp(p * log(z))
+
 # Avoid use of Float64 in `pow`
 @device_override @inline function Base.:(^)(x::Float32, y::Integer)
     y == -1 && return inv(x)
