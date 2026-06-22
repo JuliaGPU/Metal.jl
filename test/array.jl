@@ -585,6 +585,21 @@ end
     end
 
     @test Array(sortperm(MtlArray(v))) == sortperm(v)
+
+    nan_v = Float32[1, NaN, -1, 0, 2]
+    d_nan_v = MtlArray(nan_v)
+    @test isequal(Array(sort(d_nan_v)), sort(nan_v))
+    @test isequal(Array(sort(d_nan_v; rev=true)), sort(nan_v; rev=true))
+    @test Array(sortperm(d_nan_v)) == sortperm(nan_v)
+
+    nan_A = Float32[1 NaN 2; -1 0 NaN]
+    d_nan_A = MtlArray(nan_A)
+    for dim in 1:2
+        @test isequal(Array(sort(d_nan_A; dims=dim)), sort(nan_A; dims=dim))
+        p = sortperm(d_nan_A; dims=dim)
+        @test Array(p) == sortperm(nan_A; dims=dim)
+        @test isequal(nan_A[Array(p)], sort(nan_A; dims=dim))
+    end
 end
 
 @testset "accumulate" begin

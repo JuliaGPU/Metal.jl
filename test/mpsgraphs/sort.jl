@@ -11,6 +11,21 @@
     end
 end
 
+@testset "sort NaN ordering ($T)" for T in (Float16, Float32)
+    A = T[1 NaN 2; -1 0 NaN]
+
+    for dim in 1:2
+        out = similar(MtlArray(A))
+        MPSGraphs.graph_sort!(out, MtlArray(A); dim)
+        @test isequal(Array(out), sort(A; dims=dim))
+
+        index = similar(MtlArray(A), Int)
+        MPSGraphs.graph_sortperm!(index, MtlArray(A); dim)
+        @test Array(index) == sortperm(A; dims=dim)
+        @test isequal(A[Array(index)], sort(A; dims=dim))
+    end
+end
+
 @testset "sort unsupported input" begin
     A = MtlArray(Int16[2, 1])
     out = similar(A)
