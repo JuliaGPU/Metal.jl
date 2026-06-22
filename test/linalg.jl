@@ -371,12 +371,18 @@ end
     xp = copy(dbp)
     ldiv!(Fp, xp)
     @test Array(xp) ≈ Ap \ bp rtol=1f-4
+    xp = similar(dbp)
+    ldiv!(xp, Fp, dbp)
+    @test Array(xp) ≈ Ap \ bp rtol=1f-4
 
     F = lu(dA)
     @test Array(F \ db) ≈ A \ b rtol=1f-4
     @test Array(F \ dB) ≈ A \ B rtol=1f-4
     x = copy(db)
     ldiv!(F, x)
+    @test Array(x) ≈ A \ b rtol=1f-4
+    x = similar(db)
+    ldiv!(x, F, db)
     @test Array(x) ≈ A \ b rtol=1f-4
 
     M = rand(T, n, n)
