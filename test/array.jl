@@ -553,6 +553,38 @@ end
     @test Array(r) == reinterpret(Int32, @view Array(a)[2:7])
 end
 
+@testset "sort" begin
+    v = Float32[7, 2, 5, 4, 9, 1, 6, 3]
+    d_v = MtlArray(v)
+    @test Array(sort(d_v)) == sort(v)
+    @test Array(sort(d_v; rev=true)) == sort(v; rev=true)
+
+    sort!(d_v)
+    @test Array(d_v) == sort(v)
+
+    A = reshape(Float32[7, 2, 5, 4, 9, 1, 6, 3, 8, 0, 10, 11], 3, 4)
+    d_A = MtlArray(A)
+    for dim in 1:2
+        @test Array(sort(d_A; dims=dim)) == sort(A; dims=dim)
+        @test Array(sort(d_A; dims=dim, rev=true)) == sort(A; dims=dim, rev=true)
+
+        tmp = copy(d_A)
+        sort!(tmp; dims=dim)
+        @test Array(tmp) == sort(A; dims=dim)
+
+        p = sortperm(d_A; dims=dim)
+        @test Array(p) == sortperm(A; dims=dim)
+        @test A[Array(p)] == sort(A; dims=dim)
+
+        p = similar(d_A, Int)
+        sortperm!(p, d_A; dims=dim, rev=true)
+        @test Array(p) == sortperm(A; dims=dim, rev=true)
+        @test A[Array(p)] == sort(A; dims=dim, rev=true)
+    end
+
+    @test Array(sortperm(MtlArray(v))) == sortperm(v)
+end
+
 @testset "accumulate" begin
     for n in (0, 1, 2, 3, 10, 10_000, 16384, 16384+1) # small, large, odd & even, pow2 and not
         @test testf(x->accumulate(+, x), rand(Float32, n))

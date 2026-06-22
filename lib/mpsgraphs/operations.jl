@@ -10,6 +10,13 @@ function broadcastTensor(graph::MPSGraph, tensor::MPSGraphTensor, shapeTensor::M
                                            name:name::id{NSString}]::MPSGraphTensor
 end
 
+function mps_axis(ndims::Integer, dim::Integer)
+    1 <= dim <= ndims || throw(ArgumentError("dimension out of range"))
+    return ndims - dim
+end
+
+mps_axis(shape::Tuple, dim::Integer) = mps_axis(length(shape), dim)
+
 function castTensor(graph::MPSGraph, tensor::MPSGraphTensor, toType, name = "cast")
     @objc [graph::id{MPSGraph} castTensor:tensor::id{MPSGraphTensor}
                                     toType:toType::MPSDataType
