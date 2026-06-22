@@ -17,6 +17,12 @@ end
 
 mps_axis(shape::Tuple, dim::Integer) = mps_axis(length(shape), dim)
 
+function check_mpsgraph_offsets(arrays::MtlArray...)
+    all(A -> A.offset == 0, arrays) ||
+        throw(ArgumentError("MPSGraph operations require zero-offset Metal arrays"))
+    return nothing
+end
+
 function castTensor(graph::MPSGraph, tensor::MPSGraphTensor, toType, name = "cast")
     @objc [graph::id{MPSGraph} castTensor:tensor::id{MPSGraphTensor}
                                     toType:toType::MPSDataType

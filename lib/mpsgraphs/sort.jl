@@ -106,6 +106,7 @@ function check_sort_args(out::MtlArray{T}, input::MtlArray{T}, dim::Integer) whe
     size(out) == size(input) ||
         throw(DimensionMismatch("output has dimensions $(size(out)), input has dimensions $(size(input))"))
     1 <= dim <= ndims(input) || throw(ArgumentError("dimension out of range"))
+    check_mpsgraph_offsets(out, input)
     return Int(dim)
 end
 
@@ -116,6 +117,7 @@ function check_sortperm_args(index::MtlArray{Ti}, input::MtlArray{T},
     size(index) == size(input) ||
         throw(DimensionMismatch("index output has dimensions $(size(index)), input has dimensions $(size(input))"))
     1 <= dim <= ndims(input) || throw(ArgumentError("dimension out of range"))
+    check_mpsgraph_offsets(index, input)
     return Int(dim)
 end
 

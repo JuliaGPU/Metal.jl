@@ -15,6 +15,10 @@ end
     A = MtlArray(Int16[2, 1])
     out = similar(A)
     @test_throws ArgumentError MPSGraphs.graph_sort!(out, A)
+
+    parent = MtlArray(Float32[3, 2, 1])
+    offset_input = unsafe_wrap(MtlArray, pointer(parent, 2), 2)
+    @test_throws ArgumentError MPSGraphs.graph_sort!(similar(offset_input), offset_input)
 end
 
 @testset "sortperm ($T)" for T in (Float16, Float32, Int32)
