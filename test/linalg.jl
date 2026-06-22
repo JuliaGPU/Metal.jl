@@ -382,6 +382,68 @@ end
     @test storagemode(cholesky(MtlMatrix{T,altStorage}(SPD)).factors) == altStorage
 end
 
+@testset "derived" begin
+    T = Float32
+    n = 16
+
+    A = rand(T, n, n)
+    A .+= T(n) .* Matrix{T}(I, n, n)
+    dA = MtlMatrix(A)
+
+    F = lu(dA)
+    cF = lu(A)
+    @test det(dA) ≈ det(A) rtol=1f-4
+    @test det(F) ≈ det(cF) rtol=1f-4
+
+    logabs, sgndet = logabsdet(dA)
+    clogabs, csgndet = logabsdet(A)
+    @test logabs ≈ clogabs rtol=1f-4
+    @test sgndet ≈ csgndet
+    flogabs, fsgndet = logabsdet(F)
+    cflogabs, fcsgndet = logabsdet(cF)
+    @test flogabs ≈ cflogabs rtol=1f-4
+    @test fsgndet ≈ fcsgndet
+    @test logdet(dA) ≈ logdet(A) rtol=1f-4
+    @test logdet(F) ≈ logdet(cF) rtol=1f-4
+
+    invA = inv(dA)
+    @test Array(invA) ≈ inv(A) rtol=1f-4
+    @test Array(inv(F)) ≈ inv(cF) rtol=1f-4
+    @test Array(invA * dA) ≈ Matrix{T}(I, n, n) rtol=1f-4
+
+    M = rand(T, n, n)
+    SPD = M'M + T(n) .* Matrix{T}(I, n, n)
+    dSPD = MtlMatrix(SPD)
+    C = cholesky(dSPD)
+    cC = cholesky(SPD)
+    @test det(C) ≈ det(cC) rtol=1f-4
+    @test logdet(C) ≈ logdet(cC) rtol=1f-4
+    clogabs, csgndet = logabsdet(C)
+    cclogabs, ccsgndet = logabsdet(cC)
+    @test clogabs ≈ cclogabs rtol=1f-4
+    @test csgndet ≈ ccsgndet
+    @test Array(inv(C)) ≈ inv(cC) rtol=1f-4
+
+    pivotA = T[0 1; 1 0]
+    dpivotA = MtlMatrix(pivotA)
+    @test det(dpivotA) ≈ det(pivotA)
+    _, pivotsign = logabsdet(dpivotA)
+    @test pivotsign ≈ -one(T)
+
+    dsing = MtlMatrix(T[1 2; 2 4])
+    @test det(dsing) == zero(T)
+
+    altStorage = Metal.DefaultStorageMode != Metal.PrivateStorage ? Metal.PrivateStorage : Metal.SharedStorage
+    aA = MtlMatrix{T,altStorage}(A)
+    aSPD = MtlMatrix{T,altStorage}(SPD)
+    @test storagemode(inv(aA)) == altStorage
+    @test storagemode(inv(lu(aA))) == altStorage
+    @test storagemode(inv(cholesky(aSPD))) == altStorage
+
+    @test tr(dA) ≈ tr(A)
+    @test det(UpperTriangular(dA)) ≈ det(UpperTriangular(A)) rtol=1f-4
+end
+
 @testset "transpose" begin
     A = MtlMatrix(rand(Float32, 0, 1024))
     B = Metal.zeros(Float32, 1024, 0)

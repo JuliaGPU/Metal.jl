@@ -228,7 +228,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{<:Any, CPUStorage}, maxi::Integer) =
     return LinearAlgebra.LU(B, p, status)
 end
 
-function _check_lu_success(info, allowsingular)
+function check_lu_success(info, allowsingular)
     if VERSION >= v"1.11.0-DEV.1535"
         if info < 0 # zero pivot error from unpivoted LU
             LinearAlgebra.checknozeropivot(-info)
@@ -278,7 +278,7 @@ end
     synchronize(cmdbuf)
 
     status = convert(LinearAlgebra.BlasInt, status[])
-    check && _check_lu_success(status, allowsingular)
+    check && check_lu_success(status, allowsingular)
 
     return LinearAlgebra.LU(A, p, status)
 end
@@ -430,5 +430,66 @@ for (triangle, upper, unit) in ((:UpperTriangular, true, false),
             return MPS.solve_triangular(parent(parent(A)), B; upper=$(!upper),
                                         unit=$unit, transpose=true, right=true)
         end
+    end
+end
+
+function lu_pivot_sign(ipiv::MtlVector)
+    return isodd(count(ipiv .!= (1:length(ipiv)))) ? -1 : 1
+end
+
+function metal_identity(A::MtlMatrix{T,S}, n::Integer) where {T,S}
+    return MtlMatrix{T,S}(I, n, n)
+end
+
+function LinearAlgebra.det(F::LU{T,<:MtlMatrix{T}}) where {T<:MtlFloat}
+    LinearAlgebra.checksquare(F.factors)
+    LinearAlgebra.issuccess(F) || return zero(T)
+    return prod(diag(F.factors)) * T(lu_pivot_sign(F.ipiv))
+end
+
+function LinearAlgebra.logabsdet(F::LU{T,<:MtlMatrix{T}}) where {T<:MtlFloat}
+    LinearAlgebra.checksquare(F.factors)
+    LinearAlgebra.issuccess(F) || return (log(zero(T)), zero(T))
+    d = diag(F.factors)
+    return (mapreduce(x -> log(abs(x)), +, d), prod(sign, d) * T(lu_pivot_sign(F.ipiv)))
+end
+
+function LinearAlgebra.logdet(F::LU{T,<:MtlMatrix{T}}) where {T<:MtlFloat}
+    logabs, sgndet = logabsdet(F)
+    return logabs + log(sgndet)
+end
+
+function LinearAlgebra.det(C::Cholesky{T,<:MtlMatrix{T}}) where {T<:MtlFloat}
+    LinearAlgebra.checksquare(C.factors)
+    LinearAlgebra.issuccess(C) || return zero(T)
+    return prod(abs2, diag(C.factors))
+end
+
+function LinearAlgebra.logdet(C::Cholesky{T,<:MtlMatrix{T}}) where {T<:MtlFloat}
+    LinearAlgebra.checksquare(C.factors)
+    LinearAlgebra.issuccess(C) || return log(zero(T))
+    return 2 * mapreduce(log, +, diag(C.factors))
+end
+
+function LinearAlgebra.logabsdet(C::Cholesky{T,<:MtlMatrix{T}}) where {T<:MtlFloat}
+    return (logdet(C), one(T))
+end
+
+for op in (:det, :logabsdet, :logdet)
+    @eval function LinearAlgebra.$op(A::MtlMatrix{T}) where {T<:MtlFloat}
+        LinearAlgebra.checksquare(A)
+        return LinearAlgebra.$op(lu(A; check=false))
+    end
+end
+
+function LinearAlgebra.inv(A::MtlMatrix{T}) where {T<:MtlFloat}
+    n = LinearAlgebra.checksquare(A)
+    return A \ metal_identity(A, n)
+end
+
+for factorization in (:LU, :Cholesky)
+    @eval function LinearAlgebra.inv(F::$factorization{T,<:MtlMatrix{T}}) where {T<:MtlFloat}
+        n = LinearAlgebra.checksquare(F.factors)
+        return ldiv!(F, metal_identity(F.factors, n))
     end
 end
