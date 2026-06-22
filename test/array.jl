@@ -640,7 +640,20 @@ end
         @test Array(accumulate(+, MtlArray(int_input))) == accumulate(+, int_input)
         @test Array(accumulate(+, MtlArray(scan_input); dims=1, init=1.0f0)) ≈
             accumulate(+, scan_input; dims=1, init=1.0f0)
+
+        nan_input = Float32[1, NaN, 0.5, 2]
+        @test isequal(Array(accumulate(max, MtlArray(nan_input))),
+                      accumulate(max, nan_input))
+        @test isequal(Array(accumulate(min, MtlArray(nan_input))),
+                      accumulate(min, nan_input))
     end
+
+    large_nan_input = ones(Float32, Metal.mps_scan_threshold + 1)
+    large_nan_input[2] = NaN
+    @test isequal(Array(accumulate(max, MtlArray(large_nan_input))),
+                  accumulate(max, large_nan_input))
+    @test isequal(Array(accumulate(min, MtlArray(large_nan_input))),
+                  accumulate(min, large_nan_input))
 end
 
 @testset "reduced dimensions" begin

@@ -172,17 +172,16 @@ end
 const scan_alg = ScopedValue(:auto)
 const mps_scan_threshold = 64 * 1024
 
-scan_operation(::typeof(+)) = :sum
-scan_operation(::typeof(Base.add_sum)) = :sum
-scan_operation(::typeof(*)) = :product
-scan_operation(::typeof(Base.mul_prod)) = :product
-scan_operation(::typeof(max)) = :maximum
-scan_operation(::typeof(min)) = :minimum
-scan_operation(op) = nothing
+# MPS cumulative max/min ignore NaNs; Base accumulate(max/min) propagates them.
+mps_scan_operation(::typeof(+)) = :sum
+mps_scan_operation(::typeof(Base.add_sum)) = :sum
+mps_scan_operation(::typeof(*)) = :product
+mps_scan_operation(::typeof(Base.mul_prod)) = :product
+mps_scan_operation(op) = nothing
 
 function mps_scan_supported(op, output::MtlArray{T}, input::MtlArray{T},
                             dims::Integer, init::Nothing) where {T}
-    scan_operation(op) === nothing && return false
+    mps_scan_operation(op) === nothing && return false
     T <: MPSGraphs.MPSGRAPH_VALID_SCAN_TYPES || return false
     axes(output) == axes(input) || return false
     1 <= dims <= ndims(input) || return false
