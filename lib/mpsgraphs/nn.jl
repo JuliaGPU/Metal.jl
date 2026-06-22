@@ -102,6 +102,28 @@ function convolution2DWithSourceTensor(graph::MPSGraph, source::MPSGraphTensor,
                                                         name:name::id{NSString}]::MPSGraphTensor
 end
 
+function convolution2DDataGradientWithIncomingGradientTensor(
+    graph::MPSGraph, gradient::MPSGraphTensor, weights::MPSGraphTensor,
+    output_shape::MPSShape, descriptor::MPSGraphConvolution2DOpDescriptor,
+    name = "conv_data_grad")
+    @objc [graph::id{MPSGraph} convolution2DDataGradientWithIncomingGradientTensor:gradient::id{MPSGraphTensor}
+                                                                     weightsTensor:weights::id{MPSGraphTensor}
+                                                                       outputShape:output_shape::id{MPSShape}
+                                                      forwardConvolutionDescriptor:descriptor::id{MPSGraphConvolution2DOpDescriptor}
+                                                                              name:name::id{NSString}]::MPSGraphTensor
+end
+
+function convolution2DWeightsGradientWithIncomingGradientTensor(
+    graph::MPSGraph, gradient::MPSGraphTensor, source::MPSGraphTensor,
+    output_shape::MPSShape, descriptor::MPSGraphConvolution2DOpDescriptor,
+    name = "conv_filter_grad")
+    @objc [graph::id{MPSGraph} convolution2DWeightsGradientWithIncomingGradientTensor:gradient::id{MPSGraphTensor}
+                                                                        sourceTensor:source::id{MPSGraphTensor}
+                                                                         outputShape:output_shape::id{MPSShape}
+                                                        forwardConvolutionDescriptor:descriptor::id{MPSGraphConvolution2DOpDescriptor}
+                                                                                name:name::id{NSString}]::MPSGraphTensor
+end
+
 function maxPooling2DWithSourceTensor(graph::MPSGraph, source::MPSGraphTensor,
                                       descriptor::MPSGraphPooling2DOpDescriptor,
                                       name = "maxpool")
@@ -116,6 +138,26 @@ function avgPooling2DWithSourceTensor(graph::MPSGraph, source::MPSGraphTensor,
     @objc [graph::id{MPSGraph} avgPooling2DWithSourceTensor:source::id{MPSGraphTensor}
                                                  descriptor:descriptor::id{MPSGraphPooling2DOpDescriptor}
                                                        name:name::id{NSString}]::MPSGraphTensor
+end
+
+function maxPooling2DGradientWithGradientTensor(graph::MPSGraph, gradient::MPSGraphTensor,
+                                                source::MPSGraphTensor,
+                                                descriptor::MPSGraphPooling2DOpDescriptor,
+                                                name = "maxpool_grad")
+    @objc [graph::id{MPSGraph} maxPooling2DGradientWithGradientTensor:gradient::id{MPSGraphTensor}
+                                                         sourceTensor:source::id{MPSGraphTensor}
+                                                           descriptor:descriptor::id{MPSGraphPooling2DOpDescriptor}
+                                                                 name:name::id{NSString}]::MPSGraphTensor
+end
+
+function avgPooling2DGradientWithGradientTensor(graph::MPSGraph, gradient::MPSGraphTensor,
+                                                source::MPSGraphTensor,
+                                                descriptor::MPSGraphPooling2DOpDescriptor,
+                                                name = "meanpool_grad")
+    @objc [graph::id{MPSGraph} avgPooling2DGradientWithGradientTensor:gradient::id{MPSGraphTensor}
+                                                         sourceTensor:source::id{MPSGraphTensor}
+                                                           descriptor:descriptor::id{MPSGraphPooling2DOpDescriptor}
+                                                                 name:name::id{NSString}]::MPSGraphTensor
 end
 
 const MPSGRAPH_VALID_NN_TYPES = Union{Float16, Float32}
@@ -348,11 +390,98 @@ end
 const conv2d_graph_cache = Dict{Conv2DGraphKey, CachedConv2DGraph}()
 const conv2d_graph_cache_lock = ReentrantLock()
 
+struct Conv2DDataGradGraphKey{T}
+    size_dx::NTuple{4, Int}
+    size_dy::NTuple{4, Int}
+    size_w::NTuple{4, Int}
+    stride::NTuple{2, Int}
+    padding::NTuple{4, Int}
+    dilation::NTuple{2, Int}
+    groups::Int
+    flipkernel::Bool
+end
+
+struct CachedConv2DDataGradGraph
+    graph::MPSGraph
+    place_dy::MPSGraphTensor
+    place_w::MPSGraphTensor
+    result::MPSGraphTensor
+end
+
+function CachedConv2DDataGradGraph(key::Conv2DDataGradGraphKey{T}) where {T}
+    graph = MPSGraph()
+    place_dy = placeholderTensor(graph, key.size_dy, T)
+    place_w = placeholderTensor(graph, key.size_w, T)
+    desc = MPSGraphConvolution2DOpDescriptor(key.stride, key.padding, key.dilation,
+                                             key.groups)
+    result = convolution2DDataGradientWithIncomingGradientTensor(
+        graph, place_dy, conv_weights_tensor(graph, place_w, key.flipkernel),
+        convert(MPSShape, reverse(key.size_dx)), desc, "conv_data_grad")
+    return CachedConv2DDataGradGraph(graph, place_dy, place_w, result)
+end
+
+const conv2d_data_grad_graph_cache =
+    Dict{Conv2DDataGradGraphKey, CachedConv2DDataGradGraph}()
+const conv2d_data_grad_graph_cache_lock = ReentrantLock()
+
+struct Conv2DFilterGradGraphKey{T}
+    size_dw::NTuple{4, Int}
+    size_x::NTuple{4, Int}
+    size_dy::NTuple{4, Int}
+    stride::NTuple{2, Int}
+    padding::NTuple{4, Int}
+    dilation::NTuple{2, Int}
+    groups::Int
+    flipkernel::Bool
+end
+
+struct CachedConv2DFilterGradGraph
+    graph::MPSGraph
+    place_x::MPSGraphTensor
+    place_dy::MPSGraphTensor
+    result::MPSGraphTensor
+end
+
+function CachedConv2DFilterGradGraph(key::Conv2DFilterGradGraphKey{T}) where {T}
+    graph = MPSGraph()
+    place_x = placeholderTensor(graph, key.size_x, T)
+    place_dy = placeholderTensor(graph, key.size_dy, T)
+    desc = MPSGraphConvolution2DOpDescriptor(key.stride, key.padding, key.dilation,
+                                             key.groups)
+    result = convolution2DWeightsGradientWithIncomingGradientTensor(
+        graph, place_dy, place_x, convert(MPSShape, reverse(key.size_dw)), desc,
+        "conv_filter_grad")
+    result = conv_weights_tensor(graph, result, key.flipkernel)
+    return CachedConv2DFilterGradGraph(graph, place_x, place_dy, result)
+end
+
+const conv2d_filter_grad_graph_cache =
+    Dict{Conv2DFilterGradGraphKey, CachedConv2DFilterGradGraph}()
+const conv2d_filter_grad_graph_cache_lock = ReentrantLock()
+
 function check_conv2d_args(y::MtlArray{T,4}, x::MtlArray{T,4}, w::MtlArray{T,4}) where {T}
     T <: MPSGRAPH_VALID_NN_TYPES || throw(ArgumentError("MPSGraph NN operations support Float16 and Float32"))
     size(x, 3) == size(w, 3) || throw(DimensionMismatch("input and kernel channel counts do not match"))
     size(y, 3) == size(w, 4) || throw(DimensionMismatch("output and kernel channel counts do not match"))
     size(y, 4) == size(x, 4) || throw(DimensionMismatch("input and output batch sizes do not match"))
+    return nothing
+end
+
+function check_conv2d_data_grad_args(dx::MtlArray{T,4}, dy::MtlArray{T,4},
+                                     w::MtlArray{T,4}) where {T}
+    T <: MPSGRAPH_VALID_NN_TYPES || throw(ArgumentError("MPSGraph NN operations support Float16 and Float32"))
+    size(dx, 3) == size(w, 3) || throw(DimensionMismatch("input gradient and kernel channel counts do not match"))
+    size(dy, 3) == size(w, 4) || throw(DimensionMismatch("output gradient and kernel channel counts do not match"))
+    size(dy, 4) == size(dx, 4) || throw(DimensionMismatch("input and output gradient batch sizes do not match"))
+    return nothing
+end
+
+function check_conv2d_filter_grad_args(dw::MtlArray{T,4}, x::MtlArray{T,4},
+                                       dy::MtlArray{T,4}) where {T}
+    T <: MPSGRAPH_VALID_NN_TYPES || throw(ArgumentError("MPSGraph NN operations support Float16 and Float32"))
+    size(x, 3) == size(dw, 3) || throw(DimensionMismatch("input and kernel gradient channel counts do not match"))
+    size(dy, 3) == size(dw, 4) || throw(DimensionMismatch("output and kernel gradient channel counts do not match"))
+    size(dy, 4) == size(x, 4) || throw(DimensionMismatch("input and output gradient batch sizes do not match"))
     return nothing
 end
 
@@ -384,6 +513,68 @@ end
     synchronize(cmdbuf)
 
     return y
+end
+
+@autoreleasepool function graph_conv_data_grad!(dx::MtlArray{T,4}, dy::MtlArray{T,4},
+                                                w::MtlArray{T,4};
+                                                stride::NTuple{2, Int} = (1, 1),
+                                                padding::NTuple{4, Int} = (0, 0, 0, 0),
+                                                dilation::NTuple{2, Int} = (1, 1),
+                                                groups::Integer = 1,
+                                                flipkernel::Bool = false) where {T}
+    check_conv2d_data_grad_args(dx, dy, w)
+    key = Conv2DDataGradGraphKey{T}(size(dx), size(dy), size(w), stride, padding,
+                                    dilation, Int(groups), flipkernel)
+    cached = @lock conv2d_data_grad_graph_cache_lock get!(conv2d_data_grad_graph_cache, key) do
+        CachedConv2DDataGradGraph(key)
+    end
+
+    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
+        cached.place_dy => MPSGraphTensorData(dy),
+        cached.place_w => MPSGraphTensorData(w),
+    )
+    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
+        cached.result => MPSGraphTensorData(dx),
+    )
+
+    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
+    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
+            default_exec_desc())
+    commit!(cmdbuf)
+    synchronize(cmdbuf)
+
+    return dx
+end
+
+@autoreleasepool function graph_conv_filter_grad!(dw::MtlArray{T,4}, x::MtlArray{T,4},
+                                                  dy::MtlArray{T,4};
+                                                  stride::NTuple{2, Int} = (1, 1),
+                                                  padding::NTuple{4, Int} = (0, 0, 0, 0),
+                                                  dilation::NTuple{2, Int} = (1, 1),
+                                                  groups::Integer = 1,
+                                                  flipkernel::Bool = false) where {T}
+    check_conv2d_filter_grad_args(dw, x, dy)
+    key = Conv2DFilterGradGraphKey{T}(size(dw), size(x), size(dy), stride, padding,
+                                      dilation, Int(groups), flipkernel)
+    cached = @lock conv2d_filter_grad_graph_cache_lock get!(conv2d_filter_grad_graph_cache, key) do
+        CachedConv2DFilterGradGraph(key)
+    end
+
+    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
+        cached.place_x => MPSGraphTensorData(x),
+        cached.place_dy => MPSGraphTensorData(dy),
+    )
+    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
+        cached.result => MPSGraphTensorData(dw),
+    )
+
+    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
+    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
+            default_exec_desc())
+    commit!(cmdbuf)
+    synchronize(cmdbuf)
+
+    return dw
 end
 
 struct Pool2DGraphKey{T}
@@ -421,10 +612,59 @@ end
 const pool2d_graph_cache = Dict{Pool2DGraphKey, CachedPool2DGraph}()
 const pool2d_graph_cache_lock = ReentrantLock()
 
+struct Pool2DGradGraphKey{T}
+    op::Symbol
+    size_dx::NTuple{4, Int}
+    size_dy::NTuple{4, Int}
+    size_x::NTuple{4, Int}
+    kernel::NTuple{2, Int}
+    stride::NTuple{2, Int}
+    padding::NTuple{4, Int}
+    dilation::NTuple{2, Int}
+    include_zero_pad::Bool
+end
+
+struct CachedPool2DGradGraph
+    graph::MPSGraph
+    place_dy::MPSGraphTensor
+    place_x::MPSGraphTensor
+    result::MPSGraphTensor
+end
+
+function CachedPool2DGradGraph(key::Pool2DGradGraphKey{T}) where {T}
+    graph = MPSGraph()
+    place_dy = placeholderTensor(graph, key.size_dy, T)
+    place_x = placeholderTensor(graph, key.size_x, T)
+    desc = MPSGraphPooling2DOpDescriptor(key.kernel, key.stride, key.padding,
+                                         key.dilation, key.include_zero_pad)
+    result = if key.op === :max
+        maxPooling2DGradientWithGradientTensor(graph, place_dy, place_x, desc,
+                                               "maxpool_grad")
+    elseif key.op === :mean
+        avgPooling2DGradientWithGradientTensor(graph, place_dy, place_x, desc,
+                                               "meanpool_grad")
+    else
+        throw(ArgumentError("unsupported pooling gradient graph operation: $(key.op)"))
+    end
+    return CachedPool2DGradGraph(graph, place_dy, place_x, result)
+end
+
+const pool2d_grad_graph_cache = Dict{Pool2DGradGraphKey, CachedPool2DGradGraph}()
+const pool2d_grad_graph_cache_lock = ReentrantLock()
+
 function check_pool2d_args(y::MtlArray{T,4}, x::MtlArray{T,4}) where {T}
     T <: MPSGRAPH_VALID_NN_TYPES || throw(ArgumentError("MPSGraph NN operations support Float16 and Float32"))
     size(y, 3) == size(x, 3) || throw(DimensionMismatch("input and output channel counts do not match"))
     size(y, 4) == size(x, 4) || throw(DimensionMismatch("input and output batch sizes do not match"))
+    return nothing
+end
+
+function check_pool2d_grad_args(dx::MtlArray{T,4}, dy::MtlArray{T,4},
+                                x::MtlArray{T,4}) where {T}
+    T <: MPSGRAPH_VALID_NN_TYPES || throw(ArgumentError("MPSGraph NN operations support Float16 and Float32"))
+    size(dx) == size(x) || throw(DimensionMismatch("input gradient and input dimensions do not match"))
+    size(dy, 3) == size(x, 3) || throw(DimensionMismatch("input and output gradient channel counts do not match"))
+    size(dy, 4) == size(x, 4) || throw(DimensionMismatch("input and output gradient batch sizes do not match"))
     return nothing
 end
 
@@ -457,6 +697,37 @@ end
     return y
 end
 
+@autoreleasepool function run_pool2d_grad!(op::Symbol, dx::MtlArray{T,4},
+                                           dy::MtlArray{T,4}, x::MtlArray{T,4};
+                                           kernel::NTuple{2, Int},
+                                           stride::NTuple{2, Int},
+                                           padding::NTuple{4, Int},
+                                           dilation::NTuple{2, Int} = (1, 1),
+                                           include_zero_pad::Bool = false) where {T}
+    check_pool2d_grad_args(dx, dy, x)
+    key = Pool2DGradGraphKey{T}(op, size(dx), size(dy), size(x), kernel, stride,
+                                padding, dilation, include_zero_pad)
+    cached = @lock pool2d_grad_graph_cache_lock get!(pool2d_grad_graph_cache, key) do
+        CachedPool2DGradGraph(key)
+    end
+
+    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
+        cached.place_dy => MPSGraphTensorData(dy),
+        cached.place_x => MPSGraphTensorData(x),
+    )
+    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
+        cached.result => MPSGraphTensorData(dx),
+    )
+
+    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
+    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
+            default_exec_desc())
+    commit!(cmdbuf)
+    synchronize(cmdbuf)
+
+    return dx
+end
+
 function graph_maxpool!(y::MtlArray{T,4}, x::MtlArray{T,4}; kernel::NTuple{2, Int},
                         stride::NTuple{2, Int}, padding::NTuple{4, Int},
                         dilation::NTuple{2, Int} = (1, 1)) where {T}
@@ -469,4 +740,20 @@ function graph_meanpool!(y::MtlArray{T,4}, x::MtlArray{T,4}; kernel::NTuple{2, I
                          count_include_pad::Bool = true) where {T}
     return run_pool2d!(:mean, y, x; kernel, stride, padding, dilation,
                        include_zero_pad=count_include_pad)
+end
+
+function graph_maxpool_grad!(dx::MtlArray{T,4}, dy::MtlArray{T,4}, x::MtlArray{T,4};
+                             kernel::NTuple{2, Int}, stride::NTuple{2, Int},
+                             padding::NTuple{4, Int},
+                             dilation::NTuple{2, Int} = (1, 1)) where {T}
+    return run_pool2d_grad!(:max, dx, dy, x; kernel, stride, padding, dilation)
+end
+
+function graph_meanpool_grad!(dx::MtlArray{T,4}, dy::MtlArray{T,4}, x::MtlArray{T,4};
+                              kernel::NTuple{2, Int}, stride::NTuple{2, Int},
+                              padding::NTuple{4, Int},
+                              dilation::NTuple{2, Int} = (1, 1),
+                              count_include_pad::Bool = true) where {T}
+    return run_pool2d_grad!(:mean, dx, dy, x; kernel, stride, padding, dilation,
+                            include_zero_pad=count_include_pad)
 end
