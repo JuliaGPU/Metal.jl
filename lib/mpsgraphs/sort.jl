@@ -1,4 +1,4 @@
-const MPSGRAPH_VALID_SORT_TYPES = Union{Float16, Float32, Int32, Int64}
+const MPSGRAPH_VALID_SORT_TYPES = filter(T -> T <: Real, (MPS.jl_mps_to_typ |> values |> collect))
 const MPSGRAPH_SORTPERM_INDEX_TYPES = Union{Int32, Int64}
 
 function sortWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, axis::Integer,
@@ -102,7 +102,7 @@ const sortperm_graph_cache = Dict{SortPermGraphKey, CachedSortPermGraph}()
 const sortperm_graph_cache_lock = ReentrantLock()
 
 function check_sort_args(out::MtlArray{T}, input::MtlArray{T}, dim::Integer) where {T}
-    T <: MPSGRAPH_VALID_SORT_TYPES || throw(ArgumentError("MPSGraph sort supports Float16, Float32, Int32, and Int64"))
+    T <: Union{MPSGRAPH_VALID_SORT_TYPES...} || throw(ArgumentError("MPSGraph sort supports $(join(MPSGraphs.MPSGRAPH_VALID_SORT_TYPES,", ", " and "))"))
     size(out) == size(input) ||
         throw(DimensionMismatch("output has dimensions $(size(out)), input has dimensions $(size(input))"))
     1 <= dim <= ndims(input) || throw(ArgumentError("dimension out of range"))
@@ -112,7 +112,7 @@ end
 
 function check_sortperm_args(index::MtlArray{Ti}, input::MtlArray{T},
                              dim::Integer) where {Ti, T}
-    T <: MPSGRAPH_VALID_SORT_TYPES || throw(ArgumentError("MPSGraph sortperm supports Float16, Float32, Int32, and Int64 inputs"))
+    T <: Union{MPSGRAPH_VALID_SORT_TYPES...} || throw(ArgumentError("MPSGraph sortperm supports $(join(MPSGraphs.MPSGRAPH_VALID_SORT_TYPES,", ", " and ")) inputs"))
     Ti <: MPSGRAPH_SORTPERM_INDEX_TYPES || throw(ArgumentError("MPSGraph sortperm supports Int32 and Int64 indices"))
     size(index) == size(input) ||
         throw(DimensionMismatch("index output has dimensions $(size(index)), input has dimensions $(size(input))"))

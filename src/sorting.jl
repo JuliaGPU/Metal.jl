@@ -15,7 +15,7 @@ end
 
 function mps_sort_descending(::Type{T}, lt, by, rev::Union{Bool,Nothing},
                              order::Base.Order.Ordering) where {T}
-    T <: MPSGraphs.MPSGRAPH_VALID_SORT_TYPES || return nothing
+    T <: Union{MPSGraphs.MPSGRAPH_VALID_SORT_TYPES...} || return nothing
     return sort_descending(lt, by, rev, order)
 end
 
