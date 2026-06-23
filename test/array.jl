@@ -634,7 +634,7 @@ end
 
     scan_input = reshape(Float32[2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37], 3, 4)
     product_input = scan_input ./ 10
-    for alg in (:native, :MPS), dims in 1:2
+    for alg in (:native, :MPSGraph), dims in 1:2
         @with (Metal.scan_alg => alg) begin
             @test Array(accumulate(+, MtlArray(scan_input); dims)) ≈
                 accumulate(+, scan_input; dims)
@@ -654,7 +654,7 @@ end
         end
     end
 
-    @with (Metal.scan_alg => :MPS) begin
+    @with (Metal.scan_alg => :MPSGraph) begin
         int_input = Int32[1, 2, 3, 4]
         @test_throws ArgumentError accumulate(+, MtlArray(int_input))
         @test_throws ArgumentError accumulate(+, MtlArray(scan_input); dims=1,
@@ -665,7 +665,7 @@ end
         @test_throws ArgumentError accumulate(min, MtlArray(nan_input))
     end
 
-    large_nan_input = ones(Float32, Metal.mps_scan_threshold + 1)
+    large_nan_input = ones(Float32, Metal.mpsgraph_scan_threshold + 1)
     large_nan_input[2] = NaN
     @test isequal(Array(accumulate(max, MtlArray(large_nan_input))),
                   accumulate(max, large_nan_input))
@@ -675,7 +675,7 @@ end
 
 @testset "reduced dimensions" begin
     reduce_input = reshape(Float32.(1:24) ./ 10, 3, 4, 2)
-    for alg in (:native, :MPS), dims in 1:3
+    for alg in (:native, :MPSGraph), dims in 1:3
         @with (Metal.reduce_alg => alg) begin
             @test Array(sum(MtlArray(reduce_input); dims)) ≈
                 sum(reduce_input; dims)
@@ -688,7 +688,7 @@ end
         end
     end
 
-    @with (Metal.reduce_alg => :MPS) begin
+    @with (Metal.reduce_alg => :MPSGraph) begin
         int_input = reshape(Int32.(1:12), 3, 4)
         @test_throws ArgumentError sum(MtlArray(int_input); dims=2)
         @test_throws ArgumentError sum(abs2, MtlArray(reduce_input); dims=2)
