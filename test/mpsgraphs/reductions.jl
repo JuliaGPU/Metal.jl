@@ -1,4 +1,4 @@
-@testset "reductions ($T)" for T in filter(!=(Bool), MPSGraphs.MPSGRAPH_VALID_REDUCTION_TYPES)
+@testset "reductions ($T)" for T in MPSGraphs.MPSGRAPH_VALID_REDUCTION_TYPES
     A = if T <: Integer
         rand(T.(1:3), 3, 4, 2)
     else

@@ -1,5 +1,5 @@
 
-const MPSGRAPH_VALID_REDUCTION_TYPES = filter(T -> T <: Real, (MPS.jl_mps_to_typ |> values |> collect))
+const MPSGRAPH_VALID_REDUCTION_TYPES = filter(T -> T <: Real && T != Bool, (MPS.jl_mps_to_typ |> values |> collect))
 
 function reductionSumWithTensor(graph::MPSGraph, tensor::MPSGraphTensor,
                                 axes::NSArray, name = "reduction_sum")
