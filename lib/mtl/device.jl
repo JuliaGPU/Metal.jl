@@ -29,8 +29,7 @@ Get a handle to a compute device.
 MTLDevice(i::Integer) = devices()[i]
 
 function threadgroup_limits(dev::MTLDevice)
-    key = UInt(pointer(dev))
-    @memoize key::UInt begin
+    @memoize key=pointer(dev)::id{MTLDevice} begin
         (Int(dev.maxThreadsPerThreadgroup.width), Int(dev.maxThreadgroupMemoryLength))
     end::Tuple{Int,Int}
 end

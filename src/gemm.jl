@@ -314,8 +314,7 @@ end
 # validator would reject them.
 @inline function tensor_matmul_capable()
     dev = device()
-    key = UInt(pointer(dev))
-    @memoize key::UInt begin
+    @memoize key=pointer(dev)::id{MTLDevice} begin
         metal_support() >= v"4" && MTL.supports_family(dev, MTL.MTLGPUFamilyMetal4)
     end::Bool
 end

@@ -6,8 +6,7 @@ export free_memory, total_memory
 Return Metal's recommended maximum working set size for `dev`.
 """
 function working_set_size(dev::MTLDevice=device())
-    key = UInt(pointer(dev))
-    @memoize key::UInt begin
+    @memoize key=pointer(dev)::id{MTLDevice} begin
         Int(dev.recommendedMaxWorkingSetSize)
     end::Int
 end
