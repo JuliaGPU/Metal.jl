@@ -11,7 +11,7 @@
     end
 end
 
-@testset "sort NaN ordering ($T)" for T in filter(T -> T <: AbstractFloat || T <: Complex{<:AbstractFloat}, MPSGraphs.MPSGRAPH_VALID_SORT_TYPES)
+@testset "sort NaN ordering ($T)" for T in filter(T -> T <: AbstractFloat, MPSGraphs.MPSGRAPH_VALID_SORT_TYPES)
     A = T[1 NaN 2; -1 0 NaN]
 
     for dim in 1:2
