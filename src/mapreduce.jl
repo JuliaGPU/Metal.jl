@@ -210,7 +210,7 @@ function mpsgraph_reduce_dimensions(f, op, R::MtlArray{T}, A::MtlArray{T},
                                init) where {T}
     f === identity || return nothing
     mpsgraph_reduction_operation(op) === nothing && return nothing
-    T <: MPSGraphs.MPSGRAPH_VALID_REDUCTION_TYPES || return nothing
+    T <: Union{MPSGraphs.MPSGRAPH_VALID_REDUCTION_TYPES...} || return nothing
     mpsgraph_reduction_init_supported(op, T, init) || return nothing
     R.offset == 0 && A.offset == 0 || return nothing
     return reduced_dimensions(R, A)
