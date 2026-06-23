@@ -47,6 +47,16 @@ const DefaultStorageMode = let str = @load_preference("default_storage", "shared
     end
 end
 
+@public allowscalar
+function allowscalar(allow::Bool)
+    if !allow && DefaultStorageMode == SharedStorage
+        @warn """Metal.jl uses unified memory by default, scalar indexing operations will run even with scalar indexing disallowed.
+            If you want to ensure an operation is run on the GPU, set `default_storage` to \"private\" in your LocalPreferences.toml,
+            or specifically set the storage mode to `Metal.PrivateStorage` when creating your `MtlArray`s""" maxlog=1
+    end
+    GPUArraysCore.allowscalar(allow)
+end
+
 # core library
 include("../lib/mtl/MTL.jl")
 using .MTL
