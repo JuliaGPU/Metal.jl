@@ -1,4 +1,4 @@
-const MPSGRAPH_VALID_SCAN_TYPES = Union{Float16, Float32}
+const MPSGRAPH_VALID_SCAN_TYPES = filter(T -> T <: Real && T != Bool, (MPS.jl_mps_to_typ |> values |> collect))
 
 function cumulativeSumWithTensor(graph::MPSGraph, tensor::MPSGraphTensor,
                                  axis::Integer, exclusive::Bool,
@@ -40,12 +40,14 @@ function cumulativeMinimumWithTensor(graph::MPSGraph, tensor::MPSGraphTensor,
                                                       name:name::id{NSString}]::MPSGraphTensor
 end
 
-scan_operation(::typeof(+)) = :sum
-scan_operation(::typeof(Base.add_sum)) = :sum
-scan_operation(::typeof(*)) = :product
-scan_operation(::typeof(Base.mul_prod)) = :product
-scan_operation(op) =
-    throw(ArgumentError("MPSGraph scan supports + and *"))
+scan_operation(::DataType, ::typeof(+)) = :sum
+scan_operation(::DataType, ::typeof(Base.add_sum)) = :sum
+scan_operation(::DataType, ::typeof(*)) = :product
+scan_operation(::DataType, ::typeof(Base.mul_prod)) = :product
+scan_operation(::Type{<:Integer}, ::typeof(min)) = :minimum
+scan_operation(::Type{<:Integer}, ::typeof(max)) = :maximum
+scan_operation(_T, _op) =
+    throw(ArgumentError("MPSGraph scan supports + and * on all real MPS types, and min/max with integer types only"))
 
 function scanWithTensor(graph::MPSGraph, op::Symbol, tensor::MPSGraphTensor,
                         axis::Integer, name = "scan")
@@ -53,8 +55,12 @@ function scanWithTensor(graph::MPSGraph, op::Symbol, tensor::MPSGraphTensor,
         cumulativeSumWithTensor(graph, tensor, axis, false, false, name)
     elseif op === :product
         cumulativeProductWithTensor(graph, tensor, axis, false, false, name)
+    elseif op === :minimum
+        cumulativeMinimumWithTensor(graph, tensor, axis, false, false, name)
+    elseif op === :maximum
+        cumulativeMaximumWithTensor(graph, tensor, axis, false, false, name)
     else
-        throw(ArgumentError("MPSGraph scan supports + and *"))
+        throw(ArgumentError("MPSGraph scan supports + and * on all real MPS types, and min/max with integer types only"))
     end
 end
 
@@ -82,8 +88,8 @@ const scan_graph_cache = Dict{ScanGraphKey, CachedScanGraph}()
 const scan_graph_cache_lock = ReentrantLock()
 
 function check_scan_args(out::MtlArray{T}, input::MtlArray{T}, dim::Integer) where {T}
-    T <: MPSGRAPH_VALID_SCAN_TYPES ||
-        throw(ArgumentError("MPSGraph scan supports Float16 and Float32"))
+    T <: Union{MPSGRAPH_VALID_SCAN_TYPES...} ||
+        throw(ArgumentError("MPSGraph scan supports $(join(MPSGraphs.MPSGRAPH_VALID_SCAN_TYPES,", ", " and "))"))
     size(out) == size(input) ||
         throw(DimensionMismatch("output has dimensions $(size(out)), input has dimensions $(size(input))"))
     1 <= dim <= ndims(input) || throw(ArgumentError("dimension out of range"))
@@ -95,7 +101,7 @@ end
                                       dim::Integer = 1) where {T}
     dim = check_scan_args(out, input, dim)
     isempty(input) && return copyto!(out, input)
-    key = ScanGraphKey{T}(size(input), dim, scan_operation(op))
+    key = ScanGraphKey{T}(size(input), dim, scan_operation(T, op))
     cached = @lock scan_graph_cache_lock get!(scan_graph_cache, key) do
         CachedScanGraph(key)
     end

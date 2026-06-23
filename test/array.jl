@@ -655,14 +655,22 @@ end
     end
 
     @with (Metal.scan_alg => :MPSGraph) begin
-        int_input = Int32[1, 2, 3, 4]
-        @test_throws ArgumentError accumulate(+, MtlArray(int_input))
-        @test_throws ArgumentError accumulate(+, MtlArray(scan_input); dims=1,
-                                              init=1.0f0)
+        # min, max using MPSGraph supported for Integers
+        int_input = Int32.(scan_input)
+        @test Array(accumulate(max, MtlArray(int_input); dims=1)) ≈
+            accumulate(max, int_input; dims=1)
+        @test Array(accumulate(min, MtlArray(int_input); dims=2)) ≈
+            accumulate(min, int_input; dims=2)
 
+        # but not for floating point
         nan_input = Float32[1, NaN, 0.5, 2]
         @test_throws ArgumentError accumulate(max, MtlArray(nan_input))
         @test_throws ArgumentError accumulate(min, MtlArray(nan_input))
+
+        # invalid eltype and kwargs
+        @test_throws ArgumentError accumulate(+, MtlArray(Complex{Int32}.(int_input)))
+        @test_throws ArgumentError accumulate(+, MtlArray(scan_input); dims=1,
+                                              init=1.0f0)
     end
 
     large_nan_input = ones(Float32, Metal.mpsgraph_scan_threshold + 1)

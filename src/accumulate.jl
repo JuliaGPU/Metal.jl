@@ -173,17 +173,20 @@ const scan_alg = ScopedValue(:auto)
 const mpsgraph_scan_threshold = 64 * 1024
 
 # MPSGraph cumulative max/min ignore NaNs while Base accumulate(max/min)
-# propagates them, so don't use MPSGraph scan for these operations.
-mpsgraph_scan_operation(::typeof(+)) = :sum
-mpsgraph_scan_operation(::typeof(Base.add_sum)) = :sum
-mpsgraph_scan_operation(::typeof(*)) = :product
-mpsgraph_scan_operation(::typeof(Base.mul_prod)) = :product
-mpsgraph_scan_operation(op) = nothing
+# propagates them, so don't use MPSGraph scan for these operations on
+# Float inputs
+mpsgraph_scan_operation(::DataType, ::typeof(+)) = :sum
+mpsgraph_scan_operation(::DataType, ::typeof(Base.add_sum)) = :sum
+mpsgraph_scan_operation(::DataType, ::typeof(*)) = :product
+mpsgraph_scan_operation(::DataType, ::typeof(Base.mul_prod)) = :product
+mpsgraph_scan_operation(::Type{<:Integer}, ::typeof(min)) = :minimum
+mpsgraph_scan_operation(::Type{<:Integer}, ::typeof(max)) = :maximum
+mpsgraph_scan_operation(_T, _op) = nothing
 
 function mpsgraph_scan_supported(op, output::MtlArray{T}, input::MtlArray{T},
                             dims::Integer, init::Nothing) where {T}
-    mpsgraph_scan_operation(op) === nothing && return false
-    T <: MPSGraphs.MPSGRAPH_VALID_SCAN_TYPES || return false
+    mpsgraph_scan_operation(T, op) === nothing && return false
+    T <: Union{MPSGraphs.MPSGRAPH_VALID_SCAN_TYPES...} || return false
     axes(output) == axes(input) || return false
     1 <= dims <= ndims(input) || return false
     return output.offset == 0 && input.offset == 0
