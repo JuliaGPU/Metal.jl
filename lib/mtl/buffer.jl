@@ -20,8 +20,7 @@ end
 ## allocation
 
 function max_buffer_length(dev::MTLDevice)
-    key = UInt(pointer(dev))
-    @memoize key::UInt begin
+    @memoize key=pointer(dev)::id{MTLDevice} begin
         Int(dev.maxBufferLength)
     end::Int
 end

@@ -110,8 +110,7 @@ end
 
 # Fast residency path; collapse this to `true` when macOS 14 support is dropped.
 function can_use_residency_sets(dev::MTLDevice)
-    key = UInt(pointer(dev))
-    @memoize key::UInt begin
+    @memoize key=pointer(dev)::id{MTLDevice} begin
         is_macos(v"15") && !is_virtual(dev)
     end::Bool
 end
