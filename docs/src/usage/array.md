@@ -33,16 +33,16 @@ can construct `MtlArray`s in the same way as regular `Array` objects:
 
 ```jldoctest
 julia> MtlArray{Int}(undef, 2)
-2-element MtlVector{Int64, Metal.PrivateStorage}:
+2-element MtlVector{Int64, Metal.SharedStorage}:
  0
  0
 
 julia> MtlArray{Int}(undef, (1,2))
-1×2 MtlMatrix{Int64, Metal.PrivateStorage}:
+1×2 MtlMatrix{Int64, Metal.SharedStorage}:
  0  0
 
 julia> similar(ans)
-1×2 MtlMatrix{Int64, Metal.PrivateStorage}:
+1×2 MtlMatrix{Int64, Metal.SharedStorage}:
  0  0
 ```
 
@@ -51,7 +51,7 @@ Copying memory to or from the GPU can be expressed using constructors as well, o
 
 ```jldoctest
 julia> a = MtlArray([1,2])
-2-element MtlVector{Int64, Metal.PrivateStorage}:
+2-element MtlVector{Int64, Metal.SharedStorage}:
  1
  2
 
@@ -78,11 +78,11 @@ perform simple element-wise operations you can use `map` or `broadcast`:
 julia> a = MtlArray{Float32}(undef, (1,2));
 
 julia> a .= 5
-1×2 MtlMatrix{Float32, Metal.PrivateStorage}:
+1×2 MtlMatrix{Float32, Metal.SharedStorage}:
  5.0  5.0
 
 julia> map(sin, a)
-1×2 MtlMatrix{Float32, Metal.PrivateStorage}:
+1×2 MtlMatrix{Float32, Metal.SharedStorage}:
  -0.958924  -0.958924
 ```
 
@@ -91,7 +91,7 @@ To reduce the dimensionality of arrays, Metal.jl implements the various flavours
 
 ```jldoctest
 julia> a = Metal.ones(2,3)
-2×3 MtlMatrix{Float32, Metal.PrivateStorage}:
+2×3 MtlMatrix{Float32, Metal.SharedStorage}:
  1.0  1.0  1.0
  1.0  1.0  1.0
 
@@ -99,16 +99,16 @@ julia> reduce(+, a)
 6.0f0
 
 julia> mapreduce(sin, *, a; dims=2)
-2×1 MtlMatrix{Float32, Metal.PrivateStorage}:
+2×1 MtlMatrix{Float32, Metal.SharedStorage}:
  0.59582335
  0.59582335
 
 julia> b = Metal.zeros(1)
-1-element MtlVector{Float32, Metal.PrivateStorage}:
+1-element MtlVector{Float32, Metal.SharedStorage}:
  0.0
 
 julia> Base.mapreducedim!(identity, +, b, a)
-1×1 MtlMatrix{Float32, Metal.PrivateStorage}:
+1×1 MtlMatrix{Float32, Metal.SharedStorage}:
  6.0
 ```
 
@@ -118,12 +118,12 @@ Base's convenience functions for generating random numbers are available in Meta
 
 ```jldoctest
 julia> Metal.rand(2)
-2-element MtlVector{Float32, Metal.PrivateStorage}:
+2-element MtlVector{Float32, Metal.SharedStorage}:
  0.67199826
  0.87411195
 
 julia> Metal.randn(Float32, 2, 1)
-2×1 MtlMatrix{Float32, Metal.PrivateStorage}:
+2×1 MtlMatrix{Float32, Metal.SharedStorage}:
  -0.35001364
  -0.064419515
 ```
@@ -136,11 +136,11 @@ methods from the Random standard library:
 julia> using Random
 
 julia> a = Random.rand(Metal.default_rng(), Float32, 1)
-1-element MtlVector{Float32, Metal.PrivateStorage}:
+1-element MtlVector{Float32, Metal.SharedStorage}:
  0.67199826
 
 julia> Random.rand!(Metal.default_rng(), a)
-1-element MtlVector{Float32, Metal.PrivateStorage}:
+1-element MtlVector{Float32, Metal.SharedStorage}:
  0.23174448
 ```
 

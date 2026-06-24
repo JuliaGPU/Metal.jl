@@ -63,7 +63,7 @@ steps:
   - group: ":eyes: Special"
     depends_on: "julia"
     steps:
-      - label: ":floppy_disk: Shared Storage"
+      - label: ":floppy_disk: Private Storage"
         plugins:
           - JuliaCI/julia#v1:
               version: "1.12"
@@ -79,7 +79,7 @@ steps:
             build.message !~ /\[skip special\]/
         timeout_in_minutes: 60
         commands: |
-          echo -e "[Metal]\ndefault_storage = \"shared\"" >LocalPreferences.toml
+          echo -e "[Metal]\ndefault_storage = \"private\"" >LocalPreferences.toml
       - label: ":mag: API validation"
         plugins:
           - JuliaCI/julia#v1:

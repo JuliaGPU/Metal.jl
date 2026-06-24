@@ -1,7 +1,7 @@
 module MetalKernels
 
 using ..Metal
-using ..Metal: @device_override, DefaultStorageMode, SharedStorage
+using ..Metal: @device_override, DefaultStorageMode, SharedStorage, PrivateStorage
 
 import KernelAbstractions as KA
 
@@ -23,9 +23,10 @@ struct MetalBackend <: KA.GPU
 end
 
 # Ensure type stability. See JuliaGPU/KernelAbstractions#634
-@inline KA.allocate(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = MtlArray{T, length(dims), unified ? SharedStorage : DefaultStorageMode}(undef, dims)
-KA.zeros(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.zeros(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
-KA.ones(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.ones(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
+const default_to_unified = DefaultStorageMode == SharedStorage
+@inline KA.allocate(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = default_to_unified) where T = MtlArray{T, length(dims), unified ? SharedStorage : PrivateStorage}(undef, dims)
+KA.zeros(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = default_to_unified) where T = Metal.zeros(T, dims; storage=unified ? SharedStorage : PrivateStorage)
+KA.ones(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = default_to_unified) where T = Metal.ones(T, dims; storage=unified ? SharedStorage : PrivateStorage)
 
 KA.get_backend(::MtlArray) = MetalBackend()
 KA.synchronize(::MetalBackend) = synchronize()

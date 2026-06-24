@@ -92,11 +92,11 @@ without writing your own kernels:
 
 ```julia-repl
 julia> a = MtlArray([1])
-1-element MtlVector{Int64, Metal.PrivateStorage}:
+1-element MtlVector{Int64, Metal.SharedStorage}:
  1
 
 julia> a .+ 1
-1-element MtlVector{Int64, Metal.PrivateStorage}:
+1-element MtlVector{Int64, Metal.SharedStorage}:
  2
 ```
 
