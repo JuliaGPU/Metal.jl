@@ -13,15 +13,15 @@ function sort_descending(lt, by, rev::Union{Bool,Nothing}, order::Base.Order.Ord
     return rev === true ? !descending : descending
 end
 
-function mps_sort_descending(::Type{T}, lt, by, rev::Union{Bool,Nothing},
+function mpsgraph_sort_descending(::Type{T}, lt, by, rev::Union{Bool,Nothing},
                              order::Base.Order.Ordering) where {T}
     T <: Union{MPSGraphs.MPSGRAPH_VALID_SORT_TYPES...} || return nothing
     return sort_descending(lt, by, rev, order)
 end
 
-mps_sort_descending(A::MtlArray{T}, lt, by, rev::Union{Bool,Nothing},
+mpsgraph_sort_descending(A::MtlArray{T}, lt, by, rev::Union{Bool,Nothing},
                     order::Base.Order.Ordering) where {T} =
-    A.offset == 0 ? mps_sort_descending(T, lt, by, rev, order) : nothing
+    A.offset == 0 ? mpsgraph_sort_descending(T, lt, by, rev, order) : nothing
 
 function invoke_base_sort!(v::AbstractVector{T}; alg, lt, by, rev, order, scratch) where {T}
     return invoke(Base.sort!, Tuple{AbstractVector{T}}, v; alg, lt, by, rev, order,
@@ -72,7 +72,7 @@ function check_sortperm_dim(A::MtlArray, dims)
     end
 end
 
-function mps_sort!(A::MtlArray; dim::Integer, rev::Bool)
+function mpsgraph_sort!(A::MtlArray; dim::Integer, rev::Bool)
     tmp = similar(A)
     MPSGraphs.graph_sort!(tmp, A; dim, rev)
     copyto!(A, tmp)
@@ -86,10 +86,10 @@ function Base.sort!(v::MtlVector{T};
                     rev::Union{Bool,Nothing}=nothing,
                     order::Base.Order.Ordering=Base.Order.Forward,
                     scratch::Union{Vector{T}, Nothing}=nothing) where {T}
-    descending = mps_sort_descending(v, lt, by, rev, order)
+    descending = mpsgraph_sort_descending(v, lt, by, rev, order)
     descending === nothing &&
         return invoke_base_sort!(v; alg, lt, by, rev, order, scratch)
-    return mps_sort!(v; dim=1, rev=descending)
+    return mpsgraph_sort!(v; dim=1, rev=descending)
 end
 
 function Base.sort!(A::MtlArray{T};
@@ -101,10 +101,10 @@ function Base.sort!(A::MtlArray{T};
                     order::Base.Order.Ordering=Base.Order.Forward,
                     scratch::Union{Vector{T}, Nothing}=nothing) where {T}
     dim = check_sort_dim(A, dims)
-    descending = mps_sort_descending(A, lt, by, rev, order)
+    descending = mpsgraph_sort_descending(A, lt, by, rev, order)
     descending === nothing &&
         return invoke_base_sort!(A; dims=dim, alg, lt, by, rev, order, scratch)
-    return mps_sort!(A; dim, rev=descending)
+    return mpsgraph_sort!(A; dim, rev=descending)
 end
 
 Base.sort(v::MtlVector; kws...) = sort!(copy(v); kws...)
@@ -129,7 +129,7 @@ function Base.sortperm(A::MtlArray;
                        order::Base.Order.Ordering=Base.Order.Forward,
                        scratch::Union{Vector{<:Integer}, Nothing}=nothing,
                        dims=nothing)
-    descending = mps_sort_descending(A, lt, by, rev, order)
+    descending = mpsgraph_sort_descending(A, lt, by, rev, order)
     descending === nothing &&
         return invoke_base_sortperm(A; alg, lt, by, rev, order, scratch, dims)
     index = similar(A, Int)
@@ -149,7 +149,7 @@ function Base.sortperm!(index::MtlArray{Ti}, A::MtlArray;
     axes(index) == axes(A) ||
         throw(ArgumentError("index array must have the same axes as the source array"))
     dim = check_sortperm_dim(A, dims)
-    descending = index.offset == 0 ? mps_sort_descending(A, lt, by, rev, order) : nothing
+    descending = index.offset == 0 ? mpsgraph_sort_descending(A, lt, by, rev, order) : nothing
     if descending === nothing || !(Ti <: MPSGraphs.MPSGRAPH_SORTPERM_INDEX_TYPES)
         basedims = dims === nothing ? nothing : dim
         return invoke_base_sortperm!(index, A; alg, lt, by, rev, order,
