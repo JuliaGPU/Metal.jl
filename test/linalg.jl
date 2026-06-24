@@ -10,11 +10,12 @@ using LinearAlgebra, ScopedValues
 
     # test that unsupported configurations error properly
     N = 20
-    function test_matmul(inT, outT; vec_b=false, alg=:auto)
-        a = inT <: Integer ? inT.(rand(-5:5, N,N)) : rand(inT, N, N)
+    function test_matmul(inT, outT; vec_b=false, alg=:auto,
+                         range=(inT <: Unsigned ? (0:10) : (-5:5)))
+        a = inT <: Integer ? inT.(rand(range, N,N)) : rand(inT, N, N)
 
         bdims = vec_b ? (N,) : (N, N)
-        b = inT <: Integer ? inT.(rand(-5:5, bdims)) : rand(inT, bdims)
+        b = inT <: Integer ? inT.(rand(range, bdims)) : rand(inT, bdims)
 
         ma = MtlArray(a)
         mb = MtlArray(b)
@@ -63,6 +64,12 @@ using LinearAlgebra, ScopedValues
         # :scalar (scalar kernel, any eltype)
         @test test_matmul(Int32, Int32; vec_b, alg=:scalar)
         @test test_matmul(Float32, Float32; vec_b, alg=:scalar)
+        # narrow-integer inputs need a wide accumulator; the K=20 dot product overflows Int8
+        @test test_matmul(Int8,  Float32; vec_b, alg=:scalar)
+        @test test_matmul(UInt8, Float32; vec_b, alg=:scalar)
+        @test test_matmul(Int8,  Int32;   vec_b, alg=:scalar)
+        # large values whose product overflows Int16 still accumulate into Int32
+        @test test_matmul(Int16, Int32;   vec_b, alg=:scalar, range=-300:300)
         # :tensor is matrix-only and needs tile-divisible dims; N=20 errors either way
         @test_throws Exception test_matmul(Float32, Float32; vec_b, alg=:tensor)
         end

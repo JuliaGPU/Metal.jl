@@ -232,6 +232,10 @@ function gemm_scalar_kernel!(C, A, B, alpha, beta,
                               M, N, K, ::Val{TA}, ::Val{TB}, ::Val{TILE}) where {TA, TB, TILE}
     TAT = eltype(A); TBT = eltype(B); R = eltype(C)
 
+    # accumulate in a wide enough type, and convert operands before the product, so
+    # narrow-integer (Int8/Int16) inputs don't overflow
+    Tacc = promote_type(R, typeof(zero(TAT) * zero(TBT) + zero(TAT) * zero(TBT)))
+
     li = Int(thread_position_in_threadgroup().x)
     lj = Int(thread_position_in_threadgroup().y)
     gi = (Int(threadgroup_position_in_grid().x) - 1) * TILE + li
@@ -240,8 +244,7 @@ function gemm_scalar_kernel!(C, A, B, alpha, beta,
     As = MtlThreadGroupArray(TAT, (TILE, TILE))
     Bs = MtlThreadGroupArray(TBT, (TILE, TILE))
 
-    z = zero(TAT) * zero(TBT)
-    acc = z + z
+    acc = zero(Tacc)
     nkt = cld(K, TILE)
     kt = 0
     while kt < nkt
@@ -252,7 +255,7 @@ function gemm_scalar_kernel!(C, A, B, alpha, beta,
         @inbounds Bs[li, lj] = (ar <= K && gj <= N) ? opB(B, Val(TB), ar, gj) : zero(TBT)
         threadgroup_barrier(MemoryFlagThreadGroup)
         @inbounds for kk in 1:TILE
-            acc += As[li, kk] * Bs[kk, lj]
+            acc += Tacc(As[li, kk]) * Tacc(Bs[kk, lj])
         end
         threadgroup_barrier(MemoryFlagThreadGroup)
         kt += 1
