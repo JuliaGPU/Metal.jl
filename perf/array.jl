@@ -151,7 +151,7 @@ end
 let group = addgroup!(group, "sorting")
     group["1d"] = @benchmarkable Metal.@sync sort($gpu_vec)
     group["2d"] = @benchmarkable Metal.@sync sort($gpu_mat; dims=1)
-    group["by"] = @benchmarkable Metal.@sync sort($gpu_vec; by=sin)
+    # group["by"] = @benchmarkable Metal.@sync sort($gpu_vec; by=sin)
 end
 
 let group = addgroup!(group, "permutedims")
