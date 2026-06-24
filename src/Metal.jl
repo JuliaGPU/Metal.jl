@@ -12,6 +12,7 @@ using ExprTools: splitdef, combinedef
 using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
 import ObjectiveC: is_macos
 import KernelAbstractions
+import KernelAbstractions.KernelIntrinsics as KI
 using BFloat16s: BFloat16
 using ScopedValues
 
