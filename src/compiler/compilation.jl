@@ -449,6 +449,18 @@ function compile(@nospecialize(job::CompilerJob))
                      calls behind `metal_version() >= sv"3.2"`.""")
         end
 
+        # 64-bit atomic modify intrinsics (`atomic_{min,max}_explicit` on `atomic_ulong`)
+        # require the newer Apple GPU families that implement this optional feature.
+        has_i64_atomic_modify =
+            haskey(functions(mod), "air.atomic.global.min.u.i64") ||
+            haskey(functions(mod), "air.atomic.global.max.u.i64")
+        if has_i64_atomic_modify &&
+           !MTL.supports_family(device(), MTL.MTLGPUFamilyApple9)
+            error("""64-bit atomic modify intrinsics (`atomic_min_explicit`/`atomic_max_explicit` on `UInt64`) \
+                     require `MTLGPUFamilyApple9` (M3 or newer). Guard usage with \
+                     `MTL.supports_family(device(), MTL.MTLGPUFamilyApple9)`.""")
+        end
+
         @signpost_interval log=log_compiler() "Downgrade to AIR" begin
             # generate AIR, having GPUCompiler lower the IR to AIR-compatible form and
             # invoke the LLVM downgrader (both as part of Metal's `mcgen`)

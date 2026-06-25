@@ -228,6 +228,40 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             @test f.(a, val) ≈ Array(b)
         end
     end
+
+    @testset "64-bit modify (min/max)" begin
+        function max_kernel(a, val)
+            i = thread_position_in_grid().x
+            Metal.atomic_max_explicit(pointer(a, i), val)
+            return
+        end
+
+        function min_kernel(a, val)
+            i = thread_position_in_grid().x
+            Metal.atomic_min_explicit(pointer(a, i), val)
+            return
+        end
+
+        if MTL.supports_family(device(), MTL.MTLGPUFamilyApple9)
+            a = MtlArray(fill(UInt64(1), n))
+            @metal threads=n max_kernel(a, UInt64(42))
+            @test all(isequal(UInt64(42)), Array(a))
+
+            b = MtlArray(fill(UInt64(100), n))
+            @metal threads=n min_kernel(b, UInt64(42))
+            @test all(isequal(UInt64(42)), Array(b))
+        else
+            a = MtlArray(fill(UInt64(1), n))
+            @test_throws "MTLGPUFamilyApple9" begin
+                kernel = @metal launch=false max_kernel(a, UInt64(42))
+                kernel(a, UInt64(42); threads=n)
+            end
+            @test_throws "MTLGPUFamilyApple9" begin
+                kernel = @metal launch=false min_kernel(a, UInt64(42))
+                kernel(a, UInt64(42); threads=n)
+            end
+        end
+    end
 end
 
 @testset "high-level" begin
