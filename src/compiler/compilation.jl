@@ -547,8 +547,8 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
         if has_i64_atomic_modify &&
            !MTL.supports_family(device(), MTL.MTLGPUFamilyApple9)
             error("""64-bit atomic modify intrinsics (`atomic_min_explicit`/`atomic_max_explicit` on `UInt64`) \
-                     require `MTLGPUFamilyApple9` (M3 or newer). Guard usage with \
-                     `MTL.supports_family(device(), MTL.MTLGPUFamilyApple9)`.""")
+                     require `MTLGPUFamilyApple8` (M2 or newer). Guard usage with \
+                     `MTL.supports_family(device(), MTL.MTLGPUFamilyApple8)`.""")
         end
 
         @signpost_interval log=log_compiler() "Downgrade to AIR" begin
