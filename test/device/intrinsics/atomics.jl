@@ -242,7 +242,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        if MTL.supports_family(device(), MTL.MTLGPUFamilyApple9)
+        if MTL.supports_family(device(), MTL.MTLGPUFamilyApple8)
             a = MtlArray(fill(UInt64(1), n))
             @metal threads=n max_kernel(a, UInt64(42))
             @test all(isequal(UInt64(42)), Array(a))
@@ -252,11 +252,11 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             @test all(isequal(UInt64(42)), Array(b))
         else
             a = MtlArray(fill(UInt64(1), n))
-            @test_throws "MTLGPUFamilyApple9" begin
+            @test_throws "MTLGPUFamilyApple8" begin
                 kernel = @metal launch=false max_kernel(a, UInt64(42))
                 kernel(a, UInt64(42); threads=n)
             end
-            @test_throws "MTLGPUFamilyApple9" begin
+            @test_throws "MTLGPUFamilyApple8" begin
                 kernel = @metal launch=false min_kernel(a, UInt64(42))
                 kernel(a, UInt64(42); threads=n)
             end
