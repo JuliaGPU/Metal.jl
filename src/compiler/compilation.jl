@@ -550,7 +550,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
         has_i64_atomic_modify =
             haskey(functions(mod), "air.atomic.global.min.u.i64") ||
             haskey(functions(mod), "air.atomic.global.max.u.i64")
-        if has_i64_atomic_modify && (is_nothing(job.config.params.gpufamily) ||
+        if has_i64_atomic_modify && (isnothing(job.config.params.gpufamily) ||
            job.config.params.gpufamily < MTL.MTLGPUFamilyApple8)
             error("""64-bit atomic modify intrinsics (`atomic_min_explicit`/`atomic_max_explicit` on `UInt64`) \
                      require `MTLGPUFamilyApple8` (M2 or newer). Guard usage with \
