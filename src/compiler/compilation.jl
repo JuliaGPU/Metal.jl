@@ -378,8 +378,8 @@ end
         error("""Metal.jl requires AIR 2.6 (macOS 14) or newer; cannot target AIR $(air).""")
     end
     if gpufamily === nothing
-        highest_family = MTL.highest_apple_family(device())
-        gpufamily = isnothing(highest_family) ? nothing : MTL.MTLGPUFamily(1000 | highest_family)
+        highest_family = MTL.highest_apple_family(dev)
+        gpufamily = isnothing(highest_family) ? nothing : MTL.MTLGPUFamily(1000 + highest_family)
     end
 
     # create GPUCompiler objects
