@@ -1,5 +1,8 @@
 import KernelAbstractions
 using Metal.MetalKernels
+using Test
+
+@test KernelAbstractions.supports_atomics(MetalBackend())
 
 include(joinpath(dirname(pathof(KernelAbstractions)), "..", "test", "testsuite.jl"))
 

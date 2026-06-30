@@ -33,7 +33,7 @@ KA.synchronize(::MetalBackend) = synchronize()
 KA.functional(::MetalBackend) = Metal.functional()
 
 KA.supports_float64(::MetalBackend) = false
-KA.supports_atomics(::MetalBackend) = false
+KA.supports_atomics(::MetalBackend) = true
 KA.supports_unified(::MetalBackend) = true
 
 Adapt.adapt_storage(::MetalBackend, a::Array) = Adapt.adapt(MtlArray, a)
