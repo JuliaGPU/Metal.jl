@@ -103,7 +103,18 @@ for (op, types) in atomic_fetch_and_modify, typ in types, as in (AS.Device, AS.T
     end
 end
 
-# TODO: non-fetch 64-bit min/max atomics (hardware support?)
+# 64-bit atomics are currently exposed in Metal as non-fetching min/max modify operations
+# on `atomic_ulong` in device memory.
+for op in (:min, :max)
+    f = Symbol("atomic_$(op)_explicit")
+    @eval begin
+        function $f(ptr::LLVMPtr{UInt64,AS.Device}, desired::UInt64)
+            @typed_ccall($"air.atomic.global.$op.u.i64", llvmcall, Nothing,
+                         (LLVMPtr{UInt64,AS.Device}, UInt64, Int32, Int32, Bool),
+                         ptr, desired, Val(memory_order_relaxed), Val(Int32(2)), Val(true))
+        end
+    end
+end
 
 # generic atomic support using compare-and-swap
 @inline function atomic_fetch_op_explicit(ptr::LLVMPtr{T}, op::Function, val) where {T}
