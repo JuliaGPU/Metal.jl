@@ -1,4 +1,5 @@
-const MPSGRAPH_VALID_REDUCTION_TYPES = Union{Float16, Float32}
+
+const MPSGRAPH_VALID_REDUCTION_TYPES = filter(T -> T <: Real && T != Bool, (MPS.jl_mps_to_typ |> values |> collect))
 
 function reductionSumWithTensor(graph::MPSGraph, tensor::MPSGraphTensor,
                                 axes::NSArray, name = "reduction_sum")
@@ -100,8 +101,8 @@ const reduction_graph_cache = Dict{ReductionGraphKey, CachedReductionGraph}()
 const reduction_graph_cache_lock = ReentrantLock()
 
 function check_reduction_args(out::MtlArray{T}, input::MtlArray{T}) where {T}
-    T <: MPSGRAPH_VALID_REDUCTION_TYPES ||
-        throw(ArgumentError("MPSGraph reduction supports Float16 and Float32"))
+    T <: Union{MPSGRAPH_VALID_REDUCTION_TYPES...} ||
+        throw(ArgumentError("MPSGraph reduction supports $(join(MPSGraphs.MPSGRAPH_VALID_REDUCTION_TYPES,", ", " and "))"))
     dims = reduction_axes(size(out), size(input))
     check_mpsgraph_offsets(out, input)
     return dims

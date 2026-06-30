@@ -1,5 +1,5 @@
-@testset "sort ($T)" for T in (Float16, Float32, Int32)
-    A = reshape(T[7, 2, 5, 4, 9, 1, 6, 3, 8, 0, 10, 11], 3, 4)
+@testset "sort ($T)" for T in MPSGraphs.MPSGRAPH_VALID_SORT_TYPES
+    A = rand(T, 3, 4)
 
     for dim in 1:2
         out = similar(MtlArray(A))
@@ -11,7 +11,7 @@
     end
 end
 
-@testset "sort NaN ordering ($T)" for T in (Float16, Float32)
+@testset "sort NaN ordering ($T)" for T in filter(T -> T <: AbstractFloat, MPSGraphs.MPSGRAPH_VALID_SORT_TYPES)
     A = T[1 NaN 2; -1 0 NaN]
 
     for dim in 1:2
@@ -27,17 +27,19 @@ end
 end
 
 @testset "sort unsupported input" begin
-    A = MtlArray(Int16[2, 1])
+    # unsupported input types
+    A = MtlArray(Complex{Int16}[2, 1])
     out = similar(A)
     @test_throws ArgumentError MPSGraphs.graph_sort!(out, A)
 
+    # offset input
     parent = MtlArray(Float32[3, 2, 1])
     offset_input = unsafe_wrap(MtlArray, pointer(parent, 2), 2)
     @test_throws ArgumentError MPSGraphs.graph_sort!(similar(offset_input), offset_input)
 end
 
-@testset "sortperm ($T)" for T in (Float16, Float32, Int32)
-    A = reshape(T[7, 2, 5, 4, 9, 1, 6, 3, 8, 0, 10, 11], 3, 4)
+@testset "sortperm ($T)" for T in MPSGraphs.MPSGRAPH_VALID_SORT_TYPES
+    A = rand(T, 3, 4)
 
     for dim in 1:2
         index = similar(MtlArray(A), Int)
