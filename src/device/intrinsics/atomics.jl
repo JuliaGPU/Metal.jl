@@ -2,6 +2,10 @@
 
 @enum memory_order::Int32 begin
     memory_order_relaxed = 0
+    memory_order_acquire = 2
+    memory_order_release = 3
+    memory_order_acq_rel = 4
+    memory_order_seq_cst = 5
 end
 
 # XXX: the integers should come from some enum
@@ -25,34 +29,68 @@ for typ in (:Int32, :UInt32), as in (AS.Device, AS.ThreadGroup)
     memnam, memid = atomic_memory_names[as]
 
     @eval begin
-        function atomic_store_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ)
+        @inline atomic_store_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ) =
+            atomic_store_explicit(ptr, desired, Val(memory_order_relaxed))
+        @inline atomic_store_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ,
+                                      order::memory_order) =
+            atomic_store_explicit(ptr, desired, Val(order))
+
+        function atomic_store_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ,
+                                       order::Val)
             @typed_ccall($"air.atomic.$memnam.store.$typnam", llvmcall, Nothing,
                          (LLVMPtr{$typ,$as}, $typ, Int32, Int32, Bool),
-                         ptr, desired, Val(memory_order_relaxed), Val($memid), Val(true))
+                         ptr, desired, order, Val($memid), Val(true))
         end
 
-        function atomic_load_explicit(ptr::LLVMPtr{$typ,$as})
+        @inline atomic_load_explicit(ptr::LLVMPtr{$typ,$as}) =
+            atomic_load_explicit(ptr, Val(memory_order_relaxed))
+        @inline atomic_load_explicit(ptr::LLVMPtr{$typ,$as}, order::memory_order) =
+            atomic_load_explicit(ptr, Val(order))
+
+        function atomic_load_explicit(ptr::LLVMPtr{$typ,$as}, order::Val)
             @typed_ccall($"air.atomic.$memnam.load.$typnam", llvmcall, $typ,
                          (LLVMPtr{$typ,$as}, Int32, Int32, Bool),
-                         ptr, Val(memory_order_relaxed), Val($memid), Val(true))
+                         ptr, order, Val($memid), Val(true))
         end
 
-        function atomic_exchange_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ)
+        @inline atomic_exchange_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ) =
+            atomic_exchange_explicit(ptr, desired, Val(memory_order_relaxed))
+        @inline atomic_exchange_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ,
+                                         order::memory_order) =
+            atomic_exchange_explicit(ptr, desired, Val(order))
+
+        function atomic_exchange_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ,
+                                          order::Val)
             @typed_ccall($"air.atomic.$memnam.xchg.$typnam", llvmcall, $typ,
                          (LLVMPtr{$typ,$as}, $typ, Int32, Int32, Bool),
-                         ptr, desired, Val(memory_order_relaxed), Val($memid), Val(true))
+                         ptr, desired, order, Val($memid), Val(true))
         end
 
+        @inline atomic_compare_exchange_weak_explicit(ptr::LLVMPtr{$typ,$as},
+                                                      expected::$typ, desired::$typ) =
+            atomic_compare_exchange_weak_explicit(ptr, expected, desired,
+                                                  Val(memory_order_relaxed),
+                                                  Val(memory_order_relaxed))
+        @inline atomic_compare_exchange_weak_explicit(ptr::LLVMPtr{$typ,$as},
+                                                      expected::$typ, desired::$typ,
+                                                      success_order::memory_order,
+                                                      failure_order::memory_order) =
+            atomic_compare_exchange_weak_explicit(ptr, expected, desired,
+                                                  Val(success_order),
+                                                  Val(failure_order))
+
         function atomic_compare_exchange_weak_explicit(ptr::LLVMPtr{$typ,$as},
-                                                       expected::$typ, desired::$typ)
+                                                       expected::$typ, desired::$typ,
+                                                       success_order::Val,
+                                                       failure_order::Val)
             # NOTE: we deviate slightly from the Metal/C++ API here, not returning the
             #       status boolean, but the contents of the expected value box, which will
             #       have been changed to the current value if the exchange failed.
             expected_box = Ref(expected)
             @typed_ccall($"air.atomic.$memnam.cmpxchg.weak.$typnam", llvmcall, $typ,
                          (LLVMPtr{$typ,$as}, Ptr{$typ}, $typ, Int32, Int32, Int32, Bool),
-                         ptr, expected_box, desired, Val(memory_order_relaxed),
-                         Val(memory_order_relaxed), Val($memid), Val(true))
+                         ptr, expected_box, desired, success_order,
+                         failure_order, Val($memid), Val(true))
             expected_box[]
         end
     end
@@ -60,19 +98,50 @@ end
 
 # Float32 atomics are only available on Metal 3.0, and additionally only for
 # device memory, so we just skip them and reinterpret. That should be safe?
-atomic_store_explicit(ptr::LLVMPtr{Float32,AS}, desired::Float32) where {AS} =
-    atomic_store_explicit(reinterpret(LLVMPtr{UInt32,AS}, ptr), reinterpret(UInt32, desired))
-atomic_load_explicit(ptr::LLVMPtr{Float32,AS}) where {AS} =
-    reinterpret(Float32, atomic_load_explicit(reinterpret(LLVMPtr{UInt32,AS}, ptr)))
-atomic_exchange_explicit(ptr::LLVMPtr{Float32,AS}, desired::Float32) where {AS} =
+@inline atomic_store_explicit(ptr::LLVMPtr{Float32,AS}, desired::Float32) where {AS} =
+    atomic_store_explicit(ptr, desired, Val(memory_order_relaxed))
+@inline atomic_store_explicit(ptr::LLVMPtr{Float32,AS}, desired::Float32,
+                              order::memory_order) where {AS} =
+    atomic_store_explicit(ptr, desired, Val(order))
+@inline atomic_store_explicit(ptr::LLVMPtr{Float32,AS}, desired::Float32,
+                              order::Val) where {AS} =
+    atomic_store_explicit(reinterpret(LLVMPtr{UInt32,AS}, ptr),
+                          reinterpret(UInt32, desired), order)
+@inline atomic_load_explicit(ptr::LLVMPtr{Float32,AS}) where {AS} =
+    atomic_load_explicit(ptr, Val(memory_order_relaxed))
+@inline atomic_load_explicit(ptr::LLVMPtr{Float32,AS}, order::memory_order) where {AS} =
+    atomic_load_explicit(ptr, Val(order))
+@inline atomic_load_explicit(ptr::LLVMPtr{Float32,AS}, order::Val) where {AS} =
+    reinterpret(Float32, atomic_load_explicit(reinterpret(LLVMPtr{UInt32,AS}, ptr), order))
+@inline atomic_exchange_explicit(ptr::LLVMPtr{Float32,AS}, desired::Float32) where {AS} =
+    atomic_exchange_explicit(ptr, desired, Val(memory_order_relaxed))
+@inline atomic_exchange_explicit(ptr::LLVMPtr{Float32,AS}, desired::Float32,
+                                 order::memory_order) where {AS} =
+    atomic_exchange_explicit(ptr, desired, Val(order))
+@inline atomic_exchange_explicit(ptr::LLVMPtr{Float32,AS}, desired::Float32,
+                                 order::Val) where {AS} =
     reinterpret(Float32, atomic_exchange_explicit(reinterpret(LLVMPtr{UInt32,AS}, ptr),
-                                                  reinterpret(UInt32, desired)))
+                                                  reinterpret(UInt32, desired), order))
+@inline atomic_compare_exchange_weak_explicit(ptr::LLVMPtr{Float32,AS}, expected::Float32,
+                                              desired::Float32) where {AS} =
+    atomic_compare_exchange_weak_explicit(ptr, expected, desired,
+                                          Val(memory_order_relaxed),
+                                          Val(memory_order_relaxed))
+@inline atomic_compare_exchange_weak_explicit(ptr::LLVMPtr{Float32,AS}, expected::Float32,
+                                              desired::Float32,
+                                              success_order::memory_order,
+                                              failure_order::memory_order) where {AS} =
+    atomic_compare_exchange_weak_explicit(ptr, expected, desired,
+                                          Val(success_order), Val(failure_order))
 function atomic_compare_exchange_weak_explicit(ptr::LLVMPtr{Float32,AS}, expected::Float32,
-                                               desired::Float32) where {AS}
+                                               desired::Float32,
+                                               success_order::Val,
+                                               failure_order::Val) where {AS}
     ptr′ = reinterpret(LLVMPtr{UInt32,AS}, ptr)
     expected′ = reinterpret(UInt32, expected)
     desired′ = reinterpret(UInt32, desired)
-    return reinterpret(Float32, atomic_compare_exchange_weak_explicit(ptr′, expected′, desired′))
+    return reinterpret(Float32, atomic_compare_exchange_weak_explicit(ptr′, expected′, desired′,
+                                                                     success_order, failure_order))
 end
 
 const atomic_fetch_and_modify = [
@@ -95,10 +164,15 @@ for (op, types) in atomic_fetch_and_modify, typ in types, as in (AS.Device, AS.T
     memnam, memid = atomic_memory_names[as]
     f = Symbol("atomic_fetch_$(op)_explicit")
     @eval begin
-        function $f(ptr::LLVMPtr{$typ,$as}, desired::$typ)
+        @inline $f(ptr::LLVMPtr{$typ,$as}, desired::$typ) =
+            $f(ptr, desired, Val(memory_order_relaxed))
+        @inline $f(ptr::LLVMPtr{$typ,$as}, desired::$typ, order::memory_order) =
+            $f(ptr, desired, Val(order))
+
+        function $f(ptr::LLVMPtr{$typ,$as}, desired::$typ, order::Val)
             @typed_ccall($"air.atomic.$memnam.$op.$typnam", llvmcall, $typ,
                          (LLVMPtr{$typ,$as}, $typ, Int32, Int32, Bool),
-                         ptr, desired, Val(memory_order_relaxed), Val($memid), Val(true))
+                         ptr, desired, order, Val($memid), Val(true))
         end
     end
 end
@@ -106,12 +180,24 @@ end
 # TODO: non-fetch 64-bit min/max atomics (hardware support?)
 
 # generic atomic support using compare-and-swap
-@inline function atomic_fetch_op_explicit(ptr::LLVMPtr{T}, op::Function, val) where {T}
+@inline atomic_fetch_op_failure_order(order::Val) = order
+@inline atomic_fetch_op_failure_order(::Val{memory_order_release}) = Val(memory_order_relaxed)
+@inline atomic_fetch_op_failure_order(::Val{memory_order_acq_rel}) = Val(memory_order_acquire)
+
+@inline atomic_fetch_op_explicit(ptr::LLVMPtr{T}, op::Function, val) where {T} =
+    atomic_fetch_op_explicit(ptr, op, val, Val(memory_order_relaxed))
+@inline atomic_fetch_op_explicit(ptr::LLVMPtr{T}, op::Function, val,
+                                 order::memory_order) where {T} =
+    atomic_fetch_op_explicit(ptr, op, val, Val(order))
+
+@inline function atomic_fetch_op_explicit(ptr::LLVMPtr{T}, op::Function, val,
+                                          order::Val) where {T}
     old = Base.unsafe_load(ptr)
+    failure_order = atomic_fetch_op_failure_order(order)
     while true
         cmp = old
         new = convert(T, op(old, val))
-        old = atomic_compare_exchange_weak_explicit(ptr, cmp, new)
+        old = atomic_compare_exchange_weak_explicit(ptr, cmp, new, order, failure_order)
         isequal(old, cmp) && return old
     end
 end

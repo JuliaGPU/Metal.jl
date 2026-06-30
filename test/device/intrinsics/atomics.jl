@@ -228,6 +228,31 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             @test f.(a, val) ≈ Array(b)
         end
     end
+
+    @testset "explicit ordering arguments" begin
+        function ordered_kernel(a)
+            ptr = pointer(a, 1)
+            Metal.atomic_store_explicit(ptr, Int32(1), Metal.memory_order_release)
+            loaded = Metal.atomic_load_explicit(ptr, Metal.memory_order_acquire)
+            exchanged = Metal.atomic_exchange_explicit(ptr, loaded + Int32(1),
+                                                       Metal.memory_order_acq_rel)
+            added = Metal.atomic_fetch_add_explicit(ptr, exchanged,
+                                                    Metal.memory_order_seq_cst)
+            old = Metal.atomic_compare_exchange_weak_explicit(
+                ptr,
+                added + Int32(1),
+                Int32(42),
+                Metal.memory_order_acq_rel,
+                Metal.memory_order_acquire,
+            )
+            a[2] = old
+            return
+        end
+
+        a = Metal.zeros(Int32, 2)
+        @metal ordered_kernel(a)
+        @test Array(a) == Int32[42, 3]
+    end
 end
 
 @testset "high-level" begin
@@ -284,4 +309,60 @@ end
         @metal threads=n kernel(a)
         @test Array(a)[1] == 0
     end
+end
+
+@testset "device-memory publish through fetch_add" begin
+    n_leaves = 2048
+    n_nodes = 2n_leaves - 1
+
+    child0 = zeros(Int32, n_nodes)
+    child1 = zeros(Int32, n_nodes)
+    parent = zeros(Int32, n_nodes)
+    for node in 1:n_leaves-1
+        left = 2node
+        right = 2node + 1
+        child0[node] = left
+        child1[node] = right
+        parent[left] = node
+        parent[right] = node
+    end
+
+    function refit_kernel!(values, flags, child0, child1, parent, n_leaves::Int32)
+        leaf = thread_position_in_grid().x
+        if leaf <= n_leaves
+            leaf_node = n_leaves - Int32(1) + leaf
+            values[leaf_node] = UInt32(1)
+
+            parent_node = parent[leaf_node]
+            while parent_node != Int32(0)
+                old = Metal.atomic_fetch_add_explicit(pointer(flags, parent_node), UInt32(1),
+                                                      Metal.memory_order_acq_rel)
+                if old + UInt32(1) == UInt32(2)
+                    left = child0[parent_node]
+                    right = child1[parent_node]
+                    values[parent_node] = values[left] + values[right]
+                    parent_node = parent[parent_node]
+                else
+                    break
+                end
+            end
+        end
+        return
+    end
+
+    values = Metal.zeros(UInt32, n_nodes)
+    flags = Metal.zeros(UInt32, n_leaves - 1)
+    mt_child0 = MtlArray(child0)
+    mt_child1 = MtlArray(child1)
+    mt_parent = MtlArray(parent)
+
+    @metal threads=256 groups=cld(n_leaves, 256) refit_kernel!(
+        values,
+        flags,
+        mt_child0,
+        mt_child1,
+        mt_parent,
+        Int32(n_leaves),
+    )
+    @test Array(values)[1] == UInt32(n_leaves)
 end
