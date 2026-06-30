@@ -6,6 +6,7 @@ import Metal: mtlconvert, mtlfunction
 using EnzymeCore
 using EnzymeCore.EnzymeRules
 using GPUArrays
+using LinearAlgebra: mul!
 
 include("meta_kernels.jl")
 
@@ -341,6 +342,24 @@ function EnzymeCore.EnzymeRules.reverse(config, ofn::Const{typeof(GPUArrays._map
     end
 
     return (nothing, nothing, nothing)
+end
+
+## Matrix multiply: MPS is opaque to Enzyme, so hook `*` with a closed-form reverse.
+
+function EnzymeCore.EnzymeRules.augmented_primal(config, ofn::Const{typeof(*)}, ::Type{RT},
+        A::EnzymeCore.Annotation{<:MtlMatrix{T}}, B::EnzymeCore.Annotation{<:MtlMatrix{T}}) where {RT, T}
+    C = ofn.val(A.val, B.val)
+    dC = EnzymeRules.needs_shadow(config) ? fill!(similar(C), zero(T)) : nothing
+    primal = EnzymeRules.needs_primal(config) ? C : nothing
+    return EnzymeRules.AugmentedReturn(primal, dC, (A.val, B.val, dC))
+end
+
+function EnzymeCore.EnzymeRules.reverse(config, ofn::Const{typeof(*)}, ::Type{RT}, tape,
+        A::EnzymeCore.Annotation{<:MtlMatrix{T}}, B::EnzymeCore.Annotation{<:MtlMatrix{T}}) where {RT, T}
+    Aval, Bval, dC = tape
+    A isa Const || mul!(A.dval, dC, Bval', one(T), one(T))
+    B isa Const || mul!(B.dval, Aval', dC, one(T), one(T))
+    return (nothing, nothing)
 end
 
 ## HostKernel launch rules: differentiate the launch via device-side autodiff (meta_kernels.jl).

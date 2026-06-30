@@ -8,6 +8,8 @@ if enzyme_available
     using EnzymeCore, Enzyme
     import GPUCompiler
 
+    matmul_sum(A, B) = sum(A * B)
+
     function sq_kernel!(y, x)
         i = Metal.thread_position_in_grid_1d()
         @inbounds y[i] = x[i] * x[i]
@@ -33,6 +35,15 @@ if enzyme_available
             A = mtl(Float32[1 2 3; 4 5 6])
             dA = only(gradient(Reverse, sum, A))
             @test Array(dA) ≈ ones(Float32, 2, 3)
+        end
+
+        @testset "matmul gradient" begin
+            A = mtl(Float32[1 2; 3 4]); B = mtl(Float32[5 6; 7 8])
+            dA = mtl(zeros(Float32, 2, 2)); dB = mtl(zeros(Float32, 2, 2))
+            Enzyme.autodiff(Enzyme.set_runtime_activity(Reverse), matmul_sum, Active,
+                            Duplicated(A, dA), Duplicated(B, dB))
+            @test Array(dA) ≈ Float32[11 15; 11 15]   # d/dA sum(A*B) = ones*B'
+            @test Array(dB) ≈ Float32[4 4; 6 6]       # d/dB sum(A*B) = A'*ones
         end
 
         @testset "kernel-launch gradient" begin
