@@ -172,6 +172,14 @@ end
 const scan_alg = ScopedValue(:auto)
 const mpsgraph_scan_threshold = 64 * 1024
 
+# MPSGraph has no efficient 64-bit-integer cumulative kernel: on the
+# `accumulate(+, rand(Int64, 3, 10^6); dims=1)` shape it is ~2.6× slower than the
+# native scan (vs ~0.85× for ≤32-bit ints and floats, which MPSGraph handles
+# well), and the slowdown grows as the scanned dimension shrinks. So keep 64-bit
+# integers on the native scan in `:auto`; they remain correct (just slow) and
+# available under an explicit `:MPSGraph` request.
+mpsgraph_scan_worthwhile(::Type{T}) where {T} = !(T === Int64 || T === UInt64)
+
 # MPSGraph cumulative max/min ignore NaNs while Base accumulate(max/min)
 # propagates them, so don't use MPSGraph scan for these operations on
 # Float inputs
@@ -211,7 +219,8 @@ function scan_with_algorithm!(op, output::WrappedMtlArray, input::WrappedMtlArra
     supported = mpsgraph_scan_supported(op, output, input, dims, init)
     if alg === :MPSGraph
         return mpsgraph_scan!(op, output, input; dims, init)
-    elseif alg === :auto && supported && length(input) >= mpsgraph_scan_threshold
+    elseif alg === :auto && supported && mpsgraph_scan_worthwhile(eltype(input)) &&
+           length(input) >= mpsgraph_scan_threshold
         return MPSGraphs.graph_scan!(op, output, input; dim=dims)
     elseif alg === :auto || alg === :native
         return scan!(op, output, input; dims, init)
