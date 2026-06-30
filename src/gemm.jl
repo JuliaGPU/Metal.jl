@@ -480,7 +480,9 @@ function gemm!(C::MtlMatrix, tA::Char, tB::Char,
         supports_tensor_matmul(C, A, B, tA, tB, alpha, beta) ||
             error("tensor-ops GEMM is not supported for these operands")
         gemm_tensor!(C, A, B, alpha, beta, tA, tB)
-    elseif kernel === :auto && supports_tensor_matmul(C, A, B, tA, tB, alpha, beta)
+    # tensor matmul fails in some configurations in macos 27 beta
+    # so disable automatic selection in this version until fixed
+    elseif kernel === :auto && supports_tensor_matmul(C, A, B, tA, tB, alpha, beta) && macos_version() < v"27"
         gemm_tensor!(C, A, B, alpha, beta, tA, tB)
     elseif kernel === :simd || (kernel === :auto && supports_simd_matmul(C, A, B, tA, tB, alpha, beta))
         gemm_simd!(C, A, B, alpha, beta, tA, tB)
