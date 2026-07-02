@@ -5,7 +5,7 @@ using ..Metal: @device_override, DefaultStorageMode, SharedStorage, mtlfunction,
 using GPUCompiler
 
 import KernelAbstractions as KA
-import KernelAbstractions.KernelIntrinsics as KI
+import KernelAbstractions.KernelInterface as KI
 
 import Adapt
 
