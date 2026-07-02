@@ -4,7 +4,7 @@ using ..Metal
 using ..Metal: @device_override, DefaultStorageMode, SharedStorage, mtlfunction, mtlconvert
 
 import KernelAbstractions as KA
-import KernelAbstractions.KernelIntrinsics as KI
+import KernelAbstractions.KernelInterface as KI
 
 using StaticArrays: MArray
 
