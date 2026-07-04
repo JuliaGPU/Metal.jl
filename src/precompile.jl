@@ -1,6 +1,6 @@
 using PrecompileTools: @setup_workload, @compile_workload
 
-Sys.isapple() && @setup_workload begin
+Sys.isapple() && Sys.ARCH === :aarch64 && @setup_workload begin
     metallib_file = joinpath(dirname(@__DIR__), "test", "dummy.metallib")
 
     @compile_workload begin
