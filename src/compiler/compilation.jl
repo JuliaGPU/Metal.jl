@@ -475,6 +475,9 @@ end
     end
     if gpufamily === nothing
         highest_family = MTL.highest_apple_family(dev)
+        if highest_family === nothing
+            error("""Metal.jl requires Metal5 or newer; cannot target Metal$(highest_family).""")
+        end
         gpufamily = isnothing(highest_family) ? nothing : MTL.MTLGPUFamily(1000 + highest_family)
     end
 
