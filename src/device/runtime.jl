@@ -1,12 +1,6 @@
 # device runtime libraries
 
 
-## Julia library
-
-# reset the runtime cache from global scope, so that any change triggers recompilation
-GPUCompiler.reset_runtime()
-
-
 ## exception mailbox
 
 # device-side exceptions are reported through a host-visible mailbox: an `ExceptionInfo_st`
