@@ -72,6 +72,29 @@ group["construct"] = @benchmarkable MtlArray{Int,1}(undef, 1) evals=1
 
 group["broadcast"] = @benchmarkable Metal.@sync $gpu_mat .= 0f0
 
+function mpsgraph_matmul_chain!(C, D, A, B, n)
+    MPSGraphs.graph_matmul!(C, A, B)
+    for i in 2:n
+        if iseven(i)
+            MPSGraphs.graph_matmul!(D, C, B)
+        else
+            MPSGraphs.graph_matmul!(C, D, B)
+        end
+    end
+    return
+end
+
+let group = addgroup!(group, "mpsgraph")
+    N = 32
+    n = 200
+    A = MtlArray(rand(rng, Float32, N, N) ./ N)
+    B = MtlArray(rand(rng, Float32, N, N) ./ N)
+    C = similar(A)
+    D = similar(A)
+    group["matmul chain"] = @benchmarkable Metal.@sync mpsgraph_matmul_chain!(
+        $C, $D, $A, $B, $n)
+end
+
 # no need to test inplace version, which performs the same operation (but with an alloc)
 let group = addgroup!(group, "accumulate")
     let group = addgroup!(group, "Float32")
