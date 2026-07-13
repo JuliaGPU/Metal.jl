@@ -1,4 +1,4 @@
-export synchronize, device_synchronize
+export synchronize, device_synchronize, CommandBufferError
 
 # whether to wait on the Julia scheduler instead of parking the calling thread
 # inside Metal's blocking `waitUntilCompleted`. opt-out via Preferences for
@@ -75,6 +75,30 @@ function wait_cmdbuf!(cmdbuf::MTL.MTLCommandBufferLike)
     return
 end
 
+function check_synchronization_errors(states)
+    errors = MTL.CommandBufferErrorInfo[]
+    for state in states
+        append!(errors, MTL.finish_submissions!(state))
+    end
+
+    kernel_error = try
+        check_exceptions()
+        nothing
+    catch err
+        err
+    end
+
+    command_buffer_error = isempty(errors) ? nothing : CommandBufferError(errors)
+    if command_buffer_error !== nothing && kernel_error !== nothing
+        throw(CompositeException(Any[command_buffer_error, kernel_error]))
+    elseif command_buffer_error !== nothing
+        throw(command_buffer_error)
+    elseif kernel_error !== nothing
+        throw(kernel_error)
+    end
+    return
+end
+
 
 #
 # public API
@@ -96,16 +120,16 @@ Wait for currently committed GPU work on `queue` to finish.
     # is what processes its `addLogHandler:` blocks)
     drain_logging_cmdbufs!(queue)
 
-    last = MTL.last_committed(queue)
-    last === nothing && return
+    last, submissions = MTL.take_queue_submissions(queue)
 
     # Handles the already-completed fast path internally.
-    wait_cmdbuf!(last)
+    last === nothing || wait_cmdbuf!(last)
 
     drain_cleanups!(bq; force=true)
 
-    # surface any device-side exception thrown by the work we just waited on
-    check_exceptions()
+    # Surface Metal runtime failures and device-side Julia exceptions together,
+    # after cleanup has released all Julia roots held by completed work.
+    check_synchronization_errors((submissions,))
     return
 end
 
@@ -133,9 +157,7 @@ function device_synchronize()
         drain_logging_cmdbufs!(bq.queue)
     end
 
-    cmdbufs = Base.@lock MTL.last_committed_lock begin
-        collect(values(MTL.last_committed_per_queue))
-    end
+    cmdbufs, submissions = MTL.take_all_submissions()
 
     for cmdbuf in cmdbufs
         if !is_completed(cmdbuf)
@@ -151,6 +173,6 @@ function device_synchronize()
         drain_cleanups!(bq; force=true)
     end
 
-    check_exceptions()
+    check_synchronization_errors(submissions)
     return
 end
