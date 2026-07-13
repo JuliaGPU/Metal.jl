@@ -17,7 +17,7 @@ end
 #
 
 export MTLCommandBuffer, enqueue!, wait_scheduled, wait_completed, encode_signal!,
-       encode_wait!, commit!, on_scheduled, on_completed
+       encode_wait!, commit!, on_scheduled, on_completed, CommandBufferError
 
 # @objcwrapper MTLCommandBuffer <: NSObject
 
@@ -58,6 +58,143 @@ end
 
 const last_committed_lock = ReentrantLock()
 const last_committed_per_queue = Dict{id{MTLCommandQueue}, MTLCommandBufferLike}()
+
+struct CommandBufferErrorInfo
+    domain::String
+    code::Int
+    description::String
+    command_buffer_label::Union{Nothing,String}
+    queue_label::Union{Nothing,String}
+end
+
+"""
+    CommandBufferError
+
+An error reported by one or more Metal command buffers at a synchronization boundary.
+The `errors` field contains the original `NSError` domain, code, and description, plus
+the command-buffer and queue labels when available.
+"""
+struct CommandBufferError <: Exception
+    errors::Vector{CommandBufferErrorInfo}
+end
+
+function Base.showerror(io::IO, exc::CommandBufferError)
+    n = length(exc.errors)
+    print(io, "CommandBufferError: ", n == 1 ? "Metal command buffer failed" :
+                                           "$n Metal command buffers failed")
+    for info in exc.errors
+        print(io, "\nNSError: ", info.description, " (", info.domain,
+              ", code ", info.code, ")")
+        labels = String[]
+        info.command_buffer_label === nothing ||
+            push!(labels, "command buffer $(repr(info.command_buffer_label))")
+        info.queue_label === nothing || push!(labels, "queue $(repr(info.queue_label))")
+        isempty(labels) || print(io, " [", join(labels, ", "), "]")
+    end
+end
+
+mutable struct QueueSubmissionState
+    pending::Vector{MTLCommandBufferLike}
+    errors::Union{Nothing,Vector{CommandBufferErrorInfo}}
+end
+
+QueueSubmissionState() = QueueSubmissionState(MTLCommandBufferLike[], nothing)
+
+const submission_state_per_queue = Dict{id{MTLCommandQueue},QueueSubmissionState}()
+
+function command_buffer_error_info(cmdbuf::MTLCommandBufferLike)
+    err = cmdbuf.error
+    err === nothing && return CommandBufferErrorInfo(
+        "MTLCommandBufferErrorDomain", 0, "Metal did not provide an NSError",
+        _object_label(cmdbuf), _object_label(cmdbuf.commandQueue))
+    return CommandBufferErrorInfo(String(err.domain), Int(err.code),
+                                  String(err.localizedDescription),
+                                  _object_label(cmdbuf),
+                                  _object_label(cmdbuf.commandQueue))
+end
+
+function _object_label(obj)
+    label = obj.label
+    return label === nothing ? nothing : String(label)
+end
+
+# Keep this state-accounting primitive independent from Objective-C objects so its
+# ordering and pruning semantics can be tested deterministically.
+function _prune_completed_submissions!(pending, errors, is_completed, error_info)
+    n = 0
+    for submission in pending
+        is_completed(submission) || break
+        info = error_info(submission)
+        if info !== nothing
+            if errors === nothing
+                errors = [info]
+            else
+                push!(errors, info)
+            end
+        end
+        n += 1
+    end
+    n == 0 || deleteat!(pending, 1:n)
+    return errors
+end
+
+function prune_completed_submissions!(state::QueueSubmissionState)
+    state.errors = _prune_completed_submissions!(
+        state.pending, state.errors,
+        cmdbuf -> cmdbuf.status >= MTLCommandBufferStatusCompleted,
+        cmdbuf -> cmdbuf.status == MTLCommandBufferStatusError ?
+                  command_buffer_error_info(cmdbuf) : nothing)
+    return
+end
+
+function record_committed!(cmdbuf::MTLCommandBufferLike, key::id{MTLCommandQueue})
+    @lock last_committed_lock begin
+        state = get!(submission_state_per_queue, key) do
+            QueueSubmissionState()
+        end
+        # Completed successes can be forgotten immediately. Completed failures are
+        # reduced to diagnostics, so command-buffer retention stays bounded during
+        # long-running submission workloads without explicit synchronization.
+        prune_completed_submissions!(state)
+        push!(state.pending, cmdbuf)
+        last_committed_per_queue[key] = cmdbuf
+    end
+    return
+end
+
+function take_queue_submissions(queue::MTLCommandQueue)
+    key = pointer(queue)
+    @lock last_committed_lock begin
+        last = get(last_committed_per_queue, key, nothing)
+        state = pop!(submission_state_per_queue, key, nothing)
+        return last, state
+    end
+end
+
+function take_all_submissions()
+    @lock last_committed_lock begin
+        last = collect(values(last_committed_per_queue))
+        states = isempty(submission_state_per_queue) ? nothing :
+                 collect(values(submission_state_per_queue))
+        empty!(submission_state_per_queue)
+        return last, states
+    end
+end
+
+function finish_submissions!(state::QueueSubmissionState)
+    prune_completed_submissions!(state)
+    isempty(state.pending) ||
+        error("Command buffer did not reach a terminal state after queue synchronization")
+    return state.errors
+end
+
+function pending_submission_count(queue::MTLCommandQueue)
+    key = pointer(queue)
+    @lock last_committed_lock begin
+        state = get(submission_state_per_queue, key, nothing)
+        state === nothing ? 0 : length(state.pending)
+    end
+end
 
 # optional profiling hook. when set, it is invoked for every committed command buffer.
 const profile_hook = Ref{Any}(nothing)
@@ -119,12 +256,10 @@ function commit_with_queue_key!(cmdbuf::MTLCommandBufferLike, key::id{MTLCommand
     cmdbuf.status in [MTLCommandBufferStatusCompleted, MTLCommandBufferStatusCommitted] &&
         error("Cannot commit an already committed/completed command buffer")
     @objc [cmdbuf::id{MTLCommandBuffer} commit]::Nothing
-    # Record the commit so synchronize(queue) can wait on this cmdbuf instead
-    # of allocating a fresh sentinel. The slot is overwritten on every commit,
-    # so the dict stays bounded at one cmdbuf per queue.
-    @lock last_committed_lock begin
-        last_committed_per_queue[key] = cmdbuf
-    end
+    # Record every submission for error accounting. The most recent buffer remains
+    # the queue tail used by synchronization, while older completed buffers are
+    # pruned or summarized by `record_committed!`.
+    record_committed!(cmdbuf, key)
     hook = profile_hook[]
     hook === nothing || hook(cmdbuf)
     return

@@ -315,9 +315,6 @@ function drain_cleanups!(bq::BatchedCommandQueue; force::Bool=false)
     deleteat!(bq.cleanups, 1:n)
 
     for cleanup in completed
-        if cleanup.cmdbuf.status == MTL.MTLCommandBufferStatusError
-            @error "Command buffer failed" reason=cleanup.cmdbuf.error.localizedDescription
-        end
         empty!(cleanup.roots)
     end
 

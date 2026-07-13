@@ -263,6 +263,109 @@ end
     @test Array(D) == UInt8[3]
 end
 
+function inject_command_buffer_error!(queue, info)
+    key = pointer(queue)
+    Base.@lock MTL.last_committed_lock begin
+        state = get!(MTL.submission_state_per_queue, key) do
+            MTL.QueueSubmissionState()
+        end
+        if state.errors === nothing
+            state.errors = [info]
+        else
+            push!(state.errors, info)
+        end
+    end
+    return
+end
+
+@testset "command buffer error accounting" begin
+    @testset "deterministic pruning" begin
+        pending = collect(1:5)
+        errors = String[]
+        MTL._prune_completed_submissions!(pending, errors,
+                                          x -> x <= 4,
+                                          x -> iseven(x) ? "failure $x" : nothing)
+        @test pending == [5]
+        @test errors == ["failure 2", "failure 4"]
+
+        pending = collect(1:3)
+        errors = MTL._prune_completed_submissions!(pending, nothing,
+                                                   x -> x <= 2,
+                                                   _ -> nothing)
+        @test pending == [3]
+        @test errors === nothing
+    end
+
+    @testset "successful direct submissions and bounded retention" begin
+        queue = MTL.MTLCommandQueue(device())
+        for _ in 1:64
+            cmdbuf = MTL.MTLCommandBuffer(queue)
+            MTL.commit!(cmdbuf)
+            MTL.wait_completed(cmdbuf)
+            @test MTL.pending_submission_count(queue) <= 1
+        end
+        @test synchronize(queue) === nothing
+        @test MTL.pending_submission_count(queue) == 0
+    end
+
+    @testset "earlier failure and duplicate suppression" begin
+        queue = MTL.MTLCommandQueue(device())
+        queue.label = "error accounting queue"
+
+        earlier = MTL.MTLCommandBuffer(queue)
+        earlier.label = "failed earlier command buffer"
+        MTL.commit!(earlier)
+        MTL.wait_completed(earlier)
+
+        info = MTL.CommandBufferErrorInfo("MTLCommandBufferErrorDomain", 2,
+                                          "The GPU operation timed out",
+                                          String(earlier.label), String(queue.label))
+        inject_command_buffer_error!(queue, info)
+
+        later = MTL.MTLCommandBuffer(queue)
+        MTL.commit!(later)
+        err = try
+            synchronize(queue)
+            nothing
+        catch exc
+            exc
+        end
+        @test err isa Metal.CommandBufferError
+        @test only(err.errors) == info
+        message = sprint(showerror, err)
+        @test occursin("MTLCommandBufferErrorDomain", message)
+        @test occursin("code 2", message)
+        @test occursin("The GPU operation timed out", message)
+        @test occursin("failed earlier command buffer", message)
+        @test occursin("error accounting queue", message)
+
+        # The synchronization boundary claims the failure before reporting it.
+        @test synchronize(queue) === nothing
+    end
+
+    @testset "device synchronization" begin
+        queue = MTL.MTLCommandQueue(device())
+        cmdbuf = MTL.MTLCommandBuffer(queue)
+        MTL.commit!(cmdbuf)
+        info = MTL.CommandBufferErrorInfo("MTLCommandBufferErrorDomain", 8,
+                                          "Out of memory", nothing, nothing)
+        inject_command_buffer_error!(queue, info)
+        @test_throws Metal.CommandBufferError device_synchronize()
+        @test device_synchronize() === nothing
+    end
+
+    @testset "MPS intermediate submissions" begin
+        queue = MTL.MTLCommandQueue(device())
+        mpsbuf = MPS.MPSCommandBuffer(queue)
+        submitted = mpsbuf.commandBuffer
+        MPS.commitAndContinue!(mpsbuf)
+        @test MTL.last_committed(queue) == submitted
+
+        MTL.commit!(mpsbuf)
+        @test synchronize(queue) === nothing
+    end
+end
+
 @testset "command batching tunables" begin
     env = "JULIA_METAL_TEST_BATCHING_TUNABLE"
     withenv(env => nothing) do
