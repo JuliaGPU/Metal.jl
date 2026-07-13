@@ -190,31 +190,68 @@ in a hot path without degrading performance. New code will be generated automati
 the function changes, or when different types or keyword arguments are provided.
 """
 function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
-    dev = device()
     Base.@lock mtlfunction_lock begin
-        # compile the function
-        cache = compiler_cache(dev)
-        source = methodinstance(F, tt)
+        dev = device()
         config = compiler_config(dev; name, kwargs...)::MetalCompilerConfig
-        pipeline, loggingEnabled = GPUCompiler.cached_compilation(cache, source, config, compile, link)
+        source = methodinstance(F, tt)
+        job = CompilerJob(source, config)
 
-        # create a callable object that captures the function instance. we don't need to think
-        # about world age here, as GPUCompiler already does and will return a different object
-        h = hash(pipeline, hash(f, hash(tt)))
-        kernel = get(kernel_instances, h, nothing)
-        if kernel === nothing
-            # create the kernel state object
-            dev = pipeline.device
-            kernel = HostKernel{F, tt}(f, pipeline, loggingEnabled,
-                                       dev,
-                                       Int(pipeline.maxTotalThreadsPerThreadgroup),
-                                       Int(pipeline.staticThreadgroupMemoryLength),
-                                       Int(pipeline.threadExecutionWidth),
-                                       can_use_residency_sets(dev))
-            kernel_instances[h] = kernel
+        res = compile_or_lookup(job)::MetalResults
+
+        # Resolve the MTLComputePipelineState for the active device. Linear scan
+        # over the session-local cache; almost always n=1, one `===` compare.
+        pipeline = nothing
+        @inbounds for (cached_dev, cached_pipeline) in res.pipelines
+            if cached_dev === dev
+                pipeline = cached_pipeline
+                break
+            end
         end
-        return kernel::HostKernel{F,tt}
+        if pipeline === nothing
+            pipeline = link_pipeline(dev, res.air::Vector{UInt8},
+                                     res.metallib::Vector{UInt8},
+                                     res.entry::String)
+            # Don't cache session-local pipeline handles while precompiling: the
+            # results struct is serialized into the package image along with its
+            # CodeInstance, and ObjectiveC handles would come back dangling.
+            if ccall(:jl_generating_output, Cint, ()) != 1
+                push!(res.pipelines, (dev, pipeline))
+            end
+        end
+
+        h = hash(pipeline, hash(f, hash(tt)))
+        get!(kernel_instances, h) do
+            dev = pipeline.device
+            HostKernel{F,tt}(f, pipeline, res.loggingEnabled::Bool,
+                             dev,
+                             Int(pipeline.maxTotalThreadsPerThreadgroup),
+                             Int(pipeline.staticThreadgroupMemoryLength),
+                             Int(pipeline.threadExecutionWidth),
+                             can_use_residency_sets(dev))
+        end::HostKernel{F,tt}
     end
+end
+
+# Look up cached compile artifacts for `job`, compiling on miss. Storage is managed
+# by `GPUCompiler.cached_results` (Julia's integrated code cache on 1.11+, which also
+# persists artifacts through precompilation; a session-local store on 1.10).
+#
+# `metallib === nothing` identifies a `MetalResults` that hasn't been compiled yet —
+# either freshly created, or (on 1.11+) loaded from a package image whose precompile
+# workload only inferred the kernel without compiling it. The `compile_hook` check
+# additionally forces the compile path so reflection-style consumers (`@device_code_*`)
+# observe the compilation even on a cache hit.
+function compile_or_lookup(@nospecialize(job::CompilerJob))::MetalResults
+    res = GPUCompiler.cached_results(MetalResults, job)
+    if res === nothing || res.metallib === nothing || GPUCompiler.compile_hook[] !== nothing
+        artifacts = compile_to_metallib(job)
+        res = @something res GPUCompiler.cached_results(MetalResults, job)
+        res.air = artifacts.air
+        res.metallib = artifacts.metallib
+        res.entry = artifacts.entry
+        res.loggingEnabled = artifacts.loggingEnabled
+    end
+    return res
 end
 
 # cache of kernel instances

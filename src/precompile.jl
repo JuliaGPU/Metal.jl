@@ -8,8 +8,14 @@ Sys.isapple() && @setup_workload begin
         metallib = parse(MetalLib, metallib_file)
         sprint(write, metallib)
 
-        # exercise the full kernel-launch pipeline:
-        @metal identity(nothing)
+        # exercise the kernel compilation pipeline. on Julia 1.11+ this also stores
+        # the compiled kernel (inference results and metallib bytes, attached to its
+        # CodeInstance) in the package image, so that loading Metal.jl can launch it
+        # without invoking the compiler. session-local state (pipeline handles,
+        # kernel instances) is kept out of the image below and by `mtlfunction`.
+        # NOTE: only compile and link; actually launching a kernel (committing a
+        #       command buffer and waiting for it) hangs during precompilation.
+        mtlfunction(identity, Tuple{Nothing})
 
         # exercise the integrated profiler and its display path:
         sprint(show, @profile @metal identity(nothing))
@@ -46,7 +52,6 @@ Sys.isapple() && @setup_workload begin
     # objects only exist in the precompilation process; serializing those into
     # the package image yields dangling pointers when the image is loaded. Drop
     # the entries before precompilation finalizes.
-    empty!(_compiler_caches)
     empty!(_compiler_configs)
     empty!(kernel_instances)
     empty!(global_queues)

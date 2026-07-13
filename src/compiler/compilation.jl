@@ -4,6 +4,41 @@ struct MetalCompilerParams <: AbstractCompilerParams end
 const MetalCompilerConfig = CompilerConfig{MetalCompilerTarget, MetalCompilerParams}
 const MetalCompilerJob = CompilerJob{MetalCompilerTarget, MetalCompilerParams}
 
+"""
+    MetalResults
+
+Cached compilation results for a Metal kernel job, managed by
+`GPUCompiler.cached_results`. The fields partition by *pipeline stage*:
+
+- `air`: AIR bitcode produced by the LLVM-downgrader from the post-irgen LLVM IR.
+  The input to the Metal library wrapper. Session-portable; retained for diagnostics
+  when the host-side Metal pipeline creation fails.
+- `metallib` + `entry` + `loggingEnabled`: library-wrapped AIR bytes and launch
+  metadata — the final session-portable artifacts. `metallib === nothing` identifies
+  a job that has not been compiled yet (see `compile_or_lookup` in `execution.jl`).
+- `pipelines`: session-local cache of `(MTLDevice, MTLComputePipelineState)` pairs
+  resulting from the host-side link of `metallib` onto a device. Never populated
+  during precompilation, so package images only carry the portable fields.
+
+The cache partition (via `GPUCompiler.cache_owner`) already covers the macOS / AIR /
+Metal versions that affect codegen, and results are further keyed by the full
+`CompilerConfig` (including e.g. the debug level). The only runtime-visible dimension
+left in `pipelines` is the `MTLDevice` itself. A linear scan with `===` is fastest
+in the common case (n=1, single device per process) and remains cheap when multiple
+GPUs are addressed (e.g. integrated + discrete on a Mac).
+"""
+mutable struct MetalResults
+    # session-portable artifacts
+    air::Union{Nothing, Vector{UInt8}}
+    metallib::Union{Nothing, Vector{UInt8}}
+    entry::Union{Nothing, String}
+    loggingEnabled::Union{Nothing, Bool}
+    # host-side pipeline objects (session-local)
+    pipelines::Vector{Tuple{MTLDevice, MTLComputePipelineState}}
+    MetalResults() = new(nothing, nothing, nothing, nothing,
+                         Tuple{MTLDevice, MTLComputePipelineState}[])
+end
+
 GPUCompiler.runtime_module(::MetalCompilerJob) = Metal
 
 GPUCompiler.method_table(::MetalCompilerJob) = method_table
@@ -18,6 +53,8 @@ GPUCompiler.isintrinsic(@nospecialize(job::MetalCompilerJob), fn::String) =
     invoke(GPUCompiler.isintrinsic,
            Tuple{CompilerJob{MetalCompilerTarget}, String}, job, fn) ||
     startswith(fn, "__tensorops_")
+
+
 
 function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
                                     mod::LLVM.Module, entry::LLVM.Function)
@@ -329,18 +366,7 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
 end
 
 
-## compiler implementation (cache, configure, compile, and link)
-
-# cache of compilation caches, per device
-const _compiler_caches = Dict{MTLDevice, Dict{Any, Any}}()
-function compiler_cache(ctx::MTLDevice)
-    cache = get(_compiler_caches, ctx, nothing)
-    if cache === nothing
-        cache = Dict{Any, Any}()
-        _compiler_caches[ctx] = cache
-    end
-    return cache
-end
+## compiler implementation (configure, compile, and link)
 
 # cache of compiler configurations, per device (but additionally configurable via kwargs)
 const _compiler_configs = Dict{UInt, MetalCompilerConfig}()
@@ -426,8 +452,12 @@ function dump_artifacts(artifacts::Pair{String}...)
     return paths
 end
 
-# compile to executable machine code
-function compile(@nospecialize(job::CompilerJob))
+# Run inference + LLVM codegen, downgrade to AIR, wrap in a Metal library.
+# Returns the per-phase artifacts as a NamedTuple so the caller can hand them
+# onto the cached `MetalResults`. All byte/string fields are session-portable.
+const compilations = Threads.Atomic{Int}(0)
+function compile_to_metallib(@nospecialize(job::CompilerJob))
+    Threads.atomic_add!(compilations, 1)
     @signpost_event log=log_compiler() "Compile" "Job=$job"
 
     # TODO: on 1.9, this actually creates a context. cache those.
@@ -495,34 +525,29 @@ function compile(@nospecialize(job::CompilerJob))
         dump_artifacts(".ll" => ir, ".air" => air, ".metallib" => metallib)
     end
 
-    return (; ir, air, metallib, entry, loggingEnabled)
+    return (; air, metallib, entry, loggingEnabled)
 end
 
-# link into an executable kernel
-@autoreleasepool function link(@nospecialize(job::CompilerJob), compiled)
-    @signpost_event log=log_compiler() "Link" "Job=$job"
+# link the metallib into a session-local pipeline state on the given device.
+@autoreleasepool function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
+                                        metallib::Vector{UInt8}, entry::String)
+    @signpost_event log=log_compiler() "Link" entry
 
     @signpost_interval log=log_compiler() "Instantiate compute pipeline" begin
-        dev = device()
-        lib = MTLLibraryFromData(dev, compiled.metallib)
-        fun = MTLFunction(lib, compiled.entry)
-        pipeline_state = try
-            MTLComputePipelineState(dev, fun)
+        lib = MTLLibraryFromData(dev, metallib)
+        fun = MTLFunction(lib, entry)
+        try
+            return MTLComputePipelineState(dev, fun)
         catch err
             isa(err, NSError) || rethrow()
 
             # the back-end compiler likely failed
             # XXX: check more accurately? the error domain doesn't help much here
-            ir_file, air_file, metallib_file =
-                dump_artifacts(".ll" => compiled.ir, ".air" => compiled.air,
-                               ".metallib" => compiled.metallib)
+            air_file, metallib_file = dump_artifacts(".air" => air, ".metallib" => metallib)
             error("""Compilation to native code failed; see below for details.
-                     If you think this is a bug, please file an issue and attach the following files:
-                     - $(ir_file)
+                     If you think this is a bug, please file an issue and attach:
                      - $(air_file)
                      - $(metallib_file)""")
         end
     end
-
-    pipeline_state, compiled.loggingEnabled
 end
