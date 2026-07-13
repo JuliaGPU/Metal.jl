@@ -269,7 +269,11 @@ function inject_command_buffer_error!(queue, info)
         state = get!(MTL.submission_state_per_queue, key) do
             MTL.QueueSubmissionState()
         end
-        push!(state.errors, info)
+        if state.errors === nothing
+            state.errors = [info]
+        else
+            push!(state.errors, info)
+        end
     end
     return
 end
@@ -283,6 +287,13 @@ end
                                           x -> iseven(x) ? "failure $x" : nothing)
         @test pending == [5]
         @test errors == ["failure 2", "failure 4"]
+
+        pending = collect(1:3)
+        errors = MTL._prune_completed_submissions!(pending, nothing,
+                                                   x -> x <= 2,
+                                                   _ -> nothing)
+        @test pending == [3]
+        @test errors === nothing
     end
 
     @testset "successful direct submissions and bounded retention" begin

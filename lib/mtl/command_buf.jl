@@ -95,11 +95,10 @@ end
 
 mutable struct QueueSubmissionState
     pending::Vector{MTLCommandBufferLike}
-    errors::Vector{CommandBufferErrorInfo}
+    errors::Union{Nothing,Vector{CommandBufferErrorInfo}}
 end
 
-QueueSubmissionState() = QueueSubmissionState(MTLCommandBufferLike[],
-                                              CommandBufferErrorInfo[])
+QueueSubmissionState() = QueueSubmissionState(MTLCommandBufferLike[], nothing)
 
 const submission_state_per_queue = Dict{id{MTLCommandQueue},QueueSubmissionState}()
 
@@ -126,15 +125,21 @@ function _prune_completed_submissions!(pending, errors, is_completed, error_info
     for submission in pending
         is_completed(submission) || break
         info = error_info(submission)
-        info === nothing || push!(errors, info)
+        if info !== nothing
+            if errors === nothing
+                errors = [info]
+            else
+                push!(errors, info)
+            end
+        end
         n += 1
     end
     n == 0 || deleteat!(pending, 1:n)
-    return
+    return errors
 end
 
 function prune_completed_submissions!(state::QueueSubmissionState)
-    _prune_completed_submissions!(
+    state.errors = _prune_completed_submissions!(
         state.pending, state.errors,
         cmdbuf -> cmdbuf.status >= MTLCommandBufferStatusCompleted,
         cmdbuf -> cmdbuf.status == MTLCommandBufferStatusError ?
@@ -161,7 +166,7 @@ function take_queue_submissions(queue::MTLCommandQueue)
     key = pointer(queue)
     @lock last_committed_lock begin
         last = get(last_committed_per_queue, key, nothing)
-        state = pop!(submission_state_per_queue, key, QueueSubmissionState())
+        state = pop!(submission_state_per_queue, key, nothing)
         return last, state
     end
 end
@@ -169,7 +174,8 @@ end
 function take_all_submissions()
     @lock last_committed_lock begin
         last = collect(values(last_committed_per_queue))
-        states = collect(values(submission_state_per_queue))
+        states = isempty(submission_state_per_queue) ? nothing :
+                 collect(values(submission_state_per_queue))
         empty!(submission_state_per_queue)
         return last, states
     end

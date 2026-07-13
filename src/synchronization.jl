@@ -75,11 +75,27 @@ function wait_cmdbuf!(cmdbuf::MTL.MTLCommandBufferLike)
     return
 end
 
-function check_synchronization_errors(states)
-    errors = MTL.CommandBufferErrorInfo[]
+function command_buffer_errors(state::Union{Nothing,MTL.QueueSubmissionState})
+    state === nothing && return nothing
+    return MTL.finish_submissions!(state)
+end
+
+function command_buffer_errors(states::AbstractVector{MTL.QueueSubmissionState})
+    errors = nothing
     for state in states
-        append!(errors, MTL.finish_submissions!(state))
+        state_errors = MTL.finish_submissions!(state)
+        state_errors === nothing && continue
+        if errors === nothing
+            errors = state_errors
+        else
+            append!(errors, state_errors)
+        end
     end
+    return errors
+end
+
+function check_synchronization_errors(states)
+    errors = command_buffer_errors(states)
 
     kernel_error = try
         check_exceptions()
@@ -88,7 +104,7 @@ function check_synchronization_errors(states)
         err
     end
 
-    command_buffer_error = isempty(errors) ? nothing : CommandBufferError(errors)
+    command_buffer_error = errors === nothing ? nothing : CommandBufferError(errors)
     if command_buffer_error !== nothing && kernel_error !== nothing
         throw(CompositeException(Any[command_buffer_error, kernel_error]))
     elseif command_buffer_error !== nothing
@@ -129,7 +145,7 @@ Wait for currently committed GPU work on `queue` to finish.
 
     # Surface Metal runtime failures and device-side Julia exceptions together,
     # after cleanup has released all Julia roots held by completed work.
-    check_synchronization_errors((submissions,))
+    check_synchronization_errors(submissions)
     return
 end
 
