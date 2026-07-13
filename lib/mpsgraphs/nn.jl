@@ -243,7 +243,6 @@ const softmax_graph_cache_lock = ReentrantLock()
     encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
             default_exec_desc())
     commit!(cmdbuf)
-    synchronize(cmdbuf)
 
     return y
 end
@@ -330,7 +329,6 @@ const softmax_grad_graph_cache_lock = ReentrantLock()
     encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
             default_exec_desc())
     commit!(cmdbuf)
-    synchronize(cmdbuf)
 
     return dx
 end
@@ -514,7 +512,6 @@ end
     encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
             default_exec_desc())
     commit!(cmdbuf)
-    synchronize(cmdbuf)
 
     return y
 end
@@ -545,7 +542,6 @@ end
     encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
             default_exec_desc())
     commit!(cmdbuf)
-    synchronize(cmdbuf)
 
     return dx
 end
@@ -576,7 +572,6 @@ end
     encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
             default_exec_desc())
     commit!(cmdbuf)
-    synchronize(cmdbuf)
 
     return dw
 end
@@ -696,7 +691,6 @@ end
     encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
             default_exec_desc())
     commit!(cmdbuf)
-    synchronize(cmdbuf)
 
     return y
 end
@@ -727,7 +721,6 @@ end
     encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
             default_exec_desc())
     commit!(cmdbuf)
-    synchronize(cmdbuf)
 
     return dx
 end

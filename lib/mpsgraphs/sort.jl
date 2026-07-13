@@ -142,7 +142,6 @@ end
     encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
             default_exec_desc())
     commit!(cmdbuf)
-    synchronize(cmdbuf)
 
     return out
 end
@@ -168,7 +167,6 @@ end
     encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
             default_exec_desc())
     commit!(cmdbuf)
-    synchronize(cmdbuf)
 
     return index
 end

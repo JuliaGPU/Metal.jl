@@ -2,6 +2,26 @@ const FCs = ((identity, 'N'), (transpose, 'T'), (adjoint, 'C'))
 alphabeta(::Type{T}) where T <: Complex = one(T) + 1im
 alphabeta(::Type{T}) where T <: Real = one(T)
 
+@testset "asynchronous execution ordering" begin
+    N = 32
+    a = rand(Float32, N, N) ./ N
+    b = rand(Float32, N, N) ./ N
+
+    buf_a = MtlArray(a)
+    buf_b = MtlArray(b)
+    buf_c = similar(buf_a)
+    buf_d = similar(buf_a)
+    buf_e = similar(buf_a)
+
+    # Exercise both MPSGraph -> kernel and kernel -> MPSGraph dependencies.
+    MPSGraphs.graph_matmul!(buf_c, buf_a, buf_b)
+    buf_d .= 2f0 .* buf_c .+ 1f0
+    MPSGraphs.graph_matmul!(buf_e, buf_d, buf_b)
+    buf_e .+= 3f0
+
+    @test Array(buf_e) ≈ (2f0 .* (a * b) .+ 1f0) * b .+ 3f0
+end
+
 @testset "mixed-precision matrix matrix multiplication" begin
     N = 10
     rows_a = N
