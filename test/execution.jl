@@ -343,6 +343,16 @@ end
         @test device_synchronize() === nothing
     end
 
+    @testset "MPS intermediate submissions" begin
+        queue = MTL.MTLCommandQueue(device())
+        mpsbuf = MPS.MPSCommandBuffer(queue)
+        submitted = mpsbuf.commandBuffer
+        MPS.commitAndContinue!(mpsbuf)
+        @test MTL.last_committed(queue) == submitted
+
+        MTL.commit!(mpsbuf)
+        @test synchronize(queue) === nothing
+    end
 end
 
 @testset "command batching tunables" begin

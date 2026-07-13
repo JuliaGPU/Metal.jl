@@ -35,9 +35,13 @@ end
 export commitAndContinue!
 
 function commitAndContinue!(cmdbuf::MPSCommandBuffer)
+    # `commitAndContinue` replaces `commandBuffer` with a fresh underlying buffer,
+    # so retain and record the submitted one before asking MPS to continue.
+    submitted = cmdbuf.commandBuffer
     hook = MTL.submit_hook[]
-    hook === nothing || hook(cmdbuf.commandBuffer)
+    hook === nothing || hook(submitted)
     @objc [cmdbuf::id{MPSCommandBuffer} commitAndContinue]::Nothing
+    MTL.record_committed!(submitted, pointer(submitted.commandQueue))
 end
 
 function commitAndContinue!(f::Base.Callable, cmdbuf::MPSCommandBuffer)
