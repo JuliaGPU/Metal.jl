@@ -17,7 +17,7 @@
 end
 
 # Reduce a value across a threadgroup, using shared memory for communication and shuffle intrinsics
-@inline function reduce_group(op, val::T, neutral, shuffle::Val{true}, ::Val{maxthreads}) where {T, maxthreads}
+@inline function reduce_group(op, val::T, neutral, shuffle::Val{true}) where {T}
     # shared mem for partial sums
     assume(threads_per_simdgroup() == 32)
     shared = MtlThreadGroupArray(T, 32)
@@ -51,12 +51,12 @@ end
 end
 
 # Reduce a value across a group, using local memory for communication
-@inline function reduce_group(op, val::T, neutral, shuffle::Val{false}, ::Val{maxthreads}) where {T, maxthreads}
+@inline function reduce_group(op, val::T, neutral, shuffle::Val{false}) where {T}
     threads = threads_per_threadgroup().x
     thread = thread_position_in_threadgroup().x
 
     # local mem for a complete reduction
-    shared = MtlThreadGroupArray(T, (maxthreads,))
+    shared = MtlDynamicThreadGroupArray(T, (threads,))
     @inbounds shared[thread] = val
 
     # perform a reduction
@@ -90,7 +90,7 @@ Base.@propagate_inbounds _map_getindex(args::Tuple{}, I) = ()
 # Reduce an array across the grid. All elements to be processed can be addressed by the
 # product of the two iterators `Rreduce` and `Rother`, where the latter iterator will have
 # singleton entries for the dimensions that should be reduced (and vice versa).
-function partial_mapreduce_device(f, op, neutral, maxthreads, ::Val{Rreduce},
+function partial_mapreduce_device(f, op, neutral, ::Val{Rreduce},
     ::Val{Rother}, ::Val{Rlen}, ::Val{grain}, shuffle, R, As...) where {Rreduce, Rother, Rlen, grain}
     # decompose the 1D hardware indices into separate ones for reduction (across items
     # and possibly groups if it doesn't fit) and other elements (remaining groups)
@@ -129,7 +129,7 @@ function partial_mapreduce_device(f, op, neutral, maxthreads, ::Val{Rreduce},
             val = op(val, next)
         end
 
-        val = reduce_group(op, val, neutral, shuffle, maxthreads)
+        val = reduce_group(op, val, neutral, shuffle)
 
         # write back to memory
         if localIdx_reduce == 1
@@ -301,8 +301,9 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # we might not be able to launch all those threads to reduce each slice in one go.
     # that's why each threads also loops across their inputs, processing multiple values
     # so that we can span the entire reduction dimension using a single item group.
-    kernel = @metal launch=false partial_mapreduce_device(f, op, init, Val(maxthreads), Val(Rreduce), Val(Rother),
+    kernel = @metal launch=false partial_mapreduce_device(f, op, init, Val(Rreduce), Val(Rother),
                                                           Val(UInt64(length(Rother))), Val(grain), Val(shuffle), R, A)
+    compute_shmem(threads) = shuffle ? 0 : threads*sizeof(T)
 
     # how many threads do we want?
     #
@@ -319,6 +320,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     end
 
     reduce_threads = compute_threads(kernel)
+    reduce_shmem = compute_shmem(reduce_threads)
 
     # how many groups should we launch?
     #
@@ -330,14 +332,15 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
 
     # determine the launch configuration
     threads = reduce_threads
+    shmem = reduce_shmem
     groups = reduce_groups*other_groups
 
     # perform the actual reduction
     if reduce_groups == 1
         # we can cover the dimensions to reduce using a single group
-        kernel(f, op, init, Val(maxthreads), Val(Rreduce), Val(Rother),
+        kernel(f, op, init, Val(Rreduce), Val(Rother),
                Val(UInt64(length(Rother))), Val(grain), Val(shuffle), R, A;
-               threads, groups)
+               threads, groups, shmem)
     else
         # temporary empty array whose type will match the final partial array
 	    partial = similar(R, ntuple(_ -> 0, Val(ndims(R)+1)))
@@ -351,13 +354,15 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
         #       kernel's; launching more threads than the shared array has slots is an
         #       out-of-bounds access (issue #616, surfaced by macOS-15 shader validation).
         partial_kernel = @metal launch=false partial_mapreduce_device(
-                                    f, op, init, Val(maxthreads), Val(Rreduce),
+                                    f, op, init, Val(Rreduce),
                                     Val(Rother), Val(UInt64(length(Rother))),
                                     Val(grain), Val(shuffle), partial, A)
         partial_reduce_threads = compute_threads(partial_kernel)
+        partial_reduce_shmem = compute_shmem(partial_reduce_threads)
         partial_reduce_groups = cld(length(Rreduce), partial_reduce_threads * grain)
 
         partial_threads = partial_reduce_threads
+        partial_shmem = partial_reduce_shmem
         partial_groups = partial_reduce_groups*other_groups
 
         partial = similar(R, (size(R)..., partial_reduce_groups))
@@ -366,10 +371,10 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
             # use broadcasting to extend singleton dimensions
             partial .= R
         end
-        partial_kernel(f, op, init, Val(maxthreads), Val(Rreduce),
-                        Val(Rother), Val(UInt64(length(Rother))),
-                        Val(grain), Val(shuffle), partial, A;
-                        groups=partial_groups, threads=partial_threads)
+        partial_kernel(f, op, init, Val(Rreduce), Val(Rother),
+                        Val(UInt64(length(Rother))), Val(grain),
+                        Val(shuffle), partial, A; groups=partial_groups,
+                        threads=partial_threads, shmem=partial_shmem)
 
         GPUArrays.mapreducedim!(identity, op, R, partial; init=init)
     end

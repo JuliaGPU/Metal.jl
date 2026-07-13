@@ -76,6 +76,14 @@ n = 256
     @on_device MtlThreadGroupArray(Tuple{Float32, Float32}, (1,2))
     @on_device MtlThreadGroupArray(Tuple{RGB{Float32}, UInt32}, 1)
     @on_device MtlThreadGroupArray(Tuple{RGB{Float32}, UInt32}, (1,2))
+
+    # dynamic
+    @on_device shmem=sizeof(Float32) MtlDynamicThreadGroupArray(Float32, 1)
+    @on_device shmem=sizeof(Float32)*2 MtlDynamicThreadGroupArray(Float32, (1, 2))
+    @on_device shmem=sizeof(Tuple{Float32, Float32}) MtlDynamicThreadGroupArray(Tuple{Float32, Float32}, 1)
+    @on_device shmem=sizeof(Tuple{Float32, Float32})*2 MtlDynamicThreadGroupArray(Tuple{Float32, Float32}, (1,2))
+    @on_device shmem=sizeof(Tuple{RGB{Float32}, UInt32}) MtlDynamicThreadGroupArray(Tuple{RGB{Float32}, UInt32}, 1)
+    @on_device shmem=sizeof(Tuple{RGB{Float32}, UInt32})*2 MtlDynamicThreadGroupArray(Tuple{RGB{Float32}, UInt32}, (1,2))
 end
 
 
@@ -131,6 +139,95 @@ end
 end
 
 end # static
+
+@testset "dynamic shmem" begin
+
+@testset "statically typed" begin
+    function kernel(d, n)
+        t = thread_position_in_threadgroup().x
+        tr = n-t+1
+
+        s = MtlDynamicThreadGroupArray(Float32, n)
+        s[t] = d[t]
+        threadgroup_barrier()
+        d[t] = s[tr]
+
+        return
+    end
+
+    a = rand(Float32, n)
+    d_a = MtlArray(a)
+
+    @metal threads=n shmem=n*sizeof(Float32) kernel(d_a, n)
+    @test reverse(a) == Array(d_a)
+end
+
+@testset "parametrically typed" begin
+    @testset for T in [Int32, Int64, Float16, Float32]
+        function kernel(d::MtlDeviceArray{T}, n) where {T}
+            t = thread_position_in_threadgroup().x
+            tr = n-t+1
+
+            s = MtlDynamicThreadGroupArray(T, n)
+            s[t] = d[t]
+            threadgroup_barrier()
+            d[t] = s[tr]
+
+            return
+        end
+
+        a = rand(T, n)
+        d_a = MtlArray(a)
+
+        @metal threads=n shmem=n*sizeof(T) kernel(d_a, n)
+        @test reverse(a) == Array(d_a)
+    end
+end
+
+@testset "alignment" begin
+    # bug: used to generate align=12, which is invalid (non pow2)
+    function kernel(v0::T, n) where {T}
+        shared = MtlDynamicThreadGroupArray(T, n)
+        @inbounds shared[UInt32(1)] = v0
+        return
+    end
+
+    n = 32
+    typ = typeof((0f0, 0f0, 0f0))
+    @metal shmem=n*sizeof(typ) kernel((0f0, 0f0, 0f0), n)
+end
+
+@testset "multiple arrays" begin
+    function kernel(a, b, n)
+        t = thread_position_in_threadgroup().x
+        tr = n-t+1
+
+        sa = MtlDynamicThreadGroupArray(eltype(a), n)
+        sa[t] = a[t]
+        threadgroup_barrier()
+        a[t] = sa[tr]
+
+        sb = MtlDynamicThreadGroupArray(eltype(b), n)
+        sb[t] = b[t]
+        threadgroup_barrier()
+        b[t] = sb[tr]
+
+        return
+    end
+
+    a = rand(Float32, n)
+    d_a = MtlArray(a)
+
+    b = rand(Int64, n)
+    d_b = MtlArray(b)
+
+    @metal threads=n shmem=(n*sizeof(Float32), n*sizeof(Int64)) kernel(d_a, d_b, n)
+    @test reverse(a) == Array(d_a)
+    @test reverse(b) == Array(d_b)
+end
+
+
+end # dynamic
 
 end # threadgroup memory
 
