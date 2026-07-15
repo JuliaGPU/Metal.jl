@@ -239,8 +239,8 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         # specializes it to a Val before lowering to AIR.
         for (order, minimum, message) in (
             (Metal.memory_order_relaxed, v"3.0", nothing),
-            (Metal.memory_order_seq_cst, v"4.0",
-             "Atomic memory_order_seq_cst requires Metal 4.0 or newer."),
+            (Metal.memory_order_seq_cst, v"4.1",
+             "Atomic memory_order_seq_cst requires Metal 4.1 or newer."),
             (Metal.memory_order_acquire, v"4.1",
              "Atomic memory_order_acquire requires Metal 4.1 or newer."),
             (Metal.memory_order_release, v"4.1",
@@ -263,6 +263,64 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
                 @test occursin(message, sprint(showerror, err))
             end
         end
+
+        function flagged_fetch_kernel(a, ::Val{ORDER}, ::Val{FLAGS}) where {ORDER,FLAGS}
+            Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1), ORDER, FLAGS)
+            return
+        end
+
+        a = Metal.zeros(Int32, 1)
+        if Metal.metal_target() >= v"4.1"
+            @metal flagged_fetch_kernel(a, Val(Metal.memory_order_relaxed),
+                                        Val(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup))
+            @test Array(a) == Int32[1]
+        else
+            err = try
+                @metal launch=false flagged_fetch_kernel(
+                    a, Val(Metal.memory_order_relaxed), Val(Metal.MemoryFlagDevice))
+                nothing
+            catch err
+                err
+            end
+            @test err isa Metal.InvalidIRError
+            @test occursin("Atomic memory flags require Metal 4.1 or newer.",
+                           sprint(showerror, err))
+        end
+
+        function ordered_flags_abi(ptr::Core.LLVMPtr{Int32,Metal.AS.Device})
+            Metal.atomic_fetch_add_explicit(ptr, Int32(1), Metal.memory_order_acq_rel,
+                                            Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
+            return
+        end
+        function legacy_abi(ptr::Core.LLVMPtr{Int32,Metal.AS.Device})
+            Metal.atomic_fetch_add_explicit(ptr, Int32(1))
+            return
+        end
+        ordered_ir = sprint(io -> Metal.code_llvm(io, ordered_flags_abi,
+                                                   Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
+                                                   kernel=true, metal=v"4.1", dump_module=true))
+        legacy_ir = sprint(io -> Metal.code_llvm(io, legacy_abi,
+                                                  Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
+                                                  kernel=true, metal=v"4.0", dump_module=true))
+        @test occursin("@air.atomic.global.add.s.i32(ptr addrspace(1), i32, i32, i32, i32, i1)",
+                       ordered_ir)
+        @test occursin("i32 4, i32 2, i32 3, i1 false", ordered_ir)
+        @test occursin("@air.atomic.global.add.s.i32(ptr addrspace(1), i32, i32, i32, i1)",
+                       legacy_ir)
+        @test occursin("i32 0, i32 2, i1 true", legacy_ir)
+
+        function guarded_ordered_fetch_kernel(a)
+            if Metal.metal_version() >= sv"4.1"
+                Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1),
+                                                Metal.memory_order_acq_rel,
+                                                Metal.MemoryFlagDevice)
+            end
+            a[1] += 1
+            return
+        end
+        a = Metal.zeros(Int32, 1)
+        @metal guarded_ordered_fetch_kernel(a)
+        @test Array(a) == Int32[Metal.metal_target() >= v"4.1" ? 2 : 1]
     end
 end
 
@@ -347,7 +405,8 @@ end
             parent_node = parent[leaf_node]
             while parent_node != Int32(0)
                 old = Metal.atomic_fetch_add_explicit(pointer(flags, parent_node), UInt32(1),
-                                                      Metal.memory_order_acq_rel)
+                                                      Metal.memory_order_acq_rel,
+                                                      Metal.MemoryFlagDevice)
                 if old + UInt32(1) == UInt32(2)
                     left = child0[parent_node]
                     right = child1[parent_node]
