@@ -230,28 +230,39 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
     end
 
     @testset "explicit ordering arguments" begin
-        function ordered_kernel(a)
-            ptr = pointer(a, 1)
-            Metal.atomic_store_explicit(ptr, Int32(1), Metal.memory_order_release)
-            loaded = Metal.atomic_load_explicit(ptr, Metal.memory_order_acquire)
-            exchanged = Metal.atomic_exchange_explicit(ptr, loaded + Int32(1),
-                                                       Metal.memory_order_acq_rel)
-            added = Metal.atomic_fetch_add_explicit(ptr, exchanged,
-                                                    Metal.memory_order_seq_cst)
-            old = Metal.atomic_compare_exchange_weak_explicit(
-                ptr,
-                added + Int32(1),
-                Int32(42),
-                Metal.memory_order_acq_rel,
-                Metal.memory_order_acquire,
-            )
-            a[2] = old
+        function ordered_fetch_kernel(a, ::Val{ORDER}) where {ORDER}
+            Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1), ORDER)
             return
         end
 
-        a = Metal.zeros(Int32, 2)
-        @metal ordered_kernel(a)
-        @test Array(a) == Int32[42, 3]
+        # The enum value is in the kernel signature, so the public enum overload
+        # specializes it to a Val before lowering to AIR.
+        for (order, minimum, message) in (
+            (Metal.memory_order_relaxed, v"3.0", nothing),
+            (Metal.memory_order_seq_cst, v"4.0",
+             "Atomic memory_order_seq_cst requires Metal 4.0 or newer."),
+            (Metal.memory_order_acquire, v"4.1",
+             "Atomic memory_order_acquire requires Metal 4.1 or newer."),
+            (Metal.memory_order_release, v"4.1",
+             "Atomic memory_order_release requires Metal 4.1 or newer."),
+            (Metal.memory_order_acq_rel, v"4.1",
+             "Atomic memory_order_acq_rel requires Metal 4.1 or newer."),
+        )
+            a = Metal.zeros(Int32, 1)
+            if Metal.metal_target() >= minimum
+                @metal ordered_fetch_kernel(a, Val(order))
+                @test Array(a) == Int32[1]
+            else
+                err = try
+                    @metal launch=false ordered_fetch_kernel(a, Val(order))
+                    nothing
+                catch err
+                    err
+                end
+                @test err isa Metal.InvalidIRError
+                @test occursin(message, sprint(showerror, err))
+            end
+        end
     end
 end
 
@@ -356,13 +367,26 @@ end
     mt_child1 = MtlArray(child1)
     mt_parent = MtlArray(parent)
 
-    @metal threads=256 groups=cld(n_leaves, 256) refit_kernel!(
-        values,
-        flags,
-        mt_child0,
-        mt_child1,
-        mt_parent,
-        Int32(n_leaves),
-    )
-    @test Array(values)[1] == UInt32(n_leaves)
+    if Metal.metal_target() >= v"4.1"
+        @metal threads=256 groups=cld(n_leaves, 256) refit_kernel!(
+            values,
+            flags,
+            mt_child0,
+            mt_child1,
+            mt_parent,
+            Int32(n_leaves),
+        )
+        @test Array(values)[1] == UInt32(n_leaves)
+    else
+        err = try
+            @metal launch=false refit_kernel!(values, flags, mt_child0, mt_child1, mt_parent,
+                                              Int32(n_leaves))
+            nothing
+        catch err
+            err
+        end
+        @test err isa Metal.InvalidIRError
+        @test occursin("Atomic memory_order_acq_rel requires Metal 4.1 or newer.",
+                       sprint(showerror, err))
+    end
 end

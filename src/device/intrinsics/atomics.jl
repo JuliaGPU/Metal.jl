@@ -8,6 +8,30 @@
     memory_order_seq_cst = 5
 end
 
+# Ordered atomics are only available in newer Metal language versions. Keep this
+# check in device code so target constants can propagate and an enclosing
+# `metal_version()` guard can eliminate an otherwise unsupported operation.
+@inline function check_memory_order(::Val{order}) where {order}
+    if order === memory_order_relaxed
+        return
+    elseif order === memory_order_seq_cst
+        @static_assert(metal_version() >= sv"4.0",
+                       "Atomic memory_order_seq_cst requires Metal 4.0 or newer.")
+    elseif order === memory_order_acquire
+        @static_assert(metal_version() >= sv"4.1",
+                       "Atomic memory_order_acquire requires Metal 4.1 or newer.")
+    elseif order === memory_order_release
+        @static_assert(metal_version() >= sv"4.1",
+                       "Atomic memory_order_release requires Metal 4.1 or newer.")
+    elseif order === memory_order_acq_rel
+        @static_assert(metal_version() >= sv"4.1",
+                       "Atomic memory_order_acq_rel requires Metal 4.1 or newer.")
+    else
+        @static_assert(false, "Invalid atomic memory ordering.")
+    end
+    return
+end
+
 # XXX: the integers should come from some enum
 const atomic_memory_names = Dict(
     AS.Device      => ("global", Int32(2)),
@@ -36,7 +60,12 @@ for typ in (:Int32, :UInt32), as in (AS.Device, AS.ThreadGroup)
             atomic_store_explicit(ptr, desired, Val(order))
 
         function atomic_store_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ,
-                                       order::Val)
+                                       order::Val{O}) where {O}
+            if !(O in (memory_order_relaxed, memory_order_release, memory_order_seq_cst))
+                @static_assert(false,
+                               "atomic_store_explicit only supports relaxed, release, or sequentially consistent ordering.")
+            end
+            check_memory_order(order)
             @typed_ccall($"air.atomic.$memnam.store.$typnam", llvmcall, Nothing,
                          (LLVMPtr{$typ,$as}, $typ, Int32, Int32, Bool),
                          ptr, desired, order, Val($memid), Val(true))
@@ -47,7 +76,12 @@ for typ in (:Int32, :UInt32), as in (AS.Device, AS.ThreadGroup)
         @inline atomic_load_explicit(ptr::LLVMPtr{$typ,$as}, order::memory_order) =
             atomic_load_explicit(ptr, Val(order))
 
-        function atomic_load_explicit(ptr::LLVMPtr{$typ,$as}, order::Val)
+        function atomic_load_explicit(ptr::LLVMPtr{$typ,$as}, order::Val{O}) where {O}
+            if !(O in (memory_order_relaxed, memory_order_acquire, memory_order_seq_cst))
+                @static_assert(false,
+                               "atomic_load_explicit only supports relaxed, acquire, or sequentially consistent ordering.")
+            end
+            check_memory_order(order)
             @typed_ccall($"air.atomic.$memnam.load.$typnam", llvmcall, $typ,
                          (LLVMPtr{$typ,$as}, Int32, Int32, Bool),
                          ptr, order, Val($memid), Val(true))
@@ -61,6 +95,7 @@ for typ in (:Int32, :UInt32), as in (AS.Device, AS.ThreadGroup)
 
         function atomic_exchange_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ,
                                           order::Val)
+            check_memory_order(order)
             @typed_ccall($"air.atomic.$memnam.xchg.$typnam", llvmcall, $typ,
                          (LLVMPtr{$typ,$as}, $typ, Int32, Int32, Bool),
                          ptr, desired, order, Val($memid), Val(true))
@@ -81,8 +116,18 @@ for typ in (:Int32, :UInt32), as in (AS.Device, AS.ThreadGroup)
 
         function atomic_compare_exchange_weak_explicit(ptr::LLVMPtr{$typ,$as},
                                                        expected::$typ, desired::$typ,
-                                                       success_order::Val,
-                                                       failure_order::Val)
+                                                       success_order::Val{S},
+                                                       failure_order::Val{F}) where {S,F}
+            if !(F in (memory_order_relaxed, memory_order_acquire, memory_order_seq_cst)) ||
+               (S === memory_order_relaxed && F !== memory_order_relaxed) ||
+               (S === memory_order_acquire && F === memory_order_seq_cst) ||
+               (S === memory_order_release && F !== memory_order_relaxed) ||
+               (S === memory_order_acq_rel && F === memory_order_seq_cst)
+                @static_assert(false,
+                               "atomic_compare_exchange_weak_explicit failure ordering must be relaxed, acquire, or sequentially consistent and no stronger than the success ordering.")
+            end
+            check_memory_order(success_order)
+            check_memory_order(failure_order)
             # NOTE: we deviate slightly from the Metal/C++ API here, not returning the
             #       status boolean, but the contents of the expected value box, which will
             #       have been changed to the current value if the exchange failed.
@@ -170,6 +215,7 @@ for (op, types) in atomic_fetch_and_modify, typ in types, as in (AS.Device, AS.T
             $f(ptr, desired, Val(order))
 
         function $f(ptr::LLVMPtr{$typ,$as}, desired::$typ, order::Val)
+            check_memory_order(order)
             @typed_ccall($"air.atomic.$memnam.$op.$typnam", llvmcall, $typ,
                          (LLVMPtr{$typ,$as}, $typ, Int32, Int32, Bool),
                          ptr, desired, order, Val($memid), Val(true))
@@ -192,8 +238,8 @@ end
 
 @inline function atomic_fetch_op_explicit(ptr::LLVMPtr{T}, op::Function, val,
                                           order::Val) where {T}
-    old = Base.unsafe_load(ptr)
     failure_order = atomic_fetch_op_failure_order(order)
+    old = atomic_load_explicit(ptr, failure_order)
     while true
         cmp = old
         new = convert(T, op(old, val))
