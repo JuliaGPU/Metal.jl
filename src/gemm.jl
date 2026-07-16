@@ -285,8 +285,8 @@ function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceA
                              ::Val{TM}, ::Val{TN}, ::Val{TK},
                              ::Val{NSIMD}) where {TM, TN, TK, NSIMD}
     tgid  = threadgroup_position_in_grid_3d()
-    m_off = (Int32(tgid.x) - Int32(1)) * Int32(TM)
-    n_off = (Int32(tgid.y) - Int32(1)) * Int32(TN)
+    m_off = (unsafe_trunc(Int32, tgid.x) - Int32(1)) * Int32(TM)
+    n_off = (unsafe_trunc(Int32, tgid.y) - Int32(1)) * Int32(TN)
 
     tA = MtlInlineTensor(A, (M, K))
     tB = MtlInlineTensor(B, (K, N))
@@ -297,7 +297,7 @@ function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceA
     op = TensorOpsMatmul2D{matmul2d_descriptor(TM, TN, TK;
                                                mode = matmul2d_multiply_accumulate),
                            Int32(NSIMD)}()
-    nslices = Int32(K ÷ UInt32(TK))
+    nslices = unsafe_trunc(Int32, K ÷ UInt32(TK))
     for s in Int32(0):(nslices - Int32(1))
         k_off = s * Int32(TK)
         mA = view(tA, (m_off + Int32(1), k_off + Int32(1)), (Int32(TM), Int32(TK)))

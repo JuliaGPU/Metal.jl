@@ -106,7 +106,7 @@ end
 @device_function @inline function MtlInlineTensor{T, R, AS.Device}(
         data::MtlDeviceArray{T, <:Any, AS.Device},
         extents::NTuple{R, <:Integer}) where {T, R}
-    e = Int32.(extents)
+    e = unsafe_trunc.(Int32, extents)
     storage = Ref{TensorDescriptor}()
     init_strided_tensor_device!(storage, Int16(R),
                                 reinterpret(LLVMPtr{UInt8, AS.Device}, pointer(data)),
@@ -117,7 +117,7 @@ end
 @device_function @inline function MtlInlineTensor{T, R, AS.ThreadGroup}(
         data::MtlDeviceArray{T, <:Any, AS.ThreadGroup},
         extents::NTuple{R, <:Integer}) where {T, R}
-    e = Int32.(extents)
+    e = unsafe_trunc.(Int32, extents)
     storage = Ref{TensorDescriptor}()
     init_strided_tensor_threadgroup!(storage, Int16(R),
                                      reinterpret(LLVMPtr{UInt8, AS.ThreadGroup}, pointer(data)),
@@ -133,7 +133,8 @@ end
     storage = Ref{TensorDescriptor}()
     init_strided_tensor_device!(storage, Int16(R),
                                 reinterpret(LLVMPtr{UInt8, AS.Device}, pointer(data)),
-                                Int32.(extents), Int32.(strides), Int8(0))
+                                unsafe_trunc.(Int32, extents),
+                                unsafe_trunc.(Int32, strides), Int8(0))
     return MtlInlineTensor{T, R, AS.Device}(storage[])
 end
 
@@ -144,7 +145,8 @@ end
     storage = Ref{TensorDescriptor}()
     init_strided_tensor_threadgroup!(storage, Int16(R),
                                      reinterpret(LLVMPtr{UInt8, AS.ThreadGroup}, pointer(data)),
-                                     Int32.(extents), Int32.(strides), Int8(0))
+                                     unsafe_trunc.(Int32, extents),
+                                     unsafe_trunc.(Int32, strides), Int8(0))
     return MtlInlineTensor{T, R, AS.ThreadGroup}(storage[])
 end
 
