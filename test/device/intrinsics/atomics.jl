@@ -302,11 +302,14 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         legacy_ir = sprint(io -> Metal.code_llvm(io, legacy_abi,
                                                   Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
                                                   kernel=true, metal=v"4.0", dump_module=true))
-        @test occursin("@air.atomic.global.add.s.i32(ptr addrspace(1), i32, i32, i32, i32, i1)",
-                       ordered_ir)
+        atomic_ptr = raw"(?:ptr addrspace\(1\)|i32 addrspace\(1\)\*)"
+        ordered_abi_pattern = Regex(raw"@air\.atomic\.global\.add\.s\.i32\(" * atomic_ptr *
+                                    raw", i32, i32, i32, i32, i1\)")
+        legacy_abi_pattern = Regex(raw"@air\.atomic\.global\.add\.s\.i32\(" * atomic_ptr *
+                                   raw", i32, i32, i32, i1\)")
+        @test occursin(ordered_abi_pattern, ordered_ir)
         @test occursin("i32 4, i32 2, i32 3, i1 false", ordered_ir)
-        @test occursin("@air.atomic.global.add.s.i32(ptr addrspace(1), i32, i32, i32, i1)",
-                       legacy_ir)
+        @test occursin(legacy_abi_pattern, legacy_ir)
         @test occursin("i32 0, i32 2, i1 true", legacy_ir)
 
         function guarded_ordered_fetch_kernel(a)
