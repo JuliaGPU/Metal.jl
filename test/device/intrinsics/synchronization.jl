@@ -50,6 +50,51 @@
         @test Array(buf)[1] == threads - 1
     end
 
+    # TODO: Actually test for races
+    @testset "atomic thread fence" begin
+        function fence_kernel(buf, ::Val{ORDER}, ::Val{FLAGS}, ::Val{SCOPE}) where {ORDER,FLAGS,SCOPE}
+            Metal.atomic_thread_fence(FLAGS, ORDER, SCOPE)
+            buf[1] += 1
+            return
+        end
+
+        orders = [Metal.memory_order_relaxed, Metal.memory_order_seq_cst]
+        macos_version() >= v"27" && append!(orders, [Metal.memory_order_acquire, Metal.memory_order_release, Metal.memory_order_acq_rel])
+        for order in orders
+            buf = Metal.zeros(Int32, 1)
+            @metal fence_kernel(buf, Val(order),
+                                Val(Metal.MemoryFlagDevice | Metal.MemoryFlagTexture),
+                                Val(Metal.thread_scope_simdgroup))
+            @test Array(buf) == Int32[1]
+        end
+
+        function fence_abi(::Core.LLVMPtr{Int32,Metal.AS.Device})
+            Metal.atomic_thread_fence(Metal.MemoryFlagDevice | Metal.MemoryFlagTexture,
+                                        Metal.memory_order_seq_cst,
+                                        Metal.thread_scope_simdgroup)
+            return
+        end
+        ir = sprint(io -> Metal.code_llvm(io, fence_abi,
+                                            Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
+                                            kernel=true, metal=v"3.2", dump_module=true))
+        @test occursin("@air.atomic.fence(i32, i32, i32)", ir)
+        @test occursin("i32 5, i32 5, i32 4", ir)
+
+        function unavailable_fence(buf)
+            Metal.atomic_thread_fence(Metal.MemoryFlagDevice, Metal.memory_order_relaxed)
+            return
+        end
+        err = try
+            @metal launch=false metal=v"3.1" unavailable_fence(Metal.zeros(Int32, 1))
+            nothing
+        catch err
+            err
+        end
+        @test err isa Metal.InvalidIRError
+        @test occursin("atomic_thread_fence requires Metal 3.2 or newer.",
+                        sprint(showerror, err))
+    end
+
     # TODO: simdgroup barrier test
 end
 
