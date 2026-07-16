@@ -49,9 +49,10 @@ end
     A === AS.Device ? MemoryFlagDevice : MemoryFlagThreadGroup
 end
 
-const valid_atomic_orders = (memory_order_relaxed, memory_order_acquire,
-                             memory_order_release, memory_order_acq_rel,
-                             memory_order_seq_cst)
+@inline valid_atomic_order(order) =
+    order === memory_order_relaxed || order === memory_order_acquire ||
+    order === memory_order_release || order === memory_order_acq_rel ||
+    order === memory_order_seq_cst
 
 # MSL 4.1 requires callers to spell out flags for ordered atomics. We instead default
 # to the memory region addressed by the pointer, while retaining mem_none for relaxed
@@ -63,7 +64,8 @@ const valid_atomic_orders = (memory_order_relaxed, memory_order_acquire,
 # MSL specification section 6.15: failure ordering is restricted to relaxed, acquire,
 # or sequentially consistent, and may not be stronger than the success ordering.
 @inline function valid_atomic_compare_exchange_failure_order(success, failure)
-    failure in (memory_order_relaxed, memory_order_acquire, memory_order_seq_cst) ||
+    (failure === memory_order_relaxed || failure === memory_order_acquire ||
+     failure === memory_order_seq_cst) ||
         return false
     success === memory_order_relaxed && return failure === memory_order_relaxed
     success === memory_order_acquire && return failure !== memory_order_seq_cst
@@ -87,8 +89,8 @@ for typ in (:Int32, :UInt32), as in (AS.Device, AS.ThreadGroup)
 
         function atomic_store_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ,
                                        ::Val{O}, ::Val{F}) where {O,F}
-            @static_assert(O in (memory_order_relaxed, memory_order_release,
-                                 memory_order_seq_cst),
+            @static_assert(O === memory_order_relaxed || O === memory_order_release ||
+                           O === memory_order_seq_cst,
                            "atomic_store_explicit only supports relaxed, release, or sequentially consistent ordering.")
             @static_assert(atomic_order_and_flags_available(O, F),
                            "Ordered atomics and memory flags require Metal 4.1 or newer.")
@@ -105,8 +107,8 @@ for typ in (:Int32, :UInt32), as in (AS.Device, AS.ThreadGroup)
 
         function atomic_load_explicit(ptr::LLVMPtr{$typ,$as}, ::Val{O},
                                       ::Val{F}) where {O,F}
-            @static_assert(O in (memory_order_relaxed, memory_order_acquire,
-                                 memory_order_seq_cst),
+            @static_assert(O === memory_order_relaxed || O === memory_order_acquire ||
+                           O === memory_order_seq_cst,
                            "atomic_load_explicit only supports relaxed, acquire, or sequentially consistent ordering.")
             @static_assert(atomic_order_and_flags_available(O, F),
                            "Ordered atomics and memory flags require Metal 4.1 or newer.")
@@ -124,7 +126,7 @@ for typ in (:Int32, :UInt32), as in (AS.Device, AS.ThreadGroup)
 
         function atomic_exchange_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ,
                                           ::Val{O}, ::Val{F}) where {O,F}
-            @static_assert(O in valid_atomic_orders, "Invalid atomic memory ordering.")
+            @static_assert(valid_atomic_order(O), "Invalid atomic memory ordering.")
             @static_assert(atomic_order_and_flags_available(O, F),
                            "Ordered atomics and memory flags require Metal 4.1 or newer.")
             @typed_ccall($"air.atomic.$memnam.xchg.$typnam", llvmcall, $typ,
@@ -145,7 +147,7 @@ for typ in (:Int32, :UInt32), as in (AS.Device, AS.ThreadGroup)
                                                        expected::$typ, desired::$typ,
                                                        ::Val{S}, ::Val{F},
                                                        ::Val{G}) where {S,F,G}
-            @static_assert(S in valid_atomic_orders, "Invalid atomic memory ordering.")
+            @static_assert(valid_atomic_order(S), "Invalid atomic memory ordering.")
             @static_assert(valid_atomic_compare_exchange_failure_order(S, F),
                            "atomic_compare_exchange_weak_explicit failure ordering must be relaxed, acquire, or sequentially consistent and no stronger than the success ordering.")
             @static_assert(atomic_order_and_flags_available(S, G),
@@ -238,7 +240,7 @@ for (op, types) in atomic_fetch_and_modify, typ in types, as in (AS.Device, AS.T
         end
 
         function $f(ptr::LLVMPtr{$typ,$as}, desired::$typ, ::Val{O}, ::Val{F}) where {O,F}
-            @static_assert(O in valid_atomic_orders, "Invalid atomic memory ordering.")
+            @static_assert(valid_atomic_order(O), "Invalid atomic memory ordering.")
             @static_assert(atomic_order_and_flags_available(O, F),
                            "Ordered atomics and memory flags require Metal 4.1 or newer.")
             @typed_ccall($"air.atomic.$memnam.$op.$typnam", llvmcall, $typ,
