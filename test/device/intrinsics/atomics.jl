@@ -237,16 +237,12 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
 
         # The enum value is in the kernel signature, so the public enum overload
         # specializes it to a Val before lowering to AIR.
-        for (order, minimum, message) in (
-            (Metal.memory_order_relaxed, v"3.0", nothing),
-            (Metal.memory_order_seq_cst, v"4.1",
-             "Atomic memory_order_seq_cst requires Metal 4.1 or newer."),
-            (Metal.memory_order_acquire, v"4.1",
-             "Atomic memory_order_acquire requires Metal 4.1 or newer."),
-            (Metal.memory_order_release, v"4.1",
-             "Atomic memory_order_release requires Metal 4.1 or newer."),
-            (Metal.memory_order_acq_rel, v"4.1",
-             "Atomic memory_order_acq_rel requires Metal 4.1 or newer."),
+        for (order, minimum) in (
+            (Metal.memory_order_relaxed, v"3.0"),
+            (Metal.memory_order_seq_cst, v"4.1"),
+            (Metal.memory_order_acquire, v"4.1"),
+            (Metal.memory_order_release, v"4.1"),
+            (Metal.memory_order_acq_rel, v"4.1"),
         )
             a = Metal.zeros(Int32, 1)
             if Metal.metal_target() >= minimum
@@ -260,7 +256,8 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
                     err
                 end
                 @test err isa Metal.InvalidIRError
-                @test occursin(message, sprint(showerror, err))
+                @test occursin("Ordered atomics and memory flags require Metal 4.1 or newer.",
+                               sprint(showerror, err))
             end
         end
 
@@ -283,7 +280,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
                 err
             end
             @test err isa Metal.InvalidIRError
-            @test occursin("Atomic memory flags require Metal 4.1 or newer.",
+            @test occursin("Ordered atomics and memory flags require Metal 4.1 or newer.",
                            sprint(showerror, err))
         end
 
@@ -292,14 +289,17 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
                                             Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
             return
         end
-        function legacy_abi(ptr::Core.LLVMPtr{Int32,Metal.AS.Device})
+        function default_abi(ptr::Core.LLVMPtr{Int32,Metal.AS.Device})
             Metal.atomic_fetch_add_explicit(ptr, Int32(1))
             return
         end
         ordered_ir = sprint(io -> Metal.code_llvm(io, ordered_flags_abi,
                                                    Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
                                                    kernel=true, metal=v"4.1", dump_module=true))
-        legacy_ir = sprint(io -> Metal.code_llvm(io, legacy_abi,
+        relaxed_ir = sprint(io -> Metal.code_llvm(io, default_abi,
+                                                   Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
+                                                   kernel=true, metal=v"4.1", dump_module=true))
+        legacy_ir = sprint(io -> Metal.code_llvm(io, default_abi,
                                                   Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
                                                   kernel=true, metal=v"4.0", dump_module=true))
         atomic_ptr = raw"(?:ptr addrspace\(1\)|i32 addrspace\(1\)\*)"
@@ -309,8 +309,92 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
                                    raw", i32, i32, i32, i1\)")
         @test occursin(ordered_abi_pattern, ordered_ir)
         @test occursin("i32 4, i32 2, i32 3, i1 false", ordered_ir)
+        @test occursin(ordered_abi_pattern, relaxed_ir)
+        @test occursin("i32 0, i32 2, i32 0, i1 false", relaxed_ir)
         @test occursin(legacy_abi_pattern, legacy_ir)
         @test occursin("i32 0, i32 2, i1 true", legacy_ir)
+
+        function unavailable_order(a)
+            Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1),
+                                            Metal.memory_order_acquire)
+            return
+        end
+        function unavailable_flags(a)
+            Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1), Metal.memory_order_relaxed,
+                                            Metal.MemoryFlagDevice)
+            return
+        end
+        a = Metal.zeros(Int32, 1)
+        for f in (unavailable_order, unavailable_flags)
+            err = try
+                @metal launch=false metal=v"4.0" f(a)
+                nothing
+            catch err
+                err
+            end
+            @test err isa Metal.InvalidIRError
+            @test occursin("Ordered atomics and memory flags require Metal 4.1 or newer.",
+                           sprint(showerror, err))
+        end
+
+        function invalid_load_order(a, b)
+            b[1] = Metal.atomic_load_explicit(pointer(a, 1), Metal.memory_order_release)
+            return
+        end
+        function invalid_store_order(a, b)
+            Metal.atomic_store_explicit(pointer(a, 1), b[1], Metal.memory_order_acquire)
+            return
+        end
+        function invalid_failure_order(a, b)
+            b[1] = Metal.atomic_compare_exchange_weak_explicit(
+                pointer(a, 1), Int32(0), Int32(1), Metal.memory_order_relaxed,
+                Metal.memory_order_acquire)
+            return
+        end
+        b = Metal.zeros(Int32, 1)
+        for (f, message) in (
+            (invalid_load_order, "atomic_load_explicit only supports"),
+            (invalid_store_order, "atomic_store_explicit only supports"),
+            (invalid_failure_order,
+             "failure ordering must be relaxed, acquire, or sequentially consistent and no stronger"),
+        )
+            err = try
+                @metal launch=false metal=v"4.1" f(a, b)
+                nothing
+            catch err
+                err
+            end
+            @test err isa Metal.InvalidIRError
+            @test occursin(message, sprint(showerror, err))
+        end
+
+        function mixed_abi(ptr::Core.LLVMPtr{Int32,Metal.AS.Device})
+            Metal.atomic_load_explicit(ptr)
+            Metal.atomic_load_explicit(ptr + 1, Metal.memory_order_acquire)
+            return
+        end
+        mixed_ir = sprint(io -> Metal.code_llvm(
+            io, mixed_abi, Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
+            kernel=true, metal=v"4.1", dump_module=true))
+        ordered_load_pattern = Regex(raw"@air\.atomic\.global\.load\.i32\(" * atomic_ptr *
+                                     raw", i32, i32, i32, i1\)")
+        legacy_load_pattern = Regex(raw"@air\.atomic\.global\.load\.i32\(" * atomic_ptr *
+                                    raw", i32, i32, i1\)")
+        @test occursin(ordered_load_pattern, mixed_ir)
+        @test !occursin(legacy_load_pattern, mixed_ir)
+
+        function mixed_kernel(a, b)
+            x = Metal.atomic_load_explicit(pointer(a, 1))
+            y = Metal.atomic_load_explicit(pointer(a, 2), Metal.memory_order_acquire)
+            b[1] = x + y
+            return
+        end
+        if Metal.metal_target() >= v"4.1"
+            a = MtlArray(Int32[1, 2])
+            b = Metal.zeros(Int32, 1)
+            @metal mixed_kernel(a, b)
+            @test Array(b) == Int32[3]
+        end
 
         function guarded_ordered_fetch_kernel(a)
             if Metal.metal_version() >= sv"4.1"
@@ -448,7 +532,7 @@ end
             err
         end
         @test err isa Metal.InvalidIRError
-        @test occursin("Atomic memory_order_acq_rel requires Metal 4.1 or newer.",
+        @test occursin("Ordered atomics and memory flags require Metal 4.1 or newer.",
                        sprint(showerror, err))
     end
 end
