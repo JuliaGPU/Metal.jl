@@ -242,6 +242,71 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
                    job, mod, entry)
 
     # downgrade intrinsics when targeting older AIR versions
+    if job.config.target.metal < v"4.1"
+        # Metal 4.1 added memory flags to the atomic ABI and made its atomic pointers
+        # non-volatile. Device code always emits that module-wide ABI; recover the legacy
+        # form for older language targets by dropping flags and restoring volatile=true.
+        for f in collect(functions(mod))
+            fn = LLVM.name(f)
+            match(r"^air\.atomic\.(global|local)\.", fn) === nothing && continue
+
+            calls = [user(u) for u in uses(f)]
+            GPUCompiler.@compiler_assert all(call -> call isa LLVM.CallInst, calls) job
+
+            is_cmpxchg = occursin(".cmpxchg.weak.", fn)
+            compatible = all(calls) do call
+                args = collect(arguments(call))
+                flags = args[end-1]
+                success_order = args[end-(is_cmpxchg ? 4 : 3)]
+                flags isa ConstantInt && convert(UInt32, flags) == 0 &&
+                    success_order isa ConstantInt && convert(Int32, success_order) == 0 &&
+                    (!is_cmpxchg || (args[end-3] isa ConstantInt &&
+                                     convert(Int32, args[end-3]) == 0))
+            end
+            # Leave invalid calls untouched so GPUCompiler's subsequent static-assert
+            # validation can report the user-facing availability or ordering error.
+            compatible || continue
+
+            new_ft = function_type(f)
+            new_params = collect(parameters(new_ft))
+            old_params = [new_params[1:end-2]..., new_params[end]]
+            old_ft = LLVM.FunctionType(LLVM.return_type(new_ft), old_params)
+
+            LLVM.name!(f, fn * ".metal41")
+            old_f = LLVM.Function(mod, fn, old_ft)
+            for attr in collect(function_attributes(f))
+                push!(function_attributes(old_f), attr)
+            end
+
+            for call in calls
+                args = collect(arguments(call))
+                flags = args[end-1]
+                success_order = args[end-(is_cmpxchg ? 4 : 3)]
+                GPUCompiler.@compiler_assert flags isa ConstantInt job
+                GPUCompiler.@compiler_assert convert(UInt32, flags) == 0 job
+                GPUCompiler.@compiler_assert success_order isa ConstantInt job
+                GPUCompiler.@compiler_assert convert(Int32, success_order) == 0 job
+                if is_cmpxchg
+                    failure_order = args[end-3]
+                    GPUCompiler.@compiler_assert failure_order isa ConstantInt job
+                    GPUCompiler.@compiler_assert convert(Int32, failure_order) == 0 job
+                end
+
+                @dispose builder=IRBuilder() begin
+                    position!(builder, call)
+                    debuglocation!(builder, call)
+                    old_args = [args[1:end-2]..., ConstantInt(true)]
+                    new_call = call!(builder, old_ft, old_f, old_args)
+                    replace_uses!(call, new_call)
+                    erase!(call)
+                end
+            end
+
+            GPUCompiler.@compiler_assert isempty(uses(f)) job
+            erase!(f)
+        end
+    end
+
     if job.config.target.air < v"2.8"
         # AIR 2.8 generalized the simdgroup matrix load/store intrinsics, replacing
         # the elements-per-row scalar, matrix origin, and transposition flag with
