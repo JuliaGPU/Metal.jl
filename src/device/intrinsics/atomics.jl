@@ -1,9 +1,5 @@
 # Atomic Functions
 
-@enum memory_order::Int32 begin
-    memory_order_relaxed = 0
-end
-
 # XXX: the integers should come from some enum
 const atomic_memory_names = Dict(
     AS.Device      => ("global", Int32(2)),
