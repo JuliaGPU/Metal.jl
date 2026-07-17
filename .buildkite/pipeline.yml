@@ -162,7 +162,6 @@ steps:
     continue_on_failure: true
 
   - label: ":racehorse: Benchmarks"
-    key: benchmarks
     plugins:
       - JuliaCI/julia#v1:
           version: "1.12"
@@ -184,33 +183,3 @@ steps:
       build.message !~ /\[only/ && !build.pull_request.draft &&
         build.message !~ /\[skip benchmarks\]/
     timeout_in_minutes: 30
-
-  - label: ":github: Publish benchmarks"
-    key: publish-benchmarks
-    depends_on: benchmarks
-    command: |
-      if ! buildkite-agent artifact download benchmarkresults.json .; then
-        echo "No benchmark result found; skipping GitHub dispatch"
-        exit 0
-      fi
-      if [ -z "$${GITHUB_TOKEN:-}" ]; then
-        echo "GITHUB_TOKEN is not available"
-        exit 1
-      fi
-
-      payload=$$(jq -cn \
-        --arg build_number "$$BUILDKITE_BUILD_NUMBER" \
-        --arg commit "$$BUILDKITE_COMMIT" \
-        --arg branch "$$BUILDKITE_BRANCH" \
-        --arg pull_request "$$BUILDKITE_PULL_REQUEST" \
-        '{event_type: "benchmarks_complete", client_payload: $$ARGS.named}')
-      curl --fail --silent --show-error --request POST \
-        --header "Authorization: Bearer $$GITHUB_TOKEN" \
-        --header "Accept: application/vnd.github+json" \
-        --url "https://api.github.com/repos/JuliaGPU/Metal.jl/dispatches" \
-        --data "$$payload"
-    agents:
-      queue: "metal"
-
-env:
-  SECRET_GITHUB_TOKEN: "AdEayesenNRDVOEDux8opnn4mWyI/BeyTfKKMIG/oeo62sX1OHthjGH90feRw+XMnqUSbWrMHAHDJW45sIyKtK9AMUSeATfLGhA0O4A9qRJNtC3g+/Yy1/FwH2455QV/mDke8nlvq0h6S3ATU+szeggBKOzLnQ7Mc1KrLe0VB2pHdjPdxPdqnxCzf4DcLxTbjp03EAK8YgZE1vsrf+Ygw+rjRM2FN81jHfKtjYjwu7xJf1fcmhVuA3Zc/nfJ2Ocwo+6jMEaoIim2MnkRo6gZ/N0ItO1YNHf+ad+duxmsCqbuZxGwlNq+voUuLsNA5ZbKq5vujtBUSaGXlpZObqo53A==;U2FsdGVkX1/tAsPnUl0uv/EkkPytWTGcbUVHXngVqdy8ns7wFmRPzG6C4Y9DFR6wvlwqnt6K1lGNFa+D64bUqzIGRzRNcIv0Q4vomy1scK1KcH7qCgNG3R7h8TBJb7ppAjtSN2ILjrRholMuVzRGnQ=="
