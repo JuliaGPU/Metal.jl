@@ -39,7 +39,8 @@ end
 
 `N`-dimensional Metal array with storage mode `S` and elements of type `T`.
 
-`S` can be `Metal.PrivateStorage` (default), `Metal.SharedStorage`.
+`S` can be `Metal.SharedStorage` (default), `Metal.PrivateStorage`. The default
+storage mode can be changed by setting `default_storage` in LocalPreferences.toml.
 
 See the Array Programming section of the Metal.jl docs for more details.
 """
@@ -189,17 +190,6 @@ MtlMatrix or an MtlVector.
 See also `VecOrMat`(@ref) for examples.
 """
 const MtlVecOrMat{T,S} = Union{MtlVector{T,S},MtlMatrix{T,S}}
-
-# default to private memory
-const DefaultStorageMode = let str = @load_preference("default_storage", "private")
-    if str == "private"
-        PrivateStorage
-    elseif str == "shared"
-        SharedStorage
-    else
-        error("unknown default storage mode: $default_storage")
-    end
-end
 
 MtlArray{T,N}(::UndefInitializer, dims::Dims{N}) where {T,N} =
     MtlArray{T,N,DefaultStorageMode}(undef, dims)
@@ -475,9 +465,9 @@ function Adapt.adapt_storage(to::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) whe
 end
 
 """
-    mtl(A; storage=Metal.PrivateStorage)
+    mtl(A; storage=$(DefaultStorageMode))
 
-`storage` can be `Metal.PrivateStorage` (default) or `Metal.SharedStorage`.
+`storage` can be `Metal.SharedStorage` or `Metal.PrivateStorage`.
 
 Opinionated GPU array adaptor, which may alter the element type `T` of arrays:
 * For `T<:AbstractFloat`, it makes a `MtlArray{Float32}` for performance and compatibility
@@ -495,7 +485,7 @@ Uses Adapt.jl to act inside some wrapper structs.
 
 ```jldoctests
 julia> mtl(ones(3)')
-1×3 adjoint(::MtlVector{Float32, Metal.PrivateStorage}) with eltype Float32:
+1×3 adjoint(::MtlVector{Float32, Metal.SharedStorage}) with eltype Float32:
  1.0  1.0  1.0
 
 julia> mtl(zeros(1,3); storage=Metal.SharedStorage)
@@ -506,7 +496,7 @@ julia> mtl(1:3)
 1:3
 
 julia> MtlArray(1:3)
-3-element MtlVector{Int64, Metal.PrivateStorage}:
+3-element MtlVector{Int64, Metal.SharedStorage}:
  1
  2
  3
