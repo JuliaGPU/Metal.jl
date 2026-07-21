@@ -2,7 +2,6 @@
 AbstractFFTs = "621f4979-c628-5d54-868e-fcf4e3e8185c"
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 BFloat16s = "ab4f0b2a-ad5b-11e8-123f-65d77653426b"
-CompilerCaching = "9db33cc3-5358-4881-8759-fa4194144afd"
 FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
 FileCheck = "4e644321-382b-4b05-b0b6-5d23c3d944fb"
 GPUArrays = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
