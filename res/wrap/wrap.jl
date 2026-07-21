@@ -15,6 +15,7 @@ SDK_PATH = `xcrun --show-sdk-path` |> open |> readchomp |> String
 
 main(name::AbstractString; kwargs...) = main([name]; kwargs...)
 function main(names::AbstractVector=["all"]; sdk_path=SDK_PATH)
+    @info "Generating wrappers from SDK at\n$sdk_path"
     path_to_framework(framework) = joinpath(sdk_path, "System/Library/Frameworks/",framework*".framework","Headers")
     path_to_mps_framework(framework) = joinpath(sdk_path, "System/Library/Frameworks/","MetalPerformanceShaders.framework","Frameworks",framework*".framework","Headers")
 
