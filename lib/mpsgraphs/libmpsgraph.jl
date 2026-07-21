@@ -286,6 +286,15 @@ end
     MPSGraphLossReductionTypeMean = 0x0000000000000002
 end
 
+@objcwrapper availability = macos(v"27.0.0") MPSGraphSDPADescriptor <: MPSGraphObject
+
+@objcproperties MPSGraphSDPADescriptor begin
+    @autoproperty scale::Cfloat setter = setScale
+    @autoproperty maskTensor::id{MPSGraphTensor} setter = setMaskTensor
+    @autoproperty isCausal::Bool setter = setIsCausal
+    @autoproperty sinksTensor::id{MPSGraphTensor} setter = setSinksTensor
+end
+
 @objcwrapper MPSGraphVariableOp <: MPSGraphOperation
 
 @objcproperties MPSGraphVariableOp begin
