@@ -112,10 +112,7 @@ end
 @device_function @inline function atomic_thread_fence(flags::Val{F}, order::Val{O},
                                                        scope::Val{S}) where {F,O,S}
     check_atomic_thread_fence_order(order)
-    if !(S in (thread_scope_thread, thread_scope_threadgroup,
-               thread_scope_device, thread_scope_simdgroup))
-        @static_assert(false, "Invalid atomic thread scope.")
-    end
+    @static_assert(S isa thread_scope, "Invalid atomic thread scope.")
     @typed_ccall("air.atomic.fence", llvmcall, Nothing, (Int32, Int32, Int32),
                  flags, order, scope)
 end
