@@ -1,8 +1,7 @@
 @testset "output" begin
 
 # GPU logging requires macOS 15 / Metal 3.2. Targeting an older Metal version (here forced via
-# the `metal`/`macos` kwargs, so this runs on any host) must raise an informative *host* error
-# at compile time -- the dynamic replacement for the old static macOS-version check.
+# the `metal`/`macos` kwargs, so this runs on any host) must fail the static assertion.
 @testset "unsupported target" begin
     function logger()
         @mtlprintln("Hello, World")
