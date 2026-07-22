@@ -466,18 +466,8 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
             mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)
         end
 
-        # GPU logging is emitted as the `air.os_log` intrinsic, which requires Metal 3.2
-        # (macOS 15). check for it *here*, after optimization, rather than during macro
-        # expansion: that way version-gated logging (e.g. `metal_version() >= sv"3.2" &&
-        # @mtlprintln(...)`) compiles fine for older targets, because the dead `os_log`
-        # call has already been eliminated and won't trip this check.
+        # Detect logging after optimization so dead logging calls do not enable log state.
         loggingEnabled = haskey(functions(mod), "air.os_log")
-        if loggingEnabled && job.config.target.metal < v"3.2"
-            error("""GPU logging (`@mtlprintf`, `@mtlprint`, `@mtlprintln`, `@mtlshow`) requires \
-                     macOS 15 / Metal 3.2 or newer, but this kernel targets Metal $(job.config.target.metal) \
-                     (macOS $(job.config.target.macos)). To keep targeting older versions, guard logging \
-                     calls behind `metal_version() >= sv"3.2"`.""")
-        end
 
         @signpost_interval log=log_compiler() "Downgrade to AIR" begin
             # generate AIR, having GPUCompiler lower the IR to AIR-compatible form and
