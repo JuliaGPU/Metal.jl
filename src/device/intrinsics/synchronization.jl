@@ -60,16 +60,16 @@ end
                                               scope::thread_scope=thread_scope_device) =
     atomic_thread_fence(Val(flags), Val(order), Val(scope))
 
-@device_function @inline function atomic_thread_fence(flags::Val{F}, order::Val{O},
-                                                       scope::Val{S}) where {F,O,S}
+@device_function @inline function atomic_thread_fence(::Val{flags}, ::Val{order},
+                                                       ::Val{scope}) where {flags, order, scope}
     @static_assert(metal_version() >= sv"3.2",
                    "atomic_thread_fence requires Metal 3.2 or newer.")
-    @static_assert(O isa memory_order, "Invalid atomic memory ordering.")
-    @static_assert(O === memory_order_relaxed || O === memory_order_seq_cst || metal_version() >= sv"4.1",
+    @static_assert(order isa memory_order, "Invalid atomic memory ordering.")
+    @static_assert(order === memory_order_relaxed || order === memory_order_seq_cst || metal_version() >= sv"4.1",
                    "Acquire, release, and acquire-release atomic_thread_fence orderings require Metal 4.1 or newer.")
-    @static_assert(S isa thread_scope, "Invalid atomic thread scope.")
+    @static_assert(scope isa thread_scope, "Invalid atomic thread scope.")
     @typed_ccall("air.atomic.fence", llvmcall, Nothing, (Int32, Int32, Int32),
-                 flags, order, scope)
+        Val(flags), Val(order), Val(scope))
 end
 
 @doc """
