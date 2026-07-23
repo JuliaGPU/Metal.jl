@@ -241,20 +241,22 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
                    Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module, LLVM.Function},
                    job, mod, entry)
 
-    # downgrade intrinsics when targeting older AIR versions
+    # downgrade intrinsics when targeting older AIR or Metal versions
+    ## atomics
     if job.config.target.metal < v"4.1"
-        # Metal 4.1 added memory flags to the atomic ABI and made its atomic pointers
-        # non-volatile. Device code always emits that module-wide ABI; recover the legacy
-        # form for older language targets by dropping flags and restoring volatile=true.
+        ## atomic ABI: selected by AIR
+        ## volatile bit: selected by MSL
+        ## device code always emits the AIR 2.9 / Metal 4.1 form
         for f in collect(functions(mod))
             fn = LLVM.name(f)
-            match(r"^air\.atomic\.(global|local)\.", fn) === nothing && continue
+            (startswith(fn, "air.atomic.global.") ||
+             startswith(fn, "air.atomic.local.")) || continue
 
             calls = [user(u) for u in uses(f)]
-            GPUCompiler.@compiler_assert all(call -> call isa LLVM.CallInst, calls) job
-
             is_cmpxchg = occursin(".cmpxchg.weak.", fn)
-            compatible = all(calls) do call
+            is_load = occursin(".load.", fn)
+            expected_nargs = is_cmpxchg ? 8 : is_load ? 5 : 6
+            conforming(call) = call isa LLVM.CallInst && length(arguments(call)) == expected_nargs && let
                 args = collect(arguments(call))
                 flags = args[end-1]
                 success_order = args[end-(is_cmpxchg ? 4 : 3)]
@@ -263,9 +265,22 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
                     (!is_cmpxchg || (args[end-3] isa ConstantInt &&
                                      convert(Int32, args[end-3]) == 0))
             end
-            # Leave invalid calls untouched so GPUCompiler's subsequent static-assert
-            # validation can report the user-facing availability or ordering error.
-            compatible || continue
+
+            if job.config.target.air >= v"2.9"
+                # AIR 2.9 introduced the flags operand, but pre-4.1 MSL still marks
+                # atomic pointers volatile. Leave non-conforming calls for check_ir!
+                # so that device-side static assertions produce the useful diagnostic.
+                for call in calls
+                    conforming(call) || continue
+                    # LLVM models the callee as the final operand, after all arguments.
+                    operands(call)[end-1] = ConstantInt(true)
+                end
+                continue
+            end
+
+            # AIR before 2.9 needs the legacy ABI without flags. We can only rewrite a
+            # declaration when every use conforms; otherwise leave it for check_ir!.
+            all(conforming, calls) || continue
 
             new_ft = function_type(f)
             new_params = collect(parameters(new_ft))
@@ -280,18 +295,6 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
 
             for call in calls
                 args = collect(arguments(call))
-                flags = args[end-1]
-                success_order = args[end-(is_cmpxchg ? 4 : 3)]
-                GPUCompiler.@compiler_assert flags isa ConstantInt job
-                GPUCompiler.@compiler_assert convert(UInt32, flags) == 0 job
-                GPUCompiler.@compiler_assert success_order isa ConstantInt job
-                GPUCompiler.@compiler_assert convert(Int32, success_order) == 0 job
-                if is_cmpxchg
-                    failure_order = args[end-3]
-                    GPUCompiler.@compiler_assert failure_order isa ConstantInt job
-                    GPUCompiler.@compiler_assert convert(Int32, failure_order) == 0 job
-                end
-
                 @dispose builder=IRBuilder() begin
                     position!(builder, call)
                     debuglocation!(builder, call)
@@ -306,7 +309,7 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
             erase!(f)
         end
     end
-
+    ## simdgroup
     if job.config.target.air < v"2.8"
         # AIR 2.8 generalized the simdgroup matrix load/store intrinsics, replacing
         # the elements-per-row scalar, matrix origin, and transposition flag with
@@ -459,12 +462,14 @@ end
         metal = metal_target(macos)
     end
     if air === nothing
-        air = air_target(macos)
+        air = max(air_support(macos), air_floor(metal))
         if air < v"2.6"
             error("""Metal.jl requires AIR 2.6 (macOS 14) or newer, but macOS $(macos) only supports AIR $(air_support(macos)).""")
         end
     elseif air < v"2.6"
         error("""Metal.jl requires AIR 2.6 (macOS 14) or newer; cannot target AIR $(air).""")
+    elseif air < air_floor(metal)
+            error("""Metal $(metal) requires AIR $(air_floor(metal)) or newer; cannot target AIR $(air).""")
     end
 
     # create GPUCompiler objects
