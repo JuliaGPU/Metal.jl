@@ -632,6 +632,18 @@ end
     @test testf(cumsum, rand(Float32, 2))
     @test testf(cumprod, rand(Float32, 2))
 
+    @testset "SIMD scan" begin
+        @with (Metal.scan_alg => :native) begin
+            input = reshape(Float32.(mod.(0:(3 * 1025 - 1), 11) .- 5), 1025, 3)
+            @test Array(accumulate(+, MtlArray(input); dims=1)) ≈
+                accumulate(+, input; dims=1)
+
+            input = reshape(Int32.(mod.(0:(3 * 513 - 1), 7)), 513, 3)
+            @test Array(accumulate(max, MtlArray(input'); dims=2)) ==
+                accumulate(max, input'; dims=2)
+        end
+    end
+
     scan_input = reshape(Float32[2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37], 3, 4)
     product_input = scan_input ./ 10
     for alg in (:native, :MPSGraph), dims in 1:2
