@@ -1,6 +1,8 @@
 ## gpucompiler interface implementation
 
-struct MetalCompilerParams <: AbstractCompilerParams end
+struct MetalCompilerParams <: AbstractCompilerParams
+    gpufamily::Union{Nothing, MTL.MTLGPUFamily}
+end
 const MetalCompilerConfig = CompilerConfig{MetalCompilerTarget, MetalCompilerParams}
 const MetalCompilerJob = CompilerJob{MetalCompilerTarget, MetalCompilerParams}
 
@@ -451,7 +453,7 @@ end
                                          debug_level=Base.JLOptions().debug_level,
                                          opt_level=2,
                                          macos=nothing, air=nothing, metal=nothing,
-                                         kwargs...)
+                                         gpufamily=nothing, kwargs...)
     # determine the versions of things to target
     if macos === nothing
         macos = macos_version()
@@ -471,10 +473,17 @@ end
     elseif air < air_floor(metal)
             error("""Metal $(metal) requires AIR $(air_floor(metal)) or newer; cannot target AIR $(air).""")
     end
+    if gpufamily === nothing
+        highest_family = MTL.highest_apple_family(dev)
+        if highest_family === nothing
+            error("""Metal.jl requires Metal5 or newer; cannot target Metal$(highest_family).""")
+        end
+        gpufamily = isnothing(highest_family) ? nothing : MTL.MTLGPUFamily(1000 + highest_family)
+    end
 
     # create GPUCompiler objects
     target = MetalCompilerTarget(; macos, air, metal, kwargs...)
-    params = MetalCompilerParams()
+    params = MetalCompilerParams(gpufamily)
     CompilerConfig(target, params; kernel, name, always_inline, debug_level, opt_level)
 end
 
@@ -538,6 +547,18 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
 
         # Detect logging after optimization so dead logging calls do not enable log state.
         loggingEnabled = haskey(functions(mod), "air.os_log")
+
+        # 64-bit atomic modify intrinsics (`atomic_{min,max}_explicit` on `atomic_ulong`)
+        # require the newer Apple GPU families that implement this optional feature.
+        has_i64_atomic_modify =
+            haskey(functions(mod), "air.atomic.global.min.u.i64") ||
+            haskey(functions(mod), "air.atomic.global.max.u.i64")
+        if has_i64_atomic_modify && (isnothing(job.config.params.gpufamily) ||
+           job.config.params.gpufamily < MTL.MTLGPUFamilyApple8)
+            error("""64-bit atomic modify intrinsics (`atomic_min_explicit`/`atomic_max_explicit` on `UInt64`) \
+                     require `MTLGPUFamilyApple8` (M2 or newer). Guard usage with \
+                     `MTL.supports_family(device(), MTL.MTLGPUFamilyApple8)`.""")
+        end
 
         @signpost_interval log=log_compiler() "Downgrade to AIR" begin
             # generate AIR, having GPUCompiler lower the IR to AIR-compatible form and
