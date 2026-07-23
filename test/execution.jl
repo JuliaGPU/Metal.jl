@@ -162,6 +162,14 @@ end
         @test_throws "Metal.jl requires AIR 2.6" begin
             Metal.code_llvm(devnull, dummy, Tuple{}; air=v"2.5")
         end
+
+        # The offline compiler raises AIR to the floor required by the selected MSL
+        # language version, even when the deployment target supports an older AIR.
+        @test Metal.compiler_config(device(); macos=v"14", metal=v"4.0").target.air == v"2.8"
+        @test Metal.compiler_config(device(); macos=v"14", metal=v"4.1").target.air == v"2.9"
+        @test_throws "Metal 4.1.0 requires AIR 2.9.0" begin
+            Metal.code_llvm(devnull, dummy, Tuple{}; metal=v"4.1", air=v"2.8")
+        end
     end
 
     @test Metal.return_type(identity, Tuple{Int}) === Int

@@ -178,7 +178,8 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
                     @test jlfun.(a, val) ≈ Array(b)
                 end
 
-                @testset "threadgroup $T" for T in setdiff(types, [Float32])
+                threadgroup_types = Metal.metal_target() >= v"4.1" ? types : setdiff(types, [Float32])
+                @testset "threadgroup $T" for T in threadgroup_types
                     a = rand(T, n)
                     b = MtlArray(a)
                     val = rand(T)
@@ -295,13 +296,20 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         end
         ordered_ir = sprint(io -> Metal.code_llvm(io, ordered_flags_abi,
                                                    Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
-                                                   kernel=true, metal=v"4.1", dump_module=true))
+                                                   kernel=true, metal=v"4.1", air=v"2.9",
+                                                   dump_module=true))
         relaxed_ir = sprint(io -> Metal.code_llvm(io, default_abi,
                                                    Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
-                                                   kernel=true, metal=v"4.1", dump_module=true))
+                                                   kernel=true, metal=v"4.1", air=v"2.9",
+                                                   dump_module=true))
+        volatile_ir = sprint(io -> Metal.code_llvm(io, default_abi,
+                                                    Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
+                                                    kernel=true, metal=v"4.0", air=v"2.9",
+                                                    dump_module=true))
         legacy_ir = sprint(io -> Metal.code_llvm(io, default_abi,
                                                   Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
-                                                  kernel=true, metal=v"4.0", dump_module=true))
+                                                  kernel=true, metal=v"4.0", air=v"2.8",
+                                                  dump_module=true))
         atomic_ptr = raw"(?:ptr addrspace\(1\)|i32 addrspace\(1\)\*)"
         ordered_abi_pattern = Regex(raw"@air\.atomic\.global\.add\.s\.i32\(" * atomic_ptr *
                                     raw", i32, i32, i32, i32, i1\)")
@@ -311,6 +319,8 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         @test occursin("i32 4, i32 2, i32 3, i1 false", ordered_ir)
         @test occursin(ordered_abi_pattern, relaxed_ir)
         @test occursin("i32 0, i32 2, i32 0, i1 false", relaxed_ir)
+        @test occursin(ordered_abi_pattern, volatile_ir)
+        @test occursin("i32 0, i32 2, i32 0, i1 true", volatile_ir)
         @test occursin(legacy_abi_pattern, legacy_ir)
         @test occursin("i32 0, i32 2, i1 true", legacy_ir)
 
@@ -337,36 +347,34 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
                            sprint(showerror, err))
         end
 
-        function invalid_load_order(a, b)
-            b[1] = Metal.atomic_load_explicit(pointer(a, 1), Metal.memory_order_release)
+        function invalid_order(a)
+            Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1), Val(Int32(42)),
+                                            Val(Metal.MemoryFlagNone))
             return
         end
-        function invalid_store_order(a, b)
-            Metal.atomic_store_explicit(pointer(a, 1), b[1], Metal.memory_order_acquire)
+        err = try
+            @metal launch=false metal=v"4.1" air=v"2.9" invalid_order(a)
+            nothing
+        catch err
+            err
+        end
+        @test err isa Metal.InvalidIRError
+        @test occursin("Invalid atomic memory ordering.", sprint(showerror, err))
+
+        function threadgroup_float32_add(a)
+            Metal.atomic_fetch_add_explicit(pointer(MtlThreadGroupArray(Float32, 1), 1), 1f0)
+            a[1] = 1
             return
         end
-        function invalid_failure_order(a, b)
-            b[1] = Metal.atomic_compare_exchange_weak_explicit(
-                pointer(a, 1), Int32(0), Int32(1), Metal.memory_order_relaxed,
-                Metal.memory_order_acquire)
-            return
+        err = try
+            @metal launch=false metal=v"4.0" air=v"2.8" threadgroup_float32_add(a)
+            nothing
+        catch err
+            err
         end
-        b = Metal.zeros(Int32, 1)
-        for (f, message) in (
-            (invalid_load_order, "atomic_load_explicit only supports"),
-            (invalid_store_order, "atomic_store_explicit only supports"),
-            (invalid_failure_order,
-             "failure ordering must be relaxed, acquire, or sequentially consistent and no stronger"),
-        )
-            err = try
-                @metal launch=false metal=v"4.1" f(a, b)
-                nothing
-            catch err
-                err
-            end
-            @test err isa Metal.InvalidIRError
-            @test occursin(message, sprint(showerror, err))
-        end
+        @test err isa Metal.InvalidIRError
+        @test occursin("Float32 threadgroup atomic operations require Metal 4.1 or newer.",
+                       sprint(showerror, err))
 
         function mixed_abi(ptr::Core.LLVMPtr{Int32,Metal.AS.Device})
             Metal.atomic_load_explicit(ptr)
@@ -375,7 +383,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         end
         mixed_ir = sprint(io -> Metal.code_llvm(
             io, mixed_abi, Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
-            kernel=true, metal=v"4.1", dump_module=true))
+            kernel=true, metal=v"4.1", air=v"2.9", dump_module=true))
         ordered_load_pattern = Regex(raw"@air\.atomic\.global\.load\.i32\(" * atomic_ptr *
                                      raw", i32, i32, i32, i1\)")
         legacy_load_pattern = Regex(raw"@air\.atomic\.global\.load\.i32\(" * atomic_ptr *

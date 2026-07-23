@@ -1,58 +1,15 @@
 # Atomic Functions
 
-# XXX: the integers should come from some enum
-const atomic_memory_names = Dict(
-    AS.Device      => ("global", Int32(2)),
-    AS.ThreadGroup => ("local",  Int32(1))
+const atomic_memory_spaces = (
+    (AS.Device,      "global", thread_scope_device),
+    (AS.ThreadGroup, "local",  thread_scope_threadgroup),
 )
-
-const atomic_type_names = Dict(
-    :Int32   => "i32",
-    :UInt32  => "i32",
-    :Int64   => "i64",
-    :UInt64  => "i64",
-    :Float32 => "f32"
-)
-
-# Keep availability checks in device code so target constants can propagate and
-# enclosing `metal_version()` guards can eliminate unavailable operations.
-@inline function check_atomic_memory_order(::Val{order}) where {order}
-    if order === memory_order_relaxed
-        return
-    elseif order === memory_order_acquire
-        @static_assert(metal_version() >= sv"4.1",
-                       "Atomic memory_order_acquire requires Metal 4.1 or newer.")
-    elseif order === memory_order_release
-        @static_assert(metal_version() >= sv"4.1",
-                       "Atomic memory_order_release requires Metal 4.1 or newer.")
-    elseif order === memory_order_acq_rel
-        @static_assert(metal_version() >= sv"4.1",
-                       "Atomic memory_order_acq_rel requires Metal 4.1 or newer.")
-    elseif order === memory_order_seq_cst
-        @static_assert(metal_version() >= sv"4.1",
-                       "Atomic memory_order_seq_cst requires Metal 4.1 or newer.")
-    else
-        @static_assert(false, "Invalid atomic memory ordering.")
-    end
-    return
-end
-
-@inline function check_atomic_flags()
-    @static_assert(metal_version() >= sv"4.1",
-                   "Atomic memory flags require Metal 4.1 or newer.")
-    return
-end
 
 
 @inline function default_atomic_flags(order::memory_order, ::Val{A}) where {A}
     order === memory_order_relaxed && return MemoryFlagNone
     A === AS.Device ? MemoryFlagDevice : MemoryFlagThreadGroup
 end
-
-@inline valid_atomic_order(order) =
-    order === memory_order_relaxed || order === memory_order_acquire ||
-    order === memory_order_release || order === memory_order_acq_rel ||
-    order === memory_order_seq_cst
 
 # MSL 4.1 requires callers to spell out flags for ordered atomics. We instead default
 # to the memory region addressed by the pointer, while retaining mem_none for relaxed
@@ -61,77 +18,29 @@ end
     (order === memory_order_relaxed && flags == MemoryFlagNone) ||
     metal_version() >= sv"4.1"
 
-# MSL specification section 6.15: failure ordering is restricted to relaxed, acquire,
-# or sequentially consistent, and may not be stronger than the success ordering.
-@inline function valid_atomic_compare_exchange_failure_order(success, failure)
-    (failure === memory_order_relaxed || failure === memory_order_acquire ||
-     failure === memory_order_seq_cst) ||
-        return false
-    success === memory_order_relaxed && return failure === memory_order_relaxed
-    success === memory_order_acquire && return failure !== memory_order_seq_cst
-    success === memory_order_release && return failure === memory_order_relaxed
-    success === memory_order_acq_rel && return failure !== memory_order_seq_cst
-    success === memory_order_seq_cst
+@inline function validate_atomic_arguments(::Val{order}, ::Val{flags}) where {order, flags}
+    @static_assert(order isa memory_order, "Invalid atomic memory ordering.")
+    @static_assert(atomic_order_and_flags_available(order, flags),
+                   "Ordered atomics and memory flags require Metal 4.1 or newer.")
 end
 
 ## low-level functions
-for typ in (:Int32, :UInt32), as in (AS.Device, AS.ThreadGroup)
-    typnam = atomic_type_names[typ]
-    memnam, memid = atomic_memory_names[as]
+for (typ, typnam) in ((:Int32, "i32"), (:UInt32, "i32")),
+    (as, memnam, scope) in atomic_memory_spaces
 
     @eval begin
-        @inline function atomic_store_explicit(
-            ptr::LLVMPtr{$typ,$as}, desired::$typ,
-            order::memory_order=memory_order_relaxed,
-            flags::Union{MemoryFlags,UInt32}=default_atomic_flags(order, Val($as)))
-            atomic_store_explicit(ptr, desired, Val(order), Val(flags))
-        end
-
-        function atomic_store_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ,
-                                       ::Val{O}, ::Val{F}) where {O,F}
-            @static_assert(O === memory_order_relaxed || O === memory_order_release ||
-                           O === memory_order_seq_cst,
-                           "atomic_store_explicit only supports relaxed, release, or sequentially consistent ordering.")
-            @static_assert(atomic_order_and_flags_available(O, F),
-                           "Ordered atomics and memory flags require Metal 4.1 or newer.")
-            @typed_ccall($"air.atomic.$memnam.store.$typnam", llvmcall, Nothing,
-                         (LLVMPtr{$typ,$as}, $typ, Int32, Int32, Int32, Bool),
-                         ptr, desired, Val(O), Val($memid), Val(F), Val(false))
-        end
-
         @inline function atomic_load_explicit(
             ptr::LLVMPtr{$typ,$as}, order::memory_order=memory_order_relaxed,
             flags::Union{MemoryFlags,UInt32}=default_atomic_flags(order, Val($as)))
             atomic_load_explicit(ptr, Val(order), Val(flags))
         end
 
-        function atomic_load_explicit(ptr::LLVMPtr{$typ,$as}, ::Val{O},
-                                      ::Val{F}) where {O,F}
-            @static_assert(O === memory_order_relaxed || O === memory_order_acquire ||
-                           O === memory_order_seq_cst,
-                           "atomic_load_explicit only supports relaxed, acquire, or sequentially consistent ordering.")
-            @static_assert(atomic_order_and_flags_available(O, F),
-                           "Ordered atomics and memory flags require Metal 4.1 or newer.")
+        function atomic_load_explicit(ptr::LLVMPtr{$typ,$as}, ::Val{order},
+                                      ::Val{flags}) where {order, flags}
+            validate_atomic_arguments(Val(order), Val(flags))
             @typed_ccall($"air.atomic.$memnam.load.$typnam", llvmcall, $typ,
                          (LLVMPtr{$typ,$as}, Int32, Int32, Int32, Bool),
-                         ptr, Val(O), Val($memid), Val(F), Val(false))
-        end
-
-        @inline function atomic_exchange_explicit(
-            ptr::LLVMPtr{$typ,$as}, desired::$typ,
-            order::memory_order=memory_order_relaxed,
-            flags::Union{MemoryFlags,UInt32}=default_atomic_flags(order, Val($as)))
-            atomic_exchange_explicit(ptr, desired, Val(order), Val(flags))
-        end
-
-        function atomic_exchange_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ,
-                                          ::Val{O}, ::Val{F}) where {O,F}
-            @static_assert(valid_atomic_order(O), "Invalid atomic memory ordering.")
-            @static_assert(atomic_order_and_flags_available(O, F),
-                           "Ordered atomics and memory flags require Metal 4.1 or newer.")
-            @typed_ccall($"air.atomic.$memnam.xchg.$typnam", llvmcall, $typ,
-                         (LLVMPtr{$typ,$as}, $typ, Int32, Int32, Int32, Bool),
-                         ptr, desired, Val(O), Val($memid), Val(F), Val(false))
+                         ptr, Val(order), Val($scope), Val(flags), Val(false))
         end
 
         @inline function atomic_compare_exchange_weak_explicit(
@@ -145,22 +54,62 @@ for typ in (:Int32, :UInt32), as in (AS.Device, AS.ThreadGroup)
 
         function atomic_compare_exchange_weak_explicit(ptr::LLVMPtr{$typ,$as},
                                                        expected::$typ, desired::$typ,
-                                                       ::Val{S}, ::Val{F},
-                                                       ::Val{G}) where {S,F,G}
-            @static_assert(valid_atomic_order(S), "Invalid atomic memory ordering.")
-            @static_assert(valid_atomic_compare_exchange_failure_order(S, F),
-                           "atomic_compare_exchange_weak_explicit failure ordering must be relaxed, acquire, or sequentially consistent and no stronger than the success ordering.")
-            @static_assert(atomic_order_and_flags_available(S, G),
-                           "Ordered atomics and memory flags require Metal 4.1 or newer.")
+                                                       ::Val{success_order}, ::Val{failure_order},
+                                                       ::Val{flags}) where {success_order, failure_order, flags}
+            validate_atomic_arguments(Val(success_order), Val(flags))
+            @static_assert(failure_order isa memory_order, "Invalid atomic memory ordering.")
             # NOTE: we deviate slightly from the Metal/C++ API here, not returning the
             #       status boolean, but the contents of the expected value box, which will
             #       have been changed to the current value if the exchange failed.
             expected_box = Ref(expected)
             @typed_ccall($"air.atomic.$memnam.cmpxchg.weak.$typnam", llvmcall, $typ,
                          (LLVMPtr{$typ,$as}, Ptr{$typ}, $typ, Int32, Int32, Int32, Int32, Bool),
-                         ptr, expected_box, desired, Val(S),
-                         Val(F), Val($memid), Val(G), Val(false))
+                         ptr, expected_box, desired, Val(success_order),
+                         Val(failure_order), Val($scope), Val(flags), Val(false))
             expected_box[]
+        end
+    end
+end
+
+const atomic_value_intrinsics = (
+    (:store,     "store", (:Int32, :UInt32),           false),
+    (:exchange,  "xchg",  (:Int32, :UInt32),           true),
+    (:fetch_add, "add",   (:Int32, :UInt32, :Float32), true),
+    (:fetch_sub, "sub",   (:Int32, :UInt32, :Float32), true),
+    (:fetch_min, "min",   (:Int32, :UInt32),           true),
+    (:fetch_max, "max",   (:Int32, :UInt32),           true),
+    (:fetch_and, "and",   (:Int32, :UInt32),           true),
+    (:fetch_or,  "or",    (:Int32, :UInt32),           true),
+    (:fetch_xor, "xor",   (:Int32, :UInt32),           true),
+)
+
+for (op, air_op, types, returns) in atomic_value_intrinsics, typ in types,
+    (as, memnam, scope) in atomic_memory_spaces
+    typnam = typ === :Float32 ? "f32" : "i32"
+    if op ∉ (:store, :exchange) && typ !== :Float32
+        typnam = "$(typ === :Int32 ? "s" : "u").$typnam"
+    end
+    f = Symbol("atomic_$(op)_explicit")
+    return_type = returns ? typ : :Nothing
+    availability = op ∈ (:fetch_add, :fetch_sub) && typ === :Float32 && as === AS.ThreadGroup ?
+        :(@static_assert(metal_version() >= sv"4.1",
+                          "Float32 threadgroup atomic operations require Metal 4.1 or newer.")) :
+        nothing
+
+    @eval begin
+        @inline function $f(
+            ptr::LLVMPtr{$typ,$as}, desired::$typ,
+            order::memory_order=memory_order_relaxed,
+            flags::Union{MemoryFlags,UInt32}=default_atomic_flags(order, Val($as)))
+            $f(ptr, desired, Val(order), Val(flags))
+        end
+
+        function $f(ptr::LLVMPtr{$typ,$as}, desired::$typ, ::Val{order}, ::Val{flags}) where {order, flags}
+            validate_atomic_arguments(Val(order), Val(flags))
+            $availability
+            @typed_ccall($"air.atomic.$memnam.$air_op.$typnam", llvmcall, $return_type,
+                         (LLVMPtr{$typ,$as}, $typ, Int32, Int32, Int32, Bool),
+                         ptr, desired, Val(order), Val($scope), Val(flags), Val(false))
         end
     end
 end
@@ -212,44 +161,6 @@ function atomic_compare_exchange_weak_explicit(ptr::LLVMPtr{Float32,AS}, expecte
                                                                      flags))
 end
 
-const atomic_fetch_and_modify = [
-    :add => [:Int32, :UInt32, :Float32],
-    :sub => [:Int32, :UInt32, :Float32],
-    :min => [:Int32, :UInt32],
-    :max => [:Int32, :UInt32],
-    :and => [:Int32, :UInt32],
-    :or  => [:Int32, :UInt32],
-    :xor => [:Int32, :UInt32]
-]
-
-for (op, types) in atomic_fetch_and_modify, typ in types, as in (AS.Device, AS.ThreadGroup)
-    typnam = atomic_type_names[typ]
-    if typ in [:Int32, :Int64]
-        typnam = "s.$typnam"
-    elseif typ in [:UInt32, :UInt64]
-        typnam = "u.$typnam"
-    end
-    memnam, memid = atomic_memory_names[as]
-    f = Symbol("atomic_fetch_$(op)_explicit")
-    @eval begin
-        @inline function $f(
-            ptr::LLVMPtr{$typ,$as}, desired::$typ,
-            order::memory_order=memory_order_relaxed,
-            flags::Union{MemoryFlags,UInt32}=default_atomic_flags(order, Val($as)))
-            $f(ptr, desired, Val(order), Val(flags))
-        end
-
-        function $f(ptr::LLVMPtr{$typ,$as}, desired::$typ, ::Val{O}, ::Val{F}) where {O,F}
-            @static_assert(valid_atomic_order(O), "Invalid atomic memory ordering.")
-            @static_assert(atomic_order_and_flags_available(O, F),
-                           "Ordered atomics and memory flags require Metal 4.1 or newer.")
-            @typed_ccall($"air.atomic.$memnam.$op.$typnam", llvmcall, $typ,
-                         (LLVMPtr{$typ,$as}, $typ, Int32, Int32, Int32, Bool),
-                         ptr, desired, Val(O), Val($memid), Val(F), Val(false))
-        end
-    end
-end
-
 # TODO: non-fetch 64-bit min/max atomics (hardware support?)
 
 # generic atomic support using compare-and-swap
@@ -276,7 +187,6 @@ end
         isequal(old, cmp) && return old
     end
 end
-
 
 ## high-level interface
 
@@ -398,14 +308,13 @@ end
 @inline function atomic_arrayset(A::AbstractArray{T}, I::Integer, op::typeof(+),
                                  val::T) where {T <: AbstractFloat}
     ptr = pointer(A, I)
-    # XXX: consider falling back to fetch_op here to support Metal < 3.0 (this also requires
-    #      cmpxchg support for Float32, but we should be able to do that using bitcast)
+    # Float32 add/sub are native for device memory since Metal 3.0, and for threadgroup
+    # memory since Metal 4.1. Earlier threadgroup targets fail in the intrinsic itself.
     atomic_fetch_add_explicit(ptr, val)
 end
 @inline function atomic_arrayset(A::AbstractArray{T}, I::Integer, op::typeof(-),
                                  val::T) where {T <: AbstractFloat}
     ptr = pointer(A, I)
-    # XXX: see above
     atomic_fetch_sub_explicit(ptr, val)
 end
 

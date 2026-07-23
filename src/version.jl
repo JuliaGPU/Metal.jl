@@ -103,6 +103,26 @@ function metal_support(macos::VersionNumber = macos_version())
     end
 end
 
+"""
+    air_floor(metal)::VersionNumber
+Return the minimum AIR version required by `metal`. The offline compiler raises
+the emitted AIR version to this floor even when the deployment target supports
+an older AIR version.
+"""
+function air_floor(metal::VersionNumber)
+    if metal >= v"4.1"
+        v"2.9"
+    elseif metal >= v"4.0"
+        v"2.8"
+    elseif metal >= v"3.2"
+        v"2.7"
+    elseif metal >= v"3.1"
+        v"2.6"
+    else
+        v"2.5"
+    end
+end
+
 # The versions Metal.jl emits by default. These track the `*_support` ceilings, which is
 # also what the offline `metal` compiler does: compiling with `-mmacosx-version-min=N`
 # yields the AIR, MSL and metallib versions that `N` supports. Since we compile for the
