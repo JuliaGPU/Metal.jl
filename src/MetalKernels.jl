@@ -2,10 +2,9 @@ module MetalKernels
 
 using ..Metal
 using ..Metal: @device_override, DefaultStorageMode, SharedStorage
+using GPUCompiler
 
 import KernelAbstractions as KA
-
-using StaticArrays: MArray
 
 import Adapt
 
@@ -184,7 +183,11 @@ end
 end
 
 @device_override @inline function KA.Scratchpad(ctx, ::Type{T}, ::Val{Dims}) where {T, Dims}
-    MArray{KA.__size(Dims), T}(undef)
+    # private per-workitem scratch: a stack `alloca` (lowered by GPUCompiler) wrapped in a
+    # device array. the slot lives in OpenCL "Function" storage (LLVM addrspace 0), which is
+    # where the SPIR-V target places allocas.
+    ptr = GPUCompiler.alloca(T, Val(prod(Dims)), Val(Metal.AS.Generic))
+    MtlDeviceArray(Dims, ptr)
 end
 
 
