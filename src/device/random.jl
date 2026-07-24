@@ -88,9 +88,9 @@ end
     elseif field === :ctr1
         @inbounds global_random_counters()[simdgroupId]
     elseif field === :ctr2
-        globalId = thread_position_in_grid().x +
-                   (thread_position_in_grid().y - 1i32) * threads_per_grid().x +
-                   (thread_position_in_grid().z - 1i32) * threads_per_grid().x * threads_per_grid().y
+        globalId = KI.get_global_id().x +
+                   (KI.get_global_id().y - 1i32) * KI.get_global_size().x +
+                   (KI.get_global_id().z - 1i32) * KI.get_global_size().x * KI.get_global_size().y
         globalId % UInt32
     end::UInt32
 end
