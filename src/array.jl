@@ -44,7 +44,7 @@ end
 See the Array Programming section of the Metal.jl docs for more details.
 """
 mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
-    data::DataRef{<:MTLBuffer}
+    data::DataRef{MTLBuffer}
 
     maxsize::Int  # maximum data size in bytes; excluding any selector bytes
     offset::Int   # offset of the data in the buffer, in bytes
