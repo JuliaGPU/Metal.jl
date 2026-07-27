@@ -1,0 +1,14 @@
+# Disable all diagnostics for generated files
+[[diagnostic.patterns]]
+pattern = ".*"
+match_by = "code"
+match_type = "regex"
+severity = "off"
+path = "lib/**/lib*.jl"
+
+[[diagnostic.patterns]]
+pattern = ".*"
+match_by = "code"
+match_type = "regex"
+severity = "off"
+path = "test/**/*.jl"
