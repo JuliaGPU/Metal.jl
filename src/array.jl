@@ -197,7 +197,7 @@ const DefaultStorageMode = let str = @load_preference("default_storage", "privat
     elseif str == "shared"
         SharedStorage
     else
-        error("unknown default storage mode: $default_storage")
+        error("unknown default storage mode: $str")
     end
 end
 
