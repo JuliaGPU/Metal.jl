@@ -25,7 +25,6 @@
 using SHA: sha256, SHA2_256_CTX, update!, digest!
 using CEnum: @cenum
 using UUIDs: UUID
-using Printf: @printf
 using CodecBzip2: Bzip2DecompressorStream
 
 
