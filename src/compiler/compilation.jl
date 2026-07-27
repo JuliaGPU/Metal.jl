@@ -531,21 +531,21 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
     @signpost_event log=log_compiler() "Compile" "Job=$job"
 
     # TODO: on 1.9, this actually creates a context. cache those.
-    ir, air, entry, loggingEnabled = JuliaContext() do ctx
+    ir, air, entry, loggingEnabled = JuliaContext() do _
         @signpost_interval log=log_compiler() "Generate LLVM IR" begin
             mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)
         end
 
         # Detect logging after optimization so dead logging calls do not enable log state.
-        loggingEnabled = haskey(functions(mod), "air.os_log")
+        _loggingEnabled = haskey(functions(mod), "air.os_log")
 
         @signpost_interval log=log_compiler() "Downgrade to AIR" begin
             # generate AIR, having GPUCompiler lower the IR to AIR-compatible form and
             # invoke the LLVM downgrader (both as part of Metal's `mcgen`)
-            air = try
-                air, _ = invoke_frozen(GPUCompiler.emit_asm, job, mod,
+            _air = try
+                __air, _ = invoke_frozen(GPUCompiler.emit_asm, job, mod,
                                        LLVM.API.LLVMObjectFile)
-                air
+                __air
             catch err
                 # `emit_asm` has already lowered the module in-place, so stringifying it
                 # here shows exactly what the downgrader was fed
@@ -555,7 +555,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
             end
         end
 
-        string(mod), air, LLVM.name(meta.entry), loggingEnabled
+        string(mod), _air, LLVM.name(meta.entry), _loggingEnabled
     end
 
     @signpost_interval log=log_compiler() "Create Metal library" begin

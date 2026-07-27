@@ -131,8 +131,8 @@ function install_queue_residency!(queue::MTLCommandQueue, dev::MTLDevice)
     exc_buf = exception_info_buffer(dev)
 
     Base.@lock queue_residency_sets_lock begin
-        resset = get(queue_residency_sets, key, nothing)
-        resset === nothing || return resset
+        _resset = get(queue_residency_sets, key, nothing)
+        _resset === nothing || return _resset
 
         desc = MTLResidencySetDescriptor()
         desc.initialCapacity = 2

@@ -200,34 +200,34 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
 
         # Resolve the MTLComputePipelineState for the active device. Linear scan
         # over the session-local cache; almost always n=1, one `===` compare.
-        pipeline = nothing
+        pipeline = Ref{MTLComputePipelineState}()
         @inbounds for (cached_dev, cached_pipeline) in res.pipelines
             if cached_dev === dev
-                pipeline = cached_pipeline
+                pipeline[] = cached_pipeline
                 break
             end
         end
-        if pipeline === nothing
-            pipeline = link_pipeline(dev, res.air::Vector{UInt8},
+        if !isassigned(pipeline)
+            pipeline[] = link_pipeline(dev, res.air::Vector{UInt8},
                                      res.metallib::Vector{UInt8},
                                      res.entry::String)
             # Don't cache session-local pipeline handles while precompiling: the
             # results struct is serialized into the package image along with its
             # CodeInstance, and ObjectiveC handles would come back dangling.
             if ccall(:jl_generating_output, Cint, ()) != 1
-                push!(res.pipelines, (dev, pipeline))
+                push!(res.pipelines, (dev, pipeline[]))
             end
         end
 
-        h = hash(pipeline, hash(f, hash(tt)))
+        h = hash(pipeline[], hash(f, hash(tt)))
         get!(kernel_instances, h) do
-            dev = pipeline.device
-            HostKernel{F,tt}(f, pipeline, res.loggingEnabled::Bool,
-                             dev,
-                             Int(pipeline.maxTotalThreadsPerThreadgroup),
-                             Int(pipeline.staticThreadgroupMemoryLength),
-                             Int(pipeline.threadExecutionWidth),
-                             can_use_residency_sets(dev))
+            _dev = pipeline[].device
+            HostKernel{F,tt}(f, pipeline[], res.loggingEnabled::Bool,
+                             _dev,
+                             Int(pipeline[].maxTotalThreadsPerThreadgroup),
+                             Int(pipeline[].staticThreadgroupMemoryLength),
+                             Int(pipeline[].threadExecutionWidth),
+                             can_use_residency_sets(_dev))
         end::HostKernel{F,tt}
     end
 end
