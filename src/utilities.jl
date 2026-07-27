@@ -267,7 +267,6 @@ function profiled(f)
             run_loop(1; return_after_source_handled=true)
             if time() - t0 > 10
                 error("xctrace failed to start")
-                break
             end
         end
 
