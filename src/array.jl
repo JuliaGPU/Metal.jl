@@ -44,7 +44,7 @@ end
 See the Array Programming section of the Metal.jl docs for more details.
 """
 mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
-    data::DataRef{<:MTLBuffer}
+    data::DataRef{MTLBuffer}
 
     maxsize::Int  # maximum data size in bytes; excluding any selector bytes
     offset::Int   # offset of the data in the buffer, in bytes
@@ -197,7 +197,7 @@ const DefaultStorageMode = let str = @load_preference("default_storage", "privat
     elseif str == "shared"
         SharedStorage
     else
-        error("unknown default storage mode: $default_storage")
+        error("unknown default storage mode: $str")
     end
 end
 
