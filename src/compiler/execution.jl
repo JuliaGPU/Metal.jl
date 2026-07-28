@@ -54,7 +54,7 @@ macro metal(ex...)
     macro_kwargs, compiler_kwargs, call_kwargs, other_kwargs =
         split_kwargs(kwargs, MACRO_KWARGS, COMPILER_KWARGS, LAUNCH_KWARGS)
     if !isempty(other_kwargs)
-        key,val = first(other_kwargs).args
+        key,_ = first(other_kwargs).args
         throw(ArgumentError("Unsupported keyword argument '$key'"))
     end
 
