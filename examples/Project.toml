@@ -10,7 +10,7 @@ Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 ScopedValues = "7e506255-f358-4e82-b7e4-beb19740aa63"
 
 [compat]
-AppleAccelerate = "0.6"
+AppleAccelerate = "0.6, 0.7"
 BenchmarkTools = "1"
 Colors = "0.13"
 FixedPointNumbers = "0.8, 0.9"
