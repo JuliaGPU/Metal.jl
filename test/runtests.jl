@@ -168,6 +168,6 @@ init_code = quote
 end
 
 # 8GB mac minis can struggle in some julia versions
-max_worker_rss = 2^20 * (Sys.total_memory() > 8*2^30 ? 3800 : 2200)
+max_worker_rss = ParallelTestRunner.available_memory() ÷ something(args.jobs, ParallelTestRunner.default_njobs())
 
 runtests(Metal, args; testsuite, init_code, init_worker_code, test_worker, max_worker_rss)
