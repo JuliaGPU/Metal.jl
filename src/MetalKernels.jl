@@ -108,7 +108,7 @@ end
 KA.argconvert(::KA.Kernel{MetalBackend}, arg) = Metal.mtlconvert(arg)
 
 function (obj::KA.Kernel{MetalBackend})(args...; ndrange=nothing, workgroupsize=nothing)
-    ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(obj, ndrange, workgroupsize)
+    ndrange, workgroupsize, iterspace, _dynamic = KA.launch_config(obj, ndrange, workgroupsize)
     # this might not be the final context, since we may tune the workgroupsize
     ctx = KA.mkcontext(obj, ndrange, iterspace)
     kernel = @metal launch=false obj.f(ctx, args...)
@@ -116,7 +116,7 @@ function (obj::KA.Kernel{MetalBackend})(args...; ndrange=nothing, workgroupsize=
     if KA.workgroupsize(obj) <: KA.DynamicSize && workgroupsize === nothing
         groupsize = kernel.pipeline.maxTotalThreadsPerThreadgroup
         new_workgroupsize = threads_to_workgroupsize(groupsize, ndrange)
-        iterspace, dynamic = KA.partition(obj, ndrange, new_workgroupsize)
+        iterspace, _dynamic = KA.partition(obj, ndrange, new_workgroupsize)
         ctx = KA.mkcontext(obj, ndrange, iterspace)
     end
 
