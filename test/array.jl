@@ -197,7 +197,7 @@ check_storagemode(arr, smode) = Metal.storagemode(arr) == smode
     if SM == Metal.PrivateStorage
         let arr_mtl = Metal.zeros(Float32, dim...; storage=Metal.PrivateStorage)
             @test is_private(arr_mtl) && !is_shared(arr_mtl)
-            @test_throws "Cannot access the contents of a private buffer" arr_cpu = unsafe_wrap(Array{Float32}, arr_mtl, dim)
+            @test_throws "Cannot access the contents of a private buffer" unsafe_wrap(Array{Float32}, arr_mtl, dim)
             @test_throws "Cannot access the contents of a private buffer" Base.unsafe_convert(Ptr{Float32}, arr_mtl)
         end
 

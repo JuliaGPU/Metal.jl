@@ -230,11 +230,11 @@ for (jltype, suffix) in simd_shuffle_map, (mod_f, prefix) in ((threads_per_simdg
             ccall($"extern air.$(prefix)_shuffle_up.$suffix",
                 llvmcall, $jltype, ($jltype, Int16), data, delta)
 
-        @device_function $_shuffle_and_fill_down(data::$jltype, filling_data::$jltype, delta::Integer, modulo::Integer=mod_f()) =
+        @device_function $_shuffle_and_fill_down(data::$jltype, filling_data::$jltype, delta::Integer, modulo::Integer=$mod_f()) =
             ccall($"extern air.$(prefix)_shuffle_and_fill_down.$suffix",
                 llvmcall, $jltype, ($jltype, $jltype, Int16, Int16), data, filling_data, delta, modulo)
 
-        @device_function $_shuffle_and_fill_up(data::$jltype, filling_data::$jltype, delta::Integer, modulo::Integer=mod_f()) =
+        @device_function $_shuffle_and_fill_up(data::$jltype, filling_data::$jltype, delta::Integer, modulo::Integer=$mod_f()) =
             ccall($"extern air.$(prefix)_shuffle_and_fill_up.$suffix",
                 llvmcall, $jltype, ($jltype, $jltype, Int16, Int16), data, filling_data, delta, modulo)
     end
