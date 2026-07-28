@@ -476,15 +476,15 @@ function Base.show(io::IO, r::ProfileResults)
                         "($(format_percentage(htotal / den)) of wall-clock)")
             if r.trace && !isempty(host_trace.name)
                 trace_shown = [show_host_call(name, r.raw) for name in host_trace.name]
-                _host = (id    = host_trace.id[trace_shown],
-                         start = host_trace.start[trace_shown],
-                         time  = host_trace.time[trace_shown],
-                         tid   = host_trace.tid[trace_shown],
-                         name  = host_trace.name[trace_shown])
+                host_details = (id    = host_trace.id[trace_shown],
+                                start = host_trace.start[trace_shown],
+                                time  = host_trace.time[trace_shown],
+                                tid   = host_trace.tid[trace_shown],
+                                name  = host_trace.name[trace_shown])
                 columns = [:id, :start, :time]
-                length(unique(_host.tid)) > 1 && push!(columns, :tid)
+                length(unique(host_details.tid)) > 1 && push!(columns, :tid)
                 push!(columns, :name)
-                df = NamedTuple{Tuple(columns)}(Tuple(_host[c] for c in columns))
+                df = NamedTuple{Tuple(columns)}(Tuple(host_details[c] for c in columns))
                 print_trace(io, df, crop)
             else
                 perm = sortperm(host_time; rev=true)

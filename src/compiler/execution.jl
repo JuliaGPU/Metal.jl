@@ -221,13 +221,13 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
 
         h = hash(pipeline[], hash(f, hash(tt)))
         get!(kernel_instances, h) do
-            _dev = pipeline[].device
+            local dev = pipeline[].device
             HostKernel{F,tt}(f, pipeline[], res.loggingEnabled::Bool,
-                             _dev,
+                             dev,
                              Int(pipeline[].maxTotalThreadsPerThreadgroup),
                              Int(pipeline[].staticThreadgroupMemoryLength),
                              Int(pipeline[].threadExecutionWidth),
-                             can_use_residency_sets(_dev))
+                             can_use_residency_sets(dev))
         end::HostKernel{F,tt}
     end
 end
