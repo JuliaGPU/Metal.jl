@@ -104,7 +104,7 @@ end
 
 function Metal.MtlArray(ndarr::MPSNDArray; storage = Metal.DefaultStorageMode, async = false)
     arrsize = size(ndarr)
-    T = convert(DataType, ndarr.dataType)
+    T = jl_mps_to_typ[ndarr.dataType]
     arr = MtlArray{T,length(arrsize),storage}(undef, (arrsize)...)
     return exportToMtlArray!(arr, ndarr; async)
 end
