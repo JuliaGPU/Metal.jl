@@ -231,8 +231,8 @@ end
 Print a textual representation of values `xs` to standard output from the GPU. The
 functionality builds on `@mtlprintf`, and is intended as a more use friendly alternative of
 that API. However, that also means there's only limited support for argument types, handling
-16/32/64 signed and unsigned integers, 32 and 64-bit floating point numbers, `Cchar`s and
-pointers. For more complex output, use `@mtlprintf` directly.
+16/32/64-bit signed and unsigned integers, 32 and 64-bit floating point numbers, `Cchar`s
+and pointers. For more complex output, use `@mtlprintf` directly.
 
 Limited string interpolation is also possible:
 
@@ -240,7 +240,7 @@ Limited string interpolation is also possible:
     @mtlprint("Hello, World ", 42, "\\n")
     @mtlprint "Hello, World \$(42)\\n"
 ```
- 
+
 !!! compat "macOS 15"
     Printing from a GPU kernel requires macOS 15 or later.
 """
@@ -276,7 +276,7 @@ macro mtlprint(parts...)
     end
 end
 
-@doc (@doc @mtlprint) ->
+@doc (@doc @mtlprint)
 macro mtlprintln(parts...)
     return esc(
         quote
