@@ -86,7 +86,7 @@ using .MPS: MPSNDArray
 
         ndarr4 = MPSNDArray(arr4)
 
-        arr5 = MtlArray(arr4)
+        arr5 = MtlArray(ndarr4)
         @test arr4 == arr5
     else
         @test_throws "Creating an MPSNDArray that shares data with user-provided MTLBuffer is only supported in macOS v15+" MPSNDArray(arr4)
