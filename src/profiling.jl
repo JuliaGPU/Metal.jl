@@ -418,11 +418,11 @@ end
 function summary_formatter(df)
     return function(v, i, j)
         col = keys(df)[j]
-        if col == :time_ratio
+        if col === :time_ratio
             format_percentage(v)
-        elseif col == :time
+        elseif col === :time
             format_time(v)
-        elseif col == :time_dist
+        elseif col === :time_dist
             v === missing && return ""
             m, s, lo, hi = format_time(v.mean, v.std, v.min, v.max)
             @sprintf("%9s ± %-6s (%6s ‥ %s)", m, s, lo, hi)
