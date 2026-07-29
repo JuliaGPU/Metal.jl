@@ -828,3 +828,9 @@ end
     @test Array(all(d; dims=2)) == all(b; dims=2)
   end
 end
+
+@testset "mapreducedim! returning same type" begin
+    R = transpose(Metal.zeros(Float32, 2, 3))
+    A = MtlArray(rand(Float32, 3, 2, 10))
+    @test @inferred(Metal.GPUArrays.mapreducedim!(identity, +, R, A)) === R
+end

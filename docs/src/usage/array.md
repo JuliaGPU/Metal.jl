@@ -108,7 +108,7 @@ julia> b = Metal.zeros(1)
  0.0
 
 julia> Base.mapreducedim!(identity, +, b, a)
-1×1 MtlMatrix{Float32, Metal.PrivateStorage}:
+1-element MtlVector{Float32, Metal.PrivateStorage}:
  6.0
 ```
 

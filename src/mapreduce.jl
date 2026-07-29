@@ -245,6 +245,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # be conservative about using shuffle instructions
     shuffle = T <: Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
 
+    R_old = R
     # add singleton dimensions to the output container, if needed
     if ndims(R) < ndims(A)
         dims = Base.fill_to_length(size(R), 1, Val(ndims(A)))
@@ -257,9 +258,11 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     end
     dims = mpsgraph_reduce_dimensions(f, op, R, A, init)
     if alg === :MPSGraph
-        return mpsgraph_mapreducedim!(f, op, R, A; init)
+        mpsgraph_mapreducedim!(f, op, R, A; init)
+        return R_old
     elseif dims !== nothing && alg === :auto && mpsgraph_reduce_auto(R, A, dims)
-        return MPSGraphs.graph_mapreducedim!(op, R, A)
+        MPSGraphs.graph_mapreducedim!(op, R, A)
+        return R_old
     end
 
     # iteration domain, split in two: one part covers the dimensions that should
@@ -278,7 +281,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
         threads = min(length(Rother), kernel.pipeline.maxTotalThreadsPerThreadgroup)
         groups = cld(length(Rother), threads)
         kernel(f, op, init, Val(Rreduce), Val(Rother), R, A; threads, groups)
-        return R
+        return R_old
     end
 
     # when the reduction dimension is contiguous in memory, we can improve performance
@@ -374,5 +377,5 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
         GPUArrays.mapreducedim!(identity, op, R, partial; init=init)
     end
 
-    return R
+    return R_old
 end
