@@ -271,14 +271,14 @@ end
 
 
 ## indexing
-function Base.getindex(x::MtlArray{T,N,S}, I::Int) where {T,N,S<:SharedStorage}
+function Base.getindex(x::MtlArray{T,N,SharedStorage}, I::Int) where {T,N}
     @boundscheck checkbounds(x, I)
-    unsafe_load(pointer(x, I; storage=S))
+    unsafe_load(pointer(x, I; storage=SharedStorage))
 end
 
-function Base.setindex!(x::MtlArray{T,N,S}, v, I::Int) where {T,N,S<:SharedStorage}
+function Base.setindex!(x::MtlArray{T,N,SharedStorage}, v, I::Int) where {T,N}
     @boundscheck checkbounds(x, I)
-    unsafe_store!(pointer(x, I; storage=S), v)
+    unsafe_store!(pointer(x, I; storage=SharedStorage), v)
 end
 
 
