@@ -316,7 +316,7 @@ end
                                                shmem::Union{Integer, Tuple}=0,
                                                queue=nothing, submit::Bool=false)
     # function barrier to avoid capturing the `@autoreleasepool` in the generated code
-    launch_with_queue(kernel, queue, MTLSize(groups), MTLSize(threads), shmem, args, submit)
+    launch_with_queue(kernel, queue, shmem, MTLSize(groups), MTLSize(threads), args, submit)
 end
 
 @inline function launch_with_queue(@nospecialize(kernel::HostKernel), ::Nothing,
