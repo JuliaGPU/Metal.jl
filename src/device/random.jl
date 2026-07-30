@@ -81,9 +81,7 @@ end
 @inline function Base.getproperty(rng::Philox2x32, field::Symbol)
     simdgroupId = simdgroup_index_in_threadgroup()
 
-    if field === :seed
-        @inbounds global_random_seed()[1]
-    elseif field === :key
+    if field === :key
         @inbounds global_random_keys()[simdgroupId]
     elseif field === :ctr1
         @inbounds global_random_counters()[simdgroupId]
