@@ -134,7 +134,7 @@ end
 
 # CPU arrays via MPS.RNG (uses unsafe_wrap + can_alloc_nocopy or shared-storage round-trip)
 @testset "CPU Arrays" begin
-    rng = Metal.MPS.RNG()
+    rng = Metal.MPS.RNG(45)
     @testset "$f with $T" for (f, T) in MPS_INPLACE_TUPLES
         @testset "$d" for d in (2, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16),
                                 (1000,), (1000,1000), 16384, 16385)
