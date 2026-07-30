@@ -28,8 +28,6 @@ RNG(device::MTLDevice) = RNG(device, make_seed())
 
 @autoreleasepool RNG() = RNG(device(), make_seed())
 
-Base.copy(rng::RNG) = RNG(rng.device, copy(rng.uniformInteger), copy(rng.uniformFloat32), copy(rng.normalFloat32))
-
 @autoreleasepool function Random.seed!(rng::RNG, seed::Integer)
     rng.uniformInteger = MPSMatrixRandomPhilox(rng.device, UInt32, seed, MPSMatrixRandomDefaultDistributionDescriptor())
     rng.uniformFloat32 = MPSMatrixRandomPhilox(rng.device, Float32, seed, MPSMatrixRandomUniformDistributionDescriptor(0, 1))
