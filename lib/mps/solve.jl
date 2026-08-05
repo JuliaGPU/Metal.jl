@@ -397,7 +397,6 @@ function solve_triangular_right(A::MtlMatrix{T}, B::MtlMatrix{T};
 
     solve_triangular(A, Bt; upper, unit, transpose=!transpose, alpha, out=Bt)
 
-    mps_bt = MPSMatrix(Bt)
     mps_out = MPSMatrix(out)
     cmdbuf = MPSCommandBuffer(queue) do cbuf
         transpose_copy!(cbuf, dev, mps_bt, mps_out, nrhs, n)

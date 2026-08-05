@@ -123,16 +123,16 @@ command_queue_key(queue::MTLCommandQueue) = UInt(pointer(queue))
 function install_queue_residency!(queue::MTLCommandQueue, dev::MTLDevice)
     key = command_queue_key(queue)
     Base.@lock queue_residency_sets_lock begin
-        resset = get(queue_residency_sets, key, nothing)
-        resset === nothing || return resset
+        cached_resset = get(queue_residency_sets, key, nothing)
+        cached_resset === nothing || return cached_resset
     end
 
     malloc_buf = malloc_buffer(dev)
     exc_buf = exception_info_buffer(dev)
 
     Base.@lock queue_residency_sets_lock begin
-        resset = get(queue_residency_sets, key, nothing)
-        resset === nothing || return resset
+        cached_resset = get(queue_residency_sets, key, nothing)
+        cached_resset === nothing || return cached_resset
 
         desc = MTLResidencySetDescriptor()
         desc.initialCapacity = 2

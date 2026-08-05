@@ -97,10 +97,10 @@ function KA.launch_config(kernel::KA.Kernel{MetalBackend}, ndrange, workgroupsiz
 end
 
 function threads_to_workgroupsize(threads, ndrange)
-    total = 1
+    total = Ref(1)
     return map(ndrange) do n
-        x = min(div(threads, total), n)
-        total *= x
+        x = min(div(threads, total[]), n)
+        total[] *= x
         return x
     end
 end

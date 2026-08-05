@@ -11,7 +11,7 @@ module MPSGraphs
 using ..Metal
 using .MTL
 using .MPS
-using .MPS: MPSDataType, MPSShape, exportDataWithCommandBuffer
+using .MPS: MPSDataType, MPSShape
 using .MPS: MPSMatrixLike, MPSVectorLike
 using BFloat16s
 

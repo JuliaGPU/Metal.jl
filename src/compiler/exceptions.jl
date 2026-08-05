@@ -58,7 +58,7 @@ function exception_info_buffer_and_gpu_address(dev::MTLDevice)
             # per Apple's ARC naming convention, so the buffer survives the pool drain. the
             # pool is here to catch any intermediates the alloc call autoreleases internally.
             @autoreleasepool begin
-                buf = MTLBuffer(dev, sizeof(ExceptionInfo_st); storage=SharedStorage)
+                local buf = MTLBuffer(dev, sizeof(ExceptionInfo_st); storage=SharedStorage)
                 ptr = convert(Ptr{ExceptionInfo_st}, MTL.contents(buf))
                 unsafe_store!(ptr, ExceptionInfo_st())
                 (buf, ptr, UInt64(buf.gpuAddress))
