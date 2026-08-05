@@ -3,6 +3,7 @@ module MetalKernels
 using ..Metal
 using ..Metal: @device_override, DefaultStorageMode, SharedStorage, metal_support
 using GPUCompiler
+using SparseArrays
 
 import KernelAbstractions as KA
 
@@ -27,6 +28,7 @@ KA.zeros(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T 
 KA.ones(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.ones(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
 
 KA.get_backend(::MtlArray) = MetalBackend()
+KA.get_backend(::Union{MtlSparseVector,MtlSparseMatrixCSC,MtlSparseMatrixCSR}) = MetalBackend()
 KA.synchronize(::MetalBackend) = synchronize()
 
 KA.functional(::MetalBackend) = Metal.functional()
@@ -37,7 +39,14 @@ KA.supports_unified(::MetalBackend) = true
 
 Adapt.adapt_storage(::MetalBackend, a::Array) = Adapt.adapt(MtlArray, a)
 Adapt.adapt_storage(::MetalBackend, a::MtlArray) = a
+Adapt.adapt_storage(
+    ::MetalBackend,
+    a::Union{MtlSparseVector,MtlSparseMatrixCSC,MtlSparseMatrixCSR},
+) = a
 Adapt.adapt_storage(::KA.CPU, a::MtlArray) = convert(Array, a)
+Adapt.adapt_storage(::KA.CPU, a::MtlSparseVector) = SparseVector(a)
+Adapt.adapt_storage(::KA.CPU, a::Union{MtlSparseMatrixCSC,MtlSparseMatrixCSR}) =
+    SparseMatrixCSC(a)
 
 
 ## memory operations
