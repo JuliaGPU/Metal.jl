@@ -78,5 +78,6 @@ function return_type(@nospecialize(func), @nospecialize(tt))
     job = CompilerJob(source, config)
     interp = GPUCompiler.get_interpreter(job)
     sig = Base.signature_type(func, tt)
-    Core.Compiler._return_type(interp, sig)
+    # required in 1.11, otherwise this always returns `Union{}` during precompilation
+    return Base.invoke_in_world(Base.tls_world_age(), Core.Compiler._return_type, interp, sig)
 end
