@@ -50,6 +50,7 @@ Sets the Metal GPU device associated with the current Julia task.
 device!(dev::MTLDevice) = task_local_storage(:MTLDevice, dev)
 
 const global_queues = WeakKeyDict{Any,Nothing}()
+const global_queues4 = WeakKeyDict{MTL4CommandQueue,Tuple{MTL4CommandBuffer, MTL4CommandAllocator}}()
 
 """
     global_queue(dev::MTLDevice)::BatchedCommandQueue
@@ -79,6 +80,27 @@ function global_queue(dev::MTLDevice)
     end::BatchedCommandQueue
 end
 
+"""
+    global_queue4(dev::MTLDevice)::MTL4CommandQueue
+
+Return the Metal 4 command queue associated with the current Julia thread.
+"""
+function global_queue4(dev::MTLDevice)
+    get!(task_local_storage(), (:MTL4CommandQueue, dev)) do
+        @autoreleasepool begin
+            desc = MTL4CommandQueueDescriptor("global_queue4($(current_task()))")
+
+            # NOTE: MTL4CommandQueue itself is manually reference-counted,
+            #       the release pool is for resources used during its construction.
+            queue = MTL4CommandQueue(dev, desc)
+
+
+            global_queues4[queue] = (MTL4CommandBuffer(dev, "sync_buffer($(current_task()))"), MTL4CommandAllocator(dev, "sync_allocater($(current_task()))"))
+            queue
+        end
+    end::MTL4CommandQueue
+end
+
 # tracks the most recently launched logging-enabled cmdbuf per queue, so that
 # `synchronize` can wait on it and thereby drain its `addLogHandler:` blocks
 # (Metal dispatches log delivery asynchronously and offers no flush primitive;
@@ -101,6 +123,50 @@ function drain_logging_cmdbufs!(queue::MTLCommandQueue)
     end
     if cmdbuf !== nothing
         MTL.wait_completed(cmdbuf)
+    end
+    return
+end
+
+@autoreleasepool function synchronize(queue::MTL4CommandQueue)
+    ev = queue_event(queue)
+    val = ev.signaledValue + 1
+    MTL.signal_event!(queue, ev, val)
+    MTL.waitUntilSignaledValue(ev,val)
+    return
+end
+
+function synchronize()
+    dev = device()
+    tlskeys = keys(task_local_storage())
+    # hasmtl3key = (:MTLCommandQueue, dev) in tlskeys
+    # hasmtl4key = use_metal4() && (:MTL4CommandQueue, dev) in tlskeys
+    if (:MTLCommandQueue, dev) in tlskeys
+        synchronize(global_queue(dev))
+    end
+    if use_metal4() && (:MTL4CommandQueue, dev) in tlskeys
+        synchronize(global_queue4(dev))
+    end
+    return
+end
+
+@autoreleasepool function synchronize(queue::MTL4CommandQueue)
+    ev = queue_event(queue)
+    val = ev.signaledValue + 1
+    MTL.signal_event!(queue, ev, val)
+    MTL.waitUntilSignaledValue(ev,val)
+    return
+end
+
+function synchronize()
+    dev = device()
+    tlskeys = keys(task_local_storage())
+    # hasmtl3key = (:MTLCommandQueue, dev) in tlskeys
+    # hasmtl4key = use_metal4() && (:MTL4CommandQueue, dev) in tlskeys
+    if (:MTLCommandQueue, dev) in tlskeys
+        synchronize(global_queue(dev))
+    end
+    if use_metal4() && (:MTL4CommandQueue, dev) in tlskeys
+        synchronize(global_queue4(dev))
     end
     return
 end
@@ -180,6 +246,12 @@ function malloc_buffer_and_gpu_address(dev::MTLDevice)
             unsafe_store!(convert(Ptr{UInt32}, MTL.contents(buf)), UInt32(4))
             (buf, UInt64(buf.gpuAddress))
         end
+    end
+    for queue in keys(global_queues4)
+        synchronize(queue)
+    end
+    for queue in keys(global_queues4)
+        synchronize(queue)
     end
 end
 

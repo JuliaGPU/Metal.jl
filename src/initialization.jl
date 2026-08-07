@@ -49,6 +49,15 @@ function is_supported(dev)
            supports_family(dev, MTL.MTLGPUFamilyMetal3)
 end
 
+function check_use_metal4()
+    functional() || return false
+    force_metal3 = @load_preference("force_metal3", false)
+    !force_metal3 && supports_family(device(), MTL.MTLGPUFamilyMetal4)
+end
+use_metal4() = @memoize begin
+    check_use_metal4()
+end::Bool
+
 function __init__()
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     precompiling && return

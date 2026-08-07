@@ -37,7 +37,7 @@ Base.Int(ptr::MtlPtr) = Int(UInt(ptr))
 
 # CPU -> GPU
 function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T}, src::Ptr{T}, N::Integer;
-                             queue=global_queue(dev), async::Bool=false) where T
+                             queue=use_metal4() ? global_queue4(dev) : global_queue(dev), async::Bool=false) where T
     storage_type = dst.buffer.storageMode
     if storage_type == MTL.MTLStorageModePrivate
         # stage through a shared buffer
@@ -56,7 +56,7 @@ end
 
 # GPU -> CPU
 function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPtr{T}, N::Integer;
-                             queue=global_queue(dev), async::Bool=false) where T
+                             queue=use_metal4() ? global_queue4(dev) : global_queue(dev), async::Bool=false) where T
     storage_type = src.buffer.storageMode
     if storage_type == MTL.MTLStorageModePrivate
         # stage through a shared buffer
@@ -74,7 +74,7 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPtr{T}, N::Int
             unsafe_copyto!(dst, convert(Ptr{T}, tmp_buf), N)
         end
         free(tmp_buf)
-    elseif storage_type ==  MTL.MTLStorageModeShared
+    elseif storage_type == MTL.MTLStorageModeShared
         unsafe_copyto!(dst, convert(Ptr{T}, src), N)
     end
     return dst
@@ -85,34 +85,76 @@ end
 # to fix JuliaGPU/Metal.jl#710. Solution inspired by
 # https://github.com/pytorch/pytorch/pull/126104
 @autoreleasepool function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T},
-                                                              src::MtlPtr{T}, N::Integer;
-                                                              queue=global_queue(dev),
-                                                              async::Bool=false) where T
+                                              src::MtlPtr{T}, N::Integer;
+                                              queue=use_metal4() ? global_queue4(dev) : global_queue(dev),
+                                              async::Bool=false) where T
     if N > 0
-        nbytes = N * sizeof(T)
-        # For small copies of Shared memory arrays, CPU memcpy avoids GPU command buffer overhead.
-        # Otherwise, use GPU blit for large copies (>32MiB) where it's faster than CPU memcpy.
-        if dst.buffer.storageMode == src.buffer.storageMode == MTL.MTLStorageModeShared && nbytes < 2^25
-            unsafe_copyto!(convert(Ptr{T}, dst), convert(Ptr{T}, src), N)
+        if queue isa MTL4CommandQueue
+            @info "MTL4"
+            cmdbuf = MTL4CommandBuffer(dev; queue) do cmdbuf
+                MTL4ComputeCommandEncoder(cmdbuf, !async) do enc
+                    append_copy!(enc, dst.buffer, dst.offset, src.buffer, src.offset, N * sizeof(T))
+                end
+            end
         else
-            total_bytes = nbytes
-            chunk_size = 2^31
+            @info "MTL3"
+            nbytes = N * sizeof(T)
+            # For small copies of Shared memory arrays, CPU memcpy avoids GPU command buffer overhead.
+            # Otherwise, use GPU blit for large copies (>32MiB) where it's faster than CPU memcpy.
+            if dst.buffer.storageMode == src.buffer.storageMode == MTL.MTLStorageModeShared && nbytes < 2^25
+                unsafe_copyto!(convert(Ptr{T}, dst), convert(Ptr{T}, src), N)
+            else
+                total_bytes = nbytes
+                chunk_size = 2^31
+                bq = batched_queue(queue)
+                enc = blit_encoder(bq)
+                offset = 0
+
+                while nbytes > 0
+                    transfer_bytes = min(nbytes, chunk_size)
+                    append_copy!(enc, dst.buffer, dst.offset + offset,
+                                src.buffer, src.offset + offset, transfer_bytes)
+                    offset += transfer_bytes
+                    nbytes -= transfer_bytes
+                end
+
+                op = MTL.profile_metadata[] === nothing ? nothing :
+                    (; kind = :copy, name = "copyto!", bytes = Int(total_bytes))
+                record_operation!(bq, dst.buffer, src.buffer;
+                                bytes=total_bytes, op=op)
+
+                if async
+                    maybe_autoflush!(bq)
+                else
+                    synchronize(bq)
+                end
+            end
+        end
+    end
+    return dst
+end
+
+@autoreleasepool function unsafe_fill!(dev::MTLDevice, dst::MtlPtr{T},
+                                       value::Union{UInt8,Int8}, N::Integer;
+                                       queue=use_metal4() ? global_queue4(dev) : global_queue(dev),
+                                       async::Bool=false) where T
+    if N > 0
+        if queue isa MTL4CommandQueue
+            @info "MTL4"
+            cmdbuf = MTL4CommandBuffer(dev; queue) do cmdbuf
+                MTL4ComputeCommandEncoder(cmdbuf, !async) do enc
+                    append_fillbuffer!(enc, dst.buffer, value, N * sizeof(T), dst.offset)
+                end
+            end
+        else
+            nbytes = N * sizeof(T)
             bq = batched_queue(queue)
             enc = blit_encoder(bq)
-            offset = 0
-
-            while nbytes > 0
-                transfer_bytes = min(nbytes, chunk_size)
-                append_copy!(enc, dst.buffer, dst.offset + offset,
-                             src.buffer, src.offset + offset, transfer_bytes)
-                offset += transfer_bytes
-                nbytes -= transfer_bytes
-            end
+            append_fillbuffer!(enc, dst.buffer, value, nbytes, dst.offset)
 
             op = MTL.profile_metadata[] === nothing ? nothing :
-                 (; kind = :copy, name = "copyto!", bytes = Int(total_bytes))
-            record_operation!(bq, dst.buffer, src.buffer;
-                              bytes=total_bytes, op=op)
+                (; kind = :fill, name = "fill!", bytes = Int(nbytes))
+            record_operation!(bq, dst.buffer; bytes=nbytes, op=op)
 
             if async
                 maybe_autoflush!(bq)
@@ -123,28 +165,3 @@ end
     end
     return dst
 end
-
-@autoreleasepool function unsafe_fill!(dev::MTLDevice, dst::MtlPtr{T},
-                                       value::Union{UInt8,Int8}, N::Integer;
-                                       queue=global_queue(dev),
-                                       async::Bool=false) where T
-    if N > 0
-        nbytes = N * sizeof(T)
-        bq = batched_queue(queue)
-        enc = blit_encoder(bq)
-        append_fillbuffer!(enc, dst.buffer, value, nbytes, dst.offset)
-
-        op = MTL.profile_metadata[] === nothing ? nothing :
-             (; kind = :fill, name = "fill!", bytes = Int(nbytes))
-        record_operation!(bq, dst.buffer; bytes=nbytes, op=op)
-
-        if async
-            maybe_autoflush!(bq)
-        else
-            synchronize(bq)
-        end
-    end
-    return dst
-end
-
-# TODO: Implement generic fill since mtBlitCommandEncoderFillBuffer is limiting
