@@ -1,5 +1,6 @@
 using Metal
 using ParallelTestRunner
+import Pkg
 
 if !Metal.functional()
     @warn """Metal.jl is not functional on this system, so there is nothing to test; skipping.
@@ -87,6 +88,16 @@ if filter_tests!(testsuite, args)
     if parse(Bool, get(ENV, "CI", "false")) || Sys.total_memory() < 12 * 2^30
         delete!(testsuite, "largebroadcast")
     end
+
+    # Enzyme tests are opt-in (Enzyme is a heavy, optional dependency); run via `runtests.jl enzyme`.
+    delete!(testsuite, "enzyme")
+end
+
+# Add Enzyme / EnzymeCore on the fly when the tests are requested, rather than as test deps
+# (matches AMDGPU.jl).
+if any(name -> startswith(name, "enzyme"), keys(testsuite))
+    @info "Running Enzyme tests"
+    Pkg.add(["EnzymeCore", "Enzyme"])
 end
 
 # workers to run tests on
