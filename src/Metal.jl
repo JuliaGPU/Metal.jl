@@ -78,6 +78,9 @@ include("compiler/exceptions.jl")
 include("compiler/execution.jl")
 include("compiler/reflection.jl")
 
+# sparse arrays
+include("sparse.jl")
+
 # libraries
 include("../lib/mps/MPS.jl")
 export MPS

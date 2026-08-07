@@ -11,6 +11,9 @@ MtlArray
 MtlVector
 MtlMatrix
 MtlVecOrMat
+MtlSparseVector
+MtlSparseMatrixCSC
+MtlSparseMatrixCSR
 ```
 
 ## Storage modes
