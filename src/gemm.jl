@@ -232,8 +232,8 @@ function gemm_scalar_kernel!(C, A, B, alpha, beta,
                               M, N, K, ::Val{TA}, ::Val{TB}, ::Val{TILE}) where {TA, TB, TILE}
     TAT = eltype(A); TBT = eltype(B); R = eltype(C)
 
-    # accumulate in a wide enough type, and convert operands before the product, so
-    # narrow-integer (Int8/Int16) inputs don't overflow
+    # accumulate in a wide enough type so narrow-integer (Int8/Int16) inputs don't
+    # overflow.
     Tacc = promote_type(R, typeof(zero(TAT) * zero(TBT) + zero(TAT) * zero(TBT)))
 
     li = Int(thread_position_in_threadgroup().x)
@@ -255,17 +255,19 @@ function gemm_scalar_kernel!(C, A, B, alpha, beta,
         @inbounds Bs[li, lj] = (ar <= K && gj <= N) ? opB(B, Val(TB), ar, gj) : zero(TBT)
         threadgroup_barrier(MemoryFlagThreadGroup)
         @inbounds for kk in 1:TILE
-            acc += Tacc(As[li, kk]) * Tacc(Bs[kk, lj])
+            acc = muladd(As[li, kk], Bs[kk, lj], acc)
         end
         threadgroup_barrier(MemoryFlagThreadGroup)
         kt += 1
     end
 
     if gi <= M && gj <= N
+        # `setindex!` converts to `R` for us; an explicit `R(...)` would additionally
+        # demand a constructor, which element types like `SVector` don't provide
         if iszero(beta)
-            @inbounds C[gi, gj] = R(alpha * acc)
+            @inbounds C[gi, gj] = alpha * acc
         else
-            @inbounds C[gi, gj] = R(alpha * acc + beta * C[gi, gj])
+            @inbounds C[gi, gj] = alpha * acc + beta * C[gi, gj]
         end
     end
     return
