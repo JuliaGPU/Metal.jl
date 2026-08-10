@@ -36,3 +36,10 @@ function MTLLibraryFromData(dev::MTLDevice, input_data)
 
     return lib
 end
+
+function MTL4LibraryDescriptor()
+    handle = @objc [MTL4LibraryDescriptor new]::id{MTL4LibraryDescriptor}
+    obj = MTL4LibraryDescriptor(handle)
+    finalizer(release, obj)
+    return obj
+end
