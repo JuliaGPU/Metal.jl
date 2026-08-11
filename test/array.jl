@@ -833,4 +833,9 @@ end
     R = transpose(Metal.zeros(Float32, 2, 3))
     A = MtlArray(rand(Float32, 3, 2, 10))
     @test @inferred(Metal.GPUArrays.mapreducedim!(identity, +, R, A)) === R
+
+    R = transpose(Metal.zeros(Int16, 2, 3))
+    A = MtlArray(rand(Int16.(0:10), 3, 2, 10))
+    @test @inferred(sum!(abs2, R, A)) === R
+    @test Array(R) ≈ dropdims(sum(abs2, Array(A); dims=3); dims = 3)
 end

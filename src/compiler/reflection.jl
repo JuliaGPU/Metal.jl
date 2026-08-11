@@ -77,6 +77,10 @@ function return_type(@nospecialize(func), @nospecialize(tt))
     config = compiler_config(device())
     job = CompilerJob(source, config)
     interp = GPUCompiler.get_interpreter(job)
-    sig = Base.signature_type(func, tt)
-    Core.Compiler._return_type(interp, sig)
+    @static if VERSION >= v"1.11"
+        return Base.infer_return_type(func, tt; interp)
+    else
+        sig = Base.signature_type(func, tt)
+        return Core.Compiler._return_type(interp, sig)
+    end
 end

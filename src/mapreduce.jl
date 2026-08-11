@@ -243,7 +243,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     dev = device()
 
     # be conservative about using shuffle instructions
-    shuffle = T <: Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
+    shuffle = return_type(op, Tuple{T, T}) <: Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
 
     R_old = R
     # add singleton dimensions to the output container, if needed
