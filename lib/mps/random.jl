@@ -37,10 +37,14 @@ end
 
 Random.seed!(rng::RNG) = Random.seed!(rng, make_seed())
 
-const GLOBAL_RNGs = Dict{MTLDevice,MPS.RNG}()
 @autoreleasepool function default_rng()
     dev = device()
-    get!(GLOBAL_RNGs, dev) do
+
+    rngs = get!(task_local_storage(), :MetalMPSRNG) do
+        Dict{MTLDevice,RNG}()
+    end::Dict{MTLDevice,RNG}
+
+    get!(rngs, dev) do
         RNG(dev)
     end
 end
