@@ -166,11 +166,10 @@ function device_synchronize()
     flush_batched_queues!()
     maybe_collect(device(); will_block=true)
 
-    for queue in keys(global_queues)
+    queues = active_global_queues()
+    append!(queues, active_batched_queues())
+    for queue in unique!(queues)
         drain_logging_cmdbufs!(raw_queue(queue))
-    end
-    for bq in active_batched_queues()
-        drain_logging_cmdbufs!(bq.queue)
     end
 
     cmdbufs, submissions = MTL.take_all_submissions()
