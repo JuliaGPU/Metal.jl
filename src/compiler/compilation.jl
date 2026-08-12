@@ -438,14 +438,14 @@ end
 
 # cache of compiler configurations, per device (but additionally configurable via kwargs)
 const _compiler_configs = Dict{UInt, MetalCompilerConfig}()
+const compiler_configs_lock = ReentrantLock()
 function compiler_config(dev; kwargs...)
     h = hash(dev, hash(kwargs))
-    config = get(_compiler_configs, h, nothing)
-    if config === nothing
-        config = _compiler_config(dev; kwargs...)
-        _compiler_configs[h] = config
+    return Base.@lock compiler_configs_lock begin
+        get!(_compiler_configs, h) do
+            _compiler_config(dev; kwargs...)
+        end
     end
-    return config
 end
 @noinline function _compiler_config(dev; kernel=true, name=nothing, always_inline=false,
                                          debug_level=Base.JLOptions().debug_level,

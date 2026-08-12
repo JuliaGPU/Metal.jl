@@ -52,7 +52,7 @@ Sys.isapple() && Sys.ARCH === :aarch64 && @setup_workload begin
     # objects only exist in the precompilation process; serializing those into
     # the package image yields dangling pointers when the image is loaded. Drop
     # the entries before precompilation finalizes.
-    empty!(_compiler_configs)
+    Base.@lock compiler_configs_lock empty!(_compiler_configs)
     empty!(kernel_instances)
     empty!(global_queues)
     Base.@lock batched_queues_lock empty!(batched_queues)
