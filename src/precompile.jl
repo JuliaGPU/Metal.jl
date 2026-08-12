@@ -54,7 +54,7 @@ Sys.isapple() && Sys.ARCH === :aarch64 && @setup_workload begin
     # the entries before precompilation finalizes.
     Base.@lock compiler_configs_lock empty!(_compiler_configs)
     empty!(kernel_instances)
-    empty!(global_queues)
+    Base.@lock global_queues_lock empty!(global_queues)
     Base.@lock batched_queues_lock empty!(batched_queues)
     empty!(queue_residency_sets)
     Base.@lock memory_pressure_stats_lock empty!(_memory_pressure_stats)

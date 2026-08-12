@@ -50,6 +50,11 @@ Sets the Metal GPU device associated with the current Julia task.
 device!(dev::MTLDevice) = task_local_storage(:MTLDevice, dev)
 
 const global_queues = WeakKeyDict{Any,Nothing}()
+const global_queues_lock = ReentrantLock()
+
+function active_global_queues()
+    Base.@lock global_queues_lock collect(keys(global_queues))
+end
 
 """
     global_queue(dev::MTLDevice)::BatchedCommandQueue
@@ -73,7 +78,7 @@ function global_queue(dev::MTLDevice)
             queue.label = "global_queue($(current_task()))"
             bq = BatchedCommandQueue(queue)
             task_local_storage(batched_queue_key(queue), bq)
-            global_queues[bq] = nothing
+            Base.@lock global_queues_lock global_queues[bq] = nothing
             bq
         end
     end::BatchedCommandQueue
