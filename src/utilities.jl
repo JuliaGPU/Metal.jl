@@ -72,7 +72,7 @@ function versioninfo(io::IO=stdout)
     else
         println(io, length(devs), " devices:")
     end
-    for (i, dev) in enumerate(devs)
+    for dev in devs
         cores = num_gpu_cores()
         corestr = "$(cores > 0 ? cores : "?") GPU cores"
 

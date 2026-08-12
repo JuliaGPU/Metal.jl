@@ -588,7 +588,7 @@ function Base.read(io::IO, ::Type{MetalLib})
     end
 
     # 8 bytes: file size
-    file_size = read(io, UInt64)
+    _file_size = read(io, UInt64)
 
     # 2 x 8 bytes: function list offset and size
     function_list_offset = read(io, UInt64)
@@ -596,11 +596,11 @@ function Base.read(io::IO, ::Type{MetalLib})
 
     # 2 x 8 bytes: public metadata offset and size
     public_md_offset = read(io, UInt64)
-    public_md_size = read(io, UInt64)
+    _public_md_size = read(io, UInt64)
 
     # 2 x 8 bytes: private metadata offset and size
     private_md_offset = read(io, UInt64)
-    private_md_size = read(io, UInt64)
+    _private_md_size = read(io, UInt64)
 
     # 2 x 8 bytes: module list offset and size
     module_list_offset = read(io, UInt64)
@@ -613,8 +613,8 @@ function Base.read(io::IO, ::Type{MetalLib})
     function_list = []
     seek(io, function_list_offset)
     function_count = read(io, UInt32)
-    for i in 1:function_count
-        tag_group_start = position(io)
+    for _ in 1:function_count
+        _tag_group_start = position(io)
         push!(function_list, read!(io, TagGroup()))
     end
     # the function list size excludes the size field at the start
@@ -630,16 +630,16 @@ function Base.read(io::IO, ::Type{MetalLib})
 
     # public metadata
     public_md = []
-    for i in 1:function_count
-        tag_group_start = position(io)
+    for _ in 1:function_count
+        _tag_group_start = position(io)
         push!(public_md, read!(io, TagGroup()))
     end
     @assert position(io) == private_md_offset
 
     # private metadata
     private_md = []
-    for i in 1:function_count
-        tag_group_start = position(io)
+    for _ in 1:function_count
+        _tag_group_start = position(io)
         push!(private_md, read!(io, TagGroup()))
     end
     @assert position(io) == module_list_offset
@@ -659,7 +659,7 @@ function Base.read(io::IO, ::Type{MetalLib})
     if header_ex !== nothing && haskey(header_ex, "RLST")
         seek(io, header_ex["RLST"].offset)
         reflection_count = read(io, UInt32)
-        for i in 1:reflection_count
+        for _ in 1:reflection_count
             # note the offset as used by the RFLT tag
             reflection_offset = position(io) - header_ex["RLST"].offset
 
@@ -683,8 +683,8 @@ function Base.read(io::IO, ::Type{MetalLib})
     if header_ex !== nothing && haskey(header_ex, "SLST")
         seek(io, header_ex["SLST"].offset)
         script_count = read(io, UInt32)
-        for i in 1:script_count
-            script_buf = read!(io, TagGroup())
+        for _ in 1:script_count
+            _script_buf = read!(io, TagGroup())
 
             # script_buf["SBUF"] contains flatbuffer data; compare with:
             # $ metal-source -flatbuffers=binary
@@ -726,7 +726,7 @@ function Base.read(io::IO, ::Type{MetalLib})
         end
 
         archives = []
-        for i in 1:source_archive_count
+        for _ in 1:source_archive_count
             # note the offset as used by the SOFF tag
             source_offset = position(io) + sizeof(UInt32) - header_ex[tag].offset
 
@@ -995,7 +995,7 @@ function Base.write(io::IO, lib::MetalLib)
         mark_placeholder(name, pos)
     end
     function patch_placeholder(io, name, value)
-        position = mark(io)
+        _position = mark(io)
         seek(io, placeholders[name])
         write(io, value)
         reset(io)
