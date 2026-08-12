@@ -105,7 +105,8 @@ import .MetalKernels: MetalBackend
 export MetalBackend
 
 include("deprecated.jl")
-
-include("precompile.jl")
+if @load_preference("precompile", true)
+    include("precompile.jl")
+end
 
 end # module
