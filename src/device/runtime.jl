@@ -252,6 +252,15 @@ struct KernelState
     # thrown; the host reads it after synchronizing (`check_exceptions`) and rethrows as a
     # `KernelException`. held as a byte pointer; its fields are reached through `info_field`.
     exception_info::Core.LLVMPtr{UInt8, AS.Device}
+
+    # relocation table
+    #
+    # the words a relocation-carrying kernel needs (host addresses of interned Symbols, type
+    # tags, ...) resolved for this session; GPUCompiler's `:table` lowering reads them from
+    # here by index. Read-only, and null for the overwhelmingly common relocation-free kernel
+    # — the field is always present so the state layout doesn't depend on what a kernel
+    # happens to reference. Never dereferenced on device: the words are only compared.
+    reloc_table::Core.LLVMPtr{UInt64, AS.Device}
 end
 
 @inline @generated kernel_state() = GPUCompiler.kernel_state_value(KernelState)

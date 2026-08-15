@@ -171,6 +171,10 @@ struct HostKernel{F,TT}
     tgmem::Int
     exec_width::Int
     use_residency_sets::Bool
+    # this session's relocation words, or `nothing` for a relocation-free kernel. The buffer
+    # keeps the storage alive; `launch` passes its address in the `KernelState` and declares
+    # it resident, since only the address (not the buffer) is encoded.
+    reloc_table::Union{Nothing,MTLBuffer}
 end
 
 const mtlfunction_lock = ReentrantLock()
@@ -219,6 +223,24 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
             end
         end
 
+        # Same for the relocation words, which only a kernel referencing a host object needs.
+        relocations = res.relocations
+        reloc_table = nothing
+        if relocations !== nothing
+            @inbounds for (cached_dev, cached_buf) in res.reloc_tables
+                if cached_dev === dev
+                    reloc_table = cached_buf
+                    break
+                end
+            end
+            if reloc_table === nothing
+                reloc_table = reloc_table_buffer(dev, relocations)
+                if ccall(:jl_generating_output, Cint, ()) != 1
+                    push!(res.reloc_tables, (dev, reloc_table))
+                end
+            end
+        end
+
         h = hash(pipeline[], hash(f, hash(tt)))
         get!(kernel_instances, h) do
             local dev = pipeline[].device
@@ -227,7 +249,8 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
                              Int(pipeline[].maxTotalThreadsPerThreadgroup),
                              Int(pipeline[].staticThreadgroupMemoryLength),
                              Int(pipeline[].threadExecutionWidth),
-                             can_use_residency_sets(dev))
+                             can_use_residency_sets(dev),
+                             reloc_table)
         end::HostKernel{F,tt}
     end
 end
@@ -250,6 +273,7 @@ function compile_or_lookup(@nospecialize(job::CompilerJob))::MetalResults
         res.metallib = artifacts.metallib
         res.entry = artifacts.entry
         res.loggingEnabled = artifacts.loggingEnabled
+        res.relocations = artifacts.relocations
     end
     return res
 end
@@ -296,11 +320,13 @@ end
 @inline function set_argument!(cce::MTLComputeCommandEncoder, arg, idx::Integer)
     argtyp = typeof(arg)
 
-    # replace non-isbits arguments (they should be unused, or compilation
-    # would have failed) by a dummy reference
+    # A non-isbits argument has no fields the kernel could read — compilation would have
+    # failed otherwise — so it is only usable by identity, e.g. `sym === :foo`. Pass the
+    # object's address, which is the identity word GPUCompiler lowers such a parameter to,
+    # and which the kernel compares against its own resolved relocation for that value.
     if !isbitstype(argtyp)
-        argtyp = Ptr{Any}
-        arg = convert(argtyp, C_NULL)
+        arg = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), arg)
+        argtyp = Ptr{Cvoid}
     end
 
     ref = Base.RefValue(arg)
@@ -383,6 +409,9 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
             MTL.use!(cce, buf, MTL.ReadWriteUsage)
             MTL.use!(cce, exc, MTL.ReadWriteUsage)
         end
+        let reloc = kernel.reloc_table
+            reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
+        end
         encode_arguments_nospec!(cce, kernel, kernel_state, kernel.f, args)
         MTL.append_current_function!(cce, gs, ts)
     finally
@@ -428,7 +457,10 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, buf_addr)
     exc, exc_addr = exception_info_buffer_and_gpu_address(dev)
     exc_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, exc_addr)
-    kernel_state = KernelState(Random.rand(UInt32), buf_ptr, exc_ptr)
+    reloc = kernel.reloc_table
+    reloc_ptr = reinterpret(Core.LLVMPtr{UInt64, AS.Device},
+                            reloc === nothing ? UInt64(0) : UInt64(reloc.gpuAddress))
+    kernel_state = KernelState(Random.rand(UInt32), buf_ptr, exc_ptr, reloc_ptr)
 
     if kernel.loggingEnabled
         precompiling && return
@@ -448,6 +480,9 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
             MTL.use!(cce, buf, MTL.ReadWriteUsage)
             MTL.use!(cce, exc, MTL.ReadWriteUsage)
         end
+        # The relocation table is per-kernel, so it cannot join the queue's residency set
+        # (which only holds the per-device scratch buffers): declare it every launch.
+        reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
 
         encode_arguments_nospec!(cce, kernel, kernel_state, f, args)
         MTL.append_current_function!(cce, gs, ts)

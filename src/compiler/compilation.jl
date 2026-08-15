@@ -16,9 +16,16 @@ Cached compilation results for a Metal kernel job, managed by
 - `metallib` + `entry` + `loggingEnabled`: library-wrapped AIR bytes and launch
   metadata — the final session-portable artifacts. `metallib === nothing` identifies
   a job that has not been compiled yet (see `compile_or_lookup` in `execution.jl`).
+- `relocations`: the kernel's relocation manifest, or `nothing` when it carries none
+  (the common case). Session-portable — its `JuliaValueRef`/`CGlobalRef` targets are
+  serializable and resolved per-session by the loader — so a relocation-carrying kernel
+  now persists into package images too. The resolved words travel to the device in a
+  buffer whose address the `KernelState` carries; see `reloc_table_buffer`.
 - `pipelines`: session-local cache of `(MTLDevice, MTLComputePipelineState)` pairs
   resulting from the host-side link of `metallib` onto a device. Never populated
   during precompilation, so package images only carry the portable fields.
+- `reloc_tables`: session-local cache of the per-device relocation-word buffers, keyed
+  the same way and populated under the same rule.
 
 The cache partition (via `GPUCompiler.cache_owner`) already covers the macOS / AIR /
 Metal versions that affect codegen, and results are further keyed by the full
@@ -33,10 +40,13 @@ mutable struct MetalResults
     metallib::Union{Nothing, Vector{UInt8}}
     entry::Union{Nothing, String}
     loggingEnabled::Union{Nothing, Bool}
-    # host-side pipeline objects (session-local)
+    relocations::Union{Nothing, GPUCompiler.Relocations}
+    # host-side objects (session-local)
     pipelines::Vector{Tuple{MTLDevice, MTLComputePipelineState}}
-    MetalResults() = new(nothing, nothing, nothing, nothing,
-                         Tuple{MTLDevice, MTLComputePipelineState}[])
+    reloc_tables::Vector{Tuple{MTLDevice, MTLBuffer}}
+    MetalResults() = new(nothing, nothing, nothing, nothing, nothing,
+                         Tuple{MTLDevice, MTLComputePipelineState}[],
+                         Tuple{MTLDevice, MTLBuffer}[])
 end
 
 GPUCompiler.runtime_module(::MetalCompilerJob) = Metal
@@ -44,6 +54,25 @@ GPUCompiler.runtime_module(::MetalCompilerJob) = Metal
 GPUCompiler.method_table(::MetalCompilerJob) = method_table
 
 GPUCompiler.kernel_state_type(job::MetalCompilerJob) = KernelState
+
+# Keep relocations symbolic. Most kernels are relocation-free, so their metallib is
+# byte-stable across sessions, which restores pkgimage persistence (`can_persist_results`)
+# and lets content-keyed binary archives hit uniformly. Kernels that reference a type tag
+# or `isa`-test a boxed value do carry records; Metal has no post-load symbol patching, so
+# under `:table` GPUCompiler rewrites each of them into an indexed load from a table of words
+# the loader delivers as ordinary run-time data — a small buffer whose device address the
+# `KernelState` carries (see `reloc_table_buffer` and `GPUCompiler.relocation_table_pointer`
+# for the Metal target). Nothing session-local reaches the metallib, so these kernels are
+# byte-stable and persist across sessions too.
+#
+# The lowering (and the box demotion it relies on) needs LLVM.jl's
+# `convert_users_to_instructions!`, available on LLVM 17+ (Julia 1.12+) only; older versions
+# fall back to session-local `:bake` resolution and forgo persistence. So do non-kernel jobs,
+# which have no kernel state to reach a table through: those exist only to be read
+# (`Metal.code_air` and friends), never launched or cached, so a session-local resolution is
+# all they need.
+GPUCompiler.relocation_lowering(@nospecialize(job::MetalCompilerJob)) =
+    (job.config.kernel && LLVM.version() >= v"17") ? (:table) : (:bake)
 
 # Metal 4 tensor ops (`mpp::tensor_ops`, see `device/intrinsics/tensor.jl`) lower to calls to
 # externally-defined `__tensorops_impl_*` symbols, resolved by the Metal runtime's tensor-ops
@@ -531,7 +560,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
     @signpost_event log=log_compiler() "Compile" "Job=$job"
 
     # TODO: on 1.9, this actually creates a context. cache those.
-    ir, air, entry, loggingEnabled = JuliaContext() do _
+    ir, air, entry, loggingEnabled, relocations = JuliaContext() do _
         @signpost_interval log=log_compiler() "Generate LLVM IR" begin
             mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)
         end
@@ -541,11 +570,17 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
 
         @signpost_interval log=log_compiler() "Downgrade to AIR" begin
             # generate AIR, having GPUCompiler lower the IR to AIR-compatible form and
-            # invoke the LLVM downgrader (both as part of Metal's `mcgen`)
-            local air = try
-                air, _ = invoke_frozen(GPUCompiler.emit_asm, job, mod,
-                                       LLVM.API.LLVMObjectFile)
-                air
+            # invoke the LLVM downgrader (both as part of Metal's `mcgen`).
+            #
+            # Passing `meta.relocations` (the 4-arg `emit_asm`) is load-bearing: surviving
+            # relocations (interned symbols, type tags, boxed non-smalltag constants) are then
+            # rewritten into indexed loads from the kernel state's relocation table, and
+            # `meta.relocations` is finalized into the manifest the loader resolves against.
+            # The 3-arg form would hand the lowering an empty table and strand the slots.
+            local air
+            air, _ = try
+                invoke_frozen(GPUCompiler.emit_asm, job, mod, meta.relocations,
+                              LLVM.API.LLVMObjectFile)
             catch err
                 # `emit_asm` has already lowered the module in-place, so stringifying it
                 # here shows exactly what the downgrader was fed
@@ -555,7 +590,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
             end
         end
 
-        string(mod), air, LLVM.name(meta.entry), loggingEnabled
+        string(mod), air, LLVM.name(meta.entry), loggingEnabled, meta.relocations
     end
 
     @signpost_interval log=log_compiler() "Create Metal library" begin
@@ -585,7 +620,27 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
         dump_artifacts(".ll" => ir, ".air" => air, ".metallib" => metallib)
     end
 
-    return (; air, metallib, entry, loggingEnabled)
+    # `nothing` marks a relocation-free kernel (the common case), keeping its `MetalResults`
+    # and package-image footprint identical to before.
+    return (; air, metallib, entry, loggingEnabled,
+              relocations = isempty(relocations) ? nothing : relocations)
+end
+
+# Materialize this session's relocation words for `relocations` in a device buffer, whose GPU
+# address every launch passes in the `KernelState`. `resolved_relocation_table` hands back the
+# words in the order the compiler indexed them by, and permanently roots the referenced Julia
+# values, so they cannot dangle for as long as the code is loaded.
+#
+# Shared storage, written once, read-only on device. The buffer is not bound to the encoder as
+# an argument (only its address travels, inside the state), so each launch declares it
+# resident — same as the malloc and exception scratch buffers.
+@autoreleasepool function reloc_table_buffer(dev::MTLDevice,
+                                             relocations::GPUCompiler.Relocations)
+    words = GPUCompiler.resolved_relocation_table(relocations)
+    buf = MTLBuffer(dev, sizeof(words); storage=SharedStorage)
+    GC.@preserve words unsafe_copyto!(convert(Ptr{UInt}, MTL.contents(buf)),
+                                      pointer(words), length(words))
+    return buf
 end
 
 # link the metallib into a session-local pipeline state on the given device.
@@ -597,7 +652,7 @@ end
         lib = MTLLibraryFromData(dev, metallib)
         fun = MTLFunction(lib, entry)
         try
-            return MTLComputePipelineState(dev, fun)
+            return archived_pipeline(dev, fun)
         catch err
             isa(err, NSError) || rethrow()
 
