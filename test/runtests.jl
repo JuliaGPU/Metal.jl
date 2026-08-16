@@ -102,6 +102,12 @@ function test_worker(name, init_worker_code)
         return addworker(; init_worker_code)
     end
 
+    if name == "examples/gtk"
+        # Single-use worker since gtk launches a window
+        #  that persists if the worker stays alive
+        return addworker(; init_worker_code)
+    end
+
     return nothing
 end
 
