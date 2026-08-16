@@ -29,7 +29,7 @@ function versioninfo(io::IO=stdout)
 
     println(io, "Julia packages:")
     println(io, "- Metal.jl: $(Base.pkgversion(Metal))")
-    for name in [:GPUArrays, :GPUCompiler, :KernelAbstractions, :ObjectiveC,
+    for name in [:GPUArrays, :GPUCompiler, :KernelAbstractions, :KernelInterface, :ObjectiveC,
                  :LLVM, :LLVMDowngrader_jll]
         mod = getfield(Metal, name)
         println(io, "- $(name): $(Base.pkgversion(mod))")
