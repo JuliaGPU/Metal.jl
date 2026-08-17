@@ -75,6 +75,96 @@ function partial_scan(op::Function, output::AbstractArray{T}, input::AbstractArr
     return
 end
 
+function partial_scan_simd(op::Function, output::AbstractArray{T}, input::AbstractArray,
+                           Rdim, Rpre, Rpost, Rother, neutral, init,
+                           ::Val{single_simdgroup}) where {T, single_simdgroup}
+    threads = Int(threads_per_threadgroup_3d().x)
+    thread = Int(thread_position_in_threadgroup_3d().x)
+    lane = Int(thread_index_in_simdgroup())
+    simdgroup = Int(simdgroup_index_in_threadgroup())
+    assume(threads_per_simdgroup() == 32)
+
+    i = (Int(threadgroup_position_in_grid_3d().x) - 1) * threads + thread
+    j = (Int(threadgroup_position_in_grid_3d().z) - 1) *
+        Int(threadgroups_per_grid_3d().y) + Int(threadgroup_position_in_grid_3d().y)
+
+    if j > length(Rother)
+        return
+    end
+
+    @inbounds begin
+        I = Rother[j]
+        Ipre = Rpre[I[1]]
+        Ipost = Rpost[I[2]]
+    end
+
+    val = @inbounds if i <= length(Rdim)
+        op(neutral, input[Ipre, i, Ipost])
+    else
+        op(neutral, neutral)
+    end
+
+    # Inclusive scan within each SIMD group.
+    offset = 1
+    while offset < 32
+        previous = simd_shuffle_up(val, offset)
+        if lane > offset
+            val = op(previous, val)
+        end
+        offset <<= 1
+    end
+
+    if single_simdgroup
+        @inbounds if i <= length(Rdim)
+            if init !== nothing
+                val = op(something(init), val)
+            end
+            output[Ipre, i, Ipost] = val
+        end
+        return
+    end
+
+    # Scan the per-SIMD-group totals using the first SIMD group, then add the total of
+    # all preceding groups. This needs only two threadgroup barriers instead of the
+    # up-sweep/down-sweep tree used by the generic kernel.
+    totals = MtlThreadGroupArray(T, 32)
+    last_lane = min(32, threads - (simdgroup - 1) * 32)
+    if lane == last_lane
+        @inbounds totals[simdgroup] = val
+    end
+    threadgroup_barrier(MemoryFlagThreadGroup)
+
+    simdgroups = cld(threads, 32)
+    if simdgroup == 1
+        group_val = lane <= simdgroups ? @inbounds(totals[lane]) : neutral
+        offset = 1
+        while offset < 32
+            previous = simd_shuffle_up(group_val, offset)
+            if lane > offset
+                group_val = op(previous, group_val)
+            end
+            offset <<= 1
+        end
+        if lane <= simdgroups
+            @inbounds totals[lane] = group_val
+        end
+    end
+    threadgroup_barrier(MemoryFlagThreadGroup)
+
+    if simdgroup > 1
+        @inbounds val = op(totals[simdgroup - 1], val)
+    end
+
+    @inbounds if i <= length(Rdim)
+        if init !== nothing
+            val = op(something(init), val)
+        end
+        output[Ipre, i, Ipost] = val
+    end
+
+    return
+end
+
 function aggregate_partial_scan(op::Function, output::AbstractArray, aggregates::AbstractArray, Rdim, Rpre, Rpost, Rother, init)
     block = threadgroup_position_in_grid_3d().x
 
@@ -119,30 +209,56 @@ function scan!(f::Function, output::WrappedMtlArray{T}, input::WrappedMtlArray;
     Rpost = CartesianIndices(size(input)[dims+1:end])
     Rother = CartesianIndices((length(Rpre), length(Rpost)))
 
+    full = nextpow(2, length(Rdim))
+    simd_type = T <: Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
+    # A single SIMD group needs no barriers, and the hierarchical SIMD scan wins for
+    # 512+ threads. Keep the shared-memory tree for the measured 64-256-thread crossover.
+    simd = simd_type && (full <= 32 || full >= 512)
+
     # the maximum number of threads is limited by the hardware
     dev = device()
     threadgroup_threads, threadgroup_memory = MTL.threadgroup_limits(dev)
     maxthreads = min(threadgroup_threads, threadgroup_memory ÷ sizeof(T) ÷ 2)
 
     # determine how many threads we can launch for the scan kernel
-    kernel = @metal launch=false partial_scan(f, output, input, Rdim, Rpre, Rpost, Rother, neutral, init, Val(maxthreads), Val(true))
+    kernel = if simd
+        @metal launch=false partial_scan_simd(f, output, input, Rdim, Rpre, Rpost,
+                                              Rother, neutral, init, Val(false))
+    else
+        @metal launch=false partial_scan(f, output, input, Rdim, Rpre, Rpost,
+                                         Rother, neutral, init, Val(maxthreads),
+                                         Val(true))
+    end
     threads = Int(kernel.pipeline.maxTotalThreadsPerThreadgroup)
 
     # determine the grid layout to cover the other dimensions
     blocks_other = (length(Rother), 1)
 
     # does that suffice to scan the array in one go?
-    full = nextpow(2, length(Rdim))
     if full <= threads
-        @metal(threads=full, groups=(1, blocks_other...),
-               partial_scan(f, output, input, Rdim, Rpre, Rpost, Rother, neutral, init, Val(full), Val(true)))
+        if simd
+            @metal(threads=full, groups=(1, blocks_other...),
+                   partial_scan_simd(f, output, input, Rdim, Rpre, Rpost, Rother,
+                                     neutral, init, Val(full <= 32)))
+        else
+            @metal(threads=full, groups=(1, blocks_other...),
+                   partial_scan(f, output, input, Rdim, Rpre, Rpost, Rother,
+                                neutral, init, Val(full), Val(true)))
+        end
     else
         # perform partial scans across the scanning dimension
         # NOTE: don't set init here to avoid applying the value multiple times
         partial = prevpow(2, threads)
         blocks_dim = cld(length(Rdim), partial)
-        @metal(threads=partial, groups=(blocks_dim, blocks_other...),
-              partial_scan(f, output, input, Rdim, Rpre, Rpost, Rother, neutral, nothing, Val(partial), Val(true)))
+        if simd
+            @metal(threads=partial, groups=(blocks_dim, blocks_other...),
+                   partial_scan_simd(f, output, input, Rdim, Rpre, Rpost, Rother,
+                                     neutral, nothing, Val(false)))
+        else
+            @metal(threads=partial, groups=(blocks_dim, blocks_other...),
+                   partial_scan(f, output, input, Rdim, Rpre, Rpost, Rother,
+                                neutral, nothing, Val(partial), Val(true)))
+        end
 
         # get the total of each thread block (except the first) of the partial scans
         aggregates = fill(neutral, Base.setindex(size(input), blocks_dim, dims))
