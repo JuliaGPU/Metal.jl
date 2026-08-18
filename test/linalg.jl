@@ -421,6 +421,9 @@ end
         y = copy(db)
         ldiv!(dT, y)
         @test Array(y) ≈ cT \ b rtol=1f-4
+        yt = copy(db)
+        ldiv!(transpose(dT), yt)
+        @test Array(yt) ≈ transpose(cT) \ b rtol=1f-4
         Y = copy(dBR)
         rdiv!(Y, dT)
         @test Array(Y) ≈ BR / cT rtol=1f-4

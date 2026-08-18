@@ -471,6 +471,17 @@ for (triangle, upper, unit) in ((:UpperTriangular, true, false),
             return MPS.solve_triangular(parent(A), B; upper=$upper, unit=$unit)
         end
 
+        # the generic `ldiv!` picks a direction using `istriu`, which scalar-indexes the
+        # wrapper until JuliaLang/LinearAlgebra.jl#1265 (1.13) unwraps it to the parent
+        @static if VERSION < v"1.13.0-"
+        function LinearAlgebra.ldiv!(A::$triangle{T,<:Union{Transpose{T,<:MtlMatrix{T}},
+                                                            Adjoint{T,<:MtlMatrix{T}}}},
+                                     B::MtlVecOrMat{T}) where {T<:MtlFloat}
+            return MPS.solve_triangular(parent(parent(A)), B; upper=$(!upper),
+                                        unit=$unit, transpose=true)
+        end
+        end
+
         function Base.:\(A::$triangle{T,<:MtlMatrix{T}},
                          B::MtlVecOrMat{T}) where {T<:MtlFloat}
             return ldiv!(A, copy(B))
