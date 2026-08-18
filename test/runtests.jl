@@ -130,6 +130,8 @@ init_worker_code = quote
                      Float16, Float32,
                      ComplexF16, ComplexF32]
     TestSuite.supported_eltypes(::Type{<:MtlArray}) = eltypes
+    TestSuite.sparse_types(::Type{<:MtlArray}) =
+        (MtlSparseVector, MtlSparseMatrixCSC, MtlSparseMatrixCSR)
 
     # NOTE: based on test/pkg.jl::capture_stdout, but doesn't discard exceptions
     macro grab_output(ex)
