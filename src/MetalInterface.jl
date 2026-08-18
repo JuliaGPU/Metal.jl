@@ -141,12 +141,12 @@ function KI.kernel_function(::MetalBackend, f::F, tt::TT=Tuple{}; name=nothing, 
     KI.Kernel{MetalBackend, typeof(kern)}(MetalBackend(), kern)
 end
 
-function (obj::KI.Kernel{MetalBackend})(args...; numworkgroups=(), workgroupsize=(), ndrange=())
+function (obj::KI.Kernel{MetalBackend})(args...; numworkgroups=(), workgroupsize=(), ndrange=(), max_work_group_size=typemax(Int))
     KI.check_launch_args(numworkgroups, workgroupsize, ndrange)
 
     prod(ndrange) == 0 && return nothing
 
-    numworkgroups, workgroupsize = KI.auto_launch_sizes(obj, numworkgroups, workgroupsize, ndrange)
+    numworkgroups, workgroupsize = KI.auto_launch_sizes(obj, numworkgroups, workgroupsize, ndrange, max_work_group_size)
 
     obj.kern(args...; threads=workgroupsize, groups=numworkgroups)
 end
