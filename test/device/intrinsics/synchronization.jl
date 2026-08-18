@@ -12,7 +12,7 @@
         vec = unsafe_wrap(Vector{Int}, pointer(buf), size(buf))
 
         sync_test = @metal launch=false sync_test_kernel(buf)
-        threads = sync_test.maxThreads
+        threads = sync_test.maxthreads
         groups = cld(length(buf), threads)
 
         sync_test(buf; threads, groups)
@@ -42,7 +42,7 @@
         buf = Metal.zeros(Int, n)
 
         barrier_test = @metal launch=false barrier_test_kernel(buf)
-        threads = min(n, barrier_test.maxThreads)
+        threads = min(n, barrier_test.maxthreads)
         groups = cld(length(buf), threads)
 
         barrier_test(buf; threads, groups)

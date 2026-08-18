@@ -126,7 +126,7 @@ function scan!(f::Function, output::WrappedMtlArray{T}, input::WrappedMtlArray;
 
     # determine how many threads we can launch for the scan kernel
     kernel = @metal launch=false partial_scan(f, output, input, Rdim, Rpre, Rpost, Rother, neutral, init, Val(maxthreads), Val(true))
-    threads = Int(kernel.maxThreads)
+    threads = Int(kernel.maxthreads)
 
     # determine the grid layout to cover the other dimensions
     blocks_other = (length(Rother), 1)

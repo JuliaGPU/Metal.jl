@@ -84,7 +84,7 @@ rand!(arr_cpu)
 # @metal threads=1024 groups=1024 long_kernel(arr_mtl, dummy_mtl)
 
 long_kern = @metal launch=false long_kernel(arr_mtl, dummy_mtl)
-threads = long_kern.maxThreads
+threads = long_kern.maxthreads
 groups = cld(length(arr_mtl), threads)
 
 long_kern(arr_mtl, dummy_mtl; threads, groups)
