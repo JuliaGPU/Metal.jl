@@ -63,23 +63,24 @@ importing the package:
 julia> using Metal
 
 julia> Metal.versioninfo()
-macOS 26.5.0, Darwin 25.5.0
+macOS 26.6.1, Darwin 25.6.0
 
 Toolchain:
-- Julia: 1.12.6
+- Julia: 1.12.7
 - LLVM: 18.1.7
+- Metal: 4.0 (MSL), 2.8 (AIR), 1.2.9 (metallib)
 
 Julia packages:
-- Metal.jl: 1.10.0
-- GPUArrays: 11.5.4
-- GPUCompiler: 1.13.2
-- KernelAbstractions: 0.9.41
-- ObjectiveC: 5.0.0
-- LLVM: 9.8.2
-- LLVMDowngrader_jll: 0.6.0+2
+- Metal.jl: 1.10.3
+- GPUArrays: 11.5.11
+- GPUCompiler: 2.2.1
+- KernelAbstractions: 0.9.42
+- ObjectiveC: 6.0.1
+- LLVM: 9.13.0
+- LLVMDowngrader_jll: 0.9.0+0
 
 1 device:
-- Apple M2 Max 30 GPU cores (64.000 KiB allocated)
+- Apple M2 Max (30 GPU cores, 64.000 KiB allocated; Apple8, Metal4 family)
 ```
 
 
