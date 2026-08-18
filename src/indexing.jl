@@ -45,7 +45,7 @@ function Base.findall(bools::WrappedMtlArray{Bool})
         end
 
         kernel = @metal name="findall" launch=false kernel(ys, bools, indices)
-        threads = Int(kernel.pipeline.maxTotalThreadsPerThreadgroup)
+        threads = Int(kernel.maxthreads)
         groups = cld(length(indices), threads)
         kernel(ys, bools, indices; groups, threads)
     end

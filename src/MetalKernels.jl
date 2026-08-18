@@ -114,7 +114,7 @@ function (obj::KA.Kernel{MetalBackend})(args...; ndrange=nothing, workgroupsize=
     kernel = @metal launch=false obj.f(ctx, args...)
 
     if KA.workgroupsize(obj) <: KA.DynamicSize && workgroupsize === nothing
-        groupsize = kernel.pipeline.maxTotalThreadsPerThreadgroup
+        groupsize = kernel.maxthreads
         new_workgroupsize = threads_to_workgroupsize(groupsize, ndrange)
         iterspace, _dynamic = KA.partition(obj, ndrange, new_workgroupsize)
         ctx = KA.mkcontext(obj, ndrange, iterspace)

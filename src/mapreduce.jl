@@ -278,7 +278,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # If `Rother` is large enough, then a naive loop is more efficient than partial reductions.
     if length(Rother) >= serial_mapreduce_threshold(dev)
         kernel = @metal launch=false serial_mapreduce_kernel(f, op, init, Val(Rreduce), Val(Rother), R, A)
-        threads = min(length(Rother), kernel.pipeline.maxTotalThreadsPerThreadgroup)
+        threads = min(length(Rother), kernel.maxthreads)
         groups = cld(length(Rother), threads)
         kernel(f, op, init, Val(Rreduce), Val(Rother), R, A; threads, groups)
         return R_old
@@ -312,7 +312,7 @@ function GPUArrays.mapreducedim!(f::F, op::OP, R::WrappedMtlArray{T},
     # threads in a group work together to reduce values across the reduction dimensions;
     # we want as many as possible to improve algorithm efficiency and execution occupancy.
     function compute_threads(kern)
-        max_threads = kern.pipeline.maxTotalThreadsPerThreadgroup
+        max_threads = kern.maxthreads
         wanted_threads = shuffle ? nextwarp(kern.pipeline, length(Rreduce)) : length(Rreduce)
         if wanted_threads > max_threads
             shuffle ? prevwarp(kern.pipeline, max_threads) : max_threads

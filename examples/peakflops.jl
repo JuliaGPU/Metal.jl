@@ -37,7 +37,7 @@ function peakflops(len=1024*1024*100)
     out = similar(a)
 
     fma_kernel = @metal launch=false kernel_fma(a, b, c, out)
-    threads = fma_kernel.pipeline.maxTotalThreadsPerThreadgroup
+    threads = fma_kernel.maxthreads
     grid = cld(len, threads)
 
     bench = @benchmark Metal.@sync begin

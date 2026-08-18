@@ -80,7 +80,7 @@ end
         Is = StaticCartesianIndices(Is)
         kernel = @metal launch=false broadcast_cartesian_static(dest, bc, Is)
         elements = cld(length(dest), 4)
-        threads = min(elements, kernel.pipeline.maxTotalThreadsPerThreadgroup)
+        threads = min(elements, kernel.maxthreads)
         groups = cld(min(elements, typemax(UInt32).-threads), threads)
         kernel(dest, bc, Is; threads, groups)
         return dest
@@ -103,7 +103,7 @@ end
 
         kernel = @metal launch=false broadcast_linear(dest, bc)
         elements = cld(length(dest), 4)
-        threads = min(elements, kernel.pipeline.maxTotalThreadsPerThreadgroup)
+        threads = min(elements, kernel.maxthreads)
         elements = size(dest)
     elseif ndims(dest) == 2
         ## COV_EXCL_START
@@ -127,7 +127,7 @@ end
 
         kernel = @metal launch=false broadcast_2d(dest, bc)
 
-        maxThreads = kernel.pipeline.maxTotalThreadsPerThreadgroup
+        maxThreads = kernel.maxthreads
         w = min(size(dest, 1), maxThreads)
         h = min(size(dest, 2), maxThreads ÷ w)
         threads = (w, h)
@@ -159,7 +159,7 @@ end
 
         kernel = @metal launch=false broadcast_3d(dest, bc)
 
-        maxThreads = kernel.pipeline.maxTotalThreadsPerThreadgroup
+        maxThreads = kernel.maxthreads
         w = min(size(dest, 1), maxThreads)
         h = min(size(dest, 2), maxThreads ÷ w)
         d = min(size(dest, 3), maxThreads ÷ (w*h))
@@ -181,7 +181,7 @@ end
 
         kernel = @metal launch=false broadcast_cartesian(dest, bc)
         elements = cld(length(dest), 4)
-        threads = min(elements, kernel.pipeline.maxTotalThreadsPerThreadgroup)
+        threads = min(elements, kernel.maxthreads)
     end
 
     groups = cld.(min.(elements, typemax(UInt32) .- (2 .* threads)), threads)
