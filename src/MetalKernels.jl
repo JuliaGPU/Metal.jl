@@ -1,4 +1,4 @@
-module MetalInterface
+module MetalKernels
 
 using ..Metal
 using ..Metal: @device_override, DefaultStorageMode, SharedStorage, mtlfunction, mtlconvert, metal_support
@@ -11,7 +11,7 @@ import Adapt
 
 ## back-end
 
-# export MetalBackend
+export MetalBackend
 
 """
     struct MetalBackend <: KernelAbstractions.GPU
