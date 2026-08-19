@@ -1,6 +1,6 @@
 import KernelInterface
-using Metal.MetalInterface
+using Metal
 
 include(joinpath(dirname(pathof(KernelInterface)), "..", "test", "testsuite.jl"))
 
-Testsuite.testsuite(MetalInterface.MetalBackend, "Metal", Metal, MtlArray, Metal.MtlDeviceArray)
+Testsuite.testsuite(MetalBackend, "Metal", Metal, MtlArray, Metal.MtlDeviceArray)
