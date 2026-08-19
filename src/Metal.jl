@@ -12,7 +12,6 @@ using Scratch: @get_scratch!
 using ExprTools: splitdef, combinedef
 using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
 import ObjectiveC: is_macos
-import KernelAbstractions
 import KernelInterface
 const KI = KernelInterface
 using BFloat16s: BFloat16
@@ -103,14 +102,10 @@ include("indexing.jl")
 include("random.jl")
 include("fft.jl")
 
-# KernelAbstractions
-include("MetalKernelsOld.jl")
+# KernelInterface
+include("MetalKernels.jl")
 import .MetalKernels: MetalBackend
 export MetalBackend
-
-# KernelInterface - NOT PUBLIC. Use KernelInterface.get_backend on an MtlArray to get the backend
-include("MetalKernels.jl")
-import .MetalInterface
 
 include("deprecated.jl")
 if @load_preference("precompile", true)
