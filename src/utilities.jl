@@ -29,10 +29,17 @@ function versioninfo(io::IO=stdout)
 
     println(io, "Julia packages:")
     println(io, "- Metal.jl: $(Base.pkgversion(Metal))")
-    for name in [:GPUArrays, :GPUCompiler, :KernelAbstractions, :KernelInterface, :ObjectiveC,
-                 :LLVM, :LLVMDowngrader_jll]
-        mod = getfield(Metal, name)
-        println(io, "- $(name): $(Base.pkgversion(mod))")
+
+    get_module(name::Symbol) = (name, getfield(Metal, name))
+    function get_module(pkg::Tuple{String, String})
+        id = Base.PkgId(Base.UUID(pkg[1]), pkg[2])
+        (pkg[2], get(Base.loaded_modules, id, nothing))
+    end
+
+    for pkg in [:GPUArrays, :GPUCompiler, ("63c18a36-062a-441e-b654-da1e3ab1ce7c", "KernelAbstractions"),
+                 :KernelInterface, :ObjectiveC, :LLVM, :LLVMDowngrader_jll]
+        name, mod = get_module(pkg)
+        isnothing(mod) || println(io, "- $(name): $(Base.pkgversion(mod))")
     end
     println(io)
 
