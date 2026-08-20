@@ -519,11 +519,16 @@ if !MTL.is_virtual(dev)
         # function absent from it misses.
         reloaded = MTLBinaryArchive(dev, path)
 
-        hit_desc = MTLComputePipelineDescriptor()
-        hit_desc.computeFunction = fun
-        hit_desc.binaryArchives = NSArray([reloaded])
-        @test MTLComputePipelineState(dev, hit_desc;
-                  options=MTL.MTLPipelineOptionFailOnBinaryArchiveMiss) isa MTLComputePipelineState
+        # shader validation relies on live shader instrumentation, making it incompatible
+        # with binary archives: instrumented pipelines are keyed differently, so archived
+        # (uninstrumented) binaries never match and every lookup misses.
+        if !shader_validation
+            hit_desc = MTLComputePipelineDescriptor()
+            hit_desc.computeFunction = fun
+            hit_desc.binaryArchives = NSArray([reloaded])
+            @test MTLComputePipelineState(dev, hit_desc;
+                      options=MTL.MTLPipelineOptionFailOnBinaryArchiveMiss) isa MTLComputePipelineState
+        end
 
         fun2 = MTLFunction(lib, "kernel_2")
         miss_desc = MTLComputePipelineDescriptor()
