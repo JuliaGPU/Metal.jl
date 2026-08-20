@@ -62,8 +62,16 @@ else
             Metal.archive_misses[] = 0
             pso2 = Metal.link_pipeline(dev, air, metallib, entry)
             @test pso2 isa MTLComputePipelineState
-            @test Metal.archive_hits[] == 1
-            @test Metal.archive_misses[] == 0
+            if shader_validation
+                # shader validation relies on live shader instrumentation and is
+                # incompatible with binary archives: archived (uninstrumented) binaries
+                # never match, so every lookup gracefully degrades to a miss
+                @test Metal.archive_hits[] == 0
+                @test Metal.archive_misses[] == 1
+            else
+                @test Metal.archive_hits[] == 1
+                @test Metal.archive_misses[] == 0
+            end
 
             # a relocation-carrying kernel archives and hits the same way (its boxed-union
             # constant needs `demote_boxed_constants!`, LLVM 17+ / Julia 1.12+)
@@ -75,7 +83,12 @@ else
                 @test Metal.link_pipeline(dev, reloc_art...) isa MTLComputePipelineState
                 @test Metal.archive_misses[] == 1
                 @test Metal.link_pipeline(dev, reloc_art...) isa MTLComputePipelineState
-                @test Metal.archive_hits[] == 1
+                if shader_validation
+                    @test Metal.archive_hits[] == 0
+                    @test Metal.archive_misses[] == 2
+                else
+                    @test Metal.archive_hits[] == 1
+                end
             end
         end
     end
