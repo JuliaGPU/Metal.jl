@@ -10,7 +10,7 @@ end
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
 
 # parse command-line arguments (--all is Metal-specific)
-args = parse_args(ARGS; custom = ["all"])
+args = parse_args(ARGS; custom = ["all", "all-eltypes"])
 
 # register custom tests that do not correspond to files in the test directory
 testsuite = find_tests(@__DIR__)
@@ -20,8 +20,9 @@ gpuarrays = pathof(GPUArrays)
 gpuarrays_root = dirname(dirname(gpuarrays))
 gpuarrays_testsuite = joinpath(gpuarrays_root, "test", "testsuite.jl")
 include(gpuarrays_testsuite)
+testall = args.custom["all-eltypes"] !== nothing
 for name in keys(TestSuite.tests)
-    testsuite["gpuarrays/$name"] = :(TestSuite.tests[$name](MtlArray))
+    testsuite["gpuarrays/$name"] = :(TestSuite.tests[$name](MtlArray; testall=$testall))
 end
 ## examples
 function find_examples(dir, examples=String[])
