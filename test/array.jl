@@ -262,85 +262,89 @@ end
 
 end
 
-@testset "fill($T)" for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
-                              Float16, Float32]
-    b = rand(T)
+@testset "fill" begin
+    @testset "$T" for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
+                                Float16, Float32]
+        b = rand(T)
 
-    # Dims in tuple
-    let A = Metal.fill(b, (10, 10, 10, 1000))
-        B = fill(b, (10, 10, 10, 1000))
-        @test Array(A) == B
-    end
+        # Dims in tuple
+        let A = Metal.fill(b, (10, 10, 10, 1000))
+            B = fill(b, (10, 10, 10, 1000))
+            @test Array(A) == B
+        end
 
-    let M = Metal.fill(b, (10, 10))
-        B = fill(b, (10, 10))
-        @test Array(M) == B
-    end
+        let M = Metal.fill(b, (10, 10))
+            B = fill(b, (10, 10))
+            @test Array(M) == B
+        end
 
-    let V = Metal.fill(b, (10,))
-        B = fill(b, (10,))
-        @test Array(V) == B
-    end
+        let V = Metal.fill(b, (10,))
+            B = fill(b, (10,))
+            @test Array(V) == B
+        end
 
-    #Dims already unpacked
-    let A = Metal.fill(b, 10, 1000, 1000)
-        B = fill(b, 10, 1000, 1000)
-        @test Array(A) == B
-    end
+        #Dims already unpacked
+        let A = Metal.fill(b, 10, 1000, 1000)
+            B = fill(b, 10, 1000, 1000)
+            @test Array(A) == B
+        end
 
-    let M = Metal.fill(b, 10, 10)
-        B = fill(b, 10, 10)
-        @test Array(M) == B
-    end
+        let M = Metal.fill(b, 10, 10)
+            B = fill(b, 10, 10)
+            @test Array(M) == B
+        end
 
-    let V = Metal.fill(b, 10)
-        B = fill(b, 10)
-        @test Array(V) == B
+        let V = Metal.fill(b, 10)
+            B = fill(b, 10)
+            @test Array(V) == B
+        end
     end
 end
 
-@testset "fill!($T)" for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
-                               Float16, Float32]
-    b = rand(T)
-
-    # Dims in tuple
-    let A = MtlArray{T,3}(undef, (10, 1000, 1000))
-        fill!(A, b)
-        @test all(Array(A) .== b)
-    end
-
-    let M = MtlMatrix{T}(undef, (10, 10))
-        fill!(M, b)
-        @test all(Array(M) .== b)
-    end
-
-    let V = MtlVector{T}(undef, (10,))
-        fill!(V, b)
-        @test all(Array(V) .== b)
-    end
-
-    # Dims already unpacked
-    let A = MtlArray{T,4}(undef, 10, 10, 10, 1000)
-        fill!(A, b)
-        @test all(Array(A) .== b)
-    end
-
-    let M = MtlMatrix{T}(undef, 10, 10)
-        fill!(M, b)
-        @test all(Array(M) .== b)
-    end
-
-    let V = MtlVector{T}(undef, 10)
-        fill!(V, b)
-        @test all(Array(V) .== b)
-    end
-
-    # 0-length array
-    let A = MtlArray{T}(undef, 0)
+@testset "fill!" begin
+    @testset "$T" for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
+                                Float16, Float32]
         b = rand(T)
-        fill!(A, b)
-        @test A isa MtlArray{T,1}
-        @test Array(A) == fill(b, 0)
+
+        # Dims in tuple
+        let A = MtlArray{T,3}(undef, (10, 1000, 1000))
+            fill!(A, b)
+            @test all(Array(A) .== b)
+        end
+
+        let M = MtlMatrix{T}(undef, (10, 10))
+            fill!(M, b)
+            @test all(Array(M) .== b)
+        end
+
+        let V = MtlVector{T}(undef, (10,))
+            fill!(V, b)
+            @test all(Array(V) .== b)
+        end
+
+        # Dims already unpacked
+        let A = MtlArray{T,4}(undef, 10, 10, 10, 1000)
+            fill!(A, b)
+            @test all(Array(A) .== b)
+        end
+
+        let M = MtlMatrix{T}(undef, 10, 10)
+            fill!(M, b)
+            @test all(Array(M) .== b)
+        end
+
+        let V = MtlVector{T}(undef, 10)
+            fill!(V, b)
+            @test all(Array(V) .== b)
+        end
+
+        # 0-length array
+        let A = MtlArray{T}(undef, 0)
+            b = rand(T)
+            fill!(A, b)
+            @test A isa MtlArray{T,1}
+            @test Array(A) == fill(b, 0)
+        end
     end
 end
 
