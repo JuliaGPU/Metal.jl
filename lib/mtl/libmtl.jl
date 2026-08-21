@@ -555,6 +555,12 @@ end
     MTLTensorDataTypeUInt32 = 33
     MTLTensorDataTypeInt4 = 143
     MTLTensorDataTypeUInt4 = 144
+    MTLTensorDataTypeMetalFloat8UE8M0 = 145
+    MTLTensorDataTypeUInt2 = 149
+    MTLTensorDataTypeInt2 = 150
+    MTLTensorDataTypeMetalFloat8E5M2 = 141
+    MTLTensorDataTypeMetalFloat8E4M3 = 142
+    MTLTensorDataTypeMetalFloat4E2M1 = 148
 end
 
 @objcwrapper availability = macos(v"26.0.0") MTLTensorExtents <: NSObject
@@ -575,6 +581,20 @@ end
     MTLTensorUsageMachineLearning = 0x0000000000000004
 end
 
+@cenum MTLTensorPlaneType::Int64 begin
+    MTLTensorPlaneTypeData = 0
+    MTLTensorPlaneTypeScales = 1
+end
+
+@objcwrapper availability = macos(v"27.0.0") MTLTensorAuxiliaryPlaneDescriptor <: NSObject
+
+@objcproperties MTLTensorAuxiliaryPlaneDescriptor begin
+    @autoproperty dataType::MTLTensorDataType setter = setDataType
+    @autoproperty blockFactors::id{MTLTensorExtents} setter = setBlockFactors
+end
+
+@objcwrapper availability = macos(v"27.0.0") MTLTensorAuxiliaryPlaneDescriptorMap <: NSObject
+
 @objcwrapper availability = macos(v"26.0.0") MTLTensorDescriptor <: NSObject
 
 @objcproperties MTLTensorDescriptor begin
@@ -582,11 +602,14 @@ end
     @autoproperty strides::id{MTLTensorExtents} setter = setStrides
     @autoproperty dataType::MTLTensorDataType setter = setDataType
     @autoproperty usage::MTLTensorUsage setter = setUsage
+    @autoproperty auxiliaryPlanes::id{MTLTensorAuxiliaryPlaneDescriptorMap} setter = setAuxiliaryPlanes availability = macos(v"27.0.0")
     @autoproperty resourceOptions::MTLResourceOptions setter = setResourceOptions
     @autoproperty cpuCacheMode::MTLCPUCacheMode setter = setCpuCacheMode
     @autoproperty storageMode::MTLStorageMode setter = setStorageMode
     @autoproperty hazardTrackingMode::MTLHazardTrackingMode setter = setHazardTrackingMode
 end
+
+@objcwrapper availability = macos(v"27.0.0") MTLTensorBufferAttachments <: NSObject
 
 @objcwrapper managed = false MTLBuffer <: MTLResource
 
@@ -595,6 +618,16 @@ end
     @autoproperty remoteStorageBuffer::id{MTLBuffer}
     @autoproperty gpuAddress::UInt64 type = Ptr{Cvoid}
     @autoproperty sparseBufferTier::MTLBufferSparseTier availability = macos(v"26.0.0")
+end
+
+@objcwrapper availability = macos(v"27.0.0") MTLTensorAuxiliaryPlane <: NSObject
+
+@objcproperties MTLTensorAuxiliaryPlane begin
+    @autoproperty dataType::MTLTensorDataType
+    @autoproperty blockFactors::id{MTLTensorExtents}
+    @autoproperty buffer::id{MTLBuffer}
+    @autoproperty bufferOffset::UInt64
+    @autoproperty planeType::MTLTensorPlaneType
 end
 
 @objcwrapper availability = macos(v"26.0.0") MTLTensor <: MTLResource
@@ -607,6 +640,7 @@ end
     @autoproperty dimensions::id{MTLTensorExtents}
     @autoproperty dataType::MTLTensorDataType
     @autoproperty usage::MTLTensorUsage
+    @autoproperty auxiliaryPlanes::id{NSArray} type = Vector{MTLTensorAuxiliaryPlane} availability = macos(v"27.0.0")
 end
 
 const MTLGPUAddress = UInt64
@@ -804,12 +838,21 @@ end
     @autoproperty isDepthTexture::Bool
 end
 
+@objcwrapper availability = macos(v"27.0.0") MTLTensorAuxiliaryPlaneType <: NSObject
+
+@objcproperties MTLTensorAuxiliaryPlaneType begin
+    @autoproperty dataType::MTLTensorDataType
+    @autoproperty blockFactors::id{MTLTensorExtents}
+    @autoproperty planeType::MTLTensorPlaneType
+end
+
 @objcwrapper availability = macos(v"26.0.0") MTLTensorReferenceType <: MTLType
 
 @objcproperties MTLTensorReferenceType begin
     @autoproperty tensorDataType::MTLTensorDataType
     @autoproperty indexType::MTLDataType
     @autoproperty dimensions::id{MTLTensorExtents}
+    @autoproperty auxiliaryPlanes::id{NSArray} type = Vector{MTLTensorAuxiliaryPlaneType} availability = macos(v"27.0.0")
     @autoproperty access::MTLBindingAccess
 end
 
@@ -884,6 +927,7 @@ end
     @autoproperty tensorDataType::MTLTensorDataType
     @autoproperty indexType::MTLDataType
     @autoproperty dimensions::id{MTLTensorExtents}
+    @autoproperty auxiliaryPlanes::id{NSArray} type = Vector{MTLTensorAuxiliaryPlaneType} availability = macos(v"27.0.0")
 end
 
 @objcwrapper MTLFunctionConstantValues <: NSObject
@@ -991,6 +1035,7 @@ end
     MTLLanguageVersion3_1 = 0x0000000000030001
     MTLLanguageVersion3_2 = 0x0000000000030002
     MTLLanguageVersion4_0 = 0x0000000000040000
+    MTLLanguageVersion4_1 = 0x0000000000040001
 end
 
 @cenum MTLLibraryType::Int64 begin
@@ -1019,6 +1064,11 @@ end
     MTLMathFloatingPointFunctionsPrecise = 1
 end
 
+@cenum MTLFloatingPointConversionRoundingMode::Int64 begin
+    MTLFloatingPointConversionRoundingModeToNearestEven = 0
+    MTLFloatingPointConversionRoundingModeTowardZero = 1
+end
+
 @objcwrapper MTLDynamicLibrary <: NSObject
 
 @objcproperties MTLDynamicLibrary begin
@@ -1045,6 +1095,7 @@ end
     @autoproperty maxTotalThreadsPerThreadgroup::UInt64 setter = setMaxTotalThreadsPerThreadgroup
     @autoproperty requiredThreadsPerThreadgroup::MTLSize setter = setRequiredThreadsPerThreadgroup availability = macos(v"26.0.0")
     @autoproperty enableLogging::Bool setter = setEnableLogging availability = macos(v"15.0.0")
+    @autoproperty floatingPointConversionRoundingMode::MTLFloatingPointConversionRoundingMode setter = setFloatingPointConversionRoundingMode availability = macos(v"27.0.0")
 end
 
 @objcwrapper availability = macos(v"26.0.0") MTLFunctionReflection <: NSObject
