@@ -33,6 +33,19 @@ end
 @device_override @noinline Core.throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} =
     @gputhrow "InexactError" "Inexact conversion"
 
+# bool.jl / float.jl
+# `Bool(::Real)` and `Bool(::Float16)` don't go through `throw_inexacterror` but construct
+# the `InexactError` themselves, through its vararg `@nospecialize` constructor. On the
+# device that means boxing the arguments into a heap-allocated tuple on the throwing branch
+# (an allocation the optimizer can't remove), so route them through `@gputhrow` instead.
+for T in (Real, Float16)
+    @eval @device_override function Base.Bool(x::$T)
+        x == 0 && return false
+        x == 1 && return true
+        @gputhrow "InexactError" "Inexact conversion"
+    end
+end
+
 # abstractarray.jl
 @device_override @noinline Base.throw_boundserror(A, I) =
     @gputhrow "BoundsError" "Out-of-bounds array access"

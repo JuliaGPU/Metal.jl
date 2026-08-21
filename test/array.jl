@@ -755,6 +755,15 @@ end
         @test Array(x) == [false, false]
         x .= true
         @test Array(x) == [true, true]
+        x .= Float16(0)
+        @test Array(x) == [false, false]
+
+        # an inexact conversion throws on the device, through the `Bool(::Real)` quirk
+        # rather than by constructing an `InexactError` box
+        @test_throws Metal.KernelException begin
+            x .= 2
+            synchronize()
+        end
     end
 
     # preserving buffer types
