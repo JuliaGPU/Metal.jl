@@ -27,19 +27,37 @@ const TensorDescriptorStorage = Base.RefValue{TensorDescriptor}
     ccall("extern air.get_descriptor_size_tensor", llvmcall,
           Int16, (Int16, Int16), rank, index_size)
 
+# The element-type code stored in a tensor descriptor, as emitted by Apple's Metal frontend
+# for `air.init_strided_private_tensor` (an AIR-internal enum, distinct from both
+# `MTLTensorDataType` and `__tensor_ops_datatype`). The descriptor's own strides/extents are
+# in elements; this code is what address computations that only see the descriptor (notably
+# `air.slice_*` origin folding, as of macOS 27) use to scale to bytes, so passing the wrong
+# code misaddresses any non-4-byte element type.
+tensor_datatype(::Type{Float32})  = Int8(0)
+tensor_datatype(::Type{Float16})  = Int8(1)
+tensor_datatype(::Type{BFloat16}) = Int8(2)
+tensor_datatype(::Type{Int8})     = Int8(3)
+tensor_datatype(::Type{UInt8})    = Int8(4)
+tensor_datatype(::Type{Int16})    = Int8(5)
+tensor_datatype(::Type{UInt16})   = Int8(6)
+tensor_datatype(::Type{Int32})    = Int8(7)
+tensor_datatype(::Type{UInt32})   = Int8(8)
+
 # Build an `i32`-indexed strided tensor view over a device-memory buffer.
+# (macOS 27's frontend appends two more arguments — a null device pointer and an `i32 0`,
+# presumably blockwise-quantization scale data — which the back-end accepts omitted.)
 @device_function @inline init_strided_tensor_device!(
     handle::TensorDescriptorStorage,
     rank::Int16,
     data::LLVMPtr{UInt8, AS.Device},
     extents::NTuple{<:Any, Int32},
     strides::NTuple{<:Any, Int32},
-    contiguous::Int8,
+    datatype::Int8,
 ) = ccall("extern air.init_strided_private_tensor.i32.global", llvmcall,
           Cvoid,
           (Ref{TensorDescriptor}, Int16, LLVMPtr{UInt8, AS.Device},
            Ref{Int32}, Ref{Int32}, Int8),
-          handle, rank, data, extents, strides, contiguous)
+          handle, rank, data, extents, strides, datatype)
 
 @device_function @inline init_strided_tensor_threadgroup!(
     handle::TensorDescriptorStorage,
@@ -47,12 +65,12 @@ const TensorDescriptorStorage = Base.RefValue{TensorDescriptor}
     data::LLVMPtr{UInt8, AS.ThreadGroup},
     extents::NTuple{<:Any, Int32},
     strides::NTuple{<:Any, Int32},
-    contiguous::Int8,
+    datatype::Int8,
 ) = ccall("extern air.init_strided_private_tensor.i32.local", llvmcall,
           Cvoid,
           (Ref{TensorDescriptor}, Int16, LLVMPtr{UInt8, AS.ThreadGroup},
            Ref{Int32}, Ref{Int32}, Int8),
-          handle, rank, data, extents, strides, contiguous)
+          handle, rank, data, extents, strides, datatype)
 
 @device_function @inline get_extent_private_tensor(handle::TensorDescriptor,
                                                    rank::Int16, dim::Int16) =
@@ -110,7 +128,7 @@ end
     storage = Ref{TensorDescriptor}()
     init_strided_tensor_device!(storage, Int16(R),
                                 reinterpret(LLVMPtr{UInt8, AS.Device}, pointer(data)),
-                                e, packed_strides(e), Int8(0))
+                                e, packed_strides(e), tensor_datatype(T))
     return MtlInlineTensor{T, R, AS.Device}(storage[])
 end
 
@@ -121,7 +139,7 @@ end
     storage = Ref{TensorDescriptor}()
     init_strided_tensor_threadgroup!(storage, Int16(R),
                                      reinterpret(LLVMPtr{UInt8, AS.ThreadGroup}, pointer(data)),
-                                     e, packed_strides(e), Int8(0))
+                                     e, packed_strides(e), tensor_datatype(T))
     return MtlInlineTensor{T, R, AS.ThreadGroup}(storage[])
 end
 
@@ -134,7 +152,7 @@ end
     init_strided_tensor_device!(storage, Int16(R),
                                 reinterpret(LLVMPtr{UInt8, AS.Device}, pointer(data)),
                                 unsafe_trunc.(Int32, extents),
-                                unsafe_trunc.(Int32, strides), Int8(0))
+                                unsafe_trunc.(Int32, strides), tensor_datatype(T))
     return MtlInlineTensor{T, R, AS.Device}(storage[])
 end
 
@@ -146,7 +164,7 @@ end
     init_strided_tensor_threadgroup!(storage, Int16(R),
                                      reinterpret(LLVMPtr{UInt8, AS.ThreadGroup}, pointer(data)),
                                      unsafe_trunc.(Int32, extents),
-                                     unsafe_trunc.(Int32, strides), Int8(0))
+                                     unsafe_trunc.(Int32, strides), tensor_datatype(T))
     return MtlInlineTensor{T, R, AS.ThreadGroup}(storage[])
 end
 
