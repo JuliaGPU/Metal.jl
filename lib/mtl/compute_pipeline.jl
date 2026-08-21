@@ -27,4 +27,17 @@ function MTLComputePipelineState(dev::MTLDevice, fun::MTLFunction)
     return pipeline
 end
 
-# TODO: MTLComputePipelineState(d::MTLDevice, desc::MTLComputePipelineDescriptor, ...)
+# Descriptor-based creation. Needed to attach binary archives (`desc.binaryArchives`) and
+# to pass `MTLPipelineOption`s such as `MTLPipelineOptionFailOnBinaryArchiveMiss`. Reflection
+# is skipped (unreliable on archive hits); pass a null out-param.
+function MTLComputePipelineState(dev::MTLDevice, desc::MTLComputePipelineDescriptor;
+                                 options::MTLPipelineOption=MTLPipelineOptionNone)
+    err = Ref{id{NSError}}(nil)
+    pipeline = @objc [dev::id{MTLDevice} newComputePipelineStateWithDescriptor:desc::id{MTLComputePipelineDescriptor}
+                                          options:options::MTLPipelineOption
+                                          reflection:C_NULL::Ptr{Cvoid}
+                                          error:err::Ptr{id{NSError}}]::Union{Nothing,MTLComputePipelineState}
+    pipeline === nothing && throw_error(err[])
+
+    return pipeline
+end

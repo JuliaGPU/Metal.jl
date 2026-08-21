@@ -8,6 +8,7 @@ using LLVM
 using LLVM.Interop
 import LLVMDowngrader_jll
 using Preferences: @load_preference, load_preference
+using Scratch: @get_scratch!
 using ExprTools: splitdef, combinedef
 using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
 import ObjectiveC: is_macos
@@ -73,6 +74,7 @@ include("array.jl")
 
 # compiler implementation
 include("compiler/library.jl")
+include("compiler/archive.jl")
 include("compiler/compilation.jl")
 include("compiler/exceptions.jl")
 include("compiler/execution.jl")

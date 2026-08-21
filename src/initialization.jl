@@ -101,6 +101,9 @@ function __init__()
         end
     end
 
+    # persist any kernels harvested into the per-device binary archives this session.
+    atexit(serialize_binary_archives)
+
     initialization_world[] = Base.get_world_counter()
 end
 

@@ -418,6 +418,71 @@ desc.maxTotalThreadsPerThreadgroup = pipeline.maxTotalThreadsPerThreadgroup
 desc.maxCallStackDepth = 2
 @test desc.maxCallStackDepth == 2
 
+# create a pipeline via the descriptor path; it must match the function path
+desc2 = MTLComputePipelineDescriptor()
+desc2.computeFunction = fun
+pipeline_desc = MTLComputePipelineState(dev, desc2)
+@test pipeline_desc isa MTLComputePipelineState
+@test pipeline_desc.maxTotalThreadsPerThreadgroup == pipeline.maxTotalThreadsPerThreadgroup
+@test pipeline_desc.threadExecutionWidth == pipeline.threadExecutionWidth
+
+end
+
+@testset "function constants" begin
+
+# Function constants are general Metal API surface: values supplied at `MTLFunction`
+# specialization that the kernel reads directly. Exercise the wrappers (by name and by index,
+# plain and through a pipeline descriptor) on MSL source with a `[[function_constant(0)]]`
+# ulong.
+dev = first(devices())
+src = """
+#include <metal_stdlib>
+using namespace metal;
+constant ulong reloc_word [[function_constant(0)]];
+kernel void fc_test(device ulong* out [[buffer(0)]]) {
+    out[0] = reloc_word;
+}
+"""
+lib = MTLLibrary(dev, src)
+
+# the constant the kernel declares
+@test length(MTLFunction(lib, "fc_test").functionConstantsDictionary) == 1
+
+word = 0x1122_3344_5566_7788
+
+function run_fc(fun)
+    pso = MTLComputePipelineState(dev, fun)
+    buf = MTLBuffer(dev, sizeof(UInt64); storage=MTL.SharedStorage)
+    cmdbuf = MTLCommandBuffer(MTLCommandQueue(dev))
+    MTLComputeCommandEncoder(cmdbuf) do cce
+        set_function!(cce, pso)
+        set_buffer!(cce, buf, 0, 1)
+        MTL.dispatchThreadgroups!(cce, MTL.MTLSize(1, 1, 1), MTL.MTLSize(1, 1, 1))
+    end
+    MTL.commit!(cmdbuf)
+    MTL.wait_completed(cmdbuf)
+    return unsafe_load(convert(Ptr{UInt64}, buf))
+end
+
+# by name (`setConstantValue:type:withName:`, the path the loader uses)
+let fcv = MTLFunctionConstantValues()
+    MTL.setConstantValue!(fcv, Ref(word), MTL.MTLDataTypeULong, "reloc_word")
+    fun = MTLFunction(lib, "fc_test", fcv)
+    @test run_fc(fun) == word
+end
+
+# by index (`setConstantValue:type:atIndex:`)
+let fcv = MTLFunctionConstantValues()
+    MTL.setConstantValue!(fcv, Ref(word), MTL.MTLDataTypeULong, 0)
+    fun = MTLFunction(lib, "fc_test", fcv)
+    @test run_fc(fun) == word
+
+    # a specialized function still works through the descriptor path (binary-archive interop)
+    desc = MTLComputePipelineDescriptor()
+    desc.computeFunction = fun
+    @test MTLComputePipelineState(dev, desc) isa MTLComputePipelineState
+end
+
 end
 
 @testset "binary archive" begin
@@ -448,6 +513,37 @@ if !MTL.is_virtual(dev)
         write(path, bin)
         @test isfile(path)
         @test filesize(path) > 0
+
+        # reload the serialized archive and confirm content-keyed matching: the archived
+        # function is served from it (a hit under FailOnBinaryArchiveMiss), while a
+        # function absent from it misses.
+        reloaded = MTLBinaryArchive(dev, path)
+
+        # shader validation relies on live shader instrumentation, making it incompatible
+        # with binary archives: instrumented pipelines are keyed differently, so archived
+        # (uninstrumented) binaries never match and every lookup misses.
+        if !shader_validation
+            hit_desc = MTLComputePipelineDescriptor()
+            hit_desc.computeFunction = fun
+            hit_desc.binaryArchives = NSArray([reloaded])
+            @test MTLComputePipelineState(dev, hit_desc;
+                      options=MTL.MTLPipelineOptionFailOnBinaryArchiveMiss) isa MTLComputePipelineState
+        end
+
+        fun2 = MTLFunction(lib, "kernel_2")
+        miss_desc = MTLComputePipelineDescriptor()
+        miss_desc.computeFunction = fun2
+        miss_desc.binaryArchives = NSArray([reloaded])
+        # a function absent from the archive misses; creation throws (an NSError, which
+        # is not `<: Exception`, so catch broadly)
+        missed = try
+            MTLComputePipelineState(dev, miss_desc;
+                                    options=MTL.MTLPipelineOptionFailOnBinaryArchiveMiss)
+            false
+        catch
+            true
+        end
+        @test missed
     end
 end
 

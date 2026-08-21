@@ -38,7 +38,16 @@ const MPS_VALID_MATVECMUL_TYPES =
      (Float16, Float32),
      (Float32, Float32)]
 
-is_supported(dev::MTLDevice) = ccall(:MPSSupportsMTLDevice, Bool, (id{MTLDevice},), dev)
+# The MPS framework is not guaranteed to be resident: `__init__` (which loads frameworks)
+# is skipped during precompilation, and some environments (e.g. virtualized CI runners)
+# never provide the symbol at all. Treat a missing symbol as "not supported".
+function is_supported(dev::MTLDevice)
+    try
+        ccall(:MPSSupportsMTLDevice, Bool, (id{MTLDevice},), dev)
+    catch
+        false
+    end
+end
 
 # Load in generated enums and structs
 include("libmps.jl")

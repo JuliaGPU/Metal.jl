@@ -43,6 +43,14 @@ Sys.isapple() && Sys.ARCH === :aarch64 && @setup_workload begin
             let a = MtlArray(Float32[1, 2, 3])
                 a .+ 1f0
                 sum(a)
+                sum(reshape(a, 3, 1); dims=1)   # a dimensioned reduction kernel
+                synchronize()
+            end
+            # a native matrix multiply. use an integer eltype so it routes through the
+            # GPUArrays generic-matmul kernels rather than MPSGraph, which can't be
+            # instantiated during precompilation.
+            let a = MtlArray(Int32[1 2; 3 4])
+                LinearAlgebra.mul!(similar(a), a, a)
                 synchronize()
             end
         end
@@ -62,4 +70,5 @@ Sys.isapple() && Sys.ARCH === :aarch64 && @setup_workload begin
     empty!(MTL.last_committed_per_queue)
     empty!(MTL.submission_state_per_queue)
     empty!(device_exception_info)
+    empty!(device_archives)
 end

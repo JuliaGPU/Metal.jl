@@ -28,6 +28,15 @@ function MTLBinaryArchive(dev::MTLDevice, desc::MTLBinaryArchiveDescriptor)
     return archive
 end
 
+# Load an existing archive from a file. A corrupt or incompatible file raises an
+# `MTLBinaryArchiveError` (surfaced as an `NSError`), which callers can catch to fall back
+# to an empty archive.
+function MTLBinaryArchive(dev::MTLDevice, path::String)
+    desc = MTLBinaryArchiveDescriptor()
+    desc.url = NSFileURL(path)
+    return MTLBinaryArchive(dev, desc)
+end
+
 function add_functions!(bin::MTLBinaryArchive, desc::MTLComputePipelineDescriptor)
     err = Ref{id{NSError}}(nil)
     @objc [bin::id{MTLBinaryArchive} addComputePipelineFunctionsWithDescriptor:desc::id{MTLComputePipelineDescriptor}
