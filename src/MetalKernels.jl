@@ -1,48 +1,49 @@
-module MetalKernels
+module MetalInterface
 
 using ..Metal
-using ..Metal: @device_override, DefaultStorageMode, SharedStorage, metal_support
+using ..Metal: @device_override, DefaultStorageMode, SharedStorage, mtlfunction, mtlconvert, metal_support
 using GPUCompiler
 
-import KernelAbstractions as KA
+import KernelInterface as KI
 
 import Adapt
 
 
 ## back-end
 
-export MetalBackend
+# export MetalBackend
 
 """
     struct MetalBackend <: KernelAbstractions.GPU
 
 The `KernelAbstractions` backend for running on Metal GPUs.
 """
-struct MetalBackend <: KA.GPU
+struct MetalBackend <: KI.GPU
 end
 
+KI.versioninfo(io::IO, ::MetalBackend) = Metal.versioninfo(io)
+
 # Ensure type stability. See JuliaGPU/KernelAbstractions#634
-@inline KA.allocate(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = MtlArray{T, length(dims), unified ? SharedStorage : DefaultStorageMode}(undef, dims)
-KA.zeros(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.zeros(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
-KA.ones(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.ones(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
+@inline KI.allocate(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = MtlArray{T, length(dims), unified ? SharedStorage : DefaultStorageMode}(undef, dims)
+KI.zeros(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.zeros(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
+KI.ones(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.ones(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
 
-KA.get_backend(::MtlArray) = MetalBackend()
-KA.synchronize(::MetalBackend) = synchronize()
+KI.get_backend(::MtlArray) = MetalBackend()
+KI.synchronize(::MetalBackend) = synchronize()
 
-KA.functional(::MetalBackend) = Metal.functional()
+KI.functional(::MetalBackend) = Metal.functional()
 
-KA.supports_float64(::MetalBackend) = false
-KA.supports_atomics(::MetalBackend) = metal_support() >= v"4.1"
-KA.supports_unified(::MetalBackend) = true
+KI.supports_float64(::MetalBackend) = false
+KI.supports_atomics(::MetalBackend) = metal_support() >= v"4.1"
+KI.supports_unified(::MetalBackend) = true
 
 Adapt.adapt_storage(::MetalBackend, a::Array) = Adapt.adapt(MtlArray, a)
 Adapt.adapt_storage(::MetalBackend, a::MtlArray) = a
-Adapt.adapt_storage(::KA.CPU, a::MtlArray) = convert(Array, a)
 
 
 ## memory operations
 
-function KA.copyto!(::MetalBackend, dest::MtlArray{T}, src::MtlArray{T}) where T
+function KI.copyto!(::MetalBackend, dest::MtlArray{T}, src::MtlArray{T}) where T
     if device(dest) == device(src)
         GC.@preserve dest src copyto!(dest, src)
         return dest
@@ -51,12 +52,12 @@ function KA.copyto!(::MetalBackend, dest::MtlArray{T}, src::MtlArray{T}) where T
     end
 end
 
-function KA.copyto!(::MetalBackend, dest::Array{T}, src::MtlArray{T}) where T
+function KI.copyto!(::MetalBackend, dest::Array{T}, src::MtlArray{T}) where T
     GC.@preserve dest src copyto!(dest, src)
     return dest
 end
 
-function KA.copyto!(::MetalBackend, dest::MtlArray{T}, src::Array{T}) where T
+function KI.copyto!(::MetalBackend, dest::MtlArray{T}, src::Array{T}) where T
     GC.@preserve dest src copyto!(dest, src)
     return dest
 end
@@ -64,140 +65,99 @@ end
 
 ## kernel launch
 
-function KA.mkcontext(kernel::KA.Kernel{MetalBackend}, _ndrange, iterspace)
-    KA.CompilerMetadata{KA.ndrange(kernel), KA.DynamicCheck}(_ndrange, iterspace)
-end
-function KA.mkcontext(kernel::KA.Kernel{MetalBackend}, I, _ndrange, iterspace,
-                      ::Dynamic) where Dynamic
-    KA.CompilerMetadata{KA.ndrange(kernel), Dynamic}(I, _ndrange, iterspace)
-end
+KI.argconvert(::MetalBackend, arg) = mtlconvert(arg)
 
-function KA.launch_config(kernel::KA.Kernel{MetalBackend}, ndrange, workgroupsize)
-    if ndrange isa Integer
-        ndrange = (ndrange,)
-    end
-    if workgroupsize isa Integer
-        workgroupsize = (workgroupsize, )
-    end
-
-    # partition checked that the ndrange's agreed
-    if KA.ndrange(kernel) <: KA.StaticSize
-        ndrange = nothing
-    end
-
-    iterspace, dynamic = if KA.workgroupsize(kernel) <: KA.DynamicSize &&
-                            workgroupsize === nothing
-        # use ndrange as preliminary workgroupsize for autotuning
-        KA.partition(kernel, ndrange, ndrange)
-    else
-        KA.partition(kernel, ndrange, workgroupsize)
-    end
-
-    return ndrange, workgroupsize, iterspace, dynamic
+function KI.kernel_function(::MetalBackend, f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
+    kern = mtlfunction(f, tt; name, kwargs...)
+    KI.Kernel{MetalBackend, typeof(kern)}(MetalBackend(), kern)
 end
 
-function threads_to_workgroupsize(threads, ndrange)
-    total = Ref(1)
-    return map(ndrange) do n
-        x = min(div(threads, total[]), n)
-        total[] *= x
-        return x
-    end
+function (obj::KI.Kernel{MetalBackend})(args...; numworkgroups=(), workgroupsize=(), ndrange=(), max_work_group_size=typemax(Int))
+    KI.check_launch_args(numworkgroups, workgroupsize, ndrange)
+    prod(ndrange) == 0 && return nothing
+
+    numworkgroups, workgroupsize = KI.auto_launch_sizes(obj, numworkgroups, workgroupsize, ndrange, max_work_group_size)
+
+    obj.kern(args...; threads=workgroupsize, groups=numworkgroups)
 end
 
-KA.argconvert(::KA.Kernel{MetalBackend}, arg) = Metal.mtlconvert(arg)
-
-function (obj::KA.Kernel{MetalBackend})(args...; ndrange=nothing, workgroupsize=nothing)
-    ndrange, workgroupsize, iterspace, _dynamic = KA.launch_config(obj, ndrange, workgroupsize)
-    # this might not be the final context, since we may tune the workgroupsize
-    ctx = KA.mkcontext(obj, ndrange, iterspace)
-    kernel = @metal launch=false obj.f(ctx, args...)
-
-    if KA.workgroupsize(obj) <: KA.DynamicSize && workgroupsize === nothing
-        groupsize = kernel.maxthreads
-        new_workgroupsize = threads_to_workgroupsize(groupsize, ndrange)
-        iterspace, _dynamic = KA.partition(obj, ndrange, new_workgroupsize)
-        ctx = KA.mkcontext(obj, ndrange, iterspace)
-    end
-
-    groups = length(KA.blocks(iterspace))
-    threads = length(KA.workitems(iterspace))
-
-    if groups == 0
-        return nothing
-    end
-
-    # Launch kernel
-    kernel(ctx, args...; threads, groups)
-    return nothing
+function KI.kernel_max_work_group_size(kikern::KI.Kernel{<:MetalBackend}; max_work_items::Int=typemax(Int))::Int
+    Int(min(kikern.kern.maxthreads, max_work_items))
 end
+function KI.max_work_group_size(::MetalBackend)::Int
+    Int(device().maxThreadsPerThreadgroup.width)
+end
+function KI.sub_group_size(::MetalBackend)::Int
+    32
+end
+function KI.multiprocessor_count(::MetalBackend)::Int
+    Metal.num_gpu_cores()
+end
+
+KI.shfl_down_types(::MetalBackend) = DataType[Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8]
+
 
 
 ## indexing
 
 ## COV_EXCL_START
-@device_override @inline function KA.__index_Local_Linear(ctx)
-    return thread_position_in_threadgroup().x
+@device_override @inline function KI.get_local_id()
+    return (; x = Int(thread_position_in_threadgroup().x), y = Int(thread_position_in_threadgroup().y), z = Int(thread_position_in_threadgroup().z))
 end
 
-@device_override @inline function KA.__index_Group_Linear(ctx)
-    return threadgroup_position_in_grid().x
+@device_override @inline function KI.get_group_id()
+    return (; x = Int(threadgroup_position_in_grid().x), y = Int(threadgroup_position_in_grid().y), z = Int(threadgroup_position_in_grid().z))
 end
 
-@device_override @inline function KA.__index_Global_Linear(ctx)
-    I =  @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid().x, thread_position_in_threadgroup().x)
-    # TODO: This is unfortunate, can we get the linear index cheaper
-    @inbounds LinearIndices(KA.__ndrange(ctx))[I]
+@device_override @inline function KI.get_global_id()
+    return (; x = Int(thread_position_in_grid().x), y = Int(thread_position_in_grid().y), z = Int(thread_position_in_grid().z))
 end
 
-@device_override @inline function KA.__index_Local_Cartesian(ctx)
-    @inbounds KA.workitems(KA.__iterspace(ctx))[thread_position_in_threadgroup().x]
+@device_override @inline function KI.get_local_size()
+    return (; x = Int(threads_per_threadgroup().x), y = Int(threads_per_threadgroup().y), z = Int(threads_per_threadgroup().z))
 end
 
-@device_override @inline function KA.__index_Group_Cartesian(ctx)
-    @inbounds KA.blocks(KA.__iterspace(ctx))[threadgroup_position_in_grid().x]
+@device_override @inline function KI.get_num_groups()
+    return (; x = Int(threadgroups_per_grid().x), y = Int(threadgroups_per_grid().y), z = Int(threadgroups_per_grid().z))
 end
 
-@device_override @inline function KA.__index_Global_Cartesian(ctx)
-    return @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid().x,
-                               thread_position_in_threadgroup().x)
+@device_override @inline function KI.get_global_size()
+    return (; x = Int(threads_per_grid().x), y = Int(threads_per_grid().y), z = Int(threads_per_grid().z))
 end
 
-@device_override @inline function KA.__validindex(ctx)
-    if KA.__dynamic_checkbounds(ctx)
-        I = @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid().x,
-                                thread_position_in_threadgroup().x)
-        return I in KA.__ndrange(ctx)
-    else
-        return true
-    end
-end
+@device_override KI.get_sub_group_size() = threads_per_simdgroup()
+
+@device_override KI.get_max_sub_group_size() = threads_per_simdgroup()
+
+@device_override KI.get_num_sub_groups() = simdgroups_per_threadgroup()
+
+@device_override KI.get_sub_group_id() = simdgroup_index_in_threadgroup()
+
+@device_override KI.get_sub_group_local_id() = thread_index_in_simdgroup()
 
 
 ## shared memory
 
-@device_override @inline function KA.SharedMemory(::Type{T}, ::Val{Dims},
-                                                  ::Val{Id}) where {T, Dims, Id}
+@device_override @inline function KI.localmemory(::Type{T}, ::Val{Dims}) where {T, Dims}
     ptr = Metal.emit_threadgroup_memory(T, Val(prod(Dims)))
-    MtlDeviceArray(Dims, ptr)
-end
-
-@device_override @inline function KA.Scratchpad(ctx, ::Type{T}, ::Val{Dims}) where {T, Dims}
-    # private per-workitem scratch: a stack `alloca` (lowered by GPUCompiler) wrapped in a
-    # device array. the slot lives in OpenCL "Function" storage (LLVM addrspace 0), which is
-    # where the SPIR-V target places allocas.
-    ptr = GPUCompiler.alloca(T, Val(prod(Dims)), Val(Metal.AS.Generic))
     MtlDeviceArray(Dims, ptr)
 end
 
 
 ## other
 
-@device_override @inline function KA.__synchronize()
+@device_override @inline function KI.barrier()
     threadgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
 end
+@device_override @inline function KI.sub_group_barrier()
+    simdgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
+end
 
-@device_override @inline function KA.__print(args...)
+@device_override function KI.shfl_down(val::T, offset::Integer) where T
+    simd_shuffle_down(val, offset)
+end
+
+@device_override @inline function KI._print(args...)
     Metal._mtlprint(args...)
 end
 ## COV_EXCL_STOP
