@@ -324,7 +324,7 @@ end
 #
 # taken from Cosmopolitan Libc
 # Copyright 2021 Justine Alexandra Roberts Tunney
-@inline function _hypot(a::T, b::T) where T <: AbstractFloat
+@inline function _hypot(a::T, b::T) where T <: Union{AbstractFloat, Complex{<:AbstractFloat}}
     if isinf(a) || isinf(b)
         return T(Inf)
     end
@@ -341,7 +341,10 @@ end
 end
 @device_override Base.hypot(x::Float32, y::Float32) = _hypot(x, y)
 @device_override Base.hypot(x::Float16, y::Float16) = _hypot(x, y)
-
+@device_override Base.hypot(x::BFloat16, y::BFloat16) = BFloat16(_hypot(Float32(x), Float32(y)))
+@device_override Base.hypot(x::ComplexF32, y::Complex32) = _hypot(x, y)
+@device_override Base.hypot(x::ComplexF16, y::ComplexF16) = _hypot(x, y)
+@device_override Base.hypot(x::Complex{BFloat16}, y::Complex{BFloat16}) = Complex{BFloat16}(_hypot(ComplexF32(x), ComplexF32(y)))
 
 ### Integer Intrinsics
 
