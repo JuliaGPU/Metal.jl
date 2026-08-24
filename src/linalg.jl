@@ -214,7 +214,7 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
     elseif alg === :GPUArrays
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)
     else
-        error(":$alg is not a valid matmul algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`, `:native`, `:simd`, `:scalar`")
+        error(":$alg is not a valid matvecmul algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`, `:native`, `:simd`, `:scalar`")
     end
 end
 
