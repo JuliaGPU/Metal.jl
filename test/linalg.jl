@@ -36,8 +36,8 @@ using LinearAlgebra, ScopedValues
         @test_throws "Matrix-$(vec_b ? "Vector" : "Matrix") multiplication algorithm `:MPSGraph`" test_matmul(Int8, Int16; vec_b, alg=:MPSGraph)
 
         # Invalid algorithm Symbol
-        @test_throws ":bad is not a valid matvecmul algorithm." test_matmul(Int8, Int16; vec_b, alg=:bad)
-        @test_throws ":bad is not a valid matvecmul algorithm." test_matmul(Float16, Float16; vec_b, alg=:bad)
+        @test_throws ":bad is not a valid $(vec_b ? "matvecmul" : "matmul") algorithm." test_matmul(Int8, Int16; vec_b, alg=:bad)
+        @test_throws ":bad is not a valid $(vec_b ? "matvecmul" : "matmul") algorithm." test_matmul(Float16, Float16; vec_b, alg=:bad)
 
         # :auto
         @test test_matmul(Int32, Int32; vec_b)     # fallback to GPUArrays
