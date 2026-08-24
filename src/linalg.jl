@@ -34,12 +34,11 @@ end
 const matmul_alg = ScopedValue(:auto)
 matmul_alg_error(alg, inT, outT, vec) = error("Matrix-$(vec ? "Vector" : "Matrix") multiplication algorithm `:$alg` is not supported for input eltype $inT and output eltype $outT.")
 
-# the native GEMM kernels handle 'N'/'T'/'C' as well as the Symmetric/Hermitian wrapper
-# chars 'S'/'s'/'H'/'h' (the MPS paths only the former); gemm_char normalizes an
-# AbstractChar (e.g. a LinearAlgebra.WrapperChar) to the plain Char the kernels
-# specialize on.
+# LinearAlgebra's wrapper_char only ever produces 'N'/'T'/'C' or the Symmetric/Hermitian
+# wrapper chars 'S'/'s'/'H'/'h', all of which the native GEMM kernels handle (the MPS
+# paths only the former); gemm_char normalizes an AbstractChar (e.g. a
+# LinearAlgebra.WrapperChar) to the plain Char the kernels specialize on.
 @inline is_ntc(t) = (t == 'N') || (t == 'T') || (t == 'C')
-@inline is_gemm_char(t) = is_ntc(t) || (t == 'S') || (t == 's') || (t == 'H') || (t == 'h')
 @inline gemm_char(t) = t == 'N' ? 'N' : t == 'T' ? 'T' : t == 'C' ? 'C' :
                        t == 'S' ? 'S' : t == 's' ? 's' : t == 'H' ? 'H' : 'h'
 
@@ -76,7 +75,6 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     elseif alg === :simd || alg === :scalar || alg === :tensor
         # explicit native kernel: check it supports these operands, then force it. The scalar
         # kernel handles any eltype, so only :simd and :tensor have an extra constraint.
-        is_gemm_char(tA) && is_gemm_char(tB) || matmul_alg_error(alg, eltype(A), eltype(C), false)
         cA = gemm_char(tA); cB = gemm_char(tB)
         if alg === :simd
             supports_simd_matmul(C, A, B, cA, cB, alpha, beta) ||
@@ -87,12 +85,7 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
         end
         gemm!(C, cA, cB, A, B, alpha, beta; kernel=alg)
     elseif alg === :native || alg === :auto
-        if is_gemm_char(tA) && is_gemm_char(tB)
-            gemm!(C, gemm_char(tA), gemm_char(tB), A, B, alpha, beta)
-        else
-            # operand chars we don't know: expand through the generic GPUArrays path
-            GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
-        end
+        gemm!(C, gemm_char(tA), gemm_char(tB), A, B, alpha, beta)
     elseif alg === :MPS
         (ntc && supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), false)
         transA = tA == 'T' || tA == 'C'
@@ -132,7 +125,6 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB,
 
     alg = matmul_alg[]
     if alg === :native || alg === :auto || alg === :simd || alg === :scalar || alg === :tensor
-        is_gemm_char(tA) && is_gemm_char(tB) || matmul_alg_error(alg, eltype(A), eltype(C), false)
         cA = gemm_char(tA); cB = gemm_char(tB)
         if alg === :simd
             supports_simd_matmul(C, A, B, cA, cB, alpha, beta) ||
@@ -198,15 +190,10 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
         # matrix-vector products go through the native gemv; `:simd`/`:scalar` force the
         # kernel. The tensor kernel is matrix-only, so `:tensor` isn't handled here and
         # falls through to the unsupported-algorithm error below.
-        if is_gemm_char(tA)
-            kernel = (alg === :simd || alg === :scalar) ? alg : :auto
-            alg === :simd && !supports_simd_matmul(C, A, B, gemm_char(tA), 'N', alpha, beta) &&
-                matmul_alg_error(alg, eltype(A), eltype(C), true)
-            gemv!(C, gemm_char(tA), A, B, alpha, beta; kernel)
-        else
-            # operand chars we don't know: expand through the generic GPUArrays path
-            GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)
-        end
+        kernel = (alg === :simd || alg === :scalar) ? alg : :auto
+        alg === :simd && !supports_simd_matmul(C, A, B, gemm_char(tA), 'N', alpha, beta) &&
+            matmul_alg_error(alg, eltype(A), eltype(C), true)
+        gemv!(C, gemm_char(tA), A, B, alpha, beta; kernel)
     elseif alg === :MPS
         (ntc && supports_mps_matmul(A, B, C, MPS_VALID_MATVECMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), true)
         transA = tA == 'T' || tA == 'C'
