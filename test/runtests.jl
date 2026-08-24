@@ -176,7 +176,7 @@ end
 
 # 8GB mac minis can struggle in some julia versions
 max_worker_rss = 2^20 * if Sys.total_memory() <= 8*2^30
-    2200
+    2000
 elseif Sys.total_memory() <= 16*2^30
     2500
 else
