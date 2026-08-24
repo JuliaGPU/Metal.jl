@@ -1,4 +1,5 @@
 using Metal
+# ENV["JULIA_DEBUG"] = Metal
 using ParallelTestRunner
 
 if !Metal.functional()
@@ -174,6 +175,12 @@ init_code = quote
 end
 
 # 8GB mac minis can struggle in some julia versions
-max_worker_rss = 2^20 * (Sys.total_memory() > 8*2^30 ? 3800 : 2200)
+max_worker_rss = 2^20 * if Sys.total_memory() <= 8*2^30
+    2200
+elseif Sys.total_memory() <= 16*2^30
+    2500
+else
+    3800
+end
 
 runtests(Metal, args; testsuite, init_code, init_worker_code, test_worker, max_worker_rss, serial=["largecopy", "largebroadcast"])
