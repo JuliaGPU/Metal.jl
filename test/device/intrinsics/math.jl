@@ -642,6 +642,30 @@ end
         end
     end
 
+    let # hypot/abs of complex values, which lower to scalar hypot (JuliaGPU/Metal.jl#932)
+        N = 4
+        z1 = randn(Complex{T}, N)
+        z2 = randn(Complex{T}, N)
+        d1 = MtlArray(z1)
+        d2 = MtlArray(z2)
+
+        # like on the host, hypot of complex values returns a real
+        mtlout = MtlArray(zeros(T, N))
+        mtlflags = MtlArray(zeros(Bool, N))
+        function kernel(res, flags, x, y)
+            idx = thread_position_in_grid().x
+            h = hypot(x[idx], y[idx])
+            res[idx] = h
+            flags[idx] = h isa Real
+            return nothing
+        end
+        Metal.@sync @metal threads = N kernel(mtlout, mtlflags, d1, d2)
+        @test Array(mtlout) ≈ hypot.(z1, z2)
+        @test all(Array(mtlflags))
+
+        @test Array(abs.(d1)) ≈ abs.(z1)
+    end
+
     # Borrowed from the Julia "Irrationals compared with Rationals and Floats" testset
     @testset "Comparisons with $irr" for irr in (π, ℯ)
         @eval function convert_test(res)
