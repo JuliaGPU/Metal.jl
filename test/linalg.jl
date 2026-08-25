@@ -102,79 +102,81 @@ end
 end
 
 @testset "matrix multiplication of range views" begin
-    x = ones(Float32, 2, 2)
-    y = ones(Float32, 4, 2)
-    dx = MtlArray(x)
-    dy = MtlArray(y)
-    @test Array(dx * view(dy, 1:2, :)) ≈ x * view(y, 1:2, :)
+    @testset "$T" for T in [Float32, Float16, BFloat16]
+        x = ones(T, 2, 2)
+        y = ones(T, 4, 2)
+        dx = MtlArray(x)
+        dy = MtlArray(y)
+        @test Array(dx * view(dy, 1:2, :)) ≈ x * view(y, 1:2, :)
 
-    a = rand(Float32, 4, 3)
-    b = rand(Float32, 3, 5)
-    da = MtlArray(a)
-    db = MtlArray(b)
-    av = view(da, 2:3, :)
-    bv = view(db, :, 2:4)
+        a = rand(T, 4, 3)
+        b = rand(T, 3, 5)
+        da = MtlArray(a)
+        db = MtlArray(b)
+        av = view(da, 2:3, :)
+        bv = view(db, :, 2:4)
 
-    # Call `generic_matmatmul!` directly so these exercise the native kernels and honor `matmul_alg`
-    for alg in (:auto, :simd, :scalar)
-        C = MtlArray(zeros(Float32, 2, 5))
-        @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'N', 'N', av, db, true, false)
-        @test Array(C) ≈ view(a, 2:3, :) * b
+        # Call `generic_matmatmul!` directly so these exercise the native kernels and honor `matmul_alg`
+        for alg in (:auto, :simd, :scalar)
+            C = MtlArray(zeros(T, 2, 5))
+            @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'N', 'N', av, db, true, false)
+            @test Array(C) ≈ view(a, 2:3, :) * b
 
-        C = MtlArray(zeros(Float32, 4, 3))
-        @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'N', 'N', da, bv, true, false)
-        @test Array(C) ≈ a * view(b, :, 2:4)
+            C = MtlArray(zeros(T, 4, 3))
+            @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'N', 'N', da, bv, true, false)
+            @test Array(C) ≈ a * view(b, :, 2:4)
 
-        C = MtlArray(zeros(Float32, 2, 3))
-        @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'N', 'N', av, bv, true, false)
-        @test Array(C) ≈ view(a, 2:3, :) * view(b, :, 2:4)
-    end
+            C = MtlArray(zeros(T, 2, 3))
+            @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'N', 'N', av, bv, true, false)
+            @test Array(C) ≈ view(a, 2:3, :) * view(b, :, 2:4)
+        end
 
-    # non-unit strides (step-range views)
-    as = rand(Float32, 8, 6)
-    bs = rand(Float32, 6, 10)
-    xs = rand(Float32, 6)
-    das = MtlArray(as)
-    dbs = MtlArray(bs)
-    dxs = MtlArray(xs)
-    asv = view(das, 1:2:8, :)
-    bsv = view(dbs, :, 1:2:10)
+        # non-unit strides (step-range views)
+        as = rand(T, 8, 6)
+        bs = rand(T, 6, 10)
+        xs = rand(T, 6)
+        das = MtlArray(as)
+        dbs = MtlArray(bs)
+        dxs = MtlArray(xs)
+        asv = view(das, 1:2:8, :)
+        bsv = view(dbs, :, 1:2:10)
 
-    @test Array(asv * bsv) ≈ view(as, 1:2:8, :) * view(bs, :, 1:2:10)
-    @test Array(asv' * asv) ≈ view(as, 1:2:8, :)' * view(as, 1:2:8, :)
-    @test Array(asv * dxs) ≈ view(as, 1:2:8, :) * xs
+        @test Array(asv * bsv) ≈ view(as, 1:2:8, :) * view(bs, :, 1:2:10)
+        @test Array(asv' * asv) ≈ view(as, 1:2:8, :)' * view(as, 1:2:8, :)
+        @test Array(asv * dxs) ≈ view(as, 1:2:8, :) * xs
 
-    for alg in (:auto, :simd, :scalar)
-        C = MtlArray(zeros(Float32, 4, 5))
-        @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'N', 'N', asv, bsv, true, false)
-        @test Array(C) ≈ view(as, 1:2:8, :) * view(bs, :, 1:2:10)
+        for alg in (:auto, :simd, :scalar)
+            C = MtlArray(zeros(T, 4, 5))
+            @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'N', 'N', asv, bsv, true, false)
+            @test Array(C) ≈ view(as, 1:2:8, :) * view(bs, :, 1:2:10)
 
-        C = MtlArray(zeros(Float32, 6, 6))
-        @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'T', 'N', asv, asv, true, false)
-        @test Array(C) ≈ view(as, 1:2:8, :)' * view(as, 1:2:8, :)
-    end
+            C = MtlArray(zeros(T, 6, 6))
+            @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'T', 'N', asv, asv, true, false)
+            @test Array(C) ≈ view(as, 1:2:8, :)' * view(as, 1:2:8, :)
+        end
 
-    # strided destination
-    for alg in (:auto, :simd, :scalar)
-        cs = rand(Float32, 8, 5)
-        dcs = MtlArray(cs)
-        mul!(view(cs, 1:2:8, :), view(as, 1:2:8, :), view(bs, :, 1:2:10), 2.0f0, 1.0f0)
-        @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(view(dcs, 1:2:8, :), 'N', 'N', asv, bsv, 2.0f0, 1.0f0)
-        @test Array(dcs) ≈ cs
-    end
+        # strided destination
+        for alg in (:auto, :simd, :scalar)
+            cs = rand(T, 8, 5)
+            dcs = MtlArray(cs)
+            mul!(view(cs, 1:2:8, :), view(as, 1:2:8, :), view(bs, :, 1:2:10), 2.0f0, 1.0f0)
+            @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(view(dcs, 1:2:8, :), 'N', 'N', asv, bsv, 2.0f0, 1.0f0)
+            @test Array(dcs) ≈ cs
+        end
 
-    # strided destination with contiguous operands: the view is dense but its leading
-    # dimension differs from its height, which the simd kernel must not direct-store to
-    a2 = rand(Float32, 2, 3)
-    b2 = rand(Float32, 3, 5)
-    da2 = MtlArray(a2)
-    db2 = MtlArray(b2)
-    for alg in (:auto, :simd, :scalar)
-        c2 = rand(Float32, 4, 5)
-        dc2 = MtlArray(c2)
-        mul!(view(c2, 1:2, :), a2, b2)
-        @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(view(dc2, 1:2, :), 'N', 'N', da2, db2, true, false)
-        @test Array(dc2) ≈ c2
+        # strided destination with contiguous operands: the view is dense but its leading
+        # dimension differs from its height, which the simd kernel must not direct-store to
+        a2 = rand(T, 2, 3)
+        b2 = rand(T, 3, 5)
+        da2 = MtlArray(a2)
+        db2 = MtlArray(b2)
+        for alg in (:auto, :simd, :scalar)
+            c2 = rand(T, 4, 5)
+            dc2 = MtlArray(c2)
+            mul!(view(c2, 1:2, :), a2, b2)
+            @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(view(dc2, 1:2, :), 'N', 'N', da2, db2, true, false)
+            @test Array(dc2) ≈ c2
+        end
     end
 end
 
