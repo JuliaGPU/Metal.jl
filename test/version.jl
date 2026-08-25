@@ -30,6 +30,9 @@ for tahoe in [v"16", v"26"]
     @test Metal.air_support(tahoe) == v"2.8"
     @test Metal.metal_support(tahoe) == v"4"
 end
+@test Metal.metallib_support(v"27") == v"1.2.9"
+@test Metal.air_support(v"27") == v"2.9"
+@test Metal.metal_support(v"27") == v"4.1"
 
 # compatibility versions, as reported by pre-Tahoe SDK builds, normalize to marketing
 # versions
