@@ -230,6 +230,14 @@ end
 
 ## scalar path: per-element shared-memory tiled kernel (any eltype / transpose / offset)
 
+# α/β scaling for the scalar kernel. LinearAlgebra passes `Bool` α/β (`MulAddMul`'s
+# strong-zero flags), and `Bool * AbstractFloat` lowers through `copysign` — which the
+# Metal backend cannot compile for `BFloat16` — so handle `Bool` with a select instead.
+# (The false cases never execute: α = 0 returns early in `gemm!` and β = 0 takes the
+# `iszero` branch below; they just have to compile.)
+@inline bscale(a, x) = a * x
+@inline bscale(a::Bool, x) = a ? x : zero(x)
+
 function gemm_scalar_kernel!(C, A, B, alpha, beta,
                               M, N, K, ::Val{TA}, ::Val{TB}, ::Val{TILE}) where {TA, TB, TILE}
     TAT = eltype(A); TBT = eltype(B); R = eltype(C)
@@ -267,9 +275,9 @@ function gemm_scalar_kernel!(C, A, B, alpha, beta,
         # `setindex!` converts to `R` for us; an explicit `R(...)` would additionally
         # demand a constructor, which element types like `SVector` don't provide
         if iszero(beta)
-            @inbounds C[gi, gj] = alpha * acc
+            @inbounds C[gi, gj] = bscale(alpha, acc)
         else
-            @inbounds C[gi, gj] = alpha * acc + beta * C[gi, gj]
+            @inbounds C[gi, gj] = bscale(alpha, acc) + bscale(beta, C[gi, gj])
         end
     end
     return
@@ -472,11 +480,12 @@ function gemm!(C::MtlMatrixOperand, tA::Char, tB::Char,
     # nothing to compute
     (M == 0 || N == 0) && return C
 
-    # empty contraction: C = β·C
-    if K == 0
+    # no contribution from A·B (empty contraction, or α = 0 which LinearAlgebra
+    # defines as never reading A·B): C = β·C
+    if K == 0 || iszero(alpha)
         if iszero(beta)
             fill!(C, zero(eltype(C)))
-        else
+        elseif !isone(beta)
             C .*= beta
         end
         return C
