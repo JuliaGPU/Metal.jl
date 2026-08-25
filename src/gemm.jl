@@ -125,10 +125,9 @@ end
 # scratch and written elementwise with bounds checks.
 # DIRECT=false (view destinations and eltypes `simdgroup_store` can't assemble, see
 # `gemm_simd!`): every fragment takes the scratch path, which accesses C elementwise.
-@inline function epilogue!(C, scratch, acc, bm0, sm0, bn0, sn0, M, N,
+@inline function epilogue!(C::AbstractArray{R}, scratch, acc, bm0, sm0, bn0, sn0, M, N,
                             alpha, beta, lane, sc0, ::Val{TM}, ::Val{TN},
-                            ::Val{EDGE}, ::Val{SIMPLE}, ::Val{DIRECT}) where {TM, TN, EDGE, SIMPLE, DIRECT}
-    R = eltype(C)
+                            ::Val{EDGE}, ::Val{SIMPLE}, ::Val{DIRECT}) where {R, TM, TN, EDGE, SIMPLE, DIRECT}
     ntuple(Val(TM * TN)) do idx
         ti = (idx - 1) % TM; tj = (idx - 1) ÷ TM
         gr = bm0 + sm0 + ti * 8; gc = bn0 + sn0 + tj * 8
