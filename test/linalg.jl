@@ -115,17 +115,18 @@ end
     av = view(da, 2:3, :)
     bv = view(db, :, 2:4)
 
+    # Call `generic_matmatmul!` directly so these exercise the native kernels and honor `matmul_alg`
     for alg in (:auto, :simd, :scalar)
         C = MtlArray(zeros(Float32, 2, 5))
-        @with (Metal.matmul_alg => alg) mul!(C, av, db)
+        @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'N', 'N', av, db, true, false)
         @test Array(C) ≈ view(a, 2:3, :) * b
 
         C = MtlArray(zeros(Float32, 4, 3))
-        @with (Metal.matmul_alg => alg) mul!(C, da, bv)
+        @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'N', 'N', da, bv, true, false)
         @test Array(C) ≈ a * view(b, :, 2:4)
 
         C = MtlArray(zeros(Float32, 2, 3))
-        @with (Metal.matmul_alg => alg) mul!(C, av, bv)
+        @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'N', 'N', av, bv, true, false)
         @test Array(C) ≈ view(a, 2:3, :) * view(b, :, 2:4)
     end
 
@@ -145,8 +146,12 @@ end
 
     for alg in (:auto, :simd, :scalar)
         C = MtlArray(zeros(Float32, 4, 5))
-        @with (Metal.matmul_alg => alg) mul!(C, asv, bsv)
+        @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'N', 'N', asv, bsv, true, false)
         @test Array(C) ≈ view(as, 1:2:8, :) * view(bs, :, 1:2:10)
+
+        C = MtlArray(zeros(Float32, 6, 6))
+        @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'T', 'N', asv, asv, true, false)
+        @test Array(C) ≈ view(as, 1:2:8, :)' * view(as, 1:2:8, :)
     end
 
     # strided destination
