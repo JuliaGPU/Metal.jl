@@ -123,7 +123,49 @@ end
         C = MtlArray(zeros(Float32, 4, 3))
         @with (Metal.matmul_alg => alg) mul!(C, da, bv)
         @test Array(C) ≈ a * view(b, :, 2:4)
+
+        C = MtlArray(zeros(Float32, 2, 3))
+        @with (Metal.matmul_alg => alg) mul!(C, av, bv)
+        @test Array(C) ≈ view(a, 2:3, :) * view(b, :, 2:4)
     end
+
+    # non-unit strides (step-range views)
+    as = rand(Float32, 8, 6)
+    bs = rand(Float32, 6, 10)
+    xs = rand(Float32, 6)
+    das = MtlArray(as)
+    dbs = MtlArray(bs)
+    dxs = MtlArray(xs)
+    asv = view(das, 1:2:8, :)
+    bsv = view(dbs, :, 1:2:10)
+
+    @test Array(asv * bsv) ≈ view(as, 1:2:8, :) * view(bs, :, 1:2:10)
+    @test Array(asv' * asv) ≈ view(as, 1:2:8, :)' * view(as, 1:2:8, :)
+    @test Array(asv * dxs) ≈ view(as, 1:2:8, :) * xs
+
+    for alg in (:auto, :simd, :scalar)
+        C = MtlArray(zeros(Float32, 4, 5))
+        @with (Metal.matmul_alg => alg) mul!(C, asv, bsv)
+        @test Array(C) ≈ view(as, 1:2:8, :) * view(bs, :, 1:2:10)
+    end
+
+    # strided destination
+    cs = rand(Float32, 8, 5)
+    dcs = MtlArray(cs)
+    mul!(view(cs, 1:2:8, :), view(as, 1:2:8, :), view(bs, :, 1:2:10), 2.0f0, 1.0f0)
+    mul!(view(dcs, 1:2:8, :), asv, bsv, 2.0f0, 1.0f0)
+    @test Array(dcs) ≈ cs
+
+    # strided destination with contiguous operands
+    a2 = rand(Float32, 2, 3)
+    b2 = rand(Float32, 3, 5)
+    c2 = rand(Float32, 4, 5)
+    da2 = MtlArray(a2)
+    db2 = MtlArray(b2)
+    dc2 = MtlArray(c2)
+    mul!(view(c2, 1:2, :), a2, b2)
+    mul!(view(dc2, 1:2, :), da2, db2)
+    @test Array(dc2) ≈ c2
 end
 
 @testset "native GEMM" begin
