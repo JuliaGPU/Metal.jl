@@ -105,11 +105,11 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     end
 end
 
-LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB,
+LinearAlgebra.generic_matmatmul!(C::MtlMatrixOperand, tA, tB,
                                  A::MtlMatrixOperand, B::MtlMatrixOperand,
                                  _add::MulAddMul) =
     LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
-@autoreleasepool function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB,
+@autoreleasepool function LinearAlgebra.generic_matmatmul!(C::MtlMatrixOperand, tA, tB,
                                                            A::MtlMatrixOperand,
                                                            B::MtlMatrixOperand,
                                                            alpha::Number, beta::Number)
@@ -143,7 +143,7 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB,
 end
 
 if isdefined(LinearAlgebra, :generic_matmatmul_wrapper!)
-    function LinearAlgebra.generic_matmatmul_wrapper!(C::MtlMatrix{T},
+    function LinearAlgebra.generic_matmatmul_wrapper!(C::MtlMatrixOperand{T},
                                                       tA::AbstractChar, tB::AbstractChar,
                                                       A::MtlMatrixOperand{T},
                                                       B::MtlMatrixOperand{T},

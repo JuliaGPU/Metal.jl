@@ -120,16 +120,19 @@ end
 end
 
 # epilogue, kept top-level so the unrolled ntuple doesn't capture the reassigned acc.
-# EDGE=false: every fragment is fully in-bounds -> direct stores, no scratch needed.
-# EDGE=true: boundary fragments are staged through a small per-simdgroup 8x8 scratch
-# and written elementwise with bounds checks.
-@inline function epilogue!(C::MtlDeviceArray{R}, scratch, acc, bm0, sm0, bn0, sn0, M, N,
+# DIRECT=true, EDGE=false: every fragment is fully in-bounds -> direct stores, no scratch.
+# DIRECT=true, EDGE=true: boundary fragments are staged through a small per-simdgroup 8x8
+# scratch and written elementwise with bounds checks.
+# DIRECT=false (view destinations and eltypes `simdgroup_store` can't assemble, see
+# `gemm_simd!`): every fragment takes the scratch path, which accesses C elementwise.
+@inline function epilogue!(C, scratch, acc, bm0, sm0, bn0, sn0, M, N,
                             alpha, beta, lane, sc0, ::Val{TM}, ::Val{TN},
-                            ::Val{EDGE}, ::Val{SIMPLE}) where {R, TM, TN, EDGE, SIMPLE}
+                            ::Val{EDGE}, ::Val{SIMPLE}, ::Val{DIRECT}) where {TM, TN, EDGE, SIMPLE, DIRECT}
+    R = eltype(C)
     ntuple(Val(TM * TN)) do idx
         ti = (idx - 1) % TM; tj = (idx - 1) ÷ TM
         gr = bm0 + sm0 + ti * 8; gc = bn0 + sn0 + tj * 8
-        if (!EDGE || (gr + 8 <= M && gc + 8 <= N)) && simd_direct_store(R)
+        if DIRECT && (!EDGE || (gr + 8 <= M && gc + 8 <= N))
             store_frag!(C, acc[idx], gr, gc, alpha, beta, Val(SIMPLE))
         else
             simdgroup_store(acc[idx], scratch, (1, sc0 + 1))
@@ -163,7 +166,7 @@ end
 function gemm_simd_kernel!(C, A, B, alpha::Float32, beta::Float32,
                             M, N, K, ::Val{TA}, ::Val{TB},
                             ::Val{WM}, ::Val{WN}, ::Val{TM}, ::Val{TN},
-                            ::Val{KB}, ::Val{EDGE}, ::Val{SIMPLE}) where {TA, TB, WM, WN, TM, TN, KB, EDGE, SIMPLE}
+                            ::Val{KB}, ::Val{EDGE}, ::Val{SIMPLE}, ::Val{DIRECT}) where {TA, TB, WM, WN, TM, TN, KB, EDGE, SIMPLE, DIRECT}
     SGM = 8 * TM; SGN = 8 * TN                         # output region per simdgroup
     BM = WM * SGM; BN = WN * SGN; BK = 8 * KB
     nthreads = WM * WN * 32
@@ -222,7 +225,7 @@ function gemm_simd_kernel!(C, A, B, alpha::Float32, beta::Float32,
 
     lane = Int(thread_index_in_simdgroup()) - 1
     epilogue!(C, scratch, acc, bm0, sm0, bn0, sn0, M, N, alpha, beta, lane, s0 * 8,
-               Val(TM), Val(TN), Val(EDGE), Val(SIMPLE))
+               Val(TM), Val(TN), Val(EDGE), Val(SIMPLE), Val(DIRECT))
     return
 end
 
@@ -421,12 +424,16 @@ function gemm_simd!(C, A, B, alpha, beta, cA::Char, cB::Char)
     threads = WM * WN * 32
     groups = (cld(M, BM), cld(N, BN))
     # aligned tiles skip the bounds-checked edge path; α=1,β=0 skips the α/β arithmetic.
-    # `BFloat16` outputs always need the edge path's f32 scratch (see `simd_direct_store`).
-    edge = !(M % BM == 0 && N % BN == 0) || !simd_direct_store(eltype(C))
+    # `simdgroup_store` addresses C by its leading dimension, so view destinations — like
+    # `BFloat16` outputs (see `simd_direct_store`) — always take the edge path's f32
+    # scratch, which accesses C elementwise.
+    direct = C isa MtlMatrix && simd_direct_store(eltype(C))
+    edge = !(M % BM == 0 && N % BN == 0) || !direct
     simple = isone(alpha) && iszero(beta)
     @metal threads=threads groups=groups gemm_simd_kernel!(
         C, A, B, Float32(alpha), Float32(beta), Int(M), Int(N), Int(K),
-        Val(cA), Val(cB), Val(WM), Val(WN), Val(TM), Val(TN), Val(KB), Val(edge), Val(simple))
+        Val(cA), Val(cB), Val(WM), Val(WN), Val(TM), Val(TN), Val(KB), Val(edge), Val(simple),
+        Val(direct))
     return C
 end
 
@@ -446,7 +453,8 @@ end
 """
     Metal.gemm!(C, tA, tB, A, B, α, β; kernel=:auto)
 
-Native GEMM computing `C = α·op_tA(A)·op_tB(B) + β·C` for `MtlMatrix` operands.
+Native GEMM computing `C = α·op_tA(A)·op_tB(B) + β·C` for `MtlMatrix` operands, or
+range-based `view`s of them (including the destination).
 `tA`/`tB ∈ {'N','T','C'}`, or one of the LinearAlgebra wrapper chars `{'S','s','H','h'}`
 applying a Symmetric/Hermitian view of the operand (upper/lowercase selects the stored
 triangle). Backs the `:native`/`:auto` matmul paths (`kernel=:auto`, picking
@@ -456,7 +464,7 @@ caller's responsibility (see `supports_simd_matmul`/`supports_tensor_matmul`); t
 kernel never handles wrapper chars (it requires plain `'N'`/`'N'` operands), while the simd
 and scalar kernels gather elementwise through `opA`/`opB` and handle all of them.
 """
-function gemm!(C::MtlMatrix, tA::Char, tB::Char,
+function gemm!(C::MtlMatrixOperand, tA::Char, tB::Char,
                A::MtlMatrixOperand, B::MtlMatrixOperand,
                alpha::Number, beta::Number; kernel::Symbol = :auto)
     M = size(C, 1); N = size(C, 2)

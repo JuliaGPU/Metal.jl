@@ -155,22 +155,27 @@ end
     end
 
     # strided destination
-    cs = rand(Float32, 8, 5)
-    dcs = MtlArray(cs)
-    mul!(view(cs, 1:2:8, :), view(as, 1:2:8, :), view(bs, :, 1:2:10), 2.0f0, 1.0f0)
-    mul!(view(dcs, 1:2:8, :), asv, bsv, 2.0f0, 1.0f0)
-    @test Array(dcs) ≈ cs
+    for alg in (:auto, :simd, :scalar)
+        cs = rand(Float32, 8, 5)
+        dcs = MtlArray(cs)
+        mul!(view(cs, 1:2:8, :), view(as, 1:2:8, :), view(bs, :, 1:2:10), 2.0f0, 1.0f0)
+        @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(view(dcs, 1:2:8, :), 'N', 'N', asv, bsv, 2.0f0, 1.0f0)
+        @test Array(dcs) ≈ cs
+    end
 
-    # strided destination with contiguous operands
+    # strided destination with contiguous operands: the view is dense but its leading
+    # dimension differs from its height, which the simd kernel must not direct-store to
     a2 = rand(Float32, 2, 3)
     b2 = rand(Float32, 3, 5)
-    c2 = rand(Float32, 4, 5)
     da2 = MtlArray(a2)
     db2 = MtlArray(b2)
-    dc2 = MtlArray(c2)
-    mul!(view(c2, 1:2, :), a2, b2)
-    mul!(view(dc2, 1:2, :), da2, db2)
-    @test Array(dc2) ≈ c2
+    for alg in (:auto, :simd, :scalar)
+        c2 = rand(Float32, 4, 5)
+        dc2 = MtlArray(c2)
+        mul!(view(c2, 1:2, :), a2, b2)
+        @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(view(dc2, 1:2, :), 'N', 'N', da2, db2, true, false)
+        @test Array(dc2) ≈ c2
+    end
 end
 
 @testset "native GEMM" begin
