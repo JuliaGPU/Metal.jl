@@ -40,33 +40,19 @@ const MtlMatrixOperand{T} = Union{MtlMatrix{T},MtlMatrixRangeView{T}}
     end
 end
 
-# op(A)[outrow, contr], reading the stored (possibly transposed/wrapped) matrix
-@inline function opA(A, ::Val{TA}, outrow, contr) where {TA}
-    if TA === 'N'
-        @inbounds A[outrow, contr]
-    elseif TA === 'C'
-        @inbounds conj(A[contr, outrow])
-    elseif TA === 'T'
-        @inbounds A[contr, outrow]
-    elseif TA === 'S' || TA === 's'
-        symherm(A, outrow, contr, Val(TA === 'S'), Val(false))
+# op(X)[i, j], reading the stored (possibly transposed/wrapped) matrix. used for both
+# operands: A's element is op(A)[outrow, contr], B's is op(B)[contr, outcol]
+@inline function opelem(X, ::Val{TX}, i, j) where {TX}
+    if TX === 'N'
+        @inbounds X[i, j]
+    elseif TX === 'C'
+        @inbounds conj(X[j, i])
+    elseif TX === 'T'
+        @inbounds X[j, i]
+    elseif TX === 'S' || TX === 's'
+        symherm(X, i, j, Val(TX === 'S'), Val(false))
     else # 'H' / 'h'
-        symherm(A, outrow, contr, Val(TA === 'H'), Val(true))
-    end
-end
-
-# op(B)[contr, outcol]
-@inline function opB(B, ::Val{TB}, contr, outcol) where {TB}
-    if TB === 'N'
-        @inbounds B[contr, outcol]
-    elseif TB === 'C'
-        @inbounds conj(B[outcol, contr])
-    elseif TB === 'T'
-        @inbounds B[outcol, contr]
-    elseif TB === 'S' || TB === 's'
-        symherm(B, contr, outcol, Val(TB === 'S'), Val(false))
-    else # 'H' / 'h'
-        symherm(B, contr, outcol, Val(TB === 'H'), Val(true))
+        symherm(X, i, j, Val(TX === 'H'), Val(true))
     end
 end
 
@@ -195,7 +181,7 @@ function gemm_simd_kernel!(C, A, B, alpha::Float32, beta::Float32,
         while i < nelA
             m = i % BM; k = i ÷ BM
             gr = bm0 + m; gc = kt0 + k
-            v = (gr < M && gc < K) ? Float32(opA(A, Val(TA), gr + 1, gc + 1)) : 0.0f0
+            v = (gr < M && gc < K) ? Float32(opelem(A, Val(TA), gr + 1, gc + 1)) : 0.0f0
             @inbounds As[m + 1, k + 1] = v
             i += nthreads
         end
@@ -204,7 +190,7 @@ function gemm_simd_kernel!(C, A, B, alpha::Float32, beta::Float32,
         while i < nelB
             k = i % BK; n = i ÷ BK
             gr = kt0 + k; gc = bn0 + n
-            v = (gr < K && gc < N) ? Float32(opB(B, Val(TB), gr + 1, gc + 1)) : 0.0f0
+            v = (gr < K && gc < N) ? Float32(opelem(B, Val(TB), gr + 1, gc + 1)) : 0.0f0
             @inbounds Bs[k + 1, n + 1] = v
             i += nthreads
         end
@@ -260,9 +246,9 @@ function gemm_scalar_kernel!(C, A, B, alpha, beta,
     while kt < nkt
         k0 = kt * TILE
         ac = k0 + lj
-        @inbounds As[li, lj] = (gi <= M && ac <= K) ? opA(A, Val(TA), gi, ac) : zero(TAT)
+        @inbounds As[li, lj] = (gi <= M && ac <= K) ? opelem(A, Val(TA), gi, ac) : zero(TAT)
         ar = k0 + li
-        @inbounds Bs[li, lj] = (ar <= K && gj <= N) ? opB(B, Val(TB), ar, gj) : zero(TBT)
+        @inbounds Bs[li, lj] = (ar <= K && gj <= N) ? opelem(B, Val(TB), ar, gj) : zero(TBT)
         threadgroup_barrier(MemoryFlagThreadGroup)
         @inbounds for kk in 1:TILE
             acc = muladd(As[li, kk], Bs[kk, lj], acc)
@@ -469,7 +455,7 @@ the best of the tensor/simd/scalar kernels) and the `:simd`/`:scalar`/`:tensor` 
 `kernel` to force a specific kernel. Forcing a kernel that cannot handle the operands is the
 caller's responsibility (see `supports_simd_matmul`/`supports_tensor_matmul`); the tensor
 kernel never handles wrapper chars (it requires plain `'N'`/`'N'` operands), while the simd
-and scalar kernels gather elementwise through `opA`/`opB` and handle all of them.
+and scalar kernels gather elementwise through `opelem` and handle all of them.
 """
 function gemm!(C::MtlMatrixOperand, tA::Char, tB::Char,
                A::MtlMatrixOperand, B::MtlMatrixOperand,
