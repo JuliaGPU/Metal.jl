@@ -161,6 +161,31 @@ exception path minimal. It defaults to the session's `-g`.
 Only one faulting lane is recorded. Reporting works on all macOS versions; unlike
 `@mtlprintf`, it does not require macOS 15.
 
+## Compilation caches
+
+Launching a kernel for the first time compiles it in two stages: GPUCompiler.jl lowers
+Julia code to AIR bitcode and wraps it in a `metallib`; the Metal driver compiles that to
+native GPU code when creating the compute pipeline. Both stages are cached:
+
+- The `metallib` is cached in memory for the session, and kernels compiled as part of a
+  package's precompile workload (e.g. using PrecompileTools.jl) are stored in the package
+  image, so that a fresh session can launch them without invoking the compiler at all.
+- The native GPU code is cached on disk in *binary archives* (`MTLBinaryArchive`), one
+  small archive per kernel, so that a later session skips the driver compile for every
+  kernel compiled before, including kernels compiled at run time. The archives live in a
+  scratch space, in a directory per device and OS build, because Metal only reuses a cached
+  native pipeline on the same GPU and OS build. They are written as soon as a kernel has
+  been compiled, and their total size is bounded by evicting the least recently used ones
+  when Julia exits.
+
+The binary archives are enabled by default and can be turned off with the `binary_archives`
+preference or the `JULIA_METAL_BINARY_ARCHIVES` environment variable; see
+`LocalPreferences.toml` for this and the related tunables. Every failure involving an
+archive (a corrupt file, a failed serialization) silently falls back to a regular compile,
+so the cache is purely a speedup. `Metal.versioninfo()` reports whether the archives are in
+use and how often they served a kernel in the current session; for finer diagnosis, the
+counters `Metal.archive_hits[]` and `Metal.archive_misses[]` are available.
+
 ## Other Helpful Links
 
 [Metal Shading Language Specification](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf)

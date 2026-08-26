@@ -652,7 +652,7 @@ end
         lib = MTLLibraryFromData(dev, metallib)
         fun = MTLFunction(lib, entry)
         try
-            return archived_pipeline(dev, fun)
+            return archived_pipeline(dev, fun, metallib, entry)
         catch err
             isa(err, NSError) || rethrow()
 
