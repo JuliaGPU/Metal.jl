@@ -70,5 +70,5 @@ Sys.isapple() && Sys.ARCH === :aarch64 && @setup_workload begin
     empty!(MTL.last_committed_per_queue)
     empty!(MTL.submission_state_per_queue)
     empty!(device_exception_info)
-    empty!(device_archives)
+    reset_binary_archives!()
 end

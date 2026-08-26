@@ -101,8 +101,10 @@ function __init__()
         end
     end
 
-    # persist any kernels harvested into the per-device binary archives this session.
-    atexit(serialize_binary_archives)
+    # start the binary-archive cache from a clean slate (precompilation may have used it),
+    # and bound the per-device archives on disk when the session ends.
+    reset_binary_archives!()
+    atexit(prune_binary_archives)
 
     initialization_world[] = Base.get_world_counter()
 end

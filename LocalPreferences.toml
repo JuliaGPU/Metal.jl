@@ -26,6 +26,17 @@
 #   further submissions block until the GPU drains one. defaults to 3.
 #command_batching_inflight = 3
 
+# whether to cache compiled GPU code across sessions in per-kernel binary archives
+# (MTLBinaryArchive), so that a kernel compiled in an earlier session skips the
+# Metal back-end compile when it is first launched. defaults to true. can also be
+# set using the JULIA_METAL_BINARY_ARCHIVES environment variable.
+#binary_archives = true
+#
+# tunables (which can also be set using environment variables):
+# - maximum total size (in bytes) of a device's archives on disk; the least recently
+#   used ones are evicted beyond it when Julia exits. defaults to 268435456 (256 MiB).
+#binary_archives_max_size = 268435456
+
 # whether to include the precompile.jl file. This is meant
 # to improve iteration time when developing Metal.jl
 #precompile = true

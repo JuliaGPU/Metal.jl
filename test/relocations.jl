@@ -202,19 +202,9 @@ end
     end
 end
 
-# Delivering relocations as run-time data keeps every session value out of the metallib, so a
-# relocation-carrying kernel compiles to byte-identical bytes across repeated compiles in a
-# session — strictly stronger than under function constants, where the AIR still had to name
-# the constants deterministically. This restores pkgimage persistence and content-keyed
-# archive hits for these kernels.
-#
-# The two kernels that carry a relocation *in the final metallib* — the type-tag (`cglobal`)
-# and the DataType box — are asserted stable. The `isa` kernel's symbol relocation is
-# optimized away entirely (it becomes relocation-free), and its inlined `InexactError`
-# thrower leaks Julia's per-session codegen counter into block labels / inlined debug
-# metadata; that residual debug-info non-determinism is the same one that keeps the archive
-# cache off (see src/compiler/archive.jl) and is out of scope here, as is cross-process
-# determinism.
+# Relocation tables keep session values out of the metallib. Check repeated compilation of
+# the two kernels whose final metallibs retain relocations; GPUCompiler's reproducibility
+# tests cover cross-process stability.
 @testset "byte-stable metallibs" begin
     kernel_metallib(@nospecialize(f), @nospecialize(tt)) =
         Metal.compile_to_metallib(kernel_job(f, tt)).metallib
