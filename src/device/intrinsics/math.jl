@@ -341,7 +341,11 @@ end
 end
 @device_override Base.hypot(x::Float32, y::Float32) = _hypot(x, y)
 @device_override Base.hypot(x::Float16, y::Float16) = _hypot(x, y)
-
+@device_override Base.hypot(x::BFloat16, y::BFloat16) = BFloat16(_hypot(Float32(x), Float32(y)))
+# hypot of complex values is real: sqrt(abs2(x) + abs2(y)), i.e. hypot of the magnitudes
+@device_override Base.hypot(x::ComplexF32, y::ComplexF32) = _hypot(abs(x), abs(y))
+@device_override Base.hypot(x::ComplexF16, y::ComplexF16) = _hypot(abs(x), abs(y))
+@device_override Base.hypot(x::Complex{BFloat16}, y::Complex{BFloat16}) = BFloat16(hypot(ComplexF32(x), ComplexF32(y)))
 
 ### Integer Intrinsics
 

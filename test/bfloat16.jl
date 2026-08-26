@@ -26,6 +26,12 @@ end
     @test testf(a -> sqrt.(a), rand(BFloat16, 16))
     @test testf((a, b) -> min.(a, b), rand(BFloat16, 16), rand(BFloat16, 16))
     @test testf((a, b) -> max.(a, b), rand(BFloat16, 16), rand(BFloat16, 16))
+    @test testf((a, b) -> hypot.(a, b), rand(BFloat16, 16), rand(BFloat16, 16))
+    let z1 = Complex{BFloat16}.(rand(ComplexF32, 16)),
+        z2 = Complex{BFloat16}.(rand(ComplexF32, 16))
+        @test testf(a -> abs.(a), z1)
+        @test testf((a, b) -> hypot.(a, b), z1, z2)
+    end
 end
 
 @testset "reductions" begin
