@@ -59,6 +59,14 @@ matmul_alg_invalid(alg, vec) =
     gemm!(C, cA, cB, A, B, alpha, beta; kernel)
 end
 
+# a product with an empty dimension is finished before any backend is chosen: MPS asserts on
+# zero-sized buffers, and the result does not depend on A or B anyway. C is either empty (M or
+# N == 0), or only β applies (K == 0).
+function empty_matmul!(C, beta)
+    isempty(C) && return C
+    iszero(beta) ? fill!(C, zero(eltype(C))) : rmul!(C, beta)
+end
+
 LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
     LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
 @autoreleasepool function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB,
@@ -79,6 +87,7 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
         if size(C) != (mA, nB)
             throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
         end
+        return empty_matmul!(C, beta)
     end
 
     alg = matmul_alg[]
@@ -128,6 +137,7 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrixOperand, tA, tB,
         if size(C) != (mA, nB)
             throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
         end
+        return empty_matmul!(C, beta)
     end
 
     alg = matmul_alg[]
@@ -171,9 +181,10 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
     end
 
     if mA == 0 || nA == 0 || mB == 0
-        if mC != mB
-            throw(DimensionMismatch("C has length ($mC), should have ($mB)"))
+        if mC != mA
+            throw(DimensionMismatch("C has length ($mC), should have ($mA)"))
         end
+        return empty_matmul!(C, beta)
     end
 
     alg = matmul_alg[]
