@@ -81,20 +81,37 @@ const atomic_value_intrinsics = (
     (:fetch_and, "and",   (:Int32, :UInt32),           true),
     (:fetch_or,  "or",    (:Int32, :UInt32),           true),
     (:fetch_xor, "xor",   (:Int32, :UInt32),           true),
+    # atomic_ulong only supports non-fetching min/max on device memory.
+    (:min,       "min",   (:UInt64,),                  false),
+    (:max,       "max",   (:UInt64,),                  false),
 )
 
 for (op, air_op, types, returns) in atomic_value_intrinsics, typ in types,
     (as, memnam, scope) in atomic_memory_spaces
-    typnam = typ === :Float32 ? "f32" : "i32"
+    typ === :UInt64 && as !== AS.Device && continue
+    typnam = typ === :Float32 ? "f32" : typ === :UInt64 ? "i64" : "i32"
     if op ∉ (:store, :exchange) && typ !== :Float32
         typnam = "$(typ === :Int32 ? "s" : "u").$typnam"
     end
     f = Symbol("atomic_$(op)_explicit")
     return_type = returns ? typ : :Nothing
-    availability = op ∈ (:fetch_add, :fetch_sub) && typ === :Float32 && as === AS.ThreadGroup ?
-        :(@static_assert(metal_version() >= sv"4.1",
-                          "Float32 threadgroup atomic operations require Metal 4.1 or newer.")) :
+    requirements = if op ∈ (:fetch_add, :fetch_sub) && typ === :Float32 && as === AS.ThreadGroup
+        quote
+            @static_assert(metal_version() >= sv"4.1",
+                           "Float32 threadgroup atomic operations require Metal 4.1 or newer.")
+        end
+    elseif typ === :UInt64
+        quote
+            @static_assert(order === memory_order_relaxed,
+                           "64-bit atomic min/max only supports relaxed ordering.")
+            @static_assert(flags == MemoryFlagNone,
+                           "64-bit atomic min/max does not support memory flags.")
+            @static_assert(apple_family() >= 8,
+                           "64-bit atomic min/max requires Apple8 or newer.")
+        end
+    else
         nothing
+    end
 
     @eval begin
         @inline function $f(
@@ -105,8 +122,8 @@ for (op, air_op, types, returns) in atomic_value_intrinsics, typ in types,
         end
 
         function $f(ptr::LLVMPtr{$typ,$as}, desired::$typ, ::Val{order}, ::Val{flags}) where {order, flags}
+            $requirements
             validate_atomic_arguments(Val(order), Val(flags))
-            $availability
             @typed_ccall($"air.atomic.$memnam.$air_op.$typnam", llvmcall, $return_type,
                          (LLVMPtr{$typ,$as}, $typ, Int32, Int32, Int32, Bool),
                          ptr, desired, Val(order), Val($scope), Val(flags), Val(false))
@@ -161,7 +178,6 @@ function atomic_compare_exchange_weak_explicit(ptr::LLVMPtr{Float32,AS}, expecte
                                                                      flags))
 end
 
-# TODO: non-fetch 64-bit min/max atomics (hardware support?)
 
 # generic atomic support using compare-and-swap
 @inline atomic_fetch_op_failure_order(order::Val) = order
@@ -298,7 +314,9 @@ for (op,impl,typ) in [(:(+), :(atomic_fetch_add_explicit), [:UInt32,:Int32,:Floa
                       (:(|), :(atomic_fetch_or_explicit),  [:UInt32,:Int32]),
                       (:(⊻), :(atomic_fetch_xor_explicit), [:UInt32,:Int32]),
                       (:max, :(atomic_fetch_max_explicit), [:UInt32,:Int32]),
-                      (:min, :(atomic_fetch_min_explicit), [:UInt32,:Int32])]
+                      (:min, :(atomic_fetch_min_explicit), [:UInt32,:Int32]),
+                      (:max, :(atomic_max_explicit),       [:UInt64]),
+                      (:min, :(atomic_min_explicit),       [:UInt64])]
     @eval @inline atomic_arrayset(A::AbstractArray{T}, I::Integer, ::typeof($op),
                                   val::T) where {T<:Union{$(typ...)}} =
         $impl(pointer(A, I), val)
