@@ -182,9 +182,11 @@ The binary archives are enabled by default and can be turned off with the `binar
 preference or the `JULIA_METAL_BINARY_ARCHIVES` environment variable; see
 `LocalPreferences.toml` for this and the related tunables. Every failure involving an
 archive (a corrupt file, a failed serialization) silently falls back to a regular compile,
-so the cache is purely a speedup. `Metal.versioninfo()` reports whether the archives are in
-use and how often they served a kernel in the current session; for finer diagnosis, the
-counters `Metal.archive_hits[]` and `Metal.archive_misses[]` are available.
+so the cache is purely a speedup. Metal's shader validation layer is incompatible with
+binary archives, so the cache is disabled when `MTL_SHADER_VALIDATION` is nonzero.
+`Metal.versioninfo()` reports whether archives are in use and how often they served a kernel
+in the current session; for finer diagnosis, the counters `Metal.archive_hits[]` and
+`Metal.archive_misses[]` are available.
 
 ## Other Helpful Links
 

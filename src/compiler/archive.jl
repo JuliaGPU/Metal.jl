@@ -23,8 +23,21 @@
 # pipeline creation takes the plain path unchanged.
 const _binary_archives_pref = @load_preference("binary_archives", true)::Bool
 
+# Apple documents shader validation as incompatible with binary archives, so keep the
+# archive path entirely disabled when the validation layer is active.
+#
+# Metal reads this environment variable before device creation. Capture it in `__init__`
+# so later changes to `ENV` cannot make our state disagree with Metal's. The `nothing`
+# case covers package precompilation, which runs before `__init__`.
+const _shader_validation_enabled = Ref{Union{Nothing,Bool}}(nothing)
+function shader_validation_enabled()
+    enabled = _shader_validation_enabled[]
+    return enabled === nothing ? get(ENV, "MTL_SHADER_VALIDATION", "0") != "0" : enabled
+end
+
 # The `JULIA_METAL_BINARY_ARCHIVES` env var overrides the preference (mainly for tests).
 function binary_archives_enabled()
+    shader_validation_enabled() && return false
     haskey(ENV, "JULIA_METAL_BINARY_ARCHIVES") &&
         return parse(Bool, ENV["JULIA_METAL_BINARY_ARCHIVES"])
     return _binary_archives_pref

@@ -71,6 +71,8 @@ function versioninfo(io::IO=stdout)
     if binary_archives_enabled()
         println(io, "- binary archives: enabled, in $(binary_archive_dir())")
         println(io, "  ($(archive_hits[]) hits, $(archive_misses[]) misses this session)")
+    elseif shader_validation_enabled()
+        println(io, "- binary archives: disabled (incompatible with shader validation)")
     else
         println(io, "- binary archives: disabled")
     end

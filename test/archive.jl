@@ -39,9 +39,39 @@ function reset_archive_state!()
     Metal.reset_binary_archives!()
 end
 
+# Metal snapshots validation settings before device creation; changing the environment
+# afterwards must not change whether archives are available.
+@test Metal.shader_validation_enabled() == shader_validation
+withenv("MTL_SHADER_VALIDATION" => shader_validation ? "0" : "1") do
+    @test Metal.shader_validation_enabled() == shader_validation
+end
+
 dev = Metal.device()
 if MTL.is_virtual(dev)
     @warn "skipping binary-archive cache tests on a virtualized GPU"
+elseif shader_validation
+
+@testset "disabled under shader validation" begin
+    # Shader validation takes precedence over the archive preference and its override.
+    mktempdir() do dir
+        withenv("JULIA_METAL_BINARY_ARCHIVES" => "true",
+                "JULIA_METAL_BINARY_ARCHIVE_DIR" => dir) do
+            @test Metal.shader_validation_enabled()
+            @test !Metal.binary_archives_enabled()
+            reset_archive_state!()
+            @test Metal.device_archive(dev) === nothing
+
+            air, metallib, entry = compile_archive_kernel(dev)
+            @test Metal.link_pipeline(dev, air, metallib, entry) isa MTLComputePipelineState
+            @test Metal.archive_hits[] == 0
+            @test Metal.archive_misses[] == 0
+            @test isempty(readdir(dir))
+            @test occursin("incompatible with shader validation", sprint(Metal.versioninfo))
+        end
+    end
+    reset_archive_state!()
+end
+
 else
 
 @testset "in-process cycle" begin
@@ -71,16 +101,8 @@ else
             reset_archive_state!()
             pso2 = Metal.link_pipeline(dev, air, metallib, entry)
             @test pso2 isa MTLComputePipelineState
-            if shader_validation
-                # shader validation relies on live shader instrumentation and is
-                # incompatible with binary archives: archived (uninstrumented) binaries
-                # never match, so every lookup gracefully degrades to a miss
-                @test Metal.archive_hits[] == 0
-                @test Metal.archive_misses[] == 1
-            else
-                @test Metal.archive_hits[] == 1
-                @test Metal.archive_misses[] == 0
-            end
+            @test Metal.archive_hits[] == 1
+            @test Metal.archive_misses[] == 0
 
             # a relocation-carrying kernel archives and hits the same way (its boxed-union
             # constant needs `demote_boxed_constants!`, LLVM 17+ / Julia 1.12+)
@@ -92,12 +114,7 @@ else
                 @test Metal.link_pipeline(dev, reloc_art...) isa MTLComputePipelineState
                 @test Metal.archive_misses[] == 1
                 @test Metal.link_pipeline(dev, reloc_art...) isa MTLComputePipelineState
-                if shader_validation
-                    @test Metal.archive_hits[] == 0
-                    @test Metal.archive_misses[] == 2
-                else
-                    @test Metal.archive_hits[] == 1
-                end
+                @test Metal.archive_hits[] == 1
             end
         end
     end
@@ -121,7 +138,7 @@ end
             @test filesize(path) != 512
             reset_archive_state!()
             Metal.link_pipeline(dev, air, metallib, entry)
-            @test Metal.archive_hits[] == (shader_validation ? 0 : 1)
+            @test Metal.archive_hits[] == 1
 
             # a valid archive holding a different kernel (as after a hash collision or a
             # stale file) fails Metal's content check: a miss, and the file is replaced
@@ -139,7 +156,7 @@ end
             @test read(path) != read(other_path)
             reset_archive_state!()
             Metal.link_pipeline(dev, air, metallib, entry)
-            @test Metal.archive_hits[] == (shader_validation ? 0 : 1)
+            @test Metal.archive_hits[] == 1
         end
     end
     reset_archive_state!()
@@ -235,11 +252,7 @@ end
 end
 
 @testset "cross-process hits" begin
-    if shader_validation
-        # Validation instruments pipelines at creation time, so an archive harvested from
-        # the uninstrumented descriptor intentionally cannot satisfy a lookup.
-        @test_skip false
-    else
+    let
         # Process B must hit the archives written by process A, including for a kernel
         # spanning multiple CodeInstances and one carrying relocations.
         workload = raw"""
@@ -281,10 +294,15 @@ end
         # the kernels launched explicitly; helpers like `Metal.zeros` launch more
         nkernels = LLVM.version() >= v"17" ? 3 : 2
 
-        function run_workload(dir)
+        function run_workload(dir; shader_validation=false)
             env = copy(ENV)
             env["JULIA_METAL_BINARY_ARCHIVES"] = "true"
             env["JULIA_METAL_BINARY_ARCHIVE_DIR"] = dir
+            if shader_validation
+                env["MTL_SHADER_VALIDATION"] = "1"
+            else
+                delete!(env, "MTL_SHADER_VALIDATION")
+            end
             cmd = `$(Base.julia_cmd()) --startup-file=no --project=$(Base.active_project()) -e $workload`
             out = read(setenv(cmd, env), String)
             m = match(r"HITS=(\d+) MISSES=(\d+)", out)
@@ -304,6 +322,12 @@ end
             hits_b, misses_b = run_workload(dir)
             @test hits_b == misses_a
             @test misses_b == 0
+
+            # Process C: shader validation leaves the regular sessions' archives untouched.
+            hits_c, misses_c = run_workload(dir; shader_validation=true)
+            @test hits_c == 0
+            @test misses_c == 0
+            @test count(endswith(Metal.binary_archive_ext), readdir(device_dir)) == misses_a
         end
     end
 end

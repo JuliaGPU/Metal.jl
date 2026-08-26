@@ -53,6 +53,8 @@ function __init__()
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     precompiling && return
 
+    _shader_validation_enabled[] = get(ENV, "MTL_SHADER_VALIDATION", "0") != "0"
+
     MTL.submit_hook[] = flush_open_batch
 
     if !Sys.isapple() || Sys.ARCH != :aarch64
