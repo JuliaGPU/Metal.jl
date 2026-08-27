@@ -138,6 +138,11 @@ end
 
     # set macOS, AIR, and Metal versions
     let
+        @test_throws ArgumentError Metal.compiler_config(
+            device(); gpufamily=MTL.MTLGPUFamilyMetal3)
+        @test Metal.compiler_config(
+            device(); gpufamily=MTL.MTLGPUFamilyApple7).params.apple_family == 7
+
         @test occursin("""!{!"Metal", i32 3, i32 2, i32 1}""",
                        sprint(io->Metal.code_llvm(io, dummy, Tuple{}; metal=v"3.2.1",
                                                       dump_module=true, kernel=true)))

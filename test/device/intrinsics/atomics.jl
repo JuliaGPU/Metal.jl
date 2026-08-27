@@ -417,6 +417,104 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         @metal guarded_ordered_fetch_kernel(a)
         @test Array(a) == Int32[Metal.metal_target() >= v"4.1" ? 2 : 1]
     end
+
+    @testset "64-bit modify (min/max)" begin
+        function modify_kernel(f, a, val)
+            i = thread_position_in_grid().x
+            f(pointer(a, i), val)
+            return
+        end
+        modify_ops = ((Metal.atomic_max_explicit, UInt64(1)),
+                      (Metal.atomic_min_explicit, UInt64(100)))
+
+        # AIR 2.9 added the flags operand; Metal 4.1 made atomic pointers non-volatile.
+        function u64_abi(ptr::Core.LLVMPtr{UInt64,Metal.AS.Device})
+            Metal.atomic_max_explicit(ptr, UInt64(1))
+            return
+        end
+        function u64_ordered(a)
+            Metal.atomic_max_explicit(pointer(a, 1), UInt64(1),
+                                      Metal.memory_order_release)
+            return
+        end
+        function u64_flagged(a)
+            Metal.atomic_max_explicit(pointer(a, 1), UInt64(1),
+                                      Metal.memory_order_relaxed, Metal.MemoryFlagDevice)
+            return
+        end
+        u64_tt = Tuple{Core.LLVMPtr{UInt64,Metal.AS.Device}}
+        u64_ir = sprint(io -> Metal.code_llvm(io, u64_abi, u64_tt; kernel=true,
+                                              gpufamily=MTL.MTLGPUFamilyApple8,
+                                              metal=v"4.1", air=v"2.9", dump_module=true))
+        u64_volatile_ir = sprint(io -> Metal.code_llvm(io, u64_abi, u64_tt; kernel=true,
+                                                       gpufamily=MTL.MTLGPUFamilyApple8,
+                                                       metal=v"4.0", air=v"2.9", dump_module=true))
+        u64_legacy_ir = sprint(io -> Metal.code_llvm(io, u64_abi, u64_tt; kernel=true,
+                                                     gpufamily=MTL.MTLGPUFamilyApple8,
+                                                     metal=v"4.0", air=v"2.8", dump_module=true))
+        u64_ptr = raw"(?:ptr addrspace\(1\)|i64 addrspace\(1\)\*)"
+        u64_abi_pattern = Regex(raw"@air\.atomic\.global\.max\.u\.i64\(" * u64_ptr *
+                                raw", i64, i32, i32, i32, i1\)")
+        u64_legacy_pattern = Regex(raw"@air\.atomic\.global\.max\.u\.i64\(" * u64_ptr *
+                                   raw", i64, i32, i32, i1\)")
+        @test occursin(u64_abi_pattern, u64_ir)
+        @test occursin("i32 0, i32 2, i32 0, i1 false", u64_ir)
+        @test occursin(u64_abi_pattern, u64_volatile_ir)
+        @test occursin("i32 0, i32 2, i32 0, i1 true", u64_volatile_ir)
+        @test occursin(u64_legacy_pattern, u64_legacy_ir)
+        @test occursin("i32 0, i32 2, i1 true", u64_legacy_ir)
+
+        a = Metal.zeros(UInt64, 1)
+        for (f, message) in (
+            (u64_ordered, "64-bit atomic min/max only supports relaxed ordering."),
+            (u64_flagged, "64-bit atomic min/max does not support memory flags."),
+        )
+            err = try
+                @metal launch=false gpufamily=MTL.MTLGPUFamilyApple8 metal=v"4.1" air=v"2.9" f(a)
+                nothing
+            catch err
+                err
+            end
+            @test err isa Metal.InvalidIRError
+            @test occursin(message, sprint(showerror, err))
+        end
+
+        for (f, init) in modify_ops
+            a = MtlArray(fill(init, n))
+            if MTL.supports_family(device(), MTL.MTLGPUFamilyApple8)
+                @metal threads=n modify_kernel(f, a, UInt64(42))
+                @test all(isequal(UInt64(42)), Array(a))
+            end
+
+            # the intrinsic statically asserts the targeted family, which can be overridden
+            err = try
+                @metal launch=false gpufamily=MTL.MTLGPUFamilyApple7 modify_kernel(f, a, UInt64(42))
+                nothing
+            catch err
+                err
+            end
+            @test err isa Metal.InvalidIRError
+            @test occursin("64-bit atomic min/max requires Apple8 or newer.",
+                           sprint(showerror, err))
+        end
+
+        # device code can guard on the family itself
+        function guarded_max_kernel(a, val)
+            i = thread_position_in_grid().x
+            if Metal.apple_family() >= 8
+                Metal.atomic_max_explicit(pointer(a, i), val)
+            else
+                a[i] = val
+            end
+            return
+        end
+        a = MtlArray(fill(UInt64(1), n))
+        @metal threads=n guarded_max_kernel(a, UInt64(42))
+        @test all(isequal(UInt64(42)), Array(a))
+        b = MtlArray(fill(UInt64(1), n))
+        @metal threads=n gpufamily=MTL.MTLGPUFamilyApple7 guarded_max_kernel(b, UInt64(42))
+        @test all(isequal(UInt64(42)), Array(b))
+    end
 end
 
 @testset "high-level" begin
@@ -472,6 +570,49 @@ end
         a = MtlArray(T[2n])
         @metal threads=n kernel(a)
         @test Array(a)[1] == 0
+    end
+
+    @testset "max $T" for T in [Int32, UInt32, UInt64]
+        function kernel(a)
+            i = thread_position_in_grid().x
+            Metal.@atomic a[1] = max(a[1], eltype(a)(i))
+            return
+        end
+
+        a = Metal.zeros(T)
+        if T !== UInt64 || MTL.supports_family(device(), MTL.MTLGPUFamilyApple8)
+            @metal threads=n kernel(a)
+            @test Array(a)[1] == n
+        end
+
+        if T === UInt64
+            # the 64-bit operation should be native, not the compare-and-swap fallback
+            ir = sprint(io -> Metal.code_llvm(
+                io, kernel, Tuple{typeof(Metal.mtlconvert(a))};
+                kernel=true, gpufamily=MTL.MTLGPUFamilyApple8))
+            @test occursin("air.atomic.global.max.u.i64", ir)
+        end
+    end
+
+    @testset "min $T" for T in [Int32, UInt32, UInt64]
+        function kernel(a)
+            i = thread_position_in_grid().x
+            Metal.@atomic a[1] = min(a[1], eltype(a)(i))
+            return
+        end
+
+        a = MtlArray(T[n+1])
+        if T !== UInt64 || MTL.supports_family(device(), MTL.MTLGPUFamilyApple8)
+            @metal threads=n kernel(a)
+            @test Array(a)[1] == 1
+        end
+
+        if T === UInt64
+            ir = sprint(io -> Metal.code_llvm(
+                io, kernel, Tuple{typeof(Metal.mtlconvert(a))};
+                kernel=true, gpufamily=MTL.MTLGPUFamilyApple8))
+            @test occursin("air.atomic.global.min.u.i64", ir)
+        end
     end
 end
 

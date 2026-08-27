@@ -4,7 +4,7 @@ export @metal
 ## high-level @metal interface
 
 const MACRO_KWARGS = [:launch]
-const COMPILER_KWARGS = [:kernel, :name, :always_inline, :debug_level, :opt_level, :macos, :air, :metal]
+const COMPILER_KWARGS = [:kernel, :name, :always_inline, :debug_level, :opt_level, :macos, :air, :metal, :gpufamily]
 const LAUNCH_KWARGS = [:groups, :threads, :queue, :submit]
 
 """
@@ -188,6 +188,8 @@ a callable kernel object. For a higher-level interface, use [`@metal`](@ref).
 The following keyword arguments are supported:
 - `macos`, `metal` and `air`: to override the macOS OS, Metal language and AIR bitcode
    versions used during compilation. Value should be a valid version number.
+- `gpufamily`: to override the Apple GPU family (`MTL.MTLGPUFamilyApple<n>`) that the
+   generated code may rely on. Defaults to the highest family the device supports.
 
 The output of this function is automatically cached, i.e. you can simply call `mtlfunction`
 in a hot path without degrading performance. New code will be generated automatically when

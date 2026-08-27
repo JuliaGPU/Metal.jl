@@ -1,6 +1,9 @@
 ## gpucompiler interface implementation
 
-struct MetalCompilerParams <: AbstractCompilerParams end
+struct MetalCompilerParams <: AbstractCompilerParams
+    # Highest targeted MTLGPUFamilyApple<n>, or 0 if the device reports none.
+    apple_family::Int
+end
 const MetalCompilerConfig = CompilerConfig{MetalCompilerTarget, MetalCompilerParams}
 const MetalCompilerJob = CompilerJob{MetalCompilerTarget, MetalCompilerParams}
 
@@ -87,6 +90,13 @@ GPUCompiler.isintrinsic(@nospecialize(job::MetalCompilerJob), fn::String) =
 
 function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
                                     mod::LLVM.Module, entry::LLVM.Function)
+    # Materialize apple_family() before GPUCompiler optimizes the linked module.
+    if haskey(globals(mod), "apple_family")
+        gv = globals(mod)["apple_family"]
+        initializer!(gv, ConstantInt(LLVM.Int32Type(), job.config.params.apple_family))
+        linkage!(gv, LLVM.API.LLVMPrivateLinkage)
+    end
+
     entry = invoke(GPUCompiler.finish_module!,
                    Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module, LLVM.Function},
                    job, mod, entry)
@@ -480,7 +490,7 @@ end
                                          debug_level=Base.JLOptions().debug_level,
                                          opt_level=2,
                                          macos=nothing, air=nothing, metal=nothing,
-                                         kwargs...)
+                                         gpufamily=nothing, kwargs...)
     # determine the versions of things to target
     if macos === nothing
         macos = macos_version()
@@ -500,10 +510,21 @@ end
     elseif air < air_floor(metal)
             error("""Metal $(metal) requires AIR $(air_floor(metal)) or newer; cannot target AIR $(air).""")
     end
+    # Only Apple family values form the capability sequence used by device code.
+    if gpufamily === nothing
+        highest_family = MTL.highest_apple_family(dev)
+        apple_family = something(highest_family, 0)
+    else
+        gpufamily = convert(MTL.MTLGPUFamily, gpufamily)
+        apple_family = Int(gpufamily) - 1000
+        if !(1 <= apple_family <= 10)
+            throw(ArgumentError("gpufamily must be an MTLGPUFamilyApple<n>, got $(gpufamily)"))
+        end
+    end
 
     # create GPUCompiler objects
     target = MetalCompilerTarget(; macos, air, metal, kwargs...)
-    params = MetalCompilerParams()
+    params = MetalCompilerParams(apple_family)
     CompilerConfig(target, params; kernel, name, always_inline, debug_level, opt_level)
 end
 
