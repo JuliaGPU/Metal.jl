@@ -76,6 +76,23 @@ using LinearAlgebra, ScopedValues
     end
 end
 
+@testset "empty dimensions" begin
+    # products with M, K or N == 0 must not reach the backends (MPS asserts on empty buffers):
+    # the result is empty, or β·C when the contraction dimension is empty
+    @testset "$alg $(vec_b ? "gemv" : "gemm") $(M)×$(K)×$(N)" for alg in (:auto, :MPS, :MPSGraph, :native, :GPUArrays),
+                                                                  vec_b in (false, true),
+                                                                  (M, K, N) in ((0, 5, 4), (3, 0, 4), (3, 5, 0))
+        vec_b && N == 0 && continue
+        A = rand(Float32, M, K)
+        B = vec_b ? rand(Float32, K) : rand(Float32, K, N)
+        C = vec_b ? rand(Float32, M) : rand(Float32, M, N)
+        ref = mul!(copy(C), A, B, 2f0, 3f0)
+        dC = MtlArray(C)
+        @with (Metal.matmul_alg => alg) mul!(dC, MtlArray(A), MtlArray(B), 2f0, 3f0)
+        @test Array(dC) ≈ ref
+    end
+end
+
 @testset "test matrix vector multiplication of views" begin
     N = 20
 
