@@ -370,9 +370,6 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
     flush!(bq)
     queue = bq.queue
 
-    is_macos(v"15") ||
-        error("Capturing GPU log output requires macOS 15 or higher.")
-
     if is_virtual(queue.device)
         # `MTLLogState` needs a residency set, which the paravirtualized GPU driver
         # cannot create (failing with `MTLLogStateErrorDomain` code 2). Bail out here

@@ -141,7 +141,7 @@ end
     #= setter = setCompilationCompletionHandler:Skipping property compilationCompletionHandler because it is a CLBlockPointer void (^)(MPSGraphExecutable *, NSError *) =#
     @autoproperty dispatchQueue::id{dispatch_queue_t} setter = setDispatchQueue
     @autoproperty optimizationProfile::MPSGraphOptimizationProfile setter = setOptimizationProfile
-    @autoproperty callables::id{MPSGraphCallableMap} setter = setCallables availability = macos(v"14.1.0")
+    @autoproperty callables::id{MPSGraphCallableMap} setter = setCallables
     @autoproperty reducedPrecisionFastMath::MPSGraphReducedPrecisionFastMath setter = setReducedPrecisionFastMath availability = macos(v"26.0.0")
 end
 
