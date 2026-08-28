@@ -111,7 +111,7 @@ end
 
 ## scratch-buffer residency
 
-# Fast residency path; collapse this to `true` when macOS 14 support is dropped.
+# Fast residency path; collapse this to `true` when virtual devices support residency sets
 function can_use_residency_sets(dev::MTLDevice)
     @memoize key=pointer(dev)::id{MTLDevice} begin
         !is_virtual(dev)
