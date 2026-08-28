@@ -62,8 +62,8 @@ function __init__()
         return
     end
 
-    if macos_version() < v"14"
-        @error "Metal.jl requires macOS 14 or later"
+    if macos_version() < v"15"
+        @error "Metal.jl requires macOS 15 or later"
         return
     elseif macos_version() >= v"28"
         @warn "Metal.jl has not been tested on macOS 28 or later, you may run into issues."

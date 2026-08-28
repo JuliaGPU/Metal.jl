@@ -22,11 +22,7 @@
     @test kernel isa Metal.HostKernel
 end
 
-if Metal.macos_version() < v"15"
-
-@warn "Skipping GPU logging tests on macOS 14 and below"
-
-elseif Metal.is_virtual(Metal.device())
+if Metal.is_virtual(Metal.device())
 
 # GPU logging requires an `MTLLogState`, which the paravirtualized GPU driver cannot
 # create. Rather than the formatted-output tests below, verify the launch path bails out
@@ -176,6 +172,6 @@ end
     @test out == "seven_i32 = 7\nthree_f32 = 3.000000\n1.0f0 + 4.0f0 = 5.000000\n"
 end
 
-end # macos_version() < v"15" else branch
+end
 
 end # @testset "output"
