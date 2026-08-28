@@ -69,7 +69,7 @@ function can_alloc_nocopy(ptr::Ptr, bytesize::Integer)
         return false
     end
     ## the new buffer needs to be page-aligned
-    ## XXX: on macOS 14, this doesn't seem required; is this a documentation issue?
+    ## XXX: on macOS 14+, this doesn't seem required; is this a documentation issue?
     if bytesize % page_size() != 0
         return false
     end

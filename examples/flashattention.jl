@@ -9,7 +9,7 @@
 #
 #   attention_mpsgraph(Q, K, V)
 #       The high-level MPS path. Builds a one-node MPSGraph using
-#       `scaledDotProductAttentionWithQueryTensor` (macOS 14+), which
+#       `scaledDotProductAttentionWithQueryTensor`, which
 #       fuses Q·Kᵀ → scale → softmax → ·V into a single op.
 #
 #   attention_simdgroup(Q, K, V)
