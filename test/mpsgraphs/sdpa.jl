@@ -1,5 +1,3 @@
-if Metal.macos_version() >= v"14"
-
 using .MPS: MPSCommandBuffer, commit!, wait_completed
 using .MPSGraphs: MPSGraph, MPSGraphTensor, MPSGraphTensorData,
                   placeholderTensor, scaledDotProductAttentionWithQueryTensor,
@@ -80,8 +78,4 @@ end
         O_ref = ref_attention(Array(Q), Array(K), Array(V), scale, Array(mask))
         @test Array(O) ≈ O_ref rtol = (T === Float16 ? 1e-2 : sqrt(eps(T)))
     end
-end
-
-else
-    @warn "Skipping scaled dot-product attention tests; MPSGraph SDPA requires macOS 14 or later"
 end
