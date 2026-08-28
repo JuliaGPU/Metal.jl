@@ -76,7 +76,7 @@ else
         error("Could not parse xctrace version output:\n$version_output")
     else
         xcode_version = VersionNumber(parse(Int, m.captures[1]), parse(Int, m.captures[2]))
-        if Metal.MTL.is_m1(device()) && Metal.macos_version() >= v"14.4" && xcode_version < v"15.3"
+        if Metal.MTL.is_m1(device()) && xcode_version < v"15.3"
             @warn "Skipping external profiling tests because of an M1-related bug on macOS 14.4 and Xcode < 15.3; please upgrade Xcode first"
         else
             run_external = true
