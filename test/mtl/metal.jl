@@ -594,7 +594,7 @@ end
 end
 
 # residency sets are a macOS 15 feature that paravirtualized GPUs do not implement
-if Metal.is_macos(v"15") && !MTL.is_virtual(first(devices()))
+if !MTL.is_virtual(first(devices()))
 @testset "residency sets" begin
 
 dev = first(devices())
@@ -691,7 +691,7 @@ let rset = MTLResidencySet(dev, desc)
 end
 
 end # @testset "residency sets" begin
-end # if Metal.is_macos(v"15")
+end
 
 # TODO: continue adding tests
 

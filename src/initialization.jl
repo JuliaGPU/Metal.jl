@@ -39,14 +39,10 @@ functional
 
 # A device is supported if it provides the feature set Metal.jl targets (Apple7 + Metal 3),
 # or if it is a paravirtualized GPU. The latter is backed by real Apple Silicon and supports
-# Metal 3, but under-reports its capabilities through `supportsFamily` (see `is_virtual`).
-#
-# Paravirtual GPUs are only supported on macOS 15+: the macOS <15 paravirtual driver does not
-# implement the GPU-address-based ("bindless") argument passing Metal.jl requires.
+# Metal 3, but under-reports its capabilities through `supportsFamily` (see `is_virtual`)
 function is_supported(dev)
-    is_virtual(dev) && return macos_version() >= v"15"
-    return supports_family(dev, MTL.MTLGPUFamilyApple7) &&
-           supports_family(dev, MTL.MTLGPUFamilyMetal3)
+    is_virtual(dev) || supports_family(dev, MTL.MTLGPUFamilyApple7) &&
+                          supports_family(dev, MTL.MTLGPUFamilyMetal3)
 end
 
 function __init__()
@@ -62,8 +58,8 @@ function __init__()
         return
     end
 
-    if macos_version() < v"14"
-        @error "Metal.jl requires macOS 14 or later"
+    if macos_version() < v"15"
+        @error "Metal.jl requires macOS 15 or later"
         return
     elseif macos_version() >= v"28"
         @warn "Metal.jl has not been tested on macOS 28 or later, you may run into issues."
