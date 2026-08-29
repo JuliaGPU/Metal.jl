@@ -1,4 +1,8 @@
 # math.jl
+@static if isdefined(Base.Math, :throw_finite_domainerror)
+    @device_override @noinline Base.Math.throw_finite_domainerror(f::Symbol, x) =
+        @gputhrow "DomainError" "(x) is only defined for finite x."
+end
 @device_override @noinline Base.Math.throw_complex_domainerror(f::Symbol, x) =
     @gputhrow "DomainError" "This operation requires a complex input to return a complex result"
 @device_override @noinline Base.Math.throw_exp_domainerror(x) =
@@ -61,8 +65,10 @@ end
 end
 
 # trig.jl
-@device_override @noinline Base.Math.sincos_domain_error(x) =
-    @gputhrow "DomainError" "sincos(x) is only defined for finite x."
+@static if isdefined(Base.Math, :sincos_domain_error)
+    @device_override @noinline Base.Math.sincos_domain_error(x) =
+        @gputhrow "DomainError" "sincos(x) is only defined for finite x."
+end
 
 # diagonal.jl
 # XXX: remove when we have malloc
