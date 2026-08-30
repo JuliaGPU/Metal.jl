@@ -1,7 +1,7 @@
 # math.jl
 @static if isdefined(Base.Math, :throw_finite_domainerror)
     @device_override @noinline Base.Math.throw_finite_domainerror(f::Symbol, x) =
-        @gputhrow "DomainError" "(x) is only defined for finite x."
+        @gputhrow "DomainError" "function is only defined for finite x."
 end
 @device_override @noinline Base.Math.throw_complex_domainerror(f::Symbol, x) =
     @gputhrow "DomainError" "This operation requires a complex input to return a complex result"
