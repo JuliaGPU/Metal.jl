@@ -3,6 +3,7 @@
 *Metal programming in Julia*
 
 [![][doi-img]][doi-url] [![][docs-stable-img]][docs-stable-url] [![][docs-dev-img]][docs-dev-url] [![][buildkite-img]][buildkite-url] [![][codecov-img]][codecov-url] [![][benchmark-img]][benchmark-url]
+[![GetMerged Scorecard](https://getmerged.abhishekco.de/api/badge/JuliaGPU/Metal.jl)](https://getmerged.abhishekco.de/JuliaGPU/Metal.jl)
 
 [doi-img]: https://zenodo.org/badge/262279120.svg
 [doi-url]: https://zenodo.org/badge/latestdoi/262279120
