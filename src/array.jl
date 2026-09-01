@@ -488,7 +488,7 @@ Uses Adapt.jl to act inside some wrapper structs.
 
 # Examples
 
-```jldoctests
+```jldoctest
 julia> mtl(ones(3)')
 1×3 adjoint(::MtlVector{Float32, Metal.PrivateStorage}) with eltype Float32:
  1.0  1.0  1.0
