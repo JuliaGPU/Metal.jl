@@ -174,13 +174,4 @@ init_code = quote
     import ..runtime_validation, ..shader_validation, ..capturing, ..@grab_output, ..@on_device
 end
 
-# 8GB mac minis can struggle in some julia versions
-max_worker_rss = 2^20 * if Sys.total_memory() <= 8*2^30
-    2000
-elseif Sys.total_memory() <= 16*2^30
-    2500
-else
-    3800
-end
-
-runtests(Metal, args; testsuite, init_code, init_worker_code, test_worker, max_worker_rss, serial=["largecopy", "largebroadcast"])
+runtests(Metal, args; testsuite, init_code, init_worker_code, test_worker, serial=["largecopy", "largebroadcast"])
