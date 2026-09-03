@@ -52,7 +52,7 @@ end
 # Total size of a device's archives on disk; the least recently used ones are evicted
 # beyond this limit (see `prune_binary_archives`).
 const _binary_archives_max_size_pref =
-    @load_preference("binary_archives_max_size", 256 * 2^20)::Int
+    @load_preference("binary_archives_max_size", 256 * 2^32)::Int
 function binary_archives_max_size()
     haskey(ENV, "JULIA_METAL_BINARY_ARCHIVES_MAX_SIZE") &&
         return parse(Int, ENV["JULIA_METAL_BINARY_ARCHIVES_MAX_SIZE"])
