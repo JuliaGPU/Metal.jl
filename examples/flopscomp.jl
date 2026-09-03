@@ -57,8 +57,7 @@ function gpupeakflops(alg)
         outT::DataType=inT,
         ntrials::Integer=3,
         verify=true) -> _peakflops(n, inT, outT, ntrials; verify) do c, a, b
-        mul_f = @static VERSION >= v"1.13.0-rc4" ? LinearAlgebra.mul! : LinearAlgebra.generic_matmatmul!
-        with(() -> mul_f(c, 'N', 'N', a, b, 1, 0), Metal.matmul_alg => alg)
+        with(() -> mul!(c, a, b, 1, 0), Metal.matmul_alg => alg)
     end
 end
 function anepeakflops(; kwargs...)
