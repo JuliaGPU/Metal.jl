@@ -67,11 +67,8 @@ function empty_matmul!(C, beta)
     iszero(beta) ? fill!(C, zero(eltype(C))) : rmul!(C, beta)
 end
 
-LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix, _add::MulAddMul) =
-    LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
-@autoreleasepool function LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB,
-                                                           A::MtlMatrix, B::MtlMatrix,
-                                                           alpha::Number, beta::Number)
+@autoreleasepool function LinearAlgebra.mul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix,
+                                             alpha::Number, beta::Number)
     mA, nA = LinearAlgebra.lapack_size(tA, A)
     mB, nB = LinearAlgebra.lapack_size(tB, B)
 
@@ -114,14 +111,9 @@ LinearAlgebra.generic_matmatmul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatri
     end
 end
 
-LinearAlgebra.generic_matmatmul!(C::MtlMatrixOperand, tA, tB,
-                                 A::MtlMatrixOperand, B::MtlMatrixOperand,
-                                 _add::MulAddMul) =
-    LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
-@autoreleasepool function LinearAlgebra.generic_matmatmul!(C::MtlMatrixOperand, tA, tB,
-                                                           A::MtlMatrixOperand,
-                                                           B::MtlMatrixOperand,
-                                                           alpha::Number, beta::Number)
+@autoreleasepool function LinearAlgebra.mul!(C::MtlMatrixOperand, tA, tB,
+                                             A::MtlMatrixOperand, B::MtlMatrixOperand,
+                                             alpha::Number, beta::Number)
     mA, nA = LinearAlgebra.lapack_size(tA, A)
     mB, nB = LinearAlgebra.lapack_size(tB, B)
 
@@ -159,15 +151,12 @@ if isdefined(LinearAlgebra, :generic_matmatmul_wrapper!)
                                                       B::MtlMatrixOperand{T},
                                                       alpha::Number, beta::Number,
                                                       val::LinearAlgebra.BlasFlag.SyrkHerkGemm) where {T<:LinearAlgebra.BlasFloat}
-        LinearAlgebra.generic_matmatmul!(C, tA, tB, A, B, alpha, beta)
+        LinearAlgebra.mul!(C, tA, tB, A, B, alpha, beta)
     end
 end
 
-LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, _add::MulAddMul) =
-    LinearAlgebra.generic_matvecmul!(C, tA, A, B, _add.alpha, _add.beta)
-@autoreleasepool function LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar,
-                                                           A::MtlMatrix, B::MtlVector,
-                                                           alpha::Number, beta::Number)
+@autoreleasepool function LinearAlgebra.mul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector,
+                                             alpha::Number, beta::Number)
     mA, nA = LinearAlgebra.lapack_size(tA, A)
     mB = length(B)
     mC = length(C)
@@ -214,6 +203,25 @@ LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)
     else
         matmul_alg_invalid(alg, true)
+    end
+end
+
+# Julia < 1.13 dispatches on the non-public `generic_matvecmul!` and `generic_matmatmul!`,
+# which JuliaLang/LinearAlgebra.jl#1671 superseded by the `mul!` methods above. Forward from
+# the old names, both the alpha/beta variants (1.12) and the ones taking a final MulAddMul
+# (1.10 and 1.11).
+@static if VERSION < v"1.13.0-rc4"
+    LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, alpha::Number, beta::Number) =
+        LinearAlgebra.mul!(C, tA, A, B, alpha, beta)
+    LinearAlgebra.generic_matvecmul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::MtlVector, _add::MulAddMul) =
+        LinearAlgebra.mul!(C, tA, A, B, _add.alpha, _add.beta)
+    for T in (:MtlMatrix, :MtlMatrixOperand)
+        @eval begin
+            LinearAlgebra.generic_matmatmul!(C::$T, tA, tB, A::$T, B::$T, alpha::Number, beta::Number) =
+                LinearAlgebra.mul!(C, tA, tB, A, B, alpha, beta)
+            LinearAlgebra.generic_matmatmul!(C::$T, tA, tB, A::$T, B::$T, _add::MulAddMul) =
+                LinearAlgebra.mul!(C, tA, tB, A, B, _add.alpha, _add.beta)
+        end
     end
 end
 

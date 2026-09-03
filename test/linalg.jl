@@ -133,18 +133,18 @@ end
         av = view(da, 2:3, :)
         bv = view(db, :, 2:4)
 
-        # Call `generic_matmatmul!` directly so these exercise the native kernels and honor `matmul_alg`
+        # Call the storage-level `mul!` directly so these exercise the native kernels and honor `matmul_alg`
         for alg in (:auto, :simd, :scalar)
             C = MtlArray(zeros(T, 2, 5))
-            @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'N', 'N', av, db, true, false)
+            @with (Metal.matmul_alg => alg) LinearAlgebra.mul!(C, 'N', 'N', av, db, true, false)
             @test Array(C) ≈ view(a, 2:3, :) * b
 
             C = MtlArray(zeros(T, 4, 3))
-            @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'N', 'N', da, bv, true, false)
+            @with (Metal.matmul_alg => alg) LinearAlgebra.mul!(C, 'N', 'N', da, bv, true, false)
             @test Array(C) ≈ a * view(b, :, 2:4)
 
             C = MtlArray(zeros(T, 2, 3))
-            @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'N', 'N', av, bv, true, false)
+            @with (Metal.matmul_alg => alg) LinearAlgebra.mul!(C, 'N', 'N', av, bv, true, false)
             @test Array(C) ≈ view(a, 2:3, :) * view(b, :, 2:4)
         end
 
@@ -164,11 +164,11 @@ end
 
         for alg in (:auto, :simd, :scalar)
             C = MtlArray(zeros(T, 4, 5))
-            @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'N', 'N', asv, bsv, true, false)
+            @with (Metal.matmul_alg => alg) LinearAlgebra.mul!(C, 'N', 'N', asv, bsv, true, false)
             @test Array(C) ≈ view(as, 1:2:8, :) * view(bs, :, 1:2:10)
 
             C = MtlArray(zeros(T, 6, 6))
-            @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(C, 'T', 'N', asv, asv, true, false)
+            @with (Metal.matmul_alg => alg) LinearAlgebra.mul!(C, 'T', 'N', asv, asv, true, false)
             @test Array(C) ≈ view(as, 1:2:8, :)' * view(as, 1:2:8, :)
         end
 
@@ -177,7 +177,7 @@ end
             cs = rand(T, 8, 5)
             dcs = MtlArray(cs)
             mul!(view(cs, 1:2:8, :), view(as, 1:2:8, :), view(bs, :, 1:2:10), 2.0f0, 1.0f0)
-            @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(view(dcs, 1:2:8, :), 'N', 'N', asv, bsv, 2.0f0, 1.0f0)
+            @with (Metal.matmul_alg => alg) LinearAlgebra.mul!(view(dcs, 1:2:8, :), 'N', 'N', asv, bsv, 2.0f0, 1.0f0)
             @test Array(dcs) ≈ cs
         end
 
@@ -191,7 +191,7 @@ end
             c2 = rand(T, 4, 5)
             dc2 = MtlArray(c2)
             mul!(view(c2, 1:2, :), a2, b2)
-            @with (Metal.matmul_alg => alg) LinearAlgebra.generic_matmatmul!(view(dc2, 1:2, :), 'N', 'N', da2, db2, true, false)
+            @with (Metal.matmul_alg => alg) LinearAlgebra.mul!(view(dc2, 1:2, :), 'N', 'N', da2, db2, true, false)
             @test Array(dc2) ≈ c2
         end
     end
@@ -261,7 +261,7 @@ end
     # gather through the stored triangle, so these run natively instead of through the
     # GPUArrays fallback. The reference uses the same wrapper on the CPU, so the random
     # data in the non-stored triangle catches any read outside the stored one. BLAS
-    # eltypes (Float32/ComplexF32) only reach Metal's generic_matmatmul! on Julia 1.12+,
+    # eltypes (Float32/ComplexF32) only reach Metal's storage-level `mul!` on Julia 1.12+,
     # where GPUArrays overrides generic_matmatmul_wrapper! away from BLAS.symm!/hemm!.
     @testset "Symmetric/Hermitian wrappers" begin
         check(T, dX, ref) = T <: Integer ? Array(dX) == ref : isapprox(Array(dX), ref; rtol=tol(T))
