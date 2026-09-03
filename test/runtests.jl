@@ -65,6 +65,7 @@ if filter_tests!(testsuite, args)
     if args.custom["all"] === nothing
         filter!(testsuite) do (name, _)
             !startswith(name, "gpuarrays/")
+              && !startswith(name, "large")
         end
     end
 
