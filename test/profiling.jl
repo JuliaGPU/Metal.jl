@@ -64,27 +64,11 @@
     @test_throws ArgumentError @macroexpand Metal.@bprofile external=true (1 + 1)
 end
 
-run_external = false
 if parse(Bool, get(ENV, "CI", "false"))
     @warn "Skipping external profiling tests on CI due to sandboxing issues"
 elseif !success(`xctrace version`)
     @warn "Skipping external profiling tests because xctrace is not available; please install Xcode first"
 else
-    version_output = chomp(read(`xctrace version`, String))
-    m = match(r"xctrace version (\d+).(\d+)", version_output)
-    if m === nothing
-        error("Could not parse xctrace version output:\n$version_output")
-    else
-        xcode_version = VersionNumber(parse(Int, m.captures[1]), parse(Int, m.captures[2]))
-        if Metal.MTL.is_m1(device()) && xcode_version < v"15.3"
-            @warn "Skipping external profiling tests because of an M1-related bug on macOS 14.4 and Xcode < 15.3; please upgrade Xcode first"
-        else
-            run_external = true
-        end
-    end
-end
-
-if run_external
     @testset "external profiler" begin
         mktempdir() do tmpdir
             cd(tmpdir) do
