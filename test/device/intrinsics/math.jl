@@ -629,17 +629,14 @@ end
         N = 4
         arr = rand(T, N)
 
-        # test the intrinsic (macOS >= v14)
-        if metal_support() >= v"3.1"
-            buffer1 = MtlArray(arr)
-            Metal.@sync @metal threads = N nextafter_test(buffer1, typemax(T))
-            @test Array(buffer1) == nextfloat.(arr)
-            Metal.@sync @metal threads = N nextafter_test(buffer1, typemin(T))
-            @test Array(buffer1) == arr
+        buffer1 = MtlArray(arr)
+        Metal.@sync @metal threads = N nextafter_test(buffer1, typemax(T))
+        @test Array(buffer1) == nextfloat.(arr)
+        Metal.@sync @metal threads = N nextafter_test(buffer1, typemin(T))
+        @test Array(buffer1) == arr
 
-            ir = sprint(io->(@device_code_llvm io=io dump_module=true @metal nextafter_out_test()))
-            @test occursin(Regex("@air\\.nextafter\\.f$(8*sizeof(T))"), ir)
-        end
+        ir = sprint(io->(@device_code_llvm io=io dump_module=true @metal nextafter_out_test()))
+        @test occursin(Regex("@air\\.nextafter\\.f$(8*sizeof(T))"), ir)
     end
 
     let # hypot/abs of complex values, which lower to scalar hypot (JuliaGPU/Metal.jl#932)

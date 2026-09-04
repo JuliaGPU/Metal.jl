@@ -29,11 +29,9 @@ effectively returns the only system GPU.
 function device()
     get!(task_local_storage(), :MTLDevice) do
         dev = MTLDevice(1)
-        if is_virtual(dev) && macos_version() >= v"15"
+        if is_virtual(dev)
             @warn """Metal.jl is running on a virtualized Apple GPU; this is supported on a
                      best-effort basis, so you may run into issues.""" maxlog=1
-        elseif is_virtual(dev) && macos_version() < v"15"
-            @error "Metal.jl does not support virtualized Apple GPUs below macOS 15." maxlog=1
         elseif !supports_family(dev, MTL.MTLGPUFamilyApple7) ||
                !supports_family(dev, MTL.MTLGPUFamilyMetal3)
             @error "Metal.jl is only supported on Metal 3-capable Apple Silicon (M-series) GPUs." maxlog=1
@@ -113,10 +111,10 @@ end
 
 ## scratch-buffer residency
 
-# Fast residency path; collapse this to `true` when macOS 14 support is dropped.
+# Fast residency path; collapse this to `true` when virtual devices support residency sets
 function can_use_residency_sets(dev::MTLDevice)
     @memoize key=pointer(dev)::id{MTLDevice} begin
-        is_macos(v"15") && !is_virtual(dev)
+        !is_virtual(dev)
     end::Bool
 end
 

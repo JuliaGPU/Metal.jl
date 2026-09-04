@@ -370,9 +370,6 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
     flush!(bq)
     queue = bq.queue
 
-    is_macos(v"15") ||
-        error("Capturing GPU log output requires macOS 15 or higher.")
-
     if is_virtual(queue.device)
         # `MTLLogState` needs a residency set, which the paravirtualized GPU driver
         # cannot create (failing with `MTLLogStateErrorDomain` code 2). Bail out here
@@ -407,7 +404,6 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
     try
         MTL.set_function!(cce, kernel.pipeline)
         if !kernel.use_residency_sets
-            # DROP-MACOS14: per-launch residency for macOS 14 / virtual GPUs.
             MTL.use!(cce, buf, MTL.ReadWriteUsage)
             MTL.use!(cce, exc, MTL.ReadWriteUsage)
         end
@@ -478,7 +474,6 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         # allocator, exception mailbox) that aren't otherwise bound to the encoder. Declare
         # them so Metal Shader Validation tracks the accesses instead of dropping them.
         if !kernel.use_residency_sets
-            # DROP-MACOS14: per-launch residency for macOS 14 / virtual GPUs.
             MTL.use!(cce, buf, MTL.ReadWriteUsage)
             MTL.use!(cce, exc, MTL.ReadWriteUsage)
         end

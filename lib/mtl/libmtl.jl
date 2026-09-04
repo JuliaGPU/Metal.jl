@@ -202,7 +202,7 @@ end
     @autoproperty label::id{NSString} setter = setLabel
 end
 
-@objcwrapper availability = macos(v"15.0.0") MTLAllocation <: NSObject
+@objcwrapper MTLAllocation <: NSObject
 
 @objcproperties MTLAllocation begin
     @autoproperty allocatedSize::UInt64
@@ -1082,8 +1082,8 @@ end
 @objcproperties MTLCompileOptions begin
     @autoproperty preprocessorMacros::id{NSDictionary} setter = setPreprocessorMacros
     @autoproperty fastMathEnabled::Bool setter = setFastMathEnabled
-    @autoproperty mathMode::MTLMathMode setter = setMathMode availability = macos(v"15.0.0")
-    @autoproperty mathFloatingPointFunctions::MTLMathFloatingPointFunctions setter = setMathFloatingPointFunctions availability = macos(v"15.0.0")
+    @autoproperty mathMode::MTLMathMode setter = setMathMode
+    @autoproperty mathFloatingPointFunctions::MTLMathFloatingPointFunctions setter = setMathFloatingPointFunctions
     @autoproperty languageVersion::MTLLanguageVersion type = VersionNumber setter = setLanguageVersion
     @autoproperty libraryType::MTLLibraryType setter = setLibraryType
     @autoproperty installName::id{NSString} setter = setInstallName
@@ -1094,7 +1094,7 @@ end
     @autoproperty allowReferencingUndefinedSymbols::Bool setter = setAllowReferencingUndefinedSymbols
     @autoproperty maxTotalThreadsPerThreadgroup::UInt64 setter = setMaxTotalThreadsPerThreadgroup
     @autoproperty requiredThreadsPerThreadgroup::MTLSize setter = setRequiredThreadsPerThreadgroup availability = macos(v"26.0.0")
-    @autoproperty enableLogging::Bool setter = setEnableLogging availability = macos(v"15.0.0")
+    @autoproperty enableLogging::Bool setter = setEnableLogging
     @autoproperty floatingPointConversionRoundingMode::MTLFloatingPointConversionRoundingMode setter = setFloatingPointConversionRoundingMode availability = macos(v"27.0.0")
 end
 
@@ -1591,14 +1591,14 @@ end
     MTLCommandEncoderErrorStateFaulted = 4
 end
 
-@objcwrapper availability = macos(v"15.0.0") MTLLogState <: NSObject
+@objcwrapper MTLLogState <: NSObject
 
 @objcwrapper MTLCommandBufferDescriptor <: NSObject
 
 @objcproperties MTLCommandBufferDescriptor begin
     @autoproperty retainedReferences::Bool setter = setRetainedReferences
     @autoproperty errorOptions::MTLCommandBufferErrorOption setter = setErrorOptions
-    @autoproperty logState::id{MTLLogState} setter = setLogState availability = macos(v"15.0.0")
+    @autoproperty logState::id{MTLLogState} setter = setLogState
 end
 
 @objcwrapper MTLCommandBufferEncoderInfo <: NSObject
@@ -1677,7 +1677,7 @@ end
     @autoproperty dispatchType::MTLDispatchType
 end
 
-@objcwrapper availability = macos(v"15.0.0") MTLCommandQueueDescriptor <: NSObject
+@objcwrapper MTLCommandQueueDescriptor <: NSObject
 
 @objcproperties MTLCommandQueueDescriptor begin
     @autoproperty maxCommandBufferCount::UInt64 setter = setMaxCommandBufferCount
@@ -1988,7 +1988,7 @@ end
     @autoproperty linkedFunctions::id{MTLLinkedFunctions} setter = setLinkedFunctions
     @autoproperty supportAddingBinaryFunctions::Bool setter = setSupportAddingBinaryFunctions
     @autoproperty maxCallStackDepth::UInt64 setter = setMaxCallStackDepth
-    @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation availability = macos(v"15.0.0")
+    @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation
     @autoproperty requiredThreadsPerThreadgroup::MTLSize setter = setRequiredThreadsPerThreadgroup availability = macos(v"26.0.0")
 end
 
@@ -2003,7 +2003,7 @@ end
     @autoproperty staticThreadgroupMemoryLength::UInt64
     @autoproperty supportIndirectCommandBuffers::Bool
     @autoproperty gpuResourceID::MTLResourceID
-    @autoproperty shaderValidation::MTLShaderValidation availability = macos(v"15.0.0")
+    @autoproperty shaderValidation::MTLShaderValidation
     @autoproperty requiredThreadsPerThreadgroup::MTLSize availability = macos(v"26.0.0")
 end
 
@@ -2271,7 +2271,7 @@ end
     @autoproperty supportAddingFragmentBinaryFunctions::Bool setter = setSupportAddingFragmentBinaryFunctions
     @autoproperty maxVertexCallStackDepth::UInt64 setter = setMaxVertexCallStackDepth
     @autoproperty maxFragmentCallStackDepth::UInt64 setter = setMaxFragmentCallStackDepth
-    @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation availability = macos(v"15.0.0")
+    @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation
 end
 
 @objcwrapper MTLRenderPipelineFunctionsDescriptor <: NSObject
@@ -2298,7 +2298,7 @@ end
     @autoproperty meshThreadExecutionWidth::UInt64
     @autoproperty maxTotalThreadgroupsPerMeshGrid::UInt64
     @autoproperty gpuResourceID::MTLResourceID
-    @autoproperty shaderValidation::MTLShaderValidation availability = macos(v"15.0.0")
+    @autoproperty shaderValidation::MTLShaderValidation
     @autoproperty requiredThreadsPerTileThreadgroup::MTLSize availability = macos(v"26.0.0")
     @autoproperty requiredThreadsPerObjectThreadgroup::MTLSize availability = macos(v"26.0.0")
     @autoproperty requiredThreadsPerMeshThreadgroup::MTLSize availability = macos(v"26.0.0")
@@ -2327,7 +2327,7 @@ end
     @autoproperty linkedFunctions::id{MTLLinkedFunctions} setter = setLinkedFunctions
     @autoproperty supportAddingBinaryFunctions::Bool setter = setSupportAddingBinaryFunctions
     @autoproperty maxCallStackDepth::UInt64 setter = setMaxCallStackDepth
-    @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation availability = macos(v"15.0.0")
+    @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation
     @autoproperty requiredThreadsPerThreadgroup::MTLSize setter = setRequiredThreadsPerThreadgroup availability = macos(v"26.0.0")
 end
 
@@ -2356,11 +2356,11 @@ end
     @autoproperty depthAttachmentPixelFormat::MTLPixelFormat setter = setDepthAttachmentPixelFormat
     @autoproperty stencilAttachmentPixelFormat::MTLPixelFormat setter = setStencilAttachmentPixelFormat
     @autoproperty supportIndirectCommandBuffers::Bool setter = setSupportIndirectCommandBuffers
-    @autoproperty binaryArchives::id{NSArray} type = Vector{MTLBinaryArchive} setter = setBinaryArchives availability = macos(v"15.0.0")
+    @autoproperty binaryArchives::id{NSArray} type = Vector{MTLBinaryArchive} setter = setBinaryArchives
     @autoproperty objectLinkedFunctions::id{MTLLinkedFunctions} setter = setObjectLinkedFunctions
     @autoproperty meshLinkedFunctions::id{MTLLinkedFunctions} setter = setMeshLinkedFunctions
     @autoproperty fragmentLinkedFunctions::id{MTLLinkedFunctions} setter = setFragmentLinkedFunctions
-    @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation availability = macos(v"15.0.0")
+    @autoproperty shaderValidation::MTLShaderValidation setter = setShaderValidation
     @autoproperty requiredThreadsPerObjectThreadgroup::MTLSize setter = setRequiredThreadsPerObjectThreadgroup availability = macos(v"26.0.0")
     @autoproperty requiredThreadsPerMeshThreadgroup::MTLSize setter = setRequiredThreadsPerMeshThreadgroup availability = macos(v"26.0.0")
 end
@@ -2636,7 +2636,7 @@ end
     @autoproperty triangleCount::UInt64 setter = setTriangleCount
     @autoproperty transformationMatrixBuffer::id{MTLBuffer} setter = setTransformationMatrixBuffer
     @autoproperty transformationMatrixBufferOffset::UInt64 setter = setTransformationMatrixBufferOffset
-    @autoproperty transformationMatrixLayout::MTLMatrixLayout setter = setTransformationMatrixLayout availability = macos(v"15.0.0")
+    @autoproperty transformationMatrixLayout::MTLMatrixLayout setter = setTransformationMatrixLayout
 end
 
 @objcwrapper MTLAccelerationStructureBoundingBoxGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
@@ -2667,7 +2667,7 @@ end
     @autoproperty triangleCount::UInt64 setter = setTriangleCount
     @autoproperty transformationMatrixBuffer::id{MTLBuffer} setter = setTransformationMatrixBuffer
     @autoproperty transformationMatrixBufferOffset::UInt64 setter = setTransformationMatrixBufferOffset
-    @autoproperty transformationMatrixLayout::MTLMatrixLayout setter = setTransformationMatrixLayout availability = macos(v"15.0.0")
+    @autoproperty transformationMatrixLayout::MTLMatrixLayout setter = setTransformationMatrixLayout
 end
 
 @objcwrapper MTLAccelerationStructureMotionBoundingBoxGeometryDescriptor <: MTLAccelerationStructureGeometryDescriptor
@@ -2824,9 +2824,9 @@ end
     @autoproperty motionTransformBuffer::id{MTLBuffer} setter = setMotionTransformBuffer
     @autoproperty motionTransformBufferOffset::UInt64 setter = setMotionTransformBufferOffset
     @autoproperty motionTransformCount::UInt64 setter = setMotionTransformCount
-    @autoproperty instanceTransformationMatrixLayout::MTLMatrixLayout setter = setInstanceTransformationMatrixLayout availability = macos(v"15.0.0")
-    @autoproperty motionTransformType::MTLTransformType setter = setMotionTransformType availability = macos(v"15.0.0")
-    @autoproperty motionTransformStride::UInt64 setter = setMotionTransformStride availability = macos(v"15.0.0")
+    @autoproperty instanceTransformationMatrixLayout::MTLMatrixLayout setter = setInstanceTransformationMatrixLayout
+    @autoproperty motionTransformType::MTLTransformType setter = setMotionTransformType
+    @autoproperty motionTransformStride::UInt64 setter = setMotionTransformStride
 end
 
 @objcwrapper MTLIndirectInstanceAccelerationStructureDescriptor <: MTLAccelerationStructureDescriptor
@@ -2844,9 +2844,9 @@ end
     @autoproperty maxMotionTransformCount::UInt64 setter = setMaxMotionTransformCount
     @autoproperty motionTransformCountBuffer::id{MTLBuffer} setter = setMotionTransformCountBuffer
     @autoproperty motionTransformCountBufferOffset::UInt64 setter = setMotionTransformCountBufferOffset
-    @autoproperty instanceTransformationMatrixLayout::MTLMatrixLayout setter = setInstanceTransformationMatrixLayout availability = macos(v"15.0.0")
-    @autoproperty motionTransformType::MTLTransformType setter = setMotionTransformType availability = macos(v"15.0.0")
-    @autoproperty motionTransformStride::UInt64 setter = setMotionTransformStride availability = macos(v"15.0.0")
+    @autoproperty instanceTransformationMatrixLayout::MTLMatrixLayout setter = setInstanceTransformationMatrixLayout
+    @autoproperty motionTransformType::MTLTransformType setter = setMotionTransformType
+    @autoproperty motionTransformStride::UInt64 setter = setMotionTransformStride
 end
 
 @objcwrapper MTLHeapDescriptor <: NSObject
@@ -3160,7 +3160,7 @@ end
     MTLLogLevelFault = 5
 end
 
-@objcwrapper availability = macos(v"15.0.0") MTLLogStateDescriptor <: NSObject
+@objcwrapper MTLLogStateDescriptor <: NSObject
 
 @objcproperties MTLLogStateDescriptor begin
     @autoproperty level::MTLLogLevel setter = setLevel
@@ -3258,8 +3258,8 @@ end
 @objcproperties MTLStitchedLibraryDescriptor begin
     @autoproperty functionGraphs::id{NSArray} type = Vector{MTLFunctionStitchingGraph} setter = setFunctionGraphs
     @autoproperty functions::id{NSArray} type = Vector{MTLFunction} setter = setFunctions
-    @autoproperty binaryArchives::id{NSArray} type = Vector{MTLBinaryArchive} setter = setBinaryArchives availability = macos(v"15.0.0")
-    @autoproperty options::MTLStitchedLibraryOptions setter = setOptions availability = macos(v"15.0.0")
+    @autoproperty binaryArchives::id{NSArray} type = Vector{MTLBinaryArchive} setter = setBinaryArchives
+    @autoproperty options::MTLStitchedLibraryOptions setter = setOptions
 end
 
 @cenum MTLIOPriority::Int64 begin
@@ -3346,14 +3346,14 @@ function MTLIOFlushAndDestroyCompressionContext(context)
     return @ccall libmtl.MTLIOFlushAndDestroyCompressionContext(context::MTLIOCompressionContext)::MTLIOCompressionStatus
 end
 
-@objcwrapper availability = macos(v"15.0.0") MTLResidencySetDescriptor <: NSObject
+@objcwrapper MTLResidencySetDescriptor <: NSObject
 
 @objcproperties MTLResidencySetDescriptor begin
     @autoproperty label::id{NSString} setter = setLabel
     @autoproperty initialCapacity::UInt64 setter = setInitialCapacity
 end
 
-@objcwrapper availability = macos(v"15.0.0") MTLResidencySet <: NSObject
+@objcwrapper MTLResidencySet <: NSObject
 
 @objcproperties MTLResidencySet begin
     @autoproperty device::id{MTLDevice}

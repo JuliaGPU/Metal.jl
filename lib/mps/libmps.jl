@@ -391,7 +391,7 @@ end
 @objcproperties MPSNDArrayDescriptor begin
     @autoproperty dataType::MPSDataType setter = setDataType
     @autoproperty numberOfDimensions::UInt64 setter = setNumberOfDimensions
-    @autoproperty preferPackedRows::Bool setter = setPreferPackedRows availability = macos(v"15.0.0")
+    @autoproperty preferPackedRows::Bool setter = setPreferPackedRows
 end
 
 @objcwrapper MPSNDArrayAllocator <: NSObject
@@ -2546,7 +2546,7 @@ end
 
 @objcwrapper MPSNDArrayGatherGradient <: MPSNDArrayBinaryPrimaryGradientKernel
 
-@objcwrapper availability = macos(v"15.0.0") MPSNDArrayIdentity <: MPSNDArrayUnaryKernel
+@objcwrapper MPSNDArrayIdentity <: MPSNDArrayUnaryKernel
 
 @cenum MPSNDArrayQuantizationScheme::UInt64 begin
     MPSNDArrayQuantizationTypeNone = 0x0000000000000000
@@ -2554,14 +2554,14 @@ end
     MPSNDArrayQuantizationTypeLUT = 0x0000000000000002
 end
 
-@objcwrapper availability = macos(v"15.0.0") MPSNDArrayQuantizationDescriptor <: NSObject
+@objcwrapper MPSNDArrayQuantizationDescriptor <: NSObject
 
 @objcproperties MPSNDArrayQuantizationDescriptor begin
     @autoproperty quantizationDataType::MPSDataType
     @autoproperty quantizationScheme::MPSNDArrayQuantizationScheme
 end
 
-@objcwrapper availability = macos(v"15.0.0") MPSNDArrayAffineQuantizationDescriptor <: MPSNDArrayQuantizationDescriptor
+@objcwrapper MPSNDArrayAffineQuantizationDescriptor <: MPSNDArrayQuantizationDescriptor
 
 @objcproperties MPSNDArrayAffineQuantizationDescriptor begin
     @autoproperty hasZeroPoint::Bool setter = setHasZeroPoint
@@ -2569,19 +2569,19 @@ end
     @autoproperty implicitZeroPoint::Bool setter = setImplicitZeroPoint
 end
 
-@objcwrapper availability = macos(v"15.0.0") MPSNDArrayLUTQuantizationDescriptor <: MPSNDArrayQuantizationDescriptor
+@objcwrapper MPSNDArrayLUTQuantizationDescriptor <: MPSNDArrayQuantizationDescriptor
 
-@objcwrapper availability = macos(v"15.0.0") MPSNDArrayQuantizedMatrixMultiplication <: MPSNDArrayMatrixMultiplication
+@objcwrapper MPSNDArrayQuantizedMatrixMultiplication <: MPSNDArrayMatrixMultiplication
 
-@objcwrapper availability = macos(v"15.0.0") MPSNDArrayLUTDequantize <: MPSNDArrayMultiaryKernel
+@objcwrapper MPSNDArrayLUTDequantize <: MPSNDArrayMultiaryKernel
 
-@objcwrapper availability = macos(v"15.0.0") MPSNDArrayVectorLUTDequantize <: MPSNDArrayMultiaryKernel
+@objcwrapper MPSNDArrayVectorLUTDequantize <: MPSNDArrayMultiaryKernel
 
 @objcproperties MPSNDArrayVectorLUTDequantize begin
     @autoproperty vectorAxis::UInt64 setter = setVectorAxis
 end
 
-@objcwrapper availability = macos(v"15.0.0") MPSNDArrayAffineInt4Dequantize <: MPSNDArrayMultiaryKernel
+@objcwrapper MPSNDArrayAffineInt4Dequantize <: MPSNDArrayMultiaryKernel
 
 struct _MPSPackedFloat3
     data::NTuple{12, UInt8}
