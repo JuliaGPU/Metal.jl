@@ -64,8 +64,8 @@ if filter_tests!(testsuite, args)
     # The GPUArrays test suite is large and slow, so it's opt-in
     if args.custom["all"] === nothing
         filter!(testsuite) do (name, _)
-            !startswith(name, "gpuarrays/")
-              && !startswith(name, "large")
+            !startswith(name, "gpuarrays/") &&
+                !startswith(name, "large")
         end
     end
 
