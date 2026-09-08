@@ -460,11 +460,9 @@ end
 ### Cube root
 
 # Base refines cbrt(::Float32) in Float64, which Metal does not support.
-# Reduce the argument to [1, 8), approximate with a polynomial, then apply a
-# compensated Newton step. Integer reduction preserves subnormal inputs despite FTZ.
-# Exhaustive testing of positive finite Float32 inputs on an M3 Pro measured a
-# maximum error of 0.50003 ulp; this is not a correctly rounded implementation.
-@device_override function Base.cbrt(x::Float32)
+# Reduce the argument to [1, 8) and approximate with a polynomial. The accurate
+# path adds a compensated Newton step. Integer reduction preserves subnormals despite FTZ.
+@inline function _cbrt(x::Float32, fast::Bool)
     u = reinterpret(UInt32, x) & 0x7fffffff
     if u == 0 || u >= 0x7f800000
         # Preserve ±0, ±Inf and NaN. Floating-point comparisons would also treat
@@ -486,26 +484,45 @@ end
     e += Int32(23)
     q = e ÷ Int32(3)
     r = e - Int32(3) * q
-    y  = reinterpret(Float32, (((Int32(127) + r) % UInt32) << 23) | m) # in [1, 8)
-    ym = reinterpret(Float32, 0x3f800000 | m)                       # in [1, 2)
+    ym = reinterpret(Float32, 0x3f800000 | m) # in [1, 2)
 
-    # Degree-5 relative minimax fit of cbrt on [1, 2], computed with Remez
-    # in 256-bit arithmetic and rounded to Float32. Scale by cbrt(2)^r.
-    t = fma(0.005348548f0, ym, -0.05038654f0)
-    t = fma(t, ym, 0.20277724f0)
-    t = fma(t, ym, -0.4692287f0)
-    t = fma(t, ym, 0.83816004f0)
-    t = fma(t, ym, 0.47333068f0)
+    if fast
+        # Degree-7 relative minimax fit on [1, 2], centered at 1.5 to reduce
+        # cancellation (see res/cbrt.jl for the Remez fit). No refinement;
+        # measured maximum error is 2.43 ulp over all positive finite Float32
+        # inputs on an M3 Pro.
+        t = evalpoly(ym - 1.5f0, (1.1447142f0, 0.25438076f0, -0.056532383f0,
+                                0.020943526f0, -0.009240592f0, 0.004472713f0,
+                                -0.0027573353f0, 0.0015908186f0))
+    else
+        # Degree-5 relative minimax fit on [1, 2], computed with Remez in
+        # 256-bit arithmetic and rounded to Float32.
+        t = fma(0.005348548f0, ym, -0.05038654f0)
+        t = fma(t, ym, 0.20277724f0)
+        t = fma(t, ym, -0.4692287f0)
+        t = fma(t, ym, 0.83816004f0)
+        t = fma(t, ym, 0.47333068f0)
+    end
+    # Scale by cbrt(2)^r.
     t *= r == 0 ? 1f0 : (r == 1 ? 1.2599211f0 : 1.587401f0)
 
-    # Compensate for the rounding of t*t when computing the Newton residual.
-    s = t * t
-    sl = fma(t, t, -s)          # rounding error in s
-    res = fma(s, t, -y)
-    res = fma(sl, t, res)       # approximates t^3 - y
-    t -= res / (3f0 * s)
+    if !fast
+        y = reinterpret(Float32, (((Int32(127) + r) % UInt32) << 23) | m) # in [1, 8)
+        # Compensate for the rounding of t*t when computing the Newton residual.
+        s = t * t
+        sl = fma(t, t, -s)          # rounding error in s
+        res = fma(s, t, -y)
+        res = fma(sl, t, res)       # approximates t^3 - y
+        # Only the small correction needs division, with a normal divisor near
+        # [3, 12]. Fast division retains the measured maximum error of 0.50003 ulp
+        # on an M3 Pro. The residual above must keep its explicit FMAs.
+        t -= FastMath.div_fast(res, 3f0 * s)
+    end
 
     # Scale by 2^(q-50) and restore the sign. Every nonzero result is normal.
     t = reinterpret(Float32, reinterpret(UInt32, t) + (((q - Int32(50)) % UInt32) << 23))
     return copysign(t, x)
 end
+
+@device_override Base.cbrt(x::Float32) = _cbrt(x, false)
+@device_override FastMath.cbrt_fast(x::Float32) = _cbrt(x, true)
