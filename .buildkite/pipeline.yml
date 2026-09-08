@@ -16,6 +16,8 @@ steps:
                 - lib
         agents:
           queue: "metal"
+        commands: |
+          julia --project=. -e 'using Pkg; Pkg.develop("KernelAbstractions")'
         if: |
           build.message =~ /\[only tests\]/ ||
           build.message =~ /\[only julia\]/ ||
