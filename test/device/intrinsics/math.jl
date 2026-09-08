@@ -155,6 +155,16 @@ end
     end
 end
 
+# Cube root has an accurate refinement and a division-free fast-math polynomial.
+@testset "cbrt" begin
+    precise_ir = sprint(io -> Metal.code_llvm(io, x -> cbrt(x), Tuple{Float32}))
+    fast_ir = sprint(io -> Metal.code_llvm(io, x -> (@fastmath cbrt(x)), Tuple{Float32}))
+    @test occursin("fdiv fast float", precise_ir)
+    @test !occursin(r"\bfdiv\b", fast_ir)
+    @test !occursin(r"\bdouble\b", precise_ir)
+    @test !occursin(r"\bdouble\b", fast_ir)
+end
+
 # individually-shaped float intrinsics.
 @testset "misc" begin
     @eval begin
@@ -468,8 +478,9 @@ end
         arr = vcat(specials, boundaries, -boundaries,
                    reinterpret.(T, rand(Base.uinttype(T), 1024)))
         if T === Float32
-            # The input with the largest measured error and its neighbors.
-            hard = reinterpret(Float32, UInt32[0x000db5b0, 0x000db5b1, 0x000db5b2])
+            # Inputs with the largest measured errors in the precise and fast paths.
+            hard = reinterpret(Float32, UInt32[0x000db5b0, 0x000db5b1, 0x000db5b2,
+                                               0x40fa9b03, 0x40fa9b04, 0x40fa9b05])
             append!(arr, hard)
             append!(arr, -hard)
         end
@@ -488,6 +499,16 @@ end
                 ref = cbrt(Float64(arr[i]))
                 abs(Float64(got[i]) - ref) <= 0.51 * Float64(eps(Float32(ref)))
             end
+            fastgot = Array(map(x -> (@fastmath cbrt(x)), MtlArray(arr)))
+            @test all(eachindex(arr)) do i
+                x = arr[i]
+                if !isfinite(x) || iszero(x)
+                    return reinterpret(UInt32, fastgot[i]) == reinterpret(UInt32, x)
+                end
+                ref = cbrt(Float64(x))
+                abs(Float64(fastgot[i]) - ref) <= 2.5 * Float64(eps(Float32(ref)))
+            end
+            @test all(signbit.(fastgot) .== signbit.(arr))
         end
     end
 
