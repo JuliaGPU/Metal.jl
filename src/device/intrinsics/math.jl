@@ -456,3 +456,56 @@ end
 
     return r
 end
+
+### Cube root
+
+# Base refines cbrt(::Float32) in Float64, which Metal does not support.
+# Reduce the argument to [1, 8), approximate with a polynomial, then apply a
+# compensated Newton step. Integer reduction preserves subnormal inputs despite FTZ.
+# Exhaustive testing of positive finite Float32 inputs on an M3 Pro measured a
+# maximum error of 0.50003 ulp; this is not a correctly rounded implementation.
+@device_override function Base.cbrt(x::Float32)
+    u = reinterpret(UInt32, x) & 0x7fffffff
+    if u == 0 || u >= 0x7f800000
+        # Preserve ±0, ±Inf and NaN. Floating-point comparisons would also treat
+        # subnormal inputs as zero.
+        return x
+    end
+
+    # argument reduction
+    e = (u >> 23) % Int32
+    m = u & 0x007fffff
+    if e == 0
+        # subnormal: normalize the significand
+        sh = (leading_zeros(m) - 8) % Int32
+        m = (m << sh) & 0x007fffff
+        e = Int32(1) - sh
+    end
+    # Add 150 = 3*50 to the unbiased exponent (e - 127) so division rounds
+    # down even for subnormals. Remove the extra factor of 2^50 when scaling.
+    e += Int32(23)
+    q = e ÷ Int32(3)
+    r = e - Int32(3) * q
+    y  = reinterpret(Float32, (((Int32(127) + r) % UInt32) << 23) | m) # in [1, 8)
+    ym = reinterpret(Float32, 0x3f800000 | m)                       # in [1, 2)
+
+    # Degree-5 relative minimax fit of cbrt on [1, 2], computed with Remez
+    # in 256-bit arithmetic and rounded to Float32. Scale by cbrt(2)^r.
+    t = fma(0.005348548f0, ym, -0.05038654f0)
+    t = fma(t, ym, 0.20277724f0)
+    t = fma(t, ym, -0.4692287f0)
+    t = fma(t, ym, 0.83816004f0)
+    t = fma(t, ym, 0.47333068f0)
+    t *= r == 0 ? 1f0 : (r == 1 ? 1.2599211f0 : 1.587401f0)
+
+    # Compensate for the rounding of t*t when computing the Newton residual.
+    s = t * t
+    sl = fma(t, t, -s)          # rounding error in s
+    res = fma(s, t, -y)
+    res = fma(sl, t, res)       # approximates t^3 - y
+    t -= res / (3f0 * s)
+
+    # Scale by 2^(q-50) and restore the sign. Every nonzero result is normal.
+    t = reinterpret(Float32, reinterpret(UInt32, t) + (((q - Int32(50)) % UInt32) << 23))
+    return copysign(t, x)
+end
