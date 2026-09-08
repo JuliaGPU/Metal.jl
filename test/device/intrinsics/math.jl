@@ -457,6 +457,40 @@ end
         @test Array(vec) ≈ acosh.(arr)
     end
 
+    let # cbrt
+        specials = T[0, -0.0, Inf, -Inf, NaN, 1, -1, 8, -27, 1000,
+                     floatmax(T), -floatmax(T), floatmin(T), nextfloat(zero(T)), -nextfloat(zero(T))]
+        # Exercise every exponent and each subnormal normalization shift, including
+        # values on either side of the boundaries.
+        powers = T[ldexp(one(T), e) for e in
+                   exponent(nextfloat(zero(T))):exponent(floatmax(T))]
+        boundaries = vcat(prevfloat.(powers), powers, nextfloat.(powers))
+        arr = vcat(specials, boundaries, -boundaries,
+                   reinterpret.(T, rand(Base.uinttype(T), 1024)))
+        if T === Float32
+            # The input with the largest measured error and its neighbors.
+            hard = reinterpret(Float32, UInt32[0x000db5b0, 0x000db5b1, 0x000db5b2])
+            append!(arr, hard)
+            append!(arr, -hard)
+        end
+        got = Array(cbrt.(MtlArray(arr)))
+        expected = cbrt.(arr)
+        @test all(got[i] === expected[i] for i in eachindex(specials) if !isnan(specials[i]))
+        @test all(isnan, got[isnan.(arr)])
+        # Allow one representable step from the CPU result.
+        ulps(a, b) = abs(Int(reinterpret(Base.uinttype(T), a)) - Int(reinterpret(Base.uinttype(T), b)))
+        @test all(isnan(expected[i]) || ulps(got[i], expected[i]) <= 1 for i in eachindex(arr))
+        @test all(signbit.(got) .== signbit.(expected))
+        if T === Float32
+            # A Float64 reference distinguishes nearly half-ulp errors from a full ulp.
+            @test all(eachindex(arr)) do i
+                !isfinite(arr[i]) && return true
+                ref = cbrt(Float64(arr[i]))
+                abs(Float64(got[i]) - ref) <= 0.51 * Float64(eps(Float32(ref)))
+            end
+        end
+    end
+
     let # rsqrt (Metal-specific, no Base equivalent; compare the GPU intrinsic to 1/sqrt)
         arr = rand(T, 4)
         d = MtlArray(arr)
