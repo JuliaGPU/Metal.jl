@@ -41,6 +41,9 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 [extensions]
 SpecialFunctionsExt = "SpecialFunctions"
 
+[sources]
+GPUCompiler = {url = "https://github.com/JuliaGPU/GPUCompiler.jl", rev = "tb/jll-libraries"}
+
 [compat]
 AbstractFFTs = "1"
 Adapt = "4.6.1"
@@ -50,11 +53,11 @@ CodecBzip2 = "0.8.5"
 Crayons = "4"
 ExprTools = "0.1"
 GPUArrays = "11.5.14"
-GPUCompiler = "2.3"
+GPUCompiler = "2.7"
 GPUToolbox = "3"
 KernelAbstractions = "0.9.38"
 LLVM = "7.2, 8, 9"
-LLVMDowngrader_jll = "0.8.3, 0.9"
+LLVMDowngrader_jll = "0.10"
 LinearAlgebra = "1"
 ObjectiveC = "6"
 PrecompileTools = "1"
