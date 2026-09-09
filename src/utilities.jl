@@ -13,7 +13,7 @@ macro sync(code)
     end
 end
 
-function versioninfo(io::IO=stdout)
+function versioninfo(io::IO=stdout; verbose=false)
     println(io, "macOS $(macos_version()), Darwin $(darwin_version())")
     println(io)
 
@@ -69,12 +69,13 @@ function versioninfo(io::IO=stdout)
 
     println(io, "Kernel cache:")
     if binary_archives_enabled()
-        println(io, "- binary archives: enabled, in $(binary_archive_dir())")
-        println(io, "  ($(archive_hits[]) hits, $(archive_misses[]) misses this session)")
-    elseif shader_validation_enabled()
-        println(io, "- binary archives: disabled (incompatible with shader validation)")
+        print(io, "- binary archives: enabled")
+        verbose && print(io, ", in $(binary_archive_dir())")
+        println(io, "\n  ($(archive_hits[]) hits, $(archive_misses[]) misses this session)")
     else
-        println(io, "- binary archives: disabled")
+        print(io, "- binary archives: disabled")
+        shader_validation_enabled() && print(io, " (incompatible with shader validation)")
+        println(io)
     end
     println(io)
 
