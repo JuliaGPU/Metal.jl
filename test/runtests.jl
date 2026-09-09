@@ -1,3 +1,6 @@
+using Pkg
+Pkg.add(url="https://github.com/christiangnrd/GPUArrays.jl", rev="akreduce")
+
 using Metal
 # ENV["JULIA_DEBUG"] = Metal
 using ParallelTestRunner
