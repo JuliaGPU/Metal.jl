@@ -6,10 +6,10 @@ using LLVM: LLVM
 # with a user package that precompiles a broadcast kernel; a separate process then launches
 # it and counts compiler invocations (`Metal.compilations`).
 #
-# On Julia 1.13, external CodeInstances from a precompile workload survive only flakily (a
-# known Julia serialization bug — GPUCompiler's own precompile test skips the equivalent
-# check on 1.13). The zero-compilation goal is therefore marked `broken` there and should
-# flip to a pass once Julia fixes external-CI serialization.
+# On the Julia 1.13 pre-releases, external CodeInstances from a precompile workload survive
+# only flakily (a known Julia serialization bug — GPUCompiler's own precompile test skips the
+# equivalent check on 1.13). The zero-compilation goal is therefore skipped there, and
+# checked again from 1.13.0 on.
 
 # the mechanism itself; on LLVM < 17 (Julia < 1.12) Metal falls back to session-local
 # `:bake` and forgoes persistence, and the boxed-union workload kernel cannot compile,
@@ -88,9 +88,10 @@ if GPUCompiler.supports_relocatable_ir() && LLVM.version() >= v"17"
         compilations = m === nothing ? -1 : parse(Int, m.captures[1])
 
         @test result
-        # the headline: zero compiler invocations in the warm session. On 1.13 external
-        # CodeInstances survive only flakily (see above), so the count is skipped rather
-        # than marked broken: a lucky run would otherwise error as an unexpected pass.
+        # the headline: zero compiler invocations in the warm session. On the 1.13
+        # pre-releases, external CodeInstances survive only flakily (see above), so
+        # the count is skipped rather than marked broken: a lucky run would otherwise
+        # error as an unexpected pass.
         # On 1.12 < 1.12.7, owned CodeInstances never revalidate after a cross-process
         # pkgimage load: `jl_record_edges` (staticdata_utils.c) skips empty-edge CIs,
         # leaving leaves like `Core.checked_trunc_sint` at the revalidation sentinel,
@@ -102,7 +103,7 @@ if GPUCompiler.supports_relocatable_ir() && LLVM.version() >= v"17"
             # deterministic on 1.12: pre-1.12.7 always recompiles, 1.12.7+ never does
             @test compilations == 0 broken=(VERSION < v"1.12.7")
         else
-            external_cis_flaky = v"1.13.0-" <= VERSION < v"1.14-"
+            external_cis_flaky = v"1.13.0-" <= VERSION <= v"1.13.0-rc4"
             @test compilations == 0 skip=external_cis_flaky
         end
     end
