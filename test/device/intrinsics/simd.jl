@@ -475,20 +475,22 @@ end # @testset "shuffle functions"
         # use reflection rather than `@metal launch=false`: the latter still creates a
         # pipeline, and the host runtime may be too old to load a newer library
 
+        # the AIR is disassembled by the in-process LLVM, so pointers are typed or opaque
+        # depending on its version
         # AIR 2.8: dims, strides and origin vectors (always the transposed layout, so
         # the origin is row/column-swapped)
         asm = sprint() do io
             Metal.code_air(io, kernel, tt; kernel=true, macos=v"26")
         end
-        @test occursin(r"call <64 x float> @air\.simdgroup_matrix_8x8_load\.v64f32\.p1f32\(float addrspace\(1\)\* %\S+, <2 x i64> %\S+, <2 x i64> %\S+, <2 x i64> <i64 1, i64 2>\)", asm)
-        @test occursin(r"call void @air\.simdgroup_matrix_8x8_store\.v64f32\.p1f32\(<64 x float> %\S+, float addrspace\(1\)\* %\S+, <2 x i64> %\S+, <2 x i64> %\S+, <2 x i64> <i64 3, i64 1>\)", asm)
+        @test occursin(r"call <64 x float> @air\.simdgroup_matrix_8x8_load\.v64f32\.p1f32\((?:float addrspace\(1\)\*|ptr addrspace\(1\)) %\S+, <2 x i64> %\S+, <2 x i64> %\S+, <2 x i64> <i64 1, i64 2>\)", asm)
+        @test occursin(r"call void @air\.simdgroup_matrix_8x8_store\.v64f32\.p1f32\(<64 x float> %\S+, (?:float addrspace\(1\)\*|ptr addrspace\(1\)) %\S+, <2 x i64> %\S+, <2 x i64> %\S+, <2 x i64> <i64 3, i64 1>\)", asm)
 
         # AIR < 2.8: scalar elements-per-row, unswapped origin, and a transpose flag
         asm = sprint() do io
             Metal.code_air(io, kernel, tt; kernel=true, macos=v"14")
         end
-        @test occursin(r"call <64 x float> @air\.simdgroup_matrix_8x8_load\.v64f32\.p1f32\(float addrspace\(1\)\* %\S+, i64 %\S+, <2 x i64> <i64 2, i64 1>, i1 true\)", asm)
-        @test occursin(r"call void @air\.simdgroup_matrix_8x8_store\.v64f32\.p1f32\(<64 x float> %\S+, float addrspace\(1\)\* %\S+, i64 %\S+, <2 x i64> <i64 1, i64 3>, i1 true\)", asm)
+        @test occursin(r"call <64 x float> @air\.simdgroup_matrix_8x8_load\.v64f32\.p1f32\((?:float addrspace\(1\)\*|ptr addrspace\(1\)) %\S+, i64 %\S+, <2 x i64> <i64 2, i64 1>, i1 true\)", asm)
+        @test occursin(r"call void @air\.simdgroup_matrix_8x8_store\.v64f32\.p1f32\(<64 x float> %\S+, (?:float addrspace\(1\)\*|ptr addrspace\(1\)) %\S+, i64 %\S+, <2 x i64> <i64 1, i64 3>, i1 true\)", asm)
         ## the legacy declarations keep the intrinsic attributes
         attrs = match(r"declare.+@air\.simdgroup_matrix_8x8_load\.v64f32\.p1f32\(.+\).* (#\d+)", asm)
         @test attrs !== nothing
@@ -512,15 +514,15 @@ end # @testset "shuffle functions"
         asm = sprint() do io
             Metal.code_air(io, kernel_nt, tt; kernel=true, macos=v"26")
         end
-        @test occursin(r"call <64 x float> @air\.simdgroup_matrix_8x8_load\.v64f32\.p1f32\(float addrspace\(1\)\* %\S+, <2 x i64> %\S+, <2 x i64> %\S+, <2 x i64> <i64 2, i64 1>\)", asm)
-        @test occursin(r"call void @air\.simdgroup_matrix_8x8_store\.v64f32\.p1f32\(<64 x float> %\S+, float addrspace\(1\)\* %\S+, <2 x i64> %\S+, <2 x i64> %\S+, <2 x i64> <i64 1, i64 3>\)", asm)
+        @test occursin(r"call <64 x float> @air\.simdgroup_matrix_8x8_load\.v64f32\.p1f32\((?:float addrspace\(1\)\*|ptr addrspace\(1\)) %\S+, <2 x i64> %\S+, <2 x i64> %\S+, <2 x i64> <i64 2, i64 1>\)", asm)
+        @test occursin(r"call void @air\.simdgroup_matrix_8x8_store\.v64f32\.p1f32\(<64 x float> %\S+, (?:float addrspace\(1\)\*|ptr addrspace\(1\)) %\S+, <2 x i64> %\S+, <2 x i64> %\S+, <2 x i64> <i64 1, i64 3>\)", asm)
 
         # AIR < 2.8: unswapped origin and a `false` transpose flag
         asm = sprint() do io
             Metal.code_air(io, kernel_nt, tt; kernel=true, macos=v"14")
         end
-        @test occursin(r"call <64 x float> @air\.simdgroup_matrix_8x8_load\.v64f32\.p1f32\(float addrspace\(1\)\* %\S+, i64 %\S+, <2 x i64> <i64 2, i64 1>, i1 false\)", asm)
-        @test occursin(r"call void @air\.simdgroup_matrix_8x8_store\.v64f32\.p1f32\(<64 x float> %\S+, float addrspace\(1\)\* %\S+, i64 %\S+, <2 x i64> <i64 1, i64 3>, i1 false\)", asm)
+        @test occursin(r"call <64 x float> @air\.simdgroup_matrix_8x8_load\.v64f32\.p1f32\((?:float addrspace\(1\)\*|ptr addrspace\(1\)) %\S+, i64 %\S+, <2 x i64> <i64 2, i64 1>, i1 false\)", asm)
+        @test occursin(r"call void @air\.simdgroup_matrix_8x8_store\.v64f32\.p1f32\(<64 x float> %\S+, (?:float addrspace\(1\)\*|ptr addrspace\(1\)) %\S+, i64 %\S+, <2 x i64> <i64 1, i64 3>, i1 false\)", asm)
 
         # the downgraded non-transposed load executes with transpose semantics
         function kernel_nt_exec(a, b)
