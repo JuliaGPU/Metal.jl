@@ -1,17 +1,22 @@
-using Metal
-# ENV["JULIA_DEBUG"] = Metal
 using ParallelTestRunner
+
+# parse command-line arguments (--all is Metal-specific)
+args = parse_args(ARGS; custom = ["all", "validate"])
+
+# Set validation environment before loading Metal
+const validate = args.custom["validate"] !== nothing
+if validate
+    ENV["MTL_DEBUG_LAYER"] = "1"
+    ENV["MTL_SHADER_VALIDATION"]  = "1"
+end
+
+using Metal
 
 if !Metal.functional()
     @warn """Metal.jl is not functional on this system, so there is nothing to test; skipping.
              (If you believe this system should be supported, please file an issue.)"""
     Sys.exit()
 end
-
-@info "System information:\n" * sprint(io->Metal.versioninfo(io))
-
-# parse command-line arguments (--all is Metal-specific)
-args = parse_args(ARGS; custom = ["all"])
 
 # register custom tests that do not correspond to files in the test directory
 testsuite = find_tests(@__DIR__)
@@ -117,7 +122,6 @@ end
 init_worker_code = quote
     using Metal, Adapt, ObjectiveC, ObjectiveC.Foundation, BFloat16s
 
-    # XXX: expose this as --validate
     const runtime_validation = get(ENV, "MTL_DEBUG_LAYER", "0") != "0"
     const shader_validation  = get(ENV, "MTL_SHADER_VALIDATION", "0") != "0"
 
@@ -174,5 +178,7 @@ init_code = quote
     import ..TestSuite, ..testf
     import ..runtime_validation, ..shader_validation, ..capturing, ..@grab_output, ..@on_device
 end
+
+@info "System information:\n" * sprint(io->Metal.versioninfo(io))
 
 runtests(Metal, args; testsuite, init_code, init_worker_code, test_worker, serial=["largecopy", "largebroadcast"])
