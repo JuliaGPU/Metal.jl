@@ -33,7 +33,7 @@ if you want to use it. PRs are very [welcome](#contributing)!
 ## Requirements
 
 -  Mac device with M-series chip
--  Julia 1.10-1.12
+-  Julia 1.10-1.13
 -  macOS 14-27
 
 These requirements are fairly strict, and are due to our limited development
