@@ -46,7 +46,7 @@ jobs:
       # buildkite CI, which runs on real hardware.
       - uses: julia-actions/julia-runtest@v1
         with:
-          test_args: '--quickfail'
+          test_args: '--quickfail --verbose'
       # On a compilation failure, Metal.jl drops the IR/AIR/metallib dumps in
       # $RUNNER_TEMP/metal-compilation-dumps (see `dump_artifacts` in
       # src/compiler/compilation.jl). Upload them so they can be inspected,
