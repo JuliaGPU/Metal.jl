@@ -76,7 +76,7 @@ end
 
     # Test a few explicitly unsupported types
     @test_throws "MtlArray only supports element types that are stored inline" MtlArray(BigInt[1])
-    @test_throws "Metal does not support Float64 values" MtlArray(Float64[1])
+    @test MtlArray(Float64[1]) isa MtlArray{Float64}
     @test_throws "Metal does not support Int128 values" MtlArray(Int128[1])
     @test_throws "Metal does not support UInt128 values" MtlArray(UInt128[1])
 
@@ -94,8 +94,8 @@ end
         @test mtl(fill(SVector{2, ComplexF32}(1.0f0+1.0f0im, 2.0f0+2.0f0im), 10)) isa MtlArray{SVector{2, ComplexF32}}
 
         # No implicit conversion for MtlArray constructor, only for mtl
-        @test_throws "Metal does not support Float64 values" MtlArray(fill(SVector{2, Float64}(1.0, 2.0), 10))
-        @test_throws "Metal does not support Float64 values" MtlArray(fill(SVector{2, ComplexF64}(1.0, 2.0), 10))
+        @test MtlArray(fill(SVector{2, Float64}(1.0, 2.0), 10)) isa MtlArray{SVector{2, Float64}}
+        @test MtlArray(fill(SVector{2, ComplexF64}(1.0, 2.0), 10)) isa MtlArray{SVector{2, ComplexF64}}
     end
 end
 

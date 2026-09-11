@@ -3,7 +3,7 @@
 The Metal array type, `MtlArray`, generally implements the Base array interface
 and all of its expected methods.
 
-However, there is the special function `mtl` for transferring an array over to the gpu. For compatibility reasons, it will automatically convert arrays of `Float64` to `Float32`.
+However, there is the special function `mtl` for transferring an array over to the gpu. For performance reasons, it will automatically convert arrays of `Float64` to `Float32`, as Apple GPUs do not natively support double precision (see [Float64 support](@ref)).
 
 ```@docs
 mtl

@@ -273,6 +273,10 @@ end
 @device_override Base.sin(x::Float32) = ccall("extern air.sin.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.sin(x::Float16) = ccall("extern air.sin.f16", llvmcall, Float16, (Float16,), x)
 
+# Base's trigonometric functions use 128-bit integer arithmetic to reduce large arguments,
+# which Metal does not support, so use an equivalent implementation without.
+@device_override Base.Math.paynehanek(x::Float64) = GPUCompiler.SoftFloat.paynehanek(x)
+
 @device_override function FastMath.sincos_fast(x::Float32)
     c = Ref{Cfloat}()
     s = @typed_ccall("air.fast_sincos.f32", llvmcall, Cfloat, (Cfloat, Ptr{Cfloat}), x, c)
