@@ -98,28 +98,28 @@ KI.shfl_down_types(::MetalBackend) = DataType[Float32, Float16, Int32, UInt32, I
 ## indexing
 
 ## COV_EXCL_START
-@device_override @inline function KI.get_local_id()
-    return (; x = Int(thread_position_in_threadgroup().x), y = Int(thread_position_in_threadgroup().y), z = Int(thread_position_in_threadgroup().z))
+@device_override @inline function KI.get_local_id(::Type{T}) where {T}
+    return (; x = T(thread_position_in_threadgroup().x), y = T(thread_position_in_threadgroup().y), z = T(thread_position_in_threadgroup().z))
 end
 
-@device_override @inline function KI.get_group_id()
-    return (; x = Int(threadgroup_position_in_grid().x), y = Int(threadgroup_position_in_grid().y), z = Int(threadgroup_position_in_grid().z))
+@device_override @inline function KI.get_group_id(::Type{T}) where {T}
+    return (; x = T(threadgroup_position_in_grid().x), y = T(threadgroup_position_in_grid().y), z = T(threadgroup_position_in_grid().z))
 end
 
-@device_override @inline function KI.get_global_id()
-    return (; x = Int(thread_position_in_grid().x), y = Int(thread_position_in_grid().y), z = Int(thread_position_in_grid().z))
+@device_override @inline function KI.get_global_id(::Type{T}) where {T}
+    return (; x = T(thread_position_in_grid().x), y = T(thread_position_in_grid().y), z = T(thread_position_in_grid().z))
 end
 
-@device_override @inline function KI.get_local_size()
-    return (; x = Int(threads_per_threadgroup().x), y = Int(threads_per_threadgroup().y), z = Int(threads_per_threadgroup().z))
+@device_override @inline function KI.get_local_size(::Type{T}) where {T}
+    return (; x = T(threads_per_threadgroup().x), y = T(threads_per_threadgroup().y), z = T(threads_per_threadgroup().z))
 end
 
-@device_override @inline function KI.get_num_groups()
-    return (; x = Int(threadgroups_per_grid().x), y = Int(threadgroups_per_grid().y), z = Int(threadgroups_per_grid().z))
+@device_override @inline function KI.get_num_groups(::Type{T}) where {T}
+    return (; x = T(threadgroups_per_grid().x), y = T(threadgroups_per_grid().y), z = T(threadgroups_per_grid().z))
 end
 
-@device_override @inline function KI.get_global_size()
-    return (; x = Int(threads_per_grid().x), y = Int(threads_per_grid().y), z = Int(threads_per_grid().z))
+@device_override @inline function KI.get_global_size(::Type{T}) where {T}
+    return (; x = T(threads_per_grid().x), y = T(threads_per_grid().y), z = T(threads_per_grid().z))
 end
 
 @device_override KI.get_sub_group_size() = threads_per_simdgroup()
