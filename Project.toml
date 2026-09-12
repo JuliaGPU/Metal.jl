@@ -41,9 +41,6 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 [extensions]
 SpecialFunctionsExt = "SpecialFunctions"
 
-[sources]
-GPUCompiler = {url = "https://github.com/JuliaGPU/GPUCompiler.jl", rev = "tb/llvm23-jlls"}
-
 [compat]
 AbstractFFTs = "1"
 Adapt = "4.6.1"
