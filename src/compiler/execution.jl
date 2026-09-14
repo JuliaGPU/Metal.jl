@@ -266,7 +266,9 @@ end
 # workload only inferred the kernel without compiling it. The `compile_hook` check
 # additionally forces the compile path so reflection-style consumers (`@device_code_*`)
 # observe the compilation even on a cache hit.
-function compile_or_lookup(@nospecialize(job::CompilerJob))::MetalResults
+# Specialize on the target/parameter types so callers can avoid boxing CompilerJob.
+# Keep the body out of callers that specialize per kernel.
+@noinline function compile_or_lookup(job::CompilerJob)::MetalResults
     res = GPUCompiler.cached_results(MetalResults, job)
     if res === nothing || res.metallib === nothing || GPUCompiler.compile_hook[] !== nothing
         artifacts = compile_to_metallib(job)
