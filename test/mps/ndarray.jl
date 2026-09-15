@@ -1,10 +1,7 @@
 #
 # matrix descriptor
 #
-using .MPS: MPSNDArrayDescriptor, MPSDataType, lengthOfDimension, descriptor, resourceSize
-@static if Metal.macos_version() >= v"15"
-    using .MPS: userBuffer
-end
+using .MPS: MPSNDArrayDescriptor, MPSDataType, lengthOfDimension, descriptor, resourceSize, userBuffer
 
 @testset "MPSNDArrayDescriptor" begin
     T = Float32
@@ -30,12 +27,10 @@ end
 
     @test_throws ArgumentError MPSNDArrayDescriptor(Float32, ones(Int, 17))
 
-    @static if Metal.macos_version() >= v"15"
-        @test desc1.preferPackedRows == false
+    @test desc1.preferPackedRows == false
 
-        desc2.preferPackedRows = true
-        @test desc2.preferPackedRows == true
-    end
+    desc2.preferPackedRows = true
+    @test desc2.preferPackedRows == true
 end
 
 
@@ -80,17 +75,13 @@ using .MPS: MPSNDArray
 
     arr4 = MtlArray(ones(Float16, 8,3,2))
 
-    @static if Metal.macos_version() >= v"15"
-        @test userBuffer(ndarr1) === nothing
-        @test userBuffer(ndarr2) === nothing
+    @test userBuffer(ndarr1) === nothing
+    @test userBuffer(ndarr2) === nothing
 
-        ndarr4 = MPSNDArray(arr4)
+    ndarr4 = MPSNDArray(arr4)
 
-        arr5 = MtlArray(ndarr4)
-        @test arr4 == arr5
-    else
-        @test_throws "Creating an MPSNDArray that shares data with user-provided MTLBuffer is only supported in macOS v15+" MPSNDArray(arr4)
-    end
+    arr5 = MtlArray(ndarr4)
+    @test arr4 == arr5
 end
 
 

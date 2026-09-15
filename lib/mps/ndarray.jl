@@ -40,10 +40,8 @@ export MPSNDArray
 
 # @objcwrapper managed = true MPSNDArray <: NSObject
 
-@static if Metal.is_macos(v"15")
-    function userBuffer(ndarr::MPSNDArrayLike)::Union{Nothing, MTLBuffer}
-        return @objc [ndarr::id{MPSNDArray} userBuffer]::Union{Nothing,MTLBuffer}
-    end
+function userBuffer(ndarr::MPSNDArrayLike)::Union{Nothing, MTLBuffer}
+    return @objc [ndarr::id{MPSNDArray} userBuffer]::Union{Nothing,MTLBuffer}
 end
 
 function resourceSize(ndarr::MPSNDArrayLike)
@@ -83,16 +81,10 @@ function MPSNDArray(device::MTLDevice, scalar)
                                                scalar:scalar::Float64]::MPSNDArray
 end
 
-@static if Metal.is_macos(v"15")
-    function MPSNDArray(buffer::MTLBuffer, offset::UInt, descriptor::MPSNDArrayDescriptor)
-        return @objc [[MPSNDArray alloc]::id{MPSNDArray} initWithBuffer:buffer::id{MTLBuffer}
-                                                   offset:offset::NSUInteger
-                                                   descriptor:descriptor::id{MPSNDArrayDescriptor}]::MPSNDArray
-    end
-else
-    function MPSNDArray(_::MTLBuffer, _::UInt, _::MPSNDArrayDescriptor)
-        @assert false "Creating an MPSNDArray that shares data with user-provided MTLBuffer is only supported in macOS v15+"
-    end
+function MPSNDArray(buffer::MTLBuffer, offset::UInt, descriptor::MPSNDArrayDescriptor)
+    return @objc [[MPSNDArray alloc]::id{MPSNDArray} initWithBuffer:buffer::id{MTLBuffer}
+                                                offset:offset::NSUInteger
+                                                descriptor:descriptor::id{MPSNDArrayDescriptor}]::MPSNDArray
 end
 
 function MPSNDArray(arr::MtlArray{T,N}) where {T,N}

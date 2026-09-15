@@ -487,7 +487,7 @@ end # @testset "shuffle functions"
 
         # AIR < 2.8: scalar elements-per-row, unswapped origin, and a transpose flag
         asm = sprint() do io
-            Metal.code_air(io, kernel, tt; kernel=true, macos=v"14")
+            Metal.code_air(io, kernel, tt; kernel=true, macos=v"15")
         end
         @test occursin(r"call <64 x float> @air\.simdgroup_matrix_8x8_load\.v64f32\.p1f32\((?:float addrspace\(1\)\*|ptr addrspace\(1\)) %\S+, i64 %\S+, <2 x i64> <i64 2, i64 1>, i1 true\)", asm)
         @test occursin(r"call void @air\.simdgroup_matrix_8x8_store\.v64f32\.p1f32\(<64 x float> %\S+, (?:float addrspace\(1\)\*|ptr addrspace\(1\)) %\S+, i64 %\S+, <2 x i64> <i64 1, i64 3>, i1 true\)", asm)
@@ -497,7 +497,7 @@ end # @testset "shuffle functions"
         @test occursin(Regex("attributes $(attrs.captures[1]) = \\{[^}]*convergent"), asm)
 
         # the downgraded form executes correctly
-        @metal threads=(8, 8) macos=v"14" kernel(a, b)
+        @metal threads=(8, 8) macos=v"15" kernel(a, b)
         @test Array(a)[3:10, 2:9] == Array(b)[2:9, 4:11]
 
         # the non-transposed layout (`Val(false)`) swaps the dims/strides/origin vectors,
@@ -519,7 +519,7 @@ end # @testset "shuffle functions"
 
         # AIR < 2.8: unswapped origin and a `false` transpose flag
         asm = sprint() do io
-            Metal.code_air(io, kernel_nt, tt; kernel=true, macos=v"14")
+            Metal.code_air(io, kernel_nt, tt; kernel=true, macos=v"15")
         end
         @test occursin(r"call <64 x float> @air\.simdgroup_matrix_8x8_load\.v64f32\.p1f32\((?:float addrspace\(1\)\*|ptr addrspace\(1\)) %\S+, i64 %\S+, <2 x i64> <i64 2, i64 1>, i1 false\)", asm)
         @test occursin(r"call void @air\.simdgroup_matrix_8x8_store\.v64f32\.p1f32\(<64 x float> %\S+, (?:float addrspace\(1\)\*|ptr addrspace\(1\)) %\S+, i64 %\S+, <2 x i64> <i64 1, i64 3>, i1 false\)", asm)
@@ -532,7 +532,7 @@ end # @testset "shuffle functions"
         end
         c = MtlArray(rand(Float32, 8, 8))
         d = MtlArray(zeros(Float32, 8, 8))
-        @metal threads=32 macos=v"14" kernel_nt_exec(c, d)
+        @metal threads=32 macos=v"15" kernel_nt_exec(c, d)
         @test Array(d) == permutedims(Array(c))
     end
 

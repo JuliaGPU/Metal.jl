@@ -108,7 +108,7 @@ B = Metal.rand(Float32, 8);
 @metal threads=length(A) gpu_add2_print!(A, B)
 ```
 
-`@mtlprintf` is supported on macOS 15 and later. `@mtlprintf` support most of the format specifiers that `printf`
+`@mtlprintf` supports most of the format specifiers that `printf`
 supports in C with the following exceptions:
  - `%n` and `%s` conversion specifiers are not supported
  - Default argument promotion applies to arguments of half type which promote to the `double` type
@@ -158,8 +158,7 @@ The level can also be set per launch, independent of the session's `-g`, with th
 backtrace for one kernel without restarting Julia, or `debug_level=0` to keep a hot kernel's
 exception path minimal. It defaults to the session's `-g`.
 
-Only one faulting lane is recorded. Reporting works on all macOS versions; unlike
-`@mtlprintf`, it does not require macOS 15.
+Only one faulting lane is recorded.
 
 ## Compilation caches
 
