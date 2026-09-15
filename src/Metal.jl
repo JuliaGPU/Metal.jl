@@ -107,7 +107,7 @@ import .MetalKernels: MetalBackend
 export MetalBackend
 
 include("deprecated.jl")
-should_precompile = Sys.isapple() &&
+should_precompile = is_macos(v"15") &&
                       Sys.ARCH === :aarch64 &&
                       @load_preference("precompile", true)
 if should_precompile
