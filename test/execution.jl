@@ -160,18 +160,18 @@ end
                        sprint(io->Metal.code_llvm(io, dummy, Tuple{}; macos=v"16.2.1",
                                                       dump_module=true, kernel=true)))
 
-        # targeting macOS < 14, or the AIR versions that come with it, is not supported
-        @test_throws "Metal.jl requires AIR 2.6" begin
-            Metal.code_llvm(devnull, dummy, Tuple{}; macos=v"13")
+        # targeting macOS < 15, or the AIR versions that come with it, is not supported
+        @test_throws "Metal.jl requires AIR 2.7" begin
+            Metal.code_llvm(devnull, dummy, Tuple{}; macos=v"14")
         end
-        @test_throws "Metal.jl requires AIR 2.6" begin
-            Metal.code_llvm(devnull, dummy, Tuple{}; air=v"2.5")
+        @test_throws "Metal.jl requires AIR 2.7" begin
+            Metal.code_llvm(devnull, dummy, Tuple{}; air=v"2.6")
         end
 
         # The offline compiler raises AIR to the floor required by the selected MSL
         # language version, even when the deployment target supports an older AIR.
-        @test Metal.compiler_config(device(); macos=v"14", metal=v"4.0").target.air == v"2.8"
-        @test Metal.compiler_config(device(); macos=v"14", metal=v"4.1").target.air == v"2.9"
+        @test Metal.compiler_config(device(); macos=v"15", metal=v"4.0").target.air == v"2.8"
+        @test Metal.compiler_config(device(); macos=v"15", metal=v"4.1").target.air == v"2.9"
         @test_throws "Metal 4.1.0 requires AIR 2.9.0" begin
             Metal.code_llvm(devnull, dummy, Tuple{}; metal=v"4.1", air=v"2.8")
         end

@@ -79,20 +79,6 @@
                                             kernel=true, metal=v"3.2", dump_module=true))
         @test occursin("@air.atomic.fence(i32, i32, i32)", ir)
         @test occursin("i32 5, i32 5, i32 4", ir)
-
-        function unavailable_fence(buf)
-            Metal.atomic_thread_fence(Metal.MemoryFlagDevice, Metal.memory_order_relaxed)
-            return
-        end
-        err = try
-            @metal launch=false metal=v"3.1" unavailable_fence(Metal.zeros(Int32, 1))
-            nothing
-        catch err
-            err
-        end
-        @test err isa Metal.InvalidIRError
-        @test occursin("atomic_thread_fence requires Metal 3.2 or newer.",
-                        sprint(showerror, err))
     end
 
     # Core.Intrinsics.atomic_fence emits LLVM fences, which crash the macOS 27 back-end

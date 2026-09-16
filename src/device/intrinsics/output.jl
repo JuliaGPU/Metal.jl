@@ -123,11 +123,7 @@ end
 
 
         call = call_function(wrapper_f, Nothing, Tuple{arg_types...}, arg_exprs...)
-        return quote
-            @static_assert(metal_version() >= sv"3.2",
-                           "GPU logging requires macOS 15 / Metal 3.2 or newer.")
-            $call
-        end
+        return call
     end
 end
 
@@ -240,9 +236,6 @@ Limited string interpolation is also possible:
     @mtlprint("Hello, World ", 42, "\\n")
     @mtlprint "Hello, World \$(42)\\n"
 ```
-
-!!! compat "macOS 15"
-    Printing from a GPU kernel requires macOS 15 or later.
 """
 macro mtlprint(parts...)
     args = Union{Val, Expr, Symbol}[]

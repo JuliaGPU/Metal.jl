@@ -62,8 +62,6 @@ end
 
 @device_function @inline function atomic_thread_fence(::Val{flags}, ::Val{order},
                                                        ::Val{scope}) where {flags, order, scope}
-    @static_assert(metal_version() >= sv"3.2",
-                   "atomic_thread_fence requires Metal 3.2 or newer.")
     @static_assert(order isa memory_order, "Invalid atomic memory ordering.")
     @static_assert(order === memory_order_relaxed || order === memory_order_seq_cst || metal_version() >= sv"4.1",
                    "Acquire, release, and acquire-release atomic_thread_fence orderings require Metal 4.1 or newer.")
