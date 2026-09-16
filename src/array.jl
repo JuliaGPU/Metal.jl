@@ -29,7 +29,6 @@ end
 function check_eltype(T)
     Base.allocatedinline(T) || error("MtlArray only supports element types that are stored inline")
     Base.isbitsunion(T) && error("MtlArray does not yet support isbits-union arrays")
-    contains_eltype(T, Float64) && error("Metal does not support Float64 values, try using Float32 instead")
     contains_eltype(T, Int128) && error("Metal does not support Int128 values, try using Int64 instead")
     contains_eltype(T, UInt128) && error("Metal does not support UInt128 values, try using UInt64 instead")
 end
@@ -438,7 +437,7 @@ Adapt.adapt_storage(::Type{<:MtlArray{T,N,S}}, xs::AT) where {T,N,S,AT<:Abstract
 
 ## opinionated gpu array adaptor
 
-# eagerly converts Float64 to Float32, for compatibility reasons
+# eagerly converts Float64 to Float32, for performance reasons (Float64 is emulated)
 
 struct MtlArrayAdaptor{S} end
 
