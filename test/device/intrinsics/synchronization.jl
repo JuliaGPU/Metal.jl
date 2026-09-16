@@ -95,6 +95,58 @@
                         sprint(showerror, err))
     end
 
+    # Core.Intrinsics.atomic_fence emits LLVM fences, which crash the macOS 27 back-end
+    # unless GPUCompiler lowers them to air.atomic.fence (#968).
+    @testset "LLVM fence" begin
+        # message passing: thread 1 publishes data guarded by a flag, with release/acquire
+        # fences; every observer that sees the flag must see the data
+        # Julia 1.14 added a syncscope argument to the intrinsic (JuliaLang/julia#60311)
+        @inline function llvm_fence(::Val{order}) where {order}
+            @static if VERSION >= v"1.14.0-DEV.1371"
+                Core.Intrinsics.atomic_fence(order, :system)
+            else
+                Core.Intrinsics.atomic_fence(order)
+            end
+        end
+        function fence_kernel(data, flag, observed)
+            i = thread_position_in_grid_1d()
+            @inbounds if i == 1
+                data[1] = Int32(42)
+                llvm_fence(Val(:release))
+                Metal.atomic_store_explicit(pointer(flag, 1), Int32(1))
+            else
+                f = Metal.atomic_load_explicit(pointer(flag, 1))
+                llvm_fence(Val(:acquire))
+                observed[i] = f == Int32(1) ? data[1] : Int32(-1)
+            end
+            return
+        end
+
+        data = Metal.zeros(Int32, 1)
+        flag = Metal.zeros(Int32, 1)
+        observed = Metal.zeros(Int32, 1024)
+        compiled = @metal launch=false fence_kernel(data, flag, observed)
+        threads = min(length(observed), compiled.maxthreads)
+        compiled(data, flag, observed; threads)
+        @test Array(data) == Int32[42]
+        @test Array(flag) == Int32[1]
+        @test all(x -> x == -1 || x == 42, Array(observed)[2:threads])
+
+        ir = sprint(io -> Metal.code_native(io, fence_kernel,
+                                            Tuple{MtlDeviceVector{Int32,1}, MtlDeviceVector{Int32,1}, MtlDeviceVector{Int32,1}};
+                                            kernel=true, dump_module=true))
+        metal = Metal.metal_target()
+        if metal >= v"3.2"
+            @test !occursin(r"^\s*fence "m, ir)
+            release, acquire = metal >= v"4.1" ? (3, 2) : (5, 5)
+            @test occursin("@air.atomic.fence(i32 3, i32 $release, i32 2)", ir)
+            @test occursin("@air.atomic.fence(i32 3, i32 $acquire, i32 2)", ir)
+        else
+            @test occursin("fence release", ir)
+            @test occursin("fence acquire", ir)
+        end
+    end
+
     # TODO: simdgroup barrier test
 end
 
