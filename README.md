@@ -71,13 +71,13 @@ Toolchain:
 - Metal: 4.1 (MSL), 2.9 (AIR), 1.2.9 (metallib)
 
 Julia packages:
-- Metal.jl: 1.11.0
+- Metal.jl: 1.11.1
 - GPUArrays: 11.5.14
-- GPUCompiler: 2.7.0
+- GPUCompiler: 2.8.1
 - KernelAbstractions: 0.9.42
 - ObjectiveC: 6.0.1
 - LLVM: 9.13.1
-- LLVMDowngrader_jll: 0.10.0+1
+- LLVMDowngrader_jll: 0.11.0+0
 
 Kernel cache:
 - binary archives: enabled
