@@ -129,10 +129,10 @@ mutable struct Mtl4Submission
     # whether a commit-feedback handler was registered for this batch (see `commit_options`)
     const expect_feedback::Bool
     roots::Vector{Any}
-    @atomic completed::Bool
-    @atomic gpu_start::Float64
-    @atomic gpu_end::Float64
-    @atomic error::Union{Nothing,MTL.CommandBufferErrorInfo}
+    Base.@atomic completed::Bool
+    Base.@atomic gpu_start::Float64
+    Base.@atomic gpu_end::Float64
+    Base.@atomic error::Union{Nothing,MTL.CommandBufferErrorInfo}
 end
 
 # The ordering event is the authoritative completion signal: unlike the commit-feedback
@@ -140,12 +140,12 @@ end
 # `diagnosed` additionally reports whether the handler has run and filled in the timings
 # and error, which callers wait for on a bounded basis only.
 is_completed(sub::Mtl4Submission) =
-    (@atomic sub.completed) || sub.event.signaledValue >= sub.seq
+    (Base.@atomic sub.completed) || sub.event.signaledValue >= sub.seq
 
-diagnosed(sub::Mtl4Submission) = !sub.expect_feedback || (@atomic sub.completed)
+diagnosed(sub::Mtl4Submission) = !sub.expect_feedback || (Base.@atomic sub.completed)
 
 gpu_time_range(sub::Mtl4Submission) =
-    diagnosed(sub) ? ((@atomic sub.gpu_start), (@atomic sub.gpu_end)) : nothing
+    diagnosed(sub) ? ((Base.@atomic sub.gpu_start), (Base.@atomic sub.gpu_end)) : nothing
 
 function gpu_time_range(cmdbuf::MTL.MTLCommandBufferLike)
     cmdbuf.status == MTL.MTLCommandBufferStatusCompleted || return nothing
@@ -163,16 +163,16 @@ end
 function commit_options(sub::Mtl4Submission, queue_label::Union{Nothing,String})
     return MTL.MTL4CommitOptions() do feedback
         if feedback !== nothing
-            @atomic sub.gpu_start = feedback.GPUStartTime
-            @atomic sub.gpu_end = feedback.GPUEndTime
+            Base.@atomic sub.gpu_start = feedback.GPUStartTime
+            Base.@atomic sub.gpu_end = feedback.GPUEndTime
             err = feedback.error
             if err !== nothing
-                @atomic sub.error = MTL.CommandBufferErrorInfo(
+                Base.@atomic sub.error = MTL.CommandBufferErrorInfo(
                     String(err.domain), Int(err.code), String(err.localizedDescription),
                     sub.label, queue_label)
             end
         end
-        @atomic sub.completed = true
+        Base.@atomic sub.completed = true
         return
     end
 end
@@ -680,7 +680,7 @@ defer_cleanup!(queue, cmdbuf::MTL.MTLCommandBufferLike, roots::Vector{Any}) =
 function recycle!(bq::BatchedCommandQueue, sub::Mtl4Submission)
     empty!(sub.roots)
 
-    err = @atomic sub.error
+    err = Base.@atomic sub.error
     if err !== nothing
         errors = bq.errors
         if errors === nothing
