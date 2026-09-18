@@ -200,9 +200,20 @@ struct EncodeFailure
 end
 
 Adapt.adapt_structure(to::Metal.Adaptor, x::EncodeFailure) =
-    to.cce === nothing ? x : error("intentional encode failure")
+    to.bq === nothing ? x : error("intentional encode failure")
 
 failed_encode_kernel(x) = return
+
+# burns a few milliseconds of GPU time before writing, so that ordering against it is
+# observable rather than accidental
+function slow_write_kernel(A, val)
+    acc = val
+    for i in 1:2_000_000
+        acc = (acc * Int32(1103515245) + Int32(12345)) & Int32(0x7fffffff)
+    end
+    A[1] = acc == Int32(12345) ? Int32(0) : val
+    return
+end
 
 function failed_batch_increment_kernel(A)
     A[1] += Int32(1)
@@ -260,12 +271,11 @@ end
 
     D = MtlArray(UInt8[0])
     @metal threads=1 queue=queue write_kernel(D, UInt8(1))
+    # deriving a Metal 3 command buffer from the queue flushes the open Metal 4 batch, so
+    # that the new buffer can be ordered after it with a GPU-side wait
     cmdbuf = MTL.MTLCommandBuffer(queue)
-    if !Metal.command_batching() || Metal.profiling_command_buffers()
-        @test queue.cmdbuf === nothing
-    elseif Metal.command_batching_ops() > 1
-        @test queue.nops == 1
-    end
+    @test queue.cmdbuf === nothing
+    @test queue.nops == 0
     @metal threads=1 queue=queue write_kernel(D, UInt8(2))
     MTL.MTLBlitCommandEncoder(cmdbuf) do enc
         buf = Base.unsafe_convert(MTL.MTLBuffer, D)
@@ -274,6 +284,32 @@ end
     MTL.commit!(cmdbuf)
     synchronize(queue)
     @test Array(D) == UInt8[3]
+
+    # a batch opened *after* the command buffer was derived cannot be waited on from the
+    # GPU side; make it slow enough that a missing host-side wait would show
+    E = MtlArray(Int32[0])
+    cmdbuf = MTL.MTLCommandBuffer(queue)
+    @metal threads=1 queue=queue slow_write_kernel(E, Int32(1))
+    MTL.MTLBlitCommandEncoder(cmdbuf) do enc
+        buf = Base.unsafe_convert(MTL.MTLBuffer, E)
+        MTL.append_fillbuffer!(enc, buf, UInt8(2), sizeof(E), E.offset)
+    end
+    MTL.commit!(cmdbuf)
+    synchronize(queue)
+    @test Array(E) == Int32[0x02020202]
+
+    # the same through an MPS command buffer, which has its own constructor (the blit
+    # encoder wrapper only takes the underlying `MTLCommandBuffer`)
+    F = MtlArray(Int32[0])
+    cmdbuf = MPS.MPSCommandBuffer(queue)
+    @metal threads=1 queue=queue slow_write_kernel(F, Int32(1))
+    MTL.MTLBlitCommandEncoder(cmdbuf.commandBuffer) do enc
+        buf = Base.unsafe_convert(MTL.MTLBuffer, F)
+        MTL.append_fillbuffer!(enc, buf, UInt8(2), sizeof(F), F.offset)
+    end
+    MTL.commit!(cmdbuf)
+    synchronize(queue)
+    @test Array(F) == Int32[0x02020202]
 end
 
 function inject_command_buffer_error!(queue, info)

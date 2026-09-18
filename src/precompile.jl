@@ -67,6 +67,8 @@ using PrecompileTools: @setup_workload, @compile_workload
     empty!(queue_residency_sets)
     Base.@lock memory_pressure_stats_lock empty!(_memory_pressure_stats)
     empty!(device_malloc_bufs)
+    empty!(logging_submissions)
+    empty!(pending_commands)
     empty!(MTL.last_committed_per_queue)
     empty!(MTL.submission_state_per_queue)
     empty!(device_exception_info)

@@ -99,6 +99,8 @@ end
             chunk_size = 2^31
             bq = batched_queue(queue)
             enc = blit_encoder(bq)
+            make_resident!(bq, dst.buffer)
+            make_resident!(bq, src.buffer)
             offset = 0
 
             while nbytes > 0
@@ -132,6 +134,7 @@ end
         nbytes = N * sizeof(T)
         bq = batched_queue(queue)
         enc = blit_encoder(bq)
+        make_resident!(bq, dst.buffer)
         append_fillbuffer!(enc, dst.buffer, value, nbytes, dst.offset)
 
         op = MTL.profile_metadata[] === nothing ? nothing :
@@ -147,4 +150,4 @@ end
     return dst
 end
 
-# TODO: Implement generic fill since mtBlitCommandEncoderFillBuffer is limiting
+# TODO: Implement generic fill since Metal's buffer fill is limited to byte patterns

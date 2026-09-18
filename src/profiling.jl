@@ -2,7 +2,7 @@
 
 module Profiling
 
-import ..Metal: MTL, synchronize, device_synchronize
+import ..Metal: MTL, synchronize, device_synchronize, gpu_time_range
 
 import ObjectiveC
 
@@ -21,7 +21,7 @@ max_thread_id() = isdefined(Threads, :maxthreadid) ? Threads.maxthreadid() : Thr
 #
 
 function clean_label(name::String)
-    m = match(r"^MTLCommandBuffer\((.*)\)$", name)
+    m = match(r"^MTL4?CommandBuffer\((.*)\)$", name)
     m === nothing ? name : String(m.captures[1])
 end
 
@@ -178,15 +178,14 @@ function profile_internally(@nospecialize(f); trace::Bool=false, raw::Bool=false
             records
         end
         for (opname, cmdbuf) in records
-            if cmdbuf.status == MTL.MTLCommandBufferStatusCompleted
-                t0 = cmdbuf.GPUStartTime
-                t1 = cmdbuf.GPUEndTime
-                if t1 > t0
-                    push!(name, opname)
-                    push!(start, t0)
-                    push!(stop, t1)
-                    push!(ops, get(collector.metadata, cmdbuf, Any[]))
-                end
+            times = gpu_time_range(cmdbuf)
+            times === nothing && continue
+            t0, t1 = times
+            if t1 > t0
+                push!(name, opname)
+                push!(start, t0)
+                push!(stop, t1)
+                push!(ops, get(collector.metadata, cmdbuf, Any[]))
             end
         end
 

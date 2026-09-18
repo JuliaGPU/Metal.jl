@@ -80,6 +80,8 @@ function command_buffer_errors(state::Union{Nothing,MTL.QueueSubmissionState})
     return MTL.finish_submissions!(state)
 end
 
+command_buffer_errors(errors::Vector{MTL.CommandBufferErrorInfo}) = errors
+
 function command_buffer_errors(states::AbstractVector{MTL.QueueSubmissionState})
     errors = nothing
     for state in states
@@ -94,8 +96,17 @@ function command_buffer_errors(states::AbstractVector{MTL.QueueSubmissionState})
     return errors
 end
 
-function check_synchronization_errors(states)
-    errors = command_buffer_errors(states)
+function check_synchronization_errors(states...)
+    errors = nothing
+    for state in states
+        state_errors = command_buffer_errors(state)
+        state_errors === nothing && continue
+        if errors === nothing
+            errors = state_errors
+        else
+            append!(errors, state_errors)
+        end
+    end
 
     kernel_error = try
         check_exceptions()
@@ -129,23 +140,26 @@ Wait for currently committed GPU work on `queue` to finish.
     bq = batched_queue(queue)
     flush!(bq)
     queue = bq.queue
-    maybe_collect(queue.device; will_block=true)
+    maybe_collect(bq.device; will_block=true)
 
     # flush any pending log handlers from logging-enabled kernels on this queue
     # (Metal delivers logs asynchronously; `wait_completed` on the specific cmdbuf
     # is what processes its `addLogHandler:` blocks)
-    drain_logging_cmdbufs!(queue)
+    drain_logging_submissions!(bq)
 
+    # Metal 3 command buffers derived from this queue (MPS, user code)
     last, submissions = MTL.take_queue_submissions(queue)
-
     # Handles the already-completed fast path internally.
     last === nothing || wait_cmdbuf!(last)
+
+    # batched Metal 4 work
+    wait_submissions!(bq)
 
     drain_cleanups!(bq; force=true)
 
     # Surface Metal runtime failures and device-side Julia exceptions together,
     # after cleanup has released all Julia roots held by completed work.
-    check_synchronization_errors(submissions)
+    check_synchronization_errors(submissions, take_errors!(bq))
     return
 end
 
@@ -166,10 +180,8 @@ function device_synchronize()
     flush_batched_queues!()
     maybe_collect(device(); will_block=true)
 
-    queues = active_global_queues()
-    append!(queues, active_batched_queues())
-    for queue in unique!(queues)
-        drain_logging_cmdbufs!(raw_queue(queue))
+    for bq in active_batched_queues()
+        drain_logging_submissions!(bq)
     end
 
     cmdbufs, submissions = MTL.take_all_submissions()
@@ -184,10 +196,15 @@ function device_synchronize()
         end
     end
 
+    errors = nothing
     for bq in active_batched_queues()
+        wait_submissions!(bq)
         drain_cleanups!(bq; force=true)
+        bq_errors = take_errors!(bq)
+        bq_errors === nothing && continue
+        errors = errors === nothing ? bq_errors : append!(errors, bq_errors)
     end
 
-    check_synchronization_errors(submissions)
+    check_synchronization_errors(submissions, errors)
     return
 end
