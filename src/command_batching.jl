@@ -30,6 +30,10 @@
 # narrowing it to the dispatch and blit stages a compute encoder actually uses.
 const BARRIER_STAGES = MTL.MTLStageAll
 
+# Label of every batched command buffer (only applied when `label_resources()`), and the
+# name a submission reports under in profiles and errors either way.
+const BATCH_LABEL = "MTL4CommandBuffer(batched queue)"
+
 # Tunables for command batching (see `BatchedCommandQueue`), read once per
 # process. Numeric tuning knobs can also be set for one run via the matching
 # JULIA_METAL_* env var (read once at startup), which is convenient for
@@ -235,6 +239,8 @@ mutable struct BatchedCommandQueue
     # submitted batches awaiting completion, in commit order
     cleanups::Vector{MTL4Submission}
     errors::Union{Nothing,Vector{MTL.CommandBufferErrorInfo}}
+    # the queue's label, as reported in `CommandBufferError`s; fixed at construction
+    queue_label::Union{Nothing,String}
 
     # completion of, and ordering against, batched Metal 4 work. `order` is bumped once per
     # flush and is what an `MTL4Submission`'s `seq` refers to, so nothing else may signal
@@ -264,8 +270,10 @@ function BatchedCommandQueue(queue::MTLCommandQueue)
     dev = queue.device
     @autoreleasepool begin
         desc = MTL4CommandQueueDescriptor()
-        label = queue.label
-        label === nothing || (desc.label = String(label))
+        queue_label = let label = queue.label
+            label === nothing ? nothing : String(label)
+        end
+        queue_label === nothing || (desc.label = queue_label)
         queue4 = MTL4CommandQueue(dev, desc)
 
         argtable = MTL4ArgumentTable(dev; buffers=MAX_BUFFER_BINDINGS)
@@ -281,7 +289,7 @@ function BatchedCommandQueue(queue::MTLCommandQueue)
                                  NoEncoder, false,
                                  Any[], nothing, 0, 0, Any[],
                                  argtable,
-                                 MTL4Submission[], nothing,
+                                 MTL4Submission[], nothing, queue_label,
                                  event, UInt64(0), UInt64(0),
                                  event3, UInt64(0), UInt64(0),
                                  MTL4CommandBuffer[], MTL4CommandAllocator[],
@@ -325,8 +333,11 @@ function register_queue!(bq::BatchedCommandQueue)
     return
 end
 
+# A queue with unreported errors stays registered so `device_synchronize` on another
+# task still surfaces them.
 queue_is_idle(bq::BatchedCommandQueue) =
-    bq.cmdbuf === nothing && isempty(bq.cleanups) && !haskey(pending_commands, bq)
+    bq.cmdbuf === nothing && isempty(bq.cleanups) && !haskey(pending_commands, bq) &&
+    bq.errors === nothing
 
 function unregister_queue_if_idle!(bq::BatchedCommandQueue)
     queue_is_idle(bq) || return
@@ -469,7 +480,7 @@ function ensure_cmdbuf!(bq::BatchedCommandQueue,
     end
 
     cmdbuf = isempty(bq.free_cmdbufs) ? MTL4CommandBuffer(bq.device) : pop!(bq.free_cmdbufs)
-    @label! cmdbuf "MTL4CommandBuffer(batched queue)"
+    @label! cmdbuf BATCH_LABEL
     allocator = isempty(bq.free_allocators) ? MTL4CommandAllocator(bq.device) :
                                               pop!(bq.free_allocators)
     resset = if isempty(bq.free_ressets)
@@ -674,10 +685,19 @@ function recycle!(bq::BatchedCommandQueue, sub::MTL4Submission)
     return
 end
 
+# A submission is only recycled once the GPU is done with it *and* its commit-feedback
+# handler has recorded the timings and error; recycling on completion alone would let a
+# late handler write its error into an already-forgotten object. Forcing waits for both.
+recyclable(sub::MTL4Submission) = is_completed(sub) && diagnosed(sub)
+
 function drain_cleanups!(bq::BatchedCommandQueue; force::Bool=false)
     n = 0
     for sub in bq.cleanups
-        (force || is_completed(sub)) || break
+        if force
+            wait_diagnosed!(sub)
+        elseif !recyclable(sub)
+            break
+        end
         n += 1
     end
     if n > 0
@@ -722,22 +742,31 @@ pending_cleanup_count(bq::BatchedCommandQueue) = length(bq.cleanups)
 # Metal 4 has no pollable command-buffer status, so completion is observed through the
 # queue's ordering event; the commit-feedback handler is then given a bounded chance to
 # record the batch's timings and error before the submission is recycled.
+#
+# Like `wait_cmdbuf!`, this polls from the Julia scheduler unless the
+# `nonblocking_synchronization` preference is off or a precompilation worker is running,
+# in which case it parks the thread in Metal's blocking event wait instead.
 function wait_submission!(sub::MTL4Submission)
     if !is_completed(sub)
-        spins = 0
-        while spins < 256
-            if spins < 32
-                ccall(:jl_cpu_pause, Cvoid, ())
-                ccall(:jl_gc_safepoint, Cvoid, ())
-            else
+        precompiling = ccall(:jl_generating_output, Cint, ()) != 0
+        if use_nonblocking_synchronization && !precompiling
+            spins = 0
+            while spins < 256
+                if spins < 32
+                    ccall(:jl_cpu_pause, Cvoid, ())
+                    ccall(:jl_gc_safepoint, Cvoid, ())
+                else
+                    yield()
+                end
+                is_completed(sub) && break
+                spins += 1
+            end
+
+            while !is_completed(sub)
                 yield()
             end
-            is_completed(sub) && break
-            spins += 1
-        end
-
-        while !is_completed(sub)
-            yield()
+        else
+            MTL.waitUntilSignaledValue(sub.event, sub.seq)
         end
     end
 
@@ -768,7 +797,7 @@ end
 
 function wait_oldest_cleanup!(bq::BatchedCommandQueue)
     isempty(bq.cleanups) && return
-    wait_submission!(first(bq.cleanups))
+    wait_diagnosed!(first(bq.cleanups))
     drain_cleanups!(bq)
     return
 end
@@ -829,9 +858,12 @@ function discard_open_cmdbuf!(bq::BatchedCommandQueue, cmdbuf::MTL4CommandBuffer
     return
 end
 
-function flush!(bq::BatchedCommandQueue)
+# Commit the open batch, returning its `MTL4Submission` (or `nothing` if there was none).
+# The submission may already have been drained by `limit_inflight!` on return; waiting on
+# it stays valid either way, since recycling does not touch its completion state.
+function flush_batch!(bq::BatchedCommandQueue)
     cmdbuf = bq.cmdbuf
-    cmdbuf === nothing && return
+    cmdbuf === nothing && return nothing
 
     end_encoder!(bq)
 
@@ -844,22 +876,16 @@ function flush!(bq::BatchedCommandQueue)
     MTL.use_residency_set!(cmdbuf, resset)
     MTL.endCommandBuffer!(cmdbuf)
 
-    label = let l = cmdbuf.label
-        l === nothing ? "MTL4CommandBuffer(batched queue)" : String(l)
-    end
-    queue_label = let l = bq.queue4.label
-        l === nothing ? nothing : String(l)
-    end
     value = bq.order + 1
     feedback = ccall(:jl_generating_output, Cint, ()) == 0
-    sub = MTL4Submission(label, cmdbuf, allocator, resset, scratch, bq.event, value,
+    sub = MTL4Submission(BATCH_LABEL, cmdbuf, allocator, resset, scratch, bq.event, value,
                          feedback, roots, false, 0.0, 0.0, nothing)
 
     register_operations!(bq, sub)
     reset_open_cmdbuf!(bq, cmdbuf)
 
     if feedback
-        MTL.commit!(bq.queue4, cmdbuf, commit_options(sub, queue_label))
+        MTL.commit!(bq.queue4, cmdbuf, commit_options(sub, bq.queue_label))
     else
         MTL.commit!(bq.queue4, cmdbuf)
     end
@@ -876,6 +902,11 @@ function flush!(bq::BatchedCommandQueue)
     hook === nothing || hook(sub)
 
     limit_inflight!(bq)
+    return sub
+end
+
+function flush!(bq::BatchedCommandQueue)
+    flush_batch!(bq)
     return
 end
 

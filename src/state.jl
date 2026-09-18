@@ -89,9 +89,7 @@ end
 const logging_submissions = IdDict{Any,Any}()
 const logging_submissions_lock = ReentrantLock()
 
-function track_logging_submission!(bq)
-    isempty(bq.cleanups) && return
-    sub = last(bq.cleanups)
+function track_logging_submission!(bq, sub)
     Base.@lock logging_submissions_lock begin
         logging_submissions[bq] = sub
     end

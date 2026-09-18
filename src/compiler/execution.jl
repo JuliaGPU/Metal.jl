@@ -414,8 +414,8 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
 
     op = MTL.profile_metadata[] === nothing ? nothing : kernel_operation(kernel, gs, ts)
     record_operation!(bq, kernel.f, args; op=op)
-    flush!(bq)
-    track_logging_submission!(bq)
+    sub = flush_batch!(bq)
+    sub === nothing || track_logging_submission!(bq, sub)
     return
 end
 
