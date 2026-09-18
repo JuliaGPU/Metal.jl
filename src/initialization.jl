@@ -52,6 +52,7 @@ function __init__()
     _shader_validation_enabled[] = get(ENV, "MTL_SHADER_VALIDATION", "0") != "0"
 
     MTL.submit_hook[] = flush_open_batch
+    MTL.commit_hook[] = order_metal4_after
 
     if !Sys.isapple() || Sys.ARCH != :aarch64
         @error "Metal.jl is only supported on Apple Silicon"
@@ -90,9 +91,7 @@ function __init__()
         has_active_batched_queues() || return
         try
             @autoreleasepool for bq in active_batched_queues()
-                cmdbuf = bq.cmdbuf
-                end_encoder!(bq)
-                cmdbuf === nothing || reset_open_cmdbuf!(bq, cmdbuf)
+                abort_batch!(bq)
             end
         catch err
             @error "Failed to close open batched command queues at exit" exception=(err, catch_backtrace())

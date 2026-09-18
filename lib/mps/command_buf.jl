@@ -40,6 +40,8 @@ function commitAndContinue!(cmdbuf::MPSCommandBuffer)
     submitted = cmdbuf.commandBuffer
     hook = MTL.submit_hook[]
     hook === nothing || hook(submitted)
+    hook = MTL.commit_hook[]
+    hook === nothing || hook(submitted)
     @objc [cmdbuf::id{MPSCommandBuffer} commitAndContinue]::Nothing
     MTL.record_committed!(submitted, pointer(submitted.commandQueue))
 end

@@ -226,4 +226,21 @@ scope = MTLCaptureScope(queue)
 
 end
 
+@testset "batched queue" begin
+
+bq = Metal.global_queue(device())
+@test bq.queue4 isa MTL4CommandQueue
+@test bq.argtable isa MTL4ArgumentTable
+@test bq.event isa MTLSharedEvent
+@test bq.device == device()
+
+# a batched queue is still a drop-in for the Metal 3 queue it wraps
+@test bq == bq.queue
+cmdbuf = MTLCommandBuffer(bq)
+@test cmdbuf isa MTLCommandBuffer
+MTL.commit!(cmdbuf)
+Metal.synchronize()
+
+end
+
 end

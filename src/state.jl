@@ -59,8 +59,8 @@ end
 
 Return the [`BatchedCommandQueue`](@ref) associated with the current Julia task.
 
-This is a *batched* queue: kernel launches and blit operations accumulate into a
-single command buffer and are submitted lazily, rather than one command buffer per
+This is a *batched* Metal 4 queue: kernel launches, copies and fills accumulate into a
+single `MTL4CommandBuffer` and are submitted lazily, rather than one command buffer per
 operation. It is a drop-in for a raw `MTLCommandQueue` — using it as one (e.g. to
 derive a command buffer, or for MPS) preserves program order by draining pending
 batches when command buffers are enqueued or committed. Call [`synchronize`](@ref)
@@ -82,48 +82,48 @@ function global_queue(dev::MTLDevice)
     end::BatchedCommandQueue
 end
 
-# tracks the most recently launched logging-enabled cmdbuf per queue, so that
+# tracks the most recently committed logging-enabled batch per queue, so that
 # `synchronize` can wait on it and thereby drain its `addLogHandler:` blocks
 # (Metal dispatches log delivery asynchronously and offers no flush primitive;
-# `waitUntilCompleted` on the specific cmdbuf is what processes its pending blocks).
-const logging_cmdbufs = IdDict{MTLCommandQueue,MTLCommandBuffer}()
-const logging_cmdbufs_lock = ReentrantLock()
+# waiting for the specific submission is what processes its pending blocks).
+const logging_submissions = IdDict{Any,Any}()
+const logging_submissions_lock = ReentrantLock()
 
-function track_logging_cmdbuf!(queue::MTLCommandQueue, cmdbuf::MTLCommandBuffer)
-    Base.@lock logging_cmdbufs_lock begin
-        logging_cmdbufs[queue] = cmdbuf
+function track_logging_submission!(bq)
+    isempty(bq.cleanups) && return
+    sub = last(bq.cleanups)
+    Base.@lock logging_submissions_lock begin
+        logging_submissions[bq] = sub
     end
     return
 end
 
-function drain_logging_cmdbufs!(queue::MTLCommandQueue)
-    cmdbuf = Base.@lock logging_cmdbufs_lock begin
-        prev = get(logging_cmdbufs, queue, nothing)
-        delete!(logging_cmdbufs, queue)
+function drain_logging_submissions!(bq)
+    sub = Base.@lock logging_submissions_lock begin
+        prev = get(logging_submissions, bq, nothing)
+        delete!(logging_submissions, bq)
         prev
     end
-    if cmdbuf !== nothing
-        MTL.wait_completed(cmdbuf)
-    end
+    sub === nothing || wait_diagnosed!(sub)
     return
 end
 
 
 ## scratch-buffer residency
-
-# Fast residency path; collapse this to `true` when virtual devices support residency sets
-function can_use_residency_sets(dev::MTLDevice)
-    @memoize key=pointer(dev)::id{MTLDevice} begin
-        !is_virtual(dev)
-    end::Bool
-end
+#
+# Metal 4 has no implicit residency: a buffer whose GPU address a kernel dereferences must
+# be covered by a residency set. The per-device scratch buffers (the `malloc` bump
+# allocator and the exception mailbox) are referenced by every launch through the kernel
+# state, so they get a residency set of their own that is attached to the queue once.
 
 const queue_residency_sets = Dict{UInt,MTLResidencySet}()
 const queue_residency_sets_lock = ReentrantLock()
 
-command_queue_key(queue::MTLCommandQueue) = UInt(pointer(queue))
+command_queue_key(queue::MTL4CommandQueue) = UInt(pointer(queue))
 
-function install_queue_residency!(queue::MTLCommandQueue, dev::MTLDevice)
+function install_queue_residency!(bq)
+    queue = bq.queue4
+    dev = bq.device
     key = command_queue_key(queue)
     Base.@lock queue_residency_sets_lock begin
         cached_resset = get(queue_residency_sets, key, nothing)

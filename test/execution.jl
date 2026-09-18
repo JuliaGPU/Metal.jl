@@ -200,7 +200,7 @@ struct EncodeFailure
 end
 
 Adapt.adapt_structure(to::Metal.Adaptor, x::EncodeFailure) =
-    to.cce === nothing ? x : error("intentional encode failure")
+    to.bq === nothing ? x : error("intentional encode failure")
 
 failed_encode_kernel(x) = return
 
@@ -260,12 +260,11 @@ end
 
     D = MtlArray(UInt8[0])
     @metal threads=1 queue=queue write_kernel(D, UInt8(1))
+    # deriving a Metal 3 command buffer from the queue flushes the open Metal 4 batch, so
+    # that the new buffer can be ordered after it with a GPU-side wait
     cmdbuf = MTL.MTLCommandBuffer(queue)
-    if !Metal.command_batching() || Metal.profiling_command_buffers()
-        @test queue.cmdbuf === nothing
-    elseif Metal.command_batching_ops() > 1
-        @test queue.nops == 1
-    end
+    @test queue.cmdbuf === nothing
+    @test queue.nops == 0
     @metal threads=1 queue=queue write_kernel(D, UInt8(2))
     MTL.MTLBlitCommandEncoder(cmdbuf) do enc
         buf = Base.unsafe_convert(MTL.MTLBuffer, D)
