@@ -248,6 +248,9 @@ mutable struct BatchedCommandQueue
     event::MTLSharedEvent
     order::UInt64
     pending4::UInt64
+    # Metal 3 command buffers derived from this queue and not yet committed, keyed by
+    # pointer, with the `pending4` value each was made to wait on at derivation
+    derived::Dict{UInt,UInt64}
 
     # ordering of batched Metal 4 work after Metal 3 work derived from `queue`
     event3::MTLSharedEvent
@@ -290,7 +293,7 @@ function BatchedCommandQueue(queue::MTLCommandQueue)
                                  Any[], nothing, 0, 0, Any[],
                                  argtable,
                                  MTL4Submission[], nothing, queue_label,
-                                 event, UInt64(0), UInt64(0),
+                                 event, UInt64(0), UInt64(0), Dict{UInt,UInt64}(),
                                  event3, UInt64(0), UInt64(0),
                                  MTL4CommandBuffer[], MTL4CommandAllocator[],
                                  MTLResidencySet[], ArgumentScratch[])
@@ -379,9 +382,14 @@ Base.:(==)(queue::MTLCommandQueue, bq::BatchedCommandQueue) = queue == bq.queue
 
 ## interoperability with Metal 3 command buffers
 #
-# Handing the raw queue to code that derives a command buffer from it loses the chance to
-# encode a GPU-side wait on the pending Metal 4 batch, so pay for a host-side wait instead.
-# The constructors below are the fast path, and cover Metal.jl's own MPS use.
+# A command buffer derived from the queue is ordered after the batched Metal 4 work in
+# two steps. At derivation it gets a GPU-side wait on the batch flushed at that moment
+# (`order_after_batch!`). Batches opened afterwards are only flushed when the buffer
+# commits, by which point its commands are already encoded and a wait could no longer
+# precede them -- so the commit hook falls back to a host-side wait for those. Buffers
+# derived from the raw `MTLCommandQueue` are unknown to the hook and always take the
+# host-side path; the constructors below (and `MPSCommandBuffer(::BatchedCommandQueue)`)
+# are the fast path and cover Metal.jl's own MPS and MPSGraph use.
 
 function Base.cconvert(::Type{<:id{MTLCommandQueue}}, bq::BatchedCommandQueue)
     flush!(bq)
@@ -389,11 +397,17 @@ function Base.cconvert(::Type{<:id{MTLCommandQueue}}, bq::BatchedCommandQueue)
     return bq.queue
 end
 
+# The key the commit hooks will see `cmdbuf` under: they are handed the underlying
+# `MTLCommandBuffer`, so wrappers like `MPSCommandBuffer` must register that one.
+derived_key(cmdbuf::MTL.MTLCommandBufferLike) = UInt(pointer(cmdbuf))
+
 # Order `cmdbuf`, which was just derived from this queue, after the batched Metal 4 work
-# committed so far.
-function order_after_batch!(bq::BatchedCommandQueue, cmdbuf::MTL.MTLCommandBufferLike)
+# committed so far, and remember what it waited on for the commit hook.
+function order_after_batch!(bq::BatchedCommandQueue, cmdbuf::MTL.MTLCommandBufferLike,
+                            key::UInt=derived_key(cmdbuf))
     flush!(bq)
     bq.pending4 == 0 || MTL.encode_wait!(cmdbuf, bq.event, bq.pending4)
+    bq.derived[key] = bq.pending4
     return cmdbuf
 end
 
@@ -421,10 +435,17 @@ function flush_open_batch(cmdbuf)
 end
 
 # `MTL.commit_hook`: a Metal 3 command buffer is about to be committed, with all of its
-# encoders closed. Have it signal the ordering event so the next Metal 4 batch can wait.
+# encoders closed. Make sure every batch it should follow has actually finished (see the
+# section comment), then have it signal the ordering event so the next Metal 4 batch can
+# wait on it.
 function order_metal4_after(cmdbuf)
     bq = lookup_batched_queue(cmdbuf)
     bq === nothing && return
+
+    flush!(bq)
+    waited = pop!(bq.derived, derived_key(cmdbuf), UInt64(0))
+    bq.pending4 > waited && wait_submissions!(bq)
+
     value = (bq.order3 += 1)
     MTL.encode_signal!(cmdbuf, bq.event3, value)
     bq.pending3 = value
