@@ -1,17 +1,11 @@
 export MTL4ComputeCommandEncoder
-export set_function!, set_buffer!, set_bytes!, set_texture!, set_sampler_state!
-export dispatchThreadgroups!, dispatchThreads!, endEncoding!
-export use!, memoryBarrier!, append_copy!, append_fillbuffer!, append_sync!
+export set_argument_table!, set_threadgroup_memory_length!
 
-# @objcwrapper immutable=false MTL4ComputeCommandEncoder <: MTL4CommandEncoder
+# @objcwrapper managed = true MTL4ComputeCommandEncoder <: MTL4CommandEncoder
 
 function MTL4ComputeCommandEncoder(cmdbuf::MTL4CommandBuffer)
-    handle = @objc [cmdbuf::id{MTL4CommandBuffer} computeCommandEncoder]::id{MTL4ComputeCommandEncoder}
-    obj = MTL4ComputeCommandEncoder(handle)
-    # finalizer(release, obj)
-    return obj
+    return @objc [cmdbuf::id{MTL4CommandBuffer} computeCommandEncoder]::MTL4ComputeCommandEncoder
 end
-
 
 function MTL4ComputeCommandEncoder(f::Base.Callable, cmdbuf::MTL4CommandBuffer)
     encoder = MTL4ComputeCommandEncoder(cmdbuf)
@@ -22,64 +16,86 @@ function MTL4ComputeCommandEncoder(f::Base.Callable, cmdbuf::MTL4CommandBuffer)
     end
 end
 
-# Pipeline State
+## pipeline and argument state
+
 function set_function!(cce::MTL4ComputeCommandEncoder, pipeline::MTLComputePipelineState)
     @objc [cce::id{MTL4ComputeCommandEncoder} setComputePipelineState:pipeline::id{MTLComputePipelineState}]::Nothing
 end
 
-function set_argument_table!(cce::MTL4ComputeCommandEncoder, arg_table::MTL4ArgumentTable)
-    @objc [cce::id{MTL4ComputeCommandEncoder} setArgumentTable:arg_table::id{MTL4ArgumentTable}]::Nothing
+function set_argument_table!(cce::MTL4ComputeCommandEncoder, argtab::MTL4ArgumentTable)
+    @objc [cce::id{MTL4ComputeCommandEncoder} setArgumentTable:argtab::id{MTL4ArgumentTable}]::Nothing
 end
 
-# Dispatch Commands
-function dispatchThreadgroups!(cce::MTL4ComputeCommandEncoder, gridSize::MTLSize, threadGroupSize::MTLSize)
-    @objc [cce::id{MTL4ComputeCommandEncoder} dispatchThreadgroups:gridSize::MTLSize
-                                             threadsPerThreadgroup:threadGroupSize::MTLSize]::Nothing
+function set_threadgroup_memory_length!(cce::MTL4ComputeCommandEncoder, length::Integer,
+                                        index::Integer)
+    @objc [cce::id{MTL4ComputeCommandEncoder} setThreadgroupMemoryLength:length::NSUInteger
+                                                                 atIndex:(index-1)::NSUInteger]::Nothing
 end
 
-function dispatchThreads!(cce::MTL4ComputeCommandEncoder, threadsSize::MTLSize, threadsPerThreadgroup::MTLSize)
-    @objc [cce::id{MTL4ComputeCommandEncoder} dispatchThreads:threadsSize::MTLSize
-                                             threadsPerThreadgroup:threadsPerThreadgroup::MTLSize]::Nothing
+"""
+    stages(cce::MTL4ComputeCommandEncoder)::MTLStages
+
+The set of pipeline stages this encoder can encode work for; the natural argument for the
+`after`/`before` parameters of the barrier functions.
+"""
+function stages(cce::MTL4ComputeCommandEncoder)
+    @objc [cce::id{MTL4ComputeCommandEncoder} stages]::MTLStages
 end
 
-# Copy Operations (Blit functionality integrated into compute encoder in Metal 4)
-# function append_copy!(cce::MTL4ComputeCommandEncoder, dst::MTLBuffer, dstOffset::Integer,
-#                       src::MTLBuffer, srcOffset::Integer, size::Integer)
-#     @objc [cce::id{MTL4ComputeCommandEncoder} copyFromBuffer:src::id{MTLBuffer}
-#                                              sourceOffset:srcOffset::NSUInteger
-#                                              toBuffer:dst::id{MTLBuffer}
-#                                              destinationOffset:dstOffset::NSUInteger
-#                                              size:size::NSUInteger]::Nothing
-# end
+## dispatch
 
-# function append_copy!(cce::MTL4ComputeCommandEncoder, dst::MTLTexture, dstSlice::Integer, dstLevel::Integer, dstOrigin::MTLOrigin,
-#                       src::MTLBuffer, srcOffset::Integer, srcBytesPerRow::Integer, srcBytesPerImage::Integer,
-#                       size::MTLSize)
-#     @objc [cce::id{MTL4ComputeCommandEncoder} copyFromBuffer:src::id{MTLBuffer}
-#                                              sourceOffset:srcOffset::NSUInteger
-#                                              sourceBytesPerRow:srcBytesPerRow::NSUInteger
-#                                              sourceBytesPerImage:srcBytesPerImage::NSUInteger
-#                                              sourceSize:size::MTLSize
-#                                              toTexture:dst::id{MTLTexture}
-#                                              destinationSlice:dstSlice::NSUInteger
-#                                              destinationLevel:dstLevel::NSUInteger
-#                                              destinationOrigin:dstOrigin::MTLOrigin]::Nothing
-# end
-
-# Fill Buffer
-function append_fillbuffer!(cce::MTL4ComputeCommandEncoder, buffer::MTLBuffer, range::NSRange, value::UInt8)
-    @objc [cce::id{MTL4ComputeCommandEncoder} fillBuffer:buffer::id{MTLBuffer}
-                                             range:range::NSRange
-                                             value:value::UInt8]::Nothing
+function dispatchThreadgroups!(cce::MTL4ComputeCommandEncoder, threadgroupsPerGrid::MTLSize,
+                               threadsPerThreadgroup::MTLSize)
+    @objc [cce::id{MTL4ComputeCommandEncoder} dispatchThreadgroups:threadgroupsPerGrid::MTLSize
+                                              threadsPerThreadgroup:threadsPerThreadgroup::MTLSize]::Nothing
 end
 
-function append_fillbuffer!(cce::MTL4ComputeCommandEncoder, buffer::MTLBuffer, value::UInt8,
-                           byteSize::Integer, offset::Integer=0)
-    range = NSRange(offset, byteSize)
-    append_fillbuffer!(cce, buffer, range, value)
+function dispatchThreads!(cce::MTL4ComputeCommandEncoder, threadsPerGrid::MTLSize,
+                          threadsPerThreadgroup::MTLSize)
+    @objc [cce::id{MTL4ComputeCommandEncoder} dispatchThreads:threadsPerGrid::MTLSize
+                                         threadsPerThreadgroup:threadsPerThreadgroup::MTLSize]::Nothing
 end
 
-# Convenience dispatch function for encoding
-function append_current_function!(cce::MTL4ComputeCommandEncoder, gridSize::MTLSize, threadGroupSize::MTLSize)
-    dispatchThreadgroups!(cce, gridSize, threadGroupSize)
+function append_current_function!(cce::MTL4ComputeCommandEncoder, threadgroupsPerGrid,
+                                  threadsPerThreadgroup)
+    dispatchThreadgroups!(cce, threadgroupsPerGrid, threadsPerThreadgroup)
+end
+
+## copy and fill
+#
+# Metal 4 folds the Metal 3 blit encoder's buffer operations into the compute encoder.
+
+function append_copy!(cce::MTL4ComputeCommandEncoder, dst::MTLBuffer, doff,
+                      src::MTLBuffer, soff, len)
+    @objc [cce::id{MTL4ComputeCommandEncoder} copyFromBuffer:src::id{MTLBuffer}
+                                                sourceOffset:soff::NSUInteger
+                                                    toBuffer:dst::id{MTLBuffer}
+                                           destinationOffset:doff::NSUInteger
+                                                        size:len::NSUInteger]::Nothing
+end
+
+for T in (UInt8, Int8)
+    @eval function append_fillbuffer!(cce::MTL4ComputeCommandEncoder, buf::MTLBuffer,
+                                      value::$T, bytesize, offset=0)
+        range = NSRange(offset, bytesize)
+        @objc [cce::id{MTL4ComputeCommandEncoder} fillBuffer:buf::id{MTLBuffer}
+                                                       range:range::NSRange
+                                                       value:value::$T]::Nothing
+    end
+end
+
+function append_fillbuffer!(cce::MTL4ComputeCommandEncoder, buf::MTLBuffer, range::NSRange,
+                            value::UInt8)
+    @objc [cce::id{MTL4ComputeCommandEncoder} fillBuffer:buf::id{MTLBuffer}
+                                                   range:range::NSRange
+                                                   value:value::UInt8]::Nothing
+end
+
+## residency
+
+function use!(cce::MTL4ComputeCommandEncoder, bufs::Vector{MTLBuffer},
+              mode::MTLResourceUsage=ReadWriteUsage)
+    @objc [cce::id{MTL4ComputeCommandEncoder} useResources:bufs::id{MTLBuffer}
+                                                    count:length(bufs)::NSUInteger
+                                                    usage:mode::MTLResourceUsage]::Nothing
 end
