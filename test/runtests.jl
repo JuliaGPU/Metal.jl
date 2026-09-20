@@ -181,4 +181,4 @@ end
 
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
 
-runtests(Metal, args; testsuite, init_code, init_worker_code, test_worker, serial=["largecopy", "largebroadcast"])
+runtests(Metal, args; testsuite, init_code, init_worker_code, test_worker, serial=["largecopy", "largebroadcast"], history_key=validate ? "validation" : nothing)
