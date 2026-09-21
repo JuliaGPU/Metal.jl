@@ -151,7 +151,7 @@ function KI.record_event(::MetalBackend)
 end
 
 function KI.wait_event(::MetalBackend, ev::Tuple{Metal.MTLSharedEvent, UInt64})
-    MTL.waitUntilSignaledValue(ev[1], ev[2])
+    # MTL.waitUntilSignaledValue(ev[1], ev[2])
     return
 end
 
