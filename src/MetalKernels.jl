@@ -139,6 +139,21 @@ end
     MtlDeviceArray(Dims, ptr)
 end
 
+function KI.record_event(::MetalBackend)
+    dev = device()
+    ev = Metal.MTLSharedEvent(dev)
+    val = ev.signaledValue + 1
+    cmdbuf = Metal.MTLCommandBuffer(global_queue(dev))
+    MTL.encode_signal!(cmdbuf, ev, val)
+    Metal.commit!(cmdbuf)
+
+    return (ev, val)
+end
+
+function KI.wait_event(::MetalBackend, ev::Tuple{Metal.MTLSharedEvent, UInt64})
+    MTL.waitUntilSignaledValue(ev[1], ev[2])
+    return
+end
 
 ## other
 
