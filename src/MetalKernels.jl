@@ -135,7 +135,6 @@ end
 
 ## indexing
 
-## COV_EXCL_START
 @device_override @inline function KA.__index_Local_Linear(ctx)
     return thread_position_in_threadgroup().x
 end
@@ -200,6 +199,5 @@ end
 @device_override @inline function KA.__print(args...)
     Metal._mtlprint(args...)
 end
-## COV_EXCL_STOP
 
 end

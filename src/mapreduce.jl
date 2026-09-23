@@ -1,5 +1,3 @@
-## COV_EXCL_START
-
 # TODO
 # - serial version for lower latency
 # - group-stride loop to delay need for second kernel launch
@@ -163,8 +161,6 @@ function serial_mapreduce_kernel(f, op, neutral, ::Val{Rreduce}, ::Val{Rother}, 
     end
     return
 end
-
-## COV_EXCL_STOP
 
 function serial_mapreduce_threshold(dev)
     cores = num_gpu_cores()
