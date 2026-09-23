@@ -895,6 +895,52 @@ end
         as = MtlArray([Complex{Float32}(2.0e20, 2.0e20), Complex{Float32}(1.0e-25, 1.0e-25)])
         @test all(Array(as ./ as) .≈ Complex{Float32}(1.0, 0.0))
     end
+
+    # Base performs these in double precision (JuliaGPU/Metal.jl#871)
+    let
+        x = ComplexF32[1 + 2im, -3 + 4im, 2 - 0.5im, 1f30 + 1im, 1f-30 - 1f-30im]
+        dx = MtlArray(x)
+        @test Array(inv.(dx)) ≈ inv.(x)
+        @test Array(3 ./ dx) ≈ 3 ./ x
+        @test Array(atan.(dx)) ≈ atan.(x)
+        @test Array(dx[1:3] .^ -2) ≈ x[1:3] .^ -2
+        @test Array(dx ./ dx) ≈ ones(ComplexF32, length(x))
+        dz = MtlArray([2f38 + 2f38im])
+        @test Array(dz ./ dz) == [1]
+    end
+end
+
+# Base methods that compute single-precision results in double precision, replaced by
+# GPUToolbox.Overlays.float64_overrides
+@testset "Float64-free fallbacks" begin
+    x = Float32[7, -7, 1, 6, 3, 514, 1f7, 270.00122, 45, 135.5, -89.99, 179.99, 1000]
+    y = Float32[2, 2, 0.1, 0.1, 0.3, 0.75, 3, 0.25, 7, -0.3, 1.5, 9, 0.1]
+    dx, dy = MtlArray(x), MtlArray(y)
+
+    # JuliaGPU/Metal.jl#972
+    @testset "$f" for f in (div, fld, cld, rem, mod, ÷)
+        @test Array(f.(dx, dy)) == f.(x, y)
+    end
+    @test Array(div.(dx, dy, RoundNearest)) == div.(x, y, RoundNearest)
+    @test Array(first.(divrem.(dx, dy))) == first.(divrem.(x, y))
+
+    # JuliaGPU/Metal.jl#973
+    @testset "$f" for f in (sind, cosd, tand, secd, cotd)
+        @test Array(f.(dx)) ≈ f.(x)
+    end
+    @test Array(last.(sincosd.(dx))) ≈ last.(sincosd.(x))
+    @test Array(sind.(MtlArray(Float16[30, 45, 180]))) ≈ sind.(Float16[30, 45, 180])
+
+    @test Array(first.(sincospi.(dy))) ≈ first.(sincospi.(y))
+    @test Array(cispi.(dy)) ≈ cispi.(y)
+
+    # mixed Float32/Int32 comparisons and integer powers
+    i = Int32[7, -7, 16777217, typemax(Int32), 0, 514, 10000000, 270, 45, 136, -90, 180, 1000]
+    di = MtlArray(i)
+    @test Array(dx .< di) == (x .< i)
+    @test Array(dx .== di) == (x .== i)
+    @test Array(Float16.(dx) .<= di) == (Float16.(x) .<= i)
+    @test Array(MtlArray(fill(-1f0, 3)) .^ MtlArray([16777217, 16777216, -3])) == [-1, 1, -1]
 end
 
 end

@@ -56,6 +56,12 @@ GPUCompiler.runtime_module(::MetalCompilerJob) = Metal
 
 GPUCompiler.method_table(::MetalCompilerJob) = method_table
 
+# Metal does not support double precision, so also use GPUToolbox's overrides that keep
+# single-precision math out of Float64.
+GPUCompiler.method_table_view(job::MetalCompilerJob) =
+    GPUCompiler.StackedMethodTable(job.world, method_table,
+                                   GPUToolbox.Overlays.float64_overrides)
+
 GPUCompiler.kernel_state_type(job::MetalCompilerJob) = KernelState
 
 # Keep relocations symbolic. Most kernels are relocation-free, so their metallib is
