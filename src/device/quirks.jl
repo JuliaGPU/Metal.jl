@@ -30,8 +30,6 @@ end
 # checked.jl
 @device_override @noinline Base.Checked.throw_overflowerr_binaryop(op, x, y) =
     @gputhrow "OverflowError" "Binary operation overflowed"
-@device_override @noinline Base.Checked.throw_overflowerr_negation(op, x, y) =
-    @gputhrow "OverflowError" "Negation overflowed"
 
 # boot.jl
 @device_override @noinline Core.throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} =
