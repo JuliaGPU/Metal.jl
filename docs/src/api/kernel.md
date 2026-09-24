@@ -55,6 +55,30 @@ threadgroup_barrier
 simdgroup_barrier
 ```
 
+## Atomics
+
+Atomic operations on device and threadgroup memory. The low-level functions follow MSL's
+`atomic_*_explicit` functions, taking pointers and optional memory orders; `Metal.@atomic`
+offers a higher-level interface on arrays.
+
+```@docs
+Metal.@atomic
+Metal.atomic_load_explicit
+Metal.atomic_store_explicit
+Metal.atomic_exchange_explicit
+Metal.atomic_compare_exchange_weak_explicit
+Metal.atomic_fetch_add_explicit
+Metal.atomic_fetch_sub_explicit
+Metal.atomic_fetch_min_explicit
+Metal.atomic_fetch_max_explicit
+Metal.atomic_fetch_and_explicit
+Metal.atomic_fetch_or_explicit
+Metal.atomic_fetch_xor_explicit
+Metal.atomic_min_explicit
+Metal.atomic_max_explicit
+Metal.atomic_fetch_op_explicit
+```
+
 ## Printing
 
 ```@docs
