@@ -310,6 +310,106 @@ end
     end
 end
 
+# documentation
+
+const atomic_semantics = """
+The `order` is a `memory_order` (or a `Val` of one), `memory_order_relaxed` by
+default. As in MSL, the operation synchronizes with the other threads on the device for
+device memory, and with those in the threadgroup for threadgroup memory. An ordered
+operation orders accesses to both device and threadgroup memory. Ordered operations need
+Metal 3.2; before Metal 4.1, they are implemented with fences. A load only uses the
+acquire part of an order, and a store only its release part.
+
+The variants that take `flags` ([`MemoryFlags`](@ref)) as an additional argument restrict
+the memory an ordered operation orders. Except for relaxed operations without flags, they
+need Metal 4.1.
+"""
+
+@doc """
+    atomic_load_explicit(ptr::LLVMPtr{T}, [order]) -> T
+
+Atomically load the value at `ptr`, which can be an `Int32`, `UInt32` or `Float32` in device
+or threadgroup memory.
+
+$atomic_semantics
+""" atomic_load_explicit
+
+@doc """
+    atomic_store_explicit(ptr::LLVMPtr{T}, val::T, [order])
+
+Atomically store `val` at `ptr`, which can be an `Int32`, `UInt32` or `Float32` in device
+or threadgroup memory.
+
+$atomic_semantics
+""" atomic_store_explicit
+
+@doc """
+    atomic_exchange_explicit(ptr::LLVMPtr{T}, val::T, [order]) -> T
+
+Atomically replace the value at `ptr` by `val`, and return the old value. `T` can be
+`Int32`, `UInt32` or `Float32`, in device or threadgroup memory.
+
+$atomic_semantics
+""" atomic_exchange_explicit
+
+@doc """
+    atomic_compare_exchange_weak_explicit(ptr::LLVMPtr{T}, expected::T, desired::T,
+                                          [success_order, failure_order]) -> T
+
+Atomically replace the value at `ptr` by `desired` if it equals `expected`, and return the
+value that was loaded. Unlike in MSL, this function doesn't return whether the exchange
+succeeded: it did if the returned value equals `expected`. As a weak compare-exchange, it can
+fail spuriously. `T` can be `Int32`, `UInt32` or `Float32`, in device or threadgroup memory.
+
+The `success_order` applies when the exchange succeeds, the `failure_order` (which cannot
+release) when it fails.
+
+$atomic_semantics
+""" atomic_compare_exchange_weak_explicit
+
+for (op, desc, types) in (
+        (:add, "add `val` to the value at `ptr`", "`Int32`, `UInt32` or `Float32`"),
+        (:sub, "subtract `val` from the value at `ptr`", "`Int32`, `UInt32` or `Float32`"),
+        (:min, "replace the value at `ptr` by its minimum with `val`", "`Int32` or `UInt32`"),
+        (:max, "replace the value at `ptr` by its maximum with `val`", "`Int32` or `UInt32`"),
+        (:and, "replace the value at `ptr` by its bitwise and with `val`", "`Int32` or `UInt32`"),
+        (:or,  "replace the value at `ptr` by its bitwise or with `val`", "`Int32` or `UInt32`"),
+        (:xor, "replace the value at `ptr` by its bitwise xor with `val`", "`Int32` or `UInt32`"))
+    f = Symbol("atomic_fetch_$(op)_explicit")
+    doc = """
+        $f(ptr::LLVMPtr{T}, val::T, [order]) -> T
+
+    Atomically $desc, and return the old value. `T` can be $types, in device or
+    threadgroup memory.
+
+    $atomic_semantics
+    """
+    @eval @doc $doc $f
+end
+
+for op in (:min, :max)
+    f = Symbol("atomic_$(op)_explicit")
+    doc = """
+        $f(ptr::LLVMPtr{UInt64,AS.Device}, val::UInt64, [order])
+
+    Atomically replace the `UInt64` in device memory at `ptr` by its $(op)imum with `val`.
+    Unlike the 32-bit operations, this doesn't return the old value, as Metal only supports
+    the non-fetching form. It needs an Apple8 GPU or newer.
+    """
+    @eval @doc $doc $f
+end
+
+@doc """
+    atomic_fetch_op_explicit(ptr::LLVMPtr{T}, op, val, [order]) -> T
+
+Atomically replace the value at `ptr` by `op(old, val)`, and return the old value `old`.
+Implemented with a compare-exchange loop, this supports any operation, but only the types
+and address spaces [`Metal.atomic_compare_exchange_weak_explicit`](@ref) does.
+
+$atomic_semantics
+""" atomic_fetch_op_explicit
+
+
 ## high-level interface
 
 # copied from CUDA.jl -- should be generalized or integrated with Base
