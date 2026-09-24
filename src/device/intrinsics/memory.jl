@@ -23,15 +23,16 @@ end
         # create a function
         llvm_f, _ = create_function(T_ptr)
 
-        # create the global variable
+        # create the global variable. align and pad it to 4 bytes, so that GPUCompiler can
+        # implement 8- and 16-bit atomics on the containing 32-bit word.
         mod = LLVM.parent(llvm_f)
-        gv_typ = LLVM.ArrayType(eltyp, len * sizeof(T))
+        gv_typ = LLVM.ArrayType(eltyp, cld(len * sizeof(T), 4) * 4)
         gv = GlobalVariable(mod, gv_typ, "threadgroup_memory", AS.ThreadGroup)
         if len > 0
             linkage!(gv, LLVM.API.LLVMInternalLinkage)
             initializer!(gv, UndefValue(gv_typ))
         end
-        alignment!(gv, Base.datatype_alignment(T))
+        alignment!(gv, max(Base.datatype_alignment(T), 4))
 
         # generate IR
         IRBuilder() do builder
