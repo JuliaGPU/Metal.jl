@@ -178,8 +178,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
                     @test jlfun.(a, val) ≈ Array(b)
                 end
 
-                threadgroup_types = Metal.metal_target() >= v"4.1" ? types : setdiff(types, [Float32])
-                @testset "threadgroup $T" for T in threadgroup_types
+                @testset "threadgroup $T" for T in types
                     a = rand(T, n)
                     b = MtlArray(a)
                     val = rand(T)
@@ -236,32 +235,39 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             return
         end
 
-        # The enum value is in the kernel signature, so the public enum overload
-        # specializes it to a Val before lowering to AIR.
-        for (order, minimum) in (
-            (Metal.memory_order_relaxed, v"3.0"),
-            (Metal.memory_order_seq_cst, v"4.1"),
-            (Metal.memory_order_acquire, v"4.1"),
-            (Metal.memory_order_release, v"4.1"),
-            (Metal.memory_order_acq_rel, v"4.1"),
-        )
-            a = Metal.zeros(Int32, 1)
-            if Metal.metal_target() >= minimum
-                @metal ordered_fetch_kernel(a, Val(order))
+        # every target supports ordered atomics: MSL 4.1 has them, and GPUCompiler brackets
+        # relaxed ones with fences before that. code for an older target also runs on newer
+        # systems, so we can execute each of these lowerings.
+        orders = (Metal.memory_order_relaxed, Metal.memory_order_seq_cst,
+                  Metal.memory_order_acquire, Metal.memory_order_release,
+                  Metal.memory_order_acq_rel)
+        @testset "Metal $metal" for (metal, air) in ((v"3.2", v"2.7"), (v"4.0", v"2.8"),
+                                                     (v"4.1", v"2.9"))
+            Metal.metal_target() >= metal || continue
+            for order in orders
+                a = Metal.zeros(Int32, 1)
+                @metal metal=metal air=air ordered_fetch_kernel(a, Val(order))
                 @test Array(a) == Int32[1]
-            else
-                err = try
-                    @metal launch=false ordered_fetch_kernel(a, Val(order))
-                    nothing
-                catch err
-                    err
-                end
-                @test err isa Metal.InvalidIRError
-                @test occursin("Ordered atomics and memory flags require Metal 4.1 or newer.",
-                               sprint(showerror, err))
             end
         end
 
+        # memory orders can also be passed as run-time values (loads and stores only get the
+        # part of an order they can have, like with Clang)
+        function dynamic_order_kernel(a, order)
+            Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1), order)
+            x = Metal.atomic_load_explicit(pointer(a, 1), order)
+            Metal.atomic_store_explicit(pointer(a, 2), x, order)
+            Metal.atomic_compare_exchange_weak_explicit(pointer(a, 3), x - Int32(1), x, order,
+                                                        order)
+            return
+        end
+        a = Metal.zeros(Int32, 3)
+        for order in orders
+            @metal dynamic_order_kernel(a, order)
+        end
+        @test Array(a) == fill(Int32(length(orders)), 3)
+
+        # explicit memory flags need the MSL 4.1 intrinsics
         function flagged_fetch_kernel(a, ::Val{ORDER}, ::Val{FLAGS}) where {ORDER,FLAGS}
             Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1), ORDER, FLAGS)
             return
@@ -272,19 +278,22 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             @metal flagged_fetch_kernel(a, Val(Metal.memory_order_relaxed),
                                         Val(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup))
             @test Array(a) == Int32[1]
-        else
-            err = try
-                @metal launch=false flagged_fetch_kernel(
-                    a, Val(Metal.memory_order_relaxed), Val(Metal.MemoryFlagDevice))
-                nothing
-            catch err
-                err
-            end
-            @test err isa Metal.InvalidIRError
-            @test occursin("Ordered atomics and memory flags require Metal 4.1 or newer.",
-                           sprint(showerror, err))
         end
+        err = try
+            @metal launch=false metal=v"4.0" air=v"2.8" flagged_fetch_kernel(
+                a, Val(Metal.memory_order_relaxed), Val(Metal.MemoryFlagDevice))
+            nothing
+        catch err
+            err
+        end
+        @test err isa Metal.InvalidIRError
+        @test occursin("Ordered atomics and memory flags require Metal 4.1 or newer.",
+                       sprint(showerror, err))
 
+        # the form of the AIR intrinsics depends on the AIR and MSL versions
+        abi_air(f; kwargs...) =
+            sprint(io -> Metal.code_air(io, f, Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
+                                        kernel=true, dump_module=true, kwargs...))
         function ordered_flags_abi(ptr::Core.LLVMPtr{Int32,Metal.AS.Device})
             Metal.atomic_fetch_add_explicit(ptr, Int32(1), Metal.memory_order_acq_rel,
                                             Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
@@ -294,58 +303,31 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             Metal.atomic_fetch_add_explicit(ptr, Int32(1))
             return
         end
-        ordered_ir = sprint(io -> Metal.code_llvm(io, ordered_flags_abi,
-                                                   Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
-                                                   kernel=true, metal=v"4.1", air=v"2.9",
-                                                   dump_module=true))
-        relaxed_ir = sprint(io -> Metal.code_llvm(io, default_abi,
-                                                   Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
-                                                   kernel=true, metal=v"4.1", air=v"2.9",
-                                                   dump_module=true))
-        volatile_ir = sprint(io -> Metal.code_llvm(io, default_abi,
-                                                    Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
-                                                    kernel=true, metal=v"4.0", air=v"2.9",
-                                                    dump_module=true))
-        legacy_ir = sprint(io -> Metal.code_llvm(io, default_abi,
-                                                  Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
-                                                  kernel=true, metal=v"4.0", air=v"2.8",
-                                                  dump_module=true))
+        function ordered_abi(ptr::Core.LLVMPtr{Int32,Metal.AS.Device})
+            Metal.atomic_fetch_add_explicit(ptr, Int32(1), Metal.memory_order_seq_cst)
+            return
+        end
         atomic_ptr = raw"(?:ptr addrspace\(1\)|i32 addrspace\(1\)\*)"
-        ordered_abi_pattern = Regex(raw"@air\.atomic\.global\.add\.s\.i32\(" * atomic_ptr *
-                                    raw", i32, i32, i32, i32, i1\)")
-        legacy_abi_pattern = Regex(raw"@air\.atomic\.global\.add\.s\.i32\(" * atomic_ptr *
-                                   raw", i32, i32, i32, i1\)")
-        @test occursin(ordered_abi_pattern, ordered_ir)
-        @test occursin("i32 4, i32 2, i32 3, i1 false", ordered_ir)
-        @test occursin(ordered_abi_pattern, relaxed_ir)
-        @test occursin("i32 0, i32 2, i32 0, i1 false", relaxed_ir)
-        @test occursin(ordered_abi_pattern, volatile_ir)
-        @test occursin("i32 0, i32 2, i32 0, i1 true", volatile_ir)
-        @test occursin(legacy_abi_pattern, legacy_ir)
-        @test occursin("i32 0, i32 2, i1 true", legacy_ir)
+        add_call(args) = Regex(raw"call i32 @air\.atomic\.global\.add\.s\.i32\(" *
+                               atomic_ptr * raw"[^,]*, i32 1, " * args * raw"\)")
+        fence_call = raw"call void @air.atomic.fence(i32 3, i32 5, i32 2)"
 
-        function unavailable_order(a)
-            Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1),
-                                            Metal.memory_order_acquire)
-            return
-        end
-        function unavailable_flags(a)
-            Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1), Metal.memory_order_relaxed,
-                                            Metal.MemoryFlagDevice)
-            return
-        end
-        a = Metal.zeros(Int32, 1)
-        for f in (unavailable_order, unavailable_flags)
-            err = try
-                @metal launch=false metal=v"4.0" f(a)
-                nothing
-            catch err
-                err
-            end
-            @test err isa Metal.InvalidIRError
-            @test occursin("Ordered atomics and memory flags require Metal 4.1 or newer.",
-                           sprint(showerror, err))
-        end
+        ordered_flags_ir = abi_air(ordered_flags_abi; metal=v"4.1", air=v"2.9")
+        @test occursin(add_call("i32 4, i32 2, i32 3, i1 false"), ordered_flags_ir)
+        relaxed_ir = abi_air(default_abi; metal=v"4.1", air=v"2.9")
+        @test occursin(add_call("i32 0, i32 2, i32 0, i1 false"), relaxed_ir)
+        volatile_ir = abi_air(default_abi; metal=v"4.0", air=v"2.9")
+        @test occursin(add_call("i32 0, i32 2, i32 0, i1 true"), volatile_ir)
+        legacy_ir = abi_air(default_abi; metal=v"4.0", air=v"2.8")
+        @test occursin(add_call("i32 0, i32 2, i1 true"), legacy_ir)
+        # LLVM orders all memory, so ordered atomics cover device and threadgroup memory
+        ordered_ir = abi_air(ordered_abi; metal=v"4.1", air=v"2.9")
+        @test occursin(add_call("i32 5, i32 2, i32 3, i1 false"), ordered_ir)
+        @test !occursin("air.atomic.fence", ordered_ir)
+        # before MSL 4.1, a relaxed atomic bracketed by (sequentially consistent) fences
+        fenced_ir = abi_air(ordered_abi; metal=v"4.0", air=v"2.8")
+        @test occursin(add_call("i32 0, i32 2, i1 true"), fenced_ir)
+        @test count(fence_call, fenced_ir) == 2
 
         function invalid_order(a)
             Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1), Val(Int32(42)),
@@ -361,35 +343,28 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         @test err isa Metal.InvalidIRError
         @test occursin("Invalid atomic memory ordering.", sprint(showerror, err))
 
+        # threadgroup floating-point add needs MSL 4.1; before that it's a compare-exchange loop
         function threadgroup_float32_add(a)
-            Metal.atomic_fetch_add_explicit(pointer(MtlThreadGroupArray(Float32, 1), 1), 1f0)
-            a[1] = 1
+            tg = MtlThreadGroupArray(Float32, 1)
+            i = thread_position_in_threadgroup().x
+            i == 1 && (tg[1] = 0f0)
+            threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+            Metal.atomic_fetch_add_explicit(pointer(tg, 1), 1f0)
+            threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+            i == 1 && (a[1] = tg[1])
             return
         end
-        err = try
-            @metal launch=false metal=v"4.0" air=v"2.8" threadgroup_float32_add(a)
-            nothing
-        catch err
-            err
+        @testset "Metal $metal" for (metal, air) in ((v"3.2", v"2.7"), (v"4.0", v"2.8"),
+                                                     (v"4.1", v"2.9"))
+            Metal.metal_target() >= metal || continue
+            a = Metal.zeros(Float32, 1)
+            @metal threads=n metal=metal air=air threadgroup_float32_add(a)
+            @test Array(a) == Float32[n]
+            ir = sprint(io -> Metal.code_air(io, threadgroup_float32_add,
+                                             Tuple{typeof(Metal.mtlconvert(a))};
+                                             kernel=true, metal, air))
+            @test occursin("air.atomic.local.add.f32", ir) == (metal >= v"4.1")
         end
-        @test err isa Metal.InvalidIRError
-        @test occursin("Float32 threadgroup atomic operations require Metal 4.1 or newer.",
-                       sprint(showerror, err))
-
-        function mixed_abi(ptr::Core.LLVMPtr{Int32,Metal.AS.Device})
-            Metal.atomic_load_explicit(ptr)
-            Metal.atomic_load_explicit(ptr + 1, Metal.memory_order_acquire)
-            return
-        end
-        mixed_ir = sprint(io -> Metal.code_llvm(
-            io, mixed_abi, Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
-            kernel=true, metal=v"4.1", air=v"2.9", dump_module=true))
-        ordered_load_pattern = Regex(raw"@air\.atomic\.global\.load\.i32\(" * atomic_ptr *
-                                     raw", i32, i32, i32, i1\)")
-        legacy_load_pattern = Regex(raw"@air\.atomic\.global\.load\.i32\(" * atomic_ptr *
-                                    raw", i32, i32, i1\)")
-        @test occursin(ordered_load_pattern, mixed_ir)
-        @test !occursin(legacy_load_pattern, mixed_ir)
 
         function mixed_kernel(a, b)
             x = Metal.atomic_load_explicit(pointer(a, 1))
@@ -397,12 +372,10 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             b[1] = x + y
             return
         end
-        if Metal.metal_target() >= v"4.1"
-            a = MtlArray(Int32[1, 2])
-            b = Metal.zeros(Int32, 1)
-            @metal mixed_kernel(a, b)
-            @test Array(b) == Int32[3]
-        end
+        a = MtlArray(Int32[1, 2])
+        b = Metal.zeros(Int32, 1)
+        @metal mixed_kernel(a, b)
+        @test Array(b) == Int32[3]
 
         function guarded_ordered_fetch_kernel(a)
             if Metal.metal_version() >= sv"4.1"
@@ -432,52 +405,39 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             Metal.atomic_max_explicit(ptr, UInt64(1))
             return
         end
+        u64_air(; kwargs...) =
+            sprint(io -> Metal.code_air(io, u64_abi, Tuple{Core.LLVMPtr{UInt64,Metal.AS.Device}};
+                                        kernel=true, gpufamily=MTL.MTLGPUFamilyApple8,
+                                        dump_module=true, kwargs...))
+        u64_ptr = raw"(?:ptr addrspace\(1\)|i64 addrspace\(1\)\*)"
+        max_call(args) = Regex(raw"call void @air\.atomic\.global\.max\.u\.i64\(" *
+                               u64_ptr * raw"[^,]*, i64 1, " * args * raw"\)")
+        @test occursin(max_call("i32 0, i32 2, i32 0, i1 false"), u64_air(metal=v"4.1", air=v"2.9"))
+        @test occursin(max_call("i32 0, i32 2, i32 0, i1 true"), u64_air(metal=v"4.0", air=v"2.9"))
+        @test occursin(max_call("i32 0, i32 2, i1 true"), u64_air(metal=v"4.0", air=v"2.8"))
+
+        # like other atomics, they can be ordered, and (from MSL 4.1) take memory flags
         function u64_ordered(a)
-            Metal.atomic_max_explicit(pointer(a, 1), UInt64(1),
-                                      Metal.memory_order_release)
+            Metal.atomic_max_explicit(pointer(a, 1), UInt64(1), Metal.memory_order_release)
             return
         end
         function u64_flagged(a)
-            Metal.atomic_max_explicit(pointer(a, 1), UInt64(1),
-                                      Metal.memory_order_relaxed, Metal.MemoryFlagDevice)
+            Metal.atomic_max_explicit(pointer(a, 1), UInt64(1), Metal.memory_order_release,
+                                      Metal.MemoryFlagDevice)
             return
         end
-        u64_tt = Tuple{Core.LLVMPtr{UInt64,Metal.AS.Device}}
-        u64_ir = sprint(io -> Metal.code_llvm(io, u64_abi, u64_tt; kernel=true,
-                                              gpufamily=MTL.MTLGPUFamilyApple8,
-                                              metal=v"4.1", air=v"2.9", dump_module=true))
-        u64_volatile_ir = sprint(io -> Metal.code_llvm(io, u64_abi, u64_tt; kernel=true,
-                                                       gpufamily=MTL.MTLGPUFamilyApple8,
-                                                       metal=v"4.0", air=v"2.9", dump_module=true))
-        u64_legacy_ir = sprint(io -> Metal.code_llvm(io, u64_abi, u64_tt; kernel=true,
-                                                     gpufamily=MTL.MTLGPUFamilyApple8,
-                                                     metal=v"4.0", air=v"2.8", dump_module=true))
-        u64_ptr = raw"(?:ptr addrspace\(1\)|i64 addrspace\(1\)\*)"
-        u64_abi_pattern = Regex(raw"@air\.atomic\.global\.max\.u\.i64\(" * u64_ptr *
-                                raw", i64, i32, i32, i32, i1\)")
-        u64_legacy_pattern = Regex(raw"@air\.atomic\.global\.max\.u\.i64\(" * u64_ptr *
-                                   raw", i64, i32, i32, i1\)")
-        @test occursin(u64_abi_pattern, u64_ir)
-        @test occursin("i32 0, i32 2, i32 0, i1 false", u64_ir)
-        @test occursin(u64_abi_pattern, u64_volatile_ir)
-        @test occursin("i32 0, i32 2, i32 0, i1 true", u64_volatile_ir)
-        @test occursin(u64_legacy_pattern, u64_legacy_ir)
-        @test occursin("i32 0, i32 2, i1 true", u64_legacy_ir)
-
         a = Metal.zeros(UInt64, 1)
-        for (f, message) in (
-            (u64_ordered, "64-bit atomic min/max only supports relaxed ordering."),
-            (u64_flagged, "64-bit atomic min/max does not support memory flags."),
-        )
-            err = try
-                @metal launch=false gpufamily=MTL.MTLGPUFamilyApple8 metal=v"4.1" air=v"2.9" f(a)
-                nothing
-            catch err
-                err
-            end
-            @test err isa Metal.InvalidIRError
-            @test occursin(message, sprint(showerror, err))
-        end
+        u64_ordered_air(f; kwargs...) =
+            sprint(io -> Metal.code_air(io, f, Tuple{typeof(Metal.mtlconvert(a))};
+                                        kernel=true, gpufamily=MTL.MTLGPUFamilyApple8,
+                                        kwargs...))
+        @test occursin(max_call("i32 3, i32 2, i32 3, i1 false"),
+                       u64_ordered_air(u64_ordered; metal=v"4.1", air=v"2.9"))
+        @test occursin(max_call("i32 3, i32 2, i32 1, i1 false"),
+                       u64_ordered_air(u64_flagged; metal=v"4.1", air=v"2.9"))
+        fenced_ir = u64_ordered_air(u64_ordered; metal=v"4.0", air=v"2.8")
+        @test occursin(max_call("i32 0, i32 2, i1 true"), fenced_ir)
+        @test occursin("call void @air.atomic.fence(i32 3, i32 5, i32 2)", fenced_ir)
 
         for (f, init) in modify_ops
             a = MtlArray(fill(init, n))
@@ -514,6 +474,90 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         b = MtlArray(fill(UInt64(1), n))
         @metal threads=n gpufamily=MTL.MTLGPUFamilyApple7 guarded_max_kernel(b, UInt64(42))
         @test all(isequal(UInt64(42)), Array(b))
+    end
+end
+
+@testset "LLVM atomics" begin
+    # atomics emitted as plain LLVM atomics (here through UnsafeAtomics, as Atomix and
+    # KernelAbstractions do), which GPUCompiler lowers for the targeted Metal version:
+    # with fences before MSL 4.1, compare-exchange loops for operations AIR lacks, and masked
+    # operations on the containing word for 8- and 16-bit values.
+    function contend(a)
+        # sequentially consistent at system scope: what Atomix's generic path emits
+        Metal.UnsafeAtomics.modify!(pointer(a, 1), +, one(eltype(a)))
+        return
+    end
+    function contend_max(a)
+        i = thread_position_in_grid().x
+        Metal.UnsafeAtomics.modify!(pointer(a, 1), max, eltype(a)(i % 200))
+        return
+    end
+    function contend_nand(a)
+        Metal.UnsafeAtomics.modify!(pointer(a, 1), ⊼, eltype(a)(-1))   # flips all bits
+        return
+    end
+    function contend_bytes(a)
+        # neighbouring bytes of the same word
+        i = thread_position_in_grid().x
+        Metal.UnsafeAtomics.modify!(pointer(a, (i - 1) % 8 + 1), +, UInt8(1))
+        return
+    end
+    function message_passing(data, flag, out)
+        # the first lane of the second threadgroup publishes, the one of the first waits
+        tg = threadgroup_position_in_grid().x
+        thread_position_in_threadgroup().x == 1 || return
+        if tg == 2
+            data[1] = Int32(42)
+            Metal.UnsafeAtomics.store!(pointer(flag, 1), Int32(1), Metal.UnsafeAtomics.release)
+        else
+            while Metal.UnsafeAtomics.load(pointer(flag, 1), Metal.UnsafeAtomics.acquire) == Int32(0)
+            end
+            out[1] = data[1]
+        end
+        return
+    end
+
+    m = 4096
+    @testset "Metal $metal" for (metal, air) in ((v"3.2", v"2.7"), (v"4.0", v"2.8"),
+                                                 (v"4.1", v"2.9"))
+        Metal.metal_target() >= metal || continue
+        for T in (Int8, UInt16, Int32, UInt32, Float16, Float32)
+            a = Metal.zeros(T, 1)
+            @metal threads=256 groups=m÷256 metal=metal air=air contend(a)
+            @test Array(a)[1] == foldl((x, _) -> x + one(T), 1:m; init=zero(T))
+        end
+        for T in (Int32, Float32)
+            a = Metal.zeros(T, 1)
+            @metal threads=256 groups=m÷256 metal=metal air=air contend_max(a)
+            @test Array(a)[1] == T(199)
+        end
+        a = MtlArray(Int16[0x0f0f])
+        @metal threads=256 groups=m÷256 metal=metal air=air contend_nand(a)
+        @test Array(a)[1] == Int16(0x0f0f)
+        a = Metal.zeros(UInt8, 8)
+        @metal threads=256 groups=m÷256 metal=metal air=air contend_bytes(a)
+        @test Array(a) == fill(UInt8(m ÷ 8 % 256), 8)
+        # a single byte of threadgroup memory (padded to a word, see `emit_threadgroup_memory`)
+        function threadgroup_byte(a)
+            tg = MtlThreadGroupArray(UInt8, 1)
+            i = thread_position_in_threadgroup().x
+            i == 1 && (tg[1] = 0x00)
+            threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+            Metal.UnsafeAtomics.modify!(pointer(tg, 1), +, 0x01, Metal.UnsafeAtomics.monotonic)
+            threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+            i == 1 && (a[1] = tg[1])
+            return
+        end
+        a = Metal.zeros(UInt8, 1)
+        @metal threads=200 metal=metal air=air threadgroup_byte(a)
+        @test Array(a)[1] == 200
+        for _ in 1:10
+            data = Metal.zeros(Int32, 1)
+            flag = Metal.zeros(Int32, 1)
+            out = Metal.zeros(Int32, 1)
+            @metal threads=32 groups=2 metal=metal air=air message_passing(data, flag, out)
+            @test Array(out)[1] == 42
+        end
     end
 end
 
@@ -587,7 +631,7 @@ end
 
         if T === UInt64
             # the 64-bit operation should be native, not the compare-and-swap fallback
-            ir = sprint(io -> Metal.code_llvm(
+            ir = sprint(io -> Metal.code_air(
                 io, kernel, Tuple{typeof(Metal.mtlconvert(a))};
                 kernel=true, gpufamily=MTL.MTLGPUFamilyApple8))
             @test occursin("air.atomic.global.max.u.i64", ir)
@@ -608,7 +652,7 @@ end
         end
 
         if T === UInt64
-            ir = sprint(io -> Metal.code_llvm(
+            ir = sprint(io -> Metal.code_air(
                 io, kernel, Tuple{typeof(Metal.mtlconvert(a))};
                 kernel=true, gpufamily=MTL.MTLGPUFamilyApple8))
             @test occursin("air.atomic.global.min.u.i64", ir)
@@ -683,5 +727,70 @@ end
         @test err isa Metal.InvalidIRError
         @test occursin("Ordered atomics and memory flags require Metal 4.1 or newer.",
                        sprint(showerror, err))
+    end
+
+    # the same without memory flags, i.e., with LLVM atomics, on every target
+    function llvm_refit_kernel!(values, flags, child0, child1, parent, n_leaves::Int32)
+        leaf = thread_position_in_grid().x
+        if leaf <= n_leaves
+            leaf_node = n_leaves - Int32(1) + leaf
+            values[leaf_node] = UInt32(1)
+
+            parent_node = parent[leaf_node]
+            while parent_node != Int32(0)
+                old = Metal.atomic_fetch_add_explicit(pointer(flags, parent_node), UInt32(1),
+                                                      Metal.memory_order_acq_rel)
+                if old + UInt32(1) == UInt32(2)
+                    left = child0[parent_node]
+                    right = child1[parent_node]
+                    values[parent_node] = values[left] + values[right]
+                    parent_node = parent[parent_node]
+                else
+                    break
+                end
+            end
+        end
+        return
+    end
+    @testset "Metal $metal" for (metal, air) in ((v"3.2", v"2.7"), (v"4.0", v"2.8"),
+                                                 (v"4.1", v"2.9"))
+        Metal.metal_target() >= metal || continue
+        values .= 0
+        flags .= 0
+        @metal threads=256 groups=cld(n_leaves, 256) metal=metal air=air llvm_refit_kernel!(
+            values, flags, mt_child0, mt_child1, mt_parent, Int32(n_leaves))
+        @test Array(values)[1] == UInt32(n_leaves)
+    end
+end
+
+# JuliaGPU/GPUCompiler.jl#934: an object with `@atomic` fields that doesn't escape is moved to
+# the stack, keeping its compare-exchange loops, which Metal has no atomics for
+mutable struct StackAtomics
+    @atomic n::Int32
+    @atomic x::Float32
+end
+function stack_atomics(x::Float32)
+    acc = StackAtomics(0, 0f0)
+    @atomic acc.n += Int32(1)
+    @atomic acc.n += Int32(1)
+    @atomic acc.x += x
+    @atomic acc.x += 1f0
+    return (@atomic acc.n), (@atomic acc.x)
+end
+@testset "atomics on thread-private objects" begin
+    function kernel(out_n, out_x, xs)
+        i = thread_position_in_grid().x
+        @inbounds out_n[i], out_x[i] = stack_atomics(xs[i])
+        return
+    end
+    xs = MtlArray(Float32.(1:64))
+    @testset "Metal $metal" for (metal, air) in ((v"3.2", v"2.7"), (v"4.0", v"2.8"),
+                                                 (v"4.1", v"2.9"))
+        Metal.metal_target() >= metal || continue
+        out_n = MtlArray(zeros(Int32, 64))
+        out_x = MtlArray(zeros(Float32, 64))
+        @metal threads=64 metal=metal air=air kernel(out_n, out_x, xs)
+        @test all(==(2), Array(out_n))
+        @test Array(out_x) == Array(xs) .+ 1f0
     end
 end
