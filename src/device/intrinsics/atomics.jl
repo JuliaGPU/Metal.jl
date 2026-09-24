@@ -144,6 +144,16 @@ end
 
 ## low-level functions with explicit memory flags (MSL 4.1)
 
+# These call the AIR intrinsics directly: memory flags restrict which memory an ordered
+# operation orders, which LLVM atomics cannot express (an LLVM ordering orders all memory;
+# the synchronization scope only selects the threads). LLVM 19 added Memory Model Relaxation
+# Annotations for this, which AMDGPU uses to restrict fences to address spaces
+# (`!mmra !{!"amdgpu-synchronize-as", !"local"}`). Once we require Julia 1.13 (LLVM 20),
+# these can emit LLVM atomics too, tagged with e.g. `!{!"metal-synchronize-as",
+# !"threadgroup"}` (through `llvmcall`, as UnsafeAtomics can't attach metadata), which
+# GPUCompiler's atomic lowering would then turn into the flags operand. Dropping a tag is
+# safe, only ordering more memory than asked for.
+
 for (typ, typnam) in ((:Int32, "i32"), (:UInt32, "i32")),
     (as, memnam, scope) in atomic_memory_spaces
 
