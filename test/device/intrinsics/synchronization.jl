@@ -86,14 +86,11 @@
     @testset "LLVM fence" begin
         # message passing: thread 1 publishes data guarded by a flag, with release/acquire
         # fences; every observer that sees the flag must see the data
-        # Julia 1.14 added a syncscope argument to the intrinsic (JuliaLang/julia#60311)
-        @inline function llvm_fence(::Val{order}) where {order}
-            @static if VERSION >= v"1.14.0-DEV.1371"
-                Core.Intrinsics.atomic_fence(order, :system)
-            else
-                Core.Intrinsics.atomic_fence(order)
-            end
-        end
+        # UnsafeAtomics emits a bare LLVM fence through Julia's `atomic_fence` intrinsic, or
+        # through `llvmcall` where inference deletes that intrinsic (Julia < 1.12, before
+        # JuliaLang/julia#57806)
+        @inline llvm_fence(::Val{order}) where {order} =
+            Metal.UnsafeAtomics.fence(getfield(Metal.UnsafeAtomics, order))
         function fence_kernel(data, flag, observed)
             i = thread_position_in_grid_1d()
             @inbounds if i == 1
