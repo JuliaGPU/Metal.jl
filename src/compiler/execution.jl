@@ -148,6 +148,13 @@ Adapt.adapt_structure(to::Adaptor,
                       bc::Broadcast.Broadcasted{Style, <:Any, <:Type{T}}) where {Style, T} =
     Broadcast.Broadcasted{Style}((x...) -> T(x...), adapt(to, bc.args), bc.axes)
 
+# functions that capture a type, e.g., `Base.Fix1(convert, T)` as used by LinearAlgebra,
+# which isn't a valid kernel argument either
+Adapt.adapt_structure(to::Adaptor, f::Base.Fix1{<:Any, <:Type{T}}) where {T} =
+    let g = adapt(to, f.f); (x...) -> g(T, x...) end
+Adapt.adapt_structure(to::Adaptor, f::Base.Fix2{<:Any, <:Type{T}}) where {T} =
+    let g = adapt(to, f.f); (x...) -> g(x..., T) end
+
 """
     mtlconvert(x, [cce])
 
