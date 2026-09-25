@@ -621,6 +621,8 @@ function Base.resize!(A::MtlVector{T}, n::Integer) where T
         # type tag array past the data
         maxsize + n
     end
+    # Metal doesn't support empty allocations; see the `undef` constructor
+    bufsize = max(bufsize, 1)
 
     # replace the data with a new one. this 'unshares' the array.
     # as a result, we can safely support resizing unowned buffers.
