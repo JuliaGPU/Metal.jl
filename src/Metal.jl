@@ -98,6 +98,7 @@ include("mapreduce.jl")
 include("accumulate.jl")
 include("sorting.jl")
 include("indexing.jl")
+include("sparse.jl")
 include("random.jl")
 include("fft.jl")
 
