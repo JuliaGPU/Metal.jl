@@ -304,24 +304,31 @@ const kernel_instances = Dict{UInt, Any}()
     # such objects to LLVMPtr seems fine, somehow.
     # TODO: can we just convert everything eagerly and support top-level LLVMPtrs?
 
-    idx = 1
+    # the argument index is tracked at run time, because whether an argument occupies a
+    # slot depends on its converted type (e.g. a `Base.Fix1` capturing a type converts to
+    # a ghost closure). the checks on that type still fold away.
+    push!(ex.args, :(idx = 1))
     for (argidx, argtyp) in enumerate(args)
         argex = :(args[$argidx])
         if argtyp <: MTLBuffer
             # top-level buffers are passed as a pointer-valued argument
-            push!(ex.args, :(set_buffer!(cce, $argex, 0, $idx)))
+            push!(ex.args, :(set_buffer!(cce, $argex, 0, idx); idx += 1))
         elseif argtyp <: MtlPtr
             # the same as a buffer, but with an offset
-            push!(ex.args, :(set_buffer!(cce, $argex.buffer, $argex.offset, $idx)))
+            push!(ex.args, :(set_buffer!(cce, $argex.buffer, $argex.offset, idx); idx += 1))
         elseif isghosttype(argtyp) || Core.Compiler.isconstType(argtyp)
             continue
         else
             # everything else is passed by reference, copied into Metal's transient buffer
             append!(ex.args, (quote
-                set_argument!(cce, mtlconvert($(argex), cce), $idx)
+                let arg = mtlconvert($(argex), cce)
+                    if !(isghosttype(typeof(arg)) || Core.Compiler.isconstType(typeof(arg)))
+                        set_argument!(cce, arg, idx)
+                        idx += 1
+                    end
+                end
             end).args)
         end
-        idx += 1
     end
 
     push!(ex.args, :(return nothing))
