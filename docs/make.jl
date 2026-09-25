@@ -29,6 +29,7 @@ function main()
                 "usage/overview.md",
                 "usage/array.md",
                 "usage/kernel.md",
+                "usage/sparse.md",
             ],
             "Profiling" => "profiling.md",
             "Debugging and profiling with Xcode and Instruments" => "xcode.md",
@@ -40,6 +41,7 @@ function main()
                 "api/mps.md",
                 "api/mpsgraphs.md",
                 "api/libraries.md",
+                "api/sparse.md",
             ],
             "FAQ" => Any[
                 "faq/faq.md",
