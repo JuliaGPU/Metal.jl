@@ -314,15 +314,16 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
 
         ordered_flags_ir = abi_air(ordered_flags_abi; metal=v"4.1", air=v"2.9")
         @test occursin(add_call("i32 4, i32 2, i32 3, i1 false"), ordered_flags_ir)
+        # (GPUCompiler sets the volatile bit on the read-modify-writes it selects)
         relaxed_ir = abi_air(default_abi; metal=v"4.1", air=v"2.9")
-        @test occursin(add_call("i32 0, i32 2, i32 0, i1 false"), relaxed_ir)
+        @test occursin(add_call("i32 0, i32 2, i32 0, i1 true"), relaxed_ir)
         volatile_ir = abi_air(default_abi; metal=v"4.0", air=v"2.9")
         @test occursin(add_call("i32 0, i32 2, i32 0, i1 true"), volatile_ir)
         legacy_ir = abi_air(default_abi; metal=v"4.0", air=v"2.8")
         @test occursin(add_call("i32 0, i32 2, i1 true"), legacy_ir)
         # LLVM orders all memory, so ordered atomics cover device and threadgroup memory
         ordered_ir = abi_air(ordered_abi; metal=v"4.1", air=v"2.9")
-        @test occursin(add_call("i32 5, i32 2, i32 3, i1 false"), ordered_ir)
+        @test occursin(add_call("i32 5, i32 2, i32 3, i1 true"), ordered_ir)
         @test !occursin("air.atomic.fence", ordered_ir)
         # before MSL 4.1, a relaxed atomic bracketed by (sequentially consistent) fences
         fenced_ir = abi_air(ordered_abi; metal=v"4.0", air=v"2.8")
@@ -412,7 +413,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
         u64_ptr = raw"(?:ptr addrspace\(1\)|i64 addrspace\(1\)\*)"
         max_call(args) = Regex(raw"call void @air\.atomic\.global\.max\.u\.i64\(" *
                                u64_ptr * raw"[^,]*, i64 1, " * args * raw"\)")
-        @test occursin(max_call("i32 0, i32 2, i32 0, i1 false"), u64_air(metal=v"4.1", air=v"2.9"))
+        @test occursin(max_call("i32 0, i32 2, i32 0, i1 true"), u64_air(metal=v"4.1", air=v"2.9"))
         @test occursin(max_call("i32 0, i32 2, i32 0, i1 true"), u64_air(metal=v"4.0", air=v"2.9"))
         @test occursin(max_call("i32 0, i32 2, i1 true"), u64_air(metal=v"4.0", air=v"2.8"))
 
@@ -431,7 +432,7 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
             sprint(io -> Metal.code_air(io, f, Tuple{typeof(Metal.mtlconvert(a))};
                                         kernel=true, gpufamily=MTL.MTLGPUFamilyApple8,
                                         kwargs...))
-        @test occursin(max_call("i32 3, i32 2, i32 3, i1 false"),
+        @test occursin(max_call("i32 3, i32 2, i32 3, i1 true"),
                        u64_ordered_air(u64_ordered; metal=v"4.1", air=v"2.9"))
         @test occursin(max_call("i32 3, i32 2, i32 1, i1 false"),
                        u64_ordered_air(u64_flagged; metal=v"4.1", air=v"2.9"))
