@@ -108,6 +108,7 @@ include("profiling.jl")
 include("broadcast.jl")
 include("accumulate.jl")
 include("sorting.jl")
+include("sparse.jl")
 include("random.jl")
 include("fft.jl")
 
