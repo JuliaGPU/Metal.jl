@@ -58,6 +58,13 @@ end
 @inline atomic_scope(::Val{AS.Device}) = UnsafeAtomics.Internal.LLVMSyncScope{:device}()
 @inline atomic_scope(::Val{AS.ThreadGroup}) = UnsafeAtomics.Internal.LLVMSyncScope{:workgroup}()
 
+# MSL only makes device memory coherent within a threadgroup by default, so a relaxed load
+# of it is only guaranteed to (eventually) see stores from the same threadgroup. Say so with
+# the workgroup scope: LLVM's device-scope relaxed loads have to see every thread's stores,
+# which GPUCompiler implements with acquire loads when they may be repeated.
+@inline load_scope(as::Val, order) =
+    order === UnsafeAtomics.monotonic ? atomic_scope(Val(AS.ThreadGroup)) : atomic_scope(as)
+
 # MSL only allows ordered atomics and memory flags on the intrinsics from 4.1
 @inline atomic_order_and_flags_available(order, flags) =
     (order === memory_order_relaxed && flags == MemoryFlagNone) ||
@@ -78,7 +85,7 @@ for typ in atomic_types, (as, _, _) in atomic_memory_spaces
         @inline atomic_load_explicit(ptr::LLVMPtr{$typ,$as},
                                      order::Union{memory_order,Val}=memory_order_relaxed) =
             with_llvm_order(order, :load) do order
-                UnsafeAtomics.load(ptr, order, atomic_scope(Val($as)))
+                UnsafeAtomics.load(ptr, order, load_scope(Val($as), order))
             end
 
         @inline atomic_store_explicit(ptr::LLVMPtr{$typ,$as}, desired::$typ,
@@ -342,6 +349,12 @@ Atomically load the value at `ptr`, which can be an `Int32`, `UInt32` or `Float3
 or threadgroup memory.
 
 $atomic_semantics
+
+As in MSL, a relaxed load of device memory is only guaranteed to eventually observe stores
+from threads in the same threadgroup: repeating it, e.g., in a loop waiting for a flag, may
+never observe a store from another threadgroup. To wait for another threadgroup, use an
+acquire load (`memory_order_acquire`), or a relaxed load at device scope through
+UnsafeAtomics (`UnsafeAtomics.load(ptr, UnsafeAtomics.monotonic)`).
 """ atomic_load_explicit
 
 @doc """

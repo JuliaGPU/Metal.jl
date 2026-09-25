@@ -764,6 +764,67 @@ end
     end
 end
 
+# Relaxed loads of device memory can keep returning a cached value; like MSL, Metal.jl's are
+# only guaranteed to observe stores from the same threadgroup, while acquire loads and LLVM's
+# device-scope relaxed loads observe those of other threadgroups too. The waits are bounded,
+# as a GPU hang can require a reboot.
+@testset "waiting on another threadgroup" begin
+    function wait_kernel(load, flag, dummy, out, cap)
+        lane = thread_position_in_threadgroup().x
+        lane == 1 || return
+        if threadgroup_position_in_grid().x == 2
+            # let the waiting threadgroup read (and cache) the flag first
+            s = Int32(0)
+            for _ in 1:2000
+                s += Metal.atomic_load_explicit(pointer(dummy, 1), Metal.memory_order_acquire)
+            end
+            Metal.atomic_store_explicit(pointer(flag, 1), Int32(1) + s)
+        else
+            i = Int32(0)
+            v = Int32(0)
+            while v == Int32(0) && i < cap
+                v = load(pointer(flag, 1))
+                i += Int32(1)
+            end
+            @inbounds out[1] = i
+            @inbounds out[2] = v
+        end
+        return
+    end
+    acquire(p) = Metal.atomic_load_explicit(p, Metal.memory_order_acquire)
+    relaxed_device(p) = Metal.UnsafeAtomics.load(p, Metal.UnsafeAtomics.monotonic)
+
+    cap = Int32(10_000_000)
+    @testset "Metal $metal" for (metal, air) in ((v"3.2", v"2.7"), (v"4.0", v"2.8"),
+                                                 (v"4.1", v"2.9"))
+        Metal.metal_target() >= metal || continue
+        @testset "$(nameof(load))" for load in (acquire, relaxed_device)
+            flag = Metal.zeros(Int32, 1)
+            dummy = Metal.zeros(Int32, 1)
+            out = Metal.zeros(Int32, 2)
+            @metal threads=32 groups=2 metal=metal air=air wait_kernel(load, flag, dummy, out, cap)
+            i, v = Array(out)
+            @test v == 1
+            @test i < cap
+        end
+    end
+
+    # Metal.jl's relaxed loads keep MSL's semantics, so they aren't made acquire loads
+    function relaxed_wait(flag, out, cap)
+        i = Int32(0)
+        while Metal.atomic_load_explicit(pointer(flag, 1)) == Int32(0) && i < cap
+            i += Int32(1)
+        end
+        @inbounds out[1] = i
+        return
+    end
+    ir = sprint(io -> Metal.code_air(io, relaxed_wait,
+                                     Tuple{MtlDeviceVector{Int32,1}, MtlDeviceVector{Int32,1},
+                                           Int32}; kernel=true, metal=v"4.1", air=v"2.9"))
+    @test occursin(r"call i32 @air\.atomic\.global\.load\.i32\([^,]+, i32 0, i32 2, i32 0, i1 true\)", ir)
+    @test !occursin(r"call i32 @air\.atomic\.global\.load\.i32\([^,]+, i32 2,", ir)
+end
+
 # JuliaGPU/GPUCompiler.jl#934: an object with `@atomic` fields that doesn't escape is moved to
 # the stack, keeping its compare-exchange loops, which Metal has no atomics for
 mutable struct StackAtomics
