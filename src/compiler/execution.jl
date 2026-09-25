@@ -143,8 +143,9 @@ Adapt.adapt_structure(::Adaptor, r::Base.RefValue{<:Union{DataType, Type}}) =
     MtlRefType{r[]}()
 
 # case where type is the function being broadcasted
+# (on Julia 1.14, the function type parameter is `Core.TypeEgal{T} <: Type{T}`)
 Adapt.adapt_structure(to::Adaptor,
-                      bc::Broadcast.Broadcasted{Style, <:Any, Type{T}}) where {Style, T} =
+                      bc::Broadcast.Broadcasted{Style, <:Any, <:Type{T}}) where {Style, T} =
     Broadcast.Broadcasted{Style}((x...) -> T(x...), adapt(to, bc.args), bc.axes)
 
 """
