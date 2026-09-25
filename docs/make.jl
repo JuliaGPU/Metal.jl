@@ -29,6 +29,7 @@ function main()
                 "usage/overview.md",
                 "usage/array.md",
                 "usage/kernel.md",
+                "usage/sparse.md",
             ],
             "Profiling" => "profiling.md",
             "API reference" => Any[
@@ -37,6 +38,7 @@ function main()
                 "api/kernel.md",
                 "api/array.md",
                 "api/mps.md",
+                "api/sparse.md",
             ],
             "FAQ" => Any[
                 "faq/faq.md",
