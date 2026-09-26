@@ -203,6 +203,11 @@ const profile_hook = Ref{Any}(nothing)
 # enqueued or committed.
 const submit_hook = Ref{Any}(nothing)
 
+# optional commit hook. when set, it is invoked just before a command buffer is handed to
+# Metal, i.e. with all of its encoders closed but before it becomes immutable. unlike
+# `submit_hook` this is the point at which additional commands may still be encoded.
+const commit_hook = Ref{Any}(nothing)
+
 # optional profiling data for operation metadata (e.g. kernel dimensions, copy sizes).
 const profile_metadata = Ref{Any}(nothing)
 
@@ -215,7 +220,7 @@ end
 ProfileCollector() = ProfileCollector(ReentrantLock(), IdDict{Any,Vector{Any}}(),
                                       Tuple{String,Any}[])
 
-@inline function note_operation!(collector::ProfileCollector, cmdbuf::MTLCommandBufferLike, op)
+@inline function note_operation!(collector::ProfileCollector, cmdbuf, op)
     @lock collector.lock begin
         ops = get(collector.metadata, cmdbuf, nothing)
         if ops === nothing
@@ -255,6 +260,8 @@ end
 function commit_with_queue_key!(cmdbuf::MTLCommandBufferLike, key::id{MTLCommandQueue})
     cmdbuf.status in [MTLCommandBufferStatusCompleted, MTLCommandBufferStatusCommitted] &&
         error("Cannot commit an already committed/completed command buffer")
+    hook = commit_hook[]
+    hook === nothing || hook(cmdbuf)
     @objc [cmdbuf::id{MTLCommandBuffer} commit]::Nothing
     # Record every submission for error accounting. The most recent buffer remains
     # the queue tail used by synchronization, while older completed buffers are

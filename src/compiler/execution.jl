@@ -105,15 +105,14 @@ end
 ## argument conversion
 
 struct Adaptor
-    # the current command encoder, if any.
-    cce::Union{Nothing,MTLComputeCommandEncoder}
+    # the queue the arguments are being encoded on, if any.
+    bq::Union{Nothing,BatchedCommandQueue}
 end
 
 # convert Metal buffers to their GPU address
 function Adapt.adapt_storage(to::Adaptor, buf::MTLBuffer)
-    if to.cce !== nothing
-        MTL.use!(to.cce, buf, MTL.ReadWriteUsage)
-    end
+    # only the address is encoded, so the buffer has to be declared resident explicitly
+    to.bq === nothing || make_resident!(to.bq, buf)
     reinterpret(Core.LLVMPtr{Nothing,AS.Device}, buf.gpuAddress)
 end
 function Adapt.adapt_storage(to::Adaptor, ptr::MtlPtr{T}) where {T}
@@ -148,7 +147,7 @@ Adapt.adapt_structure(to::Adaptor,
     Broadcast.Broadcasted{Style}((x...) -> T(x...), adapt(to, bc.args), bc.axes)
 
 """
-    mtlconvert(x, [cce])
+    mtlconvert(x, [bq])
 
 This function is called for every argument to be passed to a kernel, allowing it to be
 converted to a GPU-friendly format. By default, the function does nothing and returns the
@@ -157,7 +156,7 @@ input object `x` as-is.
 Do not add methods to this function, but instead extend the underlying Adapt.jl package and
 register methods for the the `Metal.Adaptor` type.
 """
-mtlconvert(arg, cce=nothing) = adapt(Adaptor(cce), arg)
+mtlconvert(arg, bq=nothing) = adapt(Adaptor(bq), arg)
 
 
 ## host-side kernel API
@@ -170,7 +169,6 @@ struct HostKernel{F,TT}
     maxthreads::Int
     tgmem::Int
     exec_width::Int
-    use_residency_sets::Bool
     # this session's relocation words, or `nothing` for a relocation-free kernel. The buffer
     # keeps the storage alive; `launch` passes its address in the `KernelState` and declares
     # it resident, since only the address (not the buffer) is encoded.
@@ -251,7 +249,6 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
                              Int(pipeline[].maxTotalThreadsPerThreadgroup),
                              Int(pipeline[].staticThreadgroupMemoryLength),
                              Int(pipeline[].threadExecutionWidth),
-                             can_use_residency_sets(dev),
                              reloc_table)
         end::HostKernel{F,tt}
     end
@@ -288,7 +285,11 @@ const kernel_instances = Dict{UInt, Any}()
 
 ## kernel launching and argument encoding
 
-@inline @generated function encode_arguments!(cce, kernel, args::Vararg{Any,N}) where {N}
+# Bind a kernel's arguments into the queue's argument table. Every binding is a GPU
+# address in Metal 4, so buffers are declared resident and by-value arguments are staged
+# through the batch's argument scratch buffer.
+@inline @generated function encode_arguments!(bq::BatchedCommandQueue, kernel,
+                                              args::Vararg{Any,N}) where {N}
     ex = quote end
 
     # the arguments passed into this function have not been `mtlconvert`ed, because we need
@@ -301,16 +302,16 @@ const kernel_instances = Dict{UInt, Any}()
         argex = :(args[$argidx])
         if argtyp <: MTLBuffer
             # top-level buffers are passed as a pointer-valued argument
-            push!(ex.args, :(set_buffer!(cce, $argex, 0, $idx)))
+            push!(ex.args, :(bind_buffer!(bq, $argex, 0, $idx)))
         elseif argtyp <: MtlPtr
             # the same as a buffer, but with an offset
-            push!(ex.args, :(set_buffer!(cce, $argex.buffer, $argex.offset, $idx)))
+            push!(ex.args, :(bind_buffer!(bq, $argex.buffer, $argex.offset, $idx)))
         elseif isghosttype(argtyp) || Core.Compiler.isconstType(argtyp)
             continue
         else
-            # everything else is passed by reference, copied into Metal's transient buffer
+            # everything else is passed by reference, copied into the argument scratch
             append!(ex.args, (quote
-                set_argument!(cce, mtlconvert($(argex), cce), $idx)
+                set_argument!(bq, mtlconvert($(argex), bq), $idx)
             end).args)
         end
         idx += 1
@@ -321,7 +322,7 @@ const kernel_instances = Dict{UInt, Any}()
     ex
 end
 
-@inline function set_argument!(cce::MTLComputeCommandEncoder, arg, idx::Integer)
+@inline function set_argument!(bq::BatchedCommandQueue, arg, idx::Integer)
     argtyp = typeof(arg)
 
     # A non-isbits argument has no fields the kernel could read — compilation would have
@@ -336,7 +337,7 @@ end
     ref = Base.RefValue(arg)
     GC.@preserve ref begin
         ptr = Base.unsafe_convert(Ptr{argtyp}, ref)
-        set_bytes!(cce, reinterpret(Ptr{Cvoid}, ptr), sizeof(argtyp), idx)
+        bind_bytes!(bq, reinterpret(Ptr{Cvoid}, ptr), sizeof(argtyp), idx)
     end
     return
 end
@@ -366,13 +367,14 @@ function kernel_operation(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MT
        tgmem = kernel.tgmem, maxthreads = kernel.maxthreads)
 end
 
+# Logging-enabled kernels get a command buffer of their own, so that the `MTLLogState`
+# attached to it can be drained by waiting on that specific submission.
 function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
                          bq::BatchedCommandQueue, @nospecialize(args::Tuple),
-                         kernel_state, buf, exc)
+                         kernel_state)
     flush!(bq)
-    queue = bq.queue
 
-    if is_virtual(queue.device)
+    if is_virtual(bq.device)
         # `MTLLogState` needs a residency set, which the paravirtualized GPU driver
         # cannot create (failing with `MTLLogStateErrorDomain` code 2). Bail out here
         # with a clear host error instead of surfacing that opaque `NSError`.
@@ -384,7 +386,7 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
 
     log_state_descriptor = MTLLogStateDescriptor()
     log_state_descriptor.level = MTL.MTLLogLevelDebug
-    log_state = MTLLogState(queue.device, log_state_descriptor)
+    log_state = MTLLogState(bq.device, log_state_descriptor)
 
     function log_handler(subSystem, category, logLevel, message)
         Core.print(String(NSString(message)))
@@ -394,33 +396,26 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
     block = @objcblock(log_handler, Nothing, (id{NSString}, id{NSString}, NSInteger, id{NSString}))
     @objc [log_state::id{MTLLogState} addLogHandler:block::id{NSBlock}]::Nothing
 
-    cmdbuf_descriptor = MTLCommandBufferDescriptor()
-    cmdbuf_descriptor.logState = log_state
-    cmdbuf = MTLCommandBuffer(queue, cmdbuf_descriptor)
-    @label! cmdbuf "MTLCommandBuffer($(nameof(kernel.f)))"
-    let md = MTL.profile_metadata[]
-        md === nothing || MTL.note_operation!(md, cmdbuf, kernel_operation(kernel, gs, ts))
-    end
+    options = MTL.MTL4CommandBufferOptions()
+    options.logState = log_state
 
-    cce = MTLComputeCommandEncoder(cmdbuf)
+    cce = begin_batch!(bq; options)
     try
-        MTL.set_function!(cce, kernel.pipeline)
-        if !kernel.use_residency_sets
-            MTL.use!(cce, buf, MTL.ReadWriteUsage)
-            MTL.use!(cce, exc, MTL.ReadWriteUsage)
-        end
+        set_pipeline!(bq, cce, kernel.pipeline)
         let reloc = kernel.reloc_table
-            reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
+            reloc === nothing || make_resident!(bq, reloc)
         end
-        encode_arguments_nospec!(cce, kernel, kernel_state, kernel.f, args)
+        encode_arguments_nospec!(bq, kernel, kernel_state, kernel.f, args)
         MTL.append_current_function!(cce, gs, ts)
-    finally
-        close(cce)
+    catch
+        abort_batch!(bq)
+        rethrow()
     end
 
-    commit!(cmdbuf, queue)
-    defer_cleanup!(bq, cmdbuf, Any[kernel.f, args])
-    track_logging_cmdbuf!(queue, cmdbuf)
+    op = MTL.profile_metadata[] === nothing ? nothing : kernel_operation(kernel, gs, ts)
+    record_operation!(bq, kernel.f, args; op=op)
+    sub = flush_batch!(bq)
+    sub === nothing || track_logging_submission!(bq, sub)
     return
 end
 
@@ -453,9 +448,9 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     tgmem > 32768 &&
         throw(ArgumentError("Total used threadgroupMemoryLength($tgmem) must be <= 32768 bytes."))
 
-    buf, buf_addr = malloc_buffer_and_gpu_address(dev)
+    _, buf_addr = malloc_buffer_and_gpu_address(dev)
     buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, buf_addr)
-    exc, exc_addr = exception_info_buffer_and_gpu_address(dev)
+    _, exc_addr = exception_info_buffer_and_gpu_address(dev)
     exc_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, exc_addr)
     reloc = kernel.reloc_table
     reloc_ptr = reinterpret(Core.LLVMPtr{UInt64, AS.Device},
@@ -464,7 +459,7 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
 
     if kernel.loggingEnabled
         precompiling && return
-        launch_logging!(kernel, gs, ts, bq, args, kernel_state, buf, exc)
+        launch_logging!(kernel, gs, ts, bq, args, kernel_state)
         return
     end
 
@@ -473,17 +468,12 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         set_pipeline!(bq, cce, pipeline)
 
         # The kernel state holds GPU addresses to per-device scratch buffers (malloc bump
-        # allocator, exception mailbox) that aren't otherwise bound to the encoder. Declare
-        # them so Metal Shader Validation tracks the accesses instead of dropping them.
-        if !kernel.use_residency_sets
-            MTL.use!(cce, buf, MTL.ReadWriteUsage)
-            MTL.use!(cce, exc, MTL.ReadWriteUsage)
-        end
-        # The relocation table is per-kernel, so it cannot join the queue's residency set
-        # (which only holds the per-device scratch buffers): declare it every launch.
-        reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
+        # allocator, exception mailbox) that aren't bound through the argument table. Those
+        # live in the queue's own residency set (see `install_queue_residency!`). The
+        # relocation table is per-kernel, so it joins the batch's set instead.
+        reloc === nothing || make_resident!(bq, reloc)
 
-        encode_arguments_nospec!(cce, kernel, kernel_state, f, args)
+        encode_arguments_nospec!(bq, kernel, kernel_state, f, args)
         MTL.append_current_function!(cce, gs, ts)
     catch
         # The failing launch has not been recorded yet. Keep any earlier
@@ -514,8 +504,8 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
 end
 
 # force specialization on f and args, but not on the kernel
-@inline encode_arguments_nospec!(cce, @nospecialize(kernel), kernel_state, f, args::Tuple) =
-    encode_arguments!(cce, kernel, kernel_state, f, args...)
+@inline encode_arguments_nospec!(bq, @nospecialize(kernel), kernel_state, f, args::Tuple) =
+    encode_arguments!(bq, kernel, kernel_state, f, args...)
 
 ## Intra-warp Helpers
 
