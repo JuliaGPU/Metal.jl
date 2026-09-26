@@ -54,16 +54,13 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
         check_eltype(T)
         maxsize::Int = prod(dims) * sizeof(T)
 
-        bufsize = Ref(Base.isbitsunion(T) ? (maxsize + prod(dims)) : maxsize)
+        # Metal doesn't support empty allocations
+        bufsize::Int = max(1, Base.isbitsunion(T) ? (maxsize + prod(dims)) : maxsize)
 
         dev = device()
-        if bufsize[] == 0
-            # Metal doesn't support empty allocations. For simplicity (i.e., the ability to get
-            # a pointer, query the buffer's properties, etc), we use a 1-byte buffer instead.
-            bufsize[] = 1
-        end
-        data = GPUArrays.cached_alloc((MtlArray, dev, bufsize[], S)) do
-            buf = alloc(dev, bufsize[]; storage = S)
+
+        data = GPUArrays.cached_alloc((MtlArray, dev, bufsize, S)) do
+            buf = alloc(dev, bufsize; storage = S)
             DataRef(buf) do buf
                 free(buf)
             end
@@ -614,18 +611,10 @@ guaranteed to be initialized.
 """
 function Base.resize!(A::MtlVector{T}, n::Integer) where T
     # TODO: add additional space to allow for quicker resizing
-    maxsize = n * sizeof(T)
-    bufsize = if isbitstype(T)
-        maxsize
-    else
-        # type tag array past the data
-        maxsize + n
-    end
-    if bufsize == 0
-        # Metal doesn't support empty allocations. For simplicity (i.e., the ability to get
-        # a pointer, query the buffer's properties, etc), we use a 1-byte buffer instead.
-        bufsize = 1
-    end
+    maxsize::Int = n * sizeof(T)
+
+    # Metal doesn't support empty allocations
+    bufsize::Int = max(1, isbitstype(T) ? maxsize : maxsize + n)
 
     # replace the data with a new one. this 'unshares' the array.
     # as a result, we can safely support resizing unowned buffers.
