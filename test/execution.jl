@@ -50,6 +50,16 @@ end
     kernel(a) = return
     bar(a) = @metal kernel(a)
     @inferred bar(MtlArray([1]))
+
+    # keyword-argument handling relies on concrete evaluation of helpers that grow
+    # arrays, which our overlays of error paths must not inhibit
+    function range_kernel(a)
+        a[1] = last(range(1; step=2, length=3))
+        return
+    end
+    a = MtlArray([0])
+    @metal range_kernel(a)
+    @test Array(a) == [5]
 end
 
 

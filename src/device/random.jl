@@ -165,10 +165,15 @@ end
 
 # normally distributed
 
+# Signature of Random's generic `AbstractFloat` fallbacks. Kept as a constant because
+# spelling it inline (e.g. with `@invoke`) constructs the `UnionAll` at run time, which
+# inference no longer folds away as of Julia 1.14 (JuliaLang/julia#62001).
+const AbstractFloatFallback = Tuple{AbstractRNG, Type{<:AbstractFloat}}
+
 # use the AbstractFloat fallback from Base, which doesn't widen and only relies on `rand()`.
 # the Ziggurat method used by other back-ends relies on Float64 support.
 @device_override @inline function Random.randn(rng::Philox2x32, ::Type{T}) where {T <: AbstractFloat}
-    @invoke Random.randn(rng::AbstractRNG, T::Type{<:AbstractFloat})
+    invoke(Random.randn, AbstractFloatFallback, rng, T)
 end
 
 
@@ -177,8 +182,11 @@ end
 # use the AbstractFloat fallback from Base, which doesn't widen and only relies on `rand()`.
 # the Ziggurat method used by other back-ends relies on Float64 support.
 @device_override @inline function Random.randexp(rng::Philox2x32, ::Type{T}) where {T <: AbstractFloat}
-    @invoke Random.randexp(rng::AbstractRNG, T::Type{<:AbstractFloat})
+    invoke(Random.randexp, AbstractFloatFallback, rng, T)
 end
 
-@device_override Random.Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{T},
+# NOTE: not a consistent overlay (as used by `@device_override`), as this returns a different
+#       sampler than the host method: concrete evaluation would otherwise substitute the
+#       latter, which our overlaid `rand` methods then fail to handle.
+Base.Experimental.@overlay method_table Random.Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{T},
                                 ::Random.Repetition) where {T<:Union{Int64, UInt64}} = Random.SamplerRangeFast(r)
