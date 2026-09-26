@@ -3,6 +3,7 @@
 #
 
 export MTLDevice, MTLCreateSystemDefaultDevice, devices
+export threadgroup_limits, max_threadgroup_threads, max_threadgroup_memory
 
 # @objcwrapper MTLDevice <: NSObject
 

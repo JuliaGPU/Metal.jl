@@ -159,6 +159,14 @@ n = 256
     @on_device MtlThreadGroupArray(Tuple{Float32, Float32}, (1,2))
     @on_device MtlThreadGroupArray(Tuple{RGB{Float32}, UInt32}, 1)
     @on_device MtlThreadGroupArray(Tuple{RGB{Float32}, UInt32}, (1,2))
+
+    # dynamic
+    @on_device MtlDynamicThreadGroupArray(Float32, 1)
+    @on_device MtlDynamicThreadGroupArray(Float32, (1,2))
+    @on_device MtlDynamicThreadGroupArray(Tuple{Float32, Float32}, 1)
+    @on_device MtlDynamicThreadGroupArray(Tuple{Float32, Float32}, (1,2))
+    @on_device MtlDynamicThreadGroupArray(Tuple{RGB{Float32}, UInt32}, 1)
+    @on_device MtlDynamicThreadGroupArray(Tuple{RGB{Float32}, UInt32}, (1,2))
 end
 
 
@@ -215,6 +223,164 @@ end
 
 end # static
 
+# dynamic threadgroup memory requires macOS 15 or newer
+if macos_version() >= v"15"
+@testset "dynamic" begin
+
+@testset "statically typed" begin
+    function kernel(d, n)
+        t = thread_position_in_threadgroup().x
+        tr = n-t+1
+
+        s = MtlDynamicThreadGroupArray(Float32, n)
+        s[t] = d[t]
+        threadgroup_barrier()
+        d[t] = s[tr]
+
+        return
+    end
+
+    a = rand(Float32, n)
+    d_a = MtlArray(a)
+
+    @metal threads=n shmem=n*sizeof(Float32) kernel(d_a, n)
+    @test reverse(a) == Array(d_a)
+end
+
+@testset "parametrically typed" begin
+    @testset for T in [Int32, Int64, Float16, Float32]
+        function kernel(d::MtlDeviceArray{T}, n) where {T}
+            t = thread_position_in_threadgroup().x
+            tr = n-t+1
+
+            s = MtlDynamicThreadGroupArray(T, n)
+            s[t] = d[t]
+            threadgroup_barrier()
+            d[t] = s[tr]
+
+            return
+        end
+
+        a = rand(T, n)
+        d_a = MtlArray(a)
+
+        @metal threads=n shmem=n*sizeof(T) kernel(d_a, n)
+        @test reverse(a) == Array(d_a)
+    end
+end
+
+@testset "alignment" begin
+    # used to generate align=12, which is invalid (non pow2)
+    function kernel(v0::T, n) where {T}
+        shared = MtlDynamicThreadGroupArray(T, n)
+        @inbounds shared[UInt32(1)] = v0
+        return
+    end
+
+    n = 32
+    typ = typeof((0f0, 0f0, 0f0))
+    @metal shmem=n*sizeof(typ) kernel((0f0, 0f0, 0f0), n)
+end
+
+@testset "multiple arrays" begin
+    function kernel(a, b, n)
+        t = thread_position_in_threadgroup().x
+        tr = n-t+1
+
+        sa = MtlDynamicThreadGroupArray(eltype(a), n)
+        sa[t] = a[t]
+        threadgroup_barrier()
+        a[t] = sa[tr]
+
+        sb = MtlDynamicThreadGroupArray(eltype(b), n)
+        sb[t] = b[t]
+        threadgroup_barrier()
+        b[t] = sb[tr]
+
+        return
+    end
+
+    a = rand(Float32, n)
+    d_a = MtlArray(a)
+
+    b = rand(Int64, n)
+    d_b = MtlArray(b)
+
+    @metal threads=n shmem=n*sizeof(Float32)+n*sizeof(Int64) kernel(d_a, d_b, n)
+    @test reverse(a) == Array(d_a)
+    @test reverse(b) == Array(d_b)
+end
+
+@testset "offsets" begin
+    # all dynamic arrays alias the same allocation, so simultaneously-live arrays
+    # must be partitioned manually with a byte offset (like CUDA's `extern __shared__`)
+    function kernel(a, b, n)
+        t = thread_position_in_threadgroup().x
+        tr = n-t+1
+
+        sa = MtlDynamicThreadGroupArray(eltype(a), n)
+        sb = MtlDynamicThreadGroupArray(eltype(b), n, n*sizeof(eltype(a)))
+        sa[t] = a[t]
+        sb[t] = b[t]
+        threadgroup_barrier()
+        a[t] = sa[tr]
+        b[t] = sb[tr]
+
+        return
+    end
+
+    a = rand(Float32, n)
+    d_a = MtlArray(a)
+
+    b = rand(Int64, n)
+    d_b = MtlArray(b)
+
+    @metal threads=n shmem=n*sizeof(Float32)+n*sizeof(Int64) kernel(d_a, d_b, n)
+    @test reverse(a) == Array(d_a)
+    @test reverse(b) == Array(d_b)
+end
+
+@testset "validation" begin
+    function kernel(d)
+        s = MtlDynamicThreadGroupArray(Float32, 1024)
+        s[1] = 1f0
+        return
+    end
+
+    d_a = MtlArray(rand(Float32, 1))
+    maxmem = Metal.max_threadgroup_memory(Metal.device())
+
+    # requesting more than the device limit errors out
+    @test_throws ArgumentError @metal shmem=maxmem+16 kernel(d_a)
+    # ... also when combined with statically-used threadgroup memory
+    function static_kernel(d, n)
+        t = thread_position_in_threadgroup().x
+        s = MtlThreadGroupArray(Float32, 1024)
+        s[t] = d[t]
+        threadgroup_barrier()
+        d[t] = s[t]
+        return
+    end
+    n_static = 256
+    d_b = MtlArray(rand(Float32, n_static))
+    compiled = @metal launch=false static_kernel(d_b, n_static)
+    if get(ENV, "MTL_SHADER_VALIDATION", "0") != "0"
+        # shader validation reserves additional threadgroup memory itself
+        @test compiled.tgmem >= 1024*sizeof(Float32)
+    else
+        @test compiled.tgmem == 1024*sizeof(Float32)
+    end
+    @test_throws ArgumentError compiled(d_b, n_static; threads=n_static, shmem=maxmem)
+
+    # invalid sizes error out
+    @test_throws ArgumentError @metal shmem=-16 kernel(d_a)
+    @test_throws TypeError @metal shmem=1.5 kernel(d_a)
+    # `shmem` is the combined size of all dynamic allocations, so only an Integer
+    @test_throws TypeError @metal shmem=(16, 16) kernel(d_a)
+end
+
+end # dynamic
+end # if macos_version() >= v"15"
 end # threadgroup memory
 
 end # memory

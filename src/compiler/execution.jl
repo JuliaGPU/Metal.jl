@@ -5,7 +5,7 @@ export @metal
 
 const MACRO_KWARGS = [:launch]
 const COMPILER_KWARGS = [:kernel, :name, :always_inline, :debug_level, :opt_level, :macos, :air, :metal, :gpufamily]
-const LAUNCH_KWARGS = [:groups, :threads, :queue, :submit]
+const LAUNCH_KWARGS = [:groups, :threads, :queue, :submit, :shmem]
 
 """
     @metal threads=... groups=... [kwargs...] func(args...)
@@ -29,6 +29,9 @@ There are a few keyword arguments that influence the behavior of `@metal`:
 - `queue`: the command queue to use for this kernel. Defaults to the global command queue.
 - `submit`: whether to submit the current command batch immediately after encoding this
   kernel. Defaults to `false`.
+- `shmem`: the combined size, in bytes, of all dynamically-sized threadgroup memory
+  used by the kernel (see [`MtlDynamicThreadGroupArray`](@ref)). Defaults to `0`.
+  Requires macOS 15 or newer.
 """
 macro metal(ex...)
     call = ex[end]
@@ -358,21 +361,24 @@ end
 
 # wraps a single function call, keeping its closure body small.
 @autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
+                                               shmem::Integer=0,
                                                queue=nothing, submit::Bool=false)
     # function barrier to avoid capturing the `@autoreleasepool` in the generated code
-    launch_with_queue(kernel, queue, MTLSize(groups), MTLSize(threads), args, submit)
+    launch_with_queue(kernel, queue, shmem, MTLSize(groups), MTLSize(threads), args, submit)
 end
 
 @inline function launch_with_queue(@nospecialize(kernel::HostKernel), ::Nothing,
+                                   shmem::Integer,
                                    gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple),
                                    submit::Bool)
-    launch(kernel, gs, ts, global_queue(device()), args, submit)
+    launch(kernel, shmem, gs, ts, global_queue(device()), args, submit)
 end
 
 @inline function launch_with_queue(@nospecialize(kernel::HostKernel), queue,
+                                   shmem::Integer,
                                    gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple),
                                    submit::Bool)
-    launch(kernel, gs, ts, batched_queue(queue), args, submit)
+    launch(kernel, shmem, gs, ts, batched_queue(queue), args, submit)
 end
 
 function kernel_operation(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize)
@@ -381,9 +387,18 @@ function kernel_operation(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MT
        tgmem = kernel.tgmem, maxthreads = kernel.maxthreads)
 end
 
+# Normalize the `shmem` launch argument -- the combined size, in bytes, of all
+# dynamically-sized threadgroup allocations -- to the 16-byte granularity
+# required by `setThreadgroupMemoryLength:atIndex:`.
+function dynamic_threadgroup_length(shmem::Integer)
+    shmem < 0 &&
+        throw(ArgumentError("Dynamic threadgroup memory size (`shmem`) should be non-negative, got `$shmem`"))
+    cld(Int(shmem), 16) * 16
+end
+
 function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
                          bq::BatchedCommandQueue, @nospecialize(args::Tuple),
-                         kernel_state, buf, exc)
+                         kernel_state, buf, exc, dyn_length::Integer)
     flush!(bq)
     queue = bq.queue
 
@@ -428,6 +443,9 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
             reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
         end
         encode_arguments_nospec!(cce, kernel, kernel_state, kernel.f, args)
+        if dyn_length > 0
+            MTL.set_threadgroup_memory_length!(cce, dyn_length, 1)
+        end
         MTL.append_current_function!(cce, gs, ts)
     finally
         close(cce)
@@ -439,7 +457,8 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
     return
 end
 
-function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
+function launch(@nospecialize(kernel::HostKernel), shmem::Integer,
+                gs::MTLSize, ts::MTLSize,
                 bq::BatchedCommandQueue, @nospecialize(args::Tuple), submit::Bool)
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
 
@@ -465,8 +484,11 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     dev = kernel.device
     tgmem = kernel.tgmem
 
-    tgmem > 32768 &&
-        throw(ArgumentError("Total used threadgroupMemoryLength($tgmem) must be <= 32768 bytes."))
+    # validate the total (static + dynamic) threadgroup memory against the device limit
+    dyn_length = dynamic_threadgroup_length(shmem)
+    maxmem = MTL.max_threadgroup_memory(dev)
+    tgmem + dyn_length > maxmem &&
+        throw(ArgumentError("Total used threadgroupMemoryLength($(tgmem + dyn_length)) must be <= $maxmem bytes."))
 
     buf, buf_addr = malloc_buffer_and_gpu_address(dev)
     buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, buf_addr)
@@ -479,7 +501,7 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
 
     if kernel.loggingEnabled
         precompiling && return
-        launch_logging!(kernel, gs, ts, bq, args, kernel_state, buf, exc)
+        launch_logging!(kernel, gs, ts, bq, args, kernel_state, buf, exc, dyn_length)
         return
     end
 
@@ -499,6 +521,9 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
 
         encode_arguments_nospec!(cce, kernel, kernel_state, f, args)
+        if dyn_length > 0
+            MTL.set_threadgroup_memory_length!(cce, dyn_length, 1)
+        end
         MTL.append_current_function!(cce, gs, ts)
     catch
         # The failing launch has not been recorded yet. Keep any earlier

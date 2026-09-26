@@ -90,6 +90,44 @@ Additional notes:
 - Kernels must always return nothing
 - Kernels are asynchronous. To synchronize, use the `Metal.@sync` macro.
 
+## Threadgroup memory
+
+Threads in a threadgroup can share data through memory in the `threadgroup` address
+space, which is faster than `device` memory. For a fixed-size allocation, use
+`MtlThreadGroupArray(T, dims)` inside the kernel. When the size is only known at
+launch time, use `MtlDynamicThreadGroupArray(T, dims)` instead and pass the combined
+size of all dynamic allocations in bytes with the `shmem` launch keyword:
+
+```julia
+function reverse_kernel(d, n)
+    t = thread_position_in_threadgroup().x
+    s = MtlDynamicThreadGroupArray(eltype(d), n)
+    s[t] = d[t]
+    threadgroup_barrier()
+    d[t] = s[n-t+1]
+    return
+end
+
+@metal threads=n shmem=n*sizeof(Float32) reverse_kernel(d_a, n)
+```
+
+All dynamic arrays in a kernel alias the same allocation, which the single `shmem`
+launch argument sizes. Partition it manually with a byte `offset`:
+
+```julia
+sa = MtlDynamicThreadGroupArray(Float32, n)
+sb = MtlDynamicThreadGroupArray(Int32, n, n * sizeof(Float32))
+# launch with shmem=n*sizeof(Float32)+n*sizeof(Int32)
+```
+
+This is useful for heterogeneous buffers; for homogeneous multi-part buffers prefer
+a single array with `view`s.
+
+Each size is rounded up to a multiple of 16 bytes, as required by Metal, and the sum
+of all threadgroup memory (static and dynamic) must not exceed the device limit
+(queryable with `Metal.max_threadgroup_memory(Metal.device())`). Dynamic threadgroup
+memory requires macOS 15 or newer.
+
 ## Printing
 
 When debugging, it's not uncommon to want to print some values. This is achieved with `@mtlprintf`:
