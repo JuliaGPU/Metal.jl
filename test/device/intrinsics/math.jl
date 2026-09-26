@@ -943,4 +943,21 @@ end
     @test Array(MtlArray(fill(-1f0, 3)) .^ MtlArray([16777217, 16777216, -3])) == [-1, 1, -1]
 end
 
+# `@fastmath x^n` with an integer `n` emits `llvm.powi`, which AIR lacks. GPUCompiler expands
+# it into multiplies in the same order as the CPU does, so the results should be identical.
+@testset "fastmath integer power" begin
+    pow(x, n) = @fastmath x^n
+    pow_const(x) = @fastmath x^-5
+
+    xs = Float32[0, -0.0, 1, -1, 0.5, -1.5, 3.7, -3.7, Inf, -Inf, NaN]
+    ns = Int32[-7:7; typemin(Int32); typemax(Int32)]
+    x, n = vec([x for x in xs, n in ns]), vec([n for x in xs, n in ns])
+    @test isequal(Array(pow.(MtlArray(x), MtlArray(n))), pow.(x, n))
+    @test isequal(Array(pow_const.(MtlArray(xs))), pow_const.(xs))
+
+    # the CPU computes Float16 powers in Float32
+    h, m = Float16[0.5, -1.5, 3, -3, 1.25], Int32[-3, 2, 5, -4, 7]
+    @test Array(pow.(MtlArray(h), MtlArray(m))) ≈ pow.(h, m)
+end
+
 end
