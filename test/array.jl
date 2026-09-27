@@ -383,6 +383,13 @@ end
     @test length(b) == 0
     resize!(b, 1)
     @test length(b) == 1
+
+    # resizing to zero elements (issue #981)
+    resize!(a, 0)
+    @test length(a) == 0
+    @test Array(a) == Int[]
+    resize!(a, 1)
+    @test length(a) == 1
 end
 
 function _alignedvec(::Type{T}, n::Integer, alignment::Integer = 16384) where {T}

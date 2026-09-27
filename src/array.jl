@@ -54,16 +54,11 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
         check_eltype(T)
         maxsize::Int = prod(dims) * sizeof(T)
 
-        bufsize = Ref(Base.isbitsunion(T) ? (maxsize + prod(dims)) : maxsize)
+        bufsize::Int = Base.isbitsunion(T) ? (maxsize + prod(dims)) : maxsize
 
         dev = device()
-        if bufsize[] == 0
-            # Metal doesn't support empty allocations. For simplicity (i.e., the ability to get
-            # a pointer, query the buffer's properties, etc), we use a 1-byte buffer instead.
-            bufsize[] = 1
-        end
-        data = GPUArrays.cached_alloc((MtlArray, dev, bufsize[], S)) do
-            buf = alloc(dev, bufsize[]; storage = S)
+        data = GPUArrays.cached_alloc((MtlArray, dev, bufsize, S)) do
+            buf = alloc(dev, bufsize; storage = S)
             DataRef(buf) do buf
                 free(buf)
             end

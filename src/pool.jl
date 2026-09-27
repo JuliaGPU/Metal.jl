@@ -48,8 +48,18 @@ The storage kwarg controls where the buffer is stored. Possible values are:
 
 Note that `PrivateStorage` buffers can't be directly accessed from the CPU, therefore you cannot
 use this option if you pass a ptr to initialize the memory.
+
+Metal does not support empty buffers, so requesting 0 bytes without a `ptr` returns a 1-byte
+buffer. Buffers initialized from, or wrapping, host memory must be non-empty.
 """
 function alloc(dev::Union{MTLDevice,MTLHeap}, sz::Integer, args...; kwargs...)
+    # padding empty allocations keeps a real buffer behind empty arrays, so that they can
+    # be bound to kernels, queried, labeled, etc. like any other array. host-backed buffers
+    # can't be padded, as that would read or wrap memory beyond the caller's allocation.
+    if iszero(sz) && isempty(args)
+        sz = one(sz)
+    end
+
     maybe_collect(dev)
 
     time = Base.@elapsed begin
