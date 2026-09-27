@@ -54,9 +54,11 @@ Base.@propagate_inbounds MtlDynamicThreadGroupArray(::Type{T}, dims) where {T} =
         linkage!(gv, LLVM.API.LLVMInternalLinkage)
         initializer!(gv, UndefValue(T_ptr_at_3))
 
-        # NOTE: this aligns the global itself (an 8-byte pointer), not the
-        #       threadgroup allocation, which the runtime aligns to 16 bytes.
-        alignment!(gv, 8)
+        # The global holds the 8-byte base pointer, but advertise the pointee's
+        # alignment: `lower_dynamic_threadgroup_memory!` takes the max over all
+        # dynamic arrays for the shared parameter's metadata. Clamped to the
+        # 16 bytes the runtime aligns the allocation to.
+        alignment!(gv, min(16, max(8, Base.datatype_alignment(T))))
         constant!(gv, true)
         unnamed_addr!(gv, true)
         extinit!(gv, true)
@@ -67,6 +69,8 @@ Base.@propagate_inbounds MtlDynamicThreadGroupArray(::Type{T}, dims) where {T} =
             position!(builder, entry)
 
             val = load!(builder, T_ptr_at_3, gv)
+            # the slot itself is only pointer-aligned (cf. the global above).
+            alignment!(val, 8)
 
             ret!(builder, val)
         end
