@@ -38,6 +38,7 @@ Base.Int(ptr::MtlPtr) = Int(UInt(ptr))
 # CPU -> GPU
 function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T}, src::Ptr{T}, N::Integer;
                              queue=global_queue(dev), async::Bool=false) where T
+    iszero(N) && return dst
     storage_type = dst.buffer.storageMode
     if storage_type == MTL.MTLStorageModePrivate
         # stage through a shared buffer
@@ -57,6 +58,7 @@ end
 # GPU -> CPU
 function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPtr{T}, N::Integer;
                              queue=global_queue(dev), async::Bool=false) where T
+    iszero(N) && return dst
     storage_type = src.buffer.storageMode
     if storage_type == MTL.MTLStorageModePrivate
         # stage through a shared buffer
