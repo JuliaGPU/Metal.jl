@@ -22,25 +22,23 @@ const AtomicIntType = Union{Int32,UInt32}
 @inline load_scope(as::Val, order) =
     order === UnsafeAtomics.monotonic ? atomic_scope(Val(AS.ThreadGroup)) : atomic_scope(as)
 
-# Call `f` with the LLVM ordering for an MSL memory order. For an order passed as a value,
-# branch on it rather than computing the ordering from it: that folds when the order is a
-# constant, and keeps inference precise (and the code correct) when it isn't. Loads cannot
-# release and stores cannot acquire (LLVM rejects such atomics, MSL doesn't check), so like
-# Clang, they only get the part of an order they can have.
-@inline function with_llvm_order(f, order::Val{o}, kind::Symbol=:rmw) where {o}
-    @static_assert(o isa memory_order, "Invalid atomic memory ordering.")
-    with_llvm_order(f, o, kind)
-end
-@inline function with_llvm_order(f, order::memory_order, kind::Symbol=:rmw)
-    order === memory_order_relaxed ? f(UnsafeAtomics.monotonic) :
-    order === memory_order_seq_cst ? f(UnsafeAtomics.seq_cst) :
-    kind === :load  ? (order === memory_order_release ? f(UnsafeAtomics.monotonic) :
-                                                        f(UnsafeAtomics.acquire)) :
-    kind === :store ? (order === memory_order_acquire ? f(UnsafeAtomics.monotonic) :
-                                                        f(UnsafeAtomics.release)) :
-    order === memory_order_acquire ? f(UnsafeAtomics.acquire) :
-    order === memory_order_release ? f(UnsafeAtomics.release) :
-                                     f(UnsafeAtomics.acq_rel)
+# The LLVM ordering for an MSL memory order. Like in MSL, where it's an immediate operand of
+# the AIR intrinsics, the order has to be a constant: an order that isn't one is a dynamic
+# call when constructing the `Val`. The default orders are `Val`s, so they don't depend on the
+# functions being inlined. Loads cannot release and stores cannot acquire (LLVM rejects such
+# atomics, MSL doesn't check), so like Clang, they only get the part of an order they can have.
+@inline llvm_order(order::memory_order, kind::Symbol=:rmw) = llvm_order(Val(order), kind)
+@inline function llvm_order(::Val{order}, kind::Symbol=:rmw) where {order}
+    @static_assert(order isa memory_order, "Invalid atomic memory ordering.")
+    order === memory_order_relaxed ? UnsafeAtomics.monotonic :
+    order === memory_order_seq_cst ? UnsafeAtomics.seq_cst :
+    kind === :load  ? (order === memory_order_release ? UnsafeAtomics.monotonic :
+                                                        UnsafeAtomics.acquire) :
+    kind === :store ? (order === memory_order_acquire ? UnsafeAtomics.monotonic :
+                                                        UnsafeAtomics.release) :
+    order === memory_order_acquire ? UnsafeAtomics.acquire :
+    order === memory_order_release ? UnsafeAtomics.release :
+                                     UnsafeAtomics.acq_rel
 end
 
 # the failure ordering of a compare-exchange, which cannot release
@@ -52,31 +50,25 @@ end
 
 ## low-level functions
 
-@inline atomic_load_explicit(ptr::LLVMPtr{T,AS},
-                             order::Union{memory_order,Val}=memory_order_relaxed) where {T<:AtomicType,AS} =
-    with_llvm_order(order, :load) do order
-        UnsafeAtomics.load(ptr, order, load_scope(Val(AS), order))
-    end
+@inline function atomic_load_explicit(ptr::LLVMPtr{T,AS},
+                                      order::Union{memory_order,Val}=Val(memory_order_relaxed)) where {T<:AtomicType,AS}
+    order = llvm_order(order, :load)
+    UnsafeAtomics.load(ptr, order, load_scope(Val(AS), order))
+end
 
 @inline atomic_store_explicit(ptr::LLVMPtr{T,AS}, desired::T,
-                              order::Union{memory_order,Val}=memory_order_relaxed) where {T<:AtomicType,AS} =
-    with_llvm_order(order, :store) do order
-        UnsafeAtomics.store!(ptr, desired, order, atomic_scope(Val(AS)))
-    end
+                              order::Union{memory_order,Val}=Val(memory_order_relaxed)) where {T<:AtomicType,AS} =
+    UnsafeAtomics.store!(ptr, desired, llvm_order(order, :store), atomic_scope(Val(AS)))
 
 # NOTE: we deviate slightly from the Metal/C++ API here, not returning the status boolean,
 #       but the value that was loaded, which equals `expected` if and only if the exchange
 #       succeeded.
 @inline atomic_compare_exchange_weak_explicit(
         ptr::LLVMPtr{T,AS}, expected::T, desired::T,
-        success_order::Union{memory_order,Val}=memory_order_relaxed,
-        failure_order::Union{memory_order,Val}=memory_order_relaxed) where {T<:AtomicType,AS} =
-    with_llvm_order(success_order) do success_order
-        with_llvm_order(failure_order, :load) do failure_order
-            UnsafeAtomics.cas!(ptr, expected, desired, success_order, failure_order,
-                               atomic_scope(Val(AS))).old
-        end
-    end
+        success_order::Union{memory_order,Val}=Val(memory_order_relaxed),
+        failure_order::Union{memory_order,Val}=Val(memory_order_relaxed)) where {T<:AtomicType,AS} =
+    UnsafeAtomics.cas!(ptr, expected, desired, llvm_order(success_order),
+                       llvm_order(failure_order, :load), atomic_scope(Val(AS))).old
 
 for (op, impl, types) in ((:exchange,  :xchg!, AtomicType),
                           (:fetch_add, :add!,  AtomicType),
@@ -88,21 +80,17 @@ for (op, impl, types) in ((:exchange,  :xchg!, AtomicType),
                           (:fetch_xor, :xor!,  AtomicIntType))
     f = Symbol("atomic_$(op)_explicit")
     @eval @inline $f(ptr::LLVMPtr{T,AS}, desired::T,
-                     order::Union{memory_order,Val}=memory_order_relaxed) where {T<:$types,AS} =
-        with_llvm_order(order) do order
-            UnsafeAtomics.$impl(ptr, desired, order, atomic_scope(Val(AS)))
-        end
+                     order::Union{memory_order,Val}=Val(memory_order_relaxed)) where {T<:$types,AS} =
+        UnsafeAtomics.$impl(ptr, desired, llvm_order(order), atomic_scope(Val(AS)))
 end
 
 # atomic_ulong only supports non-fetching min/max, on device memory of Apple8+ GPUs
 for (op, impl) in ((:min, :min!), (:max, :max!))
     f = Symbol("atomic_$(op)_explicit")
     @eval @inline function $f(ptr::LLVMPtr{UInt64,AS.Device}, desired::UInt64,
-                              order::Union{memory_order,Val}=memory_order_relaxed)
+                              order::Union{memory_order,Val}=Val(memory_order_relaxed))
         @static_assert(apple_family() >= 8, "64-bit atomic min/max requires Apple8 or newer.")
-        with_llvm_order(order) do order
-            UnsafeAtomics.$impl(ptr, desired, order, atomic_scope(Val(AS.Device)))
-        end
+        UnsafeAtomics.$impl(ptr, desired, llvm_order(order), atomic_scope(Val(AS.Device)))
         return
     end
 end
@@ -211,7 +199,7 @@ end
 
 const atomic_semantics = """
 The `order` is a `memory_order` (or a `Val` of one), `memory_order_relaxed` by
-default. As in MSL, the operation synchronizes with the other threads on the device for
+default, and has to be a compile-time constant, as in MSL. As in MSL, the operation synchronizes with the other threads on the device for
 device memory, and with those in the threadgroup for threadgroup memory. An ordered
 operation orders accesses to both device and threadgroup memory. Ordered operations need
 Metal 3.2; before Metal 4.1, they are implemented with fences. A load only uses the
