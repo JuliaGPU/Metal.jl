@@ -14,19 +14,17 @@ import Adapt
 # export MetalBackend
 
 """
-    struct MetalBackend <: KernelAbstractions.GPU
+    struct MetalBackend <: KernelInterface.Backend
 
-The `KernelAbstractions` backend for running on Metal GPUs.
+The `KernelInterface` backend for running on Metal GPUs.
 """
-struct MetalBackend <: KI.GPU
+struct MetalBackend <: KI.Backend
 end
 
 KI.versioninfo(io::IO, ::MetalBackend) = Metal.versioninfo(io)
 
 # Ensure type stability. See JuliaGPU/KernelAbstractions#634
 @inline KI.allocate(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = MtlArray{T, length(dims), unified ? SharedStorage : DefaultStorageMode}(undef, dims)
-KI.zeros(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.zeros(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
-KI.ones(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.ones(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
 
 KI.get_backend(::MtlArray) = MetalBackend()
 KI.synchronize(::MetalBackend) = synchronize()
@@ -36,103 +34,109 @@ KI.functional(::MetalBackend) = Metal.functional()
 KI.supports_float64(::MetalBackend) = false
 KI.supports_atomics(::MetalBackend) = metal_support() >= v"4.1"
 KI.supports_unified(::MetalBackend) = true
+KI.supports_subgroups(::MetalBackend) = true
+KI.supports_shuffle(::MetalBackend, ::Type{T}) where {T} =
+    T <: Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
 
 
 ## memory operations
 
-function KI.copyto!(::MetalBackend, dest::MtlArray{T}, src::MtlArray{T}) where T
-    if device(dest) == device(src)
-        GC.@preserve dest src copyto!(dest, src)
-        return dest
-    else
-        error("Copy between different devices not implemented")
-    end
-end
-
-function KI.copyto!(::MetalBackend, dest::Array{T}, src::MtlArray{T}) where T
+# Metal's copies are synchronous, so they are ordered with the task's queue
+const HostOrDevice{T} = Union{Array{T}, MtlArray{T}}
+function KI.copyto!(::MetalBackend, dest::HostOrDevice{T}, src::HostOrDevice{T}) where T
+    length(dest) == length(src) ||
+        throw(ArgumentError("Arrays must have the same length, got $(length(dest)) and $(length(src))"))
     GC.@preserve dest src copyto!(dest, src)
     return dest
 end
+KI.copyto!(::MetalBackend, dest, src) =
+    throw(ArgumentError("KernelInterface.copyto! only supports dense arrays of the same element type, got $(typeof(dest)) and $(typeof(src))"))
 
-function KI.copyto!(::MetalBackend, dest::MtlArray{T}, src::Array{T}) where T
-    GC.@preserve dest src copyto!(dest, src)
-    return dest
-end
+KI.unsafe_free!(A::MtlArray) = Metal.unsafe_free!(A)
 
 
 ## kernel launch
 
 KI.argconvert(::MetalBackend, arg) = mtlconvert(arg)
 
-function KI.kernel_function(::MetalBackend, f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
+# The SIMD-group width is a property of the compiled pipeline (`threadExecutionWidth`), but
+# it is the same for all pipelines on Apple GPUs. `kernel_function` checks that, so that
+# `KI.sub_group_size` can promise it before compiling.
+const SIMD_WIDTH = 32
+
+function KI.kernel_function(backend::MetalBackend, f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
     kern = mtlfunction(f, tt; name, kwargs...)
-    KI.Kernel{MetalBackend, typeof(kern)}(MetalBackend(), kern)
+    kern.exec_width == SIMD_WIDTH ||
+        error("Kernel compiled with a SIMD-group width of $(kern.exec_width), while KernelInterface.sub_group_size promises $SIMD_WIDTH")
+    KI.Kernel{MetalBackend, typeof(kern)}(backend, kern)
 end
 
-function (obj::KI.Kernel{MetalBackend})(args...; numworkgroups=(), workgroupsize=(), ndrange=(), max_work_group_size=typemax(Int))
-    KI.check_launch_args(numworkgroups, workgroupsize, ndrange)
-    prod(ndrange) == 0 && return nothing
-
-    numworkgroups, workgroupsize = KI.auto_launch_sizes(obj, numworkgroups, workgroupsize, ndrange, max_work_group_size)
-
-    obj.kern(args...; threads=workgroupsize, groups=numworkgroups)
+function KI.launch(obj::KI.Kernel{MetalBackend}, groups::Dims{3}, items::Dims{3}, args...; kwargs...)
+    obj.kern(args...; threads=items, groups, kwargs...)
+    return
 end
 
-function KI.kernel_max_work_group_size(kikern::KI.Kernel{<:MetalBackend}; max_work_items::Int=typemax(Int))::Int
-    Int(min(kikern.kern.maxthreads, max_work_items))
-end
+# the pipeline's `maxTotalThreadsPerThreadgroup`
+KI.max_work_group_size(kernel::KI.Kernel{MetalBackend})::Int = kernel.kern.maxthreads
 function KI.max_work_group_size(::MetalBackend)::Int
     MTL.max_threadgroup_threads(device())
 end
 function KI.max_work_group_dims(::MetalBackend)::NTuple{3, Int}
     MTL.max_threadgroup_dims(device())
 end
-function KI.sub_group_size(::MetalBackend)::Int
-    32
+# the number of threads along each dimension of the grid has to fit in 32 bits
+function KI.max_num_groups(backend::MetalBackend)::NTuple{3, Int}
+    Int(typemax(UInt32)) .÷ KI.max_work_group_dims(backend)
 end
+KI.sub_group_size(::MetalBackend)::Int = SIMD_WIDTH
 function KI.multiprocessor_count(::MetalBackend)::Int
     Metal.num_gpu_cores()
 end
-
-KI.shfl_down_types(::MetalBackend) = DataType[Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8]
 
 
 
 ## indexing
 
+# computed with `% T`, which unlike `T(x)` has no error path
+
 @device_override @inline function KI.get_local_id(::Type{T}) where {T}
-    return (; x = T(thread_position_in_threadgroup().x), y = T(thread_position_in_threadgroup().y), z = T(thread_position_in_threadgroup().z))
+    id = thread_position_in_threadgroup()
+    return (; x = id.x % T, y = id.y % T, z = id.z % T)
 end
 
 @device_override @inline function KI.get_group_id(::Type{T}) where {T}
-    return (; x = T(threadgroup_position_in_grid().x), y = T(threadgroup_position_in_grid().y), z = T(threadgroup_position_in_grid().z))
-end
-
-@device_override @inline function KI.get_global_id(::Type{T}) where {T}
-    return (; x = T(thread_position_in_grid().x), y = T(thread_position_in_grid().y), z = T(thread_position_in_grid().z))
+    id = threadgroup_position_in_grid()
+    return (; x = id.x % T, y = id.y % T, z = id.z % T)
 end
 
 @device_override @inline function KI.get_local_size(::Type{T}) where {T}
-    return (; x = T(threads_per_threadgroup().x), y = T(threads_per_threadgroup().y), z = T(threads_per_threadgroup().z))
+    size = threads_per_threadgroup()
+    return (; x = size.x % T, y = size.y % T, z = size.z % T)
 end
 
 @device_override @inline function KI.get_num_groups(::Type{T}) where {T}
-    return (; x = T(threadgroups_per_grid().x), y = T(threadgroups_per_grid().y), z = T(threadgroups_per_grid().z))
+    size = threadgroups_per_grid()
+    return (; x = size.x % T, y = size.y % T, z = size.z % T)
 end
 
-@device_override @inline function KI.get_global_size(::Type{T}) where {T}
-    return (; x = T(threads_per_grid().x), y = T(threads_per_grid().y), z = T(threads_per_grid().z))
+# SIMD-groups are formed from consecutive linear thread indices, so only the last one of a
+# threadgroup can be partial
+@inline function active_simdgroup_size()
+    size = threads_per_threadgroup()
+    threads = size.x * size.y * size.z
+    first_thread = (simdgroup_index_in_threadgroup() - 0x1) * threads_per_simdgroup()
+    return min(threads_per_simdgroup(), threads - first_thread)
 end
 
-@device_override KI.get_sub_group_size() = threads_per_simdgroup()
+@device_override KI.get_sub_group_size(::Type{T}) where {T} = active_simdgroup_size() % T
 
-@device_override KI.get_max_sub_group_size() = threads_per_simdgroup()
+@device_override KI.get_max_sub_group_size(::Type{T}) where {T} = threads_per_simdgroup() % T
 
-@device_override KI.get_num_sub_groups() = simdgroups_per_threadgroup()
+@device_override KI.get_num_sub_groups(::Type{T}) where {T} = simdgroups_per_threadgroup() % T
 
-@device_override KI.get_sub_group_id() = simdgroup_index_in_threadgroup()
+@device_override KI.get_sub_group_id(::Type{T}) where {T} = simdgroup_index_in_threadgroup() % T
 
-@device_override KI.get_sub_group_local_id() = thread_index_in_simdgroup()
+@device_override KI.get_sub_group_local_id(::Type{T}) where {T} = thread_index_in_simdgroup() % T
 
 
 ## shared memory

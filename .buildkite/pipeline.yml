@@ -37,6 +37,12 @@ steps:
           build.message !~ /\[skip [^\]]*(tests|julia)/ &&
           (build.message =~ /\[only [^\]]*(tests|julia)/ ||
            build.message !~ /\[only / && !build.pull_request.draft)
+        commands: |
+          # XXX: KernelInterface 0.3 isn't registered yet, and Julia 1.10 ignores [sources]
+          if [[ "{{matrix.julia}}" == "1.10" ]]; then
+            git clone --depth 1 --branch tb/ki-0.3 https://github.com/JuliaGPU/KernelAbstractions.jl ka
+            julia --project=. -e 'using Pkg; Pkg.develop(path="ka/lib/KernelInterface")'
+          fi
         matrix:
           setup:
             julia:
