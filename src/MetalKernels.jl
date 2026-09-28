@@ -71,7 +71,7 @@ function KI.kernel_function(backend::MetalBackend, f::F, tt::TT=Tuple{}; name=no
     KI.Kernel{MetalBackend, typeof(kern)}(backend, kern)
 end
 
-function KI.launch(obj::KI.Kernel{MetalBackend}, groups::Dims{3}, items::Dims{3}, args...; kwargs...)
+function KI.launch(obj::KI.Kernel{MetalBackend}, groups::Dims{3}, items::Dims{3}, args::Vararg{Any, N}; kwargs...) where {N}
     obj.kern(args...; threads=items, groups, kwargs...)
     return
 end
