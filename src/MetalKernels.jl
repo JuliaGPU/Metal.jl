@@ -157,8 +157,15 @@ function KI.record_event(::MetalBackend)
     return (ev, val)
 end
 
+# make the GPU wait, instead of blocking the host: the wait goes into the task's open batch
+# of work, before the work that is queued next
 function KI.wait_event(::MetalBackend, ev::Tuple{Metal.MTLSharedEvent, UInt64})
-    MTL.waitUntilSignaledValue(ev[1], ev[2])
+    event, value = ev
+    bq = global_queue(device())
+    Metal.end_encoder!(bq)
+    MTL.encode_wait!(Metal.ensure_cmdbuf!(bq), event, value)
+    Metal.record_operation!(bq, event)
+    Metal.maybe_autoflush!(bq)
     return
 end
 
