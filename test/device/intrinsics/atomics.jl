@@ -253,21 +253,28 @@ const targets = ((v"3.2", v"2.7"), (v"4.0", v"2.8"), (v"4.1", v"2.9"))
             end
         end
 
-        # memory orders can also be passed as run-time values (loads and stores only get the
-        # part of an order they can have, like with Clang)
-        function dynamic_order_kernel(a, order)
-            Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1), order)
-            x = Metal.atomic_load_explicit(pointer(a, 1), order)
-            Metal.atomic_store_explicit(pointer(a, 2), x, order)
-            Metal.atomic_compare_exchange_weak_explicit(pointer(a, 3), x - Int32(1), x, order,
-                                                        order)
+        # loads and stores only get the part of an order they can have, like with Clang
+        function partial_order_kernel(a, ::Val{ORDER}) where {ORDER}
+            Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1), ORDER)
+            x = Metal.atomic_load_explicit(pointer(a, 1), ORDER)
+            Metal.atomic_store_explicit(pointer(a, 2), x, ORDER)
+            Metal.atomic_compare_exchange_weak_explicit(pointer(a, 3), x - Int32(1), x, ORDER,
+                                                        ORDER)
             return
         end
         a = Metal.zeros(Int32, 3)
         for order in orders
-            @metal dynamic_order_kernel(a, order)
+            @metal partial_order_kernel(a, Val(order))
         end
         @test Array(a) == fill(Int32(length(orders)), 3)
+
+        # like in MSL, memory orders have to be constants
+        function dynamic_order_kernel(a, order)
+            Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1), order)
+            return
+        end
+        @test_throws Metal.InvalidIRError @metal launch=false dynamic_order_kernel(
+            a, Metal.memory_order_relaxed)
 
         # explicit memory flags need the MSL 4.1 intrinsics
         function flagged_fetch_kernel(a, ::Val{ORDER}, ::Val{FLAGS}) where {ORDER,FLAGS}
