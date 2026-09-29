@@ -34,19 +34,21 @@ const INT_TYPES = [(Int8, "i8", "s"), (UInt8, "i8", "u"), (Int16, "i16", "s"),
 # floating-point
 
 # Group A: `Base.f(::Float32/::Float16)` -> `air.f.{f32,f16}`, and the fast-math variant
-# `FastMath.f_fast(::Float32)` -> `air.fast_f.f32`.
+# `FastMath.f_fast(::Float32)` -> `air.fast_f.f32`. Float16 `sin`/`cos` go through Float32
+# instead: the half builtins are inaccurate on M1-class GPUs (JuliaGPU/Metal.jl#985).
 FLOAT_A = [acos, acosh, asin, asinh, atan, atanh, cos, cosh,
            exp, exp2, exp10, log, log2, log10, sin, sinh, tan, tanh]
 @testset "$f" for f in FLOAT_A
     root = string(f)
     fast = getfield(FastMath, Symbol(root, "_fast"))
+    half = f in (sin, cos) ? "f32" : "f16"
     @eval begin
         @test @filecheck begin
             @check $("@air.$root.f32")
             Metal.code_llvm(x -> $f(x), Tuple{Float32})
         end
         @test @filecheck begin
-            @check $("@air.$root.f16")
+            @check $("@air.$root.$half")
             Metal.code_llvm(x -> $f(x), Tuple{Float16})
         end
         @test @filecheck begin
@@ -197,7 +199,7 @@ end
             Metal.code_llvm(x -> sincos(x), Tuple{Float32})
         end
         @test @filecheck begin
-            @check "@air.sincos.f16"
+            @check "@air.sincos.f32"
             Metal.code_llvm(x -> sincos(x), Tuple{Float16})
         end
         @test @filecheck begin
@@ -941,6 +943,16 @@ end
     @test Array(dx .== di) == (x .== i)
     @test Array(Float16.(dx) .<= di) == (Float16.(x) .<= i)
     @test Array(MtlArray(fill(-1f0, 3)) .^ MtlArray([16777217, 16777216, -3])) == [-1, 1, -1]
+end
+
+# Float16 sin/cos must match the CPU, which computes them in Float32 (JuliaGPU/Metal.jl#985).
+# The CPU and GPU Float32 results can differ in the last bit, which flips the rounding to
+# Float16 near ties, so allow 1 ulp.
+@testset "Float16 $f" for f in (sin, cos, first ∘ sincos, last ∘ sincos)
+    x = filter(isfinite, reinterpret(Float16, collect(typemin(UInt16):typemax(UInt16))))
+    y, ref = Array(f.(MtlArray(x))), f.(x)
+    @test all(abs.(Float32.(y) .- Float32.(ref)) .<= eps.(ref))
+    @test signbit.(y) == signbit.(ref)
 end
 
 # `@fastmath x^n` with an integer `n` emits `llvm.powi`, which AIR lacks. GPUCompiler expands
