@@ -587,17 +587,23 @@ end
     # shader validation keeps buffers alive, so their memory is never released
     get(ENV, "MTL_SHADER_VALIDATION", "0") == "1" ||
     @testset "wrapped memory is released once Metal is done with it" begin
-        owners() = @lock Metal.host_memory_owners_lock length(Metal.host_memory_owners)
-        n = owners()
-        a = unsafe_wrap(MtlArray, zeros(Float32, 16))
-        @test owners() == n + 1
+        collected = Threads.Atomic{Bool}(false)
+        function wrap_tracked()
+            host = zeros(Float32, 16)
+            finalizer(_ -> collected[] = true, host)
+            return unsafe_wrap(MtlArray, host)
+        end
+        a = wrap_tracked()
+        GC.gc(true)
+        @test !collected[]
         Metal.unsafe_free!(a)
         # Metal signals the deallocation asynchronously
         t = time()
-        while owners() > n && time() - t < 10
-            sleep(0.01)
+        while !collected[] && time() - t < 10
+            GC.gc(true)
+            sleep(0.05)
         end
-        @test owners() == n
+        @test collected[]
     end
 
     @testset "wrap MtlPtr as multi-dimensional array" begin

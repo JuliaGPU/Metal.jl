@@ -676,29 +676,18 @@ function checked_bytesize(::Type{T}, dims::Dims) where {T}
     return Base.checked_mul(foldl(Base.checked_mul, dims; init=1), sizeof(T))
 end
 
-# host memory owners that need to be kept alive until Metal is done with their memory,
-# which may be later than when the MtlArray is freed (e.g., when a command buffer that
-# uses the buffer is still executing). the buffer's deallocator signals that moment.
-const host_memory_owners = Base.IdSet{Any}()
-const host_memory_owners_lock = ReentrantLock()
-
-# returns an async condition that releases `owner` when signalled
+# returns an async condition that keeps `owner` alive until it is signalled. we use this
+# to keep host memory alive until Metal is done with it, which may be later than when the
+# MtlArray is freed (e.g., when a command buffer that uses the buffer is still executing);
+# the buffer's deallocator signals that moment.
+#
+# the callback task roots `owner`, and it is rooted itself while waiting for the condition,
+# as libuv keeps the condition alive. Julia also creates it outside of the current
+# cancellation scope, so it cannot be cancelled before the condition is signalled.
 function root_until_signalled(owner)
-    cond = Base.AsyncCondition()
-    entry = (cond, owner)
-    @lock host_memory_owners_lock push!(host_memory_owners, entry)
-    try
-        errormonitor(@async begin
-            wait(cond)
-            close(cond)
-            @lock host_memory_owners_lock delete!(host_memory_owners, entry)
-        end)
-    catch
-        @lock host_memory_owners_lock delete!(host_memory_owners, entry)
-        close(cond)
-        rethrow()
+    return Base.AsyncCondition() do cond
+        GC.@preserve owner close(cond)
     end
-    return cond
 end
 
 function wrap_host_memory(::Type{MtlArray{T,N,S}}, ptr::Ptr{T}, dims::Dims{N}, owner;
