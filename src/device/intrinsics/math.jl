@@ -64,7 +64,7 @@ end
 
 @device_override FastMath.cos_fast(x::Float32) = ccall("extern air.fast_cos.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.cos(x::Float32) = ccall("extern air.cos.f32", llvmcall, Cfloat, (Cfloat,), x)
-@device_override Base.cos(x::Float16) = ccall("extern air.cos.f16", llvmcall, Float16, (Float16,), x)
+# no Float16 cos, see `sin` below
 
 @device_override FastMath.cosh_fast(x::Float32) = ccall("extern air.fast_cosh.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.cosh(x::Float32) = ccall("extern air.cosh.f32", llvmcall, Cfloat, (Cfloat,), x)
@@ -241,7 +241,8 @@ end
 
 @device_override FastMath.sin_fast(x::Float32) = ccall("extern air.fast_sin.f32", llvmcall, Cfloat, (Cfloat,), x)
 @device_override Base.sin(x::Float32) = ccall("extern air.sin.f32", llvmcall, Cfloat, (Cfloat,), x)
-@device_override Base.sin(x::Float16) = ccall("extern air.sin.f16", llvmcall, Float16, (Float16,), x)
+# no Float16 sin/cos/sincos: Base computes them in Float32. On M1, `air.{sin,cos}.f16` are
+# approximations that are off by up to thousands of ulp (JuliaGPU/Metal.jl#985).
 
 @device_override function FastMath.sincos_fast(x::Float32)
     c = Ref{Cfloat}()
@@ -251,11 +252,6 @@ end
 @device_override function Base.sincos(x::Float32)
     c = Ref{Cfloat}()
     s = @typed_ccall("air.sincos.f32", llvmcall, Cfloat, (Cfloat, Ptr{Cfloat}), x, c)
-    (s, c[])
-end
-@device_override function Base.sincos(x::Float16)
-    c = Ref{Float16}()
-    s = @typed_ccall("air.sincos.f16", llvmcall, Float16, (Float16, Ptr{Float16}), x, c)
     (s, c[])
 end
 
