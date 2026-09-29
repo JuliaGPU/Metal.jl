@@ -155,7 +155,7 @@ for (op, air_op, types, args, norders) in atomic_intrinsics, typ in types,
     end
     # compare-exchange passes the expected value by reference
     ccall_types = [:(LLVMPtr{$typ,$as}); [a === :expected ? :(Ptr{$typ}) : typ for a in args];
-                   fill(:Int32, norders + 2); :Bool]
+                   [:Int32 for _ in 1:norders+2]; :Bool]
     ccall_args = [:ptr; [a === :expected ? :expected_box : a for a in args];
                   [:(Val($o)) for o in orders]; :(Val($scope)); :(Val(flags)); :(Val(false))]
 
