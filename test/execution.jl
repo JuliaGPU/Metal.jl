@@ -707,6 +707,26 @@ end
         @metal kernel(Int, pointer(a))
         @test Array(a)[] == 1
     end
+
+    @testset "argument converting to a ghost type" begin
+        # `Base.Fix1` capturing a type converts to a closure without fields,
+        # so it doesn't occupy a parameter slot, unlike its unconverted form
+        function kernel(f, ptr, val)
+            unsafe_store!(ptr, f(val))
+            return
+        end
+
+        a = MtlArray([0f0])
+        @metal kernel(Base.Fix1(convert, Float32), pointer(a), 42)
+        @test Array(a)[] == 42f0
+    end
+
+    @testset "wrong number of arguments" begin
+        kernel(ptr) = return
+        a = MtlArray([0])
+        k = @metal launch=false kernel(pointer(a))
+        @test_throws ArgumentError k()
+    end
 end
 
 @testset "compilation cache" begin
