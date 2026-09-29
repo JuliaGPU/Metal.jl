@@ -268,12 +268,14 @@ const targets = ((v"3.2", v"2.7"), (v"4.0", v"2.8"), (v"4.1", v"2.9"))
         end
         @test Array(a) == fill(Int32(length(orders)), 3)
 
-        # like in MSL, memory orders have to be constants
+        # like in MSL, memory orders have to be constants (on Julia 1.11, GPUCompiler already
+        # rejects the boxed constant that a run-time order needs, with an ErrorException)
         function dynamic_order_kernel(a, order)
             Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1), order)
             return
         end
-        @test_throws Metal.InvalidIRError @metal launch=false dynamic_order_kernel(
+        err = Union{Metal.InvalidIRError,ErrorException}
+        @test_throws err @metal launch=false dynamic_order_kernel(
             a, Metal.memory_order_relaxed)
 
         # explicit memory flags need the MSL 4.1 intrinsics
