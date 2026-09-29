@@ -528,6 +528,78 @@ end
     marr3 = mtl(zeros(Float32, 10); storage = Metal.SharedStorage)
     @test_throws MethodError unsafe_wrap(Array{Float16}, marr3)
 
+    @testset "wrap unaligned host memory" begin
+        # small arrays are neither page-aligned nor a multiple of the page size
+        a = Float32[1, 2, 3, 4]
+        b = unsafe_wrap(MtlArray, a)
+        @test b isa MtlVector{Float32, Metal.SharedStorage}
+        @test pointer(b; storage=Metal.SharedStorage) == pointer(a)
+        Metal.@sync b .+= 1
+        @test a == [2, 3, 4, 5]
+        a[1] = 10
+        @test Array(b) == [10, 3, 4, 5]
+        @test pointer(unsafe_wrap(Array, b)) == pointer(a)
+
+        m = rand(Float32, 3, 5)
+        @test unsafe_wrap(MtlArray, m) isa MtlMatrix{Float32}
+        @test Array(unsafe_wrap(MtlArray{Float32}, m)) == m
+        @test Array(unsafe_wrap(MtlMatrix{Float32}, m)) == m
+        GC.@preserve m begin
+            @test Array(unsafe_wrap(MtlArray, pointer(m, 2), 4)) == m[2:5]
+            @test Array(unsafe_wrap(MtlArray, pointer(m, 2), (2, 2))) == reshape(m[2:5], 2, 2)
+        end
+        @test isempty(unsafe_wrap(MtlArray, Float32[]))
+
+        # other data on the wrapped pages is left alone
+        c = zeros(UInt32, 64)
+        GC.@preserve c begin
+            d = unsafe_wrap(MtlArray, pointer(c, 5), 8)
+            Metal.@sync d .= 1
+        end
+        @test c == [zeros(UInt32, 4); ones(UInt32, 8); zeros(UInt32, 52)]
+
+        # the wrapper keeps the array alive
+        e = unsafe_wrap(MtlArray, fill(1.0f0, 1000))
+        GC.gc(true)
+        @test sum(e) == 1000
+
+        @test_throws ArgumentError unsafe_wrap(MtlArray, Ptr{Float32}(C_NULL), 1)
+        @test_throws ArgumentError unsafe_wrap(MtlArray, Any[1])
+        @test_throws ArgumentError unsafe_wrap(MtlVector{Float32}, Float32[1], (2,))
+        @test_throws ArgumentError unsafe_wrap(MtlVector{Float32}, Float32[1, 2], (1, 2))
+        @test_throws ArgumentError unsafe_wrap(MtlVector{Float32, Metal.PrivateStorage}, a)
+        @test_throws ArgumentError unsafe_wrap(MtlArray, a; storage=Metal.PrivateStorage)
+        @test unsafe_wrap(MtlVector{Float32, Metal.SharedStorage}, a) isa MtlVector{Float32}
+        # reinterpreting an array's memory is allowed, as long as it fits
+        @test Array(unsafe_wrap(MtlVector{UInt32}, a)) == reinterpret(UInt32, a)
+        GC.@preserve c begin
+            @test_throws ArgumentError unsafe_wrap(MtlArray, Ptr{Float32}(pointer(c) + 1), 1)
+            @test_throws ArgumentError unsafe_wrap(MtlArray{Float32}, pointer(c), 4)
+            @test_throws ArgumentError unsafe_wrap(MtlMatrix{UInt32}, pointer(c), 4)
+            @test unsafe_wrap(MtlVector{UInt32}, pointer(c), 4) isa MtlVector{UInt32}
+            @test_throws OverflowError unsafe_wrap(MtlArray, pointer(c), (typemax(Int) ÷ 2, 4))
+            @test_throws OverflowError unsafe_wrap(MtlArray, pointer(c), (2^31, 2^31, 4))
+            maxlen = Metal.MTL.max_buffer_length(device())
+            @test_throws ArgumentError unsafe_wrap(MtlArray, pointer(c), maxlen ÷ 4 + 1)
+        end
+    end
+
+    # shader validation keeps buffers alive, so their memory is never released
+    get(ENV, "MTL_SHADER_VALIDATION", "0") == "1" ||
+    @testset "wrapped memory is released once Metal is done with it" begin
+        owners() = @lock Metal.host_memory_owners_lock length(Metal.host_memory_owners)
+        n = owners()
+        a = unsafe_wrap(MtlArray, zeros(Float32, 16))
+        @test owners() == n + 1
+        Metal.unsafe_free!(a)
+        # Metal signals the deallocation asynchronously
+        t = time()
+        while owners() > n && time() - t < 10
+            sleep(0.01)
+        end
+        @test owners() == n
+    end
+
     @testset "wrap MtlPtr as multi-dimensional array" begin
         dims = (2, 3, 4, 5, 6)
         n = prod(dims)
