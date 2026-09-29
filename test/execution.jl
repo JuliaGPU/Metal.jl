@@ -727,6 +727,30 @@ end
         k = @metal launch=false kernel(pointer(a))
         @test_throws ArgumentError k()
     end
+
+    @testset "captured arrays" begin
+        # arrays captured by the kernel function are converted at launch, like arguments,
+        # so that their buffers are declared to the encoder (as shader validation requires)
+        let a = MtlArray(Float32[1, 2, 3, 4]), b = Metal.zeros(Float32, 4)
+            kernel = () -> (i = thread_position_in_grid().x; @inbounds b[i] = 2f0 * a[i]; nothing)
+            @metal threads=4 kernel()
+            @test Array(b) == Float32[2, 4, 6, 8]
+        end
+
+        # the kernel object keeps the arrays it captures alive
+        function captured_kernel(b)
+            a = MtlArray([42])
+            kernel = @metal launch=false (() -> (@inbounds b[1] = a[1]; nothing))()
+            kernel, WeakRef(a)
+        end
+        let b = MtlArray([0])
+            kernel, a = captured_kernel(b)
+            GC.gc(true)
+            @test a.value !== nothing
+            kernel()
+            @test Array(b) == [42]
+        end
+    end
 end
 
 @testset "compilation cache" begin

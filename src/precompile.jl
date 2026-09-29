@@ -12,7 +12,7 @@ using PrecompileTools: @setup_workload, @compile_workload
         # the compiled kernel (inference results and metallib bytes, attached to its
         # CodeInstance) in the package image, so that loading Metal.jl can launch it
         # without invoking the compiler. session-local state (pipeline handles,
-        # kernel instances) is kept out of the image below and by `mtlfunction`.
+        # relocation tables) is kept out of the image below and by `mtlfunction`.
         # NOTE: only compile and link; actually launching a kernel (committing a
         #       command buffer and waiting for it) hangs during precompilation.
         mtlfunction(identity, Tuple{Nothing})
@@ -61,7 +61,6 @@ using PrecompileTools: @setup_workload, @compile_workload
     # the package image yields dangling pointers when the image is loaded. Drop
     # the entries before precompilation finalizes.
     Base.@lock compiler_configs_lock empty!(_compiler_configs)
-    empty!(kernel_instances)
     Base.@lock global_queues_lock empty!(global_queues)
     Base.@lock batched_queues_lock empty!(batched_queues)
     empty!(queue_residency_sets)

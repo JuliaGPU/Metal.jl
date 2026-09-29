@@ -86,7 +86,8 @@ macro metal(ex...)
                 $kernel_f = $mtlconvert($f_var)
                 $kernel_args = map($mtlconvert, ($(var_exprs...),))
                 $kernel_tt = Tuple{map(Core.Typeof, $kernel_args)...}
-                $kernel = $mtlfunction($kernel_f, $kernel_tt; $(compiler_kwargs...))
+                $kernel = $mtlfunction($kernel_f, $kernel_tt;
+                                       source=$f_var, $(compiler_kwargs...))
                 if $launch
                     $kernel($(var_exprs...); $(call_kwargs...))
                 end
@@ -170,8 +171,12 @@ mtlconvert(arg, cce=nothing) = adapt(Adaptor(cce), arg)
 
 ## host-side kernel API
 
-struct HostKernel{F,TT}
+struct HostKernel{F,S,TT}
     f::F
+    # the callable before conversion, which is converted again at every launch: only then
+    # can the buffers it captures be declared to the command encoder, and holding on to it
+    # keeps those buffers alive for as long as the kernel object and its launches need them.
+    source::S
     pipeline::MTLComputePipelineState
     loggingEnabled::Bool
     device::MTLDevice
@@ -198,17 +203,21 @@ The following keyword arguments are supported:
    versions used during compilation. Value should be a valid version number.
 - `gpufamily`: to override the Apple GPU family (`MTL.MTLGPUFamilyApple<n>`) that the
    generated code may rely on. Defaults to the highest family the device supports.
+- `source`: the callable before [`mtlconvert`](@ref) turned it into `f`, which is what
+  gets converted again at every launch (so it should convert to an object of the same type
+  as `f`). Defaults to `f`, but should be set when `f` captures GPU arrays, so that their
+  buffers are made available to the GPU and kept alive as long as the kernel is in use.
 
 The output of this function is automatically cached, i.e. you can simply call `mtlfunction`
 in a hot path without degrading performance. New code will be generated automatically when
 the function changes, or when different types or keyword arguments are provided.
 """
-function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
+function mtlfunction(f::F, tt::TT=Tuple{}; source=f, name=nothing, kwargs...) where {F,TT}
     Base.@lock mtlfunction_lock begin
         dev = device()
         config = compiler_config(dev; name, kwargs...)::MetalCompilerConfig
-        source = methodinstance(F, tt)
-        job = CompilerJob(source, config)
+        mi = methodinstance(F, tt)
+        job = CompilerJob(mi, config)
 
         res = compile_or_lookup(job)::MetalResults
 
@@ -251,17 +260,12 @@ function mtlfunction(f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
             end
         end
 
-        h = hash(pipeline[], hash(f, hash(tt)))
-        get!(kernel_instances, h) do
-            local dev = pipeline[].device
-            HostKernel{F,tt}(f, pipeline[], res.loggingEnabled::Bool,
-                             dev,
-                             Int(pipeline[].maxTotalThreadsPerThreadgroup),
-                             Int(pipeline[].staticThreadgroupMemoryLength),
-                             Int(pipeline[].threadExecutionWidth),
-                             can_use_residency_sets(dev),
-                             reloc_table)
-        end::HostKernel{F,tt}
+        HostKernel{F,typeof(source),tt}(f, source, pipeline[], res.loggingEnabled::Bool, dev,
+                                        Int(pipeline[].maxTotalThreadsPerThreadgroup),
+                                        Int(pipeline[].staticThreadgroupMemoryLength),
+                                        Int(pipeline[].threadExecutionWidth),
+                                        can_use_residency_sets(dev),
+                                        reloc_table)
     end
 end
 
@@ -290,18 +294,14 @@ end
     return res
 end
 
-# cache of kernel instances
-const kernel_instances = Dict{UInt, Any}()
-
-
 ## kernel launching and argument encoding
 
 # Encode the kernel state, the callable and the arguments, in that order. Which of those
 # values occupy a parameter slot is decided by the kernel's compiled signature, which holds
 # their converted types: the unconverted ones don't tell, e.g., a `Base.Fix1` capturing a
 # type converts to a ghost closure.
-@inline @generated function encode_arguments!(cce, kernel::HostKernel{F,TT}, kernel_state,
-                                              f, args::Tuple) where {F,TT}
+@inline @generated function encode_arguments!(cce, kernel::HostKernel{F,S,TT}, kernel_state,
+                                              f, args::Tuple) where {F,S,TT}
     sig = (KernelState, F, TT.parameters...)
     vals = (:kernel_state, :f, (:(args[$i]) for i in 1:fieldcount(args))...)
     typs = (kernel_state, f, fieldtypes(args)...)
@@ -310,10 +310,9 @@ const kernel_instances = Dict{UInt, Any}()
         return :(throw(ArgumentError($msg)))
     end
 
-    # the values passed into this function have not been `mtlconvert`ed, because we need
-    # to retain the top-level MTLBuffer and MtlPtr objects. eager conversion of nested
-    # such objects to LLVMPtr seems fine, somehow.
-    # TODO: can we just convert everything eagerly and support top-level LLVMPtrs?
+    # the callable and arguments passed into this function have not been `mtlconvert`ed:
+    # top-level MTLBuffer and MtlPtr objects are bound directly, and everything else is
+    # converted here, with the encoder, so that the buffers it contains are declared to it.
     ex = quote end
     idx = 1
     for (dt, val, typ) in zip(sig, vals, typs)
@@ -427,14 +426,14 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
         let reloc = kernel.reloc_table
             reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
         end
-        encode_arguments!(cce, kernel, kernel_state, kernel.f, args)
+        encode_arguments!(cce, kernel, kernel_state, kernel.source, args)
         MTL.append_current_function!(cce, gs, ts)
     finally
         close(cce)
     end
 
     commit!(cmdbuf, queue)
-    defer_cleanup!(bq, cmdbuf, Any[kernel.f, args])
+    defer_cleanup!(bq, cmdbuf, Any[kernel.source, args])
     track_logging_cmdbuf!(queue, cmdbuf)
     return
 end
@@ -460,7 +459,7 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     (gs.depth * ts.depth) > typemax(UInt32) &&
         throw(ArgumentError("Total threads per grid in a dimension (threads.depth($(gs.depth)) * groups.depth($(ts.depth)) = $(gs.depth * ts.depth)) must not exceed $(typemax(UInt32))"))
 
-    f = kernel.f
+    source = kernel.source
     pipeline = kernel.pipeline
     dev = kernel.device
     tgmem = kernel.tgmem
@@ -498,7 +497,7 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         # (which only holds the per-device scratch buffers): declare it every launch.
         reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
 
-        encode_arguments!(cce, kernel, kernel_state, f, args)
+        encode_arguments!(cce, kernel, kernel_state, source, args)
         MTL.append_current_function!(cce, gs, ts)
     catch
         # The failing launch has not been recorded yet. Keep any earlier
@@ -515,7 +514,7 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     # The command buffer retains explicitly encoded buffers, but that doesn't keep other
     # resources alive for which we've encoded the GPU address ourselves.
     op = MTL.profile_metadata[] === nothing ? nothing : kernel_operation(kernel, gs, ts)
-    record_operation!(bq, f, args; op=op)
+    record_operation!(bq, source, args; op=op)
 
     if precompiling
         cmdbuf = bq.cmdbuf
