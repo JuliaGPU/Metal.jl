@@ -42,13 +42,13 @@ end
 
 function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
                    nocopy=false, storage::Type{<:StorageMode}=SharedStorage, hazard_tracking=DefaultTracking,
-                   cache_mode=DefaultCPUCache)
+                   cache_mode=DefaultCPUCache, deallocator=nil)
     storage == PrivateStorage && error("Cannot allocate-and-initialize a PrivateStorage buffer")
     opts =  convert(MTLResourceOptions, storage) | hazard_tracking | cache_mode
 
     @assert 0 < bytesize <= max_buffer_length(dev)
     ptr = if nocopy
-        alloc_buffer_nocopy(dev, bytesize, opts, ptr)
+        alloc_buffer_nocopy(dev, bytesize, opts, ptr, deallocator)
     else
         alloc_buffer(dev, bytesize, opts, ptr)
     end
@@ -84,13 +84,15 @@ alloc_buffer(dev::MTLDevice, bytesize, opts, ptr::Ptr) =
     @objc [dev::id{MTLDevice} newBufferWithBytes:ptr::Ptr{Cvoid}
                               length:bytesize::NSUInteger
                               options:opts::MTLResourceOptions]::id{MTLBuffer}
-function alloc_buffer_nocopy(dev::MTLDevice, bytesize, opts, ptr::Ptr)
+# `deallocator` is an optional block that Metal invokes once the buffer is deallocated,
+# i.e., when it is no longer used by any command buffer either
+function alloc_buffer_nocopy(dev::MTLDevice, bytesize, opts, ptr::Ptr, deallocator=nil)
     can_alloc_nocopy(ptr, bytesize) ||
         throw(ArgumentError("Cannot allocate nocopy buffer from non-aligned memory"))
     @objc [dev::id{MTLDevice} newBufferWithBytesNoCopy:ptr::Ptr{Cvoid}
                               length:bytesize::NSUInteger
                               options:opts::MTLResourceOptions
-                              deallocator:nil::id{Object}]::id{MTLBuffer}
+                              deallocator:deallocator::id{Object}]::id{MTLBuffer}
 end
 
 # from heap
