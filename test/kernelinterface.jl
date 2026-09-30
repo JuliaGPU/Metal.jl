@@ -96,3 +96,7 @@ end
     @test prod(dims) >= KI.max_work_group_size(backend)
     @test all(KI.max_num_groups(backend) .* dims .<= typemax(UInt32))
 end
+
+@testset "versioninfo" begin
+    @test occursin("Metal.jl", sprint(KI.versioninfo, MetalBackend()))
+end
