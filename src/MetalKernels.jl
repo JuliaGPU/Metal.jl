@@ -33,6 +33,9 @@ KI.functional(::MetalBackend) = Metal.functional()
 KI.supports_float64(::MetalBackend) = false
 KI.supports_atomics(::MetalBackend) = metal_support() >= v"4.1"
 KI.supports_unified(::MetalBackend) = true
+KI.supports_subgroups(::MetalBackend) = true
+KI.supports_shuffle(::MetalBackend, ::Type{T}) where {T} =
+    T <: Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
 
 Adapt.adapt_storage(::MetalBackend, a::AbstractArray) = Adapt.adapt(MtlArray, a)
 Adapt.adapt_storage(::MetalBackend, a::MtlArray) = a
@@ -74,10 +77,17 @@ KI.unsafe_free!(A::MtlArray) = Metal.unsafe_free!(A)
 
 KI.argconvert(::MetalBackend, arg) = mtlconvert(arg)
 
+# The SIMD-group width is a property of the compiled pipeline (`threadExecutionWidth`), but
+# it is the same for all pipelines on Apple GPUs. `kernel_function` checks that, so that
+# `KI.sub_group_size` can promise it before compiling.
+const SIMD_WIDTH = 32
+
 function KI.kernel_function(backend::MetalBackend, f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
     # KernelInterface passes the callable unconverted: it is converted again at every launch,
     # like with `@metal`, so that the buffers it captures are declared and kept alive
     kern = mtlfunction(mtlconvert(f), tt; source=f, name, kwargs...)
+    kern.exec_width == SIMD_WIDTH ||
+        error("Kernel compiled with a SIMD-group width of $(kern.exec_width), while KernelInterface.sub_group_size promises $SIMD_WIDTH")
     KI.Kernel(backend, kern)
 end
 
@@ -109,6 +119,7 @@ end
 function KI.max_num_groups(backend::MetalBackend)::NTuple{3, Int}
     Int(typemax(UInt32)) .÷ KI.max_work_group_dims(backend)
 end
+KI.sub_group_size(::MetalBackend)::Int = SIMD_WIDTH
 function KI.multiprocessor_count(::MetalBackend)::Int
     Metal.num_gpu_cores()
 end
@@ -138,6 +149,25 @@ end
     return (; x = size.x % T, y = size.y % T, z = size.z % T)
 end
 
+# SIMD-groups are formed from consecutive linear thread indices, so only the last one of a
+# threadgroup can be partial
+@inline function active_simdgroup_size()
+    size = threads_per_threadgroup()
+    threads = size.x * size.y * size.z
+    first_thread = (simdgroup_index_in_threadgroup() - 0x1) * threads_per_simdgroup()
+    return min(threads_per_simdgroup(), threads - first_thread)
+end
+
+@device_override KI.get_sub_group_size(::Type{T}) where {T} = active_simdgroup_size() % T
+
+@device_override KI.get_max_sub_group_size(::Type{T}) where {T} = threads_per_simdgroup() % T
+
+@device_override KI.get_num_sub_groups(::Type{T}) where {T} = simdgroups_per_threadgroup() % T
+
+@device_override KI.get_sub_group_id(::Type{T}) where {T} = simdgroup_index_in_threadgroup() % T
+
+@device_override KI.get_sub_group_local_id(::Type{T}) where {T} = thread_index_in_simdgroup() % T
+
 
 ## shared memory
 
@@ -151,6 +181,14 @@ end
 
 @device_override @inline function KI.barrier()
     threadgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
+end
+
+@device_override @inline function KI.sub_group_barrier()
+    simdgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
+end
+
+@device_override function KI.shfl_down(val::T, offset::Integer) where T
+    simd_shuffle_down(val, offset)
 end
 
 @device_override @inline function KI._print(args...)
