@@ -296,39 +296,39 @@ const kernel_instances = Dict{UInt, Any}()
 
 ## kernel launching and argument encoding
 
-@inline @generated function encode_arguments!(cce, kernel, args::Vararg{Any,N}) where {N}
-    ex = quote end
+# Encode the kernel state, the callable and the arguments, in that order. Which of those
+# values occupy a parameter slot is decided by the kernel's compiled signature, which holds
+# their converted types: the unconverted ones don't tell, e.g., a `Base.Fix1` capturing a
+# type converts to a ghost closure.
+@inline @generated function encode_arguments!(cce, kernel::HostKernel{F,TT}, kernel_state,
+                                              f, args::Tuple) where {F,TT}
+    sig = (KernelState, F, TT.parameters...)
+    vals = (:kernel_state, :f, (:(args[$i]) for i in 1:fieldcount(args))...)
+    typs = (kernel_state, f, fieldtypes(args)...)
+    if length(sig) != length(typs)
+        msg = "Kernel expects $(length(TT.parameters)) arguments, got $(fieldcount(args))"
+        return :(throw(ArgumentError($msg)))
+    end
 
-    # the arguments passed into this function have not been `mtlconvert`ed, because we need
+    # the values passed into this function have not been `mtlconvert`ed, because we need
     # to retain the top-level MTLBuffer and MtlPtr objects. eager conversion of nested
     # such objects to LLVMPtr seems fine, somehow.
     # TODO: can we just convert everything eagerly and support top-level LLVMPtrs?
-
-    # the argument index is tracked at run time, because whether an argument occupies a
-    # slot depends on its converted type (e.g. a `Base.Fix1` capturing a type converts to
-    # a ghost closure). the checks on that type still fold away.
-    push!(ex.args, :(idx = 1))
-    for (argidx, argtyp) in enumerate(args)
-        argex = :(args[$argidx])
-        if argtyp <: MTLBuffer
+    ex = quote end
+    idx = 1
+    for (dt, val, typ) in zip(sig, vals, typs)
+        (isghosttype(dt) || Core.Compiler.isconstType(dt)) && continue
+        if typ <: MTLBuffer
             # top-level buffers are passed as a pointer-valued argument
-            push!(ex.args, :(set_buffer!(cce, $argex, 0, idx); idx += 1))
-        elseif argtyp <: MtlPtr
+            push!(ex.args, :(set_buffer!(cce, $val, 0, $idx)))
+        elseif typ <: MtlPtr
             # the same as a buffer, but with an offset
-            push!(ex.args, :(set_buffer!(cce, $argex.buffer, $argex.offset, idx); idx += 1))
-        elseif isghosttype(argtyp) || Core.Compiler.isconstType(argtyp)
-            continue
+            push!(ex.args, :(set_buffer!(cce, $val.buffer, $val.offset, $idx)))
         else
             # everything else is passed by reference, copied into Metal's transient buffer
-            append!(ex.args, (quote
-                let arg = mtlconvert($(argex), cce)
-                    if !(isghosttype(typeof(arg)) || Core.Compiler.isconstType(typeof(arg)))
-                        set_argument!(cce, arg, idx)
-                        idx += 1
-                    end
-                end
-            end).args)
+            push!(ex.args, :(set_argument!(cce, mtlconvert($val, cce), $idx)))
         end
+        idx += 1
     end
 
     push!(ex.args, :(return nothing))
@@ -427,7 +427,7 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
         let reloc = kernel.reloc_table
             reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
         end
-        encode_arguments_nospec!(cce, kernel, kernel_state, kernel.f, args)
+        encode_arguments!(cce, kernel, kernel_state, kernel.f, args)
         MTL.append_current_function!(cce, gs, ts)
     finally
         close(cce)
@@ -498,7 +498,7 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         # (which only holds the per-device scratch buffers): declare it every launch.
         reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
 
-        encode_arguments_nospec!(cce, kernel, kernel_state, f, args)
+        encode_arguments!(cce, kernel, kernel_state, f, args)
         MTL.append_current_function!(cce, gs, ts)
     catch
         # The failing launch has not been recorded yet. Keep any earlier
@@ -527,10 +527,6 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     submit ? flush!(bq) : maybe_autoflush!(bq)
     return
 end
-
-# force specialization on f and args, but not on the kernel
-@inline encode_arguments_nospec!(cce, @nospecialize(kernel), kernel_state, f, args::Tuple) =
-    encode_arguments!(cce, kernel, kernel_state, f, args...)
 
 ## Intra-warp Helpers
 
