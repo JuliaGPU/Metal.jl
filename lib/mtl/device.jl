@@ -37,6 +37,14 @@ end
 max_threadgroup_threads(dev::MTLDevice) = first(threadgroup_limits(dev))
 max_threadgroup_memory(dev::MTLDevice) = last(threadgroup_limits(dev))
 
+# the limit along each dimension; `max_threadgroup_threads` bounds their product
+function max_threadgroup_dims(dev::MTLDevice)
+    @memoize key=pointer(dev)::id{MTLDevice} begin
+        size = dev.maxThreadsPerThreadgroup
+        (Int(size.width), Int(size.height), Int(size.depth))
+    end::NTuple{3,Int}
+end
+
 
 #
 # family

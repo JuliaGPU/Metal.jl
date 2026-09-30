@@ -1,10 +1,11 @@
 module MetalKernels
 
 using ..Metal
-using ..Metal: @device_override, DefaultStorageMode, SharedStorage, metal_support
-using GPUCompiler
+using ..Metal: @device_override, DefaultStorageMode, SharedStorage, metal_support,
+               mtlfunction, mtlconvert, launch_with_queue, MTL, MTLSize, @autoreleasepool,
+               MTLSharedEvent, MTLCommandBuffer, encode_signal!, encode_wait!, commit!
 
-import KernelAbstractions as KA
+import KernelInterface as KI
 
 import Adapt
 
@@ -14,189 +15,213 @@ import Adapt
 export MetalBackend
 
 """
-    struct MetalBackend <: KernelAbstractions.GPU
+    MetalBackend()
 
-The `KernelAbstractions` backend for running on Metal GPUs.
+The KernelInterface back end for running on Metal GPUs, which KernelAbstractions uses to
+launch `@kernel` kernels.
 """
-struct MetalBackend <: KA.GPU
+struct MetalBackend <: KI.Backend
 end
 
 # Ensure type stability. See JuliaGPU/KernelAbstractions#634
-@inline KA.allocate(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = MtlArray{T, length(dims), unified ? SharedStorage : DefaultStorageMode}(undef, dims)
-KA.zeros(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.zeros(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
-KA.ones(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = Metal.ones(T, dims; storage=unified ? SharedStorage : DefaultStorageMode)
+@inline KI.allocate(::MetalBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where T = MtlArray{T, length(dims), unified ? SharedStorage : DefaultStorageMode}(undef, dims)
 
-KA.get_backend(::MtlArray) = MetalBackend()
-KA.synchronize(::MetalBackend) = synchronize()
+KI.get_backend(::MtlArray) = MetalBackend()
+KI.synchronize(::MetalBackend) = synchronize()
 
-KA.functional(::MetalBackend) = Metal.functional()
+KI.functional(::MetalBackend) = Metal.functional()
 
-KA.supports_float64(::MetalBackend) = false
-KA.supports_atomics(::MetalBackend) = metal_support() >= v"4.1"
-KA.supports_unified(::MetalBackend) = true
+KI.versioninfo(io::IO, ::MetalBackend) = Metal.versioninfo(io)
 
-Adapt.adapt_storage(::MetalBackend, a::Array) = Adapt.adapt(MtlArray, a)
+KI.supports_float64(::MetalBackend) = false
+KI.supports_atomics(::MetalBackend) = metal_support() >= v"4.1"
+KI.supports_unified(::MetalBackend) = true
+KI.supports_subgroups(::MetalBackend) = true
+KI.supports_shuffle(::MetalBackend, ::Type{T}) where {T} =
+    T <: Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
+
+Adapt.adapt_storage(::MetalBackend, a::AbstractArray) = Adapt.adapt(MtlArray, a)
 Adapt.adapt_storage(::MetalBackend, a::MtlArray) = a
-Adapt.adapt_storage(::KA.CPU, a::MtlArray) = convert(Array, a)
 
 
 ## memory operations
 
-function KA.copyto!(::MetalBackend, dest::MtlArray{T}, src::MtlArray{T}) where T
-    if device(dest) == device(src)
-        GC.@preserve dest src copyto!(dest, src)
-        return dest
-    else
+# dense arrays, and contiguous views of host arrays (those of an `MtlArray` are `MtlArray`s)
+const ContiguousArray{T} =
+    Union{Array{T}, MtlArray{T}, Base.FastContiguousSubArray{T, <:Any, <:Array}}
+
+# Metal's copies are ordered with respect to the other work on the task's queue, and copies
+# between host and device memory complete before returning, so a host view can be wrapped
+# in an `Array` for the duration of the copy
+dense(A::Union{Array, MtlArray}) = A
+dense(A::SubArray) = unsafe_wrap(Array, pointer(A), size(A))
+
+function KI.copyto!(::MetalBackend, dest::ContiguousArray{T}, src::ContiguousArray{T}) where T
+    length(dest) == length(src) ||
+        throw(ArgumentError("Arrays must have the same length, got $(length(dest)) and $(length(src))"))
+    if dest isa MtlArray && src isa MtlArray && device(dest) != device(src)
         error("Copy between different devices not implemented")
     end
-end
-
-function KA.copyto!(::MetalBackend, dest::Array{T}, src::MtlArray{T}) where T
-    GC.@preserve dest src copyto!(dest, src)
+    if dest isa MtlArray || src isa MtlArray
+        GC.@preserve dest src copyto!(dense(dest), dense(src))
+    else
+        # host-to-host copies, including of element types a wrapped `Array` can't hold
+        copyto!(dest, src)
+    end
     return dest
 end
+KI.copyto!(::MetalBackend, dest, src) =
+    throw(ArgumentError("KernelInterface.copyto! only supports contiguous arrays of the same element type, got $(typeof(dest)) and $(typeof(src))"))
 
-function KA.copyto!(::MetalBackend, dest::MtlArray{T}, src::Array{T}) where T
-    GC.@preserve dest src copyto!(dest, src)
-    return dest
-end
+KI.unsafe_free!(A::MtlArray) = Metal.unsafe_free!(A)
 
 
 ## kernel launch
 
-function KA.mkcontext(kernel::KA.Kernel{MetalBackend}, _ndrange, iterspace)
-    KA.CompilerMetadata{KA.ndrange(kernel), KA.DynamicCheck}(_ndrange, iterspace)
-end
-function KA.mkcontext(kernel::KA.Kernel{MetalBackend}, I, _ndrange, iterspace,
-                      ::Dynamic) where Dynamic
-    KA.CompilerMetadata{KA.ndrange(kernel), Dynamic}(I, _ndrange, iterspace)
-end
+KI.argconvert(::MetalBackend, arg) = mtlconvert(arg)
 
-function KA.launch_config(kernel::KA.Kernel{MetalBackend}, ndrange, workgroupsize)
-    if ndrange isa Integer
-        ndrange = (ndrange,)
-    end
-    if workgroupsize isa Integer
-        workgroupsize = (workgroupsize, )
-    end
+# The SIMD-group width is a property of the compiled pipeline (`threadExecutionWidth`), but
+# it is the same for all pipelines on Apple GPUs. `kernel_function` checks that, so that
+# `KI.sub_group_size` can promise it before compiling.
+const SIMD_WIDTH = 32
 
-    # partition checked that the ndrange's agreed
-    if KA.ndrange(kernel) <: KA.StaticSize
-        ndrange = nothing
-    end
-
-    iterspace, dynamic = if KA.workgroupsize(kernel) <: KA.DynamicSize &&
-                            workgroupsize === nothing
-        # use ndrange as preliminary workgroupsize for autotuning
-        KA.partition(kernel, ndrange, ndrange)
-    else
-        KA.partition(kernel, ndrange, workgroupsize)
-    end
-
-    return ndrange, workgroupsize, iterspace, dynamic
+function KI.kernel_function(backend::MetalBackend, f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
+    # KernelInterface passes the callable unconverted: it is converted again at every launch,
+    # like with `@metal`, so that the buffers it captures are declared and kept alive
+    kern = mtlfunction(mtlconvert(f), tt; source=f, name, kwargs...)
+    kern.exec_width == SIMD_WIDTH ||
+        error("Kernel compiled with a SIMD-group width of $(kern.exec_width), while KernelInterface.sub_group_size promises $SIMD_WIDTH")
+    KI.Kernel(backend, kern)
 end
 
-function threads_to_workgroupsize(threads, ndrange)
-    total = Ref(1)
-    return map(ndrange) do n
-        x = min(div(threads, total[]), n)
-        total[] *= x
-        return x
+# passes the arguments on as a tuple, like calling the `HostKernel` does
+function KI.launch(obj::KI.Kernel{MetalBackend}, groups::Dims{3}, items::Dims{3},
+                   args::Tuple; queue=nothing, submit::Bool=false, kwargs...)
+    if !isempty(kwargs)
+        # KernelInterface has validated the launch geometry
+        if haskey(kwargs, :threads) || haskey(kwargs, :groups)
+            throw(ArgumentError("KernelInterface kernels take `numgroups`, `workgroupsize` or `ndrange`, not `threads` or `groups`"))
+        end
+        throw(ArgumentError("Unsupported keyword argument `$(first(keys(kwargs)))`"))
     end
+    @autoreleasepool launch_with_queue(obj.kern, queue, MTLSize(groups), MTLSize(items),
+                                       args, submit)
+    return
 end
 
-KA.argconvert(::KA.Kernel{MetalBackend}, arg) = Metal.mtlconvert(arg)
-
-function (obj::KA.Kernel{MetalBackend})(args...; ndrange=nothing, workgroupsize=nothing)
-    ndrange, workgroupsize, iterspace, _dynamic = KA.launch_config(obj, ndrange, workgroupsize)
-    # this might not be the final context, since we may tune the workgroupsize
-    ctx = KA.mkcontext(obj, ndrange, iterspace)
-    kernel = @metal launch=false obj.f(ctx, args...)
-
-    if KA.workgroupsize(obj) <: KA.DynamicSize && workgroupsize === nothing
-        groupsize = kernel.maxthreads
-        new_workgroupsize = threads_to_workgroupsize(groupsize, ndrange)
-        iterspace, _dynamic = KA.partition(obj, ndrange, new_workgroupsize)
-        ctx = KA.mkcontext(obj, ndrange, iterspace)
-    end
-
-    groups = length(KA.blocks(iterspace))
-    threads = length(KA.workitems(iterspace))
-
-    if groups == 0
-        return nothing
-    end
-
-    # Launch kernel
-    kernel(ctx, args...; threads, groups)
-    return nothing
+# the pipeline's `maxTotalThreadsPerThreadgroup`. KernelInterface's default
+# `launch_configuration` launches workgroups of that size, as Metal always has.
+KI.max_work_group_size(kernel::KI.Kernel{MetalBackend})::Int = kernel.kern.maxthreads
+function KI.max_work_group_size(::MetalBackend)::Int
+    MTL.max_threadgroup_threads(device())
+end
+function KI.max_work_group_dims(::MetalBackend)::NTuple{3, Int}
+    MTL.max_threadgroup_dims(device())
+end
+# the number of threads along each dimension of the grid has to fit in 32 bits
+function KI.max_num_groups(backend::MetalBackend)::NTuple{3, Int}
+    Int(typemax(UInt32)) .÷ KI.max_work_group_dims(backend)
+end
+KI.sub_group_size(::MetalBackend)::Int = SIMD_WIDTH
+function KI.multiprocessor_count(::MetalBackend)::Int
+    Metal.num_gpu_cores()
 end
 
 
 ## indexing
 
-@device_override @inline function KA.__index_Local_Linear(ctx)
-    return thread_position_in_threadgroup().x
+# computed with `% T`, which unlike `T(x)` has no error path
+
+@device_override @inline function KI.get_local_id(::Type{T}) where {T}
+    id = thread_position_in_threadgroup()
+    return (; x = id.x % T, y = id.y % T, z = id.z % T)
 end
 
-@device_override @inline function KA.__index_Group_Linear(ctx)
-    return threadgroup_position_in_grid().x
+@device_override @inline function KI.get_group_id(::Type{T}) where {T}
+    id = threadgroup_position_in_grid()
+    return (; x = id.x % T, y = id.y % T, z = id.z % T)
 end
 
-@device_override @inline function KA.__index_Global_Linear(ctx)
-    I =  @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid().x, thread_position_in_threadgroup().x)
-    # TODO: This is unfortunate, can we get the linear index cheaper
-    @inbounds LinearIndices(KA.__ndrange(ctx))[I]
+@device_override @inline function KI.get_local_size(::Type{T}) where {T}
+    size = threads_per_threadgroup()
+    return (; x = size.x % T, y = size.y % T, z = size.z % T)
 end
 
-@device_override @inline function KA.__index_Local_Cartesian(ctx)
-    @inbounds KA.workitems(KA.__iterspace(ctx))[thread_position_in_threadgroup().x]
+@device_override @inline function KI.get_num_groups(::Type{T}) where {T}
+    size = threadgroups_per_grid()
+    return (; x = size.x % T, y = size.y % T, z = size.z % T)
 end
 
-@device_override @inline function KA.__index_Group_Cartesian(ctx)
-    @inbounds KA.blocks(KA.__iterspace(ctx))[threadgroup_position_in_grid().x]
+# SIMD-groups are formed from consecutive linear thread indices, so only the last one of a
+# threadgroup can be partial
+@inline function active_simdgroup_size()
+    size = threads_per_threadgroup()
+    threads = size.x * size.y * size.z
+    first_thread = (simdgroup_index_in_threadgroup() - 0x1) * threads_per_simdgroup()
+    return min(threads_per_simdgroup(), threads - first_thread)
 end
 
-@device_override @inline function KA.__index_Global_Cartesian(ctx)
-    return @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid().x,
-                               thread_position_in_threadgroup().x)
-end
+@device_override KI.get_sub_group_size(::Type{T}) where {T} = active_simdgroup_size() % T
 
-@device_override @inline function KA.__validindex(ctx)
-    if KA.__dynamic_checkbounds(ctx)
-        I = @inbounds KA.expand(KA.__iterspace(ctx), threadgroup_position_in_grid().x,
-                                thread_position_in_threadgroup().x)
-        return I in KA.__ndrange(ctx)
-    else
-        return true
-    end
-end
+@device_override KI.get_max_sub_group_size(::Type{T}) where {T} = threads_per_simdgroup() % T
+
+@device_override KI.get_num_sub_groups(::Type{T}) where {T} = simdgroups_per_threadgroup() % T
+
+@device_override KI.get_sub_group_id(::Type{T}) where {T} = simdgroup_index_in_threadgroup() % T
+
+@device_override KI.get_sub_group_local_id(::Type{T}) where {T} = thread_index_in_simdgroup() % T
 
 
 ## shared memory
 
-@device_override @inline function KA.SharedMemory(::Type{T}, ::Val{Dims},
-                                                  ::Val{Id}) where {T, Dims, Id}
+@device_override @inline function KI.localmemory(::Type{T}, ::Val{Dims}) where {T, Dims}
     ptr = Metal.emit_threadgroup_memory(T, Val(prod(Dims)))
     MtlDeviceArray(Dims, ptr)
 end
 
-@device_override @inline function KA.Scratchpad(ctx, ::Type{T}, ::Val{Dims}) where {T, Dims}
-    # private per-workitem scratch: a stack `alloca` (lowered by GPUCompiler) wrapped in a
-    # device array. the slot lives in OpenCL "Function" storage (LLVM addrspace 0), which is
-    # where the SPIR-V target places allocas.
-    ptr = GPUCompiler.alloca(T, Val(prod(Dims)), Val(Metal.AS.Generic))
-    MtlDeviceArray(Dims, ptr)
+
+## events
+
+# signal a new event once the work the task has queued so far completes
+@autoreleasepool function KI.record_event(::MetalBackend)
+    dev = device()
+    event = MTLSharedEvent(dev)
+    value = event.signaledValue + 1
+    # committing the command buffer first submits the task's open batch of work
+    cmdbuf = MTLCommandBuffer(global_queue(dev))
+    encode_signal!(cmdbuf, event, value)
+    commit!(cmdbuf)
+    return (event, value)
+end
+
+# make the GPU wait, instead of blocking the host: the wait goes into the task's open batch
+# of work, before the work that is queued next
+function KI.wait_event(::MetalBackend, ev::Tuple{MTLSharedEvent, UInt64})
+    event, value = ev
+    bq = global_queue(device())
+    Metal.end_encoder!(bq)
+    encode_wait!(Metal.ensure_cmdbuf!(bq), event, value)
+    Metal.record_operation!(bq, event)
+    Metal.maybe_autoflush!(bq)
+    return
 end
 
 
-## other
+## synchronization and printing
 
-@device_override @inline function KA.__synchronize()
+@device_override @inline function KI.barrier()
     threadgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
 end
 
-@device_override @inline function KA.__print(args...)
+@device_override @inline function KI.sub_group_barrier()
+    simdgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
+end
+
+@device_override function KI.shfl_down(val::T, offset::Integer) where T
+    simd_shuffle_down(val, offset)
+end
+
+@device_override @inline function KI._print(args...)
     Metal._mtlprint(args...)
 end
 
