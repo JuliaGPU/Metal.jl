@@ -468,6 +468,69 @@ end
     @test all(vecA .== Int(5))
 end
 
+@testset "cooperative synchronization" begin
+    # a single-threaded kernel that takes tens of milliseconds
+    function spinning_kernel(a, n, oob)
+        x = a[1]
+        i = UInt32(0)
+        while i < n
+            x ⊻= x << UInt32(13)
+            x ⊻= x >> UInt32(17)
+            x ⊻= x << UInt32(5)
+            i += UInt32(1)
+        end
+        a[1] = x
+        oob && (a[3] = x)
+        return
+    end
+    a = MtlArray(UInt32[1, 2])
+    n = UInt32(1) << 20
+
+    for sync in (synchronize, device_synchronize)
+        # other tasks can run while waiting for the GPU
+        progress = Threads.Atomic{Int}(0)
+        done = Threads.Atomic{Bool}(false)
+        t = @async while !done[]
+            Threads.atomic_add!(progress, 1)
+            yield()
+        end
+        before = after = 0
+        try
+            @metal threads=1 spinning_kernel(a, n, false)
+            before = progress[]
+            sync()
+            after = progress[]
+        finally
+            done[] = true
+            wait(t)
+        end
+        @test after > before skip=!Metal.use_nonblocking_synchronization
+
+        # errors are still reported after a long wait
+        @metal threads=1 spinning_kernel(a, n, true)
+        @test_throws Metal.KernelException sync()
+    end
+
+    # `device_synchronize` only cleans up after completed work, as other tasks may commit
+    # while it waits (simulated here by bypassing the submission tracking)
+    event = MTL.MTLSharedEvent(device())
+    queue = MTL.MTLCommandQueue(device())
+    bq = Metal.batched_queue(queue)
+    cmdbuf = MTL.MTLCommandBuffer(queue)
+    MTL.encode_wait!(cmdbuf, event, 1)
+    @objc [cmdbuf::id{MTL.MTLCommandBuffer} commit]::Nothing
+    Metal.defer_cleanup!(bq, cmdbuf, Any[])
+    try
+        device_synchronize()
+        @test Metal.pending_cleanup_count(bq) == 1
+    finally
+        event.signaledValue = 1
+        MTL.wait_completed(cmdbuf)
+    end
+    device_synchronize()
+    @test Metal.pending_cleanup_count(bq) == 0
+end
+
 @testset "REPL task synchronization" begin
     synchronize()
 

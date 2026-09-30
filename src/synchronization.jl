@@ -1,74 +1,40 @@
 export synchronize, device_synchronize, CommandBufferError
 
-# whether to wait on the Julia scheduler instead of parking the calling thread
-# inside Metal's blocking `waitUntilCompleted`. opt-out via Preferences for
-# bisection or to compare against the blocking baseline.
+# whether to wait without blocking the calling thread, instead of parking it inside Metal's
+# blocking `waitUntilCompleted`. opt-out via Preferences for bisection or to compare
+# against the blocking baseline.
 const use_nonblocking_synchronization =
     @load_preference("nonblocking_synchronization", true)
 
 is_completed(cmdbuf::MTL.MTLCommandBufferLike) =
     cmdbuf.status >= MTL.MTLCommandBufferStatusCompleted
 
-# fast-path spin-wait
-function spinning_synchronization(cmdbuf::MTL.MTLCommandBufferLike)
-    is_completed(cmdbuf) && return true
-
-    # initially pause without yielding to keep latency low; switch to yield
-    # after a few dozen spins so other tasks aren't starved.
-    spins = 0
-    while spins < 256
-        if spins < 32
-            ccall(:jl_cpu_pause, Cvoid, ())
-            ccall(:jl_gc_safepoint, Cvoid, ())
-        else
-            yield()
-        end
-        is_completed(cmdbuf) && return true
-        spins += 1
-    end
-
-    return false
-end
-
-function yielding_synchronization(cmdbuf::MTL.MTLCommandBufferLike)
-    while !is_completed(cmdbuf)
-        yield()
-    end
-    return
-end
-
-# slow-path wakeup: commit a fresh empty sentinel cmdbuf and wait on it
-function nonblocking_synchronization(cmdbuf::MTL.MTLCommandBufferLike)
-
-    # libdispatch's thread-switch-from-a-foreign-callback doesn't work while
-    # a precompile worker is generating output, hanging image serialization,
-    # so fall back to blocking sync in that context.
-    precompiling = ccall(:jl_generating_output, Cint, ()) != 0
-    if precompiling
-        wait_completed(cmdbuf)
-        return
-    end
-
-    sentinel = MTLCommandBuffer(cmdbuf.commandQueue)
-    done = Base.AsyncCondition()
-    on_completed(sentinel, done)
-    # Private sentinel: do not store it in last_committed before releasing it.
-    @objc [sentinel::id{MTLCommandBuffer} commit]::Nothing
+# blocking wait, performed on a worker thread by `cooperative_wait`. `@objc` calls are
+# GC-safe, but the worker has no autorelease pool of its own, so set one up. it cannot be an
+# `@autoreleasepool`, whose global lock may be held by the waiting task.
+function blocking_wait(cmdbuf::MTL.MTLCommandBufferLike)
+    pool = ccall(:objc_autoreleasePoolPush, Ptr{Cvoid}, ())
     try
-        wait(done)
+        wait_completed(cmdbuf)
     finally
-        close(done)
-        release(sentinel)
+        ccall(:objc_autoreleasePoolPop, Cvoid, (Ptr{Cvoid},), pool)
     end
     return
 end
 
-function wait_cmdbuf!(cmdbuf::MTL.MTLCommandBufferLike)
-    is_completed(cmdbuf) && return
+# wait for a committed command buffer to complete, without blocking the calling thread so
+# that other tasks can run in the meantime. pass `handlers=true` to also wait for its
+# completion handlers to have run (e.g., to flush `addLogHandler:` output); otherwise, this
+# may or may not return before they have run.
+#
+# note that long waits use `waitUntilCompleted`, which waits for the completion handlers, so
+# these must not depend on the waiting task, e.g., on locks it holds (like the global lock
+# taken by `@autoreleasepool`).
+function wait_cmdbuf!(cmdbuf::MTL.MTLCommandBufferLike; handlers::Bool=false)
+    !handlers && is_completed(cmdbuf) && return
 
-    precompiling = ccall(:jl_generating_output, Cint, ()) != 0
-    if use_nonblocking_synchronization && !precompiling
-        spinning_synchronization(cmdbuf) || yielding_synchronization(cmdbuf)
+    if use_nonblocking_synchronization
+        cooperative_wait(blocking_wait, cmdbuf; isdone=handlers ? nothing : is_completed)
     else
         wait_completed(cmdbuf)
     end
@@ -132,8 +98,8 @@ Wait for currently committed GPU work on `queue` to finish.
     maybe_collect(queue.device; will_block=true)
 
     # flush any pending log handlers from logging-enabled kernels on this queue
-    # (Metal delivers logs asynchronously; `wait_completed` on the specific cmdbuf
-    # is what processes its `addLogHandler:` blocks)
+    # (Metal delivers logs asynchronously; waiting for the specific cmdbuf's
+    # completion handlers is what processes its `addLogHandler:` blocks)
     drain_logging_cmdbufs!(queue)
 
     last, submissions = MTL.take_queue_submissions(queue)
@@ -174,18 +140,15 @@ function device_synchronize()
 
     cmdbufs, submissions = MTL.take_all_submissions()
 
+    # the last command buffer committed to each queue completes after the earlier ones
     for cmdbuf in cmdbufs
-        if !is_completed(cmdbuf)
-            if use_nonblocking_synchronization
-                spinning_synchronization(cmdbuf) || nonblocking_synchronization(cmdbuf)
-            else
-                wait_completed(cmdbuf)
-            end
-        end
+        wait_cmdbuf!(cmdbuf)
     end
 
+    # other tasks may have committed work while we were waiting, so only clean up after
+    # command buffers that have completed
     for bq in active_batched_queues()
-        drain_cleanups!(bq; force=true)
+        drain_cleanups!(bq)
     end
 
     check_synchronization_errors(submissions)

@@ -103,7 +103,7 @@ function drain_logging_cmdbufs!(queue::MTLCommandQueue)
         prev
     end
     if cmdbuf !== nothing
-        MTL.wait_completed(cmdbuf)
+        wait_cmdbuf!(cmdbuf; handlers=true)
     end
     return
 end
