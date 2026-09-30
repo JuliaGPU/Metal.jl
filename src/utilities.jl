@@ -29,11 +29,16 @@ function versioninfo(io::IO=stdout; verbose=false)
 
     println(io, "Julia packages:")
     println(io, "- Metal.jl: $(Base.pkgversion(Metal))")
-    for name in [:GPUArrays, :GPUCompiler, :KernelAbstractions, :ObjectiveC,
+    for name in [:GPUArrays, :GPUCompiler, :KernelInterface, :ObjectiveC,
                  :LLVM, :LLVMDowngrader_jll]
         mod = getfield(Metal, name)
         println(io, "- $(name): $(Base.pkgversion(mod))")
     end
+    # KernelAbstractions is an optional dependency
+    ka = get(Base.loaded_modules,
+             Base.PkgId(Base.UUID("63c18a36-062a-441e-b654-da1e3ab1ce7c"), "KernelAbstractions"),
+             nothing)
+    ka === nothing || println(io, "- KernelAbstractions: $(Base.pkgversion(ka))")
     println(io)
 
     env = filter(var->startswith(var, "JULIA_METAL") || startswith(var, "MTL") || startswith(var, "METAL"), keys(ENV))
