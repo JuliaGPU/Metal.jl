@@ -2,7 +2,8 @@ module MetalKernels
 
 using ..Metal
 using ..Metal: @device_override, DefaultStorageMode, SharedStorage, metal_support,
-               mtlfunction, mtlconvert, launch_with_queue, MTL, MTLSize, @autoreleasepool
+               mtlfunction, mtlconvert, launch_with_queue, MTL, MTLSize, @autoreleasepool,
+               MTLSharedEvent, MTLCommandBuffer, encode_signal!, encode_wait!, commit!
 
 import KernelInterface as KI
 
@@ -174,6 +175,33 @@ end
 @device_override @inline function KI.localmemory(::Type{T}, ::Val{Dims}) where {T, Dims}
     ptr = Metal.emit_threadgroup_memory(T, Val(prod(Dims)))
     MtlDeviceArray(Dims, ptr)
+end
+
+
+## events
+
+# signal a new event once the work the task has queued so far completes
+@autoreleasepool function KI.record_event(::MetalBackend)
+    dev = device()
+    event = MTLSharedEvent(dev)
+    value = event.signaledValue + 1
+    # committing the command buffer first submits the task's open batch of work
+    cmdbuf = MTLCommandBuffer(global_queue(dev))
+    encode_signal!(cmdbuf, event, value)
+    commit!(cmdbuf)
+    return (event, value)
+end
+
+# make the GPU wait, instead of blocking the host: the wait goes into the task's open batch
+# of work, before the work that is queued next
+function KI.wait_event(::MetalBackend, ev::Tuple{MTLSharedEvent, UInt64})
+    event, value = ev
+    bq = global_queue(device())
+    Metal.end_encoder!(bq)
+    encode_wait!(Metal.ensure_cmdbuf!(bq), event, value)
+    Metal.record_operation!(bq, event)
+    Metal.maybe_autoflush!(bq)
+    return
 end
 
 
