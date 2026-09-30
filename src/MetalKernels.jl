@@ -31,6 +31,8 @@ KI.synchronize(::MetalBackend) = synchronize()
 
 KI.functional(::MetalBackend) = Metal.functional()
 
+KI.versioninfo(io::IO, ::MetalBackend) = Metal.versioninfo(io)
+
 KI.supports_float64(::MetalBackend) = false
 KI.supports_atomics(::MetalBackend) = metal_support() >= v"4.1"
 KI.supports_unified(::MetalBackend) = true
