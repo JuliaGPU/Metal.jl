@@ -529,6 +529,26 @@ end
     end
     device_synchronize()
     @test Metal.pending_cleanup_count(bq) == 0
+
+    # waiting does not keep other tasks from using Metal, and they cannot starve the wait
+    b = MtlArray(UInt32[1, 2])
+    stop = Threads.Atomic{Bool}(false)
+    deadline = time() + 10
+    other = @async while !stop[] && time() < deadline
+        @metal threads=1 spinning_kernel(b, UInt32(1), false)
+        synchronize()
+    end
+    elapsed = try
+        yield()
+        t0 = time()
+        @metal threads=1 spinning_kernel(a, n, false)
+        synchronize()
+        time() - t0
+    finally
+        stop[] = true
+        wait(other)
+    end
+    @test elapsed < 5
 end
 
 @testset "REPL task synchronization" begin

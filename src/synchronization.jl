@@ -91,11 +91,16 @@ end
 
 Wait for currently committed GPU work on `queue` to finish.
 """
-@autoreleasepool function synchronize(queue = global_queue(device()))
-    bq = batched_queue(queue)
-    flush!(bq)
+function synchronize(queue = global_queue(device()))
+    # an `@autoreleasepool` takes a global lock, so don't hold one while waiting, or other
+    # tasks would not be able to use Metal in the meantime.
+    bq = @autoreleasepool begin
+        b = batched_queue(queue)
+        flush!(b)
+        maybe_collect(b.queue.device; will_block=true)
+        b
+    end
     queue = bq.queue
-    maybe_collect(queue.device; will_block=true)
 
     # flush any pending log handlers from logging-enabled kernels on this queue
     # (Metal delivers logs asynchronously; waiting for the specific cmdbuf's
@@ -107,11 +112,13 @@ Wait for currently committed GPU work on `queue` to finish.
     # Handles the already-completed fast path internally.
     last === nothing || wait_cmdbuf!(last)
 
-    drain_cleanups!(bq; force=true)
+    @autoreleasepool begin
+        drain_cleanups!(bq; force=true)
 
-    # Surface Metal runtime failures and device-side Julia exceptions together,
-    # after cleanup has released all Julia roots held by completed work.
-    check_synchronization_errors(submissions)
+        # Surface Metal runtime failures and device-side Julia exceptions together,
+        # after cleanup has released all Julia roots held by completed work.
+        check_synchronization_errors(submissions)
+    end
     return
 end
 
