@@ -43,6 +43,9 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 KernelAbstractionsExt = "KernelAbstractions"
 SpecialFunctionsExt = "SpecialFunctions"
 
+[sources]
+KernelInterface = {url = "https://github.com/JuliaGPU/KernelAbstractions.jl", rev = "main", subdir = "lib/KernelInterface"}
+
 [compat]
 AbstractFFTs = "1"
 Adapt = "4.6.1"
