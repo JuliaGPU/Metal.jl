@@ -10,37 +10,22 @@ import RandomNumbers
 # for `threads_per_threadgroup()`, so we can have 64 simdgroups per threadgroup
 const max_simdgroups_per_threadgroup = 64
 
-@inline @generated function emit_global_random_values(::Val{name}) where name
-    @dispose ctx=Context() begin
-        T_val = convert(LLVMType, UInt32)
-        T_ptr = convert(LLVMType, LLVMPtr{UInt32,AS.ThreadGroup})
+@llvmgenerated builder function emit_global_random_values(::Val{name}
+                                                          )::LLVMPtr{UInt32,AS.ThreadGroup} where name
+    T_val = convert(LLVMType, UInt32)
+    T_ptr = convert(LLVMType, LLVMPtr{UInt32,AS.ThreadGroup})
 
-        # define function and get LLVM module
-        llvm_f, _ = create_function(T_ptr)
-        mod = LLVM.parent(llvm_f)
+    # create a global memory global variable
+    T_global = LLVM.ArrayType(T_val, max_simdgroups_per_threadgroup)
+    gv = GlobalVariable(current_module(builder), T_global, "global_random_$(name)",
+                        AS.ThreadGroup)
+    gv.linkage = LLVM.API.LLVMLinkOnceAnyLinkage
+    gv.initializer = null(T_global)
+    gv.unnamed_addr = LLVM.UnnamedAddr.Global
+    gv.alignment = 4
 
-        # create a global memory global variable
-        T_global = LLVM.ArrayType(T_val, max_simdgroups_per_threadgroup)
-        gv = GlobalVariable(mod, T_global, "global_random_$(name)", AS.ThreadGroup)
-        linkage!(gv, LLVM.API.LLVMLinkOnceAnyLinkage)
-        initializer!(gv, LLVM.null(T_global))
-        unnamed_addr!(gv, true)
-        alignment!(gv, 4)
-
-        # generate IR
-        @dispose builder=IRBuilder() begin
-            entry = BasicBlock(llvm_f, "entry")
-            position!(builder, entry)
-
-            ptr = gep!(builder, T_global, gv, [ConstantInt(0), ConstantInt(0)])
-
-            untyped_ptr = bitcast!(builder, ptr, T_ptr)
-
-            ret!(builder, untyped_ptr)
-        end
-
-        call_function(llvm_f, LLVMPtr{UInt32,AS.ThreadGroup})
-    end
+    ptr = gep!(builder, T_global, gv, [ConstantInt(0), ConstantInt(0)])
+    bitcast!(builder, ptr, T_ptr)
 end
 
 # shared memory with the actual seed, per simdgroup, loaded lazily or overridden by calling `seed!`
