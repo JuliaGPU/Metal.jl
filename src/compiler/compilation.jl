@@ -536,32 +536,35 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
             mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)
         end
 
-        # Detect logging after optimization so dead logging calls do not enable log state.
-        local loggingEnabled = haskey(mod.functions, "air.os_log")
+        # the IR belongs to us: lower and inspect it, then dispose of it
+        @dispose mod=mod begin
+            # Detect logging after optimization so dead logging calls do not enable log state.
+            local loggingEnabled = haskey(mod.functions, "air.os_log")
 
-        @signpost_interval log=log_compiler() "Downgrade to AIR" begin
-            # generate AIR, having GPUCompiler lower the IR to AIR-compatible form and
-            # invoke the LLVM downgrader (both as part of Metal's `mcgen`).
-            #
-            # Passing `meta.relocations` (the 4-arg `emit_asm`) is load-bearing: surviving
-            # relocations (interned symbols, type tags, boxed non-smalltag constants) are then
-            # rewritten into indexed loads from the kernel state's relocation table, and
-            # `meta.relocations` is finalized into the manifest the loader resolves against.
-            # The 3-arg form would hand the lowering an empty table and strand the slots.
-            local air
-            air, _ = try
-                invoke_frozen(GPUCompiler.emit_asm, job, mod, meta.relocations,
-                              LLVM.CodeGenFileType.Object)
-            catch err
-                # `emit_asm` has already lowered the module in-place, so stringifying it
-                # here shows exactly what the downgrader was fed
-                ir_file, = dump_artifacts(".ll" => string(mod))
-                error("""Compilation to AIR failed: $(sprint(showerror, err))
-                         If you think this is a bug, please file an issue and attach $(ir_file)""")
+            @signpost_interval log=log_compiler() "Downgrade to AIR" begin
+                # generate AIR, having GPUCompiler lower the IR to AIR-compatible form and
+                # invoke the LLVM downgrader (both as part of Metal's `mcgen`).
+                #
+                # Passing `meta.relocations` (the 4-arg `emit_asm`) is load-bearing: surviving
+                # relocations (interned symbols, type tags, boxed non-smalltag constants) are then
+                # rewritten into indexed loads from the kernel state's relocation table, and
+                # `meta.relocations` is finalized into the manifest the loader resolves against.
+                # The 3-arg form would hand the lowering an empty table and strand the slots.
+                local air
+                air, _ = try
+                    invoke_frozen(GPUCompiler.emit_asm, job, mod, meta.relocations,
+                                  LLVM.CodeGenFileType.Object)
+                catch err
+                    # `emit_asm` has already lowered the module in-place, so stringifying it
+                    # here shows exactly what the downgrader was fed
+                    ir_file, = dump_artifacts(".ll" => string(mod))
+                    error("""Compilation to AIR failed: $(sprint(showerror, err))
+                             If you think this is a bug, please file an issue and attach $(ir_file)""")
+                end
             end
-        end
 
-        string(mod), air, meta.entry.name, loggingEnabled, meta.relocations
+            string(mod), air, meta.entry.name, loggingEnabled, meta.relocations
+        end
     end
 
     @signpost_interval log=log_compiler() "Create Metal library" begin
