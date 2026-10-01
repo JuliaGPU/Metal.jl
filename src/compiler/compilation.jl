@@ -183,6 +183,8 @@ function static_vector_lane(v::LLVM.Value, i::Integer)
         end
         return static_vector_lane(base, i)  # this lane is untouched by the insert
     end
+    # (the C API casts its argument to a constant, so only pass it constants)
+    v isa LLVM.Constant || return nothing
     elref = LLVM.API.LLVMGetAggregateElement(v, UInt32(i))
     elref == C_NULL && return nothing
     el = LLVM.Value(elref)
