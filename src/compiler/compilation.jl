@@ -97,10 +97,10 @@ GPUCompiler.isintrinsic(@nospecialize(job::MetalCompilerJob), fn::String) =
 function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
                                     mod::LLVM.Module, entry::LLVM.Function)
     # Materialize apple_family() before GPUCompiler optimizes the linked module.
-    if haskey(mod.globals, "apple_family")
-        gv = mod.globals["apple_family"]
+    gv = get(mod.globals, "apple_family", nothing)
+    if gv !== nothing
         gv.initializer = ConstantInt(LLVM.Int32Type(), job.config.params.apple_family)
-        gv.linkage = LLVM.API.LLVMPrivateLinkage
+        gv.linkage = LLVM.Linkage.Private
     end
 
     entry = invoke(GPUCompiler.finish_module!,
@@ -111,7 +111,7 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
     for f in mod.functions
         if isdeclaration(f) && startswith(f.name, "__tensorops_impl_")
             f.section = "air.externally_defined"
-            push!(f.function_attributes, EnumAttribute("convergent"))
+            push!(f.function_attributes, EnumAttribute(:convergent))
         end
     end
 
@@ -140,18 +140,11 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
             end
 
             # call the `deferred_codegen` marker function
-            T_ptr = if LLVM.version() >= v"17"
-                LLVM.PointerType()
-            elseif VERSION >= v"1.12.0-DEV.225"
-                LLVM.PointerType(LLVM.Int8Type())
-            else
-                LLVM.Int64Type()
-            end
+            # (declared like GPUCompiler's `ccall("extern deferred_codegen", llvmcall, Ptr{Cvoid}, ...)`)
+            T_ptr = convert(LLVMType, Ptr{Cvoid})
             T_id = convert(LLVMType, Int)
             deferred_codegen_ft = LLVM.FunctionType(T_ptr, [T_id])
-            deferred_codegen = if haskey(mod.functions, "deferred_codegen")
-                mod.functions["deferred_codegen"]
-            else
+            deferred_codegen = get!(mod.functions, "deferred_codegen") do
                 LLVM.Function(mod, "deferred_codegen", deferred_codegen_ft)
             end
             fptr = call!(builder, deferred_codegen_ft, deferred_codegen, [ConstantInt(id)])
@@ -183,83 +176,40 @@ function static_vector_lane(v::LLVM.Value, i::Integer)
         end
         return static_vector_lane(base, i)  # this lane is untouched by the insert
     end
-    # (the C API casts its argument to a constant, so only pass it constants)
-    v isa LLVM.Constant || return nothing
-    elref = LLVM.API.LLVMGetAggregateElement(v, UInt32(i))
-    elref == C_NULL && return nothing
-    el = LLVM.Value(elref)
+    # (lanes of other values, including undef and poison vectors, aren't known integers)
+    v isa Union{LLVM.ConstantVector, LLVM.ConstantDataVector,
+                LLVM.ConstantAggregateZero} || return nothing
+    el = get(v.elements, i+1, nothing)
     return el isa LLVM.ConstantInt ? convert(Int, el) : nothing
-end
-
-# Follow bitcasts / zero-offset GEPs / address-space casts back to the object a pointer
-# ultimately refers to.
-function trace_to_alloca(v::LLVM.Value)
-    while true
-        if v isa LLVM.AllocaInst
-            return v
-        elseif v isa LLVM.BitCastInst || v isa LLVM.AddrSpaceCastInst
-            v = first(v.operands)
-        elseif v isa LLVM.GetElementPtrInst &&
-               all(idx -> idx isa LLVM.ConstantInt && iszero(convert(Int, idx)),
-                   v.operands[2:end])
-            v = first(v.operands)
-        else
-            return nothing
-        end
-    end
-end
-
-function trace_to_global(v::LLVM.Value)
-    while true
-        if v isa LLVM.GlobalVariable
-            return v
-        elseif v isa LLVM.BitCastInst || v isa LLVM.AddrSpaceCastInst
-            v = first(v.operands)
-        elseif v isa LLVM.GetElementPtrInst &&
-               all(idx -> idx isa LLVM.ConstantInt && iszero(convert(Int, idx)),
-                   v.operands[2:end])
-            v = first(v.operands)
-        else
-            return nothing
-        end
-    end
 end
 
 function is_tensor_op_descriptor_constant(gv::LLVM.GlobalVariable)
     # Shader Validation faults if tensor-op descriptors are copied out of AIR's
     # constant address space, so leave just those descriptor globals in AS0.
     mod = gv.parent
-    descriptor_allocas = Set{LLVM.API.LLVMValueRef}()
+    descriptor_allocas = Set{LLVM.Value}()
     for f in mod.functions
         startswith(f.name, "__tensorops_impl_matmul2d_op_run_") || continue
         for call in f.users
             call isa LLVM.CallInst || continue
             args = call.arguments
             isempty(args) && continue
-            storage = trace_to_alloca(args[1])
-            storage === nothing && continue
-            push!(descriptor_allocas, Base.unsafe_convert(LLVM.API.LLVMValueRef, storage))
+            storage = strip_pointer_casts(args[1])
+            storage isa LLVM.AllocaInst || continue
+            push!(descriptor_allocas, storage)
         end
     end
     isempty(descriptor_allocas) && return false
 
-    gv_key = Base.unsafe_convert(LLVM.API.LLVMValueRef, gv)
+    memcpys = (Intrinsic("llvm.memcpy"), Intrinsic("llvm.memcpy.inline"))
     for f in mod.functions, bb in f.blocks, inst in bb.instructions
         inst isa LLVM.CallInst || continue
-        callee = inst.called_operand
-        callee isa LLVM.Function || continue
-        startswith(callee.name, "llvm.memcpy.") || continue
+        any(intr -> isintrinsic(inst.called_operand, intr), memcpys) || continue
 
         args = inst.arguments
         length(args) == 4 || continue
-        dst = trace_to_alloca(args[1])
-        dst === nothing && continue
-        key = Base.unsafe_convert(LLVM.API.LLVMValueRef, dst)
-        key in descriptor_allocas || continue
-
-        src = trace_to_global(args[2])
-        src === nothing && continue
-        Base.unsafe_convert(LLVM.API.LLVMValueRef, src) == gv_key || continue
+        strip_pointer_casts(args[1]) in descriptor_allocas || continue
+        strip_pointer_casts(args[2]) == gv || continue
         return true
     end
 
@@ -316,8 +266,7 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
                 # so that device-side static assertions produce the useful diagnostic.
                 for call in calls
                     conforming(call) || continue
-                    # LLVM models the callee as the final operand, after all arguments.
-                    call.operands[end-1] = ConstantInt(true)
+                    call.arguments[end] = ConstantInt(true)
                 end
                 continue
             end
@@ -333,9 +282,7 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
 
             f.name = fn * ".metal41"
             old_f = LLVM.Function(mod, fn, old_ft)
-            for attr in collect(f.function_attributes)
-                push!(old_f.function_attributes, attr)
-            end
+            append!(old_f.function_attributes, f.function_attributes)
 
             for call in calls
                 args = collect(call.arguments)
@@ -392,9 +339,7 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
             old_f = LLVM.Function(mod, fn, old_ft)
             # carry over the attributes (convergent etc.); they were attached before
             # optimization, so GPUCompiler won't re-derive them for this declaration
-            for attr in collect(f.function_attributes)
-                push!(old_f.function_attributes, attr)
-            end
+            append!(old_f.function_attributes, f.function_attributes)
             for call in calls
                 @dispose builder=IRBuilder() begin
                     # (positioning the builder gives it the call's debug location)
@@ -463,8 +408,8 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
         # apply metadata to the function declarations
         for (intr, args) in intrinsics
             fn = "air.$intr"
-            haskey(mod.functions, fn) || continue
-            f = mod.functions[fn]
+            f = get(mod.functions, fn, nothing)
+            f === nothing && continue
             mds = []
             for (idx, typ) in args
                 push!(mds, ConstantInt(Int32(idx-1)))
@@ -606,7 +551,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
             local air
             air, _ = try
                 invoke_frozen(GPUCompiler.emit_asm, job, mod, meta.relocations,
-                              LLVM.API.LLVMObjectFile)
+                              LLVM.CodeGenFileType.Object)
             catch err
                 # `emit_asm` has already lowered the module in-place, so stringifying it
                 # here shows exactly what the downgrader was fed

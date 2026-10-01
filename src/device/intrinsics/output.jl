@@ -62,7 +62,7 @@ end
     # create the vararg function that calls `air.os_log`
     llvm_ft = LLVM.FunctionType(T_void, LLVMType[]; vararg = true)
     llvm_f = LLVM.Function(mod, "metal_os_log", llvm_ft)
-    push!(llvm_f.function_attributes, EnumAttribute("alwaysinline", 0))
+    push!(llvm_f.function_attributes, EnumAttribute(:alwaysinline))
 
     # generate IR
     entry = BasicBlock(llvm_f, "entry")
@@ -80,13 +80,20 @@ end
         buffer = bitcast!(builder, alloc, T_pint8)
         alloc_size = LLVM.ConstantInt(T_int64, LLVM.storage_size(dl, T_pint8))
 
-        lifetime_start_fty = LLVM.FunctionType(T_void, [T_int64, T_pint8])
-        lifetime_start = LLVM.Function(mod, "llvm.lifetime.start.p0i8", lifetime_start_fty)
-        call!(builder, lifetime_start_fty, lifetime_start, [alloc_size, buffer])
+        # `llvm.va_start`/`llvm.va_end` are only overloaded on the pointer type since
+        # LLVM 19, so only pass that type to the intrinsics that are overloaded; the
+        # lifetime intrinsics lost their size operand in LLVM 22
+        function intrinsic(name)
+            intr = Intrinsic(name)
+            LLVM.Function(mod, intr, isoverloaded(intr) ? [T_pint8] : LLVMType[])
+        end
+        lifetime_args = LLVM.version() >= v"22" ? [buffer] : [alloc_size, buffer]
 
-        va_start_fty = LLVM.FunctionType(T_void, [T_pint8])
-        va_start = LLVM.Function(mod, "llvm.va_start", va_start_fty)
-        call!(builder, va_start_fty, va_start, [buffer])
+        lifetime_start = intrinsic("llvm.lifetime.start")
+        call!(builder, lifetime_start.function_type, lifetime_start, lifetime_args)
+
+        va_start = intrinsic("llvm.va_start")
+        call!(builder, va_start.function_type, va_start, [buffer])
 
         arg_ptr = load!(builder, T_pint8, alloc)
 
@@ -94,13 +101,11 @@ end
         os_log = LLVM.Function(mod, "air.os_log", os_log_fty)
         call!(builder, os_log_fty, os_log, [subsystem_str, category_str, log_type, str, arg_ptr, arg_size])
 
-        va_end_fty = LLVM.FunctionType(T_void, [T_pint8])
-        va_end = LLVM.Function(mod, "llvm.va_end", va_end_fty)
-        call!(builder, va_end_fty, va_end, [buffer])
+        va_end = intrinsic("llvm.va_end")
+        call!(builder, va_end.function_type, va_end, [buffer])
 
-        lifetime_end_fty = LLVM.FunctionType(T_void, [T_int64, T_pint8])
-        lifetime_end = LLVM.Function(mod, "llvm.lifetime.end.p0i8", lifetime_end_fty)
-        call!(builder, lifetime_end_fty, lifetime_end, [alloc_size, buffer])
+        lifetime_end = intrinsic("llvm.lifetime.end")
+        call!(builder, lifetime_end.function_type, lifetime_end, lifetime_args)
 
         ret!(builder)
     end

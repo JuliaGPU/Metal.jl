@@ -24,7 +24,7 @@ end
     gv_typ = LLVM.ArrayType(eltyp, len * sizeof(T))
     gv = GlobalVariable(current_module(builder), gv_typ, "threadgroup_memory", AS.ThreadGroup)
     if len > 0
-        gv.linkage = LLVM.API.LLVMInternalLinkage
+        gv.linkage = LLVM.Linkage.Internal
         gv.initializer = UndefValue(gv_typ)
     end
     gv.alignment = Base.datatype_alignment(T)

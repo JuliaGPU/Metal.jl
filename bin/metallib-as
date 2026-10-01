@@ -64,7 +64,7 @@ function main(args)
             name, bc = @dispose mod = parse(LLVM.Module, data) begin
                 # find external functions
                 external_functions = filter(collect(mod.functions)) do fun
-                    !isdeclaration(fun) && fun.linkage == LLVM.API.LLVMExternalLinkage
+                    !isdeclaration(fun) && fun.linkage == LLVM.Linkage.External
                 end
                 isempty(external_functions) && error("No external functions found in $input")
                 if length(external_functions) > 1

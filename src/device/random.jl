@@ -19,7 +19,7 @@ const max_simdgroups_per_threadgroup = 64
     T_global = LLVM.ArrayType(T_val, max_simdgroups_per_threadgroup)
     gv = GlobalVariable(current_module(builder), T_global, "global_random_$(name)",
                         AS.ThreadGroup)
-    gv.linkage = LLVM.API.LLVMLinkOnceAnyLinkage
+    gv.linkage = LLVM.Linkage.LinkOnceAny
     gv.initializer = null(T_global)
     gv.unnamed_addr = LLVM.UnnamedAddr.Global
     gv.alignment = 4
