@@ -1,4 +1,4 @@
-using LLVM
+using LLVM, LLVM.IR
 
 mktempdir() do dir
     metallib_as = joinpath(dirname(@__DIR__), "bin", "metallib-as")
