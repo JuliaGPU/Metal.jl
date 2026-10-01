@@ -18,7 +18,7 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
 
     # if this kernel uses our RNG, we should prime the shared state.
     # XXX: these transformations should really happen at the Julia IR level...
-    if job.config.kernel && haskey(globals(mod), "global_random_keys")
+    if job.config.kernel && haskey(mod.globals, "global_random_keys")
         f = initialize_rng_state
         ft = typeof(f)
         tt = Tuple{}
@@ -31,16 +31,14 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
         GPUCompiler.deferred_codegen_jobs[id] = job
 
         # generate IR for calls to `deferred_codegen` and the resulting function pointer
-        top_bb = first(blocks(entry))
-        bb = BasicBlock(top_bb, "initialize_rng")
+        top_bb = entry.entry
+        bb = BasicBlock(LLVM.before(top_bb), "initialize_rng")
         @dispose builder=IRBuilder() begin
-            position!(builder, bb)
-            subprogram = LLVM.subprogram(entry)
+            position!(builder, LLVM.at_end(bb))
+            subprogram = entry.subprogram
             if subprogram !== nothing
-                loc = DILocation(0, 0, subprogram)
-                debuglocation!(builder, loc)
+                builder.debug_location = DILocation(0, 0, subprogram)
             end
-            debuglocation!(builder, first(instructions(top_bb)))
 
             # call the `deferred_codegen` marker function
             T_ptr = if LLVM.version() >= v"17"
@@ -52,8 +50,8 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
             end
             T_id = convert(LLVMType, Int)
             deferred_codegen_ft = LLVM.FunctionType(T_ptr, [T_id])
-            deferred_codegen = if haskey(functions(mod), "deferred_codegen")
-                functions(mod)["deferred_codegen"]
+            deferred_codegen = if haskey(mod.functions, "deferred_codegen")
+                mod.functions["deferred_codegen"]
             else
                 LLVM.Function(mod, "deferred_codegen", deferred_codegen_ft)
             end
@@ -100,14 +98,14 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
         # apply metadata to the function declarations
         for (intr, args) in intrinsics
             fn = "air.$intr"
-            haskey(functions(mod), fn) || continue
-            f = functions(mod)[fn]
+            haskey(mod.functions, fn) || continue
+            f = mod.functions[fn]
             mds = []
             for (idx, typ) in args
                 push!(mds, ConstantInt(Int32(idx-1)))
                 push!(mds, null(convert(LLVMType, typ)))
             end
-            metadata(f)["arg_eltypes"] = MDNode(mds)
+            f.metadata["arg_eltypes"] = MDNode(mds)
         end
     end
 
@@ -192,7 +190,7 @@ function compile(@nospecialize(job::CompilerJob))
             end
         end
 
-        string(mod), air, LLVM.name(meta.entry)
+        string(mod), air, meta.entry.name
     end
 
     @signpost_interval log=log_compiler() "Create Metal library" begin
