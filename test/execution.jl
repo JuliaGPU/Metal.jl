@@ -468,6 +468,181 @@ end
     @test all(vecA .== Int(5))
 end
 
+# a gate that keeps a command buffer from completing until it is opened. this keeps the
+# cooperative synchronization tests independent of timing: waiting for that command buffer
+# can only return after whoever opens the gate has run.
+#
+# the GPU aborts command buffers that wait on an event for more than a few seconds, so the
+# command buffer waits for a sequence of values, which a watchdog on a foreign thread signals
+# one by one while the gate is closed, and all at once when it is opened. if the test does
+# not finish in time (e.g., because the thread that should open the gate is blocked by the
+# wait, or a task never gets to run), the watchdog opens the gate instead of letting the
+# test hang, and records that it timed out.
+mutable struct SyncGate
+    const event::MTL.MTLSharedEvent     # what the command buffer waits for
+    const control::MTL.MTLSharedEvent   # GATE_OPEN or GATE_DONE, set by the test
+    const watchdog_done::Base.Event
+    @atomic timed_out::Bool
+end
+
+const GATE_OPEN = 1
+const GATE_DONE = 2
+const GATE_TICK_MS = 1_000
+const GATE_TICKS = 60       # the timeout, in ticks
+
+function gate_watchdog(ptr::Ptr{Cvoid})
+    gate = unsafe_pointer_to_objref(ptr)::SyncGate
+    opened = finished = false
+    for tick in 1:GATE_TICKS
+        if !opened
+            if MTL.waitUntilSignaledValue(gate.control, GATE_OPEN, GATE_TICK_MS)
+                opened = true
+                gate.event.signaledValue = GATE_TICKS + 1
+            else
+                gate.event.signaledValue = tick
+                continue
+            end
+        end
+        if MTL.waitUntilSignaledValue(gate.control, GATE_DONE, GATE_TICK_MS)
+            finished = true
+            break
+        end
+    end
+    finished || @atomic gate.timed_out = true
+    gate.event.signaledValue = GATE_TICKS + 1
+    notify(gate.watchdog_done)
+    return
+end
+
+open_gate!(gate::SyncGate) =
+    gate.control.signaledValue < GATE_OPEN && (gate.control.signaledValue = GATE_OPEN)
+gate_is_open(gate::SyncGate) = gate.control.signaledValue >= GATE_OPEN
+gate_timed_out(gate::SyncGate) = @atomic gate.timed_out
+
+# run `f(gate)` after committing a command buffer to the current task's queue that only
+# completes once the gate is opened, returning whether `f` finished before the timeout.
+function gated(f)
+    dev = device()
+    gate = SyncGate(MTL.MTLSharedEvent(dev), MTL.MTLSharedEvent(dev), Base.Event(), false)
+    cmdbuf = MTL.MTLCommandBuffer(Metal.global_queue(dev))
+    for value in 1:GATE_TICKS+1
+        MTL.encode_wait!(cmdbuf, gate.event, value)
+    end
+    GC.@preserve gate begin
+        # run the watchdog on a thread from libdispatch's pool, which Julia adopts
+        dispatch_queue = ccall(:dispatch_get_global_queue, Ptr{Cvoid}, (Clong, Culong), 0, 0)
+        ccall(:dispatch_async_f, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+              dispatch_queue, pointer_from_objref(gate),
+              @cfunction(gate_watchdog, Cvoid, (Ptr{Cvoid},)))
+        try
+            # this also commits pending work, which thus completes before the gate opens
+            MTL.commit!(cmdbuf)
+            f(gate)
+        finally
+            gate.control.signaledValue = GATE_DONE
+            wait(gate.watchdog_done)
+            cmdbuf.status == MTL.MTLCommandBufferStatusNotEnqueued || MTL.wait_completed(cmdbuf)
+        end
+    end
+    return !gate_timed_out(gate)
+end
+
+# run `f` while another task on the same thread opens the gate, but only after it got to run
+# many more times than the polling at the start of a wait yields (so that the wait is likely
+# handed to a worker thread). returns whether `f` only returned after the gate was opened.
+function open_gate_during(f, gate::SyncGate)
+    opener = @async begin
+        for _ in 1:10_000
+            yield()
+        end
+        open_gate!(gate)
+    end
+    try
+        f()
+        gate_is_open(gate)
+    finally
+        wait(opener)
+    end
+end
+
+gated_oob_kernel(a) = (a[2] = 1f0; return)  # out-of-bounds store on a length-1 array
+
+@testset "cooperative synchronization" begin
+    a = Metal.zeros(Float32, 1)
+
+    # with blocking synchronization, nothing else can run on the thread while waiting
+    if Metal.use_nonblocking_synchronization
+        for sync in (synchronize, device_synchronize)
+            # other tasks can run while waiting for the GPU
+            @test gated() do gate
+                open_gate_during(sync, gate)
+            end
+
+            # errors are still reported after a wait that was handed to a worker thread
+            @metal threads=1 gated_oob_kernel(a)
+            @test gated() do gate
+                open_gate_during(gate) do
+                    @test_throws Metal.KernelException sync()
+                end
+            end
+        end
+
+        # waiting does not keep other tasks from using Metal, and they cannot starve the
+        # wait: another task keeps launching kernels and synchronizing until the wait
+        # returns, and the gate is only opened once it has done so while we were waiting.
+        @test gated() do gate
+            waiting = Ref(false)
+            returned = Ref(false)
+            started = Base.Event()
+            iterated = Base.Event()
+            other = @async try
+                while !returned[] && !gate_timed_out(gate)
+                    @metal dummy()
+                    synchronize()
+                    notify(started)
+                    waiting[] && notify(iterated)
+                end
+            finally
+                notify(started)
+                notify(iterated)
+            end
+            opener = @async begin
+                wait(iterated)
+                open_gate!(gate)
+            end
+            try
+                wait(started)
+                waiting[] = true
+                synchronize()
+                gate_is_open(gate)
+            finally
+                returned[] = true
+                wait(other)
+                wait(opener)
+            end
+        end
+    end
+
+    # `device_synchronize` only cleans up after completed work, as other tasks may commit
+    # while it waits (simulated here by bypassing the submission tracking)
+    event = MTL.MTLSharedEvent(device())
+    queue = MTL.MTLCommandQueue(device())
+    bq = Metal.batched_queue(queue)
+    cmdbuf = MTL.MTLCommandBuffer(queue)
+    MTL.encode_wait!(cmdbuf, event, 1)
+    @objc [cmdbuf::id{MTL.MTLCommandBuffer} commit]::Nothing
+    Metal.defer_cleanup!(bq, cmdbuf, Any[])
+    try
+        device_synchronize()
+        @test Metal.pending_cleanup_count(bq) == 1
+    finally
+        event.signaledValue = 1
+        MTL.wait_completed(cmdbuf)
+    end
+    device_synchronize()
+    @test Metal.pending_cleanup_count(bq) == 0
+end
+
 @testset "REPL task synchronization" begin
     synchronize()
 
