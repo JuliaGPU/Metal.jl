@@ -42,8 +42,8 @@ otherwise it's zero-initialized.
 ! Note: You are responsible for freeing the returned buffer
 
 The storage kwarg controls where the buffer is stored. Possible values are:
- - PrivateStorage : Residing on the device
  - SharedStorage  : Residing on the host
+ - PrivateStorage : Residing on the device
  - Memoryless : A render pipeline exclusive mode. Render pipelines are not yet supported on Metal.jl.
 
 Note that `PrivateStorage` buffers can't be directly accessed from the CPU, therefore you cannot

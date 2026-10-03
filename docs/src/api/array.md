@@ -15,7 +15,7 @@ MtlVecOrMat
 
 ## Storage modes
 
-The Metal API has various storage modes that dictate how a resource can be accessed. `MtlArray`s are `Metal.PrivateStorage` by default, but they can also be `Metal.SharedStorage` or `Metal.ManagedStorage`. For more information on storage modes, see the official [Metal documentation](https://developer.apple.com/documentation/metal/resource_fundamentals/setting_resource_storage_modes).
+The Metal API has various storage modes that dictate how a resource can be accessed. `MtlArray`s are `Metal.SharedStorage` by default, but they can also be `Metal.PrivateStorage`. For more information on storage modes, see the official [Metal documentation](https://developer.apple.com/documentation/metal/resource_fundamentals/setting_resource_storage_modes).
 
 ```@docs
 Metal.PrivateStorage
