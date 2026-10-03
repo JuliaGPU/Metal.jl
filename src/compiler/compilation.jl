@@ -286,74 +286,8 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
                    Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module, LLVM.Function},
                    job, mod, entry)
 
-    # downgrade intrinsics when targeting older AIR or Metal versions
-    ## atomics
-    if job.config.target.metal < v"4.1"
-        ## atomic ABI: selected by AIR
-        ## volatile bit: selected by MSL
-        ## device code always emits the AIR 2.9 / Metal 4.1 form
-        for f in collect(functions(mod))
-            fn = LLVM.name(f)
-            (startswith(fn, "air.atomic.global.") ||
-             startswith(fn, "air.atomic.local.")) || continue
-
-            calls = [user(u) for u in uses(f)]
-            is_cmpxchg = occursin(".cmpxchg.weak.", fn)
-            is_load = occursin(".load.", fn)
-            expected_nargs = is_cmpxchg ? 8 : is_load ? 5 : 6
-            conforming(call) = call isa LLVM.CallInst && length(arguments(call)) == expected_nargs && let
-                args = collect(arguments(call))
-                flags = args[end-1]
-                success_order = args[end-(is_cmpxchg ? 4 : 3)]
-                flags isa ConstantInt && convert(UInt32, flags) == 0 &&
-                    success_order isa ConstantInt && convert(Int32, success_order) == 0 &&
-                    (!is_cmpxchg || (args[end-3] isa ConstantInt &&
-                                     convert(Int32, args[end-3]) == 0))
-            end
-
-            if job.config.target.air >= v"2.9"
-                # AIR 2.9 introduced the flags operand, but pre-4.1 MSL still marks
-                # atomic pointers volatile. Leave non-conforming calls for check_ir!
-                # so that device-side static assertions produce the useful diagnostic.
-                for call in calls
-                    conforming(call) || continue
-                    # LLVM models the callee as the final operand, after all arguments.
-                    operands(call)[end-1] = ConstantInt(true)
-                end
-                continue
-            end
-
-            # AIR before 2.9 needs the legacy ABI without flags. We can only rewrite a
-            # declaration when every use conforms; otherwise leave it for check_ir!.
-            all(conforming, calls) || continue
-
-            new_ft = function_type(f)
-            new_params = collect(parameters(new_ft))
-            old_params = [new_params[1:end-2]..., new_params[end]]
-            old_ft = LLVM.FunctionType(LLVM.return_type(new_ft), old_params)
-
-            LLVM.name!(f, fn * ".metal41")
-            old_f = LLVM.Function(mod, fn, old_ft)
-            for attr in collect(function_attributes(f))
-                push!(function_attributes(old_f), attr)
-            end
-
-            for call in calls
-                args = collect(arguments(call))
-                @dispose builder=IRBuilder() begin
-                    position!(builder, call)
-                    debuglocation!(builder, call)
-                    old_args = [args[1:end-2]..., ConstantInt(true)]
-                    new_call = call!(builder, old_ft, old_f, old_args)
-                    replace_uses!(call, new_call)
-                    erase!(call)
-                end
-            end
-
-            GPUCompiler.@compiler_assert isempty(uses(f)) job
-            erase!(f)
-        end
-    end
+    # downgrade intrinsics when targeting older AIR versions
+    # (GPUCompiler legalizes atomics, see `lower_atomics!`)
     ## simdgroup
     if job.config.target.air < v"2.8"
         # AIR 2.8 generalized the simdgroup matrix load/store intrinsics, replacing
@@ -455,11 +389,6 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
         ## simd
         intrinsics["simdgroup_matrix_8x8_load.v64$llvmtyp.p$as$llvmtyp"] = (1 => jltyp,)
         intrinsics["simdgroup_matrix_8x8_store.v64$llvmtyp.p$as$llvmtyp"] = (2 => jltyp,)
-        ## atomics
-        for op in [:store, :load, :xchg, :add, :sub, :min, :max, :and, :or, :xor]
-            intrinsics["atomic.$asname.$op.$llvmtyp"] = (1 => jltyp,)
-        end
-        intrinsics["atomic.$asname.cmpxchg.weak.$llvmtyp"] = (1 => jltyp, 2 => jltyp)
 
         # apply metadata to the function declarations
         for (intr, args) in intrinsics
