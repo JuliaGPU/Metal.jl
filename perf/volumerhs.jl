@@ -2,6 +2,8 @@ module VolumeRHS
 
 using BenchmarkTools
 using Metal
+using LLVM.Build: fadd!, fmul!, fsub!, fdiv!
+using LLVM.Interop: @llvmgenerated
 using StableRNGs
 using StaticArrays
 
@@ -19,17 +21,25 @@ macro unroll(expr)
 end
 
 # HACK: module-local versions of core arithmetic; needed to get FMA
+@llvmgenerated builder function fastmath(::Val{op}, ::Val{flags}, a::T, b::T)::T where {op, flags, T}
+    inst = if op === :add
+        fadd!(builder, a, b)
+    elseif op === :mul
+        fmul!(builder, a, b)
+    elseif op === :sub
+        fsub!(builder, a, b)
+    elseif op === :div
+        fdiv!(builder, a, b)
+    end
+    inst.fast_math = flags
+    inst
+end
 for (jlf, f) in zip((:+, :*, :-), (:add, :mul, :sub))
     T = :Float32
-    llvmT = "float"
-    ir = """
-        %x = f$f contract nsz $llvmT %0, %1
-        ret $llvmT %x
-    """
     @eval begin
         # the @pure is necessary so that we can constant propagate.
         @inline Base.@pure function $jlf(a::$T, b::$T)
-            Base.llvmcall($ir, $T, Tuple{$T, $T}, a, b)
+            fastmath($(Val(f)), $(Val((; contract=true, nsz=true))), a, b)
         end
     end
     @eval function $jlf(args...)
@@ -39,15 +49,10 @@ end
 
 let (jlf, f) = (:div_arcp, :div)
     T = :Float32
-    llvmT = "float"
-    ir = """
-        %x = f$f fast $llvmT %0, %1
-        ret $llvmT %x
-    """
     @eval begin
         # the @pure is necessary so that we can constant propagate.
         @inline Base.@pure function $jlf(a::$T, b::$T)
-            Base.llvmcall($ir, $T, Tuple{$T, $T}, a, b)
+            fastmath($(Val(f)), $(Val((; fast=true))), a, b)
         end
     end
     @eval function $jlf(args...)

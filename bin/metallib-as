@@ -5,7 +5,7 @@ DIR="$(dirname "$(cd "$(dirname "$0")" && pwd)")"
 exec julia --project="$DIR" "$0" "$@"
 =#
 
-using Metal, LLVM
+using Metal, LLVM, LLVM.IR
 
 function main(args)
     # parse arguments
@@ -63,15 +63,15 @@ function main(args)
 
             name, bc = @dispose mod = parse(LLVM.Module, data) begin
                 # find external functions
-                external_functions = filter(collect(LLVM.functions(mod))) do fun
-                    !isdeclaration(fun) && linkage(fun) == LLVM.API.LLVMExternalLinkage
+                external_functions = filter(collect(mod.functions)) do fun
+                    !isdeclaration(fun) && fun.linkage == LLVM.Linkage.External
                 end
                 isempty(external_functions) && error("No external functions found in $input")
                 if length(external_functions) > 1
-                    error("Multiple external functions found in $input: $(join(LLVM.name.(external_functions), ", ")))")
+                    error("Multiple external functions found in $input: $(join(map(f -> f.name, external_functions), ", ")))")
                 end
                 # the downgrader consumes bitcode, so re-emit the parsed module as bitcode
-                LLVM.name(external_functions[1]), let io = IOBuffer()
+                external_functions[1].name, let io = IOBuffer()
                     write(io, mod)
                     take!(io)
                 end

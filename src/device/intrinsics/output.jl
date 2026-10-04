@@ -25,7 +25,7 @@ end
 function valist_size(dl, param_types)
     size = 0
     for pty in param_types
-        ps = sizeof(dl, pty)
+        ps = LLVM.storage_size(dl, pty)
         if size % ps == 0
             size += ps
         else
@@ -49,82 +49,70 @@ macro mtlprintf(fmt::String, args...)
     end
 end
 
-@generated function _mtlprintf(::Val{fmt}, argspec...) where {fmt}
-    return @dispose ctx = Context() begin
-        arg_exprs = [:(argspec[$i]) for i in 1:length(argspec)]
-        arg_types = [argspec...]
+@llvmgenerated builder function _mtlprintf(::Val{fmt}, argspec...)::Nothing where {fmt}
+    T_void = LLVM.VoidType()
+    T_int32 = LLVM.Int32Type()
+    T_int64 = LLVM.Int64Type()
+    T_pint8 = LLVM.PointerType(LLVM.Int8Type())
+    T_pint8a2 = LLVM.PointerType(LLVM.Int8Type(), 2)
 
-        T_void = LLVM.VoidType()
-        T_int32 = LLVM.Int32Type()
-        T_int64 = LLVM.Int64Type()
-        T_pint8 = LLVM.PointerType(LLVM.Int8Type())
-        T_pint8a2 = LLVM.PointerType(LLVM.Int8Type(), 2)
+    mod = current_module(builder)
+    param_types = LLVMType[arg.value_type for arg in argspec]
 
-        # create functions
-        param_types = LLVMType[convert(LLVMType, typ) for typ in arg_types]
-        wrapper_f, wrapper_ft = create_function(T_void, param_types)
-        mod = LLVM.parent(wrapper_f)
+    # create the vararg function that calls `air.os_log`
+    llvm_ft = LLVM.FunctionType(T_void, LLVMType[]; vararg = true)
+    llvm_f = LLVM.Function(mod, "metal_os_log", llvm_ft)
+    push!(llvm_f.function_attributes, EnumAttribute(:alwaysinline))
 
-        llvm_ft = LLVM.FunctionType(T_void, LLVMType[]; vararg = true)
-        llvm_f = LLVM.Function(mod, "metal_os_log", llvm_ft)
-        push!(function_attributes(llvm_f), EnumAttribute("alwaysinline", 0))
+    # generate IR
+    entry = BasicBlock(llvm_f, "entry")
+    position!(builder, LLVM.at_end(entry)) do
+        str = globalstring_ptr!(builder, String(fmt), addrspace = 2)
+        subsystem_str = null(T_pint8a2)
+        category_str = const_inttoptr(LLVM.ConstantInt(T_int64, -1), T_pint8a2)
+        log_type = LLVM.ConstantInt(T_int32, __METAL_OS_LOG_TYPE_DEFAULT__)
 
-        # generate IR
-        @dispose builder = IRBuilder() begin
-            entry = BasicBlock(llvm_f, "entry")
-            position!(builder, entry)
+        # compute argsize
+        dl = mod.datalayout
+        arg_size = LLVM.ConstantInt(T_int64, valist_size(dl, param_types))
 
-            str = globalstring_ptr!(builder, String(fmt), addrspace = 2)
-            subsystem_str = null(T_pint8a2)
-            category_str = const_inttoptr(LLVM.ConstantInt(T_int64, -1), T_pint8a2)
-            log_type = LLVM.ConstantInt(T_int32, __METAL_OS_LOG_TYPE_DEFAULT__)
+        alloc = alloca!(builder, T_pint8)
+        buffer = bitcast!(builder, alloc, T_pint8)
+        alloc_size = LLVM.ConstantInt(T_int64, LLVM.storage_size(dl, T_pint8))
 
-            # compute argsize
-            dl = datalayout(mod)
-            arg_size = LLVM.ConstantInt(T_int64, valist_size(dl, param_types))
-
-            alloc = alloca!(builder, T_pint8)
-            buffer = bitcast!(builder, alloc, T_pint8)
-            alloc_size = LLVM.ConstantInt(T_int64, sizeof(dl, T_pint8))
-
-            lifetime_start_fty = LLVM.FunctionType(T_void, [T_int64, T_pint8])
-            lifetime_start = LLVM.Function(mod, "llvm.lifetime.start.p0i8", lifetime_start_fty)
-            call!(builder, lifetime_start_fty, lifetime_start, [alloc_size, buffer])
-
-            va_start_fty = LLVM.FunctionType(T_void, [T_pint8])
-            va_start = LLVM.Function(mod, "llvm.va_start", va_start_fty)
-            call!(builder, va_start_fty, va_start, [buffer])
-
-            arg_ptr = load!(builder, T_pint8, alloc)
-
-            os_log_fty = LLVM.FunctionType(T_void, [T_pint8a2, T_pint8a2, T_int32, T_pint8a2, T_pint8, T_int64])
-            os_log = LLVM.Function(mod, "air.os_log", os_log_fty)
-            call!(builder, os_log_fty, os_log, [subsystem_str, category_str, log_type, str, arg_ptr, arg_size])
-
-            va_end_fty = LLVM.FunctionType(T_void, [T_pint8])
-            va_end = LLVM.Function(mod, "llvm.va_end", va_end_fty)
-            call!(builder, va_end_fty, va_end, [buffer])
-
-            lifetime_end_fty = LLVM.FunctionType(T_void, [T_int64, T_pint8])
-            lifetime_end = LLVM.Function(mod, "llvm.lifetime.end.p0i8", lifetime_end_fty)
-            call!(builder, lifetime_end_fty, lifetime_end, [alloc_size, buffer])
-
-            ret!(builder)
+        # `llvm.va_start`/`llvm.va_end` are only overloaded on the pointer type since
+        # LLVM 19, so only pass that type to the intrinsics that are overloaded; the
+        # lifetime intrinsics lost their size operand in LLVM 22
+        function intrinsic(name)
+            intr = Intrinsic(name)
+            LLVM.Function(mod, intr, isoverloaded(intr) ? [T_pint8] : LLVMType[])
         end
+        lifetime_args = LLVM.version() >= v"22" ? [buffer] : [alloc_size, buffer]
 
-        @dispose builder = IRBuilder() begin
-            entry = BasicBlock(wrapper_f, "entry")
-            position!(builder, entry)
+        lifetime_start = intrinsic("llvm.lifetime.start")
+        call!(builder, lifetime_start.function_type, lifetime_start, lifetime_args)
 
-            call!(builder, llvm_ft, llvm_f, collect(parameters(wrapper_f)))
+        va_start = intrinsic("llvm.va_start")
+        call!(builder, va_start.function_type, va_start, [buffer])
 
-            ret!(builder)
-        end
+        arg_ptr = load!(builder, T_pint8, alloc)
 
+        os_log_fty = LLVM.FunctionType(T_void, [T_pint8a2, T_pint8a2, T_int32, T_pint8a2, T_pint8, T_int64])
+        os_log = LLVM.Function(mod, "air.os_log", os_log_fty)
+        call!(builder, os_log_fty, os_log, [subsystem_str, category_str, log_type, str, arg_ptr, arg_size])
 
-        call = call_function(wrapper_f, Nothing, Tuple{arg_types...}, arg_exprs...)
-        return call
+        va_end = intrinsic("llvm.va_end")
+        call!(builder, va_end.function_type, va_end, [buffer])
+
+        lifetime_end = intrinsic("llvm.lifetime.end")
+        call!(builder, lifetime_end.function_type, lifetime_end, lifetime_args)
+
+        ret!(builder)
     end
+
+    # call it with the arguments
+    call!(builder, llvm_ft, llvm_f, collect(argspec))
+    nothing
 end
 
 
