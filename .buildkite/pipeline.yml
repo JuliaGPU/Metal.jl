@@ -56,7 +56,7 @@ steps:
           queue: "metal"
         commands: |
           if [[ "{{matrix.julia}}" == "1.10" ]]; then
-            git clone --depth 1 --branch main https://github.com/JuliaGPU/KernelAbstractions.jl ka
+            git clone --depth 1 --branch vc/ki-subgroup-ops https://github.com/JuliaGPU/KernelAbstractions.jl ka
             julia --project=test -e '
               using Pkg
               Pkg.develop([PackageSpec(; path) for path in (pwd(), "ka", "ka/lib/KernelInterface")])'
