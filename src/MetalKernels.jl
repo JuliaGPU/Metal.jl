@@ -37,8 +37,14 @@ KI.supports_float64(::MetalBackend) = false
 KI.supports_atomics(::MetalBackend) = metal_support() >= v"4.1"
 KI.supports_unified(::MetalBackend) = true
 KI.supports_subgroups(::MetalBackend) = true
-KI.supports_shuffle(::MetalBackend, ::Type{T}) where {T} =
-    T <: Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
+# the types Metal's SIMD-group shuffles support natively
+const NativeShuffleTypes = Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
+# 64-bit integers, which are shuffled as two 32-bit halves (see `shuffle_halves`). Float64
+# isn't included, since Metal doesn't support it in kernels at all (`supports_float64`).
+const WideShuffleTypes = Union{Int64, UInt64}
+const ShuffleTypes = Union{NativeShuffleTypes, WideShuffleTypes}
+# only for these primitive types: KernelInterface's fallback checks the fields of others
+KI.supports_shuffle(::MetalBackend, ::Type{<:ShuffleTypes}) = true
 
 Adapt.adapt_storage(::MetalBackend, a::AbstractArray) = Adapt.adapt(MtlArray, a)
 Adapt.adapt_storage(::MetalBackend, a::MtlArray) = a
@@ -163,7 +169,9 @@ end
 
 @device_override KI.get_sub_group_size(::Type{T}) where {T} = active_simdgroup_size() % T
 
-@device_override KI.get_max_sub_group_size(::Type{T}) where {T} = threads_per_simdgroup() % T
+# a constant rather than `threads_per_simdgroup()`, so that code depending on it is
+# specialized for it: `kernel_function` checks that kernels are compiled for this width
+@device_override KI.get_max_sub_group_size(::Type{T}) where {T} = SIMD_WIDTH % T
 
 @device_override KI.get_num_sub_groups(::Type{T}) where {T} = simdgroups_per_threadgroup() % T
 
@@ -207,7 +215,7 @@ function KI.wait_event(::MetalBackend, ev::Tuple{MTLSharedEvent, UInt64})
 end
 
 
-## synchronization and printing
+## synchronization
 
 @device_override @inline function KI.barrier()
     threadgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
@@ -217,9 +225,55 @@ end
     simdgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
 end
 
-@device_override function KI.shfl_down(val::T, offset::Integer) where T
-    simd_shuffle_down(val, offset)
+
+## sub-group communication
+
+# Lanes, offsets and masks are wrapped with `% Int16` (the type the intrinsics take), which
+# unlike a conversion can't throw: out of range, they give an unspecified value. Lanes and
+# masks are also reduced to the SIMD-group width, since Metal requires a valid lane.
+
+@inline shuffle_lane(lane::Integer) = (((lane - 1) % Int16) & Int16(SIMD_WIDTH - 1)) + Int16(1)
+@inline shuffle_mask(mask::Integer) = (mask % Int16) & Int16(SIMD_WIDTH - 1)
+
+# Metal has no 64-bit shuffles, so 64-bit integers are shuffled as two 32-bit halves.
+# XXX: this could move into KernelInterface's fallback, for other back-ends without them.
+@inline split_halves(x::WideShuffleTypes) = (x % UInt32, (x >>> 32) % UInt32)
+@inline join_halves(::Type{T}, lo::UInt32, hi::UInt32) where {T <: WideShuffleTypes} =
+    (UInt64(lo) | (UInt64(hi) << 32)) % T
+@inline function shuffle_halves(f, x::T) where {T <: WideShuffleTypes}
+    lo, hi = split_halves(x)
+    return join_halves(T, f(lo), f(hi))
 end
+
+@device_override @inline KI.shfl(val::NativeShuffleTypes, lane::Integer) =
+    simd_shuffle(val, shuffle_lane(lane))
+@device_override @inline KI.shfl(val::WideShuffleTypes, lane::Integer) =
+    shuffle_halves(x -> simd_shuffle(x, shuffle_lane(lane)), val)
+
+@device_override @inline KI.shfl_down(val::NativeShuffleTypes, offset::Integer) =
+    simd_shuffle_down(val, offset % Int16)
+@device_override @inline KI.shfl_down(val::WideShuffleTypes, offset::Integer) =
+    shuffle_halves(x -> simd_shuffle_down(x, offset % Int16), val)
+
+@device_override @inline KI.shfl_up(val::NativeShuffleTypes, offset::Integer) =
+    simd_shuffle_up(val, offset % Int16)
+@device_override @inline KI.shfl_up(val::WideShuffleTypes, offset::Integer) =
+    shuffle_halves(x -> simd_shuffle_up(x, offset % Int16), val)
+
+@device_override @inline KI.shfl_xor(val::NativeShuffleTypes, mask::Integer) =
+    simd_shuffle_xor(val, shuffle_mask(mask))
+@device_override @inline KI.shfl_xor(val::WideShuffleTypes, mask::Integer) =
+    shuffle_halves(x -> simd_shuffle_xor(x, shuffle_mask(mask)), val)
+
+# `simd_ballot` sets the bits of the active lanes for which `pred` is true, and clears those
+# of inactive lanes (past the end of a partial SIMD-group), so `sub_group_all` checks that
+# no lane has `pred` false rather than that all bits are set
+@device_override @inline KI.sub_group_ballot(pred::Bool) = simd_ballot(pred)
+@device_override @inline KI.sub_group_any(pred::Bool) = simd_ballot(pred) != 0
+@device_override @inline KI.sub_group_all(pred::Bool) = simd_ballot(!pred) == 0
+
+
+## printing
 
 @device_override @inline function KI._print(args...)
     Metal._mtlprint(args...)
