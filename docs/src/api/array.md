@@ -15,7 +15,12 @@ MtlVecOrMat
 
 ## Storage modes
 
-The Metal API has various storage modes that dictate how a resource can be accessed. `MtlArray`s are `Metal.PrivateStorage` by default, but they can also be `Metal.SharedStorage` or `Metal.ManagedStorage`. For more information on storage modes, see the official [Metal documentation](https://developer.apple.com/documentation/metal/resource_fundamentals/setting_resource_storage_modes).
+The Metal API has various storage modes that dictate how a resource can be accessed. `MtlArray`s are `Metal.SharedStorage` by default, but they can also be `Metal.PrivateStorage`. For more information on storage modes, see the official [Metal documentation](https://developer.apple.com/documentation/metal/resource_fundamentals/setting_resource_storage_modes).
+
+Shared arrays reside in unified memory, so the CPU can access them directly: indexing them
+is fast, and is not subject to `allowscalar`. To make sure an operation executes on the GPU,
+use `Metal.PrivateStorage`, or set `default_storage = "private"` in your
+LocalPreferences.toml.
 
 ```@docs
 Metal.PrivateStorage
