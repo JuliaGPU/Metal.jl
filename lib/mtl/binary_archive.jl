@@ -44,6 +44,20 @@ function add_functions!(bin::MTLBinaryArchive, desc::MTLComputePipelineDescripto
     err[] == nil || throw_error(err[])
 end
 
+# The directory in which Metal assembles the archive, which it never removes. It is
+# created lazily, by the first function added or by this query, and serialization moves
+# on to a new one, so query it after adding functions and before serializing. This uses
+# the private `getArchiveIDWithError:`, so it returns `nothing` when that is unavailable.
+function working_directory(bin::MTLBinaryArchive)
+    sel = Selector("getArchiveIDWithError:")
+    ccall(:class_respondsToSelector, Bool, (Ptr{Cvoid}, Ptr{Cvoid}),
+          ObjectiveC.class(bin), sel) || return nothing
+    err = Ref{id{NSError}}(nil)
+    path = @objc [bin::id{MTLBinaryArchive} getArchiveIDWithError:err::Ptr{id{NSError}}]::id{NSString}
+    path == nil && return nothing
+    return String(NSString(path))
+end
+
 function Base.write(filename::String, bin::MTLBinaryArchive)
     url = NSFileURL(filename)
     err = Ref{id{NSError}}(nil)

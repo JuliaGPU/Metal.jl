@@ -175,7 +175,9 @@ native GPU code when creating the compute pipeline. Both stages are cached:
   scratch space, in a directory per device and OS build, because Metal only reuses a cached
   native pipeline on the same GPU and OS build. They are written as soon as a kernel has
   been compiled, and their total size is bounded by evicting the least recently used ones
-  when Julia exits.
+  when Julia exits. Building an archive makes Metal create a directory of a few hundred KB
+  in the per-user cache (`$(getconf DARWIN_USER_CACHE_DIR)com.apple.gpuarchiver`) that it
+  never removes; Metal.jl deletes it once the archive has been written.
 
 The binary archives are enabled by default and can be turned off with the `binary_archives`
 preference or the `JULIA_METAL_BINARY_ARCHIVES` environment variable; see

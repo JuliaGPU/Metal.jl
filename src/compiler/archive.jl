@@ -183,11 +183,13 @@ function archived_pipeline(dev::MTLDevice, fun::MTLFunction, metallib::Vector{UI
         # but writing it there would be wasted work.
         pso = MTLComputePipelineState(dev, fun)
         if ccall(:jl_generating_output, Cint, ()) != 1
+            workdir = nothing
             try
                 archive = MTLBinaryArchive(dev, MTLBinaryArchiveDescriptor())
                 harvest = MTLComputePipelineDescriptor()
                 harvest.computeFunction = fun
                 add_functions!(archive, harvest)
+                workdir = gpuarchiver_working_directory(archive)
                 # write atomically: concurrent sessions may harvest the same kernel
                 mkpath(dirname(path))
                 tmp = tempname(dirname(path))
@@ -202,6 +204,13 @@ function archived_pipeline(dev::MTLDevice, fun::MTLFunction, metallib::Vector{UI
                 isa(err, NSError) || isa(err, SystemError) || isa(err, Base.IOError) ||
                     rethrow()
                 @debug "Failed to harvest kernel into binary archive" exception=err
+            finally
+                workdir === nothing || rm(workdir; recursive=true, force=true)
+            end
+            if workdir === nothing &&
+               Threads.atomic_add!(harvests_since_sweep, 1) + 1 >= gpuarchiver_sweep_interval
+                harvests_since_sweep[] = 0
+                remove_leaked_gpuarchives()
             end
         end
         return pso
@@ -214,6 +223,7 @@ end
 # unrelated files when the archive-directory override points at a shared path.
 function prune_binary_archives()
     Base.@lock device_archives_lock begin
+        isempty(device_archives) || remove_leaked_gpuarchives()
         for da in values(device_archives)
             Base.@lock da.lock begin
                 try
@@ -271,3 +281,72 @@ end
 
 # A temporary file that is old enough not to belong to a session that is still writing it.
 stale_tempfile(path::String) = time() - mtime(path) > 3600
+
+# Metal assembles every `MTLBinaryArchive` that functions are added to in a
+# `gpuarchiver-XXXXXX` directory in the per-user cache, and never removes it: not when the
+# archive is serialized or released, nor at exit or reboot (seen on macOS 15 through 27,
+# also outside of Julia). Applications that serialize one archive now and then don't
+# notice, but with an archive per kernel this leaks a few hundred KB per harvested kernel
+# and fills the disk of machines that compile many kernels. The directory is needed until
+# `serializeToURL:` returns, and not at all afterwards.
+#
+# Each harvest removes its own directory, which Metal reveals through a private method.
+# Should that be unavailable, fall back to periodically sweeping directories old enough
+# not to belong to a harvest in progress, in this or another process. The same sweep at
+# exit also cleans up after sessions that were killed mid-harvest or predate this.
+const gpuarchiver_sweep_interval = 256
+const harvests_since_sweep = Threads.Atomic{Int}(0)
+
+const _CS_DARWIN_USER_CACHE_DIR = Cint(65538)
+function user_cache_dir()
+    buf = Vector{UInt8}(undef, 1024)
+    len = ccall(:confstr, Csize_t, (Cint, Ptr{UInt8}, Csize_t),
+                _CS_DARWIN_USER_CACHE_DIR, buf, length(buf))
+    (len == 0 || len > length(buf)) && return nothing
+    return normpath(GC.@preserve(buf, unsafe_string(pointer(buf))))
+end
+
+# Where unbundled processes like Julia keep these directories; an application bundle
+# gets its own `<cache>/<bundle id>/com.apple.gpuarchiver`.
+function gpuarchiver_dir()
+    cache = user_cache_dir()
+    cache === nothing ? nothing : joinpath(cache, "com.apple.gpuarchiver")
+end
+
+# The archive's working directory, provided it looks like one of these in the user cache,
+# so that a change in what the private method returns can't make us remove anything else.
+function gpuarchiver_working_directory(archive::MTLBinaryArchive)
+    dir = try
+        MTL.working_directory(archive)
+    catch err
+        @debug "Failed to query the binary archive's working directory" exception=err
+        nothing
+    end
+    cache = user_cache_dir()
+    (dir === nothing || cache === nothing) && return nothing
+    dir = normpath(dir)
+    if startswith(basename(dir), "gpuarchiver-") &&
+       basename(dirname(dir)) == "com.apple.gpuarchiver" && startswith(dir, cache) &&
+       isdir(dir)
+        return dir
+    end
+    return nothing
+end
+
+function remove_leaked_gpuarchives(dir=gpuarchiver_dir(); min_age=300)
+    try
+        (dir === nothing || !isdir(dir)) && return
+        now = time()
+        for entry in readdir(dir; sort=false)
+            startswith(entry, "gpuarchiver-") || continue
+            path = joinpath(dir, entry)
+            st = lstat(path)
+            if isdir(st) && now - st.mtime > min_age
+                rm(path; recursive=true, force=true)
+            end
+        end
+    catch err
+        @debug "Failed to remove leaked gpuarchiver directories" exception=err
+    end
+    return
+end

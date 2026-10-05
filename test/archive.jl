@@ -235,6 +235,58 @@ end
     reset_archive_state!()
 end
 
+@testset "leaked gpuarchiver directories" begin
+    backdate(path) = run(`touch -h -t 202001010000 $path`)
+
+    # only old `gpuarchiver-*` directories are removed
+    mktempdir() do dir
+        old = joinpath(dir, "gpuarchiver-0a1b2c"); mkpath(joinpath(old, "reflection"))
+        touch(joinpath(old, "PersistentState")); backdate(old)
+        recent = joinpath(dir, "gpuarchiver-3d4e5f"); mkpath(recent)
+        old_file = joinpath(dir, "gpuarchiver-file"); touch(old_file); backdate(old_file)
+        old_other = joinpath(dir, "unrelated"); mkpath(old_other); backdate(old_other)
+        Metal.remove_leaked_gpuarchives(dir)
+        @test !ispath(old)
+        @test isdir(recent)
+        @test isfile(old_file)
+        @test isdir(old_other)
+    end
+    Metal.remove_leaked_gpuarchives(joinpath(tempdir(), "nonexistent"))
+
+    # a harvest removes the directory in which Metal assembled the archive, which isn't
+    # needed to load it afterwards
+    gpuarchiver = Metal.gpuarchiver_dir()
+    @test gpuarchiver !== nothing
+    mktempdir() do dir
+        withenv("JULIA_METAL_BINARY_ARCHIVES" => "true",
+                "JULIA_METAL_BINARY_ARCHIVE_DIR" => dir) do
+            # the private method locating it is still available
+            archive = MTLBinaryArchive(dev, MTLBinaryArchiveDescriptor())
+            workdir = Metal.MTL.working_directory(archive)
+            @test workdir !== nothing && isdir(workdir)
+            rm(workdir; recursive=true)
+
+            art = compile_archive_kernel(dev)
+            reset_archive_state!()
+            before = readdir(gpuarchiver)
+            Metal.link_pipeline(dev, art...)
+            @test Metal.archive_misses[] == 1
+            # other sessions may be harvesting concurrently and briefly have their own
+            # directory, so give those a moment to finish
+            new = filter(startswith("gpuarchiver-"), setdiff(readdir(gpuarchiver), before))
+            leaked() = filter(entry -> ispath(joinpath(gpuarchiver, entry)), new)
+            timedwait(() -> isempty(leaked()), 10)
+            @test isempty(leaked())
+
+            reset_archive_state!()
+            Metal.link_pipeline(dev, art...)
+            @test Metal.archive_hits[] == 1
+            @test Metal.archive_misses[] == 0
+        end
+    end
+    reset_archive_state!()
+end
+
 @testset "byte-stable metallibs" begin
     # The archive content-keys on metallib bytes; GPUCompiler covers cross-session stability.
     for (f, tt) in [(archive_kernel,          Tuple{MtlDeviceVector{Float32,1}}),
