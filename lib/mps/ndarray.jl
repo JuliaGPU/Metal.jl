@@ -91,7 +91,7 @@ function MPSNDArray(arr::MtlArray{T,N}) where {T,N}
     arrsize = size(arr)
     @assert arrsize[1] * sizeof(T) % 16 == 0 "First dimension of input MtlArray must have a byte size divisible by 16"
     desc = MPSNDArrayDescriptor(T, arrsize)
-    return MPSNDArray(arr.data[], UInt(arr.offset), desc)
+    return MPSNDArray(Base.unsafe_convert(MTLBuffer, arr), UInt(arr.offset), desc)
 end
 
 function Metal.MtlArray(ndarr::MPSNDArray; storage = Metal.DefaultStorageMode, async = false)
@@ -105,7 +105,7 @@ function exportToMtlArray!(arr::MtlArray{T}, ndarr::MPSNDArrayLike; async=false)
     dev = device(arr)
 
     cmdBuf = MTLCommandBuffer(global_queue(dev)) do cmdBuf
-        exportDataWithCommandBuffer(ndarr, cmdBuf, arr.data[], T, arr.offset)
+        exportDataWithCommandBuffer(ndarr, cmdBuf, Base.unsafe_convert(MTLBuffer, arr), T, arr.offset)
     end
 
     async || synchronize(cmdBuf)

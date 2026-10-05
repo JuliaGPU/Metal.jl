@@ -86,7 +86,7 @@ synchronize_state(kern::MPSMatrixRandomMTGP32, cmdbuf::MTLCommandBufferLike) =
             tempVec = MPSTemporaryVector(cmdbuf, vecDesc)
             encode!(cmdbuf, randkern, tempVec)
             MTLBlitCommandEncoder(cmdbuf) do enc
-                MTL.append_copy!(enc, dest.data[], dest.offset, tempVec.data, tempVec.offset, bytesize)
+                MTL.append_copy!(enc, Base.unsafe_convert(MTLBuffer, dest), dest.offset, tempVec.data, tempVec.offset, bytesize)
             end
         end
     end

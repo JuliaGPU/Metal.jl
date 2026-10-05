@@ -75,12 +75,12 @@ and dispatches within an encoder run serially. At most `command_batching_infligh
 command buffers are kept in flight; further submissions block until the GPU drains
 one. Obtain the current task's batched queue with [`global_queue`](@ref).
 
-`BatchedCommandQueue`s are task-local and mutated lock-free by their owning task.
-Sharing a raw `MTLCommandQueue` across tasks is unsupported. Once the owning task has
-finished, any task's [`synchronize`](@ref) flushes and waits for the work it left
-behind, so results of a task are visible after `wait`ing for it. [`device_synchronize`](@ref)
-may flush batches owned by other tasks after those tasks have yielded or completed,
-which supports `@async` work and the REPL synchronization hook.
+`BatchedCommandQueue`s are task-local, but are only mutated while holding a global lock,
+so that other tasks can flush them too. Sharing a raw `MTLCommandQueue` across tasks is
+unsupported. Once the owning task has finished, any task's [`synchronize`](@ref) flushes
+and waits for the work it left behind, so results of a task are visible after `wait`ing
+for it. [`device_synchronize`](@ref) flushes the batches of all tasks, which supports
+`@async` work and the REPL synchronization hook.
 """
 mutable struct BatchedCommandQueue
     queue::MTLCommandQueue
@@ -146,10 +146,15 @@ end
 has_active_batched_queues() =
     Base.@lock batched_queues_lock !isempty(batched_queues)
 
+# batched queues are mutated (e.g., encoding operations or committing the open batch), and
+# managed buffers change ownership, only while holding this lock. that makes it possible
+# for any task to flush any queue, e.g., to wait for the work of another task before
+# accessing memory it uses. waiting for the GPU should happen without holding this lock.
+const submission_lock = ReentrantLock()
+
 # batched queues whose owning task has finished, but that still have an open batch or
 # in-flight work. nobody else will ever flush or synchronize these, so `synchronize`
-# adopts them. `orphaned_queues_lock` serializes tasks doing so concurrently.
-const orphaned_queues_lock = ReentrantLock()
+# adopts them.
 
 function orphaned_batched_queues()
     Base.@lock batched_queues_lock begin
@@ -202,10 +207,48 @@ function MTL.MTLCommandBuffer(f::Base.Callable, bq::BatchedCommandQueue,
     return cmdbuf
 end
 
-function flush_open_batch(cmdbuf)
+# submit a command buffer that was encoded outside of the batch (e.g., by MPS). this first
+# commits the open batch, preserving program order, and registers the use of buffers that
+# were passed to Metal since the previous submission.
+function submit_command_buffer(f, cmdbuf)
     queue = cmdbuf.commandQueue
     bq = get(task_local_storage(), batched_queue_key(queue), nothing)
     bq === nothing || flush!(bq)
+
+    pending = pending_ownership()
+    # creating a batched queue takes the autorelease pool lock, so do so before locking
+    !isempty(pending) && bq === nothing && (bq = batched_queue(queue))
+    while true
+        conflict = Base.@lock submission_lock begin
+            if isempty(pending)
+                f()
+                return
+            end
+            i = findfirst(managed -> !can_take_ownership(managed, bq), pending)
+            if i === nothing
+                foreach(managed -> take_ownership!(managed, bq), pending)
+                empty!(pending)
+                f()
+                return
+            end
+            pending[i]
+        end
+        # another queue started using the buffer since it was passed to Metal
+        synchronize(conflict)
+    end
+end
+
+# buffers that were passed to Metal by the current task, and will be used by the next
+# command buffer it submits
+pending_ownership() =
+    get!(() -> Managed[], task_local_storage(), :MetalPendingOwnership)::Vector{Managed}
+
+# for operations that use the buffers passed to Metal, but are submitted and completed by
+# Metal itself: wait for other queues that may still be using those buffers instead.
+function synchronize_pending!()
+    pending = pending_ownership()
+    foreach(synchronize, pending)
+    empty!(pending)
     return
 end
 
@@ -313,40 +356,49 @@ end
 
 function defer_cleanup!(bq::BatchedCommandQueue, cmdbuf::MTL.MTLCommandBufferLike,
                         roots::Vector{Any})
-    push!(bq.cleanups, PendingCommand(cmdbuf, roots))
-    register_queue!(bq)
+    Base.@lock submission_lock begin
+        push!(bq.cleanups, PendingCommand(cmdbuf, roots))
+        register_queue!(bq)
+    end
     return
 end
 
 defer_cleanup!(queue, cmdbuf::MTL.MTLCommandBufferLike, roots::Vector{Any}) =
     defer_cleanup!(batched_queue(queue), cmdbuf, roots)
 
-function drain_cleanups!(bq::BatchedCommandQueue; force::Bool=false)
-    n = 0
-    for cleanup in bq.cleanups
-        if !(force || cleanup.cmdbuf.status >= MTL.MTLCommandBufferStatusCompleted)
-            break
+# release the roots of completed command buffers. `until` treats the entries up to and
+# including it as completed, e.g., because a command buffer committed later has completed.
+function drain_cleanups!(bq::BatchedCommandQueue;
+                         until::Union{Nothing,PendingCommand}=nothing)
+    Base.@lock submission_lock begin
+        nforced = until === nothing ? 0 :
+                  something(findfirst(cleanup -> cleanup === until, bq.cleanups), 0)
+        n = 0
+        for cleanup in bq.cleanups
+            if !(n < nforced || cleanup.cmdbuf.status >= MTL.MTLCommandBufferStatusCompleted)
+                break
+            end
+            n += 1
         end
-        n += 1
+        n == 0 && return
+
+        completed = bq.cleanups[1:n]
+        deleteat!(bq.cleanups, 1:n)
+
+        for cleanup in completed
+            empty!(cleanup.roots)
+        end
+
+        unregister_queue_if_idle!(bq)
     end
-    n == 0 && return
-
-    completed = bq.cleanups[1:n]
-    deleteat!(bq.cleanups, 1:n)
-
-    for cleanup in completed
-        empty!(cleanup.roots)
-    end
-
-    unregister_queue_if_idle!(bq)
     return
 end
 
-function drain_cleanups!(queue; force::Bool=false)
+function drain_cleanups!(queue)
     queue = raw_queue(queue)
     for bq in active_batched_queues()
         bq.queue === queue || continue
-        drain_cleanups!(bq; force)
+        drain_cleanups!(bq)
     end
     return
 end
@@ -355,20 +407,16 @@ function pending_cleanup_count(bq::BatchedCommandQueue)
     return length(bq.cleanups)
 end
 
-function wait_oldest_cleanup!(bq::BatchedCommandQueue)
-    isempty(bq.cleanups) && return
-    cmdbuf = first(bq.cleanups).cmdbuf
-    wait_cmdbuf!(cmdbuf)
-    drain_cleanups!(bq)
-    return
-end
-
+# wait until fewer than `command_batching_inflight()` command buffers are in flight
 function limit_inflight!(bq::BatchedCommandQueue)
-    drain_cleanups!(bq)
-    while pending_cleanup_count(bq) >= command_batching_inflight()
-        wait_oldest_cleanup!(bq)
+    while true
+        cmdbuf = Base.@lock submission_lock begin
+            drain_cleanups!(bq)
+            pending_cleanup_count(bq) < command_batching_inflight() && return
+            first(bq.cleanups).cmdbuf
+        end
+        wait_cmdbuf!(cmdbuf)
     end
-    return
 end
 
 function reset_open_cmdbuf!(bq::BatchedCommandQueue, cmdbuf)
@@ -388,16 +436,24 @@ function discard_open_cmdbuf!(bq::BatchedCommandQueue, cmdbuf)
 end
 
 function flush!(bq::BatchedCommandQueue)
-    cmdbuf = bq.cmdbuf
-    cmdbuf === nothing && return
-
-    end_encoder!(bq)
-    register_operations!(bq, cmdbuf)
-    roots = bq.roots
-    MTL.commit_with_queue_key!(cmdbuf, pointer(bq.queue))
-    defer_cleanup!(bq, cmdbuf, roots)
-    reset_open_cmdbuf!(bq, cmdbuf)
+    commit_batch!(bq)
     limit_inflight!(bq)
+    return
+end
+
+# commit the open batch, if any. this may be another task's queue.
+function commit_batch!(bq::BatchedCommandQueue)
+    Base.@lock submission_lock begin
+        cmdbuf = bq.cmdbuf
+        cmdbuf === nothing && return
+
+        end_encoder!(bq)
+        register_operations!(bq, cmdbuf)
+        roots = bq.roots
+        MTL.commit_with_queue_key!(cmdbuf, pointer(bq.queue))
+        defer_cleanup!(bq, cmdbuf, roots)
+        reset_open_cmdbuf!(bq, cmdbuf)
+    end
     return
 end
 

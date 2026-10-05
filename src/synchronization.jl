@@ -96,12 +96,15 @@ for them.
 function synchronize(queue = global_queue(device()))
     # an `@autoreleasepool` takes a global lock, so don't hold one while waiting, or other
     # tasks would not be able to use Metal in the meantime.
-    bq, orphans = @autoreleasepool begin
+    bq, committed, orphans = @autoreleasepool begin
         b = batched_queue(queue)
-        flush!(b)
+        c = Base.@lock submission_lock begin
+            commit_batch!(b)
+            isempty(b.cleanups) ? nothing : b.cleanups[end]
+        end
         o = flush_orphaned_queues!()
         maybe_collect(b.queue.device; will_block=true)
-        b, o
+        b, c, o
     end
     queue = bq.queue
 
@@ -120,9 +123,11 @@ function synchronize(queue = global_queue(device()))
     end
 
     @autoreleasepool begin
-        drain_cleanups!(bq; force=true)
+        # other tasks may have committed more work to this queue while we were waiting,
+        # so only force the cleanup of command buffers that were committed before.
+        drain_cleanups!(bq; until=committed)
         if orphans !== nothing
-            Base.@lock orphaned_queues_lock foreach(drain_cleanups!, orphans)
+            foreach(drain_cleanups!, orphans)
         end
 
         # Surface Metal runtime failures and device-side Julia exceptions together,
@@ -132,12 +137,25 @@ function synchronize(queue = global_queue(device()))
     return
 end
 
+# wait for the work committed to `bq`, which may belong to another task. errors are left
+# for the queue's owner to report when it synchronizes, unless it has finished.
+function synchronize_queue(bq::BatchedCommandQueue)
+    (bq.owner === current_task() || istaskdone(bq.owner)) && return synchronize(bq)
+
+    last = @autoreleasepool Base.@lock submission_lock begin
+        commit_batch!(bq)
+        MTL.last_committed(bq.queue)
+    end
+    last === nothing || wait_cmdbuf!(last)
+    return
+end
+
 # commit the open batches of queues whose owning task has finished. their owner will
 # not touch them again, so we can, but other tasks synchronizing may do so concurrently.
 function flush_orphaned_queues!()
     orphans = orphaned_batched_queues()
     orphans === nothing && return nothing
-    Base.@lock orphaned_queues_lock foreach(flush!, orphans)
+    foreach(commit_batch!, orphans)
     return orphans
 end
 

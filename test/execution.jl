@@ -492,6 +492,53 @@ end
     @test Metal.@allowscalar b[end] == 2f0
 end
 
+@testset "handing off arrays between tasks" begin
+    n = 1 << 16
+
+    # accessing an array waits for the work of the task that last used it, even if that
+    # task is still running and hasn't synchronized
+    @testset "$S" for S in (Metal.PrivateStorage, Metal.SharedStorage)
+        a = Metal.zeros(Float32, n; storage=S)
+        synchronize()
+        used = Channel{Nothing}(1)
+        release = Channel{Nothing}(1)
+        t = @async begin
+            a .= 1f0
+            put!(used, nothing)
+            take!(release)
+        end
+        take!(used)
+        @test Array(a) == ones(Float32, n)
+        S === Metal.SharedStorage && @test a[1] == 1f0
+        put!(release, nothing)
+        wait(t)
+    end
+
+    # using an array on the GPU waits for the task that last used it
+    a = Metal.zeros(Float32, n)
+    to_t1, to_t2 = Channel{Int}(1), Channel{Int}(1)
+    t1 = @async for i in 1:10
+        take!(to_t1)
+        a .+= 1f0
+        put!(to_t2, i)
+    end
+    t2 = @async for i in 1:10
+        take!(to_t2)
+        a .*= 2f0
+        i < 10 && put!(to_t1, i)
+    end
+    put!(to_t1, 0)
+    wait(t1)
+    wait(t2)
+    @test Array(a) == fill(Float32(foldl((x, _) -> 2(x + 1), 1:10; init=0)), n)
+
+    # MPS operations register the arrays they use
+    A, B = Metal.rand(Float32, 64, 64), Metal.rand(Float32, 64, 64)
+    C = similar(A)
+    wait(@async MPS.matmul!(C, A, B))
+    @test Array(C) ≈ Array(A) * Array(B)
+end
+
 # a gate that keeps a command buffer from completing until it is opened. this keeps the
 # cooperative synchronization tests independent of timing: waiting for that command buffer
 # can only return after whoever opens the gate has run.
