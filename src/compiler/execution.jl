@@ -4,7 +4,7 @@ export @metal
 ## high-level @metal interface
 
 const MACRO_KWARGS = [:launch]
-const COMPILER_KWARGS = [:kernel, :name, :fastmath, :always_inline, :debug_level, :opt_level, :macos, :air, :metal, :gpufamily]
+const COMPILER_KWARGS = [:kernel, :name, :fastmath, :always_inline, :debug_level, :opt_level, :macos, :air, :metal, :gpufamily, :minthreads, :maxthreads]
 const LAUNCH_KWARGS = [:groups, :threads, :queue, :submit]
 
 """
@@ -26,6 +26,12 @@ There are a few keyword arguments that influence the behavior of `@metal`:
   generated name.
 - `opt_level`: the optimization level used when compiling the kernel, an integer from `0`
   to `3`. Defaults to `2`, independent of the host session's `-O` level.
+- `minthreads`: the exact threadgroup size the kernel will be launched with, as an integer
+  or a tuple of up to three integers. Lets the compiler specialize for that size; launches
+  must then use exactly that many threads. Requires Metal 4 (macOS 26).
+- `maxthreads`: an upper bound on the number of threads per threadgroup the kernel will be
+  launched with, as an integer. Lets the compiler use more registers per thread; launches
+  exceeding it are rejected.
 - `queue`: the command queue to use for this kernel. Defaults to the global command queue.
 - `submit`: whether to submit the current command batch immediately after encoding this
   kernel. Defaults to `false`.
@@ -196,6 +202,8 @@ struct HostKernel{F,S,TT}
     loggingEnabled::Bool
     device::MTLDevice
     maxthreads::Int
+    # the threadgroup size launches have to use exactly, or all zeros when unconstrained
+    reqthreads::MTLSize
     tgmem::Int
     exec_width::Int
     use_residency_sets::Bool
@@ -214,6 +222,10 @@ Low-level interface to compile a function invocation for the currently-active GP
 a callable kernel object. For a higher-level interface, use [`@metal`](@ref).
 
 The following keyword arguments are supported:
+- `minthreads`: the exact number of threads in a threadGroup the kernel will be launched
+   with (an integer or a tuple of up to three). Launches must then use exactly that size.
+- `maxthreads`: the maximum number of threads in a threadGroup. The actual maximum could
+   be lower depending on the kernel complexity, so ensure you're checking before launch
 - `macos`, `metal` and `air`: to override the macOS OS, Metal language and AIR bitcode
    versions used during compilation. Value should be a valid version number.
 - `gpufamily`: to override the Apple GPU family (`MTL.MTLGPUFamilyApple<n>`) that the
@@ -253,7 +265,8 @@ end
         if !isassigned(pipeline)
             pipeline[] = link_pipeline(dev, res.air::Vector{UInt8},
                                      res.metallib::Vector{UInt8},
-                                     res.entry::String)
+                                     res.entry::String, config.target.minthreads,
+                                     config.target.maxthreads)
             # Don't cache session-local pipeline handles while precompiling: the
             # results struct is serialized into the package image along with its
             # CodeInstance, and ObjectiveC handles would come back dangling.
@@ -280,9 +293,13 @@ end
             end
         end
 
+        minthreads = config.target.minthreads
+        reqthreads = minthreads === nothing ? MTLSize(0, 0, 0) : MTLSize(minthreads)
+
         # the fields of `HostKernel` following `f` and `source`
         (pipeline[], res.loggingEnabled::Bool, dev,
          Int(pipeline[].maxTotalThreadsPerThreadgroup),
+         reqthreads,
          Int(pipeline[].staticThreadgroupMemoryLength),
          Int(pipeline[].threadExecutionWidth),
          can_use_residency_sets(dev),
@@ -512,6 +529,11 @@ Base.@nospecializeinfer function launch(
     nthreads = ts.width * ts.height * ts.depth
     nthreads > maxthreads &&
         throw(ArgumentError("Number of threads in group ($nthreads) should not exceed $maxthreads"))
+
+    reqthreads = kernel.reqthreads
+    if reqthreads.width > 0 && ts != reqthreads
+        throw(ArgumentError("Threads in group ($(Int(ts.width)), $(Int(ts.height)), $(Int(ts.depth))) should equal the required ($(Int(reqthreads.width)), $(Int(reqthreads.height)), $(Int(reqthreads.depth))) this kernel was compiled with (minthreads)"))
+    end
 
     (gs.width * ts.width) > typemax(UInt32) &&
         throw(ArgumentError("Total threads per grid in a dimension (groups.width($(gs.width)) * threads.width($(ts.width)) = $(gs.width * ts.width)) must not exceed $(typemax(UInt32))"))
