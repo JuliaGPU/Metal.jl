@@ -468,6 +468,30 @@ end
     @test all(vecA .== Int(5))
 end
 
+@testset "synchronization after a task finished" begin
+    # work left behind by a finished task, in its own queue, is committed and waited for
+    # by the next synchronization of any other task
+    for spawn in (f -> @async(f()), f -> Threads.@spawn(f()))
+        a = Metal.zeros(Float32, 16; storage=Metal.PrivateStorage)
+        synchronize()
+        t = spawn() do
+            a .= 1f0
+            global_queue(device())
+        end
+        queue = fetch(t)
+        @test Array(a) == ones(Float32, 16)
+        @test queue.cmdbuf === nothing
+        @test isempty(queue.cleanups)
+        @test MTL.last_committed(queue.queue).status == MTL.MTLCommandBufferStatusCompleted
+    end
+
+    # host reads of shared memory
+    b = Metal.zeros(Float32, 16; storage=Metal.SharedStorage)
+    synchronize()
+    wait(@async b .= 2f0)
+    @test Metal.@allowscalar b[end] == 2f0
+end
+
 # a gate that keeps a command buffer from completing until it is opened. this keeps the
 # cooperative synchronization tests independent of timing: waiting for that command buffer
 # can only return after whoever opens the gate has run.

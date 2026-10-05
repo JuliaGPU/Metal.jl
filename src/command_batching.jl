@@ -76,13 +76,16 @@ command buffers are kept in flight; further submissions block until the GPU drai
 one. Obtain the current task's batched queue with [`global_queue`](@ref).
 
 `BatchedCommandQueue`s are task-local and mutated lock-free by their owning task.
-Sharing a raw `MTLCommandQueue` across tasks is unsupported. [`device_synchronize`](@ref)
+Sharing a raw `MTLCommandQueue` across tasks is unsupported. Once the owning task has
+finished, any task's [`synchronize`](@ref) flushes and waits for the work it left
+behind, so results of a task are visible after `wait`ing for it. [`device_synchronize`](@ref)
 may flush batches owned by other tasks after those tasks have yielded or completed,
 which supports `@async` work and the REPL synchronization hook.
 """
 mutable struct BatchedCommandQueue
     queue::MTLCommandQueue
     device::MTLDevice
+    owner::Task
     cmdbuf::Union{Nothing,MTLCommandBuffer}
     encoder::Union{Nothing,MTLComputeCommandEncoder,MTLBlitCommandEncoder}
     kind::EncoderKind
@@ -97,7 +100,7 @@ end
 function BatchedCommandQueue(queue::MTLCommandQueue)
     dev = queue.device
     can_use_residency_sets(dev) && install_queue_residency!(queue, dev)
-    BatchedCommandQueue(queue, dev, nothing, nothing, NoEncoder,
+    BatchedCommandQueue(queue, dev, current_task(), nothing, nothing, NoEncoder,
                         Any[], nothing, 0, 0, Any[], PendingCommand[])
 end
 
@@ -142,6 +145,23 @@ end
 
 has_active_batched_queues() =
     Base.@lock batched_queues_lock !isempty(batched_queues)
+
+# batched queues whose owning task has finished, but that still have an open batch or
+# in-flight work. nobody else will ever flush or synchronize these, so `synchronize`
+# adopts them. `orphaned_queues_lock` serializes tasks doing so concurrently.
+const orphaned_queues_lock = ReentrantLock()
+
+function orphaned_batched_queues()
+    Base.@lock batched_queues_lock begin
+        bqs = nothing
+        for bq in keys(batched_queues)
+            istaskdone(bq.owner) || continue
+            bqs === nothing && (bqs = BatchedCommandQueue[])
+            push!(bqs, bq)
+        end
+        bqs
+    end
+end
 
 batched_queue(bq::BatchedCommandQueue) = bq
 
