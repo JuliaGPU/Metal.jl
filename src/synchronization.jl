@@ -89,16 +89,19 @@ end
 """
     synchronize(queue=global_queue(device()))
 
-Wait for currently committed GPU work on `queue` to finish.
+Wait for currently committed GPU work on `queue` to finish. This includes work left
+behind by tasks that have finished, so that their results are visible after `wait`ing
+for them.
 """
 function synchronize(queue = global_queue(device()))
     # an `@autoreleasepool` takes a global lock, so don't hold one while waiting, or other
     # tasks would not be able to use Metal in the meantime.
-    bq = @autoreleasepool begin
+    bq, orphans = @autoreleasepool begin
         b = batched_queue(queue)
         flush!(b)
+        o = flush_orphaned_queues!()
         maybe_collect(b.queue.device; will_block=true)
-        b
+        b, o
     end
     queue = bq.queue
 
@@ -112,14 +115,42 @@ function synchronize(queue = global_queue(device()))
     # Handles the already-completed fast path internally.
     last === nothing || wait_cmdbuf!(last)
 
+    if orphans !== nothing
+        submissions = wait_orphaned_queues!(orphans, submissions)
+    end
+
     @autoreleasepool begin
         drain_cleanups!(bq; force=true)
+        if orphans !== nothing
+            Base.@lock orphaned_queues_lock foreach(drain_cleanups!, orphans)
+        end
 
         # Surface Metal runtime failures and device-side Julia exceptions together,
         # after cleanup has released all Julia roots held by completed work.
         check_synchronization_errors(submissions)
     end
     return
+end
+
+# commit the open batches of queues whose owning task has finished. their owner will
+# not touch them again, so we can, but other tasks synchronizing may do so concurrently.
+function flush_orphaned_queues!()
+    orphans = orphaned_batched_queues()
+    orphans === nothing && return nothing
+    Base.@lock orphaned_queues_lock foreach(flush!, orphans)
+    return orphans
+end
+
+function wait_orphaned_queues!(orphans, submissions)
+    states = MTL.QueueSubmissionState[]
+    submissions === nothing || push!(states, submissions)
+    for bq in orphans
+        drain_logging_cmdbufs!(bq.queue)
+        last, state = MTL.take_queue_submissions(bq.queue)
+        last === nothing || wait_cmdbuf!(last)
+        state === nothing || push!(states, state)
+    end
+    return states
 end
 
 """
