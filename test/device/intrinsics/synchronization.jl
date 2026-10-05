@@ -59,7 +59,8 @@
         end
 
         orders = [Metal.memory_order_relaxed, Metal.memory_order_seq_cst]
-        macos_version() >= v"27" && append!(orders, [Metal.memory_order_acquire, Metal.memory_order_release, Metal.memory_order_acq_rel])
+        # (before MSL 4.1, GPUCompiler makes these sequentially consistent)
+        Metal.metal_target() >= v"3.2" && append!(orders, [Metal.memory_order_acquire, Metal.memory_order_release, Metal.memory_order_acq_rel])
         for order in orders
             buf = Metal.zeros(Int32, 1)
             @metal fence_kernel(buf, Val(order),
@@ -74,11 +75,15 @@
                                         Metal.thread_scope_simdgroup)
             return
         end
+        # an LLVM fence, with the flags in its scope
         ir = sprint(io -> Metal.code_llvm(io, fence_abi,
                                             Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
-                                            kernel=true, metal=v"3.2", dump_module=true))
-        @test occursin("@air.atomic.fence(i32, i32, i32)", ir)
-        @test occursin("i32 5, i32 5, i32 4", ir)
+                                            kernel=true, metal=v"3.2"))
+        @test occursin("fence syncscope(\"subgroup-mem-global+image\") seq_cst", ir)
+        ir = sprint(io -> Metal.code_air(io, fence_abi,
+                                           Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
+                                           kernel=true, metal=v"3.2", air=v"2.7"))
+        @test occursin("@air.atomic.fence(i32 5, i32 5, i32 4)", ir)
     end
 
     # Core.Intrinsics.atomic_fence emits LLVM fences, which crash the macOS 27 back-end

@@ -4,23 +4,25 @@
 # a synchronization scope, which GPUCompiler lowers to AIR's atomic intrinsics for the
 # targeted Metal version: from MSL 4.1 with the ordering on the operation, before that as a
 # relaxed operation bracketed by fences. Like MSL, they synchronize with the device for device
-# memory and with the threadgroup for threadgroup memory. An ordered operation orders both
-# device and threadgroup memory; passing memory flags explicitly (MSL 4.1) restricts that, by
-# calling the AIR intrinsics directly, as LLVM cannot express it.
+# memory and with the threadgroup for threadgroup memory. An ordered operation orders device
+# and threadgroup memory, unless memory flags, which are part of the scope (see
+# `memory_scope`), say otherwise.
 
 const AtomicType = Union{Int32,UInt32,Float32}
 const AtomicIntType = Union{Int32,UInt32}
 
-# LLVM synchronization scopes for Metal's address spaces
-@inline atomic_scope(::Val{AS.Device}) = UnsafeAtomics.Internal.LLVMSyncScope{:device}()
-@inline atomic_scope(::Val{AS.ThreadGroup}) = UnsafeAtomics.Internal.LLVMSyncScope{:workgroup}()
+# The LLVM synchronization scope for an operation on memory in address space `as`, ordering
+# the memory named by `flags` (see `memory_scope`)
+@inline atomic_scope(::Val{as}, flags=nothing) where {as} =
+    memory_scope(Val(as == AS.ThreadGroup ? :workgroup : :device), flags)
 
 # MSL only makes device memory coherent within a threadgroup by default, so a relaxed load
 # of it is only guaranteed to (eventually) see stores from the same threadgroup. Say so with
 # the workgroup scope: LLVM's device-scope relaxed loads have to see every thread's stores,
-# which GPUCompiler implements with acquire loads.
-@inline load_scope(as::Val, order) =
-    order === UnsafeAtomics.monotonic ? atomic_scope(Val(AS.ThreadGroup)) : atomic_scope(as)
+# which GPUCompiler implements with acquire loads. (Relaxed loads don't order memory, so the
+# flags don't matter, but they still have to be valid.)
+@inline load_scope(as::Val, order, flags=nothing) =
+    atomic_scope(order === UnsafeAtomics.monotonic ? Val(AS.ThreadGroup) : as, flags)
 
 # The LLVM ordering for an MSL memory order. Like in MSL, where it's an immediate operand of
 # the AIR intrinsics, the order has to be a constant: an order that isn't one is a dynamic
@@ -47,28 +49,34 @@ end
     order === memory_order_acq_rel ? memory_order_acquire : order
 @inline cmpxchg_failure_order(::Val{order}) where {order} = Val(cmpxchg_failure_order(order))
 
+const MemoryOrder = Union{memory_order,Val}
+const MaybeMemoryFlags = Union{Nothing,MemoryFlags,UInt32,Val}
+
 
 ## low-level functions
 
 @inline function atomic_load_explicit(ptr::LLVMPtr{T,AS},
-                                      order::Union{memory_order,Val}=Val(memory_order_relaxed)) where {T<:AtomicType,AS}
+                                      order::MemoryOrder=Val(memory_order_relaxed),
+                                      flags::MaybeMemoryFlags=nothing) where {T<:AtomicType,AS}
     order = llvm_order(order, :load)
-    UnsafeAtomics.load(ptr, order, load_scope(Val(AS), order))
+    UnsafeAtomics.load(ptr, order, load_scope(Val(AS), order, flags))
 end
 
 @inline atomic_store_explicit(ptr::LLVMPtr{T,AS}, desired::T,
-                              order::Union{memory_order,Val}=Val(memory_order_relaxed)) where {T<:AtomicType,AS} =
-    UnsafeAtomics.store!(ptr, desired, llvm_order(order, :store), atomic_scope(Val(AS)))
+                              order::MemoryOrder=Val(memory_order_relaxed),
+                              flags::MaybeMemoryFlags=nothing) where {T<:AtomicType,AS} =
+    UnsafeAtomics.store!(ptr, desired, llvm_order(order, :store), atomic_scope(Val(AS), flags))
 
 # NOTE: we deviate slightly from the Metal/C++ API here, not returning the status boolean,
 #       but the value that was loaded, which equals `expected` if and only if the exchange
 #       succeeded.
 @inline atomic_compare_exchange_weak_explicit(
         ptr::LLVMPtr{T,AS}, expected::T, desired::T,
-        success_order::Union{memory_order,Val}=Val(memory_order_relaxed),
-        failure_order::Union{memory_order,Val}=Val(memory_order_relaxed)) where {T<:AtomicType,AS} =
+        success_order::MemoryOrder=Val(memory_order_relaxed),
+        failure_order::MemoryOrder=Val(memory_order_relaxed),
+        flags::MaybeMemoryFlags=nothing) where {T<:AtomicType,AS} =
     UnsafeAtomics.cas!(ptr, expected, desired, llvm_order(success_order),
-                       llvm_order(failure_order, :load), atomic_scope(Val(AS))).old
+                       llvm_order(failure_order, :load), atomic_scope(Val(AS), flags)).old
 
 for (op, impl, types) in ((:exchange,  :xchg!, AtomicType),
                           (:fetch_add, :add!,  AtomicType),
@@ -80,101 +88,20 @@ for (op, impl, types) in ((:exchange,  :xchg!, AtomicType),
                           (:fetch_xor, :xor!,  AtomicIntType))
     f = Symbol("atomic_$(op)_explicit")
     @eval @inline $f(ptr::LLVMPtr{T,AS}, desired::T,
-                     order::Union{memory_order,Val}=Val(memory_order_relaxed)) where {T<:$types,AS} =
-        UnsafeAtomics.$impl(ptr, desired, llvm_order(order), atomic_scope(Val(AS)))
+                     order::MemoryOrder=Val(memory_order_relaxed),
+                     flags::MaybeMemoryFlags=nothing) where {T<:$types,AS} =
+        UnsafeAtomics.$impl(ptr, desired, llvm_order(order), atomic_scope(Val(AS), flags))
 end
 
 # atomic_ulong only supports non-fetching min/max, on device memory of Apple8+ GPUs
 for (op, impl) in ((:min, :min!), (:max, :max!))
     f = Symbol("atomic_$(op)_explicit")
     @eval @inline function $f(ptr::LLVMPtr{UInt64,AS.Device}, desired::UInt64,
-                              order::Union{memory_order,Val}=Val(memory_order_relaxed))
+                              order::MemoryOrder=Val(memory_order_relaxed),
+                              flags::MaybeMemoryFlags=nothing)
         @static_assert(apple_family() >= 8, "64-bit atomic min/max requires Apple8 or newer.")
-        UnsafeAtomics.$impl(ptr, desired, llvm_order(order), atomic_scope(Val(AS.Device)))
+        UnsafeAtomics.$impl(ptr, desired, llvm_order(order), atomic_scope(Val(AS.Device), flags))
         return
-    end
-end
-
-
-## low-level functions with explicit memory flags (MSL 4.1)
-
-# These call the AIR intrinsics directly: memory flags restrict which memory an ordered
-# operation orders, which LLVM atomics cannot express (an LLVM ordering orders all memory;
-# the synchronization scope only selects the threads). LLVM 19 added Memory Model Relaxation
-# Annotations for this, which AMDGPU uses to restrict fences to address spaces
-# (`!mmra !{!"amdgpu-synchronize-as", !"local"}`). Once we require Julia 1.13 (LLVM 20),
-# these can emit LLVM atomics too, tagged with e.g. `!{!"metal-synchronize-as",
-# !"threadgroup"}` (through `llvmcall`, as UnsafeAtomics can't attach metadata), which
-# GPUCompiler's atomic lowering would then turn into the flags operand. Dropping a tag is
-# safe, only ordering more memory than asked for.
-
-# MSL only allows ordered atomics and memory flags on the intrinsics from 4.1
-@inline atomic_order_and_flags_available(order, flags) =
-    (order === memory_order_relaxed && flags == MemoryFlagNone) ||
-    metal_version() >= sv"4.1"
-
-@inline function validate_atomic_arguments(::Val{order}, ::Val{flags}) where {order, flags}
-    @static_assert(order isa memory_order, "Invalid atomic memory ordering.")
-    @static_assert(atomic_order_and_flags_available(order, flags),
-                   "Ordered atomics and memory flags require Metal 4.1 or newer.")
-end
-
-# (name, AIR operation, types, arguments after the pointer, orders)
-const atomic_intrinsics = (
-    (:load,                  "load",        (:Int32, :UInt32, :Float32), (),                  1),
-    (:compare_exchange_weak, "cmpxchg.weak", (:Int32, :UInt32, :Float32), (:expected, :desired), 2),
-    (:store,                 "store",       (:Int32, :UInt32, :Float32), (:desired,),         1),
-    (:exchange,              "xchg",        (:Int32, :UInt32, :Float32), (:desired,),         1),
-    (:fetch_add,             "add",         (:Int32, :UInt32, :Float32), (:desired,),         1),
-    (:fetch_sub,             "sub",         (:Int32, :UInt32, :Float32), (:desired,),         1),
-    (:fetch_min,             "min",         (:Int32, :UInt32),           (:desired,),         1),
-    (:fetch_max,             "max",         (:Int32, :UInt32),           (:desired,),         1),
-    (:fetch_and,             "and",         (:Int32, :UInt32),           (:desired,),         1),
-    (:fetch_or,              "or",          (:Int32, :UInt32),           (:desired,),         1),
-    (:fetch_xor,             "xor",         (:Int32, :UInt32),           (:desired,),         1),
-    (:min,                   "min",         (:UInt64,),                  (:desired,),         1),
-    (:max,                   "max",         (:UInt64,),                  (:desired,),         1),
-)
-
-for (op, air_op, types, args, norders) in atomic_intrinsics, typ in types,
-    (as, memnam, scope) in ((AS.Device, "global", thread_scope_device),
-                            (AS.ThreadGroup, "local", thread_scope_threadgroup))
-    typ === :UInt64 && as !== AS.Device && continue
-    typnam = typ === :Float32 ? "f32" : typ === :UInt64 ? "i64" : "i32"
-    if op ∉ (:load, :compare_exchange_weak, :store, :exchange) && typ !== :Float32
-        typnam = "$(typ === :Int32 ? "s" : "u").$typnam"
-    end
-    f = Symbol("atomic_$(op)_explicit")
-    return_type = op in (:store, :min, :max) ? :Nothing : typ
-    orders = norders == 1 ? (:order,) : (:success_order, :failure_order)
-    requirements = if typ === :Float32 && as === AS.ThreadGroup
-        :(@static_assert(metal_version() >= sv"4.1",
-                         "Float32 threadgroup atomic operations require Metal 4.1 or newer."))
-    elseif typ === :UInt64
-        :(@static_assert(apple_family() >= 8, "64-bit atomic min/max requires Apple8 or newer."))
-    end
-    # compare-exchange passes the expected value by reference
-    ccall_types = [:(LLVMPtr{$typ,$as}); [a === :expected ? :(Ptr{$typ}) : typ for a in args];
-                   [:Int32 for _ in 1:norders+2]; :Bool]
-    ccall_args = [:ptr; [a === :expected ? :expected_box : a for a in args];
-                  [:(Val($o)) for o in orders]; :(Val($scope)); :(Val(flags)); :(Val(false))]
-
-    @eval begin
-        @inline $f(ptr::LLVMPtr{$typ,$as}, $((:($a::$typ) for a in args)...),
-                   $((:($o::memory_order) for o in orders)...),
-                   flags::Union{MemoryFlags,UInt32}) =
-            $f(ptr, $(args...), $((:(Val($o)) for o in orders)...), Val(flags))
-
-        function $f(ptr::LLVMPtr{$typ,$as}, $((:($a::$typ) for a in args)...),
-                    $((:(::Val{$o}) for o in orders)...), ::Val{flags}) where {$(orders...), flags}
-            $requirements
-            validate_atomic_arguments(Val($(orders[1])), Val(flags))
-            $(norders == 2 ? :(@static_assert(failure_order isa memory_order,
-                                              "Invalid atomic memory ordering.")) : nothing)
-            $(:expected in args ? :(expected_box = Ref(expected)) : nothing)
-            @typed_ccall($"air.atomic.$memnam.$air_op.$typnam", llvmcall, $return_type,
-                         ($(ccall_types...),), $(ccall_args...))
-        end
     end
 end
 
@@ -205,13 +132,13 @@ operation orders accesses to both device and threadgroup memory. Ordered operati
 Metal 3.2; before Metal 4.1, they are implemented with fences. A load only uses the
 acquire part of an order, and a store only its release part.
 
-The variants that take `flags` ([`MemoryFlags`](@ref)) as an additional argument restrict
-the memory an ordered operation orders. Except for relaxed operations without flags, they
-need Metal 4.1.
+The optional `flags` ([`MemoryFlags`](@ref)), also a compile-time constant, name the memory
+an ordered operation orders instead: e.g., only device memory (`MemoryFlagDevice`), or also
+texture memory (`MemoryFlagDevice | MemoryFlagThreadGroup | MemoryFlagTexture`).
 """
 
 @doc """
-    atomic_load_explicit(ptr::LLVMPtr{T}, [order]) -> T
+    atomic_load_explicit(ptr::LLVMPtr{T}, [order, [flags]]) -> T
 
 Atomically load the value at `ptr`, which can be an `Int32`, `UInt32` or `Float32` in device
 or threadgroup memory.
@@ -226,7 +153,7 @@ UnsafeAtomics (`UnsafeAtomics.load(ptr, UnsafeAtomics.monotonic)`).
 """ atomic_load_explicit
 
 @doc """
-    atomic_store_explicit(ptr::LLVMPtr{T}, val::T, [order])
+    atomic_store_explicit(ptr::LLVMPtr{T}, val::T, [order, [flags]])
 
 Atomically store `val` at `ptr`, which can be an `Int32`, `UInt32` or `Float32` in device
 or threadgroup memory.
@@ -235,7 +162,7 @@ $atomic_semantics
 """ atomic_store_explicit
 
 @doc """
-    atomic_exchange_explicit(ptr::LLVMPtr{T}, val::T, [order]) -> T
+    atomic_exchange_explicit(ptr::LLVMPtr{T}, val::T, [order, [flags]]) -> T
 
 Atomically replace the value at `ptr` by `val`, and return the old value. `T` can be
 `Int32`, `UInt32` or `Float32`, in device or threadgroup memory.
@@ -245,7 +172,7 @@ $atomic_semantics
 
 @doc """
     atomic_compare_exchange_weak_explicit(ptr::LLVMPtr{T}, expected::T, desired::T,
-                                          [success_order, failure_order]) -> T
+                                          [success_order, failure_order, [flags]]) -> T
 
 Atomically replace the value at `ptr` by `desired` if it equals `expected`, and return the
 value that was loaded. Unlike in MSL, this function doesn't return whether the exchange
@@ -268,7 +195,7 @@ for (op, desc, types) in (
         (:xor, "replace the value at `ptr` by its bitwise xor with `val`", "`Int32` or `UInt32`"))
     f = Symbol("atomic_fetch_$(op)_explicit")
     doc = """
-        $f(ptr::LLVMPtr{T}, val::T, [order]) -> T
+        $f(ptr::LLVMPtr{T}, val::T, [order, [flags]]) -> T
 
     Atomically $desc, and return the old value. `T` can be $types, in device or
     threadgroup memory.
@@ -281,7 +208,7 @@ end
 for op in (:min, :max)
     f = Symbol("atomic_$(op)_explicit")
     doc = """
-        $f(ptr::LLVMPtr{UInt64,AS.Device}, val::UInt64, [order])
+        $f(ptr::LLVMPtr{UInt64,AS.Device}, val::UInt64, [order, [flags]])
 
     Atomically replace the `UInt64` in device memory at `ptr` by its $(op)imum with `val`.
     Unlike the 32-bit operations, this doesn't return the old value, as Metal only supports
@@ -291,7 +218,7 @@ for op in (:min, :max)
 end
 
 @doc """
-    atomic_fetch_op_explicit(ptr::LLVMPtr{T}, op, val, [order]) -> T
+    atomic_fetch_op_explicit(ptr::LLVMPtr{T}, op, val, [order, [flags]]) -> T
 
 Atomically replace the value at `ptr` by `op(old, val)`, and return the old value `old`.
 Implemented with a compare-exchange loop, this supports any operation, but only the types

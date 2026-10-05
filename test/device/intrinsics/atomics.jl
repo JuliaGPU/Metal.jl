@@ -278,40 +278,53 @@ const targets = ((v"3.2", v"2.7"), (v"4.0", v"2.8"), (v"4.1", v"2.9"))
         @test_throws err @metal launch=false dynamic_order_kernel(
             a, Metal.memory_order_relaxed)
 
-        # explicit memory flags need the MSL 4.1 intrinsics
+        # memory flags name the memory an ordered operation orders
         function flagged_fetch_kernel(a, ::Val{ORDER}, ::Val{FLAGS}) where {ORDER,FLAGS}
             Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1), ORDER, FLAGS)
             return
         end
-
-        a = Metal.zeros(Int32, 1)
-        if Metal.metal_target() >= v"4.1"
-            @metal flagged_fetch_kernel(a, Val(Metal.memory_order_relaxed),
-                                        Val(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup))
-            @test Array(a) == Int32[1]
+        @testset "Metal $metal" for (metal, air) in targets
+            Metal.metal_target() >= metal || continue
+            for order in (Metal.memory_order_relaxed, Metal.memory_order_acq_rel),
+                flags in (Metal.MemoryFlagNone, Metal.MemoryFlagDevice,
+                          Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup,
+                          Metal.MemoryFlagDevice | Metal.MemoryFlagTexture)
+                a = Metal.zeros(Int32, 1)
+                @metal metal=metal air=air flagged_fetch_kernel(a, Val(order), Val(flags))
+                @test Array(a) == Int32[1]
+            end
         end
-        err = try
-            @metal launch=false metal=v"4.0" air=v"2.8" flagged_fetch_kernel(
-                a, Val(Metal.memory_order_relaxed), Val(Metal.MemoryFlagDevice))
-            nothing
-        catch err
-            err
-        end
-        @test err isa Metal.InvalidIRError
-        @test occursin("Ordered atomics and memory flags require Metal 4.1 or newer.",
-                       sprint(showerror, err))
 
-        # the flags reach the MSL 4.1 intrinsic (how GPUCompiler lowers LLVM atomics, and
-        # legalizes these intrinsics for older targets, is tested there)
+        # they're part of the synchronization scope, which GPUCompiler turns into the flags
+        # operand (how it lowers atomics is tested there)
         function ordered_flags_abi(ptr::Core.LLVMPtr{Int32,Metal.AS.Device})
             Metal.atomic_fetch_add_explicit(ptr, Int32(1), Metal.memory_order_acq_rel,
-                                            Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
+                                            Metal.MemoryFlagDevice | Metal.MemoryFlagTexture)
             return
         end
+        ir = sprint(io -> Metal.code_llvm(io, ordered_flags_abi,
+                                          Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
+                                          kernel=true, metal=v"4.1", air=v"2.9"))
+        @test occursin(r"atomicrmw add (?:i32 addrspace\(1\)\*|ptr addrspace\(1\)) [^,]+, i32 1 syncscope\(\"device-mem-global\+image\"\) acq_rel", ir)
         ir = sprint(io -> Metal.code_air(io, ordered_flags_abi,
                                          Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
                                          kernel=true, metal=v"4.1", air=v"2.9"))
-        @test occursin(r"call i32 @air\.atomic\.global\.add\.s\.i32\([^,]+, i32 1, i32 4, i32 2, i32 3, i1 false\)", ir)
+        @test occursin(r"call i32 @air\.atomic\.global\.add\.s\.i32\([^,]+, i32 1, i32 4, i32 2, i32 5, i1 true\)", ir)
+        # (also on relaxed operations, whose flags don't matter)
+        function invalid_flags(a, ::Val{ORDER}) where {ORDER}
+            Metal.atomic_load_explicit(pointer(a, 1), ORDER, UInt32(16))
+            return
+        end
+        @testset "$order" for order in (Metal.memory_order_relaxed, Metal.memory_order_acquire)
+            err = try
+                @metal launch=false invalid_flags(a, Val(order))
+                nothing
+            catch err
+                err
+            end
+            @test err isa Metal.InvalidIRError
+            @test occursin("Invalid memory flags.", sprint(showerror, err))
+        end
 
         function invalid_order(a)
             Metal.atomic_fetch_add_explicit(pointer(a, 1), Int32(1), Val(Int32(42)),
@@ -379,7 +392,7 @@ const targets = ((v"3.2", v"2.7"), (v"4.0", v"2.8"), (v"4.1", v"2.9"))
         modify_ops = ((Metal.atomic_max_explicit, UInt64(1)),
                       (Metal.atomic_min_explicit, UInt64(100)))
 
-        # like other atomics, they can take memory flags (from MSL 4.1)
+        # like other atomics, they can take memory flags
         function u64_flagged(a)
             Metal.atomic_max_explicit(pointer(a, 1), UInt64(1), Metal.memory_order_release,
                                       Metal.MemoryFlagDevice)
@@ -389,7 +402,7 @@ const targets = ((v"3.2", v"2.7"), (v"4.0", v"2.8"), (v"4.1", v"2.9"))
         ir = sprint(io -> Metal.code_air(io, u64_flagged, Tuple{typeof(Metal.mtlconvert(a))};
                                          kernel=true, gpufamily=MTL.MTLGPUFamilyApple8,
                                          metal=v"4.1", air=v"2.9"))
-        @test occursin(r"call void @air\.atomic\.global\.max\.u\.i64\([^,]+, i64 1, i32 3, i32 2, i32 1, i1 false\)", ir)
+        @test occursin(r"call void @air\.atomic\.global\.max\.u\.i64\([^,]+, i64 1, i32 3, i32 2, i32 1, i1 true\)", ir)
 
         for (f, init) in modify_ops
             a = MtlArray(fill(init, n))
@@ -627,7 +640,9 @@ end
         parent[right] = node
     end
 
-    function refit_kernel!(values, flags, child0, child1, parent, n_leaves::Int32)
+    # with and without memory flags (`nothing`)
+    function refit_kernel!(values, flags, child0, child1, parent, n_leaves::Int32,
+                           memory::Val)
         leaf = thread_position_in_grid().x
         if leaf <= n_leaves
             leaf_node = n_leaves - Int32(1) + leaf
@@ -636,8 +651,7 @@ end
             parent_node = parent[leaf_node]
             while parent_node != Int32(0)
                 old = Metal.atomic_fetch_add_explicit(pointer(flags, parent_node), UInt32(1),
-                                                      Metal.memory_order_acq_rel,
-                                                      Metal.MemoryFlagDevice)
+                                                      Metal.memory_order_acq_rel, memory)
                 if old + UInt32(1) == UInt32(2)
                     left = child0[parent_node]
                     right = child1[parent_node]
@@ -656,59 +670,13 @@ end
     mt_child0 = MtlArray(child0)
     mt_child1 = MtlArray(child1)
     mt_parent = MtlArray(parent)
-
-    if Metal.metal_target() >= v"4.1"
-        @metal threads=256 groups=cld(n_leaves, 256) refit_kernel!(
-            values,
-            flags,
-            mt_child0,
-            mt_child1,
-            mt_parent,
-            Int32(n_leaves),
-        )
-        @test Array(values)[1] == UInt32(n_leaves)
-    else
-        err = try
-            @metal launch=false refit_kernel!(values, flags, mt_child0, mt_child1, mt_parent,
-                                              Int32(n_leaves))
-            nothing
-        catch err
-            err
-        end
-        @test err isa Metal.InvalidIRError
-        @test occursin("Ordered atomics and memory flags require Metal 4.1 or newer.",
-                       sprint(showerror, err))
-    end
-
-    # the same without memory flags, i.e., with LLVM atomics, on every target
-    function llvm_refit_kernel!(values, flags, child0, child1, parent, n_leaves::Int32)
-        leaf = thread_position_in_grid().x
-        if leaf <= n_leaves
-            leaf_node = n_leaves - Int32(1) + leaf
-            values[leaf_node] = UInt32(1)
-
-            parent_node = parent[leaf_node]
-            while parent_node != Int32(0)
-                old = Metal.atomic_fetch_add_explicit(pointer(flags, parent_node), UInt32(1),
-                                                      Metal.memory_order_acq_rel)
-                if old + UInt32(1) == UInt32(2)
-                    left = child0[parent_node]
-                    right = child1[parent_node]
-                    values[parent_node] = values[left] + values[right]
-                    parent_node = parent[parent_node]
-                else
-                    break
-                end
-            end
-        end
-        return
-    end
-    @testset "Metal $metal" for (metal, air) in targets
+    @testset "Metal $metal, $memory" for (metal, air) in targets,
+                                         memory in (nothing, Metal.MemoryFlagDevice)
         Metal.metal_target() >= metal || continue
         values .= 0
         flags .= 0
-        @metal threads=256 groups=cld(n_leaves, 256) metal=metal air=air llvm_refit_kernel!(
-            values, flags, mt_child0, mt_child1, mt_parent, Int32(n_leaves))
+        @metal threads=256 groups=cld(n_leaves, 256) metal=metal air=air refit_kernel!(
+            values, flags, mt_child0, mt_child1, mt_parent, Int32(n_leaves), Val(memory))
         @test Array(values)[1] == UInt32(n_leaves)
     end
 end
