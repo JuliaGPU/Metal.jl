@@ -27,6 +27,8 @@ end
 
 function run(graph::MPSGraph, commandQueue, feeds::MPSGraphTensorDataDictionary, targetTensors::NSArray)
     Metal.flush!(commandQueue)
+    # this executes synchronously, without going through Metal.jl's submission hook
+    Metal.synchronize_pending!()
     obj = @objc [graph::id{MPSGraph} runWithMTLCommandQueue:commandQueue::id{MTLCommandQueue}
                                                     feeds:feeds::id{MPSGraphTensorDataDictionary}
                                             targetTensors:targetTensors::id{NSArray}

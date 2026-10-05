@@ -44,7 +44,7 @@ end
 See the Array Programming section of the Metal.jl docs for more details.
 """
 mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
-    data::DataRef{MTLBuffer}
+    data::DataRef{Managed}
 
     maxsize::Int  # maximum data size in bytes; excluding any selector bytes
     offset::Int   # offset of the data in the buffer, in bytes
@@ -59,30 +59,30 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
         dev = device()
         data = GPUArrays.cached_alloc((MtlArray, dev, bufsize, S)) do
             buf = alloc(dev, bufsize; storage = S)
-            DataRef(buf) do buf
-                free(buf)
+            DataRef(Managed(buf)) do managed
+                free(managed.buffer)
             end
         end
-        @label! data[] "MtlArray{$(T),$(N),$(S)}(dims=$dims)"
+        @label! data[].buffer "MtlArray{$(T),$(N),$(S)}(dims=$dims)"
 
         obj = new{T,N,S}(data, maxsize, 0, dims)
         finalizer(unsafe_free!, obj)
     end
 
-    function MtlArray{T,N,S}(data::DataRef{<:MTLBuffer}, dims::Dims{N};
+    function MtlArray{T,N,S}(data::DataRef{Managed}, dims::Dims{N};
                              maxsize::Int=prod(dims) * sizeof(T), offset::Int=0) where {T,N,S}
         check_eltype(T)
         storagemode = convert(MTL.MTLStorageMode, S)
-        if storagemode != data[].storageMode
-            error("Storage mode mismatch: expected $S, got $(data[].storageMode)")
+        if storagemode != data[].buffer.storageMode
+            error("Storage mode mismatch: expected $S, got $(data[].buffer.storageMode)")
         end
         obj = new{T, N, S}(copy(data), maxsize, offset, dims)
         finalizer(unsafe_free!, obj)
     end
-    function MtlArray{T,N}(data::DataRef{<:MTLBuffer}, dims::Dims{N};
+    function MtlArray{T,N}(data::DataRef{Managed}, dims::Dims{N};
                            maxsize::Int=prod(dims) * sizeof(T), offset::Int=0) where {T,N}
         check_eltype(T)
-        storagemode = data[].storageMode
+        storagemode = data[].buffer.storageMode
         obj = if storagemode == MTL.MTLStorageModeShared
             new{T,N,SharedStorage}(copy(data), maxsize, offset, dims)
         elseif storagemode == MTL.MTLStorageModeManaged
@@ -99,8 +99,8 @@ end
 
 # Create MtlArray from MTLBuffer
 function MtlArray{T,N}(buf::B, dims::Dims{N}; kwargs...) where {B<:MTLBuffer,T,N}
-    data = DataRef(buf) do buf
-        free(buf)
+    data = DataRef(Managed(buf)) do managed
+        free(managed.buffer)
     end
     try
         return MtlArray{T,N}(data, dims; kwargs...)
@@ -117,7 +117,7 @@ GPUArrays.storage(a::MtlArray) = a.data
 
 Get the Metal device for an MtlArray.
 """
-device(A::MtlArray) = A.data[].device
+device(A::MtlArray) = A.data[].buffer.device
 
 storagemode(x::MtlArray) = storagemode(typeof(x))
 storagemode(::Type{<:MtlArray{<:Any,<:Any,S}}) where {S} = S
@@ -254,26 +254,33 @@ end
 
 
 function Base.unsafe_convert(::Type{MtlPtr{T}}, x::MtlArray) where {T}
-    buf = x.data[]
-    MtlPtr{T}(buf, x.offset)
+    MtlPtr{T}(x.data[], x.offset)
 end
 
+# accessing memory from the CPU: wait for the GPU to finish using it
 function Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S,T}
-    synchronize()
-    buf = x.data[]
-    convert(Ptr{S}, buf) + x.offset
+    convert(Ptr{S}, MtlPtr{T}(x.data[], x.offset))
 end
 
 
 ## indexing
-function Base.getindex(x::MtlArray{T,N,SharedStorage}, I::Int) where {T,N}
+
+# arrays in shared memory can be accessed directly by the CPU. this is meant to be fast, as
+# it is used to iterate arrays on the CPU, so bypass the checks for scalar iteration and
+# only synchronize when the GPU may still be using the array.
+@inline function Base.getindex(x::MtlArray{T,N,SharedStorage}, I::Int) where {T,N}
     @boundscheck checkbounds(x, I)
-    unsafe_load(pointer(x, I; storage=SharedStorage))
+    managed = x.data[]
+    maybe_synchronize(managed)
+    unsafe_load(convert(Ptr{T}, managed.host_ptr + x.offset), I)
 end
 
-function Base.setindex!(x::MtlArray{T,N,SharedStorage}, v, I::Int) where {T,N}
+@inline function Base.setindex!(x::MtlArray{T,N,SharedStorage}, v, I::Int) where {T,N}
     @boundscheck checkbounds(x, I)
-    unsafe_store!(pointer(x, I; storage=SharedStorage), v)
+    managed = x.data[]
+    maybe_synchronize(managed)
+    unsafe_store!(convert(Ptr{T}, managed.host_ptr + x.offset), v, I)
+    return x
 end
 
 
@@ -317,12 +324,19 @@ Base.convert(::Type{T}, x::T) where T <: MtlArray = x
 
 ## interop with C libraries
 
-Base.unsafe_convert(::Type{MTL.MTLBuffer}, x::MtlArray) = x.data[]
+# passing an array's buffer to Metal (e.g., to encode an MPS kernel) uses it on the GPU.
+# the use is registered when the current task submits its next command buffer. note that
+# MPS objects wrapping an array (e.g., `MPSMatrix`) only do so when they are constructed.
+function Base.unsafe_convert(::Type{MTL.MTLBuffer}, x::MtlArray)
+    managed = x.data[]
+    push!(pending_ownership(), managed)
+    return managed.buffer
+end
 
 
 ## interop with ObjC libraries
 
-Base.cconvert(::Type{<:id}, x::MtlArray) = x.data[]
+Base.cconvert(::Type{<:id}, x::MtlArray) = Base.unsafe_convert(MTL.MTLBuffer, x)
 
 
 ## interop with CPU arrays
@@ -384,8 +398,6 @@ Base.copyto!(dest::MtlArray{T}, src::MtlArray{T}) where {T} =
 
 # CPU -> GPU
 function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::Array{T}, soffs, n) where T
-    # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
-    synchronize()
     GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
     if Base.isbitsunion(T)
         # copy selector bytes
@@ -396,8 +408,6 @@ end
 
 # GPU -> CPU
 function Base.unsafe_copyto!(dev::MTLDevice, dest::Array{T}, doffs, src::MtlArray{T}, soffs, n) where T
-    # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
-    synchronize()
     GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
     if Base.isbitsunion(T)
         # copy selector bytes
@@ -408,8 +418,6 @@ end
 
 # GPU -> GPU
 function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::MtlArray{T}, soffs, n) where T
-    # these copies are implemented using pure memcpy's, not API calls, so aren't ordered.
-    synchronize()
     GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
     if Base.isbitsunion(T)
         # copy selector bytes
@@ -576,8 +584,9 @@ using `unsafe_wrap(MtlArray, ...)`.
     to `arr` for as long as the `Array`, or anything derived from it, is used; otherwise
     the `Array` may end up referring to freed memory.
 
-GPU operations execute asynchronously, so synchronize (e.g., using `Metal.synchronize()`)
-before accessing the returned array after using `arr` on the GPU.
+Wrapping waits for pending GPU operations on `arr`. GPU operations execute asynchronously,
+so synchronize again (e.g., using `Metal.synchronize()`) before accessing the returned array
+after using `arr` on the GPU.
 """
 function Base.unsafe_wrap(
         ::Union{Type{Array}, Type{Array{T}}, Type{Array{T, N}}},
@@ -604,7 +613,9 @@ function Base.unsafe_wrap(::Type{<:MtlArray}, ptr::MtlPtr{T},
                           dims::NTuple{N,<:Integer}) where {T,N}
     # use a non-owning `DataRef` (no finalizer) so we never free a buffer we
     # don't own; the original array remains responsible for the allocation.
-    data = DataRef(ptr.buffer)
+    # share the original's managed state so that both are synchronized alike.
+    managed = something(ptr.managed, Managed(ptr.buffer))
+    data = DataRef(managed)
     return MtlArray{T,N}(data, Dims(dims); offset=convert(Int, ptr.offset))
 end
 function Base.unsafe_wrap(t::Type{<:MtlArray}, ptr::MtlPtr, dim::Integer)
@@ -760,13 +771,13 @@ function Base.resize!(A::MtlVector{T}, n::Integer) where T
     # replace the data with a new one. this 'unshares' the array.
     # as a result, we can safely support resizing unowned buffers.
     buf = alloc(device(A), bufsize; storage=storagemode(A))
-    ptr = MtlPtr{T}(buf)
+    managed = Managed(buf)
     m = min(length(A), n)
     if m > 0
-        unsafe_copyto!(device(A), ptr, pointer(A), m)
+        unsafe_copyto!(device(A), MtlPtr{T}(managed), pointer(A), m)
     end
-    new_data = DataRef(buf) do buf
-        free(buf)
+    new_data = DataRef(managed) do managed
+        free(managed.buffer)
     end
     unsafe_free!(A)
 

@@ -51,9 +51,9 @@ into the command buffers and those threads can complete in any order.
 function enqueue!(cmdbuf::MTLCommandBufferLike)
     cmdbuf.status in [MTLCommandBufferStatusCompleted, MTLCommandBufferStatusEnqueued] &&
         error("Cannot enqueue an already enqueued command buffer")
-    hook = submit_hook[]
-    hook === nothing || hook(cmdbuf)
-    @objc [cmdbuf::id{MTLCommandBuffer} enqueue]::Nothing
+    submit(cmdbuf) do
+        @objc [cmdbuf::id{MTLCommandBuffer} enqueue]::Nothing
+    end
 end
 
 const last_committed_lock = ReentrantLock()
@@ -199,9 +199,14 @@ end
 # optional profiling hook. when set, it is invoked for every committed command buffer.
 const profile_hook = Ref{Any}(nothing)
 
-# optional submission hook. when set, it is invoked before command buffers are
-# enqueued or committed.
+# optional submission hook. when set, it is invoked as `hook(f, cmdbuf)` to enqueue or
+# commit a command buffer, which happens by calling `f()`.
 const submit_hook = Ref{Any}(nothing)
+
+@inline function submit(f, cmdbuf::MTLCommandBufferLike)
+    hook = submit_hook[]
+    hook === nothing ? f() : hook(f, cmdbuf)
+end
 
 # optional profiling data for operation metadata (e.g. kernel dimensions, copy sizes).
 const profile_metadata = Ref{Any}(nothing)
@@ -241,15 +246,15 @@ function last_committed(queue::MTLCommandQueue)
 end
 
 function commit!(cmdbuf::MTLCommandBufferLike)
-    hook = submit_hook[]
-    hook === nothing || hook(cmdbuf)
-    commit_with_queue_key!(cmdbuf, pointer(cmdbuf.commandQueue))
+    submit(cmdbuf) do
+        commit_with_queue_key!(cmdbuf, pointer(cmdbuf.commandQueue))
+    end
 end
 
 function commit!(cmdbuf::MTLCommandBufferLike, queue::MTLCommandQueue)
-    hook = submit_hook[]
-    hook === nothing || hook(cmdbuf)
-    commit_with_queue_key!(cmdbuf, pointer(queue))
+    submit(cmdbuf) do
+        commit_with_queue_key!(cmdbuf, pointer(queue))
+    end
 end
 
 function commit_with_queue_key!(cmdbuf::MTLCommandBufferLike, key::id{MTLCommandQueue})

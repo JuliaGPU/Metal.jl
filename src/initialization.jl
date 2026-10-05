@@ -51,7 +51,7 @@ function __init__()
 
     _shader_validation_enabled[] = get(ENV, "MTL_SHADER_VALIDATION", "0") != "0"
 
-    MTL.submit_hook[] = flush_open_batch
+    MTL.submit_hook[] = submit_command_buffer
 
     if !Sys.isapple() || Sys.ARCH != :aarch64
         @error "Metal.jl is only supported on Apple Silicon"

@@ -105,9 +105,23 @@ end
 
 ## argument conversion
 
+# thrown when encoding a kernel argument whose memory may still be in use by another
+# queue. the launch is retried after waiting for that queue, without holding any locks.
+struct OwnershipConflict <: Exception
+    managed::Managed
+end
+
+function claim!(ptr::MtlPtr, bq::BatchedCommandQueue)
+    conflict = try_take_ownership!(bq, ptr)
+    conflict === nothing || throw(OwnershipConflict(conflict))
+    return
+end
+
 struct Adaptor
     # the current command encoder, if any.
     cce::Union{Nothing,MTLComputeCommandEncoder}
+    # the queue the encoder belongs to, if any.
+    queue::Union{Nothing,BatchedCommandQueue}
 end
 
 # convert Metal buffers to their GPU address
@@ -118,6 +132,7 @@ function Adapt.adapt_storage(to::Adaptor, buf::MTLBuffer)
     reinterpret(Core.LLVMPtr{Nothing,AS.Device}, buf.gpuAddress)
 end
 function Adapt.adapt_storage(to::Adaptor, ptr::MtlPtr{T}) where {T}
+    to.queue === nothing || claim!(ptr, to.queue)
     reinterpret(Core.LLVMPtr{T,AS.Device}, adapt(to, ptr.buffer)) + ptr.offset
 end
 
@@ -157,7 +172,7 @@ Adapt.adapt_structure(to::Adaptor, f::Base.Fix2{<:Any, <:Type{T}}) where {T} =
     let g = adapt(to, f.f); (x...) -> g(x..., T) end
 
 """
-    mtlconvert(x, [cce])
+    mtlconvert(x, [cce, [queue]])
 
 This function is called for every argument to be passed to a kernel, allowing it to be
 converted to a GPU-friendly format. By default, the function does nothing and returns the
@@ -166,7 +181,7 @@ input object `x` as-is.
 Do not add methods to this function, but instead extend the underlying Adapt.jl package and
 register methods for the the `Metal.Adaptor` type.
 """
-mtlconvert(arg, cce=nothing) = adapt(Adaptor(cce), arg)
+mtlconvert(arg, cce=nothing, queue=nothing) = adapt(Adaptor(cce, queue), arg)
 
 
 ## host-side kernel API
@@ -300,7 +315,7 @@ end
 # values occupy a parameter slot is decided by the kernel's compiled signature, which holds
 # their converted types: the unconverted ones don't tell, e.g., a `Base.Fix1` capturing a
 # type converts to a ghost closure.
-@inline @generated function encode_arguments!(cce, kernel::HostKernel{F,S,TT}, kernel_state,
+@inline @generated function encode_arguments!(cce, bq, kernel::HostKernel{F,S,TT}, kernel_state,
                                               f, args::Tuple) where {F,S,TT}
     sig = (KernelState, F, TT.parameters...)
     vals = (:kernel_state, :f, (:(args[$i]) for i in 1:fieldcount(args))...)
@@ -322,10 +337,11 @@ end
             push!(ex.args, :(set_buffer!(cce, $val, 0, $idx)))
         elseif typ <: MtlPtr
             # the same as a buffer, but with an offset
+            push!(ex.args, :(claim!($val, bq)))
             push!(ex.args, :(set_buffer!(cce, $val.buffer, $val.offset, $idx)))
         else
             # everything else is passed by reference, copied into Metal's transient buffer
-            push!(ex.args, :(set_argument!(cce, mtlconvert($val, cce), $idx)))
+            push!(ex.args, :(set_argument!(cce, mtlconvert($val, cce, bq), $idx)))
         end
         idx += 1
     end
@@ -355,11 +371,22 @@ end
     return
 end
 
+function (kernel::HostKernel)(args...; groups=1, threads=1, queue=nothing,
+                              submit::Bool=false)
+    gs, ts = MTLSize(groups), MTLSize(threads)
+    while true
+        conflict = try_launch(kernel, queue, gs, ts, args, submit)
+        conflict === nothing && return
+        synchronize(conflict)
+    end
+end
+
 # wraps a single function call, keeping its closure body small.
-@autoreleasepool function (kernel::HostKernel)(args...; groups=1, threads=1,
-                                               queue=nothing, submit::Bool=false)
+@autoreleasepool function try_launch(@nospecialize(kernel::HostKernel), queue,
+                                     gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple),
+                                     submit::Bool)
     # function barrier to avoid capturing the `@autoreleasepool` in the generated code
-    launch_with_queue(kernel, queue, MTLSize(groups), MTLSize(threads), args, submit)
+    launch_with_queue(kernel, queue, gs, ts, args, submit)
 end
 
 @inline function launch_with_queue(@nospecialize(kernel::HostKernel), ::Nothing,
@@ -416,24 +443,31 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
         md === nothing || MTL.note_operation!(md, cmdbuf, kernel_operation(kernel, gs, ts))
     end
 
-    cce = MTLComputeCommandEncoder(cmdbuf)
-    try
-        MTL.set_function!(cce, kernel.pipeline)
-        if !kernel.use_residency_sets
-            MTL.use!(cce, buf, MTL.ReadWriteUsage)
-            MTL.use!(cce, exc, MTL.ReadWriteUsage)
+    Base.@lock submission_lock begin
+        cce = MTLComputeCommandEncoder(cmdbuf)
+        try
+            MTL.set_function!(cce, kernel.pipeline)
+            if !kernel.use_residency_sets
+                MTL.use!(cce, buf, MTL.ReadWriteUsage)
+                MTL.use!(cce, exc, MTL.ReadWriteUsage)
+            end
+            let reloc = kernel.reloc_table
+                reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
+            end
+            encode_arguments!(cce, bq, kernel, kernel_state, kernel.source, args)
+            MTL.append_current_function!(cce, gs, ts)
+        catch err
+            err isa OwnershipConflict && return err.managed
+            rethrow()
+        finally
+            close(cce)
         end
-        let reloc = kernel.reloc_table
-            reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
-        end
-        encode_arguments!(cce, kernel, kernel_state, kernel.source, args)
-        MTL.append_current_function!(cce, gs, ts)
-    finally
-        close(cce)
-    end
 
-    commit!(cmdbuf, queue)
-    defer_cleanup!(bq, cmdbuf, Any[kernel.source, args])
+        # the batch was flushed above, so commit directly instead of via the submission
+        # hook, which may wait for the GPU and must not be called with the lock held
+        MTL.commit_with_queue_key!(cmdbuf, pointer(queue))
+        defer_cleanup!(bq, cmdbuf, Any[kernel.source, args])
+    end
     track_logging_cmdbuf!(queue, cmdbuf)
     return
 end
@@ -459,8 +493,6 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
     (gs.depth * ts.depth) > typemax(UInt32) &&
         throw(ArgumentError("Total threads per grid in a dimension (threads.depth($(gs.depth)) * groups.depth($(ts.depth)) = $(gs.depth * ts.depth)) must not exceed $(typemax(UInt32))"))
 
-    source = kernel.source
-    pipeline = kernel.pipeline
     dev = kernel.device
     tgmem = kernel.tgmem
 
@@ -478,10 +510,27 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
 
     if kernel.loggingEnabled
         precompiling && return
-        launch_logging!(kernel, gs, ts, bq, args, kernel_state, buf, exc)
-        return
+        return launch_logging!(kernel, gs, ts, bq, args, kernel_state, buf, exc)
     end
 
+    conflict = Base.@lock submission_lock begin
+        encode_launch!(kernel, gs, ts, bq, args, kernel_state, buf, exc, precompiling)
+    end
+    conflict === nothing || return conflict
+    precompiling && return
+
+    submit ? flush!(bq) : maybe_autoflush!(bq)
+    return
+end
+
+# encode a kernel launch into the open batch of `bq`. returns the memory of an argument
+# that is still in use by another queue, if any, without encoding anything.
+function encode_launch!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
+                        bq::BatchedCommandQueue, @nospecialize(args::Tuple),
+                        kernel_state, buf, exc, precompiling::Bool)
+    source = kernel.source
+    pipeline = kernel.pipeline
+    reloc = kernel.reloc_table
     try
         cce = compute_encoder(bq)
         set_pipeline!(bq, cce, pipeline)
@@ -497,9 +546,9 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         # (which only holds the per-device scratch buffers): declare it every launch.
         reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
 
-        encode_arguments!(cce, kernel, kernel_state, source, args)
+        encode_arguments!(cce, bq, kernel, kernel_state, source, args)
         MTL.append_current_function!(cce, gs, ts)
-    catch
+    catch err
         # The failing launch has not been recorded yet. Keep any earlier
         # operations in this batch, but close encoder state dirtied by the
         # failed encode and drop an otherwise empty command buffer.
@@ -508,6 +557,7 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
             cmdbuf = bq.cmdbuf
             cmdbuf === nothing || discard_open_cmdbuf!(bq, cmdbuf)
         end
+        err isa OwnershipConflict && return err.managed
         rethrow()
     end
 
@@ -520,11 +570,8 @@ function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         cmdbuf = bq.cmdbuf
         end_encoder!(bq)
         cmdbuf === nothing || discard_open_cmdbuf!(bq, cmdbuf)
-        return
     end
-
-    submit ? flush!(bq) : maybe_autoflush!(bq)
-    return
+    return nothing
 end
 
 ## Intra-warp Helpers

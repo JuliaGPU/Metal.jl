@@ -57,7 +57,7 @@ using .MPS: MPSVector
     @test abufvec.vectors == 1
     @test abufvec.dataType == DT
     @test abufvec.offset == 0
-    @test abufvec.data == vec.data[]
+    @test abufvec.data == vec.data[].buffer
 
     vvec = @view vec[2:4]
     vlen = length(vvec)
@@ -70,7 +70,7 @@ using .MPS: MPSVector
     @test vbufmat.vectors == 1
     @test vbufmat.dataType == DT
     @test vbufmat.offset == vvec.offset
-    @test vbufmat.data == vvec.data[]
+    @test vbufmat.data == vvec.data[].buffer
 end
 
 

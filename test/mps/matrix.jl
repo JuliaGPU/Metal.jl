@@ -72,7 +72,7 @@ using .MPS: MPSMatrix
         @test abufmat.dataType == DT
         @test abufmat.matrixBytes == arowBytes * arows
         @test abufmat.offset == 0
-        @test abufmat.data == mat.data[]
+        @test abufmat.data == mat.data[].buffer
 
         vmat = @view mat[:, 2:3]
         vcols, vrows = size(vmat)
@@ -87,7 +87,7 @@ using .MPS: MPSMatrix
         @test vbufmat.dataType == DT
         @test vbufmat.matrixBytes == vrowBytes * vrows
         @test vbufmat.offset == vmat.offset
-        @test vbufmat.data == vmat.data[]
+        @test vbufmat.data == vmat.data[].buffer
     end
 
     let arr = MtlArray{T, 3}(undef, rows, cols, mats)
@@ -103,7 +103,7 @@ using .MPS: MPSMatrix
         @test mpsmat.dataType == DT
         @test mpsmat.matrixBytes == mrowBytes * mrows
         @test mpsmat.offset == 0
-        @test mpsmat.data == arr.data[]
+        @test mpsmat.data == arr.data[].buffer
         @test size(mpsmat) == (mmats, mrows, mcols)
     end
 
@@ -120,7 +120,7 @@ using .MPS: MPSMatrix
         @test vmpsmat.dataType == DT
         @test vmpsmat.matrixBytes == vecrowBytes * vecrows
         @test vmpsmat.offset == 0
-        @test vmpsmat.data == vec.data[]
+        @test vmpsmat.data == vec.data[].buffer
     end
 end
 

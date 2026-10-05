@@ -16,9 +16,9 @@ end
     xs = MtlArray{Int8}(undef, 2, 3)
     @test device(xs) == device()
     @test Base.elsize(xs) == sizeof(Int8)
-    @test xs.data[].length == 6
+    @test xs.data[].buffer.length == 6
     xs2 = MtlArray{Int8, 2}(xs)
-    @test xs2.data[].length == 6
+    @test xs2.data[].buffer.length == 6
     @test pointer(xs2) != pointer(xs)
 
     @test (pointer(xs2) + 3) == (3 + pointer(xs2))
@@ -33,7 +33,7 @@ end
         @test p isa Metal.MtlPtr
         @test UInt(p) isa UInt
         @test Int(p) == UInt(p) % Int
-        @test UInt(p) == UInt(ys.data[].gpuAddress) + ys.offset
+        @test UInt(p) == UInt(ys.data[].buffer.gpuAddress) + ys.offset
         @test UInt(p + 7) == UInt(p) + 7
         # fresh allocations should be aligned enough for typical SIMD use
         @test UInt(p) % 16 == 0
@@ -390,6 +390,44 @@ end
     @test Array(a) == Int[]
     resize!(a, 1)
     @test length(a) == 1
+end
+
+@testset "host synchronization" begin
+    # GPU operations are asynchronous, so accessing an array from the host needs to wait
+    # for the pending operations that use it.
+    n = 1 << 16
+
+    @testset "$S resize!" for S in STORAGEMODES
+        a = Metal.zeros(Float32, n; storage=S)
+        a .= 1f0
+        resize!(a, 2n)
+        @test Array(a)[1:n] == ones(Float32, n)
+    end
+
+    @testset "scalar access" begin
+        a = Metal.zeros(Float32, n; storage=Metal.SharedStorage)
+        a .= 1f0
+        @test a[n] == 1f0
+
+        # writing from the host waits for pending GPU reads
+        b = similar(a)
+        b .= a .+ 1f0
+        a[1] = 42f0
+        @test Array(b)[1] == 2f0
+    end
+
+    @testset "unsafe_wrap(Array, ...)" begin
+        a = Metal.zeros(Float32, n; storage=Metal.SharedStorage)
+        a .= 1f0
+        @test unsafe_wrap(Array, a) == ones(Float32, n)
+    end
+
+    @testset "wrapped MtlPtr" begin
+        a = Metal.zeros(Float32, n; storage=Metal.SharedStorage)
+        b = unsafe_wrap(MtlArray, pointer(a), (n,))
+        b .= 1f0
+        @test a[n] == 1f0
+    end
 end
 
 function _alignedvec(::Type{T}, n::Integer, alignment::Integer = 16384) where {T}
