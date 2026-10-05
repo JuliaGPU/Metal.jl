@@ -39,7 +39,8 @@ end
 
 `N`-dimensional Metal array with storage mode `S` and elements of type `T`.
 
-`S` can be `Metal.PrivateStorage` (default), `Metal.SharedStorage`.
+`S` can be `Metal.SharedStorage` (default), `Metal.PrivateStorage`. The default
+storage mode can be changed by setting `default_storage` in LocalPreferences.toml.
 
 See the Array Programming section of the Metal.jl docs for more details.
 """
@@ -185,15 +186,25 @@ See also `VecOrMat`(@ref) for examples.
 """
 const MtlVecOrMat{T,S} = Union{MtlVector{T,S},MtlMatrix{T,S}}
 
-# default to private memory
-const DefaultStorageMode = let str = @load_preference("default_storage", "private")
-    if str == "private"
-        PrivateStorage
-    elseif str == "shared"
+# default to shared memory
+const DefaultStorageMode = let str = @load_preference("default_storage", "shared")
+    if str == "shared"
         SharedStorage
+    elseif str == "private"
+        PrivateStorage
     else
         error("unknown default storage mode: $str")
     end
+end
+
+@public allowscalar
+function allowscalar(allow::Bool)
+    if !allow && DefaultStorageMode == SharedStorage
+        @warn """Metal.jl uses unified memory by default, so scalar indexing will still be allowed on arrays that use it.
+                 To ensure operations run on the GPU, set `default_storage` to "private" in your LocalPreferences.toml,
+                 or use `Metal.PrivateStorage` when creating your `MtlArray`s.""" maxlog=1
+    end
+    GPUArrays.allowscalar(allow)
 end
 
 MtlArray{T,N}(::UndefInitializer, dims::Dims{N}) where {T,N} =
@@ -478,9 +489,9 @@ function Adapt.adapt_storage(to::MtlArrayAdaptor{S}, xs::AbstractArray{T,N}) whe
 end
 
 """
-    mtl(A; storage=Metal.PrivateStorage)
+    mtl(A; storage=$(DefaultStorageMode))
 
-`storage` can be `Metal.PrivateStorage` (default) or `Metal.SharedStorage`.
+`storage` can be `Metal.SharedStorage` or `Metal.PrivateStorage`.
 
 Opinionated GPU array adaptor, which may alter the element type `T` of arrays:
 * For `T<:AbstractFloat`, it makes a `MtlArray{Float32}` for performance and compatibility
@@ -498,7 +509,7 @@ Uses Adapt.jl to act inside some wrapper structs.
 
 ```jldoctest
 julia> mtl(ones(3)')
-1×3 adjoint(::MtlVector{Float32, Metal.PrivateStorage}) with eltype Float32:
+1×3 adjoint(::MtlVector{Float32, Metal.SharedStorage}) with eltype Float32:
  1.0  1.0  1.0
 
 julia> mtl(zeros(1,3); storage=Metal.SharedStorage)
@@ -509,7 +520,7 @@ julia> mtl(1:3)
 1:3
 
 julia> MtlArray(1:3)
-3-element MtlVector{Int64, Metal.PrivateStorage}:
+3-element MtlVector{Int64, Metal.SharedStorage}:
  1
  2
  3
