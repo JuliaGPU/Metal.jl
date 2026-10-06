@@ -1,50 +1,139 @@
 name: Benchmarks
 permissions:
-  statuses: read        # find Buildkite URL from PR status
   contents: write       # update benchmark contents in gh-pages branch
+  issues: write         # comment on PR with benchmark results
   pull-requests: write  # comment on PR with benchmark results
   deployments: write    # deploy GitHub pages website
 
-on:
-  pull_request_target:
-    branches:
-      - main
-  push:
-    branches:
-      - main
+# Buildkite posts a commit status for every step, so we can react to the benchmark step
+# finishing instead of keeping a runner busy polling for it. Status events are delivered
+# to this repository even for pull requests from forks, and always run this workflow as
+# it exists on the default branch, with access to secrets. Never check out or execute
+# code from the commit being benchmarked; the results are untrusted data.
+on: status
 
 jobs:
   benchmark:
+    if: |
+      github.event.context == 'buildkite/metal-dot-jl/racehorse-benchmarks' &&
+      github.event.state == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
-      - name: Download Buildkite Artifacts
+      - name: Download Benchmark Results
         id: download
-        uses: EnricoMi/download-buildkite-artifact-action@v1
-        with:
-          buildkite_token: ${{ secrets.BUILDKITE_TOKEN }}
-          ignore_build_states: blocked,canceled,skipped,not_run
-          ignore_job_states: timed_out,failed
-          output_path: artifacts
-          poll_interval: 60 # Poll less often to reduce chance of hitting org-wide buildkite limit of 200 requests/sec
+        env:
+          BUILDKITE_TOKEN: ${{ secrets.BUILDKITE_TOKEN }}
+          TARGET_URL: ${{ github.event.target_url }}
+          SHA: ${{ github.event.sha }}
+          ON_MAIN: ${{ contains(github.event.branches.*.name, 'main') }}
+        run: |
+          set -euo pipefail
+          # the status links to the job that ran the benchmarks
+          if [[ ! "$TARGET_URL" =~ ^https://buildkite\.com/julialang/metal-dot-jl/builds/([0-9]+)#([0-9a-f-]+)$ ]]; then
+            echo "Unexpected target URL: $TARGET_URL"
+            exit 1
+          fi
+          api="https://api.buildkite.com/v2/organizations/julialang/pipelines/metal-dot-jl/builds/${BASH_REMATCH[1]}"
+          job="${BASH_REMATCH[2]}"
+          auth="Authorization: Bearer $BUILDKITE_TOKEN"
 
-      - name: Locate Benchmarks Artifact
-        id: locate
-        if: ${{ steps.download.outputs.download-state == 'success' }}
-        run: echo "path=$(find artifacts -type f -name benchmarkresults.json 2>/dev/null)" >> $GITHUB_OUTPUT
+          build=$(curl -fsS -H "$auth" "$api")
+          if [[ "$(jq -r .commit <<<"$build")" != "$SHA" ]]; then
+            echo "Build does not match commit $SHA"
+            exit 1
+          fi
+          pull_request=$(jq -r '.pull_request.id // empty' <<<"$build")
+
+          url=$(curl -fsS -H "$auth" "$api/jobs/$job/artifacts" |
+                jq -r '.[] | select(.path == "benchmarkresults.json") | .download_url')
+          if [[ -z "$url" ]]; then
+            echo "No benchmark results found"
+            exit 0
+          fi
+          mkdir -p artifacts
+          curl -fsSL -H "$auth" -o artifacts/benchmarkresults.json "$url"
+
+          echo "path=artifacts/benchmarkresults.json" >> "$GITHUB_OUTPUT"
+          echo "pull_request=$pull_request" >> "$GITHUB_OUTPUT"
+          # only record results of commits on main, as decided by GitHub: Buildkite's branch
+          # name for a fork's pull request is chosen by the fork
+          if [[ -z "$pull_request" && "$ON_MAIN" == "true" ]]; then
+            echo "main=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Upload Benchmark Results
-        if: ${{ steps.locate.outputs.path != '' }}
+        if: ${{ steps.download.outputs.path != '' }}
         uses: benchmark-action/github-action-benchmark@v1
         with:
-          name: Metal Benchmarks
+          name: Metal.jl Benchmarks
           tool: "julia"
-          output-file-path: ${{ steps.locate.outputs.path }}
+          output-file-path: ${{ steps.download.outputs.path }}
           benchmark-data-dir-path: "bench"
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          comment-always: ${{ github.event_name == 'pull_request_target' }}
+          ref: ${{ github.event.sha }}
+          comment-always: ${{ steps.download.outputs.pull_request != '' }}
           summary-always: true
           alert-threshold: "125%"
           fail-on-alert: false
-          auto-push: ${{ github.event_name != 'pull_request_target' }}
+          auto-push: ${{ steps.download.outputs.main == 'true' }}
+
+      # github-action-benchmark only comments on pull requests when triggered by one,
+      # so move the comment it left on the commit to the pull request
+      - name: Move Benchmark Results to Pull Request
+        if: ${{ steps.download.outputs.path != '' && steps.download.outputs.pull_request != '' }}
+        uses: actions/github-script@v9
+        env:
+          PULL_REQUEST: ${{ steps.download.outputs.pull_request }}
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const commit_sha = context.payload.sha;
+            const issue_number = Number(process.env.PULL_REQUEST);
+            const marker = '<!-- github-benchmark-action-comment(start): Metal.jl Benchmarks Summary -->';
+
+            const commitComments = await github.paginate(
+              github.rest.repos.listCommentsForCommit,
+              {owner, repo, commit_sha, per_page: 100},
+            );
+            const source = commitComments.filter(comment => comment.body?.startsWith(marker)).at(-1);
+            if (!source) {
+              throw new Error(`No benchmark comment found on commit ${commit_sha}`);
+            }
+
+            const pullRequestComments = await github.paginate(
+              github.rest.issues.listComments,
+              {owner, repo, issue_number, per_page: 100},
+            );
+            const benchmarkComments = pullRequestComments.filter(comment => comment.body?.startsWith(marker));
+            const existing = benchmarkComments.at(-1);
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body: source.body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body: source.body,
+              });
+            }
+
+            for (const duplicate of benchmarkComments.slice(0, -1)) {
+              await github.rest.issues.deleteComment({
+                owner,
+                repo,
+                comment_id: duplicate.id,
+              });
+            }
+
+            await github.rest.repos.deleteCommitComment({
+              owner,
+              repo,
+              comment_id: source.id,
+            });

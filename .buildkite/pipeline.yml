@@ -147,6 +147,7 @@ steps:
   - wait: ~
     continue_on_failure: true
 
+  # the label determines the commit status context .github/workflows/Benchmark.yml reacts to
   - label: ":racehorse: Benchmarks"
     plugins:
       - JuliaCI/julia#v1:
