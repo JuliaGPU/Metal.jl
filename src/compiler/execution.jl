@@ -290,14 +290,15 @@ end
 #
 # `metallib === nothing` identifies a `MetalResults` that hasn't been compiled yet —
 # either freshly created, or (on 1.11+) loaded from a package image whose precompile
-# workload only inferred the kernel without compiling it. The `compile_hook` check
-# additionally forces the compile path so reflection-style consumers (`@device_code_*`)
-# observe the compilation even on a cache hit.
+# workload only inferred the kernel without compiling it. Every lookup is reported to
+# the `@device_code_*` hook, so reflection observes cached kernels without recompiling
+# them.
 # Specialize on the target/parameter types so callers can avoid boxing CompilerJob.
 # Keep the body out of callers that specialize per kernel.
 @noinline function compile_or_lookup(job::CompilerJob)::MetalResults
+    GPUCompiler.run_compile_hook(job)
     res = GPUCompiler.cached_results(MetalResults, job)
-    if res === nothing || res.metallib === nothing || GPUCompiler.compile_hook[] !== nothing
+    if res === nothing || res.metallib === nothing
         artifacts = compile_to_metallib(job)
         res = @something res GPUCompiler.cached_results(MetalResults, job)
         res.air = artifacts.air
