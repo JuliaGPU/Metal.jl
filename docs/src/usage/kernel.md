@@ -169,23 +169,12 @@ native GPU code when creating the compute pipeline. Both stages are cached:
 - The `metallib` is cached in memory for the session, and kernels compiled as part of a
   package's precompile workload (e.g. using PrecompileTools.jl) are stored in the package
   image, so that a fresh session can launch them without invoking the compiler at all.
-- The native GPU code is cached on disk in *binary archives* (`MTLBinaryArchive`), one
-  small archive per kernel, so that a later session skips the driver compile for every
-  kernel compiled before, including kernels compiled at run time. The archives live in a
-  scratch space, in a directory per device and OS build, because Metal only reuses a cached
-  native pipeline on the same GPU and OS build. They are written as soon as a kernel has
-  been compiled, and their total size is bounded by evicting the least recently used ones
-  when Julia exits.
-
-The binary archives are enabled by default and can be turned off with the `binary_archives`
-preference or the `JULIA_METAL_BINARY_ARCHIVES` environment variable; see
-`LocalPreferences.toml` for this and the related tunables. Every failure involving an
-archive (a corrupt file, a failed serialization) silently falls back to a regular compile,
-so the cache is purely a speedup. Metal's shader validation layer is incompatible with
-binary archives, so the cache is disabled when `MTL_SHADER_VALIDATION` is nonzero.
-`Metal.versioninfo()` reports whether archives are in use and how often they served a kernel
-in the current session; for finer diagnosis, the counters `Metal.archive_hits[]` and
-`Metal.archive_misses[]` are available.
+- The native GPU code is cached by Metal itself, in a per-user shader cache
+  (`$(getconf DARWIN_USER_CACHE_DIR)com.apple.metal`) keyed on the library's contents.
+  Because Metal.jl generates the same `metallib` for a kernel in every session, a later
+  session normally skips the driver compile for kernels compiled before, including kernels
+  compiled at run time. This cache is bounded, so compiling thousands of kernels (e.g.
+  running the Metal.jl test suite) evicts older entries.
 
 ## Other Helpful Links
 

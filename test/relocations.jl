@@ -2,7 +2,7 @@ using GPUCompiler
 using LLVM: LLVM
 
 # Metal selects the `:table` relocation-lowering strategy so kernels stay byte-stable across
-# sessions (restoring pkgimage persistence and content-keyed binary archives) whether or not
+# sessions (restoring pkgimage persistence and hits in Metal's shader cache) whether or not
 # they carry relocations. See `GPUCompiler.relocation_lowering(::MetalCompilerJob)`; on
 # LLVM < 17 (Julia < 1.12) it falls back to session-local `:bake` resolution.
 

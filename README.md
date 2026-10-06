@@ -79,10 +79,6 @@ Julia packages:
 - LLVM: 9.13.1
 - LLVMDowngrader_jll: 0.11.0+0
 
-Kernel cache:
-- binary archives: enabled
-  (0 hits, 0 misses this session)
-
 1 device:
 - Apple M2 Max (30 GPU cores, 64.000 KiB allocated; Apple8, Metal4 family)
 ```

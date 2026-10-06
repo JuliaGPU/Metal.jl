@@ -54,8 +54,6 @@ function versioninfo(io::IO=stdout; verbose=false)
         "command_batching_bytes" => load_preference(Metal, "command_batching_bytes"),
         "command_batching_inflight" => load_preference(Metal, "command_batching_inflight"),
         "precompile" => load_preference(Metal, "precompile"),
-        "binary_archives" => load_preference(Metal, "binary_archives"),
-        "binary_archives_max_size" => load_preference(Metal, "binary_archives_max_size"),
     ]
     if any(x->!isnothing(x[2]), prefs)
         println(io, "Preferences:")
@@ -66,18 +64,6 @@ function versioninfo(io::IO=stdout; verbose=false)
         end
         println(io)
     end
-
-    println(io, "Kernel cache:")
-    if binary_archives_enabled()
-        print(io, "- binary archives: enabled")
-        verbose && print(io, ", in $(binary_archive_dir())")
-        println(io, "\n  ($(archive_hits[]) hits, $(archive_misses[]) misses this session)")
-    else
-        print(io, "- binary archives: disabled")
-        shader_validation_enabled() && print(io, " (incompatible with shader validation)")
-        println(io)
-    end
-    println(io)
 
     devs = devices()
     if isempty(devs)
