@@ -66,13 +66,13 @@ GPUCompiler.kernel_state_type(job::MetalCompilerJob) = KernelState
 
 # Keep relocations symbolic. Most kernels are relocation-free, so their metallib is
 # byte-stable across sessions, which restores pkgimage persistence (`can_persist_results`)
-# and lets content-keyed binary archives hit uniformly. Kernels that reference a type tag
-# or `isa`-test a boxed value do carry records; Metal has no post-load symbol patching, so
-# under `:table` GPUCompiler rewrites each of them into an indexed load from a table of words
-# the loader delivers as ordinary run-time data — a small buffer whose device address the
-# `KernelState` carries (see `reloc_table_buffer` and `GPUCompiler.relocation_table_pointer`
-# for the Metal target). Nothing session-local reaches the metallib, so these kernels are
-# byte-stable and persist across sessions too.
+# and lets Metal's shader cache, keyed on the library contents, hit across sessions. Kernels
+# that reference a type tag or `isa`-test a boxed value do carry records; Metal has no
+# post-load symbol patching, so under `:table` GPUCompiler rewrites each of them into an
+# indexed load from a table of words the loader delivers as ordinary run-time data — a small
+# buffer whose device address the `KernelState` carries (see `reloc_table_buffer` and
+# `GPUCompiler.relocation_table_pointer` for the Metal target). Nothing session-local
+# reaches the metallib, so these kernels are byte-stable and persist across sessions too.
 #
 # The lowering (and the box demotion it relies on) needs LLVM.jl's
 # `convert_users_to_instructions!`, available on LLVM 17+ (Julia 1.12+) only; older versions
@@ -626,7 +626,7 @@ end
         lib = MTLLibraryFromData(dev, metallib)
         fun = MTLFunction(lib, entry)
         try
-            return archived_pipeline(dev, fun, metallib, entry)
+            return MTLComputePipelineState(dev, fun)
         catch err
             isa(err, NSError) || rethrow()
 

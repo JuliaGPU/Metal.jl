@@ -49,8 +49,6 @@ function __init__()
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     precompiling && return
 
-    _shader_validation_enabled[] = get(ENV, "MTL_SHADER_VALIDATION", "0") != "0"
-
     MTL.submit_hook[] = submit_command_buffer
 
     if !Sys.isapple() || Sys.ARCH != :aarch64
@@ -98,11 +96,6 @@ function __init__()
             @error "Failed to close open batched command queues at exit" exception=(err, catch_backtrace())
         end
     end
-
-    # start the binary-archive cache from a clean slate (precompilation may have used it),
-    # and bound the per-device archives on disk when the session ends.
-    reset_binary_archives!()
-    atexit(prune_binary_archives)
 
     initialization_world[] = Base.get_world_counter()
 end
