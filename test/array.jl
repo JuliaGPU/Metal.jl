@@ -16,9 +16,9 @@ end
     xs = MtlArray{Int8}(undef, 2, 3)
     @test device(xs) == device()
     @test Base.elsize(xs) == sizeof(Int8)
-    @test xs.data[].buffer.length == 6
+    @test xs.data[].buffer.length == 8  # padded to whole words
     xs2 = MtlArray{Int8, 2}(xs)
-    @test xs2.data[].buffer.length == 6
+    @test xs2.data[].buffer.length == 8
     @test pointer(xs2) != pointer(xs)
 
     @test (pointer(xs2) + 3) == (3 + pointer(xs2))

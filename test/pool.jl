@@ -15,10 +15,14 @@ end
 end
 
 @testset "empty allocations" begin
-    # Metal doesn't support empty buffers, so `alloc` pads them
+    # Metal doesn't support empty buffers, so `alloc` pads them, like it pads every buffer
+    # to whole words
     dev = device()
     buf = alloc(dev, 0; storage=Metal.SharedStorage)
-    @test buf.length == 1
+    @test buf.length == 4
+    free(buf)
+    buf = alloc(dev, 6; storage=Metal.SharedStorage)
+    @test buf.length == 8
     free(buf)
 
     # zero-length host copies must not need a host-backed staging buffer

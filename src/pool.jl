@@ -49,15 +49,18 @@ The storage kwarg controls where the buffer is stored. Possible values are:
 Note that `PrivateStorage` buffers can't be directly accessed from the CPU, therefore you cannot
 use this option if you pass a ptr to initialize the memory.
 
-Metal does not support empty buffers, so requesting 0 bytes without a `ptr` returns a 1-byte
-buffer. Buffers initialized from, or wrapping, host memory must be non-empty.
+Without a `ptr`, the buffer is padded to whole 4-byte words (and at least one): Metal does not
+support empty buffers, and GPUCompiler implements 8- and 16-bit atomics on the containing
+32-bit word. Buffers initialized from, or wrapping, host memory must be non-empty.
 """
 function alloc(dev::Union{MTLDevice,MTLHeap}, sz::Integer, args...; kwargs...)
-    # padding empty allocations keeps a real buffer behind empty arrays, so that they can
-    # be bound to kernels, queried, labeled, etc. like any other array. host-backed buffers
-    # can't be padded, as that would read or wrap memory beyond the caller's allocation.
-    if iszero(sz) && isempty(args)
-        sz = one(sz)
+    # pad allocations to whole words: atomics on 8- and 16-bit values access the containing
+    # 32-bit word, which has to be part of the buffer (Metal's shader validation enforces
+    # that). this also keeps a real buffer behind empty arrays, so that they can be bound
+    # to kernels, queried, labeled, etc. like any other array. host-backed buffers can't be
+    # padded, as that would read or wrap memory beyond the caller's allocation.
+    if isempty(args)
+        sz = max(cld(sz, 4), 1) * 4
     end
 
     maybe_collect(dev)
