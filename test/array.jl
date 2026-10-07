@@ -731,6 +731,16 @@ end
         @test Array(p) == sortperm(nan_A; dims=dim)
         @test isequal(nan_A[Array(p)], sort(nan_A; dims=dim))
     end
+
+    # algorithms: AcceleratedKernels' are accepted, sortperm is stable unless allowed not to be
+    AK = Metal.GPUArrays.AK
+    dup_v = Float32.(rand(1:10, 10_000))
+    @test Array(sort(MtlArray(dup_v); alg=AK.MergeSort())) == sort(dup_v)
+    @test Array(sortperm(MtlArray(dup_v))) == sortperm(dup_v)
+    @test Array(sortperm(MtlArray(dup_v); alg=AK.MergeSort())) == sortperm(dup_v)
+    p = Array(sortperm(MtlArray(dup_v); alg=QuickSort))
+    @test dup_v[p] == sort(dup_v)
+    @test_throws ArgumentError sort(MtlArray(dup_v); alg=Base.Sort.ScratchQuickSort())
 end
 
 @testset "accumulate" begin
@@ -812,28 +822,6 @@ end
                   accumulate(min, large_nan_input))
 end
 
-@testset "reduced dimensions" begin
-    reduce_input = reshape(Float32.(1:24) ./ 10, 3, 4, 2)
-    for alg in (:native, :MPSGraph), dims in 1:3
-        @with (Metal.reduce_alg => alg) begin
-            @test Array(sum(MtlArray(reduce_input); dims)) ≈
-                sum(reduce_input; dims)
-            @test Array(prod(MtlArray(reduce_input); dims)) ≈
-                prod(reduce_input; dims)
-            @test Array(maximum(MtlArray(reduce_input); dims)) ≈
-                maximum(reduce_input; dims)
-            @test Array(minimum(MtlArray(reduce_input); dims)) ≈
-                minimum(reduce_input; dims)
-        end
-    end
-
-    @with (Metal.reduce_alg => :MPSGraph) begin
-        int_input = reshape(Int32.(1:12), 3, 4)
-        @test_throws ArgumentError sum(MtlArray(int_input); dims=2)
-        @test_throws ArgumentError sum(abs2, MtlArray(reduce_input); dims=2)
-    end
-end
-
 @testset "findall" begin
     # 1D
     @test testf(x->findall(x), rand(Bool, 1000))
@@ -912,9 +900,7 @@ end
 end
 
 @testset "large map reduce" begin
-  dev = device()
-
-  big_size = Metal.serial_mapreduce_threshold(dev) + 5
+  big_size = 100_005
   a = rand(Float32, big_size, 31)
   c = MtlArray(a)
 
@@ -972,7 +958,7 @@ end
 @testset "mapreducedim! returning same type" begin
     R = transpose(Metal.zeros(Float32, 2, 3))
     A = MtlArray(rand(Float32, 3, 2, 10))
-    @test @inferred(Metal.GPUArrays.mapreducedim!(identity, +, R, A)) === R
+    @test @inferred(Base.mapreducedim!(identity, +, R, A)) === R
 
     R = transpose(Metal.zeros(Int16, 2, 3))
     A = MtlArray(rand(Int16.(0:10), 3, 2, 10))
