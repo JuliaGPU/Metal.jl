@@ -227,11 +227,16 @@ The output of this function is automatically cached, i.e. you can simply call `m
 in a hot path without degrading performance. New code will be generated automatically when
 the function changes, or when different types or keyword arguments are provided.
 """
-function mtlfunction(f::F, tt::TT=Tuple{}; source=f, name=nothing, kwargs...) where {F,TT}
+function mtlfunction(f::F, tt::TT=Tuple{}; source::S=f, kwargs...) where {F,TT,S}
+    HostKernel{F,S,tt}(f, source, link_kernel(methodinstance(F, tt); kwargs...)...)
+end
+
+# Everything about creating a kernel object that doesn't depend on the kernel's type, kept
+# out of `mtlfunction`, which is compiled for every kernel.
+@noinline function link_kernel(mi::Core.MethodInstance; name=nothing, kwargs...)
     Base.@lock mtlfunction_lock begin
         dev = device()
         config = compiler_config(dev; name, kwargs...)::MetalCompilerConfig
-        mi = methodinstance(F, tt)
         job = CompilerJob(mi, config)
 
         res = compile_or_lookup(job)::MetalResults
@@ -275,12 +280,13 @@ function mtlfunction(f::F, tt::TT=Tuple{}; source=f, name=nothing, kwargs...) wh
             end
         end
 
-        HostKernel{F,typeof(source),tt}(f, source, pipeline[], res.loggingEnabled::Bool, dev,
-                                        Int(pipeline[].maxTotalThreadsPerThreadgroup),
-                                        Int(pipeline[].staticThreadgroupMemoryLength),
-                                        Int(pipeline[].threadExecutionWidth),
-                                        can_use_residency_sets(dev),
-                                        reloc_table)
+        # the fields of `HostKernel` following `f` and `source`
+        (pipeline[], res.loggingEnabled::Bool, dev,
+         Int(pipeline[].maxTotalThreadsPerThreadgroup),
+         Int(pipeline[].staticThreadgroupMemoryLength),
+         Int(pipeline[].threadExecutionWidth),
+         can_use_residency_sets(dev),
+         reloc_table)
     end
 end
 
