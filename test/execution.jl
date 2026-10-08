@@ -62,6 +62,23 @@ end
     @test Array(a) == [5]
 end
 
+@testset "launch code is shared between kernels" begin
+    # encoding and submitting a launch doesn't depend on the kernel's signature, so
+    # launching kernels with new signatures should not compile it again
+    function store_kernel(a, x)
+        a[1] = x
+        return
+    end
+    for T in (Int32, Float32, Int16)
+        @metal store_kernel(MtlArray(zeros(T, 1)), one(T))
+    end
+    synchronize()
+
+    for f in (Metal.try_launch, Metal.launch, Metal.encode_launch!, Metal.launch_logging!)
+        @test length(collect(Base.specializations(only(methods(f))))) <= 1
+    end
+end
+
 
 @testset "reflection" begin
     Metal.code_lowered(dummy, Tuple{})

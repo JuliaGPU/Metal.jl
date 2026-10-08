@@ -382,35 +382,49 @@ function (kernel::HostKernel)(args...; groups=1, threads=1, queue=nothing,
     end
 end
 
-# wraps a single function call, keeping its closure body small.
-@autoreleasepool function try_launch(@nospecialize(kernel::HostKernel), queue,
-                                     gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple),
-                                     submit::Bool)
-    # function barrier to avoid capturing the `@autoreleasepool` in the generated code
-    launch_with_queue(kernel, queue, gs, ts, args, submit)
+# A launch attempt, as the callable that `@autoreleasepool` runs. This is a struct rather
+# than a closure: a closure has a type parameter per captured variable (on Julia < 1.13
+# even when it is `@nospecialize`d), and would be compiled for every kernel signature.
+struct LaunchAttempt <: Function
+    kernel::HostKernel
+    queue::Any
+    gs::MTLSize
+    ts::MTLSize
+    args::Tuple
+    submit::Bool
 end
 
-@inline function launch_with_queue(@nospecialize(kernel::HostKernel), ::Nothing,
-                                   gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple),
-                                   submit::Bool)
+(l::LaunchAttempt)() = launch_with_queue(l.kernel, l.queue, l.gs, l.ts, l.args, l.submit)
+
+Base.@nospecializeinfer function try_launch(@nospecialize(kernel::HostKernel), queue,
+                                            gs::MTLSize, ts::MTLSize,
+                                            @nospecialize(args::Tuple), submit::Bool)
+    attempt = LaunchAttempt(kernel, queue, gs, ts, args, submit)
+    @autoreleasepool attempt()
+end
+
+Base.@nospecializeinfer @inline function launch_with_queue(
+        @nospecialize(kernel::HostKernel), ::Nothing, gs::MTLSize, ts::MTLSize,
+        @nospecialize(args::Tuple), submit::Bool)
     launch(kernel, gs, ts, global_queue(device()), args, submit)
 end
 
-@inline function launch_with_queue(@nospecialize(kernel::HostKernel), queue,
-                                   gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple),
-                                   submit::Bool)
+Base.@nospecializeinfer @inline function launch_with_queue(
+        @nospecialize(kernel::HostKernel), queue, gs::MTLSize, ts::MTLSize,
+        @nospecialize(args::Tuple), submit::Bool)
     launch(kernel, gs, ts, batched_queue(queue), args, submit)
 end
 
-function kernel_operation(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize)
+Base.@nospecializeinfer function kernel_operation(@nospecialize(kernel::HostKernel),
+                                                  gs::MTLSize, ts::MTLSize)
     (; kind = :kernel, name = string(nameof(kernel.f)),
        threadgroups = gs, threads = ts,
        tgmem = kernel.tgmem, maxthreads = kernel.maxthreads)
 end
 
-function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
-                         bq::BatchedCommandQueue, @nospecialize(args::Tuple),
-                         kernel_state, buf, exc)
+Base.@nospecializeinfer function launch_logging!(
+        @nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
+        bq::BatchedCommandQueue, @nospecialize(args::Tuple), kernel_state, buf, exc)
     flush!(bq)
     queue = bq.queue
 
@@ -473,8 +487,9 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
     return
 end
 
-function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
-                bq::BatchedCommandQueue, @nospecialize(args::Tuple), submit::Bool)
+Base.@nospecializeinfer function launch(
+        @nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
+        bq::BatchedCommandQueue, @nospecialize(args::Tuple), submit::Bool)
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
 
     (gs.width>0 && gs.height>0 && gs.depth>0) ||
@@ -526,9 +541,10 @@ end
 
 # encode a kernel launch into the open batch of `bq`. returns the memory of an argument
 # that is still in use by another queue, if any, without encoding anything.
-function encode_launch!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
-                        bq::BatchedCommandQueue, @nospecialize(args::Tuple),
-                        kernel_state, buf, exc, precompiling::Bool)
+Base.@nospecializeinfer function encode_launch!(
+        @nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
+        bq::BatchedCommandQueue, @nospecialize(args::Tuple), kernel_state, buf, exc,
+        precompiling::Bool)
     source = kernel.source
     pipeline = kernel.pipeline
     reloc = kernel.reloc_table
