@@ -227,11 +227,16 @@ The output of this function is automatically cached, i.e. you can simply call `m
 in a hot path without degrading performance. New code will be generated automatically when
 the function changes, or when different types or keyword arguments are provided.
 """
-function mtlfunction(f::F, tt::TT=Tuple{}; source=f, name=nothing, kwargs...) where {F,TT}
+function mtlfunction(f::F, tt::TT=Tuple{}; source::S=f, kwargs...) where {F,TT,S}
+    HostKernel{F,S,tt}(f, source, link_kernel(methodinstance(F, tt); kwargs...)...)
+end
+
+# Everything about creating a kernel object that doesn't depend on the kernel's type, kept
+# out of `mtlfunction`, which is compiled for every kernel.
+@noinline function link_kernel(mi::Core.MethodInstance; name=nothing, kwargs...)
     Base.@lock mtlfunction_lock begin
         dev = device()
         config = compiler_config(dev; name, kwargs...)::MetalCompilerConfig
-        mi = methodinstance(F, tt)
         job = CompilerJob(mi, config)
 
         res = compile_or_lookup(job)::MetalResults
@@ -275,12 +280,13 @@ function mtlfunction(f::F, tt::TT=Tuple{}; source=f, name=nothing, kwargs...) wh
             end
         end
 
-        HostKernel{F,typeof(source),tt}(f, source, pipeline[], res.loggingEnabled::Bool, dev,
-                                        Int(pipeline[].maxTotalThreadsPerThreadgroup),
-                                        Int(pipeline[].staticThreadgroupMemoryLength),
-                                        Int(pipeline[].threadExecutionWidth),
-                                        can_use_residency_sets(dev),
-                                        reloc_table)
+        # the fields of `HostKernel` following `f` and `source`
+        (pipeline[], res.loggingEnabled::Bool, dev,
+         Int(pipeline[].maxTotalThreadsPerThreadgroup),
+         Int(pipeline[].staticThreadgroupMemoryLength),
+         Int(pipeline[].threadExecutionWidth),
+         can_use_residency_sets(dev),
+         reloc_table)
     end
 end
 
@@ -320,7 +326,7 @@ end
                                               f, args::Tuple) where {F,S,TT}
     sig = (KernelState, F, TT.parameters...)
     vals = (:kernel_state, :f, (:(args[$i]) for i in 1:fieldcount(args))...)
-    typs = (kernel_state, f, fieldtypes(args)...)
+    typs = (kernel_state, f, args.parameters...)
     if length(sig) != length(typs)
         msg = "Kernel expects $(length(TT.parameters)) arguments, got $(fieldcount(args))"
         return :(throw(ArgumentError($msg)))
@@ -342,7 +348,7 @@ end
             push!(ex.args, :(set_buffer!(cce, $val.buffer, $val.offset, $idx)))
         else
             # everything else is passed by reference, copied into Metal's transient buffer
-            push!(ex.args, :(set_argument!(cce, mtlconvert($val, cce, bq), $idx)))
+            push!(ex.args, :(convert_argument!(cce, bq, $val, $idx)))
         end
         idx += 1
     end
@@ -351,6 +357,11 @@ end
 
     ex
 end
+
+# Not inlined into `encode_arguments!`, which is compiled for every kernel signature, so
+# that the conversion of each argument type is compiled once and shared between kernels.
+@noinline convert_argument!(cce::MTLComputeCommandEncoder, bq, arg, idx::Integer) =
+    set_argument!(cce, mtlconvert(arg, cce, bq), idx)
 
 @inline function set_argument!(cce::MTLComputeCommandEncoder, arg, idx::Integer)
     argtyp = typeof(arg)
@@ -382,35 +393,49 @@ function (kernel::HostKernel)(args...; groups=1, threads=1, queue=nothing,
     end
 end
 
-# wraps a single function call, keeping its closure body small.
-@autoreleasepool function try_launch(@nospecialize(kernel::HostKernel), queue,
-                                     gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple),
-                                     submit::Bool)
-    # function barrier to avoid capturing the `@autoreleasepool` in the generated code
-    launch_with_queue(kernel, queue, gs, ts, args, submit)
+# A launch attempt, as the callable that `@autoreleasepool` runs. This is a struct rather
+# than a closure: a closure has a type parameter per captured variable (on Julia < 1.13
+# even when it is `@nospecialize`d), and would be compiled for every kernel signature.
+struct LaunchAttempt <: Function
+    kernel::HostKernel
+    queue::Any
+    gs::MTLSize
+    ts::MTLSize
+    args::Tuple
+    submit::Bool
 end
 
-@inline function launch_with_queue(@nospecialize(kernel::HostKernel), ::Nothing,
-                                   gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple),
-                                   submit::Bool)
+(l::LaunchAttempt)() = launch_with_queue(l.kernel, l.queue, l.gs, l.ts, l.args, l.submit)
+
+Base.@nospecializeinfer function try_launch(@nospecialize(kernel::HostKernel), queue,
+                                            gs::MTLSize, ts::MTLSize,
+                                            @nospecialize(args::Tuple), submit::Bool)
+    attempt = LaunchAttempt(kernel, queue, gs, ts, args, submit)
+    @autoreleasepool attempt()
+end
+
+Base.@nospecializeinfer @inline function launch_with_queue(
+        @nospecialize(kernel::HostKernel), ::Nothing, gs::MTLSize, ts::MTLSize,
+        @nospecialize(args::Tuple), submit::Bool)
     launch(kernel, gs, ts, global_queue(device()), args, submit)
 end
 
-@inline function launch_with_queue(@nospecialize(kernel::HostKernel), queue,
-                                   gs::MTLSize, ts::MTLSize, @nospecialize(args::Tuple),
-                                   submit::Bool)
+Base.@nospecializeinfer @inline function launch_with_queue(
+        @nospecialize(kernel::HostKernel), queue, gs::MTLSize, ts::MTLSize,
+        @nospecialize(args::Tuple), submit::Bool)
     launch(kernel, gs, ts, batched_queue(queue), args, submit)
 end
 
-function kernel_operation(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize)
+Base.@nospecializeinfer function kernel_operation(@nospecialize(kernel::HostKernel),
+                                                  gs::MTLSize, ts::MTLSize)
     (; kind = :kernel, name = string(nameof(kernel.f)),
        threadgroups = gs, threads = ts,
        tgmem = kernel.tgmem, maxthreads = kernel.maxthreads)
 end
 
-function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
-                         bq::BatchedCommandQueue, @nospecialize(args::Tuple),
-                         kernel_state, buf, exc)
+Base.@nospecializeinfer function launch_logging!(
+        @nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
+        bq::BatchedCommandQueue, @nospecialize(args::Tuple), kernel_state, buf, exc)
     flush!(bq)
     queue = bq.queue
 
@@ -473,8 +498,9 @@ function launch_logging!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTL
     return
 end
 
-function launch(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
-                bq::BatchedCommandQueue, @nospecialize(args::Tuple), submit::Bool)
+Base.@nospecializeinfer function launch(
+        @nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
+        bq::BatchedCommandQueue, @nospecialize(args::Tuple), submit::Bool)
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
 
     (gs.width>0 && gs.height>0 && gs.depth>0) ||
@@ -526,9 +552,10 @@ end
 
 # encode a kernel launch into the open batch of `bq`. returns the memory of an argument
 # that is still in use by another queue, if any, without encoding anything.
-function encode_launch!(@nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
-                        bq::BatchedCommandQueue, @nospecialize(args::Tuple),
-                        kernel_state, buf, exc, precompiling::Bool)
+Base.@nospecializeinfer function encode_launch!(
+        @nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
+        bq::BatchedCommandQueue, @nospecialize(args::Tuple), kernel_state, buf, exc,
+        precompiling::Bool)
     source = kernel.source
     pipeline = kernel.pipeline
     reloc = kernel.reloc_table

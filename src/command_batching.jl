@@ -337,8 +337,14 @@ function note_operation!(bq::BatchedCommandQueue, op)
     return
 end
 
-function record_operation!(bq::BatchedCommandQueue, roots...; bytes::Integer=0, op=nothing)
-    append!(bq.roots, roots)
+# `roots` are pushed one by one: `append!`ing the tuple would compile `copyto!` for every
+# combination of root types, i.e., for every kernel signature.
+Base.@nospecializeinfer function record_operation!(bq::BatchedCommandQueue,
+                                                   @nospecialize(roots...);
+                                                   bytes::Integer=0, op=nothing)
+    for root in roots
+        push!(bq.roots, root)
+    end
     op === nothing || note_operation!(bq, op)
     bq.nops += 1
     bq.nbytes += bytes
