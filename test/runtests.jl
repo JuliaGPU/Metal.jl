@@ -133,8 +133,8 @@ init_worker_code = quote
 
     const eltypes = [Int16, Int32, Int64,
                      Complex{Int16}, Complex{Int32}, Complex{Int64},
-                     Float16, Float32,
-                     ComplexF16, ComplexF32]
+                     Float16, Float32, Float64,
+                     ComplexF16, ComplexF32, ComplexF64]
     TestSuite.supported_eltypes(::Type{<:MtlArray}) = eltypes
 
     # NOTE: based on test/pkg.jl::capture_stdout, but doesn't discard exceptions

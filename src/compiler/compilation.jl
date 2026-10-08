@@ -63,6 +63,10 @@ GPUCompiler.method_tables(::MetalCompilerJob) =
 
 GPUCompiler.kernel_state_type(job::MetalCompilerJob) = KernelState
 
+# Metal does not support double-precision arithmetic, so emulate it in software
+GPUCompiler.device_library_providers(::MetalCompilerJob) =
+    (GPUCompiler.SoftFloat.SoftFloat64Provider(),)
+
 # Keep relocations symbolic. Most kernels are relocation-free, so their metallib is
 # byte-stable across sessions, which restores pkgimage persistence (`can_persist_results`)
 # and lets Metal's shader cache, keyed on the library contents, hit across sessions. Kernels

@@ -72,3 +72,6 @@ Statistics = "1"
 UUIDs = "1"
 UnsafeAtomics = "0.4"
 julia = "1.10"
+
+[sources]
+GPUCompiler = {url = "https://github.com/JuliaGPU/GPUCompiler.jl", rev = "tb/softfloat"}

@@ -112,6 +112,28 @@ julia> Base.mapreducedim!(identity, +, b, a)
  6.0
 ```
 
+## Float64 support
+
+Apple GPUs do not support double-precision floating-point arithmetic. Metal.jl
+nevertheless supports `Float64` (and `ComplexF64`) arrays and kernels by emulating the
+arithmetic in software, using 64-bit integer operations. This is transparent: ordinary
+Julia code, including Base's math functions, compiles and computes the same results as on
+the CPU, with round-to-nearest-even arithmetic, subnormals, signed zeros and NaNs.
+
+```jldoctest
+julia> a = MtlArray([1.0, 2.0]);
+
+julia> Array(a .* 0.5 .+ sqrt.(a))
+2-element Vector{Float64}:
+ 1.5
+ 2.414213562373095
+```
+
+Emulated arithmetic is much slower than native `Float32`, however, so the opinionated `mtl`
+conversion function still converts `Float64` arrays to `Float32`. Use `MtlArray` directly
+when double precision is required. Floating-point exception flags, non-default rounding
+modes, and `Float64` atomics are not supported.
+
 ## Random numbers
 
 Base's convenience functions for generating random numbers are available in Metal as well:
