@@ -326,7 +326,7 @@ end
                                               f, args::Tuple) where {F,S,TT}
     sig = (KernelState, F, TT.parameters...)
     vals = (:kernel_state, :f, (:(args[$i]) for i in 1:fieldcount(args))...)
-    typs = (kernel_state, f, fieldtypes(args)...)
+    typs = (kernel_state, f, args.parameters...)
     if length(sig) != length(typs)
         msg = "Kernel expects $(length(TT.parameters)) arguments, got $(fieldcount(args))"
         return :(throw(ArgumentError($msg)))
@@ -348,7 +348,7 @@ end
             push!(ex.args, :(set_buffer!(cce, $val.buffer, $val.offset, $idx)))
         else
             # everything else is passed by reference, copied into Metal's transient buffer
-            push!(ex.args, :(set_argument!(cce, mtlconvert($val, cce, bq), $idx)))
+            push!(ex.args, :(convert_argument!(cce, bq, $val, $idx)))
         end
         idx += 1
     end
@@ -357,6 +357,11 @@ end
 
     ex
 end
+
+# Not inlined into `encode_arguments!`, which is compiled for every kernel signature, so
+# that the conversion of each argument type is compiled once and shared between kernels.
+@noinline convert_argument!(cce::MTLComputeCommandEncoder, bq, arg, idx::Integer) =
+    set_argument!(cce, mtlconvert(arg, cce, bq), idx)
 
 @inline function set_argument!(cce::MTLComputeCommandEncoder, arg, idx::Integer)
     argtyp = typeof(arg)
