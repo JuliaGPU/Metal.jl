@@ -686,6 +686,49 @@ end
     @test Array(r) == reinterpret(Int32, @view Array(a)[2:7])
 end
 
+@testset "aliasing" begin
+    x = MtlArray([1, 2])
+    y = view(x, 2:2)
+    @test Base.mightalias(x, x)
+    @test Base.mightalias(x, y)
+    z = view(x, 1:1)
+    @test Base.mightalias(x, z)
+    @test !Base.mightalias(y, z)
+
+    a = copy(y)::typeof(x)
+    @test !Base.mightalias(x, a)
+    b = Base.unaliascopy(y)::typeof(y)
+    @test !Base.mightalias(x, b)
+
+    # contiguous views are MtlArrays with an offset into the parent's buffer,
+    # which should still alias wrapped arrays (like SubArrays) of that buffer
+    x = MtlArray(1:16)
+    @test Base.mightalias(view(x, 2:16), view(x, 15:-1:1))
+    @test Base.mightalias(view(x, 1:2:15), view(x, 2:9))
+    @test Base.mightalias(view(x, 2:16), view(reinterpret(Int32, x), 1:2:31))
+    @test !Base.mightalias(view(x, 2:16), view(MtlArray(1:16), 15:-1:1))
+
+    # an array wrapped from a pointer into another one's buffer
+    y = view(x, 2:16)
+    z = unsafe_wrap(MtlArray, pointer(y), size(y))
+    @test Base.mightalias(y, view(z, 15:-1:1))
+
+    # so in-place broadcasts between them should make a copy first
+    n = 2^20
+    x = MtlArray{Float32}(1:n)
+    view(x, 2:n) .= view(x, n-1:-1:1)
+    @test Array(x) == [1; n-1:-1:1]
+
+    # empty arrays alias nothing, also on Julia 1.10
+    @test !Base.mightalias(MtlArray(Int[]), MtlArray(Float32[]))
+    @test !Base.mightalias(view(MtlArray(zeros(Float32, 2, 0)), 1:1, :), MtlArray(Int[]))
+
+    # disjoint parts of one array may be each other's source and destination
+    x = MtlArray(collect(1:10))
+    @test Array(sum!(view(x, 1:1), view(x, 2:10))) == [54]
+    @test Array(cumsum!(view(x, 1:5), view(x, 6:10))) == cumsum(6:10)
+end
+
 @testset "sort" begin
     v = Float32[7, 2, 5, 4, 9, 1, 6, 3]
     d_v = MtlArray(v)

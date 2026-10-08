@@ -252,6 +252,15 @@ Base.elsize(::Type{<:MtlArray{T}}) where {T} = sizeof(T)
 Base.size(x::MtlArray) = x.dims
 Base.sizeof(x::MtlArray) = Base.elsize(x) * length(x)
 
+
+## alias detection
+
+# GPUArrays implements `Base.dataids` and `Base.mightalias` from where an array lives,
+# identifying the buffer by its GPU address
+GPUArrays.memory_location(x::MtlArray) = (UInt(x.data[].buffer.gpuAddress), x.offset)
+
+Base.unaliascopy(x::MtlArray) = copy(x)
+
 @inline function Base.pointer(x::MtlArray{T}, i::Integer=1; storage=PrivateStorage) where {T}
     PT = if storage == PrivateStorage
         MtlPtr{T}
