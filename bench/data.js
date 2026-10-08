@@ -2,7 +2,7 @@ window.BENCHMARK_DATA = {
   "lastUpdate": 1791479974263,
   "repoUrl": "https://github.com/JuliaGPU/Metal.jl",
   "entries": {
-    "Metal Benchmarks": [
+    "Metal.jl Benchmarks": [
       {
         "commit": {
           "author": {
@@ -141872,9 +141872,7 @@ window.BENCHMARK_DATA = {
             "extra": "gctime=0\nmemory=128\nallocs=6\nparams={\"evals\":172,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
           }
         ]
-      }
-    ],
-    "Metal.jl Benchmarks": [
+      },
       {
         "commit": {
           "author": {
