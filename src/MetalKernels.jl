@@ -107,7 +107,8 @@ end
 
 KA.argconvert(::KA.Kernel{MetalBackend}, arg) = Metal.mtlconvert(arg)
 
-function (obj::KA.Kernel{MetalBackend})(args...; ndrange=nothing, workgroupsize=nothing)
+function (obj::KA.Kernel{MetalBackend})(args::Vararg{Any,N}; ndrange=nothing,
+                                        workgroupsize=nothing) where {N}
     ndrange, workgroupsize, iterspace, _dynamic = KA.launch_config(obj, ndrange, workgroupsize)
     # this might not be the final context, since we may tune the workgroupsize
     ctx = KA.mkcontext(obj, ndrange, iterspace)
