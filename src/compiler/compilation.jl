@@ -563,23 +563,14 @@ end
 
 # link the metallib into a session-local pipeline state on the given device.
 @autoreleasepool function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
-                                        metallib::Vector{UInt8}, entry::String,
-                                        minthreads, maxthreads::Union{Nothing, Int})
+                                        metallib::Vector{UInt8}, entry::String)
     @signpost_event log=log_compiler() "Link" entry
 
     @signpost_interval log=log_compiler() "Instantiate compute pipeline" begin
         lib = MTLLibraryFromData(dev, metallib)
         fun = MTLFunction(lib, entry)
-        pipe_desc = MTLComputePipelineDescriptor()
-        pipe_desc.computeFunction = fun
-        if !isnothing(minthreads)
-            pipe_desc.requiredThreadsPerThreadgroup = MTLSize(minthreads)
-        end
-        if !isnothing(maxthreads)
-            pipe_desc.maxTotalThreadsPerThreadgroup = maxthreads
-        end
         try
-            return MTLComputePipelineState(dev, pipe_desc)
+            return MTLComputePipelineState(dev, fun)
         catch err
             isa(err, NSError) || rethrow()
 

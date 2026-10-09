@@ -265,8 +265,7 @@ end
         if !isassigned(pipeline)
             pipeline[] = link_pipeline(dev, res.air::Vector{UInt8},
                                      res.metallib::Vector{UInt8},
-                                     res.entry::String, config.target.minthreads,
-                                     config.target.maxthreads)
+                                     res.entry::String)
             # Don't cache session-local pipeline handles while precompiling: the
             # results struct is serialized into the package image along with its
             # CodeInstance, and ObjectiveC handles would come back dangling.
