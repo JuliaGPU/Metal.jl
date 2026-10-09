@@ -42,33 +42,25 @@ end
     # TODO: kernel introspection
 end
 
-# Metal's system-wide shader cache keys compiled functions on the library, the function
-# name and the maximum threadgroup size, but not on the required threadgroup size, and the
-# first compile wins for every later process. Use a dedicated kernel per hint so that no
-# kernel is ever linked both with and without a required size.
-tg_max_kernel() = return
-tg_zero_kernel() = return
-tg_req_kernel() = return
-
 @testset "threadgroup size hints" begin
     # maxthreads is forwarded to the GPUCompiler target
     @test Metal.compiler_config(device(); maxthreads=256).target.maxthreads == 256
     # and applied to the compute pipeline
-    k = Metal.mtlfunction(tg_max_kernel; maxthreads=256)
+    k = Metal.mtlfunction(dummy; maxthreads=256)
     @test k.pipeline.maxTotalThreadsPerThreadgroup == 256
     @test k.maxthreads == 256
     k(; threads=256)
     @test_throws ArgumentError k(; threads=512)
     # and accepted by the `@metal` macro
-    @metal maxthreads=256 tg_max_kernel()
-    k = @metal launch=false maxthreads=256 tg_max_kernel()
+    @metal maxthreads=256 dummy()
+    k = @metal launch=false maxthreads=256 dummy()
     @test k.maxthreads == 256
 
     # all-zero minthreads disables the requirement; mixing zero and non-zero is an error
     @test Metal.compiler_config(device(); minthreads=0).target.minthreads === nothing
     @test Metal.compiler_config(device(); minthreads=(0, 0, 0)).target.minthreads === nothing
     @test_throws ArgumentError Metal.compiler_config(device(); minthreads=(32, 0, 1))
-    k = Metal.mtlfunction(tg_zero_kernel; minthreads=0)
+    k = Metal.mtlfunction(dummy; minthreads=0)
     @test k.pipeline.requiredThreadsPerThreadgroup == Metal.MTL.MTLSize(0, 0, 0)
     k(; threads=64)
 
@@ -76,20 +68,18 @@ tg_req_kernel() = return
     if Metal.macos_version() >= v"26"
         @test Metal.compiler_config(device(); minthreads=32).target.minthreads == 32
         @test Metal.compiler_config(device(); metal=v"3.2", minthreads=32).target.minthreads == 32
-        k = Metal.mtlfunction(tg_req_kernel; minthreads=(32, 1, 1))
-        # TODO: `link_pipeline` creates the pipeline state straight from the function, so the
-        #       required threadgroup size never reaches the runtime and the launch-time check
-        #       has nothing to compare against.
-        @test_broken k.pipeline.requiredThreadsPerThreadgroup == MTL.MTLSize(32, 1, 1)
-        @test_broken k.reqthreads == MTL.MTLSize(32, 1, 1)
+        k = Metal.mtlfunction(dummy; minthreads=(32, 1, 1))
+
+        @test k.pipeline.requiredThreadsPerThreadgroup == MTL.MTLSize(32, 1, 1)
+        @test k.reqthreads == MTL.MTLSize(32, 1, 1)
         k(; threads=32)
         k(; threads=(32, 1, 1))
-        # launching with any other threadgroup size is rejected up front; use the same
-        # thread count with a different shape so that the `maxthreads` check does not
-        # reject the launch first.
-        @test_broken (try k(; threads=16); false; catch err; err isa ArgumentError; end)
-        @test_broken (try k(; threads=(16, 2)); false; catch err; err isa ArgumentError; end)
-        @metal threads=32 minthreads=32 tg_req_kernel()
+        # launching with any other threadgroup size is rejected up front. Match the message
+        # so that a launch rejected by the `maxthreads` check (which runs first) cannot
+        # satisfy the test; the second launch keeps the thread count but changes the shape.
+        @test_throws "should equal the required (32, 1, 1)" k(; threads=16)
+        @test_throws "should equal the required (32, 1, 1)" k(; threads=(16, 2))
+        @metal threads=32 minthreads=32 dummy()
     else
         @test_throws ArgumentError Metal.compiler_config(device(); minthreads=32)
     end
