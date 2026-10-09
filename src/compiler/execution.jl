@@ -292,8 +292,11 @@ end
             end
         end
 
-        minthreads = config.target.minthreads
-        reqthreads = minthreads === nothing ? MTLSize(0, 0, 0) : MTLSize(minthreads)
+        reqthreads = if macos_version >= v"26"
+            pipeline[].requiredThreadsPerThreadgroup
+        else
+            MTLSize(0, 0, 0)
+        end
 
         # the fields of `HostKernel` following `f` and `source`
         (pipeline[], res.loggingEnabled::Bool, dev,

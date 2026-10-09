@@ -77,7 +77,7 @@ tg_req_kernel() = return
         @test Metal.compiler_config(device(); minthreads=32).target.minthreads == 32
         @test Metal.compiler_config(device(); metal=v"3.2", minthreads=32).target.minthreads == 32
         k = Metal.mtlfunction(tg_req_kernel; minthreads=(32, 1, 1))
-        @test k.pipeline.requiredThreadsPerThreadgroup == Metal.MTL.MTLSize(32, 1, 1)
+        @test k.pipeline.requiredThreadsPerThreadgroup == MTL.MTLSize(32, 1, 1)
         k(; threads=32)
         k(; threads=(32, 1, 1))
         # launching with any other threadgroup size is rejected up front
