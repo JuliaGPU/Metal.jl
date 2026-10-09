@@ -292,7 +292,7 @@ end
             end
         end
 
-        reqthreads = if macos_version >= v"26"
+        reqthreads = if macos_version() >= v"26"
             pipeline[].requiredThreadsPerThreadgroup
         else
             MTLSize(0, 0, 0)
