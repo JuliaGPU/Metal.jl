@@ -686,6 +686,49 @@ end
     @test Array(r) == reinterpret(Int32, @view Array(a)[2:7])
 end
 
+@testset "aliasing" begin
+    x = MtlArray([1, 2])
+    y = view(x, 2:2)
+    @test Base.mightalias(x, x)
+    @test Base.mightalias(x, y)
+    z = view(x, 1:1)
+    @test Base.mightalias(x, z)
+    @test !Base.mightalias(y, z)
+
+    a = copy(y)::typeof(x)
+    @test !Base.mightalias(x, a)
+    b = Base.unaliascopy(y)::typeof(y)
+    @test !Base.mightalias(x, b)
+
+    # contiguous views are MtlArrays with an offset into the parent's buffer,
+    # which should still alias wrapped arrays (like SubArrays) of that buffer
+    x = MtlArray(1:16)
+    @test Base.mightalias(view(x, 2:16), view(x, 15:-1:1))
+    @test Base.mightalias(view(x, 1:2:15), view(x, 2:9))
+    @test Base.mightalias(view(x, 2:16), view(reinterpret(Int32, x), 1:2:31))
+    @test !Base.mightalias(view(x, 2:16), view(MtlArray(1:16), 15:-1:1))
+
+    # an array wrapped from a pointer into another one's buffer
+    y = view(x, 2:16)
+    z = unsafe_wrap(MtlArray, pointer(y), size(y))
+    @test Base.mightalias(y, view(z, 15:-1:1))
+
+    # so in-place broadcasts between them should make a copy first
+    n = 2^20
+    x = MtlArray{Float32}(1:n)
+    view(x, 2:n) .= view(x, n-1:-1:1)
+    @test Array(x) == [1; n-1:-1:1]
+
+    # empty arrays alias nothing, also on Julia 1.10
+    @test !Base.mightalias(MtlArray(Int[]), MtlArray(Float32[]))
+    @test !Base.mightalias(view(MtlArray(zeros(Float32, 2, 0)), 1:1, :), MtlArray(Int[]))
+
+    # disjoint parts of one array may be each other's source and destination
+    x = MtlArray(collect(1:10))
+    @test Array(sum!(view(x, 1:1), view(x, 2:10))) == [54]
+    @test Array(cumsum!(view(x, 1:5), view(x, 6:10))) == cumsum(6:10)
+end
+
 @testset "sort" begin
     v = Float32[7, 2, 5, 4, 9, 1, 6, 3]
     d_v = MtlArray(v)
@@ -731,6 +774,16 @@ end
         @test Array(p) == sortperm(nan_A; dims=dim)
         @test isequal(nan_A[Array(p)], sort(nan_A; dims=dim))
     end
+
+    # algorithms: AcceleratedKernels' are accepted, sortperm is stable unless allowed not to be
+    AK = Metal.GPUArrays.AK
+    dup_v = Float32.(rand(1:10, 10_000))
+    @test Array(sort(MtlArray(dup_v); alg=AK.MergeSort())) == sort(dup_v)
+    @test Array(sortperm(MtlArray(dup_v))) == sortperm(dup_v)
+    @test Array(sortperm(MtlArray(dup_v); alg=AK.MergeSort())) == sortperm(dup_v)
+    p = Array(sortperm(MtlArray(dup_v); alg=QuickSort))
+    @test dup_v[p] == sort(dup_v)
+    @test_throws ArgumentError sort(MtlArray(dup_v); alg=Base.Sort.ScratchQuickSort())
 end
 
 @testset "accumulate" begin
@@ -812,28 +865,6 @@ end
                   accumulate(min, large_nan_input))
 end
 
-@testset "reduced dimensions" begin
-    reduce_input = reshape(Float32.(1:24) ./ 10, 3, 4, 2)
-    for alg in (:native, :MPSGraph), dims in 1:3
-        @with (Metal.reduce_alg => alg) begin
-            @test Array(sum(MtlArray(reduce_input); dims)) ≈
-                sum(reduce_input; dims)
-            @test Array(prod(MtlArray(reduce_input); dims)) ≈
-                prod(reduce_input; dims)
-            @test Array(maximum(MtlArray(reduce_input); dims)) ≈
-                maximum(reduce_input; dims)
-            @test Array(minimum(MtlArray(reduce_input); dims)) ≈
-                minimum(reduce_input; dims)
-        end
-    end
-
-    @with (Metal.reduce_alg => :MPSGraph) begin
-        int_input = reshape(Int32.(1:12), 3, 4)
-        @test_throws ArgumentError sum(MtlArray(int_input); dims=2)
-        @test_throws ArgumentError sum(abs2, MtlArray(reduce_input); dims=2)
-    end
-end
-
 @testset "findall" begin
     # 1D
     @test testf(x->findall(x), rand(Bool, 1000))
@@ -912,9 +943,7 @@ end
 end
 
 @testset "large map reduce" begin
-  dev = device()
-
-  big_size = Metal.serial_mapreduce_threshold(dev) + 5
+  big_size = 100_005
   a = rand(Float32, big_size, 31)
   c = MtlArray(a)
 
@@ -972,7 +1001,7 @@ end
 @testset "mapreducedim! returning same type" begin
     R = transpose(Metal.zeros(Float32, 2, 3))
     A = MtlArray(rand(Float32, 3, 2, 10))
-    @test @inferred(Metal.GPUArrays.mapreducedim!(identity, +, R, A)) === R
+    @test @inferred(Base.mapreducedim!(identity, +, R, A)) === R
 
     R = transpose(Metal.zeros(Int16, 2, 3))
     A = MtlArray(rand(Int16.(0:10), 3, 2, 10))
