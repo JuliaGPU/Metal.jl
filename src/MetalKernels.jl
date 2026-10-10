@@ -37,8 +37,15 @@ KI.supports_float64(::MetalBackend) = false
 KI.supports_atomics(::MetalBackend) = metal_support() >= v"4.1"
 KI.supports_unified(::MetalBackend) = true
 KI.supports_subgroups(::MetalBackend) = true
-KI.supports_shuffle(::MetalBackend, ::Type{T}) where {T} =
-    T <: Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
+# Metal doesn't specify how SIMD-groups are formed, but Apple GPUs form them from consecutive
+# linear thread indices, and KernelInterface's testsuite checks that. SIMD-groups of a
+# threadgroup execute independently.
+KI.supports_linear_subgroups(::MetalBackend) = true
+KI.supports_independent_subgroups(::MetalBackend) = true
+# the types Metal's SIMD-group shuffles support natively. KernelInterface's fallbacks shuffle
+# other primitive types (e.g. 64-bit integers) as `UInt32` words, and structs field by field.
+const ShuffleTypes = Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
+KI.supports_shuffle(::MetalBackend, ::Type{<:ShuffleTypes}) = true
 
 Adapt.adapt_storage(::MetalBackend, a::AbstractArray) = Adapt.adapt(MtlArray, a)
 Adapt.adapt_storage(::MetalBackend, a::MtlArray) = a
@@ -167,7 +174,9 @@ end
 
 @device_override KI.get_sub_group_size(::Type{T}) where {T} = active_simdgroup_size() % T
 
-@device_override KI.get_max_sub_group_size(::Type{T}) where {T} = threads_per_simdgroup() % T
+# a constant rather than `threads_per_simdgroup()`, so that code depending on it is
+# specialized for it: `kernel_function` checks that kernels are compiled for this width
+@device_override KI.get_max_sub_group_size(::Type{T}) where {T} = SIMD_WIDTH % T
 
 @device_override KI.get_num_sub_groups(::Type{T}) where {T} = simdgroups_per_threadgroup() % T
 
@@ -214,7 +223,7 @@ function KI.wait_event(::MetalBackend, ev::Tuple{MTLSharedEvent, UInt64})
 end
 
 
-## synchronization and printing
+## synchronization
 
 @device_override @inline function KI.barrier()
     threadgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
@@ -224,9 +233,45 @@ end
     simdgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
 end
 
-@device_override function KI.shfl_down(val::T, offset::Integer) where T
-    simd_shuffle_down(val, offset)
+
+## sub-group communication
+
+# Lanes and masks are wrapped with `% Int16` (the type the intrinsics take), which unlike a
+# conversion can't throw: out of range, they give an unspecified value. They are also reduced
+# to the SIMD-group width, since Metal requires a valid lane. Offsets are compared with the
+# width before narrowing them, so that `shfl_down` and `shfl_up` by any offset past the width
+# return the work-item's own value, which Metal's shuffles do for a `delta` of 0.
+
+@inline shuffle_lane(lane::Integer) = (((lane - 1) % Int16) & Int16(SIMD_WIDTH - 1)) + Int16(1)
+@inline shuffle_mask(mask::Integer) = (mask % Int16) & Int16(SIMD_WIDTH - 1)
+
+@device_override @inline KI.shfl(val::ShuffleTypes, lane::Integer) =
+    simd_shuffle(val, shuffle_lane(lane))
+
+@inline shuffle_delta(offset::Integer) = ifelse(offset < SIMD_WIDTH, offset % Int16, Int16(0))
+
+@device_override @inline KI.shfl_down(val::ShuffleTypes, offset::Integer) =
+    simd_shuffle_down(val, shuffle_delta(offset))
+
+@device_override @inline KI.shfl_up(val::ShuffleTypes, offset::Integer) =
+    simd_shuffle_up(val, shuffle_delta(offset))
+
+@device_override @inline KI.shfl_xor(val::ShuffleTypes, mask::Integer) =
+    simd_shuffle_xor(val, shuffle_mask(mask))
+
+# MSL leaves the bits of `simd_ballot` past the SIMD-group width undefined, so the ballot is
+# masked to the lanes of the SIMD-group (which only leaves lanes past the end of a partial
+# one). `sub_group_all` checks that no lane has `pred` false, rather than that all bits are set.
+@inline function ballot(pred::Bool)
+    lanes = (UInt64(1) << (active_simdgroup_size() % UInt32)) - UInt64(1)
+    return simd_ballot(pred) & lanes
 end
+@device_override @inline KI.sub_group_ballot(pred::Bool) = ballot(pred)
+@device_override @inline KI.sub_group_any(pred::Bool) = ballot(pred) != 0
+@device_override @inline KI.sub_group_all(pred::Bool) = ballot(!pred) == 0
+
+
+## printing
 
 @device_override @inline function KI._print(args...)
     Metal._mtlprint(args...)
