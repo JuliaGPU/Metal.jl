@@ -371,7 +371,7 @@ end
                                          debug_level=Base.JLOptions().debug_level,
                                          opt_level=2,
                                          macos=nothing, air=nothing, metal=nothing,
-                                         gpufamily=nothing, kwargs...)
+                                         gpufamily=nothing, minthreads=nothing, kwargs...)
     # determine the versions of things to target
     if macos === nothing
         macos = macos_version()
@@ -403,8 +403,21 @@ end
         end
     end
 
+    # minthreads is applied through MTLComputePipelineDescriptor.requiredThreadsPerThreadgroup,
+    # which the runtime only provides on macOS 26, regardless of the targeted MSL version.
+    # All-zero dimensions disable the requirement, and are normalized to `nothing`.
+    if minthreads !== nothing
+        if all(iszero, minthreads)
+            minthreads = nothing
+        elseif !all(>(0), minthreads)
+            throw(ArgumentError("minthreads dimensions should be either all zero or all non-zero, got $(minthreads)"))
+        elseif macos_version() < v"26"
+            throw(ArgumentError("minthreads requires macOS 26 or newer; running macOS $(macos_version())"))
+        end
+    end
+
     # create GPUCompiler objects
-    target = MetalCompilerTarget(; macos, air, metal, kwargs...)
+    target = MetalCompilerTarget(; macos, air, metal, minthreads, kwargs...)
     params = MetalCompilerParams(apple_family)
     CompilerConfig(target, params; kernel, name, always_inline, debug_level, opt_level)
 end
@@ -550,14 +563,20 @@ end
 
 # link the metallib into a session-local pipeline state on the given device.
 @autoreleasepool function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
-                                        metallib::Vector{UInt8}, entry::String)
+                                        metallib::Vector{UInt8}, entry::String,
+                                        minthreads)
     @signpost_event log=log_compiler() "Link" entry
 
     @signpost_interval log=log_compiler() "Instantiate compute pipeline" begin
         lib = MTLLibraryFromData(dev, metallib)
         fun = MTLFunction(lib, entry)
+        desc = MTLComputePipelineDescriptor()
+        desc.computeFunction = fun
+        if !isnothing(minthreads)
+            desc.requiredThreadsPerThreadgroup = MTLSize(minthreads)
+        end
         try
-            return MTLComputePipelineState(dev, fun)
+            return MTLComputePipelineState(dev, desc)
         catch err
             isa(err, NSError) || rethrow()
 

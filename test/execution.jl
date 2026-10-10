@@ -42,6 +42,49 @@ end
     # TODO: kernel introspection
 end
 
+@testset "threadgroup size hints" begin
+    # maxthreads is forwarded to the GPUCompiler target
+    @test Metal.compiler_config(device(); maxthreads=256).target.maxthreads == 256
+    # and applied to the compute pipeline
+    k = Metal.mtlfunction(dummy; maxthreads=256)
+    @test k.pipeline.maxTotalThreadsPerThreadgroup == 256
+    @test k.maxthreads == 256
+    k(; threads=256)
+    @test_throws ArgumentError k(; threads=512)
+    # and accepted by the `@metal` macro
+    @metal maxthreads=256 dummy()
+    k = @metal launch=false maxthreads=256 dummy()
+    @test k.maxthreads == 256
+
+    # all-zero minthreads disables the requirement; mixing zero and non-zero is an error
+    @test Metal.compiler_config(device(); minthreads=0).target.minthreads === nothing
+    @test Metal.compiler_config(device(); minthreads=(0, 0, 0)).target.minthreads === nothing
+    @test_throws ArgumentError Metal.compiler_config(device(); minthreads=(32, 0, 1))
+    k = Metal.mtlfunction(dummy; minthreads=0)
+    @test k.pipeline.requiredThreadsPerThreadgroup == Metal.MTL.MTLSize(0, 0, 0)
+    k(; threads=64)
+
+    # minthreads requires macOS 26, independent of the targeted Metal version
+    if Metal.macos_version() >= v"26"
+        @test Metal.compiler_config(device(); minthreads=32).target.minthreads == 32
+        @test Metal.compiler_config(device(); metal=v"3.2", minthreads=32).target.minthreads == 32
+        k = Metal.mtlfunction(dummy; minthreads=(32, 1, 1))
+
+        @test k.pipeline.requiredThreadsPerThreadgroup == MTL.MTLSize(32, 1, 1)
+        @test k.reqthreads == MTL.MTLSize(32, 1, 1)
+        k(; threads=32)
+        k(; threads=(32, 1, 1))
+        # launching with any other threadgroup size is rejected up front. Match the message
+        # so that a launch rejected by the `maxthreads` check (which runs first) cannot
+        # satisfy the test; the second launch keeps the thread count but changes the shape.
+        @test_throws "should equal the required (32, 1, 1)" k(; threads=16)
+        @test_throws "should equal the required (32, 1, 1)" k(; threads=(16, 2))
+        @metal threads=32 minthreads=32 dummy()
+    else
+        @test_throws ArgumentError Metal.compiler_config(device(); minthreads=32)
+    end
+end
+
 @testset "inference" begin
     foo() = @metal dummy()
     @inferred foo()

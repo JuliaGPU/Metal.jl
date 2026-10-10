@@ -38,6 +38,9 @@ UnsafeAtomics = "013be700-e6cd-48c3-b4a1-df204f14c38f"
 [weakdeps]
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
+[sources]
+GPUCompiler = {rev = "maxthreads", url = "https://github.com/JuliaGPU/GPUCompiler.jl.git"}
+
 [extensions]
 SpecialFunctionsExt = "SpecialFunctions"
 
