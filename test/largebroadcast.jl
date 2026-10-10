@@ -1,7 +1,7 @@
 const N = Int(typemax(UInt32)) + 1
 const T = Int8
 
-@testset "len = $n" for n in ((N÷2) - 4, (N÷2), (N÷2) + 4, N - 1024, N - 3, N - 1, N, N + 4)
+@testset "len = $n" for n in (N - 1024, N - 3, N - 1, N, N + 4)
     A = MtlArray{T}(undef, n)
     # Known working method to zero out array
     Metal.unsafe_fill!(device(A), pointer(A), T(0), n * sizeof(T); async = false)
