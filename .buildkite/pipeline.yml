@@ -40,9 +40,40 @@ steps:
         matrix:
           setup:
             julia:
+              - "1.12"
+
+      # XXX: KernelAbstractions 0.10 and KernelInterface 0.4 aren't registered yet. Julia
+      #      1.10 doesn't support [sources], so they are checked out from git and developed
+      #      together with Metal, in the same Pkg operation because Metal's compat excludes
+      #      the registered versions. Julia 1.11 doesn't support workspaces, so Metal is
+      #      developed into the test project, whose [sources] provide the other two.
+      #      `Pkg.test` wouldn't use either environment, so the tests are run directly.
+      - label: "Julia {{matrix.julia}}"
+        plugins:
+          - JuliaCI/julia#v1:
+              version: "{{matrix.julia}}"
+        agents:
+          queue: "metal"
+        commands: |
+          if [[ "{{matrix.julia}}" == "1.10" ]]; then
+            git clone --depth 1 --branch main https://github.com/JuliaGPU/KernelAbstractions.jl ka
+            julia --project=test -e '
+              using Pkg
+              Pkg.develop([PackageSpec(; path) for path in (pwd(), "ka", "ka/lib/KernelInterface")])'
+          else
+            julia --project=test -e 'using Pkg; Pkg.develop(path=pwd())'
+          fi
+          julia --project=test --check-bounds=yes test/runtests.jl --quickfail --all --verbose
+        if: |
+          build.message !~ /\[skip [^\]]*(tests|julia)/ &&
+          (build.message =~ /\[only [^\]]*(tests|julia)/ ||
+           build.message !~ /\[only / && !build.pull_request.draft)
+        timeout_in_minutes: 60
+        matrix:
+          setup:
+            julia:
               - "1.10"
               - "1.11"
-              - "1.12"
 
       - <<: *julia
         if: |
