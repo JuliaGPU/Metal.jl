@@ -42,8 +42,14 @@ KI.supports_subgroups(::MetalBackend) = true
 # threadgroup execute independently.
 KI.supports_linear_subgroups(::MetalBackend) = true
 KI.supports_independent_subgroups(::MetalBackend) = true
+# Metal limitation: MSL has no barrier for part of a SIMD-group. `simdgroup_barrier` has to be
+# encountered by all threads of the SIMD-group, also in conditionals and loops (only threads
+# that have ended are excused), and while a SIMD-group-scope `atomic_thread_fence` orders
+# memory, nothing guarantees that the lanes of a segment rendezvous. So the functions with a
+# `width` are executed by the whole SIMD-group, and narrow tiles get a workgroup each.
+KI.supports_independent_segments(::MetalBackend) = false
 # the types Metal's SIMD-group shuffles support natively. KernelInterface's fallbacks shuffle
-# other primitive types (e.g. 64-bit integers) as `UInt32` words, and structs field by field.
+# other primitive types (e.g. 64-bit integers) and structs as `UInt32` words.
 const ShuffleTypes = Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
 KI.supports_shuffle(::MetalBackend, ::Type{<:ShuffleTypes}) = true
 
