@@ -167,48 +167,32 @@ end
 function compile(@nospecialize(job::CompilerJob))
     @signpost_event log=log_compiler() "Compile" "Job=$job"
 
-    @signpost_interval log=log_compiler() "Generate LLVM IR" begin
-        # TODO: on 1.9, this actually creates a context. cache those.
-        ir, entry = JuliaContext() do ctx
+    # TODO: on 1.9, this actually creates a context. cache those.
+    ir, air, entry = JuliaContext() do ctx
+        @signpost_interval log=log_compiler() "Generate LLVM IR" begin
             mod, meta = GPUCompiler.compile(:llvm, job)
-            string(mod), LLVM.name(meta.entry)
         end
-    end
 
-    @signpost_interval log=log_compiler() "Downgrade to AIR" begin
-        # generate AIR
-        air = let
-            input = Pipe()
-            output = Pipe()
-            log = Pipe()
-
-            cmd = `$(LLVMDowngrader_jll.llvm_as()) --bitcode-version=5.0 -o -`
-            proc = run(pipeline(cmd, stdout=output, stderr=log, stdin=input); wait=false)
-            close(output.in)
-            close(log.in)
-
-            writer = @async begin
-                write(input, ir)
-                close(input)
-            end
-            reader = @async read(output)
-            logger = @async read(log, String)
-
-            try
-                wait(proc)
-                success(proc) || error(fetch(logger))
+        @signpost_interval log=log_compiler() "Downgrade to AIR" begin
+            # generate AIR, having GPUCompiler lower the IR to AIR-compatible form and
+            # invoke the LLVM downgrader (both as part of Metal's `mcgen`)
+            air = try
+                air, _ = GPUCompiler.emit_asm(job, mod, LLVM.API.LLVMObjectFile)
+                air
             catch err
+                # `emit_asm` has already lowered the module in-place, so stringifying it
+                # here shows exactly what the downgrader was fed
                 ir_file = tempname(cleanup=false) * ".ll"
-                write(ir_file, ir)
+                write(ir_file, string(mod))
                 if parse(Bool, get(ENV, "BUILDKITE", "false"))
                     run(`buildkite-agent artifact upload $(ir_file)`)
                 end
-                error("""Compilation to AIR failed; see above for details.
+                error("""Compilation to AIR failed: $(sprint(showerror, err))
                          If you think this is a bug, please file an issue and attach $(ir_file)""")
             end
-
-            fetch(reader)
         end
+
+        string(mod), air, LLVM.name(meta.entry)
     end
 
     @signpost_interval log=log_compiler() "Create Metal library" begin

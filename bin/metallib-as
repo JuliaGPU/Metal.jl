@@ -61,7 +61,7 @@ function main(args)
                 data = String(data)
             end
 
-            name, ir = @dispose mod = parse(LLVM.Module, data) begin
+            name, bc = @dispose mod = parse(LLVM.Module, data) begin
                 # find external functions
                 external_functions = filter(collect(LLVM.functions(mod))) do fun
                     !isdeclaration(fun) && linkage(fun) == LLVM.API.LLVMExternalLinkage
@@ -70,7 +70,11 @@ function main(args)
                 if length(external_functions) > 1
                     error("Multiple external functions found in $input: $(join(LLVM.name.(external_functions), ", ")))")
                 end
-                LLVM.name(external_functions[1]), string(mod)
+                # llvm-downgrade consumes bitcode, so re-emit the parsed module as bitcode
+                LLVM.name(external_functions[1]), let io = IOBuffer()
+                    write(io, mod)
+                    take!(io)
+                end
             end
 
             air_module = if endswith(input, ".bc") && !downgrade
@@ -78,11 +82,11 @@ function main(args)
                 read(input)
             else
                 let input=Pipe(), output=Pipe()
-                    cmd = `$(LLVMDowngrader_jll.llvm_as()) --bitcode-version=5.0 -o -`
+                    cmd = `$(LLVMDowngrader_jll.llvm_downgrade()) --bitcode-version=14.0 -o - -`
                     proc = run(pipeline(cmd, stdin=input, stdout=output); wait=false)
                     close(output.in)
                     writer = @async begin
-                        write(input, ir)
+                        write(input, bc)
                         close(input)
                     end
                     reader = @async read(output)
