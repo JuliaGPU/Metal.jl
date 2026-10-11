@@ -98,7 +98,7 @@ if filter_tests!(testsuite, args)
     end
 
     # only run large broadcast test on machines with >12GiB memory
-    if parse(Bool, get(ENV, "CI", "false")) || Sys.total_memory() < 12 * 2^30
+    if Metal.T_IDX == UInt32 && (parse(Bool, get(ENV, "CI", "false")) || Sys.total_memory() < 12 * 2^30)
         delete!(testsuite, "largebroadcast")
     end
 end
