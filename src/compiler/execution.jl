@@ -513,12 +513,12 @@ Base.@nospecializeinfer function launch(
     nthreads > maxthreads &&
         throw(ArgumentError("Number of threads in group ($nthreads) should not exceed $maxthreads"))
 
-    (gs.width * ts.width) > typemax(UInt32) &&
-        throw(ArgumentError("Total threads per grid in a dimension (groups.width($(gs.width)) * threads.width($(ts.width)) = $(gs.width * ts.width)) must not exceed $(typemax(UInt32))"))
-    (gs.height * ts.height) > typemax(UInt32) &&
-        throw(ArgumentError("Total threads per grid in a dimension (groups.height($(gs.height)) * threads.height($(ts.height)) = $(gs.height * ts.height)) must not exceed $(typemax(UInt32))"))
-    (gs.depth * ts.depth) > typemax(UInt32) &&
-        throw(ArgumentError("Total threads per grid in a dimension (groups.depth($(gs.depth)) * threads.depth($(ts.depth)) = $(gs.depth * ts.depth)) must not exceed $(typemax(UInt32))"))
+    (gs.width * ts.width) > typemax(T_IDX) &&
+        throw(ArgumentError("Total threads per grid in a dimension (groups.width($(gs.width)) * threads.width($(ts.width)) = $(gs.width * ts.width)) must not exceed $(typemax(T_IDX))"))
+    (gs.height * ts.height) > typemax(T_IDX) &&
+        throw(ArgumentError("Total threads per grid in a dimension (groups.height($(gs.height)) * threads.height($(ts.height)) = $(gs.height * ts.height)) must not exceed $(typemax(T_IDX))"))
+    (gs.depth * ts.depth) > typemax(T_IDX) &&
+        throw(ArgumentError("Total threads per grid in a dimension (groups.depth($(gs.depth)) * threads.depth($(ts.depth)) = $(gs.depth * ts.depth)) must not exceed $(typemax(T_IDX))"))
 
     dev = kernel.device
     tgmem = kernel.tgmem

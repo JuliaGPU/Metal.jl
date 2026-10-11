@@ -399,7 +399,7 @@ end
 @testset "host synchronization" begin
     # GPU operations are asynchronous, so accessing an array from the host needs to wait
     # for the pending operations that use it.
-    n = 1 << 16
+    n = Metal.T_IDX == UInt16 ? 1 << 15 : 1 << 16
 
     @testset "$S resize!" for S in STORAGEMODES
         a = Metal.zeros(Float32, n; storage=S)
@@ -714,7 +714,7 @@ end
     @test Base.mightalias(y, view(z, 15:-1:1))
 
     # so in-place broadcasts between them should make a copy first
-    n = 2^20
+    n = Metal.T_IDX == UInt16 ? 2^10 : 2^20
     x = MtlArray{Float32}(1:n)
     view(x, 2:n) .= view(x, n-1:-1:1)
     @test Array(x) == [1; n-1:-1:1]

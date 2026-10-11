@@ -2,6 +2,10 @@
 
 ## kernel functions
 
+const T_IDX = @load_preference("index_kernels_uint16", false) ? UInt16 : UInt32
+
+const IDX_STR = T_IDX == UInt16 ? "i16" : "i32"
+
 const nodim_intr = [
     ("dispatch_quadgroups_per_threadgroup", 0),
     ("dispatch_simdgroups_per_threadgroup", 0),
@@ -22,7 +26,7 @@ for (intr, offset) in nodim_intr
     @eval begin
         # UInt32
         export $(intr)
-        @device_function $(intr)() = ccall($"extern julia.air.$intr.i32", llvmcall, UInt32, ()) + UInt32($offset)
+        @device_function $(intr)() = ccall($"extern julia.air.$intr.$IDX_STR", llvmcall, $T_IDX, ()) + $T_IDX($offset)
 
         # UInt16
         export $(intr_i16)
@@ -50,11 +54,11 @@ for (intr, offset) in dim_intr
         # UInt32
         export $(intr)
         @device_function function $(intr)()
-            vec = ccall($"extern julia.air.$intr.v3i32", llvmcall,
-                        NTuple{3, VecElement{UInt32}}, ())
-            (x = vec[1].value + UInt32($offset),
-             y = vec[2].value + UInt32($offset),
-             z = vec[3].value + UInt32($offset))
+            vec = ccall($"extern julia.air.$intr.v3$IDX_STR", llvmcall,
+                        NTuple{3, VecElement{T_IDX}}, ())
+            (x = vec[1].value + T_IDX($offset),
+             y = vec[2].value + T_IDX($offset),
+             z = vec[3].value + T_IDX($offset))
         end
 
         # UInt16

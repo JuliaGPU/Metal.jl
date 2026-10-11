@@ -217,19 +217,23 @@ end
     # so the simdgroup kernel is exercised regardless of whether a tensor path is available.
     # BFloat16 routes its epilogue through f32 scratch (see `simd_direct_store`), which the
     # β≠0 / ragged cases here exercise.
-    @testset "$T $tA$tB α=$α β=$β" for T in (Float32, Float16, BFloat16),
-                                        (tA, tB) in (("N","N"), ("N","T"), ("T","N"), ("T","T")),
-                                        (α, β) in ((T(1), T(0)), (T(2), T(0)), (T(1), T(1)), (T(2), T(3)))
-        @test nativetest(T, 64, 48, 32, only(tA), only(tB), α, β; alg=:simd)   # aligned
-        @test nativetest(T, 65, 47, 33, only(tA), only(tB), α, β; alg=:simd)   # ragged
+    @testset "simd path" begin
+        @testset "$T $tA$tB α=$α β=$β" for T in (Float32, Float16, BFloat16),
+                                            (tA, tB) in (("N","N"), ("N","T"), ("T","N"), ("T","T")),
+                                            (α, β) in ((T(1), T(0)), (T(2), T(0)), (T(1), T(1)), (T(2), T(3)))
+            @test nativetest(T, 64, 48, 32, only(tA), only(tB), α, β; alg=:simd)   # aligned
+            @test nativetest(T, 65, 47, 33, only(tA), only(tB), α, β; alg=:simd)   # ragged
+        end
     end
 
     # scalar path (ComplexF32, Int32): includes conjugate transpose
-    @testset "$T $tA$tB" for T in (ComplexF32, Int32),
-                             (tA, tB) in (("N","N"), ("N","T"), ("T","N"), ("C","N"), ("N","C"))
-        α = T(2); β = T <: Integer ? T(1) : T(1) / 2
-        @test nativetest(T, 40, 24, 16, only(tA), only(tB), α, β; alg=:scalar)
-        @test nativetest(T, 41, 25, 17, only(tA), only(tB), α, β; alg=:scalar)   # ragged
+    @testset "scalar path" begin
+        @testset "$T $tA$tB" for T in (ComplexF32, Int32),
+                                 (tA, tB) in (("N","N"), ("N","T"), ("T","N"), ("C","N"), ("N","C"))
+            α = T(2); β = T <: Integer ? T(1) : T(1) / 2
+            @test nativetest(T, 40, 24, 16, only(tA), only(tB), α, β; alg=:scalar)
+            @test nativetest(T, 41, 25, 17, only(tA), only(tB), α, β; alg=:scalar)   # ragged
+        end
     end
 
     # offset views (dense MtlMatrix with offset≠0): the case MPSGraph falls back on

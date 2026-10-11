@@ -53,6 +53,7 @@ function versioninfo(io::IO=stdout; verbose=false)
         "command_batching_ops" => load_preference(Metal, "command_batching_ops"),
         "command_batching_bytes" => load_preference(Metal, "command_batching_bytes"),
         "command_batching_inflight" => load_preference(Metal, "command_batching_inflight"),
+        "index_kernels_uint16" => load_preference(Metal, "index_kernels_uint16"),
         "precompile" => load_preference(Metal, "precompile"),
     ]
     if any(x->!isnothing(x[2]), prefs)
