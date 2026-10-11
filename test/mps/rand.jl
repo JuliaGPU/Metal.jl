@@ -17,14 +17,14 @@ const MPS_OOPLACE_TUPLES = [[(rand, T) for T in MPS_RAND_TYPES];
         @testset "$d" for d in (2, 3, (3, 3), (3, 3, 3), 16, (16, 16), (16, 16, 16),
                                 (1000,), (1000,1000))
             A = MtlArray{T}(undef, d)
-            fill!(A, T(0))
+            A .= T(0)
             f(rng, A)
             @test !iszero(collect(A))
         end
 
         @testset "0" begin
             A = MtlArray{T}(undef, 0)
-            fill!(A, T(0))
+            A .= T(0)
             f(rng, A)
             @test Array(A) == fill(1, 0)
         end
@@ -40,7 +40,7 @@ end
         alen = 100
         A = MtlArray{T}(undef, alen)
         function test_view!(X::MtlArray{T}, idx) where {T}
-            fill!(X, T(0))
+            X .= T(0)
             view_X = @view X[idx]
             f(rng, view_X)
             cpuX = collect(X)

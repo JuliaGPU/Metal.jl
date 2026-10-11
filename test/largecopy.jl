@@ -2,10 +2,10 @@
 @testset "large_copyto!" begin
     N = 2^30 + 11
     A = MtlVector{Float32}(undef, N)
-    fill!(A, 1)
+    A .= 1
 
     B = MtlVector{Float32}(undef, N)
-    fill!(B, 0)
+    B .= 0
     synchronize()
 
     @test all(isone.(A))

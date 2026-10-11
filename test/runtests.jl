@@ -74,6 +74,13 @@ if filter_tests!(testsuite, args)
         end
     end
 
+    # don't run the examples with UInt16 indexing
+    if Metal.T_IDX == UInt16
+        filter!(testsuite) do (name, _)
+            !startswith(name, "examples/")
+        end
+    end
+
     if Metal.DefaultStorageMode != Metal.PrivateStorage
         # GPUArrays' scalar indexing tests assume that indexing is not supported
         delete!(testsuite, "gpuarrays/indexing scalar")

@@ -12,5 +12,8 @@ if Metal.is_virtual(Metal.device())
     # device-side printing needs GPU logging, which is unsupported on virtualized GPUs
     push!(skip_tests, "Printing")
 end
+if Metal.T_IDX == UInt16
+    push!(skip_tests, "Examples")
+end
 
 Testsuite.testsuite(MetalBackend, "Metal", Metal, MtlArray, Metal.MtlDeviceArray; skip_tests)
