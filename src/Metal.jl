@@ -4,7 +4,7 @@ using GPUArrays
 using Adapt
 using GPUCompiler
 using GPUToolbox
-using LLVM
+using LLVM, LLVM.IR, LLVM.Build
 using LLVM.Interop
 import LLVMDowngrader_jll
 using Preferences: @load_preference, load_preference

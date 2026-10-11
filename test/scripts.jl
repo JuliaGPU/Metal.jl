@@ -1,4 +1,4 @@
-using LLVM
+using LLVM, LLVM.IR
 
 @testset "scripts" begin
 

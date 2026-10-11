@@ -425,14 +425,8 @@ const clz = leading_zeros
 @device_override Base.trailing_zeros(x::UInt8)  = ccall("extern air.ctz.i8", llvmcall, UInt8, (UInt8,), x)
 const ctz = trailing_zeros
 
-@device_override Base.count_ones(x::Int64)  = ccall("extern air.popcount.i64", llvmcall, Int64, (Int64,), x)
-@device_override Base.count_ones(x::UInt64) = ccall("extern air.popcount.i64", llvmcall, UInt64, (UInt64,), x)
-@device_override Base.count_ones(x::Int32)  = ccall("extern air.popcount.i32", llvmcall, Int32, (Int32,), x)
-@device_override Base.count_ones(x::UInt32) = ccall("extern air.popcount.i32", llvmcall, UInt32, (UInt32,), x)
-@device_override Base.count_ones(x::Int16)  = ccall("extern air.popcount.i16", llvmcall, Int16, (Int16,), x)
-@device_override Base.count_ones(x::UInt16) = ccall("extern air.popcount.i16", llvmcall, UInt16, (UInt16,), x)
-@device_override Base.count_ones(x::Int8)   = ccall("extern air.popcount.i8", llvmcall, Int8, (Int8,), x)
-@device_override Base.count_ones(x::UInt8)  = ccall("extern air.popcount.i8", llvmcall, UInt8, (UInt8,), x)
+# `count_ones` is emitted as `llvm.ctpop`, which GPUCompiler lowers to `air.popcount`.
+# That lets LLVM constant-fold it, e.g., in LLVM.jl's `ispow2(align)` pointer checks.
 const popcount = count_ones
 
 @device_override Base.bitreverse(x::Int64)  = ccall("extern air.reverse_bits.i64", llvmcall, Int64, (Int64,), x)
