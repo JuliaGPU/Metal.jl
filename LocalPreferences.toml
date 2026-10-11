@@ -26,6 +26,11 @@
 #   further submissions block until the GPU drains one. defaults to 3.
 #command_batching_inflight = 3
 
+# when true, the default indexing intrinsics use UInt16
+# this is meant to test grid size limits without it multitasking
+# too much memory. Should not be considered stable
+#index_kernels_uint16=false
+
 # whether to include the precompile.jl file. This is meant
 # to improve iteration time when developing Metal.jl
 #precompile = true
