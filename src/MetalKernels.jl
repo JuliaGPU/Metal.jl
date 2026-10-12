@@ -42,6 +42,10 @@ KI.supports_subgroups(::MetalBackend) = true
 # threadgroup execute independently.
 KI.supports_linear_subgroups(::MetalBackend) = true
 KI.supports_independent_subgroups(::MetalBackend) = true
+# MSL has no barrier for part of a SIMD-group, but Apple GPUs execute a SIMD-group with a
+# single program counter and an execution mask, serializing divergent paths, so the lanes of a
+# segment in segment-uniform control flow execute in lock-step: see `KI.sub_group_barrier`.
+KI.supports_partitionable_subgroups(::MetalBackend) = true
 # the types Metal's SIMD-group shuffles support natively. KernelInterface's fallbacks shuffle
 # other primitive types (e.g. 64-bit integers) and structs as `UInt32` words.
 const ShuffleTypes = Union{Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, UInt8}
@@ -231,6 +235,20 @@ end
 
 @device_override @inline function KI.sub_group_barrier()
     simdgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
+end
+
+# MSL does not specify an execution barrier for a segment of a SIMD-group. On Apple GPUs,
+# control flow that is uniform over a segment executes in lock-step within it, which we rely on
+# for the rendezvous (validated on M1 and M3 with a stress test of diverging segments), and a
+# SIMD-group-scope fence orders threadgroup and device memory. A full `simdgroup_barrier` would
+# need every lane of the SIMD-group, including those of segments on other paths.
+@device_override @inline function KI.sub_group_barrier(width::Integer)
+    if width >= 32
+        simdgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
+    else
+        atomic_thread_fence(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup,
+                            Metal.memory_order_seq_cst, Metal.thread_scope_simdgroup)
+    end
 end
 
 
