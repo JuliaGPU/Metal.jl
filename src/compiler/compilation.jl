@@ -392,20 +392,20 @@ end
             error("""Metal $(metal) requires AIR $(air_floor(metal)) or newer; cannot target AIR $(air).""")
     end
     # Only Apple family values form the capability sequence used by device code.
-    if gpufamily === nothing
-        highest_family = MTL.highest_apple_family(dev)
-        apple_family = something(highest_family, 0)
+    apple_family = if gpufamily === nothing
+        MTL.highest_apple_family(dev)
     else
         gpufamily = convert(MTL.MTLGPUFamily, gpufamily)
-        apple_family = Int(gpufamily) - 1000
-        if !(1 <= apple_family <= 10)
+        family = Int(gpufamily) - 1000
+        if !(1 <= family <= 10)
             throw(ArgumentError("gpufamily must be an MTLGPUFamilyApple<n>, got $(gpufamily)"))
         end
+        family
     end
 
     # create GPUCompiler objects
-    target = MetalCompilerTarget(; macos, air, metal, kwargs...)
-    params = MetalCompilerParams(apple_family)
+    target = MetalCompilerTarget(; macos, air, metal, apple_family, kwargs...)
+    params = MetalCompilerParams(something(apple_family, 0))
     CompilerConfig(target, params; kernel, name, always_inline, debug_level, opt_level)
 end
 
