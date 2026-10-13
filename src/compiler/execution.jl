@@ -407,7 +407,7 @@ end
 
 (l::LaunchAttempt)() = launch_with_queue(l.kernel, l.queue, l.gs, l.ts, l.args, l.submit)
 
-Base.@nospecializeinfer function try_launch(@nospecialize(kernel::HostKernel), queue,
+Base.@nospecializeinfer function try_launch(@nospecialize(kernel::HostKernel), @nospecialize(queue),
                                             gs::MTLSize, ts::MTLSize,
                                             @nospecialize(args::Tuple), submit::Bool)
     attempt = LaunchAttempt(kernel, queue, gs, ts, args, submit)
