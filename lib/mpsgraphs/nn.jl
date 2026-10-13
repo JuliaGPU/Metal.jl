@@ -457,34 +457,34 @@ function check_conv2d_groups(groups::Integer, in_channels::Int, kernel_in_channe
         throw(DimensionMismatch("input channel count must match groups times kernel input channels"))
     out_channels % groups == 0 ||
         throw(DimensionMismatch("output channel count must be divisible by groups"))
-    return Int(groups)
+    return
 end
 
 function check_conv2d_args(y::MtlArray{T,4}, x::MtlArray{T,4}, w::MtlArray{T,4},
                            groups::Integer) where {T}
     T <: MPSGRAPH_VALID_NN_TYPES || throw(ArgumentError("MPSGraph NN operations support Float16 and Float32"))
-    groups = check_conv2d_groups(groups, size(x, 3), size(w, 3), size(w, 4))
+    check_conv2d_groups(groups, size(x, 3), size(w, 3), size(w, 4))
     size(y, 3) == size(w, 4) || throw(DimensionMismatch("output and kernel channel counts do not match"))
     size(y, 4) == size(x, 4) || throw(DimensionMismatch("input and output batch sizes do not match"))
-    return groups
+    return
 end
 
 function check_conv2d_data_grad_args(dx::MtlArray{T,4}, dy::MtlArray{T,4},
                                      w::MtlArray{T,4}, groups::Integer) where {T}
     T <: MPSGRAPH_VALID_NN_TYPES || throw(ArgumentError("MPSGraph NN operations support Float16 and Float32"))
-    groups = check_conv2d_groups(groups, size(dx, 3), size(w, 3), size(w, 4))
+    check_conv2d_groups(groups, size(dx, 3), size(w, 3), size(w, 4))
     size(dy, 3) == size(w, 4) || throw(DimensionMismatch("output gradient and kernel channel counts do not match"))
     size(dy, 4) == size(dx, 4) || throw(DimensionMismatch("input and output gradient batch sizes do not match"))
-    return groups
+    return
 end
 
 function check_conv2d_filter_grad_args(dw::MtlArray{T,4}, x::MtlArray{T,4},
                                        dy::MtlArray{T,4}, groups::Integer) where {T}
     T <: MPSGRAPH_VALID_NN_TYPES || throw(ArgumentError("MPSGraph NN operations support Float16 and Float32"))
-    groups = check_conv2d_groups(groups, size(x, 3), size(dw, 3), size(dw, 4))
+    check_conv2d_groups(groups, size(x, 3), size(dw, 3), size(dw, 4))
     size(dy, 3) == size(dw, 4) || throw(DimensionMismatch("output and kernel gradient channel counts do not match"))
     size(dy, 4) == size(x, 4) || throw(DimensionMismatch("input and output gradient batch sizes do not match"))
-    return groups
+    return
 end
 
 @autoreleasepool function graph_conv!(y::MtlArray{T,4}, x::MtlArray{T,4}, w::MtlArray{T,4};
@@ -493,7 +493,7 @@ end
                                       dilation::NTuple{2, Int} = (1, 1),
                                       groups::Integer = 1,
                                       flipkernel::Bool = false) where {T}
-    groups = check_conv2d_args(y, x, w, groups)
+    check_conv2d_args(y, x, w, groups)
     key = Conv2DGraphKey{T}(size(y), size(x), size(w), stride, padding, dilation,
                             groups, flipkernel)
     cached = @lock conv2d_graph_cache_lock get!(conv2d_graph_cache, key) do
@@ -523,7 +523,7 @@ end
                                                 dilation::NTuple{2, Int} = (1, 1),
                                                 groups::Integer = 1,
                                                 flipkernel::Bool = false) where {T}
-    groups = check_conv2d_data_grad_args(dx, dy, w, groups)
+    check_conv2d_data_grad_args(dx, dy, w, groups)
     key = Conv2DDataGradGraphKey{T}(size(dx), size(dy), size(w), stride, padding,
                                     dilation, groups, flipkernel)
     cached = @lock conv2d_data_grad_graph_cache_lock get!(conv2d_data_grad_graph_cache, key) do
@@ -553,7 +553,7 @@ end
                                                   dilation::NTuple{2, Int} = (1, 1),
                                                   groups::Integer = 1,
                                                   flipkernel::Bool = false) where {T}
-    groups = check_conv2d_filter_grad_args(dw, x, dy, groups)
+    check_conv2d_filter_grad_args(dw, x, dy, groups)
     key = Conv2DFilterGradGraphKey{T}(size(dw), size(x), size(dy), stride, padding,
                                       dilation, groups, flipkernel)
     cached = @lock conv2d_filter_grad_graph_cache_lock get!(conv2d_filter_grad_graph_cache, key) do

@@ -107,7 +107,7 @@ function check_sort_args(out::MtlArray{T}, input::MtlArray{T}, dim::Integer) whe
         throw(DimensionMismatch("output has dimensions $(size(out)), input has dimensions $(size(input))"))
     1 <= dim <= ndims(input) || throw(ArgumentError("dimension out of range"))
     check_mpsgraph_offsets(out, input)
-    return Int(dim)
+    return
 end
 
 function check_sortperm_args(index::MtlArray{Ti}, input::MtlArray{T},
@@ -118,13 +118,13 @@ function check_sortperm_args(index::MtlArray{Ti}, input::MtlArray{T},
         throw(DimensionMismatch("index output has dimensions $(size(index)), input has dimensions $(size(input))"))
     1 <= dim <= ndims(input) || throw(ArgumentError("dimension out of range"))
     check_mpsgraph_offsets(index, input)
-    return Int(dim)
+    return
 end
 
 @autoreleasepool function graph_sort!(out::MtlArray{T}, input::MtlArray{T};
                                       dim::Integer = 1,
                                       rev::Bool = false) where {T}
-    dim = check_sort_args(out, input, dim)
+    check_sort_args(out, input, dim)
     isempty(input) && return copyto!(out, input)
     key = SortGraphKey{T}(size(input), dim, rev)
     cached = @lock sort_graph_cache_lock get!(sort_graph_cache, key) do
@@ -149,7 +149,7 @@ end
 @autoreleasepool function graph_sortperm!(index::MtlArray{Ti}, input::MtlArray{T};
                                           dim::Integer = 1,
                                           rev::Bool = false) where {Ti, T}
-    dim = check_sortperm_args(index, input, dim)
+    check_sortperm_args(index, input, dim)
     isempty(input) && return index
     key = SortPermGraphKey{T, Ti}(size(input), dim, rev)
     cached = @lock sortperm_graph_cache_lock get!(sortperm_graph_cache, key) do
