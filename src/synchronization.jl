@@ -106,35 +106,39 @@ function synchronize(queue = global_queue(device()))
         maybe_collect(b.queue.device; will_block=true)
         b, c, o
     end
-    queue = bq.queue
 
     # flush any pending log handlers from logging-enabled kernels on this queue
     # (Metal delivers logs asynchronously; waiting for the specific cmdbuf's
     # completion handlers is what processes its `addLogHandler:` blocks)
-    drain_logging_cmdbufs!(queue)
+    drain_logging_cmdbufs!(bq.queue)
 
-    last, submissions = MTL.take_queue_submissions(queue)
+    last, submissions = MTL.take_queue_submissions(bq.queue)
 
     # Handles the already-completed fast path internally.
     last === nothing || wait_cmdbuf!(last)
 
-    if orphans !== nothing
-        submissions = wait_orphaned_queues!(orphans, submissions)
-    end
-
-    @autoreleasepool begin
-        # other tasks may have committed more work to this queue while we were waiting,
-        # so only force the cleanup of command buffers that were committed before.
-        drain_cleanups!(bq; until=committed)
-        if orphans !== nothing
-            foreach(drain_cleanups!, orphans)
-        end
-
-        # Surface Metal runtime failures and device-side Julia exceptions together,
-        # after cleanup has released all Julia roots held by completed work.
-        check_synchronization_errors(submissions)
+    # waiting for orphaned queues changes the type of `submissions`, so keep the paths
+    # apart for `finish_synchronization!` to be called with concrete arguments
+    if orphans === nothing
+        finish_synchronization!(bq, committed, nothing, submissions)
+    else
+        finish_synchronization!(bq, committed, orphans,
+                                wait_orphaned_queues!(orphans, submissions))
     end
     return
+end
+
+@autoreleasepool function finish_synchronization!(bq, committed, orphans, submissions)
+    # other tasks may have committed more work to this queue while we were waiting,
+    # so only force the cleanup of command buffers that were committed before.
+    drain_cleanups!(bq; until=committed)
+    if orphans !== nothing
+        foreach(drain_cleanups!, orphans)
+    end
+
+    # Surface Metal runtime failures and device-side Julia exceptions together,
+    # after cleanup has released all Julia roots held by completed work.
+    check_synchronization_errors(submissions)
 end
 
 # wait for the work committed to `bq`, which may belong to another task. errors are left

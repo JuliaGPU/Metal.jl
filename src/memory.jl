@@ -213,21 +213,19 @@ end
         conflict = try_take_ownership!(bq, dst, src)
         conflict === nothing || return conflict
 
-        total_bytes = nbytes
         chunk_size = 2^31
         enc = blit_encoder(bq)
         offset = 0
-        while nbytes > 0
-            transfer_bytes = min(nbytes, chunk_size)
+        while offset < nbytes
+            transfer_bytes = min(nbytes - offset, chunk_size)
             append_copy!(enc, dst.buffer, dst.offset + offset,
                          src.buffer, src.offset + offset, transfer_bytes)
             offset += transfer_bytes
-            nbytes -= transfer_bytes
         end
 
         op = MTL.profile_metadata[] === nothing ? nothing :
-             (; kind = :copy, name = "copyto!", bytes = Int(total_bytes))
-        record_operation!(bq, dst.buffer, src.buffer; bytes=total_bytes, op=op)
+             (; kind = :copy, name = "copyto!", bytes = Int(nbytes))
+        record_operation!(bq, dst.buffer, src.buffer; bytes=nbytes, op=op)
     end
     return nothing
 end

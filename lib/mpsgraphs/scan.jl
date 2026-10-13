@@ -94,12 +94,12 @@ function check_scan_args(out::MtlArray{T}, input::MtlArray{T}, dim::Integer) whe
         throw(DimensionMismatch("output has dimensions $(size(out)), input has dimensions $(size(input))"))
     1 <= dim <= ndims(input) || throw(ArgumentError("dimension out of range"))
     check_mpsgraph_offsets(out, input)
-    return Int(dim)
+    return
 end
 
 @autoreleasepool function graph_scan!(op, out::MtlArray{T}, input::MtlArray{T};
                                       dim::Integer = 1) where {T}
-    dim = check_scan_args(out, input, dim)
+    check_scan_args(out, input, dim)
     isempty(input) && return copyto!(out, input)
     key = ScanGraphKey{T}(size(input), dim, scan_operation(T, op))
     cached = @lock scan_graph_cache_lock get!(scan_graph_cache, key) do

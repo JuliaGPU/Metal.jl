@@ -287,10 +287,10 @@ LinearAlgebra.ipiv2perm(v::MtlVector{<:Any, CPUStorage}, maxi::Integer) =
 
     synchronize(cmdbuf)
 
-    status = convert(LinearAlgebra.BlasInt, status[]::MPS.MPSMatrixDecompositionStatus)
-    check && checknonsingular(status)
+    info = convert(LinearAlgebra.BlasInt, status[]::MPS.MPSMatrixDecompositionStatus)
+    check && checknonsingular(info)
 
-    return LinearAlgebra.LU(B, p, status)
+    return LinearAlgebra.LU(B, p, info)
 end
 
 function check_lu_success(info, allowsingular)
@@ -342,10 +342,10 @@ end
 
     synchronize(cmdbuf)
 
-    status = convert(LinearAlgebra.BlasInt, status[])
-    check && check_lu_success(status, allowsingular)
+    info = convert(LinearAlgebra.BlasInt, status[])
+    check && check_lu_success(info, allowsingular)
 
-    return LinearAlgebra.LU(A, p, status)
+    return LinearAlgebra.LU(A, p, info)
 end
 
 @autoreleasepool function LinearAlgebra.transpose!(B::MtlMatrix{T},
