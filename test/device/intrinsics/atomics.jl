@@ -523,6 +523,29 @@ end
             @test Array(out)[1] == 42
         end
     end
+
+    # the macOS 26 compiler for Apple10 GPUs (the M5) crashes on floating-point adds and
+    # subtracts that follow a release fence (#1024), so on those GPUs they are lowered as
+    # compare-exchange loops, which also run on other GPUs (target macOS 15 so that every
+    # supported host can run them)
+    @testset "Apple10 before macOS 27" begin
+        a = Metal.zeros(Float32, 1)
+        tt = Tuple{typeof(Metal.mtlconvert(a))}
+        apple10 = (; macos=v"15", metal=v"3.2", air=v"2.7", gpufamily=MTL.MTLGPUFamilyApple10)
+        ir = sprint(io -> Metal.code_air(io, contend, tt; kernel=true, apple10...))
+        @test occursin("@air.atomic.global.cmpxchg.weak.i32(", ir)
+        @test !occursin("@air.atomic.global.add.f32(", ir)
+        # other GPUs, and the macOS 27 compiler, keep the native operation
+        for kwargs in ((; apple10..., gpufamily=MTL.MTLGPUFamilyApple9),
+                       (; apple10..., macos=v"27"))
+            ir = sprint(io -> Metal.code_air(io, contend, tt; kernel=true, kwargs...))
+            @test occursin("@air.atomic.global.add.f32(", ir)
+            @test !occursin("@air.atomic.global.cmpxchg.weak.i32(", ir)
+        end
+
+        @metal threads=256 groups=m÷256 macos=v"15" metal=v"3.2" air=v"2.7" gpufamily=MTL.MTLGPUFamilyApple10 contend(a)
+        @test Array(a)[1] == Float32(m)
+    end
 end
 
 @testset "high-level" begin
