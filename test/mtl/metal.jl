@@ -1,7 +1,5 @@
 using .MTL
 
-@autoreleasepool begin
-
 @testset "devices" begin
 
 devs = devices()
@@ -694,5 +692,3 @@ end # @testset "residency sets" begin
 end
 
 # TODO: continue adding tests
-
-end # @autoreleasepool begin

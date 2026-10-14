@@ -5,21 +5,19 @@ export MPSMatrixDescriptor
 # @objcwrapper MPSMatrixDescriptor <: NSObject
 
 function MPSMatrixDescriptor(rows, columns, rowBytes, dataType)
-    desc = @objc [MPSMatrixDescriptor matrixDescriptorWithRows:rows::NSUInteger
+    return @objc [MPSMatrixDescriptor matrixDescriptorWithRows:rows::NSUInteger
                                       columns:columns::NSUInteger
                                       rowBytes:rowBytes::NSUInteger
-                                      dataType:dataType::MPSDataType]::id{MPSMatrixDescriptor}
-    MPSMatrixDescriptor(desc)
+                                      dataType:dataType::MPSDataType]::MPSMatrixDescriptor
 end
 
 function MPSMatrixDescriptor(rows, columns, matrices, rowBytes, matrixBytes, dataType)
-    desc = @objc [MPSMatrixDescriptor matrixDescriptorWithRows:rows::NSUInteger
+    return @objc [MPSMatrixDescriptor matrixDescriptorWithRows:rows::NSUInteger
                                       columns:columns::NSUInteger
                                       matrices:matrices::NSUInteger
                                       rowBytes:rowBytes::NSUInteger
                                       matrixBytes:matrixBytes::NSUInteger
-                                      dataType:dataType::MPSDataType]::id{MPSMatrixDescriptor}
-    MPSMatrixDescriptor(desc)
+                                      dataType:dataType::MPSDataType]::MPSMatrixDescriptor
 end
 
 

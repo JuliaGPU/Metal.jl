@@ -539,7 +539,7 @@ end
 # Shared storage, written once, read-only on device. The buffer is not bound to the encoder as
 # an argument (only its address travels, inside the state), so each launch declares it
 # resident — same as the malloc and exception scratch buffers.
-@autoreleasepool function reloc_table_buffer(dev::MTLDevice,
+function reloc_table_buffer(dev::MTLDevice,
                                              relocations::GPUCompiler.Relocations)
     words = GPUCompiler.resolved_relocation_table(relocations)
     buf = MTLBuffer(dev, sizeof(words); storage=SharedStorage)
@@ -549,7 +549,7 @@ end
 end
 
 # link the metallib into a session-local pipeline state on the given device.
-@autoreleasepool function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
+function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
                                         metallib::Vector{UInt8}, entry::String)
     @signpost_event log=log_compiler() "Link" entry
 

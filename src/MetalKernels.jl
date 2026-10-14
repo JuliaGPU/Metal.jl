@@ -2,7 +2,7 @@ module MetalKernels
 
 using ..Metal
 using ..Metal: @device_override, DefaultStorageMode, SharedStorage, metal_support,
-               mtlfunction, mtlconvert, try_launch, MTL, MTLSize, @autoreleasepool,
+               mtlfunction, mtlconvert, try_launch, MTL, MTLSize,
                MTLSharedEvent, MTLCommandBuffer, encode_signal!, encode_wait!, commit!
 
 import KernelInterface as KI
@@ -200,7 +200,7 @@ end
 ## events
 
 # signal a new event once the work the task has queued so far completes
-@autoreleasepool function KI.record_event(::MetalBackend)
+function KI.record_event(::MetalBackend)
     dev = device()
     event = MTLSharedEvent(dev)
     value = event.signaledValue + 1

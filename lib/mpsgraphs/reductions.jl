@@ -108,7 +108,7 @@ function check_reduction_args(out::MtlArray{T}, input::MtlArray{T}) where {T}
     return dims
 end
 
-@autoreleasepool function graph_mapreducedim!(op, out::MtlArray{T},
+function graph_mapreducedim!(op, out::MtlArray{T},
                                               input::MtlArray{T}) where {T}
     dims = check_reduction_args(out, input)
     key = ReductionGraphKey{T}(size(input), size(out), dims,

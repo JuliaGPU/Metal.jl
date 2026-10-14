@@ -5,10 +5,9 @@ export MPSMatrixCopyDescriptor
 # @objcwrapper MPSMatrixCopyDescriptor <: NSObject
 
 function MPSMatrixCopyDescriptor(sourceMatrix, destinationMatrix, offsets = MPSMatrixCopyOffsets(Cuint(0), Cuint(0), Cuint(0), Cuint(0)))
-    desc = @objc [MPSMatrixCopyDescriptor descriptorWithSourceMatrix:sourceMatrix::id{MPSMatrix}
+    return @objc [MPSMatrixCopyDescriptor descriptorWithSourceMatrix:sourceMatrix::id{MPSMatrix}
                                           destinationMatrix:destinationMatrix::id{MPSMatrix}
-                                          offsets:offsets::MPSMatrixCopyOffsets]::id{MPSMatrixCopyDescriptor}
-    MPSMatrixCopyDescriptor(desc)
+                                          offsets:offsets::MPSMatrixCopyOffsets]::MPSMatrixCopyDescriptor
 end
 
 

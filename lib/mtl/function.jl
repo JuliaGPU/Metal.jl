@@ -31,11 +31,11 @@ end
 # Missing constant values are *not* an error here — the runtime silently leaves the slots
 # `undef` — so callers must set every constant the function declares.
 function MTLFunction(lib::MTLLibrary, name, constants::MTLFunctionConstantValues)
-    err = Ref{id{NSError}}(nil)
+    err = Out{NSError}()
     fun = @objc [lib::id{MTLLibrary} newFunctionWithName:name::id{NSString}
                                      constantValues:constants::id{MTLFunctionConstantValues}
-                                     error:err::Ptr{id{NSError}}]::Union{Nothing,MTLFunction}
-    fun === nothing && throw_error(err[])
+                                     error:err::Out{NSError}]::Union{Nothing,MTLFunction}
+    fun === nothing && throw_error(err)
     return fun
 end
 

@@ -393,25 +393,10 @@ function (kernel::HostKernel)(args...; groups=1, threads=1, queue=nothing,
     end
 end
 
-# A launch attempt, as the callable that `@autoreleasepool` runs. This is a struct rather
-# than a closure: a closure has a type parameter per captured variable (on Julia < 1.13
-# even when it is `@nospecialize`d), and would be compiled for every kernel signature.
-struct LaunchAttempt <: Function
-    kernel::HostKernel
-    queue::Any
-    gs::MTLSize
-    ts::MTLSize
-    args::Tuple
-    submit::Bool
-end
-
-(l::LaunchAttempt)() = launch_with_queue(l.kernel, l.queue, l.gs, l.ts, l.args, l.submit)
-
 Base.@nospecializeinfer function try_launch(@nospecialize(kernel::HostKernel), @nospecialize(queue),
                                             gs::MTLSize, ts::MTLSize,
                                             @nospecialize(args::Tuple), submit::Bool)
-    attempt = LaunchAttempt(kernel, queue, gs, ts, args, submit)
-    @autoreleasepool attempt()
+    launch_with_queue(kernel, queue, gs, ts, args, submit)
 end
 
 Base.@nospecializeinfer @inline function launch_with_queue(

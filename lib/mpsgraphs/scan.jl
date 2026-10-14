@@ -97,7 +97,7 @@ function check_scan_args(out::MtlArray{T}, input::MtlArray{T}, dim::Integer) whe
     return
 end
 
-@autoreleasepool function graph_scan!(op, out::MtlArray{T}, input::MtlArray{T};
+function graph_scan!(op, out::MtlArray{T}, input::MtlArray{T};
                                       dim::Integer = 1) where {T}
     check_scan_args(out, input, dim)
     isempty(input) && return copyto!(out, input)

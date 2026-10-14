@@ -17,11 +17,8 @@ using ..Metal
 # Import the bindings that are not used in MTL for backward compatibility
 import ..Metal: StorageMode, SharedStorage, ManagedStorage, PrivateStorage, Memoryless, CPUStorage
 
-function throw_error(err::id{NSError})
-    # NSError arrives through an `error:` out-parameter, not as an Objective-C
-    # return value, so nullable ARC return handling cannot retain it for us.
-    throw(retain(NSError, err))
-end
+# throw the error reported through an `error:` out-parameter of a failed call
+throw_error(err::Out{NSError}) = throw(something(err[], ErrorException("Metal call failed")))
 
 
 ## source code includes

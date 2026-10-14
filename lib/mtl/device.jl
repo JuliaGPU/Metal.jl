@@ -17,7 +17,8 @@ MTLCreateSystemDefaultDevice() =
 Get an iterator for the compute devices.
 """
 function devices()
-    list = NSArray(@ccall libmtl.MTLCopyAllDevices()::id{NSArray})
+    # the array is leaked to keep the devices alive, as `MTLDevice` is unmanaged
+    list = @unsafe_autoreleasepool NSArray(@ccall libmtl.MTLCopyAllDevices()::id{NSArray})
     [reinterpret(MTLDevice, dev) for dev in list]
 end
 

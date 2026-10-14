@@ -78,12 +78,12 @@ end
 
 function alloc_buffer_with_retry(dev::Union{MTLDevice,MTLHeap}, sz::Integer, args...; kwargs...)
     try
-        return @autoreleasepool MTLBuffer(dev, sz, args...; kwargs...)
+        return MTLBuffer(dev, sz, args...; kwargs...)
     catch err
         err isa OutOfMemoryError || rethrow()
         GC.gc(true)
         device_synchronize()
-        return @autoreleasepool MTLBuffer(dev, sz, args...; kwargs...)
+        return MTLBuffer(dev, sz, args...; kwargs...)
     end
 end
 

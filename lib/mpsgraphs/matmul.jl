@@ -134,7 +134,7 @@ end
 # Thread-safe graph cache with lock
 const _matmul_graph_cache = Dict{MatmulGraphKey, CachedMatmulGraph}()
 const _matmul_graph_cache_lock = ReentrantLock()
-@autoreleasepool function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb},
+function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb},
                                    alpha::Number, beta::Number,
                                    transpose_a, transpose_b) where {Tc, Tab, Na, Nb}
     # Get or create cached graph

@@ -22,7 +22,6 @@
     end
 
     function profile_result(raw, names=["[MTLCommandBuffer status]", "[NSObject retain]",
-                                        "[NSAutoreleasePool drain]",
                                         "[MTLDevice newBufferWithLength:options:]"])
         Metal.Profiling.ProfileResults(;
             device=(name=String[], start=Float64[], stop=Float64[], ops=Vector{Any}[]),
@@ -36,7 +35,6 @@
     filtered_output = sprint(show, filtered)
     @test !occursin("[MTLCommandBuffer status]", filtered_output)
     @test !occursin("[NSObject retain]", filtered_output)
-    @test !occursin("[NSAutoreleasePool drain]", filtered_output)
     @test occursin("[MTLDevice newBufferWithLength:options:]", filtered_output)
 
     filtered_only = profile_result(false, ["[MTLCommandBuffer status]",
@@ -47,7 +45,6 @@
     raw_output = sprint(show, raw)
     @test occursin("[MTLCommandBuffer status]", raw_output)
     @test occursin("[NSObject retain]", raw_output)
-    @test occursin("[NSAutoreleasePool drain]", raw_output)
 
     if !isempty(res.device.name)
         @test any(n -> occursin("broadcast", n), res.device.name)

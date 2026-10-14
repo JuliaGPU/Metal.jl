@@ -1,8 +1,6 @@
 # @objcwrapper managed = true MPSGraphRandomOpDescriptor <: MPSGraphObject
 
 function MPSGraphRandomOpDescriptor(distribution::MPSGraphRandomDistribution, dataType)
-    desc = @objc [MPSGraphRandomOpDescriptor descriptorWithDistribution:distribution::MPSGraphRandomDistribution
-                    dataType:dataType::MPSDataType]::id{MPSGraphRandomOpDescriptor}
-    obj = MPSGraphRandomOpDescriptor(desc)
-    return obj
+    return @objc [MPSGraphRandomOpDescriptor descriptorWithDistribution:distribution::MPSGraphRandomDistribution
+                    dataType:dataType::MPSDataType]::MPSGraphRandomOpDescriptor
 end

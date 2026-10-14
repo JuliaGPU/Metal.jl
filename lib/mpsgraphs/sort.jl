@@ -121,7 +121,7 @@ function check_sortperm_args(index::MtlArray{Ti}, input::MtlArray{T},
     return
 end
 
-@autoreleasepool function graph_sort!(out::MtlArray{T}, input::MtlArray{T};
+function graph_sort!(out::MtlArray{T}, input::MtlArray{T};
                                       dim::Integer = 1,
                                       rev::Bool = false) where {T}
     check_sort_args(out, input, dim)
@@ -146,7 +146,7 @@ end
     return out
 end
 
-@autoreleasepool function graph_sortperm!(index::MtlArray{Ti}, input::MtlArray{T};
+function graph_sortperm!(index::MtlArray{Ti}, input::MtlArray{T};
                                           dim::Integer = 1,
                                           rev::Bool = false) where {Ti, T}
     check_sortperm_args(index, input, dim)

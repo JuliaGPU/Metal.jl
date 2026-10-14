@@ -131,10 +131,10 @@ function startCapture(manager::MTLCaptureManager, desc::MTLCaptureDescriptor)
     # Check not already capturing
     manager.isCapturing && throw(error("Capture manager is already capturing."))
 
-    err = Ref{id{NSError}}(nil)
+    err = Out{NSError}()
     success = @objc [manager::id{MTLCaptureManager} startCaptureWithDescriptor:desc::id{MTLCaptureDescriptor}
-                                                    error:err::Ptr{id{NSError}}]::Bool
-    success || throw_error(err[])
+                                                    error:err::Out{NSError}]::Bool
+    success || throw_error(err)
     return
 end
 
