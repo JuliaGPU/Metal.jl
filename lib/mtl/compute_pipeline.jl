@@ -19,10 +19,10 @@ export MTLComputePipelineState
 # @objcwrapper managed = true MTLComputePipelineState <: NSObject
 
 function MTLComputePipelineState(dev::MTLDevice, fun::MTLFunction)
-    err = Ref{id{NSError}}(nil)
+    err = Out{NSError}()
     pipeline = @objc [dev::id{MTLDevice} newComputePipelineStateWithFunction:fun::id{MTLFunction}
-                                          error:err::Ptr{id{NSError}}]::Union{Nothing,MTLComputePipelineState}
-    pipeline === nothing && throw_error(err[])
+                                          error:err::Out{NSError}]::Union{Nothing,MTLComputePipelineState}
+    pipeline === nothing && throw_error(err)
 
     return pipeline
 end
@@ -32,12 +32,12 @@ end
 # is skipped (unreliable on archive hits); pass a null out-param.
 function MTLComputePipelineState(dev::MTLDevice, desc::MTLComputePipelineDescriptor;
                                  options::MTLPipelineOption=MTLPipelineOptionNone)
-    err = Ref{id{NSError}}(nil)
+    err = Out{NSError}()
     pipeline = @objc [dev::id{MTLDevice} newComputePipelineStateWithDescriptor:desc::id{MTLComputePipelineDescriptor}
                                           options:options::MTLPipelineOption
                                           reflection:C_NULL::Ptr{Cvoid}
-                                          error:err::Ptr{id{NSError}}]::Union{Nothing,MTLComputePipelineState}
-    pipeline === nothing && throw_error(err[])
+                                          error:err::Out{NSError}]::Union{Nothing,MTLComputePipelineState}
+    pipeline === nothing && throw_error(err)
 
     return pipeline
 end

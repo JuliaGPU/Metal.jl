@@ -224,7 +224,7 @@ end
 const softmax_graph_cache = Dict{SoftmaxGraphKey, CachedSoftmaxGraph}()
 const softmax_graph_cache_lock = ReentrantLock()
 
-@autoreleasepool function run_softmax!(op::Symbol, y::MtlArray{T}, x::MtlArray{T},
+function run_softmax!(op::Symbol, y::MtlArray{T}, x::MtlArray{T},
                                        dims::Integer) where {T}
     axis = check_softmax_args(y, x, dims)
     key = SoftmaxGraphKey{T}(op, size(x), axis)
@@ -308,7 +308,7 @@ end
 const softmax_grad_graph_cache = Dict{SoftmaxGradGraphKey, CachedSoftmaxGradGraph}()
 const softmax_grad_graph_cache_lock = ReentrantLock()
 
-@autoreleasepool function run_softmax_grad!(op::Symbol, dx::MtlArray{T},
+function run_softmax_grad!(op::Symbol, dx::MtlArray{T},
                                             dy::MtlArray{T}, y::MtlArray{T},
                                             dims::Integer) where {T}
     axis = check_softmax_grad_args(dx, dy, y, dims)
@@ -487,7 +487,7 @@ function check_conv2d_filter_grad_args(dw::MtlArray{T,4}, x::MtlArray{T,4},
     return
 end
 
-@autoreleasepool function graph_conv!(y::MtlArray{T,4}, x::MtlArray{T,4}, w::MtlArray{T,4};
+function graph_conv!(y::MtlArray{T,4}, x::MtlArray{T,4}, w::MtlArray{T,4};
                                       stride::NTuple{2, Int} = (1, 1),
                                       padding::NTuple{4, Int} = (0, 0, 0, 0),
                                       dilation::NTuple{2, Int} = (1, 1),
@@ -516,7 +516,7 @@ end
     return y
 end
 
-@autoreleasepool function graph_conv_data_grad!(dx::MtlArray{T,4}, dy::MtlArray{T,4},
+function graph_conv_data_grad!(dx::MtlArray{T,4}, dy::MtlArray{T,4},
                                                 w::MtlArray{T,4};
                                                 stride::NTuple{2, Int} = (1, 1),
                                                 padding::NTuple{4, Int} = (0, 0, 0, 0),
@@ -546,7 +546,7 @@ end
     return dx
 end
 
-@autoreleasepool function graph_conv_filter_grad!(dw::MtlArray{T,4}, x::MtlArray{T,4},
+function graph_conv_filter_grad!(dw::MtlArray{T,4}, x::MtlArray{T,4},
                                                   dy::MtlArray{T,4};
                                                   stride::NTuple{2, Int} = (1, 1),
                                                   padding::NTuple{4, Int} = (0, 0, 0, 0),
@@ -667,7 +667,7 @@ function check_pool2d_grad_args(dx::MtlArray{T,4}, dy::MtlArray{T,4},
     return nothing
 end
 
-@autoreleasepool function run_pool2d!(op::Symbol, y::MtlArray{T,4}, x::MtlArray{T,4};
+function run_pool2d!(op::Symbol, y::MtlArray{T,4}, x::MtlArray{T,4};
                                       kernel::NTuple{2, Int},
                                       stride::NTuple{2, Int},
                                       padding::NTuple{4, Int},
@@ -695,7 +695,7 @@ end
     return y
 end
 
-@autoreleasepool function run_pool2d_grad!(op::Symbol, dx::MtlArray{T,4},
+function run_pool2d_grad!(op::Symbol, dx::MtlArray{T,4},
                                            dy::MtlArray{T,4}, x::MtlArray{T,4};
                                            kernel::NTuple{2, Int},
                                            stride::NTuple{2, Int},

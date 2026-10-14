@@ -54,15 +54,10 @@ const device_exception_lock = ReentrantLock()
 function exception_info_buffer_and_gpu_address(dev::MTLDevice)
     Base.@lock device_exception_lock begin
         buf, _, gpuaddr = get!(device_exception_info, dev) do
-            # `newBufferWithLength:` (a `new*` method) returns retain-count-1, non-autoreleased
-            # per Apple's ARC naming convention, so the buffer survives the pool drain. the
-            # pool is here to catch any intermediates the alloc call autoreleases internally.
-            @autoreleasepool begin
-                local buf = MTLBuffer(dev, sizeof(ExceptionInfo_st); storage=SharedStorage)
-                ptr = convert(Ptr{ExceptionInfo_st}, MTL.contents(buf))
-                unsafe_store!(ptr, ExceptionInfo_st())
-                (buf, ptr, UInt64(buf.gpuAddress))
-            end
+            local buf = MTLBuffer(dev, sizeof(ExceptionInfo_st); storage=SharedStorage)
+            ptr = convert(Ptr{ExceptionInfo_st}, MTL.contents(buf))
+            unsafe_store!(ptr, ExceptionInfo_st())
+            (buf, ptr, UInt64(buf.gpuAddress))
         end
         return buf, gpuaddr
     end
@@ -71,7 +66,6 @@ end
 exception_info_buffer(dev::MTLDevice) = first(exception_info_buffer_and_gpu_address(dev))
 
 # check the exception mailbox of all devices, rethrowing host-side if one was set.
-# the caller is responsible for running inside an autorelease pool (`synchronize` is).
 function check_exceptions()
     Base.@lock device_exception_lock begin
         for (dev, (_, ptr, _)) in device_exception_info

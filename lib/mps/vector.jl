@@ -6,18 +6,16 @@ export MPSVectorDescriptor
 
 
 function MPSVectorDescriptor(length::Integer, dataType::Union{DataType,MPSDataType})
-    desc = @objc [MPSVectorDescriptor vectorDescriptorWithLength:length::NSUInteger
-                                      dataType:dataType::MPSDataType]::id{MPSVectorDescriptor}
-    MPSVectorDescriptor(desc)
+    return @objc [MPSVectorDescriptor vectorDescriptorWithLength:length::NSUInteger
+                                      dataType:dataType::MPSDataType]::MPSVectorDescriptor
 end
 
 function MPSVectorDescriptor(length::Integer, vectors, vectorBytes::Integer,
                              dataType::Union{DataType,MPSDataType})
-    desc = @objc [MPSVectorDescriptor vectorDescriptorWithLength:length::NSUInteger
+    return @objc [MPSVectorDescriptor vectorDescriptorWithLength:length::NSUInteger
                                       vectors:vectors::NSUInteger
                                       vectorBytes:vectorBytes::NSUInteger
-                                      dataType:dataType::MPSDataType]::id{MPSVectorDescriptor}
-    MPSVectorDescriptor(desc)
+                                      dataType:dataType::MPSDataType]::MPSVectorDescriptor
 end
 
 
@@ -52,9 +50,8 @@ end
 # @objcwrapper managed = true MPSTemporaryVector <: MPSVector
 
 function MPSTemporaryVector(commandBuffer::MTLCommandBufferLike, descriptor::MPSVectorDescriptor)
-    obj = @objc [MPSTemporaryVector temporaryVectorWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}
-                              descriptor:descriptor::id{MPSVectorDescriptor}]::id{MPSTemporaryVector}
-    return MPSTemporaryVector(obj)
+    return @objc [MPSTemporaryVector temporaryVectorWithCommandBuffer:commandBuffer::id{MTLCommandBuffer}
+                                      descriptor:descriptor::id{MPSVectorDescriptor}]::MPSTemporaryVector
 end
 
 

@@ -57,7 +57,7 @@ end
 @noinline function synchronize(managed::Managed)
     while true
         # look up the work to wait for
-        queue, epoch = @autoreleasepool Base.@lock submission_lock begin
+        queue, epoch = Base.@lock submission_lock begin
             (Base.@atomic managed.dirty) ? (managed.queue, managed.epoch) : (nothing, nothing)
         end
         epoch === nothing && return
@@ -66,7 +66,7 @@ end
         queue === nothing || synchronize_queue(queue)
 
         # the buffer may have been used again while we were waiting
-        done = @autoreleasepool Base.@lock submission_lock begin
+        done = Base.@lock submission_lock begin
             managed.epoch == epoch && (Base.@atomic managed.dirty = false; true)
         end
         done && return
@@ -207,7 +207,7 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T}, src::MtlPtr{T}, N::
     return dst
 end
 
-@autoreleasepool function encode_copy!(bq::BatchedCommandQueue, dst::MtlPtr, src::MtlPtr,
+function encode_copy!(bq::BatchedCommandQueue, dst::MtlPtr, src::MtlPtr,
                                        nbytes::Integer)
     Base.@lock submission_lock begin
         conflict = try_take_ownership!(bq, dst, src)
@@ -245,7 +245,7 @@ function unsafe_fill!(dev::MTLDevice, dst::MtlPtr{T}, value::Union{UInt8,Int8}, 
     return dst
 end
 
-@autoreleasepool function encode_fill!(bq::BatchedCommandQueue, dst::MtlPtr,
+function encode_fill!(bq::BatchedCommandQueue, dst::MtlPtr,
                                        value::Union{UInt8,Int8}, nbytes::Integer)
     Base.@lock submission_lock begin
         conflict = try_take_ownership!(bq, dst)

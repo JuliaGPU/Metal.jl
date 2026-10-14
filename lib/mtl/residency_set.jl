@@ -5,10 +5,10 @@ function MTLResidencySetDescriptor()
 end
 
 function MTLResidencySet(device::MTLDevice, desc::MTLResidencySetDescriptor)
-    err = Ref{id{NSError}}(nil)
+    err = Out{NSError}()
     resset = @objc [device::id{MTLDevice} newResidencySetWithDescriptor:desc::id{MTLResidencySetDescriptor}
-                                                                    error:err::Ptr{id{NSError}}]::Union{Nothing,MTLResidencySet}
-    resset === nothing && throw_error(err[])
+                                                                    error:err::Out{NSError}]::Union{Nothing,MTLResidencySet}
+    resset === nothing && throw_error(err)
     return resset
 end
 

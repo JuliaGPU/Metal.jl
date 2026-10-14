@@ -44,16 +44,13 @@ end
 # @objcwrapper managed = true MPSMatrixRandomMTGP32 <: MPSMatrixRandom
 # @objcwrapper managed = true MPSMatrixRandomPhilox <: MPSMatrixRandom
 
+# the initializers that use the default distribution over-release the descriptor they
+# create, crashing when the autorelease pool is drained, so always pass a descriptor.
 for R in [:MPSMatrixRandomMTGP32, :MPSMatrixRandomPhilox]
     @eval begin
-        function $R(device)
-            return @objc [[$R alloc]::id{$R} initWithDevice:device::id{MTLDevice}]::$R
-        end
-        function $R(device, destinationDataType, seed)
-            return @objc [[$R alloc]::id{$R} initWithDevice:device::id{MTLDevice}
-                                      destinationDataType:destinationDataType::MPSDataType
-                                      seed:seed::NSUInteger]::$R
-        end
+        $R(device) = $R(device, UInt32, 0)
+        $R(device, destinationDataType, seed) =
+            $R(device, destinationDataType, seed, MPSMatrixRandomDefaultDistributionDescriptor())
         function $R(device, destinationDataType, seed, distributionDescriptor)
             return @objc [[$R alloc]::id{$R} initWithDevice:device::id{MTLDevice}
                                       destinationDataType:destinationDataType::MPSDataType

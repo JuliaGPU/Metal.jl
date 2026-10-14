@@ -10,30 +10,27 @@ function MPS.encode!(commandBuffer::MPSCommandBuffer, graph::MPSGraph, feeds::MP
 end
 
 function MPS.encode!(commandBuffer::MPSCommandBuffer, graph::MPSGraph, feeds::MPSGraphTensorDataDictionary, targetTensors::NSArray, targetOperations=nil, executionDescriptor::MPSGraphExecutionDescriptor=MPSGraphExecutionDescriptor())
-    obj = @objc [graph::id{MPSGraph} encodeToCommandBuffer:commandBuffer::id{MPSCommandBuffer}
-                                                        feeds:feeds::id{MPSGraphTensorDataDictionary}
-                                                targetTensors:targetTensors::id{NSArray}
-                                             targetOperations:targetOperations::id{Object}
-                                          executionDescriptor:executionDescriptor::id{MPSGraphExecutionDescriptor}]::id{MPSGraphTensorDataDictionary}
-    MPSGraphTensorDataDictionary(obj)
+    return @objc [graph::id{MPSGraph} encodeToCommandBuffer:commandBuffer::id{MPSCommandBuffer}
+                                                         feeds:feeds::id{MPSGraphTensorDataDictionary}
+                                                 targetTensors:targetTensors::id{NSArray}
+                                              targetOperations:targetOperations::id{Object}
+                                           executionDescriptor:executionDescriptor::id{MPSGraphExecutionDescriptor}]::MPSGraphTensorDataDictionary
 end
 
 function run(graph::MPSGraph, feeds::MPSGraphTensorDataDictionary, targetTensors::NSArray, targetOperations=nil)
-    obj = @objc [graph::id{MPSGraph} runWithFeeds:feeds::id{MPSGraphTensorDataDictionary}
-                                            targetTensors:targetTensors::id{NSArray}
-                                         targetOperations:targetOperations::id{Object}]::id{MPSGraphTensorDataDictionary}
-    MPSGraphTensorDataDictionary(obj)
+    return @objc [graph::id{MPSGraph} runWithFeeds:feeds::id{MPSGraphTensorDataDictionary}
+                                             targetTensors:targetTensors::id{NSArray}
+                                          targetOperations:targetOperations::id{Object}]::MPSGraphTensorDataDictionary
 end
 
 function run(graph::MPSGraph, commandQueue, feeds::MPSGraphTensorDataDictionary, targetTensors::NSArray)
     Metal.flush!(commandQueue)
     # this executes synchronously, without going through Metal.jl's submission hook
     Metal.synchronize_pending!()
-    obj = @objc [graph::id{MPSGraph} runWithMTLCommandQueue:commandQueue::id{MTLCommandQueue}
-                                                    feeds:feeds::id{MPSGraphTensorDataDictionary}
-                                            targetTensors:targetTensors::id{NSArray}
-                                         targetOperations:nil::id{Object}]::id{MPSGraphTensorDataDictionary}
-    MPSGraphTensorDataDictionary(obj)
+    return @objc [graph::id{MPSGraph} runWithMTLCommandQueue:commandQueue::id{MTLCommandQueue}
+                                                     feeds:feeds::id{MPSGraphTensorDataDictionary}
+                                             targetTensors:targetTensors::id{NSArray}
+                                          targetOperations:nil::id{Object}]::MPSGraphTensorDataDictionary
 end
 
 const MPSGraphTensorShapedTypeDictionary = NSDictionary#{MPSGraphTensor, MPSGraphTensorShapedType}

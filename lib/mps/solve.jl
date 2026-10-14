@@ -137,7 +137,7 @@ end
 @inline mps_cholesky_lower(uplo) = uplo_char(uplo) == 'U'
 @inline mps_cholesky_upper(uplo) = uplo_char(uplo) == 'L'
 
-@autoreleasepool function solve_lu(A::MtlMatrix{T}, B::MtlVecOrMat{T};
+function solve_lu(A::MtlMatrix{T}, B::MtlVecOrMat{T};
                                    check::Bool=true) where {T<:MtlFloat}
     n, nrhs = check_square_rhs(A, B)
     dev = device()
@@ -182,7 +182,7 @@ end
     return X
 end
 
-@autoreleasepool function solve_lu(F::LinearAlgebra.LU{T,<:MtlMatrix{T}},
+function solve_lu(F::LinearAlgebra.LU{T,<:MtlMatrix{T}},
                                    B::MtlVecOrMat{T};
                                    out::MtlVecOrMat{T}=B) where {T<:MtlFloat}
     n = LinearAlgebra.checksquare(F)
@@ -225,7 +225,7 @@ end
     return out
 end
 
-@autoreleasepool function decompose_cholesky!(A::MtlMatrix{T};
+function decompose_cholesky!(A::MtlMatrix{T};
                                               uplo::Union{Symbol,AbstractChar}='U') where {T<:MtlFloat}
     n = LinearAlgebra.checksquare(A)
     dev = device()
@@ -248,7 +248,7 @@ function decompose_cholesky(A::MtlMatrix{T};
     return decompose_cholesky!(copy(A); uplo)
 end
 
-@autoreleasepool function solve_cholesky(C::LinearAlgebra.Cholesky{T,<:MtlMatrix{T}},
+function solve_cholesky(C::LinearAlgebra.Cholesky{T,<:MtlMatrix{T}},
                                          B::MtlVecOrMat{T};
                                          out::MtlVecOrMat{T}=B) where {T<:MtlFloat}
     n = LinearAlgebra.checksquare(C)
@@ -286,7 +286,7 @@ end
     return out
 end
 
-@autoreleasepool function solve_cholesky(A::MtlMatrix{T}, B::MtlVecOrMat{T};
+function solve_cholesky(A::MtlMatrix{T}, B::MtlVecOrMat{T};
                                          uplo::Union{Symbol,AbstractChar}='U',
                                          check::Bool=true) where {T<:MtlFloat}
     n, nrhs = check_square_rhs(A, B)
@@ -330,7 +330,7 @@ end
     return X
 end
 
-@autoreleasepool function solve_triangular(A::MtlMatrix{T}, B::MtlVecOrMat{T};
+function solve_triangular(A::MtlMatrix{T}, B::MtlVecOrMat{T};
                                            upper::Bool, unit::Bool,
                                            transpose::Bool=false, right::Bool=false,
                                            alpha=one(T),

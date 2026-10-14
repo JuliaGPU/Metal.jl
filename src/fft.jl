@@ -267,7 +267,7 @@ end
 const _fft_graph_cache = Dict{FFTGraphKey, CachedFFTGraph}()
 const _fft_graph_cache_lock = ReentrantLock()
 
-@autoreleasepool function _fft!(p::MtlFFTPlan{T, S, backward, inplace, N}, x, y) where {T <: FFTNumber, S <: FFTNumber, N, backward, inplace}
+function _fft!(p::MtlFFTPlan{T, S, backward, inplace, N}, x, y) where {T <: FFTNumber, S <: FFTNumber, N, backward, inplace}
     # Get or create cached graph
     key = FFTGraphKey(p)
     cached = @lock _fft_graph_cache_lock get!(_fft_graph_cache, key) do

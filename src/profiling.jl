@@ -328,13 +328,8 @@ const filtered_host_calls = Set([
     "[NSArray objectAtIndex:]",
     "[NSBlock copy]",
 ])
-const filtered_host_call_prefixes = ("[NSAutoreleasePool ",)
 
-function show_host_call(name::String, raw::Bool)
-    raw && return true
-    name in filtered_host_calls && return false
-    return !any(prefix -> startswith(name, prefix), filtered_host_call_prefixes)
-end
+show_host_call(name::String, raw::Bool) = raw || !(name in filtered_host_calls)
 
 opfield(op, k) = haskey(op, k) ? op[k] : missing
 format_dims(sz) = "$(Int(sz.width))×$(Int(sz.height))×$(Int(sz.depth))"

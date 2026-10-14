@@ -14,9 +14,9 @@ export MTLLogState
 # @objcwrapper MTLLogState <: NSObject
 
 function MTLLogState(dev::MTLDevice, descriptor::MTLLogStateDescriptor)
-    err = Ref{id{NSError}}(nil)
+    err = Out{NSError}()
     handle = @objc [dev::id{MTLDevice} newLogStateWithDescriptor:descriptor::id{MTLLogStateDescriptor}
-        error:err::Ptr{id{NSError}}]::id{MTLLogState}
-    err[] == nil || throw_error(err[])
-    MTLLogState(handle)
+        error:err::Out{NSError}]::Union{Nothing,MTLLogState}
+    handle === nothing && throw_error(err)
+    return handle
 end
