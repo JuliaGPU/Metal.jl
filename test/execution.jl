@@ -1014,6 +1014,44 @@ end
             @test Array(b) == [42]
         end
     end
+
+    @testset "dynamically indexed closure argument" begin
+        # the closure used to be copied to the stack, where the dynamic indexing of `w` kept
+        # it alive, and the back-end miscompiled the kernel (#1018)
+        function kernel(out, f)
+            i = thread_position_in_grid().x
+            n = length(out)
+            if i > n
+                return
+            elseif i == n
+                out[i] = f(i)
+            else
+                out[i] = f(i) + 0f0 * f(i + 1)
+            end
+            return
+        end
+        make_f(u, J, w) = el -> begin
+            V = 0f0
+            for k in 1:4, j in 1:4, i in 1:4
+                V += J[i, j, k, el] * w[i] * w[j] * w[k] * u[1, i, j, k, el]
+            end
+            return V
+        end
+
+        len = 512
+        u = ones(Float32, 1, 4, 4, 4, len)
+        J = repeat(reshape(Float32.(1:len), 1, 1, 1, len), 4, 4, 4)
+        w = (1f0, 2f0, 3f0, 4f0)
+        out = Metal.zeros(Float32, len)
+        @metal threads=256 groups=cld(len, 256) kernel(out, make_f(MtlArray(u), MtlArray(J), w))
+        @test Array(out) == map(make_f(u, J, w), 1:len)
+    end
+end
+
+@testset "Symbols in device memory" begin
+    # loaded as a pointer into thread memory, a Symbol used to lose its upper bits (#1017)
+    syms = MtlArray([(:begin, :end), (:end, :begin)])
+    @test Array(map(t -> t[1] === :begin, syms)) == [true, false]
 end
 
 @testset "compilation cache" begin
