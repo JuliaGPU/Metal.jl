@@ -22,7 +22,11 @@ Create a [`MetalLibFunction`](@ref) for the function `entry` of the AIR module `
 deriving its metadata from the module like Apple's toolchain does:
 - `type` from the named metadata listing the module's entry points (`air.kernel`,
   `air.visible`, ...), or `METALLIB_UNQUALIFIED_FUNCTION` if `entry` is in none of them;
-- `air_version` and `metal_version` from `air.version` and `air.language_version`.
+- `air_version` and `metal_version` from `air.version` and `air.language_version`;
+- `constants` from `air.function_constants`. Constants the module checks with
+  `air.is_function_constant_defined` are optional, unless the module records whether they
+  are required (as linked modules do). Note that this lists all of the module's constants,
+  while Apple's linker only lists those the function uses.
 
 `air_module` is the bitcode to store in the library, i.e. `mod` as Metal should see it
 (typically downgraded). Other keyword arguments set fields of the function directly,
@@ -40,18 +44,19 @@ function MetalLibFunction(mod::LLVM.Module, entry::String; air_module::Vector{UI
     get!(() -> program_type(mod, fn), fields, :type)
     get!(() -> air_version(mod), fields, :air_version)
     get!(() -> metal_version(mod), fields, :metal_version)
+    get!(() -> function_constants(mod), fields, :constants)
     return MetalLibFunction(; name=entry, air_module, fields...)
 end
 
-# a value referenced from metadata, looking through the casts of typed-pointer modules
-function metadata_value(md::LLVM.Metadata)
-    val = LLVM.Value(md)
+# look through the pointer casts of typed-pointer modules
+function strip_casts(val::LLVM.Value)
     while val isa LLVM.ConstantExpr &&
           LLVM.opcode(val) in (LLVM.API.LLVMBitCast, LLVM.API.LLVMAddrSpaceCast)
         val = LLVM.operands(val)[1]
     end
     return val
 end
+metadata_value(md::LLVM.Metadata) = strip_casts(LLVM.Value(md))
 
 function program_type(mod::LLVM.Module, fn::LLVM.Function)
     for (name, type) in program_type_metadata
@@ -90,4 +95,54 @@ air_version(mod::LLVM.Module) = version_number(version_metadata(mod, "air.versio
 function metal_version(mod::LLVM.Module)
     ops = version_metadata(mod, "air.language_version")
     return version_number(ops[2:end])
+end
+
+# the data types of function constants, by their MSL spelling
+const function_constant_types = let
+    types = Dict{String,MTL.MTLDataType}()
+    for (msl, mtl) in ["bool" => "Bool", "char" => "Char", "uchar" => "UChar",
+                       "short" => "Short", "ushort" => "UShort", "int" => "Int",
+                       "uint" => "UInt", "long" => "Long", "ulong" => "ULong",
+                       "half" => "Half", "bfloat" => "BFloat", "float" => "Float"],
+        width in ["", "2", "3", "4"]
+        types[msl * width] = getproperty(MTL, Symbol("MTLDataType", mtl, width))
+    end
+    types
+end
+
+# `!air.function_constants = !{!{ptr addrspace(2) @init, !"type", !"name", i32 index}}`,
+# where linked modules add an `i1 required` operand
+function function_constants(mod::LLVM.Module)
+    haskey(mod.metadata, "air.function_constants") || return FunctionConstant[]
+    optional = optional_function_constants(mod)
+    map(LLVM.operands(mod.metadata["air.function_constants"])) do node
+        ops = LLVM.operands(node)
+        length(ops) in (4, 5) ||
+            throw(ArgumentError("malformed function constant metadata: $node"))
+        initializer = metadata_value(ops[1])
+        type = convert(String, ops[2])
+        datatype = get(function_constant_types, type) do
+            throw(ArgumentError("unsupported function constant type $type"))
+        end
+        name = convert(String, ops[3])
+        index = convert(Int, LLVM.Value(ops[4]))
+        required = if length(ops) == 5
+            convert(Int, LLVM.Value(ops[5])) != 0
+        else
+            !(initializer in optional)
+        end
+        FunctionConstant(name, datatype, index, required)
+    end
+end
+
+# the initializers of the function constants the module checks are defined
+function optional_function_constants(mod::LLVM.Module)
+    optional = LLVM.Value[]
+    haskey(mod.functions, "air.is_function_constant_defined") || return optional
+    for use in LLVM.uses(mod.functions["air.is_function_constant_defined"])
+        call = LLVM.user(use)
+        call isa LLVM.CallInst || continue
+        push!(optional, strip_casts(LLVM.arguments(call)[1]))
+    end
+    return optional
 end
