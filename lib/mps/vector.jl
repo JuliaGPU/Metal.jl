@@ -78,16 +78,18 @@ function encode!(cmdbuf::MTLCommandBufferLike, matvecmul::MPSMatrixVectorMultipl
 end
 
 """
-    matvecmul!(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha=1, beta=0, transpose=false)
+    MPS.matvecmul!(y, A, x, α=true, β=false; tA='N') -> y
 
-A `MPSMatrixVectorMultiplication` kernel thay computes:
-    `c = alpha * op(a) * b + beta * c`
+Compute `y = α * opA(A) * x + β * y` using `MPSMatrixVectorMultiplication`, where `opA` is
+the identity (`'N'`) or the transpose (`'T'` or `'C'`), as selected by `tA`.
 
-This function should not typically be used. Rather, use the normal `LinearAlgebra` interface
-with any `MtlArray` and it should be accelerated using Metal Performance Shaders.
+`A` is an `MtlArray` matrix and `x` and `y` are `MtlArray` vectors, with element types
+that are one of the combinations in `MPS.MPS_VALID_MATVECMUL_TYPES`. The multiplication
+executes asynchronously, ordered with the other work submitted from the current task.
 """
-function matvecmul!(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha::Number=true, beta::Number=false,
-                    transpose=false)
+function matvecmul!(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha::Number=true,
+                    beta::Number=false; tA::AbstractChar='N')
+    transpose = mps_transpose(tA)
     # NOTE: MPS uses row major, while Julia is col-major
     cols_a = size(a, transpose ? 1 : 2)
     rows_c = length(c)
@@ -107,4 +109,11 @@ function matvecmul!(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha::Number=true
     commit!(cmdbuf)
 
     return c
+end
+
+function matvecmul!(c::MtlVector, a::MtlMatrix, b::MtlVector, alpha::Number, beta::Number,
+                    transpose::Bool)
+    Base.depwarn("`MPS.matvecmul!(c, a, b, α, β, transpose::Bool)` is deprecated, use `MPS.matvecmul!(c, a, b, α, β; tA)` with 'N' or 'T' instead.",
+                 :matvecmul!)
+    return matvecmul!(c, a, b, alpha, beta; tA=transpose ? 'T' : 'N')
 end

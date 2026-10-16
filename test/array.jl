@@ -851,10 +851,13 @@ end
         @test_throws ArgumentError accumulate(max, MtlArray(nan_input))
         @test_throws ArgumentError accumulate(min, MtlArray(nan_input))
 
+        # an `init` of the input's element type
+        @test Array(accumulate(+, MtlArray(scan_input); dims=1, init=1.0f0)) ≈
+            accumulate(+, scan_input; dims=1, init=1.0f0)
+
         # invalid eltype and kwargs
         @test_throws ArgumentError accumulate(+, MtlArray(Complex{Int32}.(int_input)))
-        @test_throws ArgumentError accumulate(+, MtlArray(scan_input); dims=1,
-                                              init=1.0f0)
+        @test_throws ArgumentError accumulate(+, MtlArray(int_input); dims=1, init=1)
     end
 
     large_nan_input = ones(Float32, Metal.mpsgraph_scan_threshold + 1)

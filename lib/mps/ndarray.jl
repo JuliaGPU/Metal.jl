@@ -88,9 +88,12 @@ function MPSNDArray(buffer::MTLBuffer, offset::UInt, descriptor::MPSNDArrayDescr
 end
 
 function MPSNDArray(arr::MtlArray{T,N}) where {T,N}
-    arrsize = size(arr)
-    @assert arrsize[1] * sizeof(T) % 16 == 0 "First dimension of input MtlArray must have a byte size divisible by 16"
-    desc = MPSNDArrayDescriptor(T, arrsize)
+    # MPS ignores misaligned offsets and silently reads garbage
+    arr.offset % sizeof(T) == 0 ||
+        throw(ArgumentError("MPSNDArray requires an offset that is a multiple of the element size"))
+    desc = MPSNDArrayDescriptor(T, size(arr))
+    # without packed rows, MPS assumes the fastest dimension is padded to 16 bytes
+    desc.preferPackedRows = true
     return MPSNDArray(Base.unsafe_convert(MTLBuffer, arr), UInt(arr.offset), desc)
 end
 

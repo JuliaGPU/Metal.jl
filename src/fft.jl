@@ -228,13 +228,7 @@ function FFTGraphKey(p::MtlFFTPlan{T, S, backward, inplace, N, R}) where {T, S, 
     )
 end
 
-# Cached graph with all tensors needed for execution
-struct CachedFFTGraph
-    graph::MPSGraph
-    placeholder::MPSGraphTensor
-    result::MPSGraphTensor
-end
-function CachedFFTGraph(key::FFTGraphKey)
+function MPSGraphs.build_graph(key::FFTGraphKey)
     graph = MPSGraph()
 
     # Create symbolic placeholder with the input shape and type
@@ -260,33 +254,12 @@ function CachedFFTGraph(key::FFTGraphKey)
     # Create FFT operation
     result = fft_fn(graph, placeholder, axes, fft_desc)
 
-    CachedFFTGraph(graph, placeholder, result)
+    MPSGraphs.CachedGraph(graph, [placeholder], [result])
 end
 
-# Thread-safe graph cache with lock
-const _fft_graph_cache = Dict{FFTGraphKey, CachedFFTGraph}()
-const _fft_graph_cache_lock = ReentrantLock()
-
 function _fft!(p::MtlFFTPlan{T, S, backward, inplace, N}, x, y) where {T <: FFTNumber, S <: FFTNumber, N, backward, inplace}
-    # Get or create cached graph
     key = FFTGraphKey(p)
-    cached = @lock _fft_graph_cache_lock get!(_fft_graph_cache, key) do
-        CachedFFTGraph(key)
-    end
-
-    # Build feed and result dictionaries with current data
-    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.placeholder => MPSGraphTensorData(x)
-    )
-
-    resultdict = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => MPSGraphTensorData(y)
-    )
-
-    cmdbuf = MPS.MPSCommandBuffer(global_queue(device()))
-    MPS.encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(resultdict), nil, MPSGraphs.default_exec_desc())
-    commit!(cmdbuf)
-
+    MPSGraphs.run!(MPSGraphs.cached_graph(key), (y,), (x,))
     return y
 end
 

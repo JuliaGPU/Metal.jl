@@ -30,18 +30,18 @@ end
         x_d = MtlArray(x)
         y_d = MtlArray(y)
 
-        MPSGraphs.graph_softmax!(y_d, x_d; dims)
+        MPSGraphs.softmax!(y_d, x_d; dims)
         y_ref = ref_softmax(x; dims)
         @test Array(y_d) ≈ y_ref
 
-        MPSGraphs.graph_softmax_grad!(dx_d, dy_d, y_d; dims)
+        MPSGraphs.softmax_grad!(dx_d, dy_d, y_d; dims)
         @test Array(dx_d) ≈ ref_softmax_grad(dy, y_ref; dims)
 
-        MPSGraphs.graph_logsoftmax!(y_d, x_d; dims)
+        MPSGraphs.logsoftmax!(y_d, x_d; dims)
         y_ref = ref_logsoftmax(x; dims)
         @test Array(y_d) ≈ y_ref
 
-        MPSGraphs.graph_logsoftmax_grad!(dx_d, dy_d, y_d; dims)
+        MPSGraphs.logsoftmax_grad!(dx_d, dy_d, y_d; dims)
         @test Array(dx_d) ≈ ref_logsoftmax_grad(dy, y_ref; dims)
     end
 end
@@ -187,7 +187,7 @@ end
         y_ref = ref_conv2d(x, w; stride=(2, 1), padding=(1, 1, 0, 1),
                            dilation=(1, 1), groups, flipkernel)
         y = MtlArray(similar(y_ref))
-        MPSGraphs.graph_conv!(y, MtlArray(x), MtlArray(w); stride=(2, 1),
+        MPSGraphs.conv!(y, MtlArray(x), MtlArray(w); stride=(2, 1),
                               padding=(1, 1, 0, 1), dilation=(1, 1), groups,
                               flipkernel)
         @test Array(y) ≈ y_ref
@@ -197,7 +197,7 @@ end
                                       padding=(1, 1, 0, 1), dilation=(1, 1),
                                       groups, flipkernel)
         dx = MtlArray(similar(x))
-        MPSGraphs.graph_conv_data_grad!(dx, MtlArray(dy), MtlArray(w);
+        MPSGraphs.conv_data_grad!(dx, MtlArray(dy), MtlArray(w);
                                         stride=(2, 1), padding=(1, 1, 0, 1),
                                         dilation=(1, 1), groups, flipkernel)
         dx = Array(dx)
@@ -209,7 +209,7 @@ end
                                         padding=(1, 1, 0, 1), dilation=(1, 1),
                                         groups, flipkernel)
         dw = MtlArray(similar(w))
-        MPSGraphs.graph_conv_filter_grad!(dw, MtlArray(x), MtlArray(dy);
+        MPSGraphs.conv_filter_grad!(dw, MtlArray(x), MtlArray(dy);
                                           stride=(2, 1), padding=(1, 1, 0, 1),
                                           dilation=(1, 1), groups, flipkernel)
         @test Array(dw) ≈ dw_ref
@@ -221,21 +221,21 @@ end
 
     y_ref = ref_pool2d(:max, x; kernel=(3, 2), stride=(2, 1))
     y = MtlArray(similar(y_ref))
-    MPSGraphs.graph_maxpool!(y, MtlArray(x); kernel=(3, 2), stride=(2, 1),
+    MPSGraphs.maxpool!(y, MtlArray(x); kernel=(3, 2), stride=(2, 1),
                              padding=(0, 0, 0, 0))
     @test Array(y) ≈ y_ref
 
     dy = randn(T, size(y_ref))
     dx_ref = ref_pool2d_grad(:max, dy, x; kernel=(3, 2), stride=(2, 1))
     dx = MtlArray(similar(x))
-    MPSGraphs.graph_maxpool_grad!(dx, MtlArray(dy), MtlArray(x); kernel=(3, 2),
+    MPSGraphs.maxpool_grad!(dx, MtlArray(dy), MtlArray(x); kernel=(3, 2),
                                   stride=(2, 1), padding=(0, 0, 0, 0))
     @test Array(dx) ≈ dx_ref
 
     y_ref = ref_pool2d(:mean, x; kernel=(3, 2), stride=(2, 1),
                        padding=(1, 1, 0, 1), count_include_pad=true)
     y = MtlArray(similar(y_ref))
-    MPSGraphs.graph_meanpool!(y, MtlArray(x); kernel=(3, 2), stride=(2, 1),
+    MPSGraphs.meanpool!(y, MtlArray(x); kernel=(3, 2), stride=(2, 1),
                               padding=(1, 1, 0, 1), count_include_pad=true)
     @test Array(y) ≈ y_ref
 
@@ -243,7 +243,7 @@ end
     dx_ref = ref_pool2d_grad(:mean, dy, x; kernel=(3, 2), stride=(2, 1),
                              padding=(1, 1, 0, 1), count_include_pad=true)
     dx = MtlArray(similar(x))
-    MPSGraphs.graph_meanpool_grad!(dx, MtlArray(dy), MtlArray(x);
+    MPSGraphs.meanpool_grad!(dx, MtlArray(dy), MtlArray(x);
                                    kernel=(3, 2), stride=(2, 1),
                                    padding=(1, 1, 0, 1), count_include_pad=true)
     @test Array(dx) ≈ dx_ref
@@ -254,8 +254,78 @@ end
     dx_ref = ref_pool2d_grad(:mean, dy, x; kernel=(3, 2), stride=(2, 1),
                              padding=(1, 1, 0, 1), count_include_pad=false)
     dx = MtlArray(similar(x))
-    MPSGraphs.graph_meanpool_grad!(dx, MtlArray(dy), MtlArray(x);
+    MPSGraphs.meanpool_grad!(dx, MtlArray(dy), MtlArray(x);
                                    kernel=(3, 2), stride=(2, 1),
                                    padding=(1, 1, 0, 1), count_include_pad=false)
     @test Array(dx) ≈ dx_ref
+end
+
+@testset "unsupported inputs" begin
+    x = MtlArray(rand(Float32, 7, 6, 2, 3))
+    w = MtlArray(rand(Float32, 3, 2, 2, 4))
+    y = MtlArray{Float32}(undef, 5, 5, 4, 3)
+    @test MPSGraphs.supports(MPSGraphs.conv!, y, x, w)
+    @test !MPSGraphs.supports(MPSGraphs.conv!, similar(y, 4, 5, 4, 3), x, w)
+    @test_throws DimensionMismatch MPSGraphs.conv!(similar(y, 4, 5, 4, 3), x, w)
+    @test !MPSGraphs.supports(MPSGraphs.conv!, y, x, w; groups=2)
+    @test !MPSGraphs.supports(MPSGraphs.conv!, similar(y, Float16), x, w)
+    @test_throws ArgumentError MPSGraphs.conv!(similar(y, Float16), x, w)
+
+    @test MPSGraphs.supports(MPSGraphs.maxpool!, similar(x, 3, 3, 2, 3), x; kernel=(2, 2))
+    @test !MPSGraphs.supports(MPSGraphs.maxpool!, similar(x, 4, 3, 2, 3), x; kernel=(2, 2))
+    @test !MPSGraphs.supports(MPSGraphs.meanpool!, similar(x, 3, 3, 2), x; kernel=(2, 2))
+
+    # window options
+    @test !MPSGraphs.supports(MPSGraphs.conv!, y, x, w; stride=(0, 1))
+    @test !MPSGraphs.supports(MPSGraphs.conv!, y, x, w; padding=(-1, 1, 0, 0))
+    @test !MPSGraphs.supports(MPSGraphs.maxpool!, similar(x, 3, 3, 2, 3), x; kernel=(2, 2),
+                              dilation=(0, 1))
+    @test_throws ArgumentError MPSGraphs.maxpool!(similar(x, 3, 3, 2, 3), x; kernel=(2, 2),
+                                                  stride=(0, 2))
+
+    # pooling gradients validate every array
+    dy = MtlArray(rand(Float32, 3, 3, 2, 3))
+    @test MPSGraphs.supports(MPSGraphs.maxpool_grad!, similar(x), dy, x; kernel=(2, 2))
+    @test !MPSGraphs.supports(MPSGraphs.maxpool_grad!, Array(x), dy, x; kernel=(2, 2))
+    @test !MPSGraphs.supports(MPSGraphs.meanpool_grad!, similar(x, Float16), dy, x; kernel=(2, 2))
+    @test_throws ArgumentError MPSGraphs.maxpool_grad!(Array(x), dy, x; kernel=(2, 2))
+
+    @test !MPSGraphs.supports(MPSGraphs.softmax!, similar(x), x; dims=5)
+    x17 = MtlArray(rand(Float32, 2, ntuple(_ -> 1, 16)...))
+    @test !MPSGraphs.supports(MPSGraphs.softmax!, similar(x17), x17; dims=1)
+    @test !MPSGraphs.supports(MPSGraphs.softmax!, similar(x, Int32), x)
+    @test_throws ArgumentError MPSGraphs.softmax!(similar(x), x; dims=5)
+end
+
+@testset "deprecated graph_softmax!" begin
+    x = randn(Float32, 5, 4)
+    y = MtlArray{Float32}(undef, 5, 4)
+    @test_deprecated MPSGraphs.graph_softmax!(y, MtlArray(x); dims=2)
+    @test Array(y) ≈ ref_softmax(x; dims=2)
+end
+
+@testset "empty inputs" begin
+    # an empty batch
+    x = MtlArray{Float32}(undef, 4, 4, 1, 0)
+    dy = MtlArray{Float32}(undef, 2, 2, 1, 0)
+    dw = MtlArray(rand(Float32, 3, 3, 1, 1))
+    MPSGraphs.conv_filter_grad!(dw, x, dy)
+    @test all(iszero, Array(dw))
+
+    # no input channels
+    x = MtlArray{Float32}(undef, 4, 4, 0, 2)
+    w = MtlArray{Float32}(undef, 3, 3, 0, 5)
+    y = MtlArray(rand(Float32, 2, 2, 5, 2))
+    MPSGraphs.conv!(y, x, w)
+    @test all(iszero, Array(y))
+
+    # no channels to pool over
+    x = MtlArray{Float32}(undef, 4, 4, 0, 2)
+    @test MPSGraphs.maxpool!(MtlArray{Float32}(undef, 2, 2, 0, 2), x; kernel=(2, 2)) isa MtlArray
+    dx = MtlArray(rand(Float32, 4, 4, 0, 2))
+    @test MPSGraphs.maxpool_grad!(dx, MtlArray{Float32}(undef, 2, 2, 0, 2), x;
+                                  kernel=(2, 2)) === dx
+
+    x = MtlArray{Float32}(undef, 0, 3)
+    @test MPSGraphs.softmax!(similar(x), x) isa MtlArray
 end

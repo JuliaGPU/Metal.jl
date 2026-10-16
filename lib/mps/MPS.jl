@@ -70,4 +70,6 @@ include("copy.jl")
 # integrations
 include("random.jl")
 
+Metal.@public MPS_VALID_MATMUL_TYPES, MPS_VALID_MATVECMUL_TYPES
+
 end

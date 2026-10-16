@@ -274,3 +274,31 @@ using .MPS: MPSMatrixSoftMax, MPSMatrixLogSoftMax
     @test lkern.sourceColumns == cols
     @test lkern.sourceRows == rows
 end
+
+@testset "transposed operands" begin
+    ops = Dict('N' => identity, 'T' => transpose, 'C' => adjoint)
+    for tA in "NTC", tB in "NTC"
+        A = rand(Float32, tA == 'N' ? (4, 3) : (3, 4))
+        B = rand(Float32, tB == 'N' ? (3, 5) : (5, 3))
+        C = MtlArray{Float32}(undef, 4, 5)
+        MPS.matmul!(C, MtlArray(A), MtlArray(B); tA, tB)
+        @test Array(C) ≈ ops[tA](A) * ops[tB](B)
+    end
+    for tA in "NTC"
+        A = rand(Float32, tA == 'N' ? (4, 3) : (3, 4))
+        x = rand(Float32, 3)
+        y = MtlArray{Float32}(undef, 4)
+        MPS.matvecmul!(y, MtlArray(A), MtlArray(x); tA)
+        @test Array(y) ≈ ops[tA](A) * x
+    end
+    @test_throws ArgumentError MPS.matmul!(MtlArray{Float32}(undef, 4, 5),
+                                           MtlArray(rand(Float32, 4, 3)),
+                                           MtlArray(rand(Float32, 3, 5)); tA='S')
+
+    # Bool flags, as used before
+    A = rand(Float32, 3, 4)
+    B = rand(Float32, 3, 5)
+    C = MtlArray{Float32}(undef, 4, 5)
+    @test_deprecated MPS.matmul!(C, MtlArray(A), MtlArray(B), true, false, true, false)
+    @test Array(C) ≈ transpose(A) * B
+end

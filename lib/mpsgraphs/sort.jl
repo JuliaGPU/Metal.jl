@@ -30,33 +30,18 @@ struct SortGraphKey{T}
     descending::Bool
 end
 
-struct CachedSortGraph
-    graph::MPSGraph
-    place_x::MPSGraphTensor
-    result::MPSGraphTensor
-end
-
-function CachedSortGraph(key::SortGraphKey{T}) where {T}
+function build_graph(key::SortGraphKey{T}) where {T}
     graph = MPSGraph()
     place_x = placeholderTensor(graph, key.shape, T)
     result = sortWithTensor(graph, place_x, mps_axis(key.shape, key.dim),
                             key.descending, "sort")
-    return CachedSortGraph(graph, place_x, result)
+    return CachedGraph(graph, [place_x], [result])
 end
-
-const sort_graph_cache = Dict{SortGraphKey, CachedSortGraph}()
-const sort_graph_cache_lock = ReentrantLock()
 
 struct SortPermGraphKey{T, Ti}
     shape::Tuple{Vararg{Int}}
     dim::Int
     descending::Bool
-end
-
-struct CachedSortPermGraph
-    graph::MPSGraph
-    place_x::MPSGraphTensor
-    result::MPSGraphTensor
 end
 
 function linear_sortperm_tensor(graph::MPSGraph, arg, key::SortPermGraphKey{T, Ti}) where {T, Ti}
@@ -89,84 +74,84 @@ function linear_sortperm_tensor(graph::MPSGraph, arg, key::SortPermGraphKey{T, T
                                      "sortperm_one_based")
 end
 
-function CachedSortPermGraph(key::SortPermGraphKey{T, Ti}) where {T, Ti}
+function build_graph(key::SortPermGraphKey{T, Ti}) where {T, Ti}
     graph = MPSGraph()
     place_x = placeholderTensor(graph, key.shape, T)
     arg = argSortWithTensor(graph, place_x, mps_axis(key.shape, key.dim),
                             key.descending, "argsort")
     result = linear_sortperm_tensor(graph, arg, key)
-    return CachedSortPermGraph(graph, place_x, result)
+    return CachedGraph(graph, [place_x], [result])
 end
 
-const sortperm_graph_cache = Dict{SortPermGraphKey, CachedSortPermGraph}()
-const sortperm_graph_cache_lock = ReentrantLock()
+"""
+    MPSGraphs.sort!(B, A; dims=nothing, rev=false) -> B
 
-function check_sort_args(out::MtlArray{T}, input::MtlArray{T}, dim::Integer) where {T}
-    T <: Union{MPSGRAPH_VALID_SORT_TYPES...} || throw(ArgumentError("MPSGraph sort supports $(join(MPSGraphs.MPSGRAPH_VALID_SORT_TYPES,", ", " and "))"))
-    size(out) == size(input) ||
-        throw(DimensionMismatch("output has dimensions $(size(out)), input has dimensions $(size(input))"))
-    1 <= dim <= ndims(input) || throw(ArgumentError("dimension out of range"))
-    check_mpsgraph_offsets(out, input)
-    return
+Sort `A` along dimension `dims` in ascending order (descending with `rev=true`), and store
+the result in `B`. `dims` can only be omitted for vectors.
+
+`B` and `A` are `MtlArray`s of the same size and the same real element type. `B` must not
+overlap `A`. Elements are ordered with `isless`, so NaNs sort last.
+
+The sort executes asynchronously, ordered with the other work submitted from the current
+task. Use [`MPSGraphs.supports`](@ref) to check whether a call is supported without
+throwing.
+"""
+function sort!(B, A; dims=nothing, rev::Bool=false)
+    check_supported(sort!, B, A; dims, rev)
+    isempty(A) && return B
+    key = SortGraphKey{eltype(A)}(size(A), something(dims, 1), rev)
+    run!(cached_graph(key), (B,), (A,))
+    return B
 end
 
-function check_sortperm_args(index::MtlArray{Ti}, input::MtlArray{T},
-                             dim::Integer) where {Ti, T}
-    T <: Union{MPSGRAPH_VALID_SORT_TYPES...} || throw(ArgumentError("MPSGraph sortperm supports $(join(MPSGraphs.MPSGRAPH_VALID_SORT_TYPES,", ", " and ")) inputs"))
-    Ti <: MPSGRAPH_SORTPERM_INDEX_TYPES || throw(ArgumentError("MPSGraph sortperm supports Int32 and Int64 indices"))
-    size(index) == size(input) ||
-        throw(DimensionMismatch("index output has dimensions $(size(index)), input has dimensions $(size(input))"))
-    1 <= dim <= ndims(input) || throw(ArgumentError("dimension out of range"))
-    check_mpsgraph_offsets(index, input)
-    return
+function unsupported(::typeof(sort!), B, A; dims=nothing, rev::Bool=false)
+    err = unsupported_arrays(B, A)
+    err === nothing || return err
+    T = eltype(A)
+    eltype(B) == T ||
+        return ArgumentError("MPSGraph sorting requires the output and input to have the same element type, got $(eltype(B)) and $T")
+    T <: Union{MPSGRAPH_VALID_SORT_TYPES...} ||
+        return ArgumentError("MPSGraph sorting does not support element type $T")
+    size(B) == size(A) ||
+        return DimensionMismatch("output has dimensions $(size(B)), input has dimensions $(size(A))")
+    err = unsupported_rank(A)
+    err === nothing || return err
+    return unsupported_dims(A, dims)
 end
 
-function graph_sort!(out::MtlArray{T}, input::MtlArray{T};
-                                      dim::Integer = 1,
-                                      rev::Bool = false) where {T}
-    check_sort_args(out, input, dim)
-    isempty(input) && return copyto!(out, input)
-    key = SortGraphKey{T}(size(input), dim, rev)
-    cached = @lock sort_graph_cache_lock get!(sort_graph_cache, key) do
-        CachedSortGraph(key)
-    end
+"""
+    MPSGraphs.sortperm!(I, A; dims=nothing, rev=false) -> I
 
-    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.place_x => MPSGraphTensorData(input),
-    )
-    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => MPSGraphTensorData(out),
-    )
+Store in `I` the linear indices that sort `A` along dimension `dims`, in ascending order
+(descending with `rev=true`), like `sortperm(A; dims)`. `dims` can only be omitted for
+vectors.
 
-    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
-    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
-            default_exec_desc())
-    commit!(cmdbuf)
+`A` is an `MtlArray` with a real element type, and `I` an `MtlArray{Int32}` or
+`MtlArray{Int64}` of the same size. Elements are ordered with `isless`, so NaNs sort last.
+The permutation is not guaranteed to be stable: equal elements can appear in any order.
 
-    return out
+The operation executes asynchronously, ordered with the other work submitted from the
+current task. Use [`MPSGraphs.supports`](@ref) to check whether a call is supported
+without throwing.
+"""
+function sortperm!(I, A; dims=nothing, rev::Bool=false)
+    check_supported(sortperm!, I, A; dims, rev)
+    isempty(A) && return I
+    key = SortPermGraphKey{eltype(A), eltype(I)}(size(A), something(dims, 1), rev)
+    run!(cached_graph(key), (I,), (A,))
+    return I
 end
 
-function graph_sortperm!(index::MtlArray{Ti}, input::MtlArray{T};
-                                          dim::Integer = 1,
-                                          rev::Bool = false) where {Ti, T}
-    check_sortperm_args(index, input, dim)
-    isempty(input) && return index
-    key = SortPermGraphKey{T, Ti}(size(input), dim, rev)
-    cached = @lock sortperm_graph_cache_lock get!(sortperm_graph_cache, key) do
-        CachedSortPermGraph(key)
-    end
-
-    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.place_x => MPSGraphTensorData(input),
-    )
-    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => MPSGraphTensorData(index),
-    )
-
-    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
-    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
-            default_exec_desc())
-    commit!(cmdbuf)
-
-    return index
+function unsupported(::typeof(sortperm!), I, A; dims=nothing, rev::Bool=false)
+    err = unsupported_arrays(I, A)
+    err === nothing || return err
+    eltype(A) <: Union{MPSGRAPH_VALID_SORT_TYPES...} ||
+        return ArgumentError("MPSGraph sorting does not support element type $(eltype(A))")
+    eltype(I) <: MPSGRAPH_SORTPERM_INDEX_TYPES ||
+        return ArgumentError("MPSGraph sortperm requires Int32 or Int64 indices, got $(eltype(I))")
+    size(I) == size(A) ||
+        return DimensionMismatch("index output has dimensions $(size(I)), input has dimensions $(size(A))")
+    err = unsupported_rank(A)
+    err === nothing || return err
+    return unsupported_dims(A, dims)
 end

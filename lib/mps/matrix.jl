@@ -114,18 +114,33 @@ function encode!(cmdbuf::MTLCommandBufferLike, matmul::MPSMatrixMultiplicationLi
                                                resultMatrix:result::id{MPSMatrix}]::Nothing
 end
 
-"""
-    matmul!(c::MtlMatrix, a::MtlMatrix, b::MtlMatrix, alpha=1, beta=0,
-              transpose_left=false, transpose_right=false)
-A `MPSMatrixMultiplication` kernel that computes:
-`c = alpha * a * b + beta * c`
+# MPS supports real element types only, for which the adjoint is the transpose
+function mps_transpose(t::AbstractChar)
+    t == 'N' && return false
+    (t == 'T' || t == 'C') && return true
+    throw(ArgumentError("transpose flag must be 'N', 'T' or 'C', got '$t'"))
+end
 
-This function should not typically be used. Rather, use the normal `LinearAlgebra` interface
-with any `MtlArray` and it should be accelerated using Metal Performance Shaders.
+"""
+    MPS.matmul!(C, A, B, α=true, β=false; tA='N', tB='N') -> C
+
+Compute `C = α * opA(A) * opB(B) + β * C` using `MPSMatrixMultiplication`, where `opA`
+and `opB` are the identity (`'N'`) or the transpose (`'T'` or `'C'`), as selected by `tA`
+and `tB`.
+
+`A`, `B` and `C` are `MtlArray` matrices, or 3D arrays holding equally many matrices along
+the last dimension. Their element types are one of the combinations in
+`MPS.MPS_VALID_MATMUL_TYPES`. The multiplication executes asynchronously, ordered with the
+other work submitted from the current task.
+
+`LinearAlgebra.mul!` selects between this, [`Metal.MPSGraphs.matmul!`](@ref) and Metal.jl's own
+kernels; use this function to select MPS explicitly.
 """
 function matmul!(c::MtlArray{T1,N}, a::MtlArray{T2,N}, b::MtlArray{T3,N},
-                 alpha::Number=true, beta::Number=false,
-                 transpose_a=false, transpose_b=false) where {T1, T2, T3, N}
+                 alpha::Number=true, beta::Number=false;
+                 tA::AbstractChar='N', tB::AbstractChar='N') where {T1, T2, T3, N}
+    transpose_a = mps_transpose(tA)
+    transpose_b = mps_transpose(tB)
     # NOTE: MPS uses row major, while Julia is col-major. Instead of transposing
     #       the inputs (by passing !transpose_[ab]) and afterwards transposing
     #       the output, we use the property that (AB)ᵀ = BᵀAᵀ
@@ -149,6 +164,14 @@ function matmul!(c::MtlArray{T1,N}, a::MtlArray{T2,N}, b::MtlArray{T3,N},
     commit!(cmdbuf)
 
     return c
+end
+
+function matmul!(c::MtlArray, a::MtlArray, b::MtlArray, alpha::Number, beta::Number,
+                 transpose_a::Bool, transpose_b::Bool=false)
+    Base.depwarn("`MPS.matmul!(c, a, b, α, β, transpose_a::Bool, transpose_b::Bool)` is deprecated, use `MPS.matmul!(c, a, b, α, β; tA, tB)` with 'N' or 'T' instead.",
+                 :matmul!)
+    return matmul!(c, a, b, alpha, beta; tA=transpose_a ? 'T' : 'N',
+                   tB=transpose_b ? 'T' : 'N')
 end
 
 

@@ -40,12 +40,21 @@ const MPSGRAPH_VALID_MATMUL_TYPES =
 
 const MPSGRAPH_VALID_MATVECMUL_TYPES = MPSGRAPH_VALID_MATMUL_TYPES
 
+# array-level operations, distinct from the functions of the same name in Base and MPS
+function reduce! end
+function accumulate! end
+function sort! end
+function sortperm! end
+function matmul! end
+function matvecmul! end
+
 include("libmpsgraph.jl")
 
 include("core.jl")
 include("tensor.jl")
 include("execution.jl")
 include("operations.jl")
+include("interface.jl")
 include("random.jl")
 
 include("matmul.jl")
@@ -54,5 +63,12 @@ include("nn.jl")
 include("sort.jl")
 include("scan.jl")
 include("reductions.jl")
+
+include("deprecated.jl")
+
+Metal.@public supports, reduce!, accumulate!, sort!, sortperm!, matmul!, matvecmul!,
+               softmax!, logsoftmax!, softmax_grad!, logsoftmax_grad!, conv!,
+               conv_data_grad!, conv_filter_grad!, maxpool!, maxpool_grad!, meanpool!,
+               meanpool_grad!, MPSGRAPH_VALID_MATMUL_TYPES, MPSGRAPH_VALID_MATVECMUL_TYPES
 
 end
