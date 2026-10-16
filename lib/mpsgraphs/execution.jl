@@ -79,19 +79,24 @@ end
 # small operations.
 
 """
-    CachedGraph(graph, inputs, outputs)
+    CachedGraph(graph, inputs, outputs; constants=[])
 
 A graph together with the placeholders it reads (`inputs`) and the tensors it produces
-(`outputs`), in the order in which [`run!`](@ref) binds arrays to them.
+(`outputs`), in the order in which [`run!`](@ref) binds arrays to them. `constants` pairs
+further placeholders with arrays that are bound on every run; unlike graph constants,
+which MPSGraph converts through Float64, they hold any value exactly.
 """
 struct CachedGraph
     graph::MPSGraph
     inputs::Vector{MPSGraphTensor}
     outputs::Vector{MPSGraphTensor}
+    constants::Vector{Pair{MPSGraphTensor, MtlArray}}
     # concurrent encoding of one graph is not documented to be safe
     lock::ReentrantLock
 end
-CachedGraph(graph, inputs, outputs) = CachedGraph(graph, inputs, outputs, ReentrantLock())
+CachedGraph(graph, inputs, outputs;
+            constants::Vector{<:Pair{MPSGraphTensor}}=Pair{MPSGraphTensor,MtlArray}[]) =
+    CachedGraph(graph, inputs, outputs, constants, ReentrantLock())
 
 """
     build_graph(key)::CachedGraph
@@ -119,7 +124,8 @@ function run!(cached::CachedGraph, outputs::Tuple, inputs::Tuple)
     (any(isempty, inputs) || any(isempty, outputs)) &&
         throw(ArgumentError("cannot run a graph on empty arrays"))
     feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        tensor => MPSGraphTensorData(arr) for (tensor, arr) in zip(cached.inputs, inputs))
+        tensor => MPSGraphTensorData(arr)
+        for (tensor, arr) in Iterators.flatten((zip(cached.inputs, inputs), cached.constants)))
     results = Dict{MPSGraphTensor, MPSGraphTensorData}(
         tensor => MPSGraphTensorData(arr) for (tensor, arr) in zip(cached.outputs, outputs))
 

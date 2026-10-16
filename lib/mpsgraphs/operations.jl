@@ -60,6 +60,46 @@ function additionWithPrimaryTensor(graph::MPSGraph, primary::MPSGraphTensor, sec
                                                      name:name::id{NSString}]::MPSGraphTensor
 end
 
+function maximumWithPrimaryTensor(graph::MPSGraph, primary::MPSGraphTensor, secondary::MPSGraphTensor, name = "max")
+    @objc [graph::id{MPSGraph} maximumWithPrimaryTensor:primary::id{MPSGraphTensor}
+                                        secondaryTensor:secondary::id{MPSGraphTensor}
+                                                    name:name::id{NSString}]::MPSGraphTensor
+end
+function minimumWithPrimaryTensor(graph::MPSGraph, primary::MPSGraphTensor, secondary::MPSGraphTensor, name = "min")
+    @objc [graph::id{MPSGraph} minimumWithPrimaryTensor:primary::id{MPSGraphTensor}
+                                        secondaryTensor:secondary::id{MPSGraphTensor}
+                                                    name:name::id{NSString}]::MPSGraphTensor
+end
+function maximumWithNaNPropagationWithPrimaryTensor(graph::MPSGraph, primary::MPSGraphTensor, secondary::MPSGraphTensor, name = "max")
+    @objc [graph::id{MPSGraph} maximumWithNaNPropagationWithPrimaryTensor:primary::id{MPSGraphTensor}
+                                                          secondaryTensor:secondary::id{MPSGraphTensor}
+                                                                      name:name::id{NSString}]::MPSGraphTensor
+end
+function minimumWithNaNPropagationWithPrimaryTensor(graph::MPSGraph, primary::MPSGraphTensor, secondary::MPSGraphTensor, name = "min")
+    @objc [graph::id{MPSGraph} minimumWithNaNPropagationWithPrimaryTensor:primary::id{MPSGraphTensor}
+                                                          secondaryTensor:secondary::id{MPSGraphTensor}
+                                                                      name:name::id{NSString}]::MPSGraphTensor
+end
+
+# `op(x, y)` for the operations that reductions and scans support, propagating NaN like
+# Base (the NaN-propagating variants abort on integer tensors)
+function binary_operation(graph::MPSGraph, op::Symbol, ::Type{T}, x::MPSGraphTensor,
+                          y::MPSGraphTensor) where {T}
+    if op === :sum
+        additionWithPrimaryTensor(graph, x, y)
+    elseif op === :product
+        multiplicationWithPrimaryTensor(graph, x, y)
+    elseif op === :maximum
+        T <: AbstractFloat ? maximumWithNaNPropagationWithPrimaryTensor(graph, x, y) :
+                             maximumWithPrimaryTensor(graph, x, y)
+    elseif op === :minimum
+        T <: AbstractFloat ? minimumWithNaNPropagationWithPrimaryTensor(graph, x, y) :
+                             minimumWithPrimaryTensor(graph, x, y)
+    else
+        throw(ArgumentError("unsupported operation $op"))
+    end
+end
+
 function transposeTensor(graph::MPSGraph, tensor::MPSGraphTensor, dimension, withDimension, name = "transpose")
     @objc [graph::id{MPSGraph} transposeTensor:tensor::id{MPSGraphTensor}
                                      dimension:dimension::NSUInteger

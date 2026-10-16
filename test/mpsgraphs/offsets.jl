@@ -21,7 +21,7 @@ end
     A = rand(Float32, 3, 5)
     a, _ = offset_array(A)
     r, rp = offset_array(Float32, 1, 5)
-    MPSGraphs.graph_mapreducedim!(+, r, a)
+    MPSGraphs.reduce!(+, r, a)
     @test Array(r) ≈ sum(A; dims=1)
     @test padding_intact(rp)
 end
@@ -30,7 +30,7 @@ end
     A = rand(Int16(1):Int16(3), 7)
     a, _ = offset_array(A)
     b, bp = offset_array(Int16, 7)
-    MPSGraphs.graph_scan!(+, b, a)
+    MPSGraphs.accumulate!(+, b, a)
     @test Array(b) == cumsum(A)
     @test padding_intact(bp)
 end
@@ -79,5 +79,5 @@ end
     parent = MtlArray(zeros(UInt8, 17))
     a = reinterpret(Float32, view(parent, 2:17))
     @test a isa MtlArray && a.offset % sizeof(Float32) != 0
-    @test_throws ArgumentError MPSGraphs.graph_scan!(+, similar(a), a)
+    @test_throws ArgumentError MPSGraphs.accumulate!(+, similar(a), a)
 end

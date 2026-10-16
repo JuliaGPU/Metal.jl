@@ -40,12 +40,17 @@ const MPSGRAPH_VALID_MATMUL_TYPES =
 
 const MPSGRAPH_VALID_MATVECMUL_TYPES = MPSGRAPH_VALID_MATMUL_TYPES
 
+# array-level operations, distinct from the Base functions of the same name
+function reduce! end
+function accumulate! end
+
 include("libmpsgraph.jl")
 
 include("core.jl")
 include("tensor.jl")
 include("execution.jl")
 include("operations.jl")
+include("interface.jl")
 include("random.jl")
 
 include("matmul.jl")
@@ -54,5 +59,7 @@ include("nn.jl")
 include("sort.jl")
 include("scan.jl")
 include("reductions.jl")
+
+include("deprecated.jl")
 
 end
