@@ -245,6 +245,23 @@ end
     end
 end
 
+@testset "function constants" begin
+    readobj = metal_tool("metal-readobj")
+    if readobj === nothing
+        @test_skip "Apple's metal-readobj not available"
+    else
+        for metallib in filter(startswith("constants."), metallibs)
+            path = joinpath(metallib_dir, metallib)
+            lib = parse(MetalLib, path)
+            output = read(`$readobj --all $path`, String)
+            expected = [(m[1], m[2] == "Yes") for m in
+                        eachmatch(r"Name: (\w+)\n\s+Type: \w+ \(\w+\)\n\s+Index: \d+\n\s+Required: (\w+)", output)]
+            @test !isempty(expected)
+            @test [(c.name, c.required) for fun in lib.functions for c in fun.constants] == expected
+        end
+    end
+end
+
 @testset "function dependencies" begin
     path = joinpath(metallib_dir, "dependencies.standalone.metallib")
     lib = parse(MetalLib, path)
