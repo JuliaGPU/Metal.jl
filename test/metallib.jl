@@ -486,6 +486,12 @@ end
     bytes[hsrd+2+8+1:hsrd+2+16] .= 0      # the section's size
     @test_throws MetalLibFormatError read(IOBuffer(bytes), MetalLib)
 
+    # every reference to a reflection entry must resolve
+    bytes = read(joinpath(metallib_dir, "dylib.metallib"))
+    rflt = last(findlast(codeunits("RFLT"), bytes))
+    bytes[rflt+2+1:rflt+2+8] .= 0xff
+    @test_throws MetalLibFormatError read(IOBuffer(bytes), MetalLib)
+
     # stub libraries, which only describe their functions, are not supported
     bytes = read(joinpath(metallib_dir, "kernel.26.metallib"))
     mdsz = findfirst(codeunits("MDSZ"), bytes)
