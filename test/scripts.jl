@@ -146,6 +146,10 @@ metallib_dir = joinpath(@__DIR__, "metallib")
         # ... but only when it is an option
         r = metallib("info", "--", "--json")
         @test r.code == 1 && isempty(r.out) && contains(r.err, "no such file: --json")
+        r = metallib("dis", "-o", "--json", "--bogus")
+        @test r.code == 2 && isempty(r.out)
+        r = metallib("dis", "-o", "--", "--json", "--bogus")
+        @test r.code == 2 && getkey(parse_json(r.out), "status") == "error"
     end
 
     @testset "info" begin
@@ -183,5 +187,83 @@ metallib_dir = joinpath(@__DIR__, "metallib")
         @test getkey(only(getkey(doc, "diagnostics")), "offset") isa Int
         r = metallib("info", joinpath(metallib_dir, "nonexistent.metallib"))
         @test r.code == 1 && contains(r.err, "no such file")
+    end
+
+    @testset "dis, as and load" begin
+        mktempdir() do dir
+            # (a library that loads on every supported macOS)
+            path = joinpath(metallib_dir, "kernels.13.metallib")
+            lib = parse(Metal.MetalLib, path)
+
+            # functions must be named when there are several
+            r = metallib("dis", path)
+            @test r.code == 1 && contains(r.err, "foo, bar, baz")
+
+            # bitcode, as is
+            r = metallib("dis", "--json", "-o", joinpath(dir, "bar.bc"), path, "bar")
+            @test r.code == 0
+            @test read(joinpath(dir, "bar.bc")) == lib.functions[2].air_module
+            result = getkey(parse_json(r.out), "result")
+            @test getkey(result, "format") == "bitcode"
+            @test metallib("dis", "-o", joinpath(dir, "bar.bc"), path, "bar").code == 1
+            @test metallib("dis", "-f", "-o", joinpath(dir, "bar.bc"), path, "bar").code == 0
+
+            # textual IR, to standard output
+            r = metallib("dis", "-S", "-o", "-", path, "foo")
+            @test r.code == 0 && contains(r.out, "define void @foo()")
+            @test metallib("dis", "--json", "-o", "-", path, "foo").code == 2
+
+            # and back into a library, which loads
+            write(joinpath(dir, "foo.ll"), r.out)
+            # (functions are described from their module's metadata)
+            visible = joinpath(metallib_dir, "visible.26.metallib")
+            @test metallib("dis", "-o", joinpath(dir, "twice.bc"), visible, "twice").code == 0
+            @test metallib("as", "-o", joinpath(dir, "twice.metallib"), joinpath(dir, "twice.bc")).code == 0
+            twice = only(parse(Metal.MetalLib, joinpath(dir, "twice.metallib")).functions)
+            @test twice.type == Metal.METALLIB_VISIBLE_FUNCTION
+            @test twice.air_version == only(f for f in parse(Metal.MetalLib, visible).functions
+                                            if f.name == "twice").air_version
+
+            r = metallib("as", "--json", "-o", joinpath(dir, "foo.metallib"),
+                         joinpath(dir, "foo.ll"))
+            @test r.code == 0
+            @test getkey(only(getkey(getkey(parse_json(r.out), "result"), "functions")),
+                         "name") == "foo"
+            r = metallib("load", "--pipeline", "--json", joinpath(dir, "foo.metallib"))
+            @test r.code == 0
+            @test getkey(only(getkey(getkey(parse_json(r.out), "result"), "functions")),
+                         "pipeline") == "ok"
+            @test metallib("as", joinpath(dir, "foo.ll"), joinpath(dir, "bar.bc")).code == 2
+            write(joinpath(dir, "broken.ll"), "this is not LLVM IR")
+            r = metallib("as", "-o", joinpath(dir, "broken.metallib"), joinpath(dir, "broken.ll"))
+            @test r.code == 1 && contains(r.err, "could not parse")
+        end
+
+        # pipelines are only created for kernels
+        r = metallib("load", "--pipeline", "--json", joinpath(metallib_dir, "visible.13.metallib"))
+        @test r.code == 0
+        functions = getkey(getkey(parse_json(r.out), "result"), "functions")
+        @test Dict(getkey(f, "name") => getkey(f, "pipeline") for f in functions) ==
+              Dict("foo" => "ok", "twice" => "skipped")
+        @test only(getkey(getkey(f, "type"), "name") for f in functions
+                   if getkey(f, "name") == "foo") == "MTLFunctionTypeKernel"
+
+        # ... that don't need values for function constants (Metal would abort)
+        r = metallib("load", "--pipeline", "--json", joinpath(metallib_dir, "constants.13.metallib"))
+        @test r.code == 0
+        doc = parse_json(r.out)
+        @test getkey(only(getkey(getkey(doc, "result"), "functions")), "pipeline") == "skipped"
+        @test contains(getkey(only(getkey(doc, "diagnostics")), "message"), "constants")
+        # (optional constants are left undefined)
+        r = metallib("load", "--pipeline", "--json", joinpath(metallib_dir, "optional.13.metallib"))
+        @test r.code == 0
+        doc = parse_json(r.out)
+        @test getkey(only(getkey(getkey(doc, "result"), "functions")), "pipeline") == "ok"
+
+        # failing to load a library is reported as such
+        r = metallib("load", "-"; input=IOBuffer(rand(UInt8, 100)))
+        @test r.code == 1 && contains(r.err, "failed to load the library")
+        r = metallib("load", joinpath(metallib_dir, "kernel.13.metallib"), "nonexistent")
+        @test r.code == 1 && contains(r.err, "no function nonexistent")
     end
 end
