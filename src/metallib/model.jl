@@ -49,6 +49,16 @@ function content_uuid(datas::Vector{UInt8}...)
     return UUID(u)
 end
 
+# the tag groups a function was read with, kept so that writing the library back reproduces
+# the input: they record the order of the tags, the tags we don't decode, and the size
+# convention of each group. see `layout_group`.
+struct FunctionLayout
+    function_tags::TagGroup
+    public_tags::TagGroup
+    private_tags::TagGroup
+    reflection_tags::Union{Nothing,TagGroup}
+end
+
 Base.@kwdef struct MetalLibFunction
     name::String
     type::ProgramType = METALLIB_COMPUTE_FUNCTION
@@ -68,6 +78,15 @@ Base.@kwdef struct MetalLibFunction
 
     # reflection data
     reflection_data::Union{Nothing, Vector{UInt8}} = nothing
+
+    # how the function was laid out in the library it was read from, if any
+    layout::Union{Nothing, FunctionLayout} = nothing
+end
+
+# the parts of a library's layout that are not covered by its functions; see `FunctionLayout`
+struct LibraryLayout
+    header_extension::Union{Nothing,TagGroup}
+    dynamic_header::Union{Nothing,TagGroup}
 end
 
 Base.@kwdef struct MetalLib
@@ -90,6 +109,46 @@ Base.@kwdef struct MetalLib
 
     functions::Vector{MetalLibFunction}
     embedded_source::Union{Nothing, EmbeddedSource} = nothing
+
+    # how the library was laid out when it was read, if it was
+    layout::Union{Nothing, LibraryLayout} = nothing
+end
+
+# assemble a tag group from `values` (tag => value pairs, or nothing to omit a tag), laid out
+# like `template` if we have one: tags keep their position, tags we could not decode are
+# written back verbatim (unless we now have a value for them), and tags that are not in the
+# template are added at the end.
+function layout_group(template::Union{Nothing,TagGroup}, values; kwargs...)
+    tg = TagGroup(; kwargs...)
+    pending = Dict{String,Any}(tag => value for (tag, value) in values if value !== nothing)
+    if template !== nothing
+        tg.counts_size = template.counts_size
+        for (tag, value) in template.data
+            if haskey(pending, tag)
+                push!(tg.data, tag => pop!(pending, tag))
+            elseif value isa RawTag
+                push!(tg.data, tag => value)
+            end
+        end
+    end
+    for (tag, _) in values
+        if haskey(pending, tag)
+            push!(tg.data, tag => pop!(pending, tag))
+        end
+    end
+    return tg
+end
+
+# look up a decoded tag value, or `nothing` if the tag is missing or was kept as raw bytes
+function decoded(tg::Union{Nothing,TagGroup}, tag::String)
+    tg === nothing && return nothing
+    value = get(tg, tag, nothing)
+    return value isa RawTag ? nothing : value
+end
+function decoded(tg::TagGroup, tag::String, ::Type{T}) where T
+    value = decoded(tg, tag)
+    value isa T || error("Metal library is missing a valid $tag tag")
+    return value
 end
 
 ## public metadata
@@ -234,11 +293,10 @@ function Base.read(io::IO, ::Type{MetalLib})
     ## sections
 
     # function list
-    function_list = []
+    function_list = TagGroup[]
     seek(io, function_list_offset)
     function_count = read(io, UInt32)
     for _ in 1:function_count
-        _tag_group_start = position(io)
         push!(function_list, read!(io, TagGroup()))
     end
     # the function list size excludes the size field at the start
@@ -253,59 +311,55 @@ function Base.read(io::IO, ::Type{MetalLib})
     end
 
     # public metadata
-    public_md = []
+    public_md = TagGroup[]
     for _ in 1:function_count
-        _tag_group_start = position(io)
         push!(public_md, read!(io, TagGroup()))
     end
     @assert position(io) == private_md_offset
 
     # private metadata
-    private_md = []
+    private_md = TagGroup[]
     for _ in 1:function_count
-        _tag_group_start = position(io)
         push!(private_md, read!(io, TagGroup()))
     end
     @assert position(io) == module_list_offset
 
     # module list
-    module_list = []
+    module_list = Vector{UInt8}[]
     for i in 1:function_count
-        module_size = function_list[i]["MDSZ"]
+        module_size = decoded(function_list[i], "MDSZ", UInt64)
         push!(module_list, read(io, module_size))
     end
     @assert position(io) == module_list_offset + module_list_size
 
     # reflection list
-    #
-    # there always seems to be one buffer per function, so let's store it in MetalLibFunction
-    reflection_data = Vector{Vector{UInt8}}(undef, function_count)
-    if header_ex !== nothing && haskey(header_ex, "RLST")
-        seek(io, header_ex["RLST"].offset)
+    reflection_tags = Vector{Union{Nothing,TagGroup}}(nothing, function_count)
+    if (rlst = decoded(header_ex, "RLST")) !== nothing
+        seek(io, rlst.offset)
         reflection_count = read(io, UInt32)
         for _ in 1:reflection_count
             # note the offset as used by the RFLT tag
-            reflection_offset = position(io) - header_ex["RLST"].offset
+            reflection_offset = position(io) - rlst.offset
 
             reflection_buf = read!(io, TagGroup())
 
             # check if any function points to this reflection
             function_idx = findfirst(function_list) do fun
-                fun["RFLT"] == reflection_offset
+                decoded(fun, "RFLT") == reflection_offset
             end
             if function_idx === nothing
                 error("No function points to this reflection")
             end
-            reflection_data[function_idx] = reflection_buf["RBUF"]
+            reflection_tags[function_idx] = reflection_buf
         end
-        @assert position(io) == header_ex["RLST"].offset + header_ex["RLST"].size
+        @assert position(io) == rlst.offset + rlst.size
     end
 
     # script list
     #
     # this section contains pipeline descriptor scripts
-    if header_ex !== nothing && haskey(header_ex, "SLST")
-        seek(io, header_ex["SLST"].offset)
+    if (slst = decoded(header_ex, "SLST")) !== nothing
+        seek(io, slst.offset)
         script_count = read(io, UInt32)
         for _ in 1:script_count
             _script_buf = read!(io, TagGroup())
@@ -314,36 +368,36 @@ function Base.read(io::IO, ::Type{MetalLib})
             # $ metal-source -flatbuffers=binary
             # $ metal-source -flatbuffers=json
         end
-        @assert position(io) == header_ex["SLST"].offset + header_ex["SLST"].size
+        @assert position(io) == slst.offset + slst.size
     end
 
     # dynamic header
     #
-    # this section only records the name of the library
-    library_name = nothing
-    if header_ex !== nothing && haskey(header_ex, "HDYN")
-        seek(io, header_ex["HDYN"].offset)
+    # this section records the name of the library
+    dynamic_header = nothing
+    if (hdyn = decoded(header_ex, "HDYN")) !== nothing
+        seek(io, hdyn.offset)
         dynamic_header = read!(io, TagGroup(has_size=false))
-        library_name = get(dynamic_header, "NAME", nothing)
-        @assert position(io) == header_ex["HDYN"].offset + header_ex["HDYN"].size
+        @assert position(io) == hdyn.offset + hdyn.size
     end
+    library_name = decoded(dynamic_header, "NAME")
 
     # embedded source
     #
     # there can be fewer sources than functions, so preserve the function -> source mapping
     embedded_source = nothing
     function_sources = Dict()
-    have_hsrc = header_ex !== nothing && haskey(header_ex, "HSRC")
-    have_hsrd = header_ex !== nothing && haskey(header_ex, "HSRD")
-    if have_hsrc || have_hsrd
-        # HSRC and HSRC are identical except for the working directory field
-        @assert have_hsrc != have_hsrd
-        tag = have_hsrc ? "HSRC" : "HSRD"
-        seek(io, header_ex[tag].offset)
+    hsrc = decoded(header_ex, "HSRC")
+    hsrd = decoded(header_ex, "HSRD")
+    if hsrc !== nothing || hsrd !== nothing
+        # HSRC and HSRD are identical except for the working directory field
+        @assert (hsrc === nothing) != (hsrd === nothing)
+        section = something(hsrc, hsrd)
+        seek(io, section.offset)
 
         source_archive_count = read(io, UInt32)
         command_line_info = String(readuntil(io, UInt8(0)))
-        working_directory = if have_hsrd
+        working_directory = if hsrd !== nothing
             String(readuntil(io, UInt8(0)))
         else
             nothing
@@ -352,7 +406,7 @@ function Base.read(io::IO, ::Type{MetalLib})
         archives = []
         for _ in 1:source_archive_count
             # note the offset as used by the SOFF tag
-            source_offset = position(io) + sizeof(UInt32) - header_ex[tag].offset
+            source_offset = position(io) + sizeof(UInt32) - section.offset
 
             data = read!(io, TagGroup(size_type=UInt32, counts_size=false))
             id, archive = data["SARC"]
@@ -360,7 +414,7 @@ function Base.read(io::IO, ::Type{MetalLib})
 
             # check if any function points to this source
             for j in 1:length(function_list)
-                if function_list[j]["SOFF"] == source_offset
+                if decoded(function_list[j], "SOFF") == source_offset
                     function_sources[j] = id
                 end
             end
@@ -373,45 +427,40 @@ function Base.read(io::IO, ::Type{MetalLib})
     functions = MetalLibFunction[]
     for i in 1:length(function_list)
         optional_args = []
-        if haskey(public_md[i], "CNST")
-            push!(optional_args, :constants => public_md[i]["CNST"])
+        if (constants = decoded(public_md[i], "CNST")) !== nothing
+            push!(optional_args, :constants => constants)
         end
-        if haskey(private_md[i], "DEBI")
-            push!(optional_args, :debug_info => private_md[i]["DEBI"])
+        if (debug_info = decoded(private_md[i], "DEBI")) !== nothing
+            push!(optional_args, :debug_info => debug_info)
         end
-        if haskey(private_md[i], "DEPF")
-            push!(optional_args, :dependent_file => private_md[i]["DEPF"])
+        if (dependent_file = decoded(private_md[i], "DEPF")) !== nothing
+            push!(optional_args, :dependent_file => dependent_file)
         end
         if haskey(function_sources, i)
             push!(optional_args, :source_id => function_sources[i])
         end
-        if isassigned(reflection_data, i)
-            push!(optional_args, :reflection_data => reflection_data[i])
+        if (reflection_data = decoded(reflection_tags[i], "RBUF")) !== nothing
+            push!(optional_args, :reflection_data => reflection_data)
         end
+        versions = decoded(function_list[i], "VERS", NamedTuple)
 
         push!(functions, MetalLibFunction(;
-            name = function_list[i]["NAME"],
-            type = function_list[i]["TYPE"],
+            name = decoded(function_list[i], "NAME", String),
+            type = decoded(function_list[i], "TYPE", ProgramType),
             air_module = module_list[i],
-            air_version=function_list[i]["VERS"].air,
-            metal_version=function_list[i]["VERS"].metal,
+            air_version = versions.air,
+            metal_version = versions.metal,
+            layout = FunctionLayout(function_list[i], public_md[i], private_md[i],
+                                    reflection_tags[i]),
             optional_args...
         ))
-    end
-
-    optional_args = []
-    if header_ex !== nothing && haskey(header_ex, "UUID")
-        # TODO: get rid of the nothing checks
-        push!(optional_args, :uuid => header_ex["UUID"])
-    end
-    if library_name !== nothing
-        push!(optional_args, :library_name => library_name)
     end
 
     MetalLib(; file_version, file_type, is_macos, is_stub,
                platform_version, platform_type, is_64bit,
                functions, embedded_source,
-               optional_args...)
+               uuid = decoded(header_ex, "UUID"), library_name,
+               layout = LibraryLayout(header_ex, dynamic_header))
 end
 
 Base.write(path::AbstractString, lib::MetalLib) = open(path, "w") do io
@@ -448,9 +497,10 @@ function Base.write(io::IO, lib::MetalLib)
     ## dynamic header
 
     dynamic_header = let io=IOBuffer()
-        if lib.library_name !== nothing
-            dynamic_header_tags = TagGroup(has_size=false)
-            dynamic_header_tags["NAME"] = lib.library_name
+        template = lib.layout === nothing ? nothing : lib.layout.dynamic_header
+        dynamic_header_tags = layout_group(template, ["NAME" => lib.library_name];
+                                           has_size=false)
+        if !isempty(dynamic_header_tags.data)
             write(io, dynamic_header_tags)
         end
         take!(io)
@@ -459,24 +509,20 @@ function Base.write(io::IO, lib::MetalLib)
 
     ## reflection list
 
-    reflection_list_offsets = Int[]
+    reflection_list_offsets = Vector{Union{Nothing,Int}}(nothing, length(lib.functions))
 
     reflection_list = let io=IOBuffer()
-        reflection_buffers = count(lib.functions) do fun
-            fun.reflection_data !== nothing
+        reflection_groups = map(lib.functions) do fun
+            template = fun.layout === nothing ? nothing : fun.layout.reflection_tags
+            layout_group(template, ["RBUF" => fun.reflection_data])
         end
+        reflection_count = count(tg -> !isempty(tg.data), reflection_groups)
 
-        # we expect either no reflection buffers, or one for each function
-        # (otherwise it's not clear how to encode the offsets in the RFLT tags)
-        @assert reflection_buffers == 0 || reflection_buffers == length(lib.functions)
-
-        if reflection_buffers > 0
-            write(io, UInt32(reflection_buffers))
-            for fun in lib.functions
-                push!(reflection_list_offsets, position(io))
-
-                reflection_tags = TagGroup()
-                reflection_tags["RBUF"] = fun.reflection_data
+        if reflection_count > 0
+            write(io, UInt32(reflection_count))
+            for (i, reflection_tags) in enumerate(reflection_groups)
+                isempty(reflection_tags.data) && continue
+                reflection_list_offsets[i] = position(io)
                 write(io, reflection_tags)
             end
         end
@@ -493,23 +539,18 @@ function Base.write(io::IO, lib::MetalLib)
     function_tag_groups = []
 
     for (i, fun) in enumerate(lib.functions)
+        layout = fun.layout
+
         # public metadata
         public_md_offset = position(public_md_stream)
-        public_md_tags = TagGroup()
-        if !isempty(fun.constants)
-            public_md_tags["CNST"] = fun.constants
-        end
+        public_md_tags = layout_group(layout === nothing ? nothing : layout.public_tags,
+            ["CNST" => isempty(fun.constants) ? nothing : fun.constants])
         write(public_md_stream, public_md_tags)
 
         # private metadata
         private_md_offset = position(private_md_stream)
-        private_md_tags = TagGroup()
-        if fun.debug_info !== nothing
-            private_md_tags["DEBI"] = fun.debug_info
-        end
-        if fun.dependent_file !== nothing
-            private_md_tags["DEPF"] = fun.dependent_file
-        end
+        private_md_tags = layout_group(layout === nothing ? nothing : layout.private_tags,
+            ["DEBI" => fun.debug_info, "DEPF" => fun.dependent_file])
         write(private_md_stream, private_md_tags)
 
         # module
@@ -519,21 +560,23 @@ function Base.write(io::IO, lib::MetalLib)
         write(module_list_stream, fun.air_module)
 
         # tags
-        function_tags = TagGroup()
-        function_tags["NAME"] = fun.name
-        function_tags["TYPE"] = fun.type
-        function_tags["HASH"] = module_hash
-        function_tags["OFFT"] = (; public_md=public_md_offset,
-                                   private_md=private_md_offset,
-                                   air_module=module_list_offset)
-        function_tags["VERS"] = (; air=fun.air_version, metal=fun.metal_version)
-        function_tags["MDSZ"] = module_size
-        if fun.source_id !== nothing && haskey(embedded_source_offsets, fun.source_id)
-            function_tags["SOFF"] = embedded_source_offsets[fun.source_id]
+        source_offset = if fun.source_id !== nothing
+            get(embedded_source_offsets, fun.source_id, nothing)
         end
-        if lib.file_version >= v"1.2.7" && !isempty(reflection_list_offsets)
-            function_tags["RFLT"] = reflection_list_offsets[i]
+        reflection_offset = if lib.file_version >= v"1.2.7"
+            reflection_list_offsets[i]
         end
+        function_tags = layout_group(layout === nothing ? nothing : layout.function_tags, [
+            "NAME" => fun.name,
+            "TYPE" => fun.type,
+            "HASH" => module_hash,
+            "OFFT" => (; public_md=public_md_offset,
+                         private_md=private_md_offset,
+                         air_module=module_list_offset),
+            "VERS" => (; air=fun.air_version, metal=fun.metal_version),
+            "MDSZ" => module_size,
+            "SOFF" => source_offset,
+            "RFLT" => reflection_offset])
         push!(function_tag_groups, function_tags)
     end
 
@@ -552,20 +595,15 @@ function Base.write(io::IO, lib::MetalLib)
     ## header extensions
 
     if lib.file_version >= v"1.2.3"
-        header_ex_tags = TagGroup(has_size=false)
-        if sizeof(embedded_source) > 0
-            embedded_source_tag = lib.file_version >= v"1.2.6" ? "HSRD" : "HSRC"
-            header_ex_tags[embedded_source_tag] = (; offset=0, size=sizeof(embedded_source))
-        end
-        if sizeof(dynamic_header) > 0
-            header_ex_tags["HDYN"] = (; offset=0, size=sizeof(dynamic_header))
-        end
-        if lib.file_version >= v"1.2.7" && sizeof(reflection_list) > 0
-            header_ex_tags["RLST"] = (; offset=0, size=sizeof(reflection_list))
-        end
-        if lib.uuid !== nothing
-            header_ex_tags["UUID"] = lib.uuid
-        end
+        # section offsets are patched in when writing the sections
+        embedded_source_tag = lib.file_version >= v"1.2.6" ? "HSRD" : "HSRC"
+        section(data) = sizeof(data) > 0 ? (; offset=0, size=sizeof(data)) : nothing
+        template = lib.layout === nothing ? nothing : lib.layout.header_extension
+        header_ex_tags = layout_group(template, [
+            embedded_source_tag => section(embedded_source),
+            "HDYN" => section(dynamic_header),
+            "RLST" => lib.file_version >= v"1.2.7" ? section(reflection_list) : nothing,
+            "UUID" => lib.uuid]; has_size=false)
 
         header_ex_stream = IOBuffer()
         write(header_ex_stream, header_ex_tags)

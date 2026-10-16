@@ -2,11 +2,14 @@ METAL := xcrun -sdk macosx metal
 METALLIB := xcrun -sdk macosx metallib
 MACOSX_VERSIONS := 11 12 13 14 15 26
 
-SOURCES := $(wildcard *.metal)
+# sources that need a dedicated rule (see below)
+SPECIAL_SOURCES := dependencies.metal dependencies_helper.metal
+
+SOURCES := $(filter-out $(SPECIAL_SOURCES),$(wildcard *.metal))
 METALLIBS := $(foreach ver,$(MACOSX_VERSIONS),$(SOURCES:.metal=.$(ver).metallib))
 
 # libraries packaged by the standalone `metallib` tool instead of the compiler driver
-STANDALONE_METALLIBS := kernel.standalone.metallib
+STANDALONE_METALLIBS := kernel.standalone.metallib dependencies.standalone.metallib
 
 .PHONY: all
 all: $(METALLIBS) $(STANDALONE_METALLIBS)
@@ -25,3 +28,9 @@ $(foreach ver,$(MACOSX_VERSIONS),$(eval $(call METALLIB_RULE,$(ver))))
 	$(METAL) -mmacosx-version-min=13 -c -o $*.air $<
 	$(METALLIB) -o $@ $*.air
 	$(RM) $*.air
+
+dependencies.standalone.metallib: dependencies.metal dependencies_helper.metal
+	$(METAL) -mmacosx-version-min=13 -c -o dependencies.air dependencies.metal
+	$(METAL) -mmacosx-version-min=13 -c -o dependencies_helper.air dependencies_helper.metal
+	$(METALLIB) --function-dependencies -o $@ dependencies.air dependencies_helper.air
+	$(RM) dependencies.air dependencies_helper.air
