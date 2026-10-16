@@ -50,3 +50,5 @@ function Base.show(io::IO, lib::MetalLib)
 
     print(io, ")")
 end
+
+@public MetalLib, MetalLibFunction, FunctionConstant, DebugInfo, MetalLibFormatError

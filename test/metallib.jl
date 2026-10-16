@@ -443,3 +443,12 @@ end
     @test err isa MetalLibFormatError
     @test contains(sprint(showerror, err), "stub")
 end
+
+@static if VERSION >= v"1.11"
+    @testset "public API" begin
+        for name in (:MetalLib, :MetalLibFunction, :FunctionConstant, :DebugInfo,
+                     :MetalLibFormatError)
+            @test Base.ispublic(Metal, name)
+        end
+    end
+end
