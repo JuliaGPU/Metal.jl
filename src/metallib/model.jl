@@ -130,8 +130,9 @@ struct LibraryLayout
     # sections we don't decode, by the header extension tag that points to them
     raw_sections::Dict{String,Vector{UInt8}}
 
-    # the tag groups of the script list
+    # the tag groups of the script list and the embedded source section
     script_tags::Vector{TagGroup}
+    source_tags::Vector{TagGroup}
 
     # the UUID the library was read with, and the SHA-256 of the library with that UUID
     # zeroed, to detect edits (see `MetalLib`)
@@ -570,6 +571,7 @@ function read_metallib(io::IOBuffer, bytes::Vector{UInt8})
     # there can be fewer sources than functions, so preserve the function -> source mapping
     embedded_source = nothing
     function_sources = Dict()
+    source_tags = TagGroup[]
     hsrc = decoded(header_ex, "HSRC")
     hsrd = decoded(header_ex, "HSRD")
     if hsrc !== nothing || hsrd !== nothing
@@ -578,11 +580,12 @@ function read_metallib(io::IOBuffer, bytes::Vector{UInt8})
                      "both HSRC and HSRD embedded source sections")
         section = something(hsrc, hsrd)
         seek_section(io, section.offset, section.size, "embedded source")
+        source_io = IOBuffer(read(io, section.size))
 
-        source_archive_count = read(io, UInt32)
-        command_line_info = String(readuntil(io, UInt8(0)))
+        source_archive_count = read(source_io, UInt32)
+        command_line_info = String(readuntil(source_io, UInt8(0)))
         working_directory = if hsrd !== nothing
-            String(readuntil(io, UInt8(0)))
+            String(readuntil(source_io, UInt8(0)))
         else
             nothing
         end
@@ -590,9 +593,10 @@ function read_metallib(io::IOBuffer, bytes::Vector{UInt8})
         archives = []
         for _ in 1:source_archive_count
             # note the offset as used by the SOFF tag
-            source_offset = position(io) + sizeof(UInt32) - section.offset
+            source_offset = position(source_io) + sizeof(UInt32)
 
-            data = read!(io, TagGroup(size_type=UInt32, counts_size=false))
+            data = read!(source_io, TagGroup(size_type=UInt32, counts_size=false))
+            push!(source_tags, data)
             id, archive = decoded(data, "SARC", NamedTuple)
             push!(archives, id => archive)
 
@@ -603,6 +607,9 @@ function read_metallib(io::IOBuffer, bytes::Vector{UInt8})
                 end
             end
         end
+
+        format_check(eof(source_io), "embedded source section does not match its size",
+                     section.offset)
 
         embedded_source = EmbeddedSource(command_line_info, working_directory, archives)
     end
@@ -649,7 +656,7 @@ function read_metallib(io::IOBuffer, bytes::Vector{UInt8})
                functions, embedded_source,
                uuid, library_name,
                scripts, layout = LibraryLayout(header_ex, dynamic_header, raw_sections,
-                                               script_tags, uuid, digest))
+                                               script_tags, source_tags, uuid, digest))
 end
 
 Base.write(path::AbstractString, lib::MetalLib) = open(path, "w") do io
@@ -700,12 +707,14 @@ function write_metallib(io::IOBuffer, lib::MetalLib)
                 write(io, lib.embedded_source.working_directory)
                 write(io, UInt8(0))
             end
-            for (id, archive) = lib.embedded_source.archives
+            templates = lib.layout === nothing ? TagGroup[] : lib.layout.source_tags
+            for (i, (id, archive)) in enumerate(lib.embedded_source.archives)
                 # the offset points past the tag token
                 embedded_source_offsets[id] = position(io) + sizeof(UInt32)
 
-                archive_tags = TagGroup(size_type=UInt32, counts_size=false)
-                archive_tags["SARC"] = (; id, archive)
+                template = get(templates, i, nothing)
+                archive_tags = layout_group(template, ["SARC" => (; id, archive)];
+                                            size_type=UInt32, counts_size=false)
                 write(io, archive_tags)
             end
         end
