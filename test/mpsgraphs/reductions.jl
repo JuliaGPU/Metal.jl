@@ -31,11 +31,4 @@ end
     A = MtlArray(reshape(Complex{Int32}.(1:6), 3, 2))
     out = similar(A, (1, 2))
     @test_throws ArgumentError MPSGraphs.graph_mapreducedim!(+, out, A)
-
-    # offset input
-    parent = MtlArray(Float32[1, 2, 3])
-    offset_input = unsafe_wrap(MtlArray, pointer(parent, 2), 2)
-    offset_out = similar(offset_input, (1,))
-    @test_throws ArgumentError MPSGraphs.graph_mapreducedim!(+, offset_out,
-                                                             offset_input)
 end

@@ -104,7 +104,6 @@ function check_reduction_args(out::MtlArray{T}, input::MtlArray{T}) where {T}
     T <: Union{MPSGRAPH_VALID_REDUCTION_TYPES...} ||
         throw(ArgumentError("MPSGraph reduction supports $(join(MPSGraphs.MPSGRAPH_VALID_REDUCTION_TYPES,", ", " and "))"))
     dims = reduction_axes(size(out), size(input))
-    check_mpsgraph_offsets(out, input)
     return dims
 end
 

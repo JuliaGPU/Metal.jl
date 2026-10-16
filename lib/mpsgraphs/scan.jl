@@ -93,7 +93,6 @@ function check_scan_args(out::MtlArray{T}, input::MtlArray{T}, dim::Integer) whe
     size(out) == size(input) ||
         throw(DimensionMismatch("output has dimensions $(size(out)), input has dimensions $(size(input))"))
     1 <= dim <= ndims(input) || throw(ArgumentError("dimension out of range"))
-    check_mpsgraph_offsets(out, input)
     return
 end
 

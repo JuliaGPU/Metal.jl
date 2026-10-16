@@ -14,11 +14,7 @@ end
 @inline function supports_mpsgraph_matmul(A, B, C, valid_types)
     MPS.is_supported(device(C)) &&
         eltype(A) == eltype(B) &&
-        (eltype(A), eltype(C)) in valid_types &&
-        # TODO: remove this limitation
-        A.offset == 0 &&
-        B.offset == 0 &&
-        C.offset == 0
+        (eltype(A), eltype(C)) in valid_types
 end
 
 # Supported values:

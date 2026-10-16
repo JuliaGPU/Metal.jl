@@ -16,10 +16,4 @@ end
     # unsupported input
     A = MtlArray(Complex{Int32}[1, 2])
     @test_throws ArgumentError MPSGraphs.graph_scan!(+, similar(A), A)
-
-    # offset input
-    parent = MtlArray(Float32[1, 2, 3])
-    offset_input = unsafe_wrap(MtlArray, pointer(parent, 2), 2)
-    @test_throws ArgumentError MPSGraphs.graph_scan!(+, similar(offset_input),
-                                                     offset_input)
 end

@@ -44,7 +44,8 @@ function MPSGraphTensorData(buffer::MTLBuffer, shape::MPSShape, dataType, rowByt
                                                                   dataType:dataType::MPSDataType
                                                                   rowBytes:rowBytes::NSUInteger]::MPSGraphTensorData
 end
-MPSGraphTensorData(matrix::MtlArray{T}) where T = MPSGraphTensorData(Base.unsafe_convert(MTLBuffer, matrix), convert(MPSShape, reverse(size(matrix))), T)
+# `initWithMTLBuffer:` has no offset, so arrays are bound through an MPSNDArray view instead
+MPSGraphTensorData(arr::MtlArray) = MPSGraphTensorData(MPSNDArray(arr))
 
 function MPSGraphTensorData(matrix::MPSMatrixLike)
     return @objc [[MPSGraphTensorData alloc]::id{MPSGraphTensorData} initWithMPSMatrix:matrix::id{MPSMatrix}]::MPSGraphTensorData

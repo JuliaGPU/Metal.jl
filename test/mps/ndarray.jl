@@ -70,8 +70,9 @@ using .MPS: MPSNDArray
     @test descriptor(ndarr2) isa MPSNDArrayDescriptor
     @test resourceSize(ndarr2) isa UInt
 
-    arr3 = MtlArray(ones(Float16, 2,3,4))
-    @test_throws "First dimension of input MtlArray must have a byte size divisible by 16" MPSNDArray(arr3)
+    # rows that aren't a multiple of 16 bytes
+    arr3 = MtlArray(rand(Float16, 3, 3, 4))
+    @test MtlArray(MPSNDArray(arr3)) == arr3
 
     arr4 = MtlArray(ones(Float16, 8,3,2))
 

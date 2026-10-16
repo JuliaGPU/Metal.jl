@@ -29,8 +29,7 @@ function mpsgraph_scan_supported(op, output::MtlArray{T}, input::MtlArray{T},
     mpsgraph_scan_operation(T, op) === nothing && return false
     T <: Union{MPSGraphs.MPSGRAPH_VALID_SCAN_TYPES...} || return false
     axes(output) == axes(input) || return false
-    1 <= dims <= ndims(input) || return false
-    return output.offset == 0 && input.offset == 0
+    return 1 <= dims <= ndims(input)
 end
 
 mpsgraph_scan_supported(op, output, input, dims::Integer, init) = false

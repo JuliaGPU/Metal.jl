@@ -19,7 +19,6 @@ function sort_descending(lt, by, rev::Union{Bool,Nothing}, order::Base.Order.Ord
 end
 
 function mpsgraph_sort_descending(A::MtlArray{T}, lt, by, rev, order) where {T}
-    A.offset == 0 || return nothing
     T <: Union{MPSGraphs.MPSGRAPH_VALID_SORT_TYPES...} || return nothing
     return sort_descending(lt, by, rev, order)
 end
@@ -73,7 +72,6 @@ end
 # allows an unstable result (GPUArrays' default, like Base's, is stable)
 function mpsgraph_sortperm_descending(ix::MtlArray{Ti}, A::MtlArray, alg, lt, by, rev,
                                       order) where {Ti}
-    ix.offset == 0 || return nothing
     Ti <: MPSGraphs.MPSGRAPH_SORTPERM_INDEX_TYPES || return nothing
     mpsgraph_requires_stable(alg) === false || return nothing
     axes(ix) == axes(A) || return nothing
