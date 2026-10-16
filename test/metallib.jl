@@ -309,11 +309,8 @@ end
 
     # when an edit moves the reflection list, the flatbuffers stay 16-byte aligned
     lib = parse(MetalLib, joinpath(metallib_dir, "kernels.26.metallib"))
-    renamed(fun) = MetalLibFunction(; (name => getfield(fun, name)
-                                       for name in fieldnames(MetalLibFunction))...,
-                                    name = fun.name * "_x")
-    new_lib = MetalLib(; (name => getfield(lib, name) for name in fieldnames(MetalLib))...,
-                       functions = map(renamed, lib.functions))
+    renamed(fun) = MetalLibFunction(fun; name = fun.name * "_x")
+    new_lib = MetalLib(lib; functions = map(renamed, lib.functions))
     bytes = collect(codeunits(sprint(write, new_lib)))
     flatbuffers = findall(codeunits("AIRR"), bytes)
     @test length(flatbuffers) == length(lib.functions)
@@ -327,8 +324,7 @@ end
     # none of the tools we have produce pipeline scripts, so attach some ourselves
     lib = parse(MetalLib, joinpath(metallib_dir, "kernels.26.metallib"))
     scripts = [rand(UInt8, 100), rand(UInt8, 3)]
-    new_lib = MetalLib(; (name => getfield(lib, name) for name in fieldnames(MetalLib))...,
-                       scripts)
+    new_lib = MetalLib(lib; scripts)
     bytes = sprint(write, new_lib)
     reread = read(IOBuffer(bytes), MetalLib)
     @test reread.scripts == scripts
@@ -345,6 +341,51 @@ end
             @test contains(read(cmd, String), "ScriptListSize: 0x")
         end
     end
+end
+
+@testset "editing libraries" begin
+    # (a library that loads on every supported macOS)
+    lib = parse(MetalLib, joinpath(metallib_dir, "kernels.13.metallib"))
+    @test MetalLib(lib) == lib
+    @test sprint(write, MetalLib(lib)) == String(read(joinpath(metallib_dir, "kernels.13.metallib")))
+
+    # an edited library gets a new UUID, and loads
+    lib2 = MetalLib(lib; functions = lib.functions[1:2])
+    bytes = sprint(write, lib2)
+    reread = read(IOBuffer(bytes), MetalLib)
+    @test [fun.name for fun in reread.functions] == ["foo", "bar"]
+    @test reread.uuid != lib.uuid
+    @test uuid_version(reread.uuid) == 4
+    @test sprint(write, reread) == bytes
+    mtllib = MTL.MTLLibraryFromData(device(), bytes)
+    @test sort(String.(mtllib.functionNames)) == ["bar", "foo"]
+    for name in mtllib.functionNames
+        @test MTL.MTLComputePipelineState(device(), MTL.MTLFunction(mtllib, name)) isa
+              MTL.MTLComputePipelineState
+    end
+
+    # ... unless we pick one
+    uuid = UUID("12345678-1234-4234-8234-123456789abc")
+    @test read(IOBuffer(sprint(write, MetalLib(lib2; uuid))), MetalLib).uuid == uuid
+
+    # replacing a module recomputes its hash, while the other functions keep theirs
+    other = parse(MetalLib, joinpath(metallib_dir, "kernel.13.metallib"))
+    foo = MetalLibFunction(lib.functions[1]; air_module = only(other.functions).air_module)
+    lib3 = MetalLib(lib; functions = [foo; lib.functions[2:end]])
+    reread = read(IOBuffer(sprint(write, lib3)), MetalLib)
+    hashes = [Metal.decoded(fun.layout.function_tags, "HASH") for fun in reread.functions]
+    @test hashes[1] == Metal.sha256(foo.air_module)
+    @test hashes[2:end] == [Metal.decoded(fun.layout.function_tags, "HASH")
+                            for fun in lib.functions[2:end]]
+    mtllib = MTL.MTLLibraryFromData(device(), sprint(write, lib3))
+    @test MTL.MTLComputePipelineState(device(), MTL.MTLFunction(mtllib, "foo")) isa
+          MTL.MTLComputePipelineState
+
+    # writing to a stream that already holds data
+    io = IOBuffer()
+    write(io, "prefix")
+    @test write(io, lib) == sizeof(sprint(write, lib))
+    @test String(take!(io)) == "prefix" * sprint(write, lib)
 end
 
 @testset "malformed libraries" begin

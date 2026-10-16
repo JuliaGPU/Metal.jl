@@ -64,6 +64,23 @@ struct FunctionLayout
     module_digest::Vector{UInt8}
 end
 
+"""
+    MetalLibFunction(; name, air_module, air_version, metal_version, kwargs...)
+    MetalLibFunction(fun::MetalLibFunction; kwargs...)
+
+A function in a [`MetalLib`](@ref): its name and type, its AIR module (LLVM bitcode) with
+the AIR and Metal language versions it targets, and its metadata. The second form copies
+`fun`, replacing the fields given as keyword arguments.
+
+Fields:
+- `name`, `type` (a `ProgramType`, `METALLIB_COMPUTE_FUNCTION` by default);
+- `air_module`, `air_version`, `metal_version`;
+- `constants`: the function constants (`FunctionConstant`s) the function declares;
+- `debug_info`: a `DebugInfo` with the line and file of the function's definition;
+- `dependencies`: paths of the files the function was linked from;
+- `source_id`: the identifier of the embedded source archive the function comes from;
+- `reflection_data`: an AIRR reflection flatbuffer, as emitted by Apple's toolchain.
+"""
 Base.@kwdef struct MetalLibFunction
     name::String
     type::ProgramType = METALLIB_COMPUTE_FUNCTION
@@ -89,6 +106,10 @@ Base.@kwdef struct MetalLibFunction
     layout::Union{Nothing, FunctionLayout} = nothing
 end
 
+MetalLibFunction(fun::MetalLibFunction; kwargs...) =
+    MetalLibFunction(; (name => getfield(fun, name)
+                        for name in fieldnames(MetalLibFunction))..., kwargs...)
+
 # the parts of a library's layout that are not covered by its functions; see `FunctionLayout`
 struct LibraryLayout
     header_extension::Union{Nothing,TagGroup}
@@ -99,11 +120,37 @@ struct LibraryLayout
 
     # the tag groups of the script list
     script_tags::Vector{TagGroup}
+
+    # the UUID the library was read with, and the SHA-256 of the library with that UUID
+    # zeroed, to detect edits (see `MetalLib`)
+    uuid::Union{Nothing,UUID}
+    digest::Vector{UInt8}
 end
 
 # sections we keep as raw bytes, in the order they appear in a library
 const raw_section_tags = ["VLST", "ILST"]
 
+"""
+    MetalLib(; functions, kwargs...)
+    MetalLib(lib::MetalLib; kwargs...)
+    read(io_or_path, MetalLib)
+
+A Metal library (`.metallib` file): a container of [`MetalLibFunction`](@ref)s with their AIR
+modules and metadata. Libraries can be built from scratch, read from a file or stream, and
+written with `write(io_or_path, lib)`. The second form copies `lib`, replacing the fields
+given as keyword arguments.
+
+Reading and writing a library without changing it reproduces it byte for byte, including
+parts of the format Metal.jl does not decode: unknown tags are kept as raw bytes and written
+back in their original position, and the layout of the original file (tag order, group size
+conventions, shared modules and reflection entries) is remembered. Edits are supported in a
+bounded way: functions can be added, removed or replaced, and their metadata changed. The
+writer then recomputes offsets and sizes, the hashes of new modules, and the UUID of the
+library (unless you set a new one): a library that was read keeps its UUID only as long as it
+is written back unchanged. Tags Metal.jl does not decode are not updated by edits.
+
+Malformed input throws a [`MetalLibFormatError`](@ref).
+"""
 Base.@kwdef struct MetalLib
     # defaults to the newest file format the host supports. note that optional sections
     # the official toolchain would emit (e.g. reflection data) are simply left out when
@@ -132,6 +179,9 @@ Base.@kwdef struct MetalLib
     # how the library was laid out when it was read, if it was
     layout::Union{Nothing, LibraryLayout} = nothing
 end
+
+MetalLib(lib::MetalLib; kwargs...) =
+    MetalLib(; (name => getfield(lib, name) for name in fieldnames(MetalLib))..., kwargs...)
 
 # assemble a tag group from `values` (tag => value pairs, or nothing to omit a tag), laid out
 # like `template` if we have one: tags keep their position, tags we could not decode are
@@ -259,10 +309,11 @@ function Base.read(io::IO, ::Type{MetalLib})
     format_check(sizeof(data) == file_size - 24,
                  "truncated: expected $file_size bytes, got $(24 + sizeof(data))",
                  24 + sizeof(data))
-    buffer = IOBuffer([header; data])
+    bytes = [header; data]
+    buffer = IOBuffer(bytes)
 
     try
-        read_metallib(buffer)
+        read_metallib(buffer, bytes)
     catch err
         err isa EOFError || rethrow()
         throw(MetalLibFormatError("unexpected end of a section or tag", position(buffer)))
@@ -294,7 +345,7 @@ function seek_section(io::IOBuffer, offset::Integer, size::Integer, what)
     seek(io, offset)
 end
 
-function read_metallib(io::IOBuffer)
+function read_metallib(io::IOBuffer, bytes::Vector{UInt8})
     ## header
 
     # 4 bytes: "MTLB" magic
@@ -570,19 +621,53 @@ function read_metallib(io::IOBuffer)
         ))
     end
 
+    uuid = decoded(header_ex, "UUID")
+    digest = library_digest(bytes,
+                            uuid === nothing ? nothing : header_ex.offsets["UUID"])
+
     MetalLib(; file_version, file_type, is_macos, is_stub,
                platform_version, platform_type, is_64bit,
                functions, embedded_source,
-               uuid = decoded(header_ex, "UUID"), library_name,
+               uuid, library_name,
                scripts, layout = LibraryLayout(header_ex, dynamic_header, raw_sections,
-                                               script_tags))
+                                               script_tags, uuid, digest))
 end
 
 Base.write(path::AbstractString, lib::MetalLib) = open(path, "w") do io
     write(io, lib)
 end
 
+# the SHA-256 of a library, ignoring the 16 bytes of its UUID at `uuid_offset`
+function library_digest(bytes::Vector{UInt8}, uuid_offset)
+    uuid_offset === nothing && return sha256(bytes)
+    ctx = SHA2_256_CTX()
+    update!(ctx, view(bytes, 1:uuid_offset))
+    update!(ctx, zeros(UInt8, 16))
+    update!(ctx, view(bytes, uuid_offset+17:length(bytes)))
+    return digest!(ctx)
+end
+
 function Base.write(io::IO, lib::MetalLib)
+    buf = IOBuffer()
+    uuid_offset = write_metallib(buf, lib)
+    bytes = take!(buf)
+
+    # a library that was read keeps its UUID, unless it was edited and the UUID was not
+    # changed along with it
+    if lib.layout !== nothing && lib.uuid !== nothing && lib.uuid == lib.layout.uuid &&
+       uuid_offset !== nothing
+        digest = library_digest(bytes, uuid_offset)
+        if digest != lib.layout.digest
+            uuid = content_uuid(digest)
+            bytes[uuid_offset+1:uuid_offset+16] = encode_tag("UUID", uuid)
+        end
+    end
+
+    return write(io, bytes)
+end
+
+# write a library, returning the offset of its UUID if it has one
+function write_metallib(io::IOBuffer, lib::MetalLib)
     ## embedded source
 
     embedded_source_offsets = Dict()
@@ -914,6 +999,8 @@ function Base.write(io::IO, lib::MetalLib)
         mark_placeholder(:script_list_offset,
                          position(io) + offsetof(header_ex_tags, "SLST"))
     end
+    uuid_offset = haskey(header_ex_tags, "UUID") ?
+                  position(io) + offsetof(header_ex_tags, "UUID") : nothing
     write(io, header_ex)
 
     # public metadata
@@ -962,4 +1049,6 @@ function Base.write(io::IO, lib::MetalLib)
     end
 
     patch_placeholder(io, :file_size, position(io))
+
+    return uuid_offset
 end
