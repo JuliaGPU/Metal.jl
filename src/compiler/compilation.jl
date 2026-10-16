@@ -463,7 +463,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
     @signpost_event log=log_compiler() "Compile" "Job=$job"
 
     # TODO: on 1.9, this actually creates a context. cache those.
-    ir, air, entry, loggingEnabled, relocations = JuliaContext() do _
+    ir, air, fun, entry, loggingEnabled, relocations = JuliaContext() do _
         @signpost_interval log=log_compiler() "Generate LLVM IR" begin
             mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)
         end
@@ -495,15 +495,23 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
                 end
             end
 
-            string(mod), air, meta.entry.name, loggingEnabled, meta.relocations
+            # describe the function while we still have its module
+            local fun = try
+                MetalLibFunction(mod, meta.entry.name; air_module=air)
+            catch err
+                ir_file, air_file = dump_artifacts(".ll" => string(mod), ".air" => air)
+                error("""Compilation to Metal library failed: $(sprint(showerror, err))
+                         If you think this is a bug, please file an issue and attach the following files:
+                         - $(ir_file)
+                         - $(air_file)""")
+            end
+
+            string(mod), air, fun, meta.entry.name, loggingEnabled, meta.relocations
         end
     end
 
     @signpost_interval log=log_compiler() "Create Metal library" begin
         metallib = try
-            fun = MetalLibFunction(; name=entry, air_module=air,
-                                     air_version=job.config.target.air,
-                                     metal_version=job.config.target.metal)
             lib = MetalLib(; functions = [fun],
                              file_version = metallib_target(job.config.target.macos),
                              platform_version = job.config.target.macos,

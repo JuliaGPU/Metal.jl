@@ -1,6 +1,7 @@
 # test that we can parse and regenerate Metal libraries accurately
 
 using Metal: MetalLibFunction, MetalLib, MetalLibFormatError, content_uuid
+using LLVM: LLVM, @dispose
 using UUIDs: UUID, uuid_version
 
 using Printf: @printf
@@ -499,6 +500,60 @@ end
     err = try read(IOBuffer(bytes), MetalLib) catch err; err end
     @test err isa MetalLibFormatError
     @test contains(sprint(showerror, err), "stub")
+end
+
+# the modules of a library, parsed for the functions whose module is plain bitcode (not
+# compressed), as `name => module` pairs
+function each_module(f, lib::MetalLib)
+    for fun in lib.functions
+        fun.air_module[1:4] in (UInt8[0x42, 0x43, 0xc0, 0xde], UInt8[0xde, 0xc0, 0x17, 0x0b]) ||
+            continue
+        @dispose ctx=LLVM.Context() mod=parse(LLVM.Module, fun.air_module) begin
+            f(fun, mod)
+        end
+    end
+end
+
+@testset "building functions from modules" begin
+    # Apple's toolchain derives a function's library metadata from its module like we do
+    for metallib in metallibs
+        lib = parse(MetalLib, joinpath(metallib_dir, metallib))
+        each_module(lib) do fun, mod
+            built = MetalLibFunction(mod, fun.name; fun.air_module)
+            @test built.air_module === fun.air_module
+            @test (metallib, fun.name, built.type) == (metallib, fun.name, fun.type)
+            @test built.air_version == fun.air_version
+            @test built.metal_version == fun.metal_version
+        end
+    end
+
+    # fields can be overridden
+    lib = parse(MetalLib, joinpath(metallib_dir, "kernel.26.metallib"))
+    each_module(lib) do fun, mod
+        built = MetalLibFunction(mod, fun.name; fun.air_module, air_version=v"2.7",
+                                 type=Metal.METALLIB_VISIBLE_FUNCTION)
+        @test built.air_version == v"2.7"
+        @test built.metal_version == fun.metal_version
+        @test built.type == Metal.METALLIB_VISIBLE_FUNCTION
+        @test_throws ArgumentError MetalLibFunction(mod, "bar"; fun.air_module)
+    end
+end
+
+function metallib_kernel(a)
+    @inbounds a[1] = 42f0
+    return
+end
+
+@testset "generated libraries" begin
+    cfg = Metal.compiler_config(device(); kernel=true, name=nothing)
+    src = Metal.methodinstance(typeof(metallib_kernel), Tuple{MtlDeviceVector{Float32,1}},
+                               Base.get_world_counter())
+    job = Metal.GPUCompiler.CompilerJob(src, cfg, Base.get_world_counter())
+    lib = read(IOBuffer(Metal.compile_to_metallib(job).metallib), MetalLib)
+    fun = only(lib.functions)
+    @test fun.type == Metal.METALLIB_COMPUTE_FUNCTION
+    @test fun.air_version == cfg.target.air
+    @test fun.metal_version == cfg.target.metal
 end
 
 @static if VERSION >= v"1.11"
