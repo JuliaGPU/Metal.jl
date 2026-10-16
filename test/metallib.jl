@@ -170,15 +170,14 @@ function readobj_uuid(path)
     readobj = metal_tool("metal-readobj")
     readobj === nothing && return nothing
     m = match(r"UUID: ([0-9A-F-]+)", read(`$readobj --all $path`, String))
-    return UUID(m[1])
+    return m === nothing ? nothing : UUID(m[1])
 end
 
 ## tests begin
 metallib_dir = joinpath(@__DIR__, "metallib")
 metallibs = String[]
 for file in readdir(metallib_dir)
-    # TODO: the standalone `metallib` tool's group layout is not reproduced yet
-    if endswith(file, ".metallib") && !endswith(file, ".standalone.metallib")
+    if endswith(file, ".metallib")
         push!(metallibs, file)
     end
 end
@@ -285,7 +284,7 @@ end
     @test only(lib.functions).name == "foo"
 
     bytes = sprint(write, lib)
-    @test_broken bytes == String(read(path))
+    @test bytes == String(read(path))
     mtllib = MTL.MTLLibraryFromData(device(), bytes)
     @test MTL.MTLComputePipelineState(device(), MTL.MTLFunction(mtllib, "foo")) isa MTL.MTLComputePipelineState
 end

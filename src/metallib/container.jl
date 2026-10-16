@@ -16,11 +16,13 @@
 # - script lists (SLST section, SBUF buffers), recording pipeline descriptor scripts;
 #   compare with `metal-source -flatbuffers=json`
 #
+# tags we do not decode, such as graphics-related metadata (vertex attributes in VATT/VATY,
+# tessellation in TESS, layered rendering in LAYR) or compressed reflection buffers (RBUZ),
+# are kept as raw bytes and written back unchanged.
+#
 # parts we do not support at all:
-# - compressed reflection buffers (RBUZ)
 # - dynamic libraries and symbol companions: variable lists and imported/exported symbol
 #   lists (the install name maps onto the dynamic header's NAME tag, which we do support)
-# - graphics-related metadata: vertex attributes (VATT/VATY tags), tessellation (TESS)
 
 using CEnum: @cenum
 using UUIDs: UUID
@@ -66,9 +68,17 @@ end
 
 ## tag groups
 
+# a tag value we keep as raw bytes: either the tag is unknown to us, or its decoded value
+# would not encode back to the same bytes (e.g. because of trailing data we don't parse)
+struct RawTag
+    data::Vector{UInt8}
+end
+
 # a helper type for reading and writing tag groups
 Base.@kwdef mutable struct TagGroup
-    data::Vector{Pair{String,Any}}=Pair{String,Any}[]   # like an ordered dict
+    # the tags in order, with decoded values or as `RawTag`s. like an ordered dict, but
+    # tags can repeat
+    data::Vector{Pair{String,Any}}=Pair{String,Any}[]
 
     offsets::Dict{String,Int} = Dict()
 
@@ -221,8 +231,40 @@ tag_value_io["SBUF"] = (
     (io, val) -> write(io, val))
 
 # unlike other tags, buffer tags encode the size of their value as a 32-bit field,
-# presumably so that their contents can outgrow the 16-bit size limit
-const wide_size_tags = ["RBUF", "SBUF"]
+# presumably so that their contents can outgrow the 16-bit size limit. RBUZ holds a
+# BZip2-compressed reflection buffer (emitted by `air-lld --compress-sections`, together with
+# an RBSZ tag with the uncompressed size); we keep it as raw bytes.
+const wide_size_tags = ["RBUF", "RBUZ", "SBUF"]
+
+function encode_tag(tag::String, value)
+    value isa RawTag && return value.data
+    haskey(tag_value_io, tag) || error("Unknown tag $tag")
+    value_type, _, value_writer = tag_value_io[tag]
+    io = IOBuffer()
+    value_writer(io, convert(value_type, value))
+    return take!(io)
+end
+
+# decode a tag value, keeping it as raw bytes unless it re-encodes identically: the file
+# format is only partially documented, and we must be able to write back what we read
+function decode_tag(tag::String, bytes::Vector{UInt8})
+    if !haskey(tag_value_io, tag)
+        @debug "Keeping unknown metallib tag $tag as raw bytes"
+        return RawTag(bytes)
+    end
+    value_type, value_parser, _ = tag_value_io[tag]
+    value = try
+        value_parser(IOBuffer(bytes), sizeof(bytes))
+    catch err
+        err isa EOFError || rethrow()
+        nothing
+    end
+    if !isa(value, value_type) || encode_tag(tag, value) != bytes
+        @debug "Keeping metallib tag $tag as raw bytes, as its value does not round-trip"
+        return RawTag(bytes)
+    end
+    return value
+end
 
 function Base.read!(io::IO, tg::TagGroup)
     if tg.has_size
@@ -244,21 +286,10 @@ function Base.read!(io::IO, tg::TagGroup)
             read(io, tg.size_type)
         end
         tg.offsets[tag_name] = position(io)
+        value_bytes = read(io, value_size)
+        sizeof(value_bytes) == value_size || throw(EOFError())
 
-        if !haskey(tag_value_io, tag_name)
-            @warn "Unknown tag: $tag_name"
-            skip(io, value_size)
-            continue
-        end
-
-        # read and parse the value
-        value_type, value_parser, _ = tag_value_io[tag_name]
-        value = value_parser(io, value_size)
-        isa(value, value_type) || error("Value for tag $tag_name has type $(typeof(value)), expected $value_type")
-        tg[tag_name] = value
-
-        # ensure we consumed the entire value
-        @assert position(io) == tg.offsets[tag_name] + value_size
+        push!(tg.data, tag_name => decode_tag(tag_name, value_bytes))
     end
 
     # ensure we consumed the entire group
@@ -285,15 +316,7 @@ function Base.write(io::IO, tg::TagGroup)
             @assert length(tag) == 4
             write(io, tag)
 
-            # look up the tag and validate the value
-            haskey(tag_value_io, tag) || error("Unknown tag $tag")
-            value_type, _, value_writer = tag_value_io[tag]
-
-            # serialize the value
-            value_bytes = let io=IOBuffer()
-                value_writer(io, convert(value_type, value))
-                take!(io)
-            end
+            value_bytes = encode_tag(tag, value)
             value_size = sizeof(value_bytes)
 
             # write the value size and the value itself
