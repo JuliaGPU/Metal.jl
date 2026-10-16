@@ -172,6 +172,19 @@ end
     @test compare(joinpath(metallib_dir, metallib))
 end
 
+@testset "function types" begin
+    for metallib in filter(startswith("visible."), metallibs)
+        lib = parse(MetalLib, joinpath(metallib_dir, metallib))
+        types = Dict(fun.name => fun.type for fun in lib.functions)
+        @test types == Dict("foo" => Metal.PROGRAM_KERNEL, "twice" => Metal.PROGRAM_VISIBLE)
+
+        # the runtime takes the function type from the TYPE tag
+        lib.platform_version <= Metal.macos_version() || continue
+        mtllib = MTL.MTLLibraryFromData(device(), sprint(write, lib))
+        @test MTL.MTLFunction(mtllib, "twice").functionType == MTL.MTLFunctionTypeVisible
+    end
+end
+
 @testset "content-derived UUID" begin
     u = content_uuid(UInt8[1, 2, 3])
     @test u == content_uuid(UInt8[1, 2, 3])

@@ -9,6 +9,10 @@ mktempdir() do dir
     dummy = joinpath(@__DIR__, "dummy.metallib")
     @test success(`$metallib_load $dummy`)
 
+    # only kernels can be instantiated as a compute pipeline
+    visible = joinpath(@__DIR__, "metallib", "visible.13.metallib")
+    @test success(`$metallib_load $visible`)
+
     # disassemble to bitcode
     run(`$metallib_dis -o $dir/dummy.bc $dummy kernel_1`)
     @test isfile(joinpath(dir, "dummy.bc"))
