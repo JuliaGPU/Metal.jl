@@ -51,7 +51,7 @@ end
 
 Base.@kwdef struct MetalLibFunction
     name::String
-    type::ProgramType = PROGRAM_KERNEL
+    type::ProgramType = METALLIB_COMPUTE_FUNCTION
     air_version::VersionNumber
     metal_version::VersionNumber
 
@@ -75,12 +75,12 @@ Base.@kwdef struct MetalLib
     # the official toolchain would emit (e.g. reflection data) are simply left out when
     # we have nothing to put there; the loader accepts that.
     file_version::VersionNumber=metallib_target()
-    file_type::FileType=FILE_EXECUTABLE
+    file_type::FileType=METALLIB_EXECUTE
     is_macos::Bool=true
     is_stub::Bool=false
 
     platform_version::VersionNumber=macos_version()
-    platform_type::PlatformType=PLATFORM_MACOS
+    platform_type::PlatformType=METALLIB_PLATFORM_MACOS
     is_64bit::Bool=true
 
     uuid::Union{Nothing, UUID} = nothing
@@ -184,7 +184,7 @@ function Base.read(io::IO, ::Type{MetalLib})
         file_type = FileType(file_type & 0x7f)
     else
         read(io, 1)
-        file_type = FILE_EXECUTABLE
+        file_type = METALLIB_EXECUTE
         is_stub = false
     end
 
@@ -196,7 +196,7 @@ function Base.read(io::IO, ::Type{MetalLib})
         platform_type = PlatformType(platform_type & 0x7f)
     else
         read(io, 1)
-        platform_type = PLATFORM_MACOS
+        platform_type = METALLIB_PLATFORM_MACOS
         is_64bit = true
     end
 

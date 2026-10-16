@@ -191,7 +191,7 @@ end
     for metallib in filter(startswith("visible."), metallibs)
         lib = parse(MetalLib, joinpath(metallib_dir, metallib))
         types = Dict(fun.name => fun.type for fun in lib.functions)
-        @test types == Dict("foo" => Metal.PROGRAM_KERNEL, "twice" => Metal.PROGRAM_VISIBLE)
+        @test types == Dict("foo" => Metal.METALLIB_COMPUTE_FUNCTION, "twice" => Metal.METALLIB_VISIBLE_FUNCTION)
 
         # the runtime takes the function type from the TYPE tag
         lib.platform_version <= Metal.macos_version() || continue
@@ -242,6 +242,26 @@ end
             write(io, bytes)
             close(io)
             @test readobj_uuid(path) == uuid
+        end
+    end
+end
+
+@testset "enum names" begin
+    # our enums are named like Apple's metal-readobj prints them
+    readobj = metal_tool("metal-readobj")
+    if readobj === nothing
+        @test_skip "Apple's metal-readobj not available"
+    else
+        for metallib in metallibs
+            path = joinpath(metallib_dir, metallib)
+            lib = parse(MetalLib, path)
+            output = read(`$readobj --all $path`, String)
+            @test match(r"FileType: (\w+) ", output)[1] == string(lib.file_type)
+            if lib.file_version >= v"1.2.6"
+                @test match(r"Platform: (\w+) ", output)[1] == string(lib.platform_type)
+            end
+            function_types = [m[1] for m in eachmatch(r"Type: (METALLIB_\w+_FUNCTION) ", output)]
+            @test function_types == [string(fun.type) for fun in lib.functions]
         end
     end
 end
