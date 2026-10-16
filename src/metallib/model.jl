@@ -158,7 +158,7 @@ function decoded(tg::Union{Nothing,TagGroup}, tag::String)
 end
 function decoded(tg::TagGroup, tag::String, ::Type{T}) where T
     value = decoded(tg, tag)
-    value isa T || error("Metal library is missing a valid $tag tag")
+    format_check(value isa T, "missing a valid $tag tag")
     return value
 end
 
@@ -238,13 +238,41 @@ Base.parse(::Type{MetalLib}, path::AbstractString) = open(path) do io
 end
 
 function Base.read(io::IO, ::Type{MetalLib})
+    # read the whole library into memory: the format is based on offsets from its start,
+    # and reading from memory keeps corrupt sizes from allocating more than we have
+    header = read(io, 24)
+    format_check(sizeof(header) >= 4 && header[1:4] == codeunits("MTLB"),
+                 "not a Metal library (bad magic)", 0)
+    format_check(sizeof(header) == 24, "truncated header", sizeof(header))
+    file_size = only(reinterpret(UInt64, header[17:24]))
+    format_check(24 <= file_size <= typemax(Int), "invalid file size $file_size", 16)
+    data = UInt8[]
+    readbytes!(io, data, file_size - 24)
+    format_check(sizeof(data) == file_size - 24,
+                 "truncated: expected $file_size bytes, got $(24 + sizeof(data))",
+                 24 + sizeof(data))
+    buffer = IOBuffer([header; data])
+
+    try
+        read_metallib(buffer)
+    catch err
+        err isa EOFError || rethrow()
+        throw(MetalLibFormatError("unexpected end of a section or tag", position(buffer)))
+    end
+end
+
+# seek to a section of `size` bytes at `offset`, checking that it lies within the library
+function seek_section(io::IOBuffer, offset::Integer, size::Integer, what)
+    format_check(offset <= io.size && size <= io.size - offset,
+                 "$what of $size bytes at offset $offset lies outside the library")
+    seek(io, offset)
+end
+
+function read_metallib(io::IOBuffer)
     ## header
 
     # 4 bytes: "MTLB" magic
-    magic = String(read(io, 4))
-    if magic != "MTLB"
-        throw(ArgumentError("Not a Metal library"))
-    end
+    skip(io, 4)
 
     # 3 x 2 bytes: file version
     file_major = read(io, UInt16)
@@ -299,11 +327,11 @@ function Base.read(io::IO, ::Type{MetalLib})
 
     # 2 x 8 bytes: public metadata offset and size
     public_md_offset = read(io, UInt64)
-    _public_md_size = read(io, UInt64)
+    public_md_size = read(io, UInt64)
 
     # 2 x 8 bytes: private metadata offset and size
     private_md_offset = read(io, UInt64)
-    _private_md_size = read(io, UInt64)
+    private_md_size = read(io, UInt64)
 
     # 2 x 8 bytes: module list offset and size
     module_list_offset = read(io, UInt64)
@@ -314,51 +342,63 @@ function Base.read(io::IO, ::Type{MetalLib})
 
     # function list
     function_list = TagGroup[]
-    seek(io, function_list_offset)
+    # (the function list size excludes the size field at the start)
+    seek_section(io, function_list_offset, function_list_size, "function list")
     function_count = read(io, UInt32)
     for _ in 1:function_count
         push!(function_list, read!(io, TagGroup()))
     end
-    # the function list size excludes the size field at the start
-    @assert position(io) <= function_list_offset + function_list_size + sizeof(UInt32)
+    format_check(position(io) <= function_list_offset + function_list_size + sizeof(UInt32),
+                 "function list exceeds its size", function_list_offset)
 
     # header extension, if any
     if position(io) < public_md_offset
         header_ex = read!(io, TagGroup(has_size=false))
-        @assert position(io) == public_md_offset
+        format_check(position(io) == public_md_offset,
+                     "header extension does not end at the public metadata", position(io))
     else
         header_ex = nothing
     end
 
     # public metadata
     public_md = TagGroup[]
+    seek_section(io, public_md_offset, public_md_size, "public metadata")
     for _ in 1:function_count
         push!(public_md, read!(io, TagGroup()))
     end
-    @assert position(io) == private_md_offset
+    format_check(position(io) == private_md_offset,
+                 "public metadata does not end at the private metadata", position(io))
 
     # private metadata
     private_md = TagGroup[]
+    seek_section(io, private_md_offset, private_md_size, "private metadata")
     for _ in 1:function_count
         push!(private_md, read!(io, TagGroup()))
     end
-    @assert position(io) == module_list_offset
+    format_check(position(io) == module_list_offset,
+                 "private metadata does not end at the module list", position(io))
 
     # module list
     #
     # functions can share a module (e.g., in Core Image libraries and dynamic libraries),
     # in which case they also share the vector holding it
+    seek_section(io, module_list_offset, module_list_size, "module list")
     modules = Dict{UInt64,Vector{UInt8}}()
     module_list = Vector{UInt8}[]
     for i in 1:function_count
         offset = decoded(function_list[i], "OFFT", NamedTuple).air_module
-        module_size = decoded(function_list[i], "MDSZ", UInt64)
-        @assert offset + module_size <= module_list_size
+        module_size = decoded(function_list[i], "MDSZ")
+        format_check(module_size !== nothing,
+                     "function $(i-1) has no module (MDSZ tag); stub libraries, which only " *
+                     "describe their functions, are not supported")
+        format_check(offset <= module_list_size && module_size <= module_list_size - offset,
+                     "module of function $(i-1) lies outside the module list")
         air_module = get!(modules, offset) do
             seek(io, module_list_offset + offset)
             read(io, module_size)
         end
-        @assert sizeof(air_module) == module_size
+        format_check(sizeof(air_module) == module_size,
+                     "modules of different sizes at offset $offset of the module list")
         push!(module_list, air_module)
     end
     module_digests = IdDict{Vector{UInt8},Vector{UInt8}}(m => sha256(m) for m in values(modules))
@@ -368,7 +408,7 @@ function Base.read(io::IO, ::Type{MetalLib})
     # like modules, reflection entries can be shared by several functions
     reflection_tags = Vector{Union{Nothing,TagGroup}}(nothing, function_count)
     if (rlst = decoded(header_ex, "RLST")) !== nothing
-        seek(io, rlst.offset)
+        seek_section(io, rlst.offset, rlst.size, "reflection list")
         reflection_count = read(io, UInt32)
         for _ in 1:reflection_count
             # note the offset as used by the RFLT tag
@@ -380,19 +420,19 @@ function Base.read(io::IO, ::Type{MetalLib})
             function_idxs = findall(function_list) do fun
                 decoded(fun, "RFLT") == reflection_offset
             end
-            if isempty(function_idxs)
-                error("No function points to this reflection")
-            end
+            format_check(!isempty(function_idxs),
+                         "no function refers to this reflection entry", position(io))
             reflection_tags[function_idxs] .= Ref(reflection_buf)
         end
-        @assert position(io) == rlst.offset + rlst.size
+        format_check(position(io) == rlst.offset + rlst.size,
+                     "reflection list does not match its size", rlst.offset)
     end
 
     # script list
     #
     # this section contains pipeline descriptor scripts
     if (slst = decoded(header_ex, "SLST")) !== nothing
-        seek(io, slst.offset)
+        seek_section(io, slst.offset, slst.size, "script list")
         script_count = read(io, UInt32)
         for _ in 1:script_count
             _script_buf = read!(io, TagGroup())
@@ -401,7 +441,8 @@ function Base.read(io::IO, ::Type{MetalLib})
             # $ metal-source -flatbuffers=binary
             # $ metal-source -flatbuffers=json
         end
-        @assert position(io) == slst.offset + slst.size
+        format_check(position(io) == slst.offset + slst.size,
+                     "script list does not match its size", slst.offset)
     end
 
     # dynamic header
@@ -409,9 +450,10 @@ function Base.read(io::IO, ::Type{MetalLib})
     # this section records the name of the library
     dynamic_header = nothing
     if (hdyn = decoded(header_ex, "HDYN")) !== nothing
-        seek(io, hdyn.offset)
+        seek_section(io, hdyn.offset, hdyn.size, "dynamic header")
         dynamic_header = read!(io, TagGroup(has_size=false))
-        @assert position(io) == hdyn.offset + hdyn.size
+        format_check(position(io) == hdyn.offset + hdyn.size,
+                     "dynamic header does not match its size", hdyn.offset)
     end
     library_name = decoded(dynamic_header, "NAME")
 
@@ -419,9 +461,8 @@ function Base.read(io::IO, ::Type{MetalLib})
     raw_sections = Dict{String,Vector{UInt8}}()
     for tag in raw_section_tags
         if (section = decoded(header_ex, tag)) !== nothing
-            seek(io, section.offset)
+            seek_section(io, section.offset, section.size, tag)
             raw_sections[tag] = read(io, section.size)
-            @assert sizeof(raw_sections[tag]) == section.size
         end
     end
 
@@ -434,9 +475,10 @@ function Base.read(io::IO, ::Type{MetalLib})
     hsrd = decoded(header_ex, "HSRD")
     if hsrc !== nothing || hsrd !== nothing
         # HSRC and HSRD are identical except for the working directory field
-        @assert (hsrc === nothing) != (hsrd === nothing)
+        format_check((hsrc === nothing) != (hsrd === nothing),
+                     "both HSRC and HSRD embedded source sections")
         section = something(hsrc, hsrd)
-        seek(io, section.offset)
+        seek_section(io, section.offset, section.size, "embedded source")
 
         source_archive_count = read(io, UInt32)
         command_line_info = String(readuntil(io, UInt8(0)))
@@ -452,7 +494,7 @@ function Base.read(io::IO, ::Type{MetalLib})
             source_offset = position(io) + sizeof(UInt32) - section.offset
 
             data = read!(io, TagGroup(size_type=UInt32, counts_size=false))
-            id, archive = data["SARC"]
+            id, archive = decoded(data, "SARC", NamedTuple)
             push!(archives, id => archive)
 
             # check if any function points to this source
