@@ -90,9 +90,7 @@ function LinearAlgebra.mul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix,
         native_matmul!(C, tA, tB, A, B, alpha, beta, alg)
     elseif alg === :MPS
         (ntc && supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), false)
-        transA = tA == 'T' || tA == 'C'
-        transB = tB == 'T' || tB == 'C'
-        matmul!(C, A, B, alpha, beta, transA, transB)
+        MPS.matmul!(C, A, B, alpha, beta; tA, tB)
     elseif alg === :GPUArrays
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
     else
@@ -186,8 +184,7 @@ function LinearAlgebra.mul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::Mtl
         gemv!(C, cA, A, B, alpha, beta; kernel)
     elseif alg === :MPS
         (ntc && supports_mps_matmul(A, B, C, MPS_VALID_MATVECMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), true)
-        transA = tA == 'T' || tA == 'C'
-        matvecmul!(C, A, B, alpha, beta, transA)
+        MPS.matvecmul!(C, A, B, alpha, beta; tA)
     elseif alg === :GPUArrays
         GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)
     else
