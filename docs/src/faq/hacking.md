@@ -61,6 +61,9 @@ A `.metallib` is a container that wraps one or more AIR modules (LLVM bitcode) t
 the metadata Metal needs to instantiate them. Three scripts in `bin/` let you move between
 that container and plain LLVM IR, and load the result onto a real device.
 
+The scripts are built on `Metal.MetalLib`, which you can also use directly from Julia to
+inspect or edit a library; see the [Libraries](@ref) page of the API reference.
+
 `metallib-dis` unpacks a library back into LLVM modules:
 
 ```

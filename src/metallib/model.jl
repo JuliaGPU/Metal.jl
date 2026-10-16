@@ -5,6 +5,13 @@ using CodecBzip2: Bzip2DecompressorStream
 
 ## structures
 
+"""
+    FunctionConstant(name, datatype, index, required)
+
+A function constant declared by a [`MetalLibFunction`](@ref): its name, data type (an
+`MTLDataType`), index, and whether a value must be provided for it (constants an MSL function
+only uses after checking `is_function_constant_defined` are not required).
+"""
 struct FunctionConstant
     name::String
     datatype::MTL.MTLDataType
@@ -12,6 +19,11 @@ struct FunctionConstant
     required::Bool      # whether a value must be provided
 end
 
+"""
+    DebugInfo(line, path)
+
+Where a [`MetalLibFunction`](@ref) was defined: a line number and the path of the source file.
+"""
 struct DebugInfo
     line::Int
     path::String
