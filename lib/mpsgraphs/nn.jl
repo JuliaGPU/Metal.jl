@@ -187,12 +187,6 @@ struct SoftmaxGraphKey{T}
     axis::Int
 end
 
-struct CachedSoftmaxGraph
-    graph::MPSGraph
-    place_x::MPSGraphTensor
-    result::MPSGraphTensor
-end
-
 function logsoftmax_tensor(graph::MPSGraph, x::MPSGraphTensor,
                            key::SoftmaxGraphKey)
     maxval = reductionMaximumWithTensor(graph, x, key.axis, "logsoftmax_max")
@@ -208,7 +202,7 @@ function logsoftmax_tensor(graph::MPSGraph, x::MPSGraphTensor,
                                         "logsoftmax")
 end
 
-function CachedSoftmaxGraph(key::SoftmaxGraphKey{T}) where {T}
+function build_graph(key::SoftmaxGraphKey{T}) where {T}
     graph = MPSGraph()
     place_x = placeholderTensor(graph, key.shape, T)
     result = if key.op === :softmax
@@ -218,31 +212,14 @@ function CachedSoftmaxGraph(key::SoftmaxGraphKey{T}) where {T}
     else
         throw(ArgumentError("unsupported softmax graph operation: $(key.op)"))
     end
-    return CachedSoftmaxGraph(graph, place_x, result)
+    return CachedGraph(graph, [place_x], [result])
 end
-
-const softmax_graph_cache = Dict{SoftmaxGraphKey, CachedSoftmaxGraph}()
-const softmax_graph_cache_lock = ReentrantLock()
 
 function run_softmax!(op::Symbol, y::MtlArray{T}, x::MtlArray{T},
                                        dims::Integer) where {T}
     axis = check_softmax_args(y, x, dims)
     key = SoftmaxGraphKey{T}(op, size(x), axis)
-    cached = @lock softmax_graph_cache_lock get!(softmax_graph_cache, key) do
-        CachedSoftmaxGraph(key)
-    end
-
-    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.place_x => MPSGraphTensorData(x),
-    )
-    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => MPSGraphTensorData(y),
-    )
-
-    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
-    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
-            default_exec_desc())
-    commit!(cmdbuf)
+    run!(cached_graph(key), (y,), (x,))
 
     return y
 end
@@ -259,13 +236,6 @@ struct SoftmaxGradGraphKey{T}
     op::Symbol
     shape::Tuple{Vararg{Int}}
     axis::Int
-end
-
-struct CachedSoftmaxGradGraph
-    graph::MPSGraph
-    place_dy::MPSGraphTensor
-    place_y::MPSGraphTensor
-    result::MPSGraphTensor
 end
 
 function softmax_grad_tensor(graph::MPSGraph, dy::MPSGraphTensor, y::MPSGraphTensor,
@@ -291,7 +261,7 @@ function logsoftmax_grad_tensor(graph::MPSGraph, dy::MPSGraphTensor, y::MPSGraph
         "logsoftmax_grad")
 end
 
-function CachedSoftmaxGradGraph(key::SoftmaxGradGraphKey{T}) where {T}
+function build_graph(key::SoftmaxGradGraphKey{T}) where {T}
     graph = MPSGraph()
     place_dy = placeholderTensor(graph, key.shape, T)
     place_y = placeholderTensor(graph, key.shape, T)
@@ -302,33 +272,15 @@ function CachedSoftmaxGradGraph(key::SoftmaxGradGraphKey{T}) where {T}
     else
         throw(ArgumentError("unsupported softmax gradient graph operation: $(key.op)"))
     end
-    return CachedSoftmaxGradGraph(graph, place_dy, place_y, result)
+    return CachedGraph(graph, [place_dy, place_y], [result])
 end
-
-const softmax_grad_graph_cache = Dict{SoftmaxGradGraphKey, CachedSoftmaxGradGraph}()
-const softmax_grad_graph_cache_lock = ReentrantLock()
 
 function run_softmax_grad!(op::Symbol, dx::MtlArray{T},
                                             dy::MtlArray{T}, y::MtlArray{T},
                                             dims::Integer) where {T}
     axis = check_softmax_grad_args(dx, dy, y, dims)
     key = SoftmaxGradGraphKey{T}(op, size(y), axis)
-    cached = @lock softmax_grad_graph_cache_lock get!(softmax_grad_graph_cache, key) do
-        CachedSoftmaxGradGraph(key)
-    end
-
-    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.place_dy => MPSGraphTensorData(dy),
-        cached.place_y => MPSGraphTensorData(y),
-    )
-    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => MPSGraphTensorData(dx),
-    )
-
-    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
-    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
-            default_exec_desc())
-    commit!(cmdbuf)
+    run!(cached_graph(key), (dx,), (dy, y))
 
     return dx
 end
@@ -354,18 +306,11 @@ struct Conv2DGraphKey{T}
     flipkernel::Bool
 end
 
-struct CachedConv2DGraph
-    graph::MPSGraph
-    place_x::MPSGraphTensor
-    place_w::MPSGraphTensor
-    result::MPSGraphTensor
-end
-
 function conv_weights_tensor(graph::MPSGraph, weights::MPSGraphTensor, flipkernel::Bool)
     return flipkernel ? weights : reverseTensor(graph, weights, [2, 3], "conv_weights_reverse")
 end
 
-function CachedConv2DGraph(key::Conv2DGraphKey{T}) where {T}
+function build_graph(key::Conv2DGraphKey{T}) where {T}
     graph = MPSGraph()
     place_x = placeholderTensor(graph, key.size_x, T)
     place_w = placeholderTensor(graph, key.size_w, T)
@@ -375,11 +320,8 @@ function CachedConv2DGraph(key::Conv2DGraphKey{T}) where {T}
                                            conv_weights_tensor(graph, place_w,
                                                                key.flipkernel),
                                            desc, "conv")
-    return CachedConv2DGraph(graph, place_x, place_w, result)
+    return CachedGraph(graph, [place_x, place_w], [result])
 end
-
-const conv2d_graph_cache = Dict{Conv2DGraphKey, CachedConv2DGraph}()
-const conv2d_graph_cache_lock = ReentrantLock()
 
 struct Conv2DDataGradGraphKey{T}
     size_dx::NTuple{4, Int}
@@ -392,14 +334,7 @@ struct Conv2DDataGradGraphKey{T}
     flipkernel::Bool
 end
 
-struct CachedConv2DDataGradGraph
-    graph::MPSGraph
-    place_dy::MPSGraphTensor
-    place_w::MPSGraphTensor
-    result::MPSGraphTensor
-end
-
-function CachedConv2DDataGradGraph(key::Conv2DDataGradGraphKey{T}) where {T}
+function build_graph(key::Conv2DDataGradGraphKey{T}) where {T}
     graph = MPSGraph()
     place_dy = placeholderTensor(graph, key.size_dy, T)
     place_w = placeholderTensor(graph, key.size_w, T)
@@ -408,12 +343,8 @@ function CachedConv2DDataGradGraph(key::Conv2DDataGradGraphKey{T}) where {T}
     result = convolution2DDataGradientWithIncomingGradientTensor(
         graph, place_dy, conv_weights_tensor(graph, place_w, key.flipkernel),
         convert(MPSShape, reverse(key.size_dx)), desc, "conv_data_grad")
-    return CachedConv2DDataGradGraph(graph, place_dy, place_w, result)
+    return CachedGraph(graph, [place_dy, place_w], [result])
 end
-
-const conv2d_data_grad_graph_cache =
-    Dict{Conv2DDataGradGraphKey, CachedConv2DDataGradGraph}()
-const conv2d_data_grad_graph_cache_lock = ReentrantLock()
 
 struct Conv2DFilterGradGraphKey{T}
     size_dw::NTuple{4, Int}
@@ -426,14 +357,7 @@ struct Conv2DFilterGradGraphKey{T}
     flipkernel::Bool
 end
 
-struct CachedConv2DFilterGradGraph
-    graph::MPSGraph
-    place_x::MPSGraphTensor
-    place_dy::MPSGraphTensor
-    result::MPSGraphTensor
-end
-
-function CachedConv2DFilterGradGraph(key::Conv2DFilterGradGraphKey{T}) where {T}
+function build_graph(key::Conv2DFilterGradGraphKey{T}) where {T}
     graph = MPSGraph()
     place_x = placeholderTensor(graph, key.size_x, T)
     place_dy = placeholderTensor(graph, key.size_dy, T)
@@ -443,12 +367,8 @@ function CachedConv2DFilterGradGraph(key::Conv2DFilterGradGraphKey{T}) where {T}
         graph, place_dy, place_x, convert(MPSShape, reverse(key.size_dw)), desc,
         "conv_filter_grad")
     result = conv_weights_tensor(graph, result, key.flipkernel)
-    return CachedConv2DFilterGradGraph(graph, place_x, place_dy, result)
+    return CachedGraph(graph, [place_x, place_dy], [result])
 end
-
-const conv2d_filter_grad_graph_cache =
-    Dict{Conv2DFilterGradGraphKey, CachedConv2DFilterGradGraph}()
-const conv2d_filter_grad_graph_cache_lock = ReentrantLock()
 
 function check_conv2d_groups(groups::Integer, in_channels::Int, kernel_in_channels::Int,
                              out_channels::Int)
@@ -496,22 +416,7 @@ function graph_conv!(y::MtlArray{T,4}, x::MtlArray{T,4}, w::MtlArray{T,4};
     check_conv2d_args(y, x, w, groups)
     key = Conv2DGraphKey{T}(size(y), size(x), size(w), stride, padding, dilation,
                             groups, flipkernel)
-    cached = @lock conv2d_graph_cache_lock get!(conv2d_graph_cache, key) do
-        CachedConv2DGraph(key)
-    end
-
-    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.place_x => MPSGraphTensorData(x),
-        cached.place_w => MPSGraphTensorData(w),
-    )
-    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => MPSGraphTensorData(y),
-    )
-
-    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
-    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
-            default_exec_desc())
-    commit!(cmdbuf)
+    run!(cached_graph(key), (y,), (x, w))
 
     return y
 end
@@ -526,22 +431,7 @@ function graph_conv_data_grad!(dx::MtlArray{T,4}, dy::MtlArray{T,4},
     check_conv2d_data_grad_args(dx, dy, w, groups)
     key = Conv2DDataGradGraphKey{T}(size(dx), size(dy), size(w), stride, padding,
                                     dilation, groups, flipkernel)
-    cached = @lock conv2d_data_grad_graph_cache_lock get!(conv2d_data_grad_graph_cache, key) do
-        CachedConv2DDataGradGraph(key)
-    end
-
-    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.place_dy => MPSGraphTensorData(dy),
-        cached.place_w => MPSGraphTensorData(w),
-    )
-    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => MPSGraphTensorData(dx),
-    )
-
-    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
-    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
-            default_exec_desc())
-    commit!(cmdbuf)
+    run!(cached_graph(key), (dx,), (dy, w))
 
     return dx
 end
@@ -556,22 +446,7 @@ function graph_conv_filter_grad!(dw::MtlArray{T,4}, x::MtlArray{T,4},
     check_conv2d_filter_grad_args(dw, x, dy, groups)
     key = Conv2DFilterGradGraphKey{T}(size(dw), size(x), size(dy), stride, padding,
                                       dilation, groups, flipkernel)
-    cached = @lock conv2d_filter_grad_graph_cache_lock get!(conv2d_filter_grad_graph_cache, key) do
-        CachedConv2DFilterGradGraph(key)
-    end
-
-    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.place_x => MPSGraphTensorData(x),
-        cached.place_dy => MPSGraphTensorData(dy),
-    )
-    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => MPSGraphTensorData(dw),
-    )
-
-    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
-    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
-            default_exec_desc())
-    commit!(cmdbuf)
+    run!(cached_graph(key), (dw,), (x, dy))
 
     return dw
 end
@@ -587,13 +462,7 @@ struct Pool2DGraphKey{T}
     include_zero_pad::Bool
 end
 
-struct CachedPool2DGraph
-    graph::MPSGraph
-    place_x::MPSGraphTensor
-    result::MPSGraphTensor
-end
-
-function CachedPool2DGraph(key::Pool2DGraphKey{T}) where {T}
+function build_graph(key::Pool2DGraphKey{T}) where {T}
     graph = MPSGraph()
     place_x = placeholderTensor(graph, key.size_x, T)
     desc = MPSGraphPooling2DOpDescriptor(key.kernel, key.stride, key.padding,
@@ -605,11 +474,8 @@ function CachedPool2DGraph(key::Pool2DGraphKey{T}) where {T}
     else
         throw(ArgumentError("unsupported pooling graph operation: $(key.op)"))
     end
-    return CachedPool2DGraph(graph, place_x, result)
+    return CachedGraph(graph, [place_x], [result])
 end
-
-const pool2d_graph_cache = Dict{Pool2DGraphKey, CachedPool2DGraph}()
-const pool2d_graph_cache_lock = ReentrantLock()
 
 struct Pool2DGradGraphKey{T}
     op::Symbol
@@ -623,14 +489,7 @@ struct Pool2DGradGraphKey{T}
     include_zero_pad::Bool
 end
 
-struct CachedPool2DGradGraph
-    graph::MPSGraph
-    place_dy::MPSGraphTensor
-    place_x::MPSGraphTensor
-    result::MPSGraphTensor
-end
-
-function CachedPool2DGradGraph(key::Pool2DGradGraphKey{T}) where {T}
+function build_graph(key::Pool2DGradGraphKey{T}) where {T}
     graph = MPSGraph()
     place_dy = placeholderTensor(graph, key.size_dy, T)
     place_x = placeholderTensor(graph, key.size_x, T)
@@ -645,11 +504,8 @@ function CachedPool2DGradGraph(key::Pool2DGradGraphKey{T}) where {T}
     else
         throw(ArgumentError("unsupported pooling gradient graph operation: $(key.op)"))
     end
-    return CachedPool2DGradGraph(graph, place_dy, place_x, result)
+    return CachedGraph(graph, [place_dy, place_x], [result])
 end
-
-const pool2d_grad_graph_cache = Dict{Pool2DGradGraphKey, CachedPool2DGradGraph}()
-const pool2d_grad_graph_cache_lock = ReentrantLock()
 
 function check_pool2d_args(y::MtlArray{T,4}, x::MtlArray{T,4}) where {T}
     T <: MPSGRAPH_VALID_NN_TYPES || throw(ArgumentError("MPSGraph NN operations support Float16 and Float32"))
@@ -676,21 +532,7 @@ function run_pool2d!(op::Symbol, y::MtlArray{T,4}, x::MtlArray{T,4};
     check_pool2d_args(y, x)
     key = Pool2DGraphKey{T}(op, size(y), size(x), kernel, stride, padding,
                             dilation, include_zero_pad)
-    cached = @lock pool2d_graph_cache_lock get!(pool2d_graph_cache, key) do
-        CachedPool2DGraph(key)
-    end
-
-    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.place_x => MPSGraphTensorData(x),
-    )
-    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => MPSGraphTensorData(y),
-    )
-
-    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
-    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
-            default_exec_desc())
-    commit!(cmdbuf)
+    run!(cached_graph(key), (y,), (x,))
 
     return y
 end
@@ -705,22 +547,7 @@ function run_pool2d_grad!(op::Symbol, dx::MtlArray{T,4},
     check_pool2d_grad_args(dx, dy, x)
     key = Pool2DGradGraphKey{T}(op, size(dx), size(dy), size(x), kernel, stride,
                                 padding, dilation, include_zero_pad)
-    cached = @lock pool2d_grad_graph_cache_lock get!(pool2d_grad_graph_cache, key) do
-        CachedPool2DGradGraph(key)
-    end
-
-    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.place_dy => MPSGraphTensorData(dy),
-        cached.place_x => MPSGraphTensorData(x),
-    )
-    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => MPSGraphTensorData(dx),
-    )
-
-    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
-    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
-            default_exec_desc())
-    commit!(cmdbuf)
+    run!(cached_graph(key), (dx,), (dy, x))
 
     return dx
 end

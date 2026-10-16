@@ -1,35 +1,3 @@
-#=
-Creates a default MPSGraphExecutionDescriptor with a MPSGraphCompilationDescriptor
- set to use optimization level 0 instead of 1. This is because level 1 causes operations
- on eltypes <= 16 bytes to be executed on the ANE instead of the GPU, leading to worse
- performance and hangs when the matrices are too big
-=#
-function default_exec_desc()
-    @memoize begin
-        compDesc = MPSGraphCompilationDescriptor()
-        # Use optimization level 0 to avoid operations being moved to the neural engine
-        compDesc.optimizationLevel = MPSGraphOptimizationLevel0
-
-        execDesc = MPSGraphExecutionDescriptor()
-        execDesc.compilationDescriptor = compDesc
-        execDesc
-    end::MPSGraphExecutionDescriptor
-end
-
-
-#=
-MPSGraph caching infrastructure.
-
-The overhead of creating an MPSGraph dominates matmul time for small-medium matrices.
-By caching graphs keyed by their structural parameters (shapes, types, flags), we
-achieve significant speedup for repeated operations with the same configuration.
-
-The cache key includes all parameters that affect graph structure:
-- Input/output shapes and element types
-- Transpose flags
-- Alpha/beta values (baked into graph as constants)
-=#
-
 # Cache key for matmul graphs - includes all structural parameters
 struct MatmulGraphKey{Tab<: Number, Tc <: Number}
     size_a::Tuple{Vararg{Int}}
@@ -54,16 +22,8 @@ function MatmulGraphKey(a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb}, c::MtlArray{
     )
 end
 
-# Cached graph with all tensors needed for execution
-struct CachedMatmulGraph
-    graph::MPSGraph
-    place_c::Union{Nothing,MPSGraphTensor}  # not read when β is zero
-    place_a::MPSGraphTensor
-    place_b::MPSGraphTensor
-    result::MPSGraphTensor
-end
-# Build a new matmul graph (called only on cache miss)
-function CachedMatmulGraph(key::MatmulGraphKey{Tab, Tc}) where {Tab, Tc}
+# inputs: A, B and (unless β is zero) C; output: C
+function build_graph(key::MatmulGraphKey{Tab, Tc}) where {Tab, Tc}
     graph = MPSGraph()
 
     placeA = placeholderTensor(graph, key.size_a, Tab)
@@ -118,7 +78,7 @@ function CachedMatmulGraph(key::MatmulGraphKey{Tab, Tc}) where {Tab, Tc}
 
     # like BLAS, β = 0 means C is not read, so that NaNs or uninitialized memory in C don't
     # propagate into the result
-    iszero(key.beta) && return CachedMatmulGraph(graph, nothing, placeA, placeB, castC)
+    iszero(key.beta) && return CachedGraph(graph, [placeA, placeB], [castC])
 
     placeC = placeholderTensor(graph, key.size_c, Tc)
     afterbeta = let
@@ -132,39 +92,15 @@ function CachedMatmulGraph(key::MatmulGraphKey{Tab, Tc}) where {Tab, Tc}
         additionWithPrimaryTensor(graph, castC, betaC)
     end
 
-    CachedMatmulGraph(graph, placeC, placeA, placeB, afterbeta)
+    CachedGraph(graph, [placeA, placeB, placeC], [afterbeta])
 end
 
-# Thread-safe graph cache with lock
-const _matmul_graph_cache = Dict{MatmulGraphKey, CachedMatmulGraph}()
-const _matmul_graph_cache_lock = ReentrantLock()
 function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb},
-                                   alpha::Number, beta::Number,
-                                   transpose_a, transpose_b) where {Tc, Tab, Na, Nb}
-    # Get or create cached graph
+                  alpha::Number, beta::Number,
+                  transpose_a, transpose_b) where {Tc, Tab, Na, Nb}
     key = MatmulGraphKey(a, b, c, alpha, beta, transpose_a, transpose_b)
-    cached = @lock _matmul_graph_cache_lock get!(_matmul_graph_cache, key) do
-        CachedMatmulGraph(key)
-    end
-
-    # Build feed and result dictionaries with current data
-    c_data = MPSGraphTensorData(c)
-    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.place_a => MPSGraphTensorData(a),
-        cached.place_b => MPSGraphTensorData(b),
-    )
-    if cached.place_c !== nothing
-        feeds[cached.place_c] = c_data
-    end
-
-    resultdict = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => c_data
-    )
-
-    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
-    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(resultdict), nil, default_exec_desc())
-    commit!(cmdbuf)
-
+    inputs = iszero(key.beta) ? (a, b) : (a, b, c)
+    run!(cached_graph(key), (c,), inputs)
     return c
 end
 

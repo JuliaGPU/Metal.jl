@@ -70,22 +70,13 @@ struct ScanGraphKey{T}
     op::Symbol
 end
 
-struct CachedScanGraph
-    graph::MPSGraph
-    place_x::MPSGraphTensor
-    result::MPSGraphTensor
-end
-
-function CachedScanGraph(key::ScanGraphKey{T}) where {T}
+function build_graph(key::ScanGraphKey{T}) where {T}
     graph = MPSGraph()
     place_x = placeholderTensor(graph, key.shape, T)
     result = scanWithTensor(graph, key.op, place_x, mps_axis(key.shape, key.dim),
                             "scan")
-    return CachedScanGraph(graph, place_x, result)
+    return CachedGraph(graph, [place_x], [result])
 end
-
-const scan_graph_cache = Dict{ScanGraphKey, CachedScanGraph}()
-const scan_graph_cache_lock = ReentrantLock()
 
 function check_scan_args(out::MtlArray{T}, input::MtlArray{T}, dim::Integer) where {T}
     T <: Union{MPSGRAPH_VALID_SCAN_TYPES...} ||
@@ -101,21 +92,7 @@ function graph_scan!(op, out::MtlArray{T}, input::MtlArray{T};
     check_scan_args(out, input, dim)
     isempty(input) && return copyto!(out, input)
     key = ScanGraphKey{T}(size(input), dim, scan_operation(T, op))
-    cached = @lock scan_graph_cache_lock get!(scan_graph_cache, key) do
-        CachedScanGraph(key)
-    end
-
-    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.place_x => MPSGraphTensorData(input),
-    )
-    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => MPSGraphTensorData(out),
-    )
-
-    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
-    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
-            default_exec_desc())
-    commit!(cmdbuf)
+    run!(cached_graph(key), (out,), (input,))
 
     return out
 end

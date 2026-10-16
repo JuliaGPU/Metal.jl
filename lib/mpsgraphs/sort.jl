@@ -30,33 +30,18 @@ struct SortGraphKey{T}
     descending::Bool
 end
 
-struct CachedSortGraph
-    graph::MPSGraph
-    place_x::MPSGraphTensor
-    result::MPSGraphTensor
-end
-
-function CachedSortGraph(key::SortGraphKey{T}) where {T}
+function build_graph(key::SortGraphKey{T}) where {T}
     graph = MPSGraph()
     place_x = placeholderTensor(graph, key.shape, T)
     result = sortWithTensor(graph, place_x, mps_axis(key.shape, key.dim),
                             key.descending, "sort")
-    return CachedSortGraph(graph, place_x, result)
+    return CachedGraph(graph, [place_x], [result])
 end
-
-const sort_graph_cache = Dict{SortGraphKey, CachedSortGraph}()
-const sort_graph_cache_lock = ReentrantLock()
 
 struct SortPermGraphKey{T, Ti}
     shape::Tuple{Vararg{Int}}
     dim::Int
     descending::Bool
-end
-
-struct CachedSortPermGraph
-    graph::MPSGraph
-    place_x::MPSGraphTensor
-    result::MPSGraphTensor
 end
 
 function linear_sortperm_tensor(graph::MPSGraph, arg, key::SortPermGraphKey{T, Ti}) where {T, Ti}
@@ -89,17 +74,14 @@ function linear_sortperm_tensor(graph::MPSGraph, arg, key::SortPermGraphKey{T, T
                                      "sortperm_one_based")
 end
 
-function CachedSortPermGraph(key::SortPermGraphKey{T, Ti}) where {T, Ti}
+function build_graph(key::SortPermGraphKey{T, Ti}) where {T, Ti}
     graph = MPSGraph()
     place_x = placeholderTensor(graph, key.shape, T)
     arg = argSortWithTensor(graph, place_x, mps_axis(key.shape, key.dim),
                             key.descending, "argsort")
     result = linear_sortperm_tensor(graph, arg, key)
-    return CachedSortPermGraph(graph, place_x, result)
+    return CachedGraph(graph, [place_x], [result])
 end
-
-const sortperm_graph_cache = Dict{SortPermGraphKey, CachedSortPermGraph}()
-const sortperm_graph_cache_lock = ReentrantLock()
 
 function check_sort_args(out::MtlArray{T}, input::MtlArray{T}, dim::Integer) where {T}
     T <: Union{MPSGRAPH_VALID_SORT_TYPES...} || throw(ArgumentError("MPSGraph sort supports $(join(MPSGraphs.MPSGRAPH_VALID_SORT_TYPES,", ", " and "))"))
@@ -125,21 +107,7 @@ function graph_sort!(out::MtlArray{T}, input::MtlArray{T};
     check_sort_args(out, input, dim)
     isempty(input) && return copyto!(out, input)
     key = SortGraphKey{T}(size(input), dim, rev)
-    cached = @lock sort_graph_cache_lock get!(sort_graph_cache, key) do
-        CachedSortGraph(key)
-    end
-
-    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.place_x => MPSGraphTensorData(input),
-    )
-    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => MPSGraphTensorData(out),
-    )
-
-    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
-    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
-            default_exec_desc())
-    commit!(cmdbuf)
+    run!(cached_graph(key), (out,), (input,))
 
     return out
 end
@@ -150,21 +118,7 @@ function graph_sortperm!(index::MtlArray{Ti}, input::MtlArray{T};
     check_sortperm_args(index, input, dim)
     isempty(input) && return index
     key = SortPermGraphKey{T, Ti}(size(input), dim, rev)
-    cached = @lock sortperm_graph_cache_lock get!(sortperm_graph_cache, key) do
-        CachedSortPermGraph(key)
-    end
-
-    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.place_x => MPSGraphTensorData(input),
-    )
-    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => MPSGraphTensorData(index),
-    )
-
-    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
-    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
-            default_exec_desc())
-    commit!(cmdbuf)
+    run!(cached_graph(key), (index,), (input,))
 
     return index
 end

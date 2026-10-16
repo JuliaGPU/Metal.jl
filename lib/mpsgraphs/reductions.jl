@@ -81,24 +81,15 @@ struct ReductionGraphKey{T}
     op::Symbol
 end
 
-struct CachedReductionGraph
-    graph::MPSGraph
-    place_x::MPSGraphTensor
-    result::MPSGraphTensor
-end
-
-function CachedReductionGraph(key::ReductionGraphKey{T}) where {T}
+function build_graph(key::ReductionGraphKey{T}) where {T}
     graph = MPSGraph()
     place_x = placeholderTensor(graph, key.input_shape, T)
     axes = NSArray([NSNumber(mps_axis(key.input_shape, dim)) for dim in key.dims])
     reduced = reductionWithTensor(graph, key.op, place_x, axes, "reduction")
     output_shape = convert(MPSShape, reverse(key.output_shape))
     result = reshapeTensor(graph, reduced, output_shape, "reduction_reshape")
-    return CachedReductionGraph(graph, place_x, result)
+    return CachedGraph(graph, [place_x], [result])
 end
-
-const reduction_graph_cache = Dict{ReductionGraphKey, CachedReductionGraph}()
-const reduction_graph_cache_lock = ReentrantLock()
 
 function check_reduction_args(out::MtlArray{T}, input::MtlArray{T}) where {T}
     T <: Union{MPSGRAPH_VALID_REDUCTION_TYPES...} ||
@@ -112,21 +103,7 @@ function graph_mapreducedim!(op, out::MtlArray{T},
     dims = check_reduction_args(out, input)
     key = ReductionGraphKey{T}(size(input), size(out), dims,
                                reduction_operation(op))
-    cached = @lock reduction_graph_cache_lock get!(reduction_graph_cache, key) do
-        CachedReductionGraph(key)
-    end
-
-    feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.place_x => MPSGraphTensorData(input),
-    )
-    results = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => MPSGraphTensorData(out),
-    )
-
-    cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
-    encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
-            default_exec_desc())
-    commit!(cmdbuf)
+    run!(cached_graph(key), (out,), (input,))
 
     return out
 end
