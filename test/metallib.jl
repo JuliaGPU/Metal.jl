@@ -177,7 +177,8 @@ end
 metallib_dir = joinpath(@__DIR__, "metallib")
 metallibs = String[]
 for file in readdir(metallib_dir)
-    if endswith(file, ".metallib")
+    # TODO: the standalone `metallib` tool's group layout is not reproduced yet
+    if endswith(file, ".metallib") && !endswith(file, ".standalone.metallib")
         push!(metallibs, file)
     end
 end
@@ -243,4 +244,28 @@ end
             @test readobj_uuid(path) == uuid
         end
     end
+end
+
+@testset "tag group size conventions" begin
+    for (group_size, counts_size) in ((8, true), (4, false))
+        bytes = [reinterpret(UInt8, [UInt32(group_size)]); codeunits("ENDT")]
+        tg = read!(IOBuffer(bytes), Metal.TagGroup())
+        @test tg.counts_size == counts_size
+        @test take!(write(IOBuffer(), tg)) == bytes
+    end
+    bytes = [reinterpret(UInt8, [UInt32(6)]); codeunits("ENDT")]
+    @test_throws ErrorException read!(IOBuffer(bytes), Metal.TagGroup())
+end
+
+@testset "standalone metallib tool" begin
+    # Apple's standalone `metallib` tool does not count the size field in the size of
+    # metadata groups, unlike the compiler driver
+    path = joinpath(metallib_dir, "kernel.standalone.metallib")
+    lib = parse(MetalLib, path)
+    @test only(lib.functions).name == "foo"
+
+    bytes = sprint(write, lib)
+    @test_broken bytes == String(read(path))
+    mtllib = MTL.MTLLibraryFromData(device(), bytes)
+    @test MTL.MTLComputePipelineState(device(), MTL.MTLFunction(mtllib, "foo")) isa MTL.MTLComputePipelineState
 end
