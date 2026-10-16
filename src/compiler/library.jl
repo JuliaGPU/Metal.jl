@@ -210,7 +210,7 @@ end
 ## tag groups
 
 # a helper type for reading and writing tag groups
-Base.@kwdef struct TagGroup
+Base.@kwdef mutable struct TagGroup
     data::Vector{Pair{String,Any}}=Pair{String,Any}[]   # like an ordered dict
 
     offsets::Dict{String,Int} = Dict()
@@ -221,7 +221,9 @@ Base.@kwdef struct TagGroup
     # whether the tag group starts with a 32-bit size field for the entire group
     has_size::Bool=true
 
-    # whether the tag group size field is included in the size
+    # whether the tag group size field is included in the size. the compiler driver and
+    # air-lld include it, but Apple's standalone `metallib` tool does not for metadata
+    # groups, so the reader detects and records which convention a group uses.
     counts_size::Bool=true
 end
 
@@ -427,13 +429,8 @@ const wide_size_tags = ["RBUF", "SBUF"]
 
 function Base.read!(io::IO, tg::TagGroup)
     if tg.has_size
-        if tg.counts_size
-            group_start = position(io)
-        end
+        group_start = position(io)
         group_size = read(io, UInt32)
-        if !tg.counts_size
-            group_start = position(io)
-        end
     end
 
     while true
@@ -469,7 +466,15 @@ function Base.read!(io::IO, tg::TagGroup)
 
     # ensure we consumed the entire group
     if tg.has_size
-        @assert position(io) == group_start + group_size
+        group_end = position(io)
+        if group_end == group_start + group_size
+            tg.counts_size = true
+        elseif group_end == group_start + sizeof(UInt32) + group_size
+            tg.counts_size = false
+        else
+            error("Tag group at offset $group_start ends at offset $group_end, " *
+                  "which does not match its recorded size of $group_size bytes")
+        end
     end
 
     return tg
