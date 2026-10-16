@@ -76,6 +76,21 @@ using LinearAlgebra, ScopedValues
     end
 end
 
+@testset "β = 0 ignores the output's contents" begin
+    A = MtlArray(rand(Float32, 8, 8))
+    B = MtlArray(rand(Float32, 8, 8))
+    x = MtlArray(rand(Float32, 8))
+    @testset "$alg" for alg in (:auto, :MPS, :MPSGraph, :native, :GPUArrays)
+        C = MtlArray(fill(NaN32, 8, 8))
+        @with (Metal.matmul_alg => alg) mul!(C, A, B)
+        @test Array(C) ≈ Array(A) * Array(B)
+
+        y = MtlArray(fill(NaN32, 8))
+        @with (Metal.matmul_alg => alg) mul!(y, A, x)
+        @test Array(y) ≈ Array(A) * Array(x)
+    end
+end
+
 @testset "empty dimensions" begin
     # products with M, K or N == 0 must not reach the backends (MPS asserts on empty buffers):
     # the result is empty, or β·C when the contraction dimension is empty

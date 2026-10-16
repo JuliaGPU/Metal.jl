@@ -57,7 +57,7 @@ end
 # Cached graph with all tensors needed for execution
 struct CachedMatmulGraph
     graph::MPSGraph
-    place_c::MPSGraphTensor
+    place_c::Union{Nothing,MPSGraphTensor}  # not read when β is zero
     place_a::MPSGraphTensor
     place_b::MPSGraphTensor
     result::MPSGraphTensor
@@ -68,7 +68,6 @@ function CachedMatmulGraph(key::MatmulGraphKey{Tab, Tc}) where {Tab, Tc}
 
     placeA = placeholderTensor(graph, key.size_a, Tab)
     placeB = placeholderTensor(graph, key.size_b, Tab)
-    placeC = placeholderTensor(graph, key.size_c, Tc)
 
     # cast to output eltype if input type is an integer type
     castTab = Tab <: Integer ? Tc : Tab
@@ -117,6 +116,11 @@ function CachedMatmulGraph(key::MatmulGraphKey{Tab, Tc}) where {Tab, Tc}
 
     castC = castTensor(graph, afteralpha, Tc, "castC")
 
+    # like BLAS, β = 0 means C is not read, so that NaNs or uninitialized memory in C don't
+    # propagate into the result
+    iszero(key.beta) && return CachedMatmulGraph(graph, nothing, placeA, placeB, castC)
+
+    placeC = placeholderTensor(graph, key.size_c, Tc)
     afterbeta = let
         betatensor = if Tc <: Real
             constantWithScalar(graph, key.beta, Tc)
@@ -144,14 +148,17 @@ function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb},
     end
 
     # Build feed and result dictionaries with current data
+    c_data = MPSGraphTensorData(c)
     feeds = Dict{MPSGraphTensor, MPSGraphTensorData}(
         cached.place_a => MPSGraphTensorData(a),
         cached.place_b => MPSGraphTensorData(b),
-        cached.place_c => MPSGraphTensorData(c)
     )
+    if cached.place_c !== nothing
+        feeds[cached.place_c] = c_data
+    end
 
     resultdict = Dict{MPSGraphTensor, MPSGraphTensorData}(
-        cached.result => feeds[cached.place_c]
+        cached.result => c_data
     )
 
     cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
