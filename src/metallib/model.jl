@@ -79,7 +79,7 @@ Base.@kwdef struct MetalLibFunction
 
     # private metadata
     debug_info::Union{Nothing, DebugInfo} = nothing
-    dependent_file::Union{Nothing, String} = nothing
+    dependencies::Vector{String} = String[]     # paths of the files the function came from
 
     # reflection data
     reflection_data::Union{Nothing, Vector{UInt8}} = nothing
@@ -194,12 +194,21 @@ tag_value_io["DEBI"] = (
         write(io, UInt8(0))
     end)
 tag_value_io["DEPF"] = (
-    # Path of the dependent file; a null-terminated string
-    String,
-    (io, _)   -> String(readuntil(io, UInt8(0))),
+    # Paths of the files the function depends on (e.g. the object files it was linked
+    # from); a sequence of null-terminated strings
+    Vector{String},
+    (io, _)   -> begin
+        paths = String[]
+        while !eof(io)
+            push!(paths, String(readuntil(io, UInt8(0))))
+        end
+        paths
+    end,
     (io, val) -> begin
-        write(io, val)
-        write(io, UInt8(0))
+        for path in val
+            write(io, path)
+            write(io, UInt8(0))
+        end
     end)
 ## embedded sources
 tag_value_io["SARC"] = (
@@ -451,8 +460,8 @@ function Base.read(io::IO, ::Type{MetalLib})
         if (debug_info = decoded(private_md[i], "DEBI")) !== nothing
             push!(optional_args, :debug_info => debug_info)
         end
-        if (dependent_file = decoded(private_md[i], "DEPF")) !== nothing
-            push!(optional_args, :dependent_file => dependent_file)
+        if (dependencies = decoded(private_md[i], "DEPF")) !== nothing
+            push!(optional_args, :dependencies => dependencies)
         end
         if haskey(function_sources, i)
             push!(optional_args, :source_id => function_sources[i])
@@ -580,7 +589,8 @@ function Base.write(io::IO, lib::MetalLib)
         # private metadata
         private_md_offset = position(private_md_stream)
         private_md_tags = layout_group(layout === nothing ? nothing : layout.private_tags,
-            ["DEBI" => fun.debug_info, "DEPF" => fun.dependent_file])
+            ["DEBI" => fun.debug_info,
+             "DEPF" => isempty(fun.dependencies) ? nothing : fun.dependencies])
         write(private_md_stream, private_md_tags)
 
         # module
