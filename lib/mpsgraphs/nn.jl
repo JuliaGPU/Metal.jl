@@ -155,30 +155,10 @@ end
 
 const MPSGRAPH_VALID_NN_TYPES = Union{Float16, Float32}
 
-function softmax_axis(shape::Tuple, dims::Integer)
-    dim = Int(dims)
-    1 <= dim <= length(shape) || throw(ArgumentError("dims must be between 1 and $(length(shape))"))
-    return length(shape) - dim
-end
-
 function reduction_shape(shape::Tuple, axis::Integer)
     mpsshape = collect(reverse(shape))
     mpsshape[Int(axis) + 1] = 1
     return convert(MPSShape, mpsshape)
-end
-
-function check_softmax_args(y::MtlArray{T}, x::MtlArray{T}, dims::Integer) where {T}
-    T <: MPSGRAPH_VALID_NN_TYPES || throw(ArgumentError("MPSGraph NN operations support Float16 and Float32"))
-    size(y) == size(x) || throw(DimensionMismatch("output has dimensions $(size(y)), input has dimensions $(size(x))"))
-    return softmax_axis(size(x), dims)
-end
-
-function check_softmax_grad_args(dx::MtlArray{T}, dy::MtlArray{T}, y::MtlArray{T},
-                                 dims::Integer) where {T}
-    T <: MPSGRAPH_VALID_NN_TYPES || throw(ArgumentError("MPSGraph NN operations support Float16 and Float32"))
-    size(dx) == size(dy) == size(y) ||
-        throw(DimensionMismatch("softmax gradient inputs must have matching dimensions"))
-    return softmax_axis(size(y), dims)
 end
 
 struct SoftmaxGraphKey{T}
@@ -213,23 +193,6 @@ function build_graph(key::SoftmaxGraphKey{T}) where {T}
         throw(ArgumentError("unsupported softmax graph operation: $(key.op)"))
     end
     return CachedGraph(graph, [place_x], [result])
-end
-
-function run_softmax!(op::Symbol, y::MtlArray{T}, x::MtlArray{T},
-                                       dims::Integer) where {T}
-    axis = check_softmax_args(y, x, dims)
-    key = SoftmaxGraphKey{T}(op, size(x), axis)
-    run!(cached_graph(key), (y,), (x,))
-
-    return y
-end
-
-function graph_softmax!(y::MtlArray{T}, x::MtlArray{T}; dims::Integer = 1) where {T}
-    return run_softmax!(:softmax, y, x, dims)
-end
-
-function graph_logsoftmax!(y::MtlArray{T}, x::MtlArray{T}; dims::Integer = 1) where {T}
-    return run_softmax!(:logsoftmax, y, x, dims)
 end
 
 struct SoftmaxGradGraphKey{T}
@@ -273,26 +236,6 @@ function build_graph(key::SoftmaxGradGraphKey{T}) where {T}
         throw(ArgumentError("unsupported softmax gradient graph operation: $(key.op)"))
     end
     return CachedGraph(graph, [place_dy, place_y], [result])
-end
-
-function run_softmax_grad!(op::Symbol, dx::MtlArray{T},
-                                            dy::MtlArray{T}, y::MtlArray{T},
-                                            dims::Integer) where {T}
-    axis = check_softmax_grad_args(dx, dy, y, dims)
-    key = SoftmaxGradGraphKey{T}(op, size(y), axis)
-    run!(cached_graph(key), (dx,), (dy, y))
-
-    return dx
-end
-
-function graph_softmax_grad!(dx::MtlArray{T}, dy::MtlArray{T}, y::MtlArray{T};
-                             dims::Integer = 1) where {T}
-    return run_softmax_grad!(:softmax, dx, dy, y, dims)
-end
-
-function graph_logsoftmax_grad!(dx::MtlArray{T}, dy::MtlArray{T}, y::MtlArray{T};
-                                dims::Integer = 1) where {T}
-    return run_softmax_grad!(:logsoftmax, dx, dy, y, dims)
 end
 
 struct Conv2DGraphKey{T}
@@ -370,87 +313,6 @@ function build_graph(key::Conv2DFilterGradGraphKey{T}) where {T}
     return CachedGraph(graph, [place_x, place_dy], [result])
 end
 
-function check_conv2d_groups(groups::Integer, in_channels::Int, kernel_in_channels::Int,
-                             out_channels::Int)
-    groups >= 1 || throw(ArgumentError("groups must be positive"))
-    in_channels == groups * kernel_in_channels ||
-        throw(DimensionMismatch("input channel count must match groups times kernel input channels"))
-    out_channels % groups == 0 ||
-        throw(DimensionMismatch("output channel count must be divisible by groups"))
-    return
-end
-
-function check_conv2d_args(y::MtlArray{T,4}, x::MtlArray{T,4}, w::MtlArray{T,4},
-                           groups::Integer) where {T}
-    T <: MPSGRAPH_VALID_NN_TYPES || throw(ArgumentError("MPSGraph NN operations support Float16 and Float32"))
-    check_conv2d_groups(groups, size(x, 3), size(w, 3), size(w, 4))
-    size(y, 3) == size(w, 4) || throw(DimensionMismatch("output and kernel channel counts do not match"))
-    size(y, 4) == size(x, 4) || throw(DimensionMismatch("input and output batch sizes do not match"))
-    return
-end
-
-function check_conv2d_data_grad_args(dx::MtlArray{T,4}, dy::MtlArray{T,4},
-                                     w::MtlArray{T,4}, groups::Integer) where {T}
-    T <: MPSGRAPH_VALID_NN_TYPES || throw(ArgumentError("MPSGraph NN operations support Float16 and Float32"))
-    check_conv2d_groups(groups, size(dx, 3), size(w, 3), size(w, 4))
-    size(dy, 3) == size(w, 4) || throw(DimensionMismatch("output gradient and kernel channel counts do not match"))
-    size(dy, 4) == size(dx, 4) || throw(DimensionMismatch("input and output gradient batch sizes do not match"))
-    return
-end
-
-function check_conv2d_filter_grad_args(dw::MtlArray{T,4}, x::MtlArray{T,4},
-                                       dy::MtlArray{T,4}, groups::Integer) where {T}
-    T <: MPSGRAPH_VALID_NN_TYPES || throw(ArgumentError("MPSGraph NN operations support Float16 and Float32"))
-    check_conv2d_groups(groups, size(x, 3), size(dw, 3), size(dw, 4))
-    size(dy, 3) == size(dw, 4) || throw(DimensionMismatch("output and kernel gradient channel counts do not match"))
-    size(dy, 4) == size(x, 4) || throw(DimensionMismatch("input and output gradient batch sizes do not match"))
-    return
-end
-
-function graph_conv!(y::MtlArray{T,4}, x::MtlArray{T,4}, w::MtlArray{T,4};
-                                      stride::NTuple{2, Int} = (1, 1),
-                                      padding::NTuple{4, Int} = (0, 0, 0, 0),
-                                      dilation::NTuple{2, Int} = (1, 1),
-                                      groups::Integer = 1,
-                                      flipkernel::Bool = false) where {T}
-    check_conv2d_args(y, x, w, groups)
-    key = Conv2DGraphKey{T}(size(y), size(x), size(w), stride, padding, dilation,
-                            groups, flipkernel)
-    run!(cached_graph(key), (y,), (x, w))
-
-    return y
-end
-
-function graph_conv_data_grad!(dx::MtlArray{T,4}, dy::MtlArray{T,4},
-                                                w::MtlArray{T,4};
-                                                stride::NTuple{2, Int} = (1, 1),
-                                                padding::NTuple{4, Int} = (0, 0, 0, 0),
-                                                dilation::NTuple{2, Int} = (1, 1),
-                                                groups::Integer = 1,
-                                                flipkernel::Bool = false) where {T}
-    check_conv2d_data_grad_args(dx, dy, w, groups)
-    key = Conv2DDataGradGraphKey{T}(size(dx), size(dy), size(w), stride, padding,
-                                    dilation, groups, flipkernel)
-    run!(cached_graph(key), (dx,), (dy, w))
-
-    return dx
-end
-
-function graph_conv_filter_grad!(dw::MtlArray{T,4}, x::MtlArray{T,4},
-                                                  dy::MtlArray{T,4};
-                                                  stride::NTuple{2, Int} = (1, 1),
-                                                  padding::NTuple{4, Int} = (0, 0, 0, 0),
-                                                  dilation::NTuple{2, Int} = (1, 1),
-                                                  groups::Integer = 1,
-                                                  flipkernel::Bool = false) where {T}
-    check_conv2d_filter_grad_args(dw, x, dy, groups)
-    key = Conv2DFilterGradGraphKey{T}(size(dw), size(x), size(dy), stride, padding,
-                                      dilation, groups, flipkernel)
-    run!(cached_graph(key), (dw,), (x, dy))
-
-    return dw
-end
-
 struct Pool2DGraphKey{T}
     op::Symbol
     size_y::NTuple{4, Int}
@@ -507,77 +369,365 @@ function build_graph(key::Pool2DGradGraphKey{T}) where {T}
     return CachedGraph(graph, [place_dy, place_x], [result])
 end
 
-function check_pool2d_args(y::MtlArray{T,4}, x::MtlArray{T,4}) where {T}
-    T <: MPSGRAPH_VALID_NN_TYPES || throw(ArgumentError("MPSGraph NN operations support Float16 and Float32"))
-    size(y, 3) == size(x, 3) || throw(DimensionMismatch("input and output channel counts do not match"))
-    size(y, 4) == size(x, 4) || throw(DimensionMismatch("input and output batch sizes do not match"))
+
+## array interface
+
+# arrays of one element type that NN operations support, optionally all of rank `N`
+function unsupported_nn_arrays(arrays...; N=nothing)
+    err = unsupported_arrays(arrays...)
+    err === nothing || return err
+    T = eltype(first(arrays))
+    all(A -> eltype(A) == T, arrays) ||
+        return ArgumentError("MPSGraph NN operations require arrays of the same element type, got $(join(map(eltype, arrays), ", "))")
+    T <: MPSGRAPH_VALID_NN_TYPES ||
+        return ArgumentError("MPSGraph NN operations support Float16 and Float32, got $T")
+    N === nothing || all(A -> ndims(A) == N, arrays) ||
+        return ArgumentError("MPSGraph 2D convolution and pooling require 4D arrays in WHCN layout")
     return nothing
 end
 
-function check_pool2d_grad_args(dx::MtlArray{T,4}, dy::MtlArray{T,4},
-                                x::MtlArray{T,4}) where {T}
-    T <: MPSGRAPH_VALID_NN_TYPES || throw(ArgumentError("MPSGraph NN operations support Float16 and Float32"))
-    size(dx) == size(x) || throw(DimensionMismatch("input gradient and input dimensions do not match"))
-    size(dy, 3) == size(x, 3) || throw(DimensionMismatch("input and output gradient channel counts do not match"))
-    size(dy, 4) == size(x, 4) || throw(DimensionMismatch("input and output gradient batch sizes do not match"))
+function unsupported_softmax(dims, x, ys...)
+    err = unsupported_nn_arrays(x, ys...)
+    err === nothing || return err
+    all(y -> size(y) == size(x), ys) ||
+        return DimensionMismatch("softmax arguments have dimensions $(join(map(size, (x, ys...)), ", "))")
+    err = unsupported_rank(x)
+    err === nothing || return err
+    dims isa Integer && 1 <= dims <= ndims(x) ||
+        return ArgumentError("`dims` must be a dimension of the input, got $dims")
     return nothing
 end
 
-function run_pool2d!(op::Symbol, y::MtlArray{T,4}, x::MtlArray{T,4};
-                                      kernel::NTuple{2, Int},
-                                      stride::NTuple{2, Int},
-                                      padding::NTuple{4, Int},
-                                      dilation::NTuple{2, Int} = (1, 1),
-                                      include_zero_pad::Bool = false) where {T}
-    check_pool2d_args(y, x)
-    key = Pool2DGraphKey{T}(op, size(y), size(x), kernel, stride, padding,
-                            dilation, include_zero_pad)
+function softmax_impl!(op::Symbol, y, x, dims)
+    isempty(x) && return y
+    key = SoftmaxGraphKey{eltype(x)}(op, size(x), mps_axis(ndims(x), dims))
     run!(cached_graph(key), (y,), (x,))
-
     return y
 end
 
-function run_pool2d_grad!(op::Symbol, dx::MtlArray{T,4},
-                                           dy::MtlArray{T,4}, x::MtlArray{T,4};
-                                           kernel::NTuple{2, Int},
-                                           stride::NTuple{2, Int},
-                                           padding::NTuple{4, Int},
-                                           dilation::NTuple{2, Int} = (1, 1),
-                                           include_zero_pad::Bool = false) where {T}
-    check_pool2d_grad_args(dx, dy, x)
-    key = Pool2DGradGraphKey{T}(op, size(dx), size(dy), size(x), kernel, stride,
-                                padding, dilation, include_zero_pad)
-    run!(cached_graph(key), (dx,), (dy, x))
-
+function softmax_grad_impl!(op::Symbol, dx, dy, y, dims)
+    isempty(y) && return dx
+    key = SoftmaxGradGraphKey{eltype(y)}(op, size(y), mps_axis(ndims(y), dims))
+    run!(cached_graph(key), (dx,), (dy, y))
     return dx
 end
 
-function graph_maxpool!(y::MtlArray{T,4}, x::MtlArray{T,4}; kernel::NTuple{2, Int},
-                        stride::NTuple{2, Int}, padding::NTuple{4, Int},
-                        dilation::NTuple{2, Int} = (1, 1)) where {T}
-    return run_pool2d!(:max, y, x; kernel, stride, padding, dilation)
+"""
+    MPSGraphs.softmax!(y, x; dims=1) -> y
+
+Compute the softmax `exp.(x) ./ sum(exp.(x); dims)` along dimension `dims` of `x`, and
+store it in `y`.
+
+`x` and `y` are `MtlArray`s of the same size with element type `Float16` or `Float32`. The
+operation executes asynchronously, ordered with the other work submitted from the current
+task. Use [`MPSGraphs.supports`](@ref) to check whether a call is supported without
+throwing.
+"""
+function softmax!(y, x; dims=1)
+    check_supported(softmax!, y, x; dims)
+    return softmax_impl!(:softmax, y, x, dims)
+end
+unsupported(::typeof(softmax!), y, x; dims=1) = unsupported_softmax(dims, x, y)
+
+"""
+    MPSGraphs.logsoftmax!(y, x; dims=1) -> y
+
+Compute the log-softmax `x .- log.(sum(exp.(x); dims))` along dimension `dims` of `x`,
+and store it in `y`. The requirements of [`MPSGraphs.softmax!`](@ref) apply.
+"""
+function logsoftmax!(y, x; dims=1)
+    check_supported(logsoftmax!, y, x; dims)
+    return softmax_impl!(:logsoftmax, y, x, dims)
+end
+unsupported(::typeof(logsoftmax!), y, x; dims=1) = unsupported_softmax(dims, x, y)
+
+"""
+    MPSGraphs.softmax_grad!(dx, dy, y; dims=1) -> dx
+
+Compute the gradient `dx` of [`MPSGraphs.softmax!`](@ref) with respect to its input,
+given its output `y` and the gradient `dy` with respect to that output. All arrays have
+the same size, and the requirements of `softmax!` apply.
+"""
+function softmax_grad!(dx, dy, y; dims=1)
+    check_supported(softmax_grad!, dx, dy, y; dims)
+    return softmax_grad_impl!(:softmax, dx, dy, y, dims)
+end
+unsupported(::typeof(softmax_grad!), dx, dy, y; dims=1) = unsupported_softmax(dims, y, dy, dx)
+
+"""
+    MPSGraphs.logsoftmax_grad!(dx, dy, y; dims=1) -> dx
+
+Compute the gradient `dx` of [`MPSGraphs.logsoftmax!`](@ref) with respect to its input,
+given its output `y` and the gradient `dy` with respect to that output. All arrays have
+the same size, and the requirements of `softmax!` apply.
+"""
+function logsoftmax_grad!(dx, dy, y; dims=1)
+    check_supported(logsoftmax_grad!, dx, dy, y; dims)
+    return softmax_grad_impl!(:logsoftmax, dx, dy, y, dims)
+end
+unsupported(::typeof(logsoftmax_grad!), dx, dy, y; dims=1) =
+    unsupported_softmax(dims, y, dy, dx)
+
+# the spatial extent of a convolution or pooling output, as in NNlib
+function conv_output_size(input::NTuple{2, Int}, kernel::NTuple{2, Int}, stride, padding,
+                          dilation)
+    pads = ((padding[1], padding[2]), (padding[3], padding[4]))
+    return ntuple(2) do i
+        div(input[i] + sum(pads[i]) - dilation[i] * (kernel[i] - 1) - 1, stride[i]) + 1
+    end
 end
 
-function graph_meanpool!(y::MtlArray{T,4}, x::MtlArray{T,4}; kernel::NTuple{2, Int},
-                         stride::NTuple{2, Int}, padding::NTuple{4, Int},
-                         dilation::NTuple{2, Int} = (1, 1),
-                         count_include_pad::Bool = true) where {T}
-    return run_pool2d!(:mean, y, x; kernel, stride, padding, dilation,
-                       include_zero_pad=count_include_pad)
+function unsupported_window(kernel, stride, padding, dilation)
+    all(>(0), kernel) && all(>(0), stride) && all(>(0), dilation) && all(>=(0), padding) ||
+        return ArgumentError("kernel, stride and dilation must be positive, and padding nonnegative; got kernel=$kernel, stride=$stride, padding=$padding, dilation=$dilation")
+    return nothing
 end
 
-function graph_maxpool_grad!(dx::MtlArray{T,4}, dy::MtlArray{T,4}, x::MtlArray{T,4};
-                             kernel::NTuple{2, Int}, stride::NTuple{2, Int},
-                             padding::NTuple{4, Int},
-                             dilation::NTuple{2, Int} = (1, 1)) where {T}
-    return run_pool2d_grad!(:max, dx, dy, x; kernel, stride, padding, dilation)
+# x, w and y of a 2D convolution, in WHCN and (KW, KH, Cin/groups, Cout) layout
+function unsupported_conv(y, x, w, stride, padding, dilation, groups)
+    err = unsupported_nn_arrays(y, x, w; N=4)
+    err === nothing || return err
+    err = unsupported_window(size(w)[1:2], stride, padding, dilation)
+    err === nothing || return err
+    groups >= 1 && size(x, 3) == groups * size(w, 3) && size(w, 4) % groups == 0 ||
+        return DimensionMismatch("input channels ($(size(x, 3))) must be `groups` ($groups) times the kernel's input channels ($(size(w, 3))), and output channels ($(size(w, 4))) divisible by it")
+    expected = (conv_output_size(size(x)[1:2], size(w)[1:2], stride, padding, dilation)...,
+                size(w, 4), size(x, 4))
+    size(y) == expected ||
+        return DimensionMismatch("convolution output has dimensions $(size(y)), expected $expected")
+    return nothing
 end
 
-function graph_meanpool_grad!(dx::MtlArray{T,4}, dy::MtlArray{T,4}, x::MtlArray{T,4};
-                              kernel::NTuple{2, Int}, stride::NTuple{2, Int},
-                              padding::NTuple{4, Int},
-                              dilation::NTuple{2, Int} = (1, 1),
-                              count_include_pad::Bool = true) where {T}
-    return run_pool2d_grad!(:mean, dx, dy, x; kernel, stride, padding, dilation,
-                            include_zero_pad=count_include_pad)
+const CONV_DOC = """
+The arrays use NNlib's layout: `x` and `y` are `(width, height, channels, batch)`, and the
+kernel `w` is `(width, height, input channels ÷ groups, output channels)`. `padding` is
+`(left, right, top, bottom)`. By default the kernel is flipped, i.e. this computes a
+convolution rather than a cross-correlation; `flipkernel=true` computes the latter. All
+arrays are 4D `MtlArray`s with element type `Float16` or `Float32`.
+
+The operation executes asynchronously, ordered with the other work submitted from the
+current task. Use [`MPSGraphs.supports`](@ref) to check whether a call is supported
+without throwing.
+"""
+
+"""
+    MPSGraphs.conv!(y, x, w; stride=(1, 1), padding=(0, 0, 0, 0), dilation=(1, 1),
+                    groups=1, flipkernel=false) -> y
+
+Compute the 2D convolution of `x` with the kernel `w`, and store it in `y`.
+
+$CONV_DOC
+"""
+function conv!(y, x, w; stride::NTuple{2, Int}=(1, 1), padding::NTuple{4, Int}=(0, 0, 0, 0),
+               dilation::NTuple{2, Int}=(1, 1), groups::Integer=1, flipkernel::Bool=false)
+    check_supported(conv!, y, x, w; stride, padding, dilation, groups, flipkernel)
+    isempty(y) && return y
+    # an empty sum over input channels or the batch
+    (isempty(x) || isempty(w)) && return fill!(y, zero(eltype(y)))
+    key = Conv2DGraphKey{eltype(x)}(size(y), size(x), size(w), stride, padding, dilation,
+                                    groups, flipkernel)
+    run!(cached_graph(key), (y,), (x, w))
+    return y
+end
+
+function unsupported(::typeof(conv!), y, x, w; stride::NTuple{2, Int}=(1, 1),
+                     padding::NTuple{4, Int}=(0, 0, 0, 0), dilation::NTuple{2, Int}=(1, 1),
+                     groups::Integer=1, flipkernel::Bool=false)
+    return unsupported_conv(y, x, w, stride, padding, dilation, groups)
+end
+
+"""
+    MPSGraphs.conv_data_grad!(dx, dy, w; stride=(1, 1), padding=(0, 0, 0, 0),
+                              dilation=(1, 1), groups=1, flipkernel=false) -> dx
+
+Compute the gradient `dx` of [`MPSGraphs.conv!`](@ref) with respect to its input `x`,
+given the gradient `dy` with respect to its output and the kernel `w`.
+
+$CONV_DOC
+"""
+function conv_data_grad!(dx, dy, w; stride::NTuple{2, Int}=(1, 1),
+                         padding::NTuple{4, Int}=(0, 0, 0, 0),
+                         dilation::NTuple{2, Int}=(1, 1), groups::Integer=1,
+                         flipkernel::Bool=false)
+    check_supported(conv_data_grad!, dx, dy, w; stride, padding, dilation, groups,
+                    flipkernel)
+    isempty(dx) && return dx
+    (isempty(dy) || isempty(w)) && return fill!(dx, zero(eltype(dx)))
+    key = Conv2DDataGradGraphKey{eltype(dy)}(size(dx), size(dy), size(w), stride, padding,
+                                             dilation, groups, flipkernel)
+    run!(cached_graph(key), (dx,), (dy, w))
+    return dx
+end
+
+function unsupported(::typeof(conv_data_grad!), dx, dy, w; stride::NTuple{2, Int}=(1, 1),
+                     padding::NTuple{4, Int}=(0, 0, 0, 0), dilation::NTuple{2, Int}=(1, 1),
+                     groups::Integer=1, flipkernel::Bool=false)
+    return unsupported_conv(dy, dx, w, stride, padding, dilation, groups)
+end
+
+"""
+    MPSGraphs.conv_filter_grad!(dw, x, dy; stride=(1, 1), padding=(0, 0, 0, 0),
+                                dilation=(1, 1), groups=1, flipkernel=false) -> dw
+
+Compute the gradient `dw` of [`MPSGraphs.conv!`](@ref) with respect to its kernel, given
+its input `x` and the gradient `dy` with respect to its output.
+
+$CONV_DOC
+"""
+function conv_filter_grad!(dw, x, dy; stride::NTuple{2, Int}=(1, 1),
+                           padding::NTuple{4, Int}=(0, 0, 0, 0),
+                           dilation::NTuple{2, Int}=(1, 1), groups::Integer=1,
+                           flipkernel::Bool=false)
+    check_supported(conv_filter_grad!, dw, x, dy; stride, padding, dilation, groups,
+                    flipkernel)
+    isempty(dw) && return dw
+    (isempty(x) || isempty(dy)) && return fill!(dw, zero(eltype(dw)))
+    key = Conv2DFilterGradGraphKey{eltype(x)}(size(dw), size(x), size(dy), stride, padding,
+                                              dilation, groups, flipkernel)
+    run!(cached_graph(key), (dw,), (x, dy))
+    return dw
+end
+
+function unsupported(::typeof(conv_filter_grad!), dw, x, dy; stride::NTuple{2, Int}=(1, 1),
+                     padding::NTuple{4, Int}=(0, 0, 0, 0), dilation::NTuple{2, Int}=(1, 1),
+                     groups::Integer=1, flipkernel::Bool=false)
+    return unsupported_conv(dy, x, dw, stride, padding, dilation, groups)
+end
+
+# x and y of a 2D pooling, in WHCN layout
+function unsupported_pool(y, x, kernel, stride, padding, dilation)
+    err = unsupported_nn_arrays(y, x; N=4)
+    err === nothing || return err
+    err = unsupported_window(kernel, stride, padding, dilation)
+    err === nothing || return err
+    isempty(x) && !isempty(y) &&
+        return ArgumentError("pooling requires a nonempty input for a nonempty output")
+    expected = (conv_output_size(size(x)[1:2], kernel, stride, padding, dilation)...,
+                size(x, 3), size(x, 4))
+    size(y) == expected ||
+        return DimensionMismatch("pooling output has dimensions $(size(y)), expected $expected")
+    return nothing
+end
+
+const POOL_DOC = """
+The arrays use NNlib's layout: `x` and `y` are 4D `MtlArray`s of `(width, height,
+channels, batch)` with element type `Float16` or `Float32`. `kernel`, `stride` and
+`dilation` are `(width, height)`, and `padding` is `(left, right, top, bottom)`.
+
+The operation executes asynchronously, ordered with the other work submitted from the
+current task. Use [`MPSGraphs.supports`](@ref) to check whether a call is supported
+without throwing.
+"""
+
+function pool_impl!(op::Symbol, y, x, kernel, stride, padding, dilation,
+                    count_include_pad)
+    isempty(y) && return y
+    key = Pool2DGraphKey{eltype(x)}(op, size(y), size(x), kernel, stride, padding,
+                                    dilation, count_include_pad)
+    run!(cached_graph(key), (y,), (x,))
+    return y
+end
+
+function pool_grad_impl!(op::Symbol, dx, dy, x, kernel, stride, padding, dilation,
+                         count_include_pad)
+    isempty(dx) && return dx
+    isempty(dy) && return fill!(dx, zero(eltype(dx)))
+    key = Pool2DGradGraphKey{eltype(x)}(op, size(dx), size(dy), size(x), kernel, stride,
+                                        padding, dilation, count_include_pad)
+    run!(cached_graph(key), (dx,), (dy, x))
+    return dx
+end
+
+function unsupported_pool_grad(dx, dy, x, kernel, stride, padding, dilation)
+    err = unsupported_nn_arrays(dx, dy, x; N=4)
+    err === nothing || return err
+    size(dx) == size(x) ||
+        return DimensionMismatch("input gradient has dimensions $(size(dx)), input has dimensions $(size(x))")
+    return unsupported_pool(dy, x, kernel, stride, padding, dilation)
+end
+
+"""
+    MPSGraphs.maxpool!(y, x; kernel, stride=kernel, padding=(0, 0, 0, 0),
+                       dilation=(1, 1)) -> y
+
+Compute the maximum of `x` over each 2D window of size `kernel`, and store it in `y`.
+
+$POOL_DOC
+"""
+function maxpool!(y, x; kernel::NTuple{2, Int}, stride::NTuple{2, Int}=kernel,
+                  padding::NTuple{4, Int}=(0, 0, 0, 0), dilation::NTuple{2, Int}=(1, 1))
+    check_supported(maxpool!, y, x; kernel, stride, padding, dilation)
+    return pool_impl!(:max, y, x, kernel, stride, padding, dilation, false)
+end
+
+function unsupported(::typeof(maxpool!), y, x; kernel::NTuple{2, Int},
+                     stride::NTuple{2, Int}=kernel, padding::NTuple{4, Int}=(0, 0, 0, 0),
+                     dilation::NTuple{2, Int}=(1, 1))
+    return unsupported_pool(y, x, kernel, stride, padding, dilation)
+end
+
+"""
+    MPSGraphs.maxpool_grad!(dx, dy, x; kernel, stride=kernel, padding=(0, 0, 0, 0),
+                            dilation=(1, 1)) -> dx
+
+Compute the gradient `dx` of [`MPSGraphs.maxpool!`](@ref) with respect to its input `x`,
+given the gradient `dy` with respect to its output.
+
+$POOL_DOC
+"""
+function maxpool_grad!(dx, dy, x; kernel::NTuple{2, Int}, stride::NTuple{2, Int}=kernel,
+                       padding::NTuple{4, Int}=(0, 0, 0, 0), dilation::NTuple{2, Int}=(1, 1))
+    check_supported(maxpool_grad!, dx, dy, x; kernel, stride, padding, dilation)
+    return pool_grad_impl!(:max, dx, dy, x, kernel, stride, padding, dilation, false)
+end
+
+function unsupported(::typeof(maxpool_grad!), dx, dy, x; kernel::NTuple{2, Int},
+                     stride::NTuple{2, Int}=kernel, padding::NTuple{4, Int}=(0, 0, 0, 0),
+                     dilation::NTuple{2, Int}=(1, 1))
+    return unsupported_pool_grad(dx, dy, x, kernel, stride, padding, dilation)
+end
+
+"""
+    MPSGraphs.meanpool!(y, x; kernel, stride=kernel, padding=(0, 0, 0, 0),
+                        dilation=(1, 1), count_include_pad=true) -> y
+
+Compute the mean of `x` over each 2D window of size `kernel`, and store it in `y`. With
+`count_include_pad`, padding counts towards the number of averaged elements.
+
+$POOL_DOC
+"""
+function meanpool!(y, x; kernel::NTuple{2, Int}, stride::NTuple{2, Int}=kernel,
+                   padding::NTuple{4, Int}=(0, 0, 0, 0), dilation::NTuple{2, Int}=(1, 1),
+                   count_include_pad::Bool=true)
+    check_supported(meanpool!, y, x; kernel, stride, padding, dilation)
+    return pool_impl!(:mean, y, x, kernel, stride, padding, dilation, count_include_pad)
+end
+
+function unsupported(::typeof(meanpool!), y, x; kernel::NTuple{2, Int},
+                     stride::NTuple{2, Int}=kernel, padding::NTuple{4, Int}=(0, 0, 0, 0),
+                     dilation::NTuple{2, Int}=(1, 1), count_include_pad::Bool=true)
+    return unsupported_pool(y, x, kernel, stride, padding, dilation)
+end
+
+"""
+    MPSGraphs.meanpool_grad!(dx, dy, x; kernel, stride=kernel, padding=(0, 0, 0, 0),
+                             dilation=(1, 1), count_include_pad=true) -> dx
+
+Compute the gradient `dx` of [`MPSGraphs.meanpool!`](@ref) with respect to its input `x`,
+given the gradient `dy` with respect to its output.
+
+$POOL_DOC
+"""
+function meanpool_grad!(dx, dy, x; kernel::NTuple{2, Int}, stride::NTuple{2, Int}=kernel,
+                        padding::NTuple{4, Int}=(0, 0, 0, 0), dilation::NTuple{2, Int}=(1, 1),
+                        count_include_pad::Bool=true)
+    check_supported(meanpool_grad!, dx, dy, x; kernel, stride, padding, dilation)
+    return pool_grad_impl!(:mean, dx, dy, x, kernel, stride, padding, dilation,
+                           count_include_pad)
+end
+
+function unsupported(::typeof(meanpool_grad!), dx, dy, x; kernel::NTuple{2, Int},
+                     stride::NTuple{2, Int}=kernel, padding::NTuple{4, Int}=(0, 0, 0, 0),
+                     dilation::NTuple{2, Int}=(1, 1), count_include_pad::Bool=true)
+    return unsupported_pool_grad(dx, dy, x, kernel, stride, padding, dilation)
 end

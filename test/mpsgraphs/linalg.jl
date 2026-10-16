@@ -14,9 +14,9 @@ alphabeta(::Type{T}) where T <: Real = one(T)
     buf_e = similar(buf_a)
 
     # Exercise both MPSGraph -> kernel and kernel -> MPSGraph dependencies.
-    MPSGraphs.graph_matmul!(buf_c, buf_a, buf_b)
+    MPSGraphs.matmul!(buf_c, buf_a, buf_b)
     buf_d .= 2f0 .* buf_c .+ 1f0
-    MPSGraphs.graph_matmul!(buf_e, buf_d, buf_b)
+    MPSGraphs.matmul!(buf_e, buf_d, buf_b)
     buf_e .+= 3f0
 
     @test Array(buf_e) ≈ (2f0 .* (a * b) .+ 1f0) * b .+ 3f0
@@ -48,7 +48,7 @@ end
 
             truth_c = (alpha .* accum_jl_type.(fA(arr_a))) * accum_jl_type.(fB(arr_b)) .+ (beta .* arr_c)
 
-            MPSGraphs.graph_matmul!(buf_c, buf_a, buf_b, alpha, beta, tA, tB)
+            MPSGraphs.matmul!(buf_c, buf_a, buf_b, alpha, beta; tA, tB)
 
             @test Array(buf_c) ≈ truth_c
         end
@@ -82,7 +82,7 @@ end
                 @views truth_c[:, :, i] = (alpha .* accum_jl_type.(fA(arr_a[:, :, i]))) * accum_jl_type.(fB(arr_b[:, :, i])) .+ (beta .* arr_c[:, :, i])
             end
 
-            MPSGraphs.graph_matmul!(buf_c, buf_a, buf_b, alpha, beta, tA, tB)
+            MPSGraphs.matmul!(buf_c, buf_a, buf_b, alpha, beta; tA, tB)
 
             @test Array(buf_c) ≈ truth_c
         end
@@ -109,9 +109,46 @@ end
 
             truth_c = (accum_jl_type(alpha) .* accum_jl_type.(fA(arr_a))) * accum_jl_type.(arr_b) .+ (accum_jl_type(beta) .* arr_c)
 
-            MPSGraphs.graph_matvecmul!(buf_c, buf_a, buf_b, alpha, beta, tA)
+            MPSGraphs.matvecmul!(buf_c, buf_a, buf_b, alpha, beta; tA)
 
             @test Array(buf_c) ≈ truth_c
         end
     end
+end
+
+@testset "matmul empty and unsupported inputs" begin
+    A = MtlArray(rand(Float32, 4, 3))
+    B = MtlArray(rand(Float32, 3, 5))
+    C = MtlArray(rand(Float32, 4, 5))
+    @test MPSGraphs.supports(MPSGraphs.matmul!, C, A, B)
+    for (C_, A_, B_, kwargs, E) in (
+            (similar(C, 5, 4), A, B, (;), DimensionMismatch),
+            (C, A, B, (; tA='T'), DimensionMismatch),
+            (C, A, B, (; tA='S'), ArgumentError),
+            (similar(C, Int32), MtlArray(rand(Int32, 4, 3)), MtlArray(rand(Int32, 3, 5)), (;), ArgumentError),
+            (C, A, MtlArray(rand(Float16, 3, 5)), (;), ArgumentError),
+            (MtlArray(rand(Float32, 4, 5, 2)), A, B, (;), ArgumentError),
+        )
+        @test !MPSGraphs.supports(MPSGraphs.matmul!, C_, A_, B_; kwargs...)
+        @test_throws E MPSGraphs.matmul!(C_, A_, B_; kwargs...)
+    end
+
+    # an empty inner dimension only scales C
+    C_host = Array(C)
+    MPSGraphs.matmul!(C, similar(A, 4, 0), similar(B, 0, 5), true, 2f0)
+    @test Array(C) ≈ 2 .* C_host
+    MPSGraphs.matmul!(C, similar(A, 4, 0), similar(B, 0, 5))
+    @test all(iszero, Array(C))
+
+    y = MtlArray(rand(Float32, 4))
+    @test !MPSGraphs.supports(MPSGraphs.matvecmul!, y, A, MtlArray(rand(Float32, 4)))
+    @test_throws DimensionMismatch MPSGraphs.matvecmul!(y, A, MtlArray(rand(Float32, 4)))
+end
+
+@testset "deprecated graph_matmul!" begin
+    A = rand(Float32, 4, 3)
+    B = rand(Float32, 4, 5)
+    C = MtlArray{Float32}(undef, 3, 5)
+    @test_deprecated MPSGraphs.graph_matmul!(C, MtlArray(A), MtlArray(B), true, false, 'T', 'N')
+    @test Array(C) ≈ transpose(A) * B
 end

@@ -39,12 +39,12 @@ end
     A = rand(Float16, 5, 3)
     a, _ = offset_array(A)
     b, bp = offset_array(Float16, 5, 3)
-    MPSGraphs.graph_sort!(b, a; dim=1)
+    MPSGraphs.sort!(b, a; dims=1)
     @test Array(b) == sort(A; dims=1)
     @test padding_intact(bp)
 
     i, ip = offset_array(Int32, 5, 3)
-    MPSGraphs.graph_sortperm!(i, a; dim=1)
+    MPSGraphs.sortperm!(i, a; dims=1)
     @test Array(i) == sortperm(A; dims=1)
     @test padding_intact(ip)
 end
@@ -55,13 +55,13 @@ end
     a, _ = offset_array(A)
     b, _ = offset_array(B)
     c, cp = offset_array(Float32, 4, 5)
-    MPSGraphs.graph_matmul!(c, a, b)
+    MPSGraphs.matmul!(c, a, b)
     @test Array(c) ≈ A * B
     @test padding_intact(cp)
 
     x, _ = offset_array(rand(Float32, 3))
     y, yp = offset_array(Float32, 4)
-    MPSGraphs.graph_matvecmul!(y, a, x)
+    MPSGraphs.matvecmul!(y, a, x)
     @test Array(y) ≈ A * Array(x)
     @test padding_intact(yp)
 end
@@ -70,7 +70,7 @@ end
     X = randn(Float32, 5, 3)
     x, _ = offset_array(X)
     y, yp = offset_array(Float32, 5, 3)
-    MPSGraphs.graph_softmax!(y, x; dims=1)
+    MPSGraphs.softmax!(y, x; dims=1)
     @test Array(y) ≈ exp.(X) ./ sum(exp.(X); dims=1)
     @test padding_intact(yp)
 end

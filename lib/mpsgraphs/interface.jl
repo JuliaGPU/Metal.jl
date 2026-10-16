@@ -42,6 +42,22 @@ function unsupported_array(A)
         return ArgumentError("MPSGraph operations require arrays at an offset that is a multiple of their element size")
     return nothing
 end
+
+# arrays are bound as MPSNDArrays, which have at most 16 dimensions
+unsupported_rank(A) = ndims(A) <= 16 ? nothing :
+    ArgumentError("MPSGraph operations support arrays of up to 16 dimensions, got $(ndims(A))")
+
+# `dims` selects one dimension of `A`, and can be omitted for vectors
+function unsupported_dims(A, dims)
+    if dims === nothing
+        ndims(A) == 1 ||
+            return ArgumentError("`dims` is required for arrays with more than one dimension")
+    elseif !(dims isa Integer && 1 <= dims <= ndims(A))
+        return ArgumentError("`dims` must be a dimension of the input, got $dims")
+    end
+    return nothing
+end
+
 function unsupported_arrays(As...)
     for A in As
         err = unsupported_array(A)

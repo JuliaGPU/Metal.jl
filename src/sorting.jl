@@ -38,9 +38,9 @@ else
 end
 mpsgraph_requires_stable(alg) = nothing
 
-function mpsgraph_sort!(A::MtlArray; dim::Integer, rev::Bool)
+function mpsgraph_sort!(A::MtlArray; dims::Integer, rev::Bool)
     tmp = similar(A)
-    MPSGraphs.graph_sort!(tmp, A; dim, rev)
+    MPSGraphs.sort!(tmp, A; dims, rev)
     copyto!(A, tmp)
     return A
 end
@@ -54,7 +54,7 @@ function Base.sort!(v::MtlVector; alg=nothing, lt=isless, by=identity, rev=nothi
     if descending === nothing || mpsgraph_requires_stable(alg) === nothing
         return invoke(sort!, Tuple{AnyGPUVector}, v; alg, lt, by, rev, order, scratch)
     end
-    return mpsgraph_sort!(v; dim=1, rev=descending)
+    return mpsgraph_sort!(v; dims=1, rev=descending)
 end
 
 function Base.sort!(A::MtlArray; dims::Integer, alg=nothing, lt=isless, by=identity,
@@ -65,7 +65,7 @@ function Base.sort!(A::MtlArray; dims::Integer, alg=nothing, lt=isless, by=ident
        !(1 <= dims <= ndims(A))
         return invoke(sort!, Tuple{AnyGPUArray}, A; dims, alg, lt, by, rev, order, scratch)
     end
-    return mpsgraph_sort!(A; dim=dims, rev=descending)
+    return mpsgraph_sort!(A; dims, rev=descending)
 end
 
 # MPSGraph's argsort is not documented to be stable, so it is only used when the algorithm
@@ -86,7 +86,7 @@ function Base.sortperm!(ix::MtlArray{<:Integer}, v::MtlVector; alg=nothing, lt=i
         return invoke(sortperm!, Tuple{AnyGPUArray{<:Integer}, AnyGPUVector}, ix, v;
                       alg, lt, by, rev, order, kwargs...)
     end
-    MPSGraphs.graph_sortperm!(ix, v; dim=1, rev=descending)
+    MPSGraphs.sortperm!(ix, v; dims=1, rev=descending)
     return ix
 end
 
@@ -98,6 +98,6 @@ function Base.sortperm!(ix::MtlArray{<:Integer}, A::MtlArray; dims::Integer, alg
         return invoke(sortperm!, Tuple{AnyGPUArray{<:Integer}, AnyGPUArray}, ix, A;
                       dims, alg, lt, by, rev, order, kwargs...)
     end
-    MPSGraphs.graph_sortperm!(ix, A; dim=dims, rev=descending)
+    MPSGraphs.sortperm!(ix, A; dims, rev=descending)
     return ix
 end

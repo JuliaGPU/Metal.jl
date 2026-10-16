@@ -124,13 +124,7 @@ function unsupported(::typeof(accumulate!), op, B, A; dims=nothing, init=nothing
         return ArgumentError("MPSGraph scans require `init` to be a $T, got a $(typeof(init))")
     size(B) == size(A) ||
         return DimensionMismatch("output has dimensions $(size(B)), input has dimensions $(size(A))")
-    if dims === nothing
-        ndims(A) == 1 ||
-            return ArgumentError("`dims` is required for arrays with more than one dimension")
-    elseif !(dims isa Integer && 1 <= dims <= ndims(A))
-        return ArgumentError("`dims` must be a dimension of the input, got $dims")
-    end
-    return nothing
+    return unsupported_dims(A, dims)
 end
 
 struct ScanGraphKey{T}

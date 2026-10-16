@@ -40,9 +40,13 @@ const MPSGRAPH_VALID_MATMUL_TYPES =
 
 const MPSGRAPH_VALID_MATVECMUL_TYPES = MPSGRAPH_VALID_MATMUL_TYPES
 
-# array-level operations, distinct from the Base functions of the same name
+# array-level operations, distinct from the functions of the same name in Base and MPS
 function reduce! end
 function accumulate! end
+function sort! end
+function sortperm! end
+function matmul! end
+function matvecmul! end
 
 include("libmpsgraph.jl")
 
