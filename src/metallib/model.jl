@@ -81,7 +81,8 @@ Base.@kwdef struct MetalLibFunction
     debug_info::Union{Nothing, DebugInfo} = nothing
     dependencies::Vector{String} = String[]     # paths of the files the function came from
 
-    # reflection data
+    # reflection data: an "AIRR" flatbuffer. (in the file, the RBUF tag pads it with zeros
+    # so that it starts 16-byte aligned; the writer recomputes that padding.)
     reflection_data::Union{Nothing, Vector{UInt8}} = nothing
 
     # how the function was laid out in the library it was read from, if any
@@ -261,6 +262,24 @@ function Base.read(io::IO, ::Type{MetalLib})
     end
 end
 
+# reflection buffers are padded with zeros so that their contents start at a 16-byte aligned
+# offset in the file. return the contents without padding, or keep the RBUF tag as raw bytes
+# when it isn't padded like that (the writer would not reproduce it).
+function unpad_reflection!(tg::TagGroup)
+    i = findfirst(((tag, value),) -> tag == "RBUF", tg.data)
+    i === nothing && return nothing
+    data = tg.data[i].second
+    data isa RawTag && return nothing
+    padding = reflection_padding(tg.offsets["RBUF"])
+    if padding <= sizeof(data) && all(iszero, view(data, 1:padding))
+        return data[padding+1:end]
+    else
+        tg.data[i] = "RBUF" => RawTag(data)
+        return nothing
+    end
+end
+reflection_padding(offset) = mod(-offset, 16)
+
 # seek to a section of `size` bytes at `offset`, checking that it lies within the library
 function seek_section(io::IOBuffer, offset::Integer, size::Integer, what)
     format_check(offset <= io.size && size <= io.size - offset,
@@ -407,6 +426,7 @@ function read_metallib(io::IOBuffer)
     #
     # like modules, reflection entries can be shared by several functions
     reflection_tags = Vector{Union{Nothing,TagGroup}}(nothing, function_count)
+    reflection_data = Vector{Union{Nothing,Vector{UInt8}}}(nothing, function_count)
     if (rlst = decoded(header_ex, "RLST")) !== nothing
         seek_section(io, rlst.offset, rlst.size, "reflection list")
         reflection_count = read(io, UInt32)
@@ -423,6 +443,7 @@ function read_metallib(io::IOBuffer)
             format_check(!isempty(function_idxs),
                          "no function refers to this reflection entry", position(io))
             reflection_tags[function_idxs] .= Ref(reflection_buf)
+            reflection_data[function_idxs] .= Ref(unpad_reflection!(reflection_buf))
         end
         format_check(position(io) == rlst.offset + rlst.size,
                      "reflection list does not match its size", rlst.offset)
@@ -524,8 +545,8 @@ function read_metallib(io::IOBuffer)
         if haskey(function_sources, i)
             push!(optional_args, :source_id => function_sources[i])
         end
-        if (reflection_data = decoded(reflection_tags[i], "RBUF")) !== nothing
-            push!(optional_args, :reflection_data => reflection_data)
+        if reflection_data[i] !== nothing
+            push!(optional_args, :reflection_data => reflection_data[i])
         end
         versions = decoded(function_list[i], "VERS", NamedTuple)
 
@@ -600,126 +621,158 @@ function Base.write(io::IO, lib::MetalLib)
 
     ## reflection list
 
-    reflection_list_offsets = Vector{Union{Nothing,Int}}(nothing, length(lib.functions))
+    # functions that were read sharing a reflection entry share its tag group; keep sharing
+    # it unless their reflection data changed
+    reflection_entries = Dict{Tuple{UInt,UInt},Any}()
+    for (i, fun) in enumerate(lib.functions)
+        template = fun.layout === nothing ? nothing : fun.layout.reflection_tags
+        key = (objectid(template), objectid(fun.reflection_data))
+        entry = get!(reflection_entries, key) do
+            (; functions=Int[], template, data=fun.reflection_data)
+        end
+        push!(entry.functions, i)
+    end
+    reflection_entries = sort!(collect(values(reflection_entries)); by=entry->entry.functions)
 
-    reflection_list = let io=IOBuffer()
-        # functions that were read sharing a reflection entry share its tag group; keep
-        # sharing it unless their reflection data changed
-        reflection_groups = Dict{Tuple{UInt,UInt},Tuple{Vector{Int},TagGroup}}()
-        for (i, fun) in enumerate(lib.functions)
-            template = fun.layout === nothing ? nothing : fun.layout.reflection_tags
-            key = (objectid(template), objectid(fun.reflection_data))
-            if haskey(reflection_groups, key)
-                push!(reflection_groups[key][1], i)
-            else
-                tg = layout_group(template, ["RBUF" => fun.reflection_data])
-                isempty(tg.data) || (reflection_groups[key] = ([i], tg))
+    # the padding of reflection buffers depends on where the list ends up in the file
+    function build_reflection_list(list_offset)
+        offsets = Vector{Union{Nothing,Int}}(nothing, length(lib.functions))
+        buf = IOBuffer()
+        groups = map(reflection_entries) do entry
+            layout_group(entry.template, ["RBUF" => entry.data])
+        end
+        if any(tg -> !isempty(tg.data), groups)
+            write(buf, UInt32(count(tg -> !isempty(tg.data), groups)))
+            for (entry, tg) in zip(reflection_entries, groups)
+                isempty(tg.data) && continue
+                offsets[entry.functions] .= position(buf)
+                if entry.data !== nothing
+                    # find where the buffer lands: after the group size and the tags before it
+                    write(IOBuffer(), tg)
+                    data_offset = list_offset + position(buf) + sizeof(UInt32) + tg.offsets["RBUF"]
+                    padding = zeros(UInt8, reflection_padding(data_offset))
+                    tg = layout_group(entry.template, ["RBUF" => [padding; entry.data]])
+                end
+                write(buf, tg)
             end
         end
-
-        if !isempty(reflection_groups)
-            write(io, UInt32(length(reflection_groups)))
-            entries = sort!(collect(values(reflection_groups)); by=first)
-            for (function_idxs, reflection_tags) in entries
-                reflection_list_offsets[function_idxs] .= position(io)
-                write(io, reflection_tags)
-            end
-        end
-        take!(io)
+        return take!(buf), offsets
     end
 
 
     ## function list
 
-    public_md_stream = IOBuffer()
-    private_md_stream = IOBuffer()
-    module_list_stream = IOBuffer()
-
-    function_tag_groups = []
-
     # modules shared by several functions are only written once
-    module_offsets = IdDict{Vector{UInt8},Int}()
     module_digests = IdDict{Vector{UInt8},Vector{UInt8}}()
 
-    for (i, fun) in enumerate(lib.functions)
-        layout = fun.layout
+    function build_function_list(reflection_list_offsets)
+        public_md_stream = IOBuffer()
+        private_md_stream = IOBuffer()
+        module_list_stream = IOBuffer()
+        module_offsets = IdDict{Vector{UInt8},Int}()
+        function_tag_groups = TagGroup[]
 
-        # public metadata
-        public_md_offset = position(public_md_stream)
-        public_md_tags = layout_group(layout === nothing ? nothing : layout.public_tags,
-            ["CNST" => isempty(fun.constants) ? nothing : fun.constants])
-        write(public_md_stream, public_md_tags)
+        for (i, fun) in enumerate(lib.functions)
+            layout = fun.layout
 
-        # private metadata
-        private_md_offset = position(private_md_stream)
-        private_md_tags = layout_group(layout === nothing ? nothing : layout.private_tags,
-            ["DEBI" => fun.debug_info,
-             "DEPF" => isempty(fun.dependencies) ? nothing : fun.dependencies])
-        write(private_md_stream, private_md_tags)
+            # public metadata
+            public_md_offset = position(public_md_stream)
+            public_md_tags = layout_group(layout === nothing ? nothing : layout.public_tags,
+                ["CNST" => isempty(fun.constants) ? nothing : fun.constants])
+            write(public_md_stream, public_md_tags)
 
-        # module
-        module_list_offset = get!(module_offsets, fun.air_module) do
-            offset = position(module_list_stream)
-            write(module_list_stream, fun.air_module)
-            offset
-        end
-        module_hash = get!(() -> sha256(fun.air_module), module_digests, fun.air_module)
-        if layout !== nothing && module_hash == layout.module_digest
-            module_hash = something(decoded(layout.function_tags, "HASH"), module_hash)
-        end
-        module_size = sizeof(fun.air_module)
+            # private metadata
+            private_md_offset = position(private_md_stream)
+            private_md_tags = layout_group(layout === nothing ? nothing : layout.private_tags,
+                ["DEBI" => fun.debug_info,
+                 "DEPF" => isempty(fun.dependencies) ? nothing : fun.dependencies])
+            write(private_md_stream, private_md_tags)
 
-        # tags
-        source_offset = if fun.source_id !== nothing
-            get(embedded_source_offsets, fun.source_id, nothing)
+            # module
+            module_list_offset = get!(module_offsets, fun.air_module) do
+                offset = position(module_list_stream)
+                write(module_list_stream, fun.air_module)
+                offset
+            end
+            module_hash = get!(() -> sha256(fun.air_module), module_digests, fun.air_module)
+            if layout !== nothing && module_hash == layout.module_digest
+                module_hash = something(decoded(layout.function_tags, "HASH"), module_hash)
+            end
+            module_size = sizeof(fun.air_module)
+
+            # tags
+            source_offset = if fun.source_id !== nothing
+                get(embedded_source_offsets, fun.source_id, nothing)
+            end
+            reflection_offset = if lib.file_version >= v"1.2.7"
+                reflection_list_offsets[i]
+            end
+            function_tags = layout_group(layout === nothing ? nothing : layout.function_tags, [
+                "NAME" => fun.name,
+                "TYPE" => fun.type,
+                "HASH" => module_hash,
+                "OFFT" => (; public_md=public_md_offset,
+                             private_md=private_md_offset,
+                             air_module=module_list_offset),
+                "VERS" => (; air=fun.air_version, metal=fun.metal_version),
+                "MDSZ" => module_size,
+                "SOFF" => source_offset,
+                "RFLT" => reflection_offset])
+            push!(function_tag_groups, function_tags)
         end
-        reflection_offset = if lib.file_version >= v"1.2.7"
-            reflection_list_offsets[i]
+
+        function_list_stream = IOBuffer()
+        write(function_list_stream, UInt32(length(function_tag_groups)))
+        for tag_group in function_tag_groups
+            write(function_list_stream, tag_group)
         end
-        function_tags = layout_group(layout === nothing ? nothing : layout.function_tags, [
-            "NAME" => fun.name,
-            "TYPE" => fun.type,
-            "HASH" => module_hash,
-            "OFFT" => (; public_md=public_md_offset,
-                         private_md=private_md_offset,
-                         air_module=module_list_offset),
-            "VERS" => (; air=fun.air_version, metal=fun.metal_version),
-            "MDSZ" => module_size,
-            "SOFF" => source_offset,
-            "RFLT" => reflection_offset])
-        push!(function_tag_groups, function_tags)
+
+        return (; function_list = take!(function_list_stream),
+                  public_md = take!(public_md_stream),
+                  private_md = take!(private_md_stream),
+                  module_list = take!(module_list_stream))
     end
-
-    function_list_stream = IOBuffer()
-    write(function_list_stream, UInt32(length(function_tag_groups)))
-    for tag_group in function_tag_groups
-        write(function_list_stream, tag_group)
-    end
-
-    function_list = take!(function_list_stream)
-    public_md = take!(public_md_stream)
-    private_md = take!(private_md_stream)
-    module_list = take!(module_list_stream)
 
 
     ## header extensions
 
-    if lib.file_version >= v"1.2.3"
+    embedded_source_tag = lib.file_version >= v"1.2.6" ? "HSRD" : "HSRC"
+    function build_header_extension(reflection_list)
+        lib.file_version >= v"1.2.3" || return (nothing, UInt8[])
         # section offsets are patched in when writing the sections
-        embedded_source_tag = lib.file_version >= v"1.2.6" ? "HSRD" : "HSRC"
         section(data) = sizeof(data) > 0 ? (; offset=0, size=sizeof(data)) : nothing
         template = lib.layout === nothing ? nothing : lib.layout.header_extension
-        header_ex_tags = layout_group(template, [
+        tags = layout_group(template, [
             embedded_source_tag => section(embedded_source),
             "HDYN" => section(dynamic_header),
             (tag => section(get(raw_sections, tag, UInt8[])) for tag in raw_section_tags)...,
             "RLST" => lib.file_version >= v"1.2.7" ? section(reflection_list) : nothing,
             "UUID" => lib.uuid]; has_size=false)
 
-        header_ex_stream = IOBuffer()
-        write(header_ex_stream, header_ex_tags)
-        header_ex = take!(header_ex_stream)
+        buf = IOBuffer()
+        write(buf, tags)
+        return tags, take!(buf)
     end
+
+
+    ## layout
+
+    # lay everything out once to find where the reflection list goes, then build it for
+    # that offset. the sections before it don't depend on its contents, only on which
+    # functions have an entry, so their sizes stay the same.
+    reflection_list, reflection_list_offsets = build_reflection_list(0)
+    sections = build_function_list(reflection_list_offsets)
+    header_ex_tags, header_ex = build_header_extension(reflection_list)
+    if !isempty(reflection_list)
+        reflection_list_offset = 0x58 + sizeof(sections.function_list) + sizeof(header_ex) +
+                                 sizeof(sections.public_md) + sizeof(sections.private_md) +
+                                 sizeof(sections.module_list) + sizeof(embedded_source) +
+                                 sizeof(dynamic_header) + sum(sizeof, values(raw_sections); init=0)
+        reflection_list, reflection_list_offsets = build_reflection_list(reflection_list_offset)
+        sections = build_function_list(reflection_list_offsets)
+        header_ex_tags, header_ex = build_header_extension(reflection_list)
+    end
+    (; function_list, public_md, private_md, module_list) = sections
 
 
     ## header

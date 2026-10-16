@@ -297,6 +297,32 @@ end
     @test MTL.MTLComputePipelineState(device(), MTL.MTLFunction(mtllib, "foo")) isa MTL.MTLComputePipelineState
 end
 
+@testset "reflection alignment" begin
+    # reflection data is the flatbuffer itself, without the padding in front of it
+    for metallib in metallibs
+        lib = parse(MetalLib, joinpath(metallib_dir, metallib))
+        for fun in lib.functions
+            fun.reflection_data === nothing && continue
+            @test fun.reflection_data[5:8] == codeunits("AIRR")
+        end
+    end
+
+    # when an edit moves the reflection list, the flatbuffers stay 16-byte aligned
+    lib = parse(MetalLib, joinpath(metallib_dir, "kernels.26.metallib"))
+    renamed(fun) = MetalLibFunction(; (name => getfield(fun, name)
+                                       for name in fieldnames(MetalLibFunction))...,
+                                    name = fun.name * "_x")
+    new_lib = MetalLib(; (name => getfield(lib, name) for name in fieldnames(MetalLib))...,
+                       functions = map(renamed, lib.functions))
+    bytes = collect(codeunits(sprint(write, new_lib)))
+    flatbuffers = findall(codeunits("AIRR"), bytes)
+    @test length(flatbuffers) == length(lib.functions)
+    @test all(range -> mod(first(range) - 1 - 4, 16) == 0, flatbuffers)
+    reread = read(IOBuffer(bytes), MetalLib)
+    @test [fun.reflection_data for fun in reread.functions] ==
+          [fun.reflection_data for fun in lib.functions]
+end
+
 @testset "malformed libraries" begin
     # reading a malformed library either works or throws a `MetalLibFormatError`
     function check_parse(bytes)
