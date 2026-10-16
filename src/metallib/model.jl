@@ -9,7 +9,7 @@ struct FunctionConstant
     name::String
     datatype::MTL.MTLDataType
     index::Int
-    active::Bool
+    required::Bool      # whether a value must be provided
 end
 
 struct DebugInfo
@@ -231,9 +231,9 @@ tag_value_io["CNST"] = (
             name = String(readuntil(io, UInt8(0)))
             datatype = MTL.MTLDataType(read(io, UInt8))
             index = read(io, UInt16)
-            active = Bool(read(io, UInt8))
+            required = Bool(read(io, UInt8))
 
-            constants[i] = FunctionConstant(name, datatype, index, active)
+            constants[i] = FunctionConstant(name, datatype, index, required)
         end
         constants
     end,
@@ -244,7 +244,7 @@ tag_value_io["CNST"] = (
             write(io, UInt8(0))
             write(io, UInt8(constant.datatype))
             write(io, UInt16(constant.index))
-            write(io, UInt8(constant.active))
+            write(io, UInt8(constant.required))
         end
     end)
 ## private metadata
