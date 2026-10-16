@@ -279,6 +279,37 @@ end
             @test lib.file_version == v"1.2.9"
             @test lib.platform_version == v"26"
         end
+        # targets newer than the host can be compiled, but loading them fails with a
+        # clear error. the newest macOS shares its versions with whatever comes next, so
+        # test with an AIR version the host doesn't support.
+        let air = VersionNumber(2, Metal.air_support().minor + 1)
+            @test !isempty(sprint(io->Metal.code_llvm(io, dummy, Tuple{}; air)))
+            # (not `@test_throws`, which passes on Apple's error: `NSError` isn't an `Exception`)
+            err = try
+                @metal launch=false air=air dummy()
+            catch err
+                err
+            end
+            @test err isa ErrorException
+            @test occursin("which this system (macOS $(Metal.macos_version())) cannot load",
+                           sprint(showerror, err))
+        end
+        let host = Metal.macos_version(), target = Metal.compiler_config(device()).target
+            # what the host compiles for by default, or for an older or newer macOS that
+            # uses the same versions, can be loaded
+            @test Metal.check_loadable(target) === nothing
+            @test Metal.check_loadable((; macos=v"15", air=v"2.7", metal=v"3.2")) === nothing
+            @test Metal.check_loadable((; target.air, target.metal,
+                                          macos=VersionNumber(host.major + 1))) === nothing
+            @test Metal.check_loadable((; target.macos,
+                                          air=VersionNumber(target.air.major, target.air.minor, 1),
+                                          metal=VersionNumber(target.metal.major, target.metal.minor, 1))) === nothing
+            # unsupported AIR or MSL versions can't be
+            @test_throws ErrorException Metal.check_loadable(
+                (; target.macos, target.metal, air=VersionNumber(2, Metal.air_support().minor + 1)))
+            @test_throws ErrorException Metal.check_loadable(
+                (; target.macos, target.air, metal=VersionNumber(4, Metal.metal_support().minor + 1)))
+        end
         let (target, lib) = compiled_library(; macos=v"15", metal=v"3.2")
             @test target.macos == v"15"
             @test target.air == v"2.7"

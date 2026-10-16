@@ -263,6 +263,7 @@ end
             end
         end
         if !isassigned(pipeline)
+            check_loadable(config.target)
             pipeline[] = link_pipeline(dev, res.air::Vector{UInt8},
                                      res.metallib::Vector{UInt8},
                                      res.entry::String, job.config.target.minthreads)
