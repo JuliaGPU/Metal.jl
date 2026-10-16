@@ -14,8 +14,6 @@ function main(args)
     force = false
     output = nothing
     downgrade = false
-    air_version = Metal.air_support()
-    metal_version = Metal.metal_support()
     usage = "metallib-as [-h] [-f] [-d] [-l] [-o output.metallib] inputs.(bc|ll)..."
     while !isempty(args)
         arg = popfirst!(args)
@@ -48,7 +46,7 @@ function main(args)
     end
 
     # create functions
-    functions = []
+    functions = Metal.MetalLibFunction[]
     @dispose ctx=Context() begin
         for input in inputs
             data = if input == "-"
@@ -61,7 +59,7 @@ function main(args)
                 data = String(data)
             end
 
-            name, bc = @dispose mod = parse(LLVM.Module, data) begin
+            @dispose mod = parse(LLVM.Module, data) begin
                 # find external functions
                 external_functions = filter(collect(mod.functions)) do fun
                     !isdeclaration(fun) && fun.linkage == LLVM.Linkage.External
@@ -70,22 +68,21 @@ function main(args)
                 if length(external_functions) > 1
                     error("Multiple external functions found in $input: $(join(map(f -> f.name, external_functions), ", ")))")
                 end
-                # the downgrader consumes bitcode, so re-emit the parsed module as bitcode
-                external_functions[1].name, let io = IOBuffer()
-                    write(io, mod)
-                    take!(io)
+                name = external_functions[1].name
+
+                air_module = if endswith(input, ".bc") && !downgrade
+                    # use the input as-is
+                    read(input)
+                else
+                    # the downgrader consumes bitcode, so re-emit the parsed module as bitcode
+                    bc = let io = IOBuffer()
+                        write(io, mod)
+                        take!(io)
+                    end
+                    Metal.GPUCompiler.downgrade(bc, v"14.0")
                 end
-            end
 
-            air_module = if endswith(input, ".bc") && !downgrade
-                # use the input as-is
-                read(input)
-            else
-                Metal.GPUCompiler.downgrade(bc, v"14.0")
-            end
-
-            let fun = Metal.MetalLibFunction(; name, air_module, air_version, metal_version)
-                push!(functions, fun)
+                push!(functions, Metal.MetalLibFunction(mod, name; air_module))
             end
         end
     end

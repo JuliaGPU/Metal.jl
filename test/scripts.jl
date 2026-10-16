@@ -33,6 +33,13 @@ mktempdir() do dir
     run(`$metallib_as -f -o $dir/dummy.metallib $dir/dummy.ll`)
     @test success(`$metallib_load $dir/dummy.metallib`)
 
+    # the function type comes from the module
+    visible = joinpath(@__DIR__, "metallib", "visible.26.metallib")
+    run(`$metallib_dis -o $dir/twice.bc $visible twice`)
+    run(`$metallib_as -f -o $dir/twice.metallib $dir/twice.bc`)
+    fun = only(read(joinpath(dir, "twice.metallib"), Metal.MetalLib).functions)
+    @test fun.type == Metal.METALLIB_VISIBLE_FUNCTION
+
     # test pipelines
     @test success(pipeline(`$metallib_dis -o - $dummy kernel_1`,
                            `$metallib_as -o - -`,
