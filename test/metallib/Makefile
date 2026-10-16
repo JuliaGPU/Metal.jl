@@ -3,7 +3,7 @@ METALLIB := xcrun -sdk macosx metallib
 MACOSX_VERSIONS := 11 12 13 14 15 26
 
 # sources that need a dedicated rule (see below)
-SPECIAL_SOURCES := dependencies.metal dependencies_helper.metal coreimage.metal dylib.metal
+SPECIAL_SOURCES := dependencies.metal dependencies_helper.metal coreimage.metal dylib.metal imports.metal
 
 SOURCES := $(filter-out $(SPECIAL_SOURCES),$(wildcard *.metal))
 METALLIBS := $(foreach ver,$(MACOSX_VERSIONS),$(SOURCES:.metal=.$(ver).metallib))
@@ -11,7 +11,7 @@ METALLIBS := $(foreach ver,$(MACOSX_VERSIONS),$(SOURCES:.metal=.$(ver).metallib)
 # libraries packaged by the standalone `metallib` tool instead of the compiler driver
 STANDALONE_METALLIBS := kernel.standalone.metallib dependencies.standalone.metallib
 
-SPECIAL_METALLIBS := coreimage.metallib dylib.metallib kernels.compressed.metallib
+SPECIAL_METALLIBS := coreimage.metallib dylib.metallib imports.metallib kernels.compressed.metallib
 
 .PHONY: all
 all: $(METALLIBS) $(STANDALONE_METALLIBS) $(SPECIAL_METALLIBS)
@@ -44,6 +44,9 @@ coreimage.metallib: coreimage.metal
 
 dylib.metallib: dylib.metal
 	$(METAL) -mmacosx-version-min=13 -dynamiclib -install_name @loader_path/$@ -o $@ $<
+
+imports.metallib: imports.metal dylib.metallib
+	$(METAL) -mmacosx-version-min=13 -o $@ $^
 
 # compressed modules and reflection need metallib v1.2.9 (macOS 26)
 kernels.compressed.metallib: kernels.metal

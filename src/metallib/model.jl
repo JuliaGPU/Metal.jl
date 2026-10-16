@@ -92,7 +92,13 @@ end
 struct LibraryLayout
     header_extension::Union{Nothing,TagGroup}
     dynamic_header::Union{Nothing,TagGroup}
+
+    # sections we don't decode, by the header extension tag that points to them
+    raw_sections::Dict{String,Vector{UInt8}}
 end
+
+# sections we keep as raw bytes, in the order they appear in a library
+const raw_section_tags = ["VLST", "ILST"]
 
 Base.@kwdef struct MetalLib
     # defaults to the newest file format the host supports. note that optional sections
@@ -409,6 +415,16 @@ function Base.read(io::IO, ::Type{MetalLib})
     end
     library_name = decoded(dynamic_header, "NAME")
 
+    # variable and imported symbol lists
+    raw_sections = Dict{String,Vector{UInt8}}()
+    for tag in raw_section_tags
+        if (section = decoded(header_ex, tag)) !== nothing
+            seek(io, section.offset)
+            raw_sections[tag] = read(io, section.size)
+            @assert sizeof(raw_sections[tag]) == section.size
+        end
+    end
+
     # embedded source
     #
     # there can be fewer sources than functions, so preserve the function -> source mapping
@@ -487,7 +503,7 @@ function Base.read(io::IO, ::Type{MetalLib})
                platform_version, platform_type, is_64bit,
                functions, embedded_source,
                uuid = decoded(header_ex, "UUID"), library_name,
-               layout = LibraryLayout(header_ex, dynamic_header))
+               layout = LibraryLayout(header_ex, dynamic_header, raw_sections))
 end
 
 Base.write(path::AbstractString, lib::MetalLib) = open(path, "w") do io
@@ -532,6 +548,12 @@ function Base.write(io::IO, lib::MetalLib)
         end
         take!(io)
     end
+
+
+    ## variable and imported symbol lists
+
+    raw_sections = lib.layout === nothing ? Dict{String,Vector{UInt8}}() :
+                   lib.layout.raw_sections
 
 
     ## reflection list
@@ -648,6 +670,7 @@ function Base.write(io::IO, lib::MetalLib)
         header_ex_tags = layout_group(template, [
             embedded_source_tag => section(embedded_source),
             "HDYN" => section(dynamic_header),
+            (tag => section(get(raw_sections, tag, UInt8[])) for tag in raw_section_tags)...,
             "RLST" => lib.file_version >= v"1.2.7" ? section(reflection_list) : nothing,
             "UUID" => lib.uuid]; has_size=false)
 
@@ -746,6 +769,11 @@ function Base.write(io::IO, lib::MetalLib)
         mark_placeholder(:dynamic_header_offset,
                          position(io) + offsetof(header_ex_tags, "HDYN"))
     end
+    for (tag, data) in raw_sections
+        if sizeof(data) > 0
+            mark_placeholder(Symbol(tag), position(io) + offsetof(header_ex_tags, tag))
+        end
+    end
     if sizeof(reflection_list) > 0
         mark_placeholder(:reflection_list_offset,
                          position(io) + offsetof(header_ex_tags, "RLST"))
@@ -776,9 +804,14 @@ function Base.write(io::IO, lib::MetalLib)
         write(io, dynamic_header)
     end
 
-    # TODO: variable list
-
-    # TODO: imported symbol list
+    # variable list and imported symbol list
+    for tag in raw_section_tags
+        data = get(raw_sections, tag, UInt8[])
+        if sizeof(data) > 0
+            patch_placeholder(io, Symbol(tag), position(io))
+            write(io, data)
+        end
+    end
 
     # reflection list
     if sizeof(reflection_list) > 0
