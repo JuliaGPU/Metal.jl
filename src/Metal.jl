@@ -108,6 +108,9 @@ import .MetalKernels: MetalBackend
 export MetalBackend
 
 include("deprecated.jl")
+
+# command-line tools
+include("metallib/cli.jl")
 should_precompile = is_macos(v"15") &&
                       Sys.ARCH === :aarch64 &&
                       @load_preference("precompile", true) &&
