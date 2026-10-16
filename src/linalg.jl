@@ -64,15 +64,15 @@ function LinearAlgebra.mul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix,
     if nA != mB
         throw(DimensionMismatch("A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
     end
+    if size(C) != (mA, nB)
+        throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
+    end
 
     if C === A || B === C
         throw(ArgumentError("output matrix must not be aliased with input matrix"))
     end
 
     if mA == 0 || nA == 0 || nB == 0
-        if size(C) != (mA, nB)
-            throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
-        end
         return empty_matmul!(C, beta)
     end
 
@@ -107,15 +107,15 @@ function LinearAlgebra.mul!(C::MtlMatrixOperand, tA, tB,
     if nA != mB
         throw(DimensionMismatch("A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
     end
+    if size(C) != (mA, nB)
+        throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
+    end
 
     if C === A || B === C
         throw(ArgumentError("output matrix must not be aliased with input matrix"))
     end
 
     if mA == 0 || nA == 0 || nB == 0
-        if size(C) != (mA, nB)
-            throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
-        end
         return empty_matmul!(C, beta)
     end
 
@@ -151,15 +151,15 @@ function LinearAlgebra.mul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::Mtl
     if nA != mB
         throw(DimensionMismatch("A has dimensions ($mA,$nA) but B is a vector of length ($mB)"))
     end
+    if mC != mA
+        throw(DimensionMismatch("C has length ($mC), should have ($mA)"))
+    end
 
     if B === C
         throw(ArgumentError("output matrix must not be aliased with input matrix"))
     end
 
     if mA == 0 || nA == 0 || mB == 0
-        if mC != mA
-            throw(DimensionMismatch("C has length ($mC), should have ($mA)"))
-        end
         return empty_matmul!(C, beta)
     end
 

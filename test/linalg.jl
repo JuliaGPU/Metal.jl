@@ -108,6 +108,29 @@ end
     end
 end
 
+@testset "destination size mismatch" begin
+    # the backends take the output size from C, so a wrongly sized C has to be rejected up
+    # front (MPSGraph asserts on it, the native kernels silently compute a partial product)
+    A = MtlArray(rand(Float32, 4, 3))
+    B = MtlArray(rand(Float32, 3, 5))
+    x = MtlArray(rand(Float32, 3))
+    @testset "$alg" for alg in (:auto, :MPS, :MPSGraph, :native, :GPUArrays)
+        @with (Metal.matmul_alg => alg) begin
+            for dims in ((1, 5), (8, 5), (4, 4), (4, 6))
+                @test_throws DimensionMismatch mul!(Metal.zeros(Float32, dims), A, B)
+                @test_throws DimensionMismatch mul!(Metal.zeros(Float32, dims), 'N', 'N', A, B, true, false)
+            end
+            for len in (2, 8)
+                @test_throws DimensionMismatch mul!(Metal.zeros(Float32, len), A, x)
+                @test_throws DimensionMismatch mul!(Metal.zeros(Float32, len), 'N', A, x, true, false)
+            end
+        end
+    end
+    # views go through the `MtlMatrixOperand` method
+    @test_throws DimensionMismatch mul!(Metal.zeros(Float32, 1, 5), 'N', 'N', view(A, 1:2, :), B, true, false)
+    @test_throws DimensionMismatch mul!(view(Metal.zeros(Float32, 4, 5), 1:2, :), A, B)
+end
+
 @testset "test matrix vector multiplication of views" begin
     N = 20
 
