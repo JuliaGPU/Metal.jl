@@ -1066,4 +1066,24 @@ end
     @test Array(map(x -> x * 3 // 2, MtlArray(T[1, 4]))) == T[1, 4] .* 3 .// 2
 end
 
+# Base compares rationals using the 128-bit products of their numerators and denominators,
+# which GPUToolbox computes in 64-bit words instead (#550)
+@testset "rational comparisons" begin
+    xs = Float32[0, -1, 1.4, 1.5, 1.6, Inf, NaN]
+    @test Array(map(x -> x < 3 // 2, MtlArray(xs))) == (xs .< 3 // 2)
+
+    qs = [1//3, -5//7, 3//2, typemax(Int)//2, 2^40//3, -typemax(Int)//(2^40 + 1)]
+    ns = [0, -1, 2, 2^35, typemax(Int), typemin(Int)]
+    fs = Float32[0.3, -0.7, 1.5, 2f0^62, 3.6f11, -Inf]
+    for op in (<, <=, cmp)
+        @test Array(op.(MtlArray(qs), MtlArray(fs))) == op.(qs, fs)
+        @test Array(op.(MtlArray(fs), MtlArray(qs))) == op.(fs, qs)
+    end
+    for op in (<, <=)
+        @test Array(op.(MtlArray(qs), MtlArray(reverse(qs)))) == op.(qs, reverse(qs))
+        @test Array(op.(MtlArray(qs), MtlArray(ns))) == op.(qs, ns)
+        @test Array(op.(MtlArray(ns), MtlArray(qs))) == op.(ns, qs)
+    end
+end
+
 end
