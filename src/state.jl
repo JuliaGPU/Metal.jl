@@ -75,7 +75,7 @@ function global_queue(dev::MTLDevice)
         task_local_storage(batched_queue_key(queue), bq)
         Base.@lock global_queues_lock global_queues[bq] = nothing
         bq
-    end::BatchedCommandQueue
+    end::ConcreteBatchedQueue
 end
 
 # tracks the most recently launched logging-enabled cmdbuf per queue, so that

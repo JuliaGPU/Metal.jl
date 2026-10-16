@@ -329,16 +329,16 @@ end
         @metal threads=1 queue=queue increment_kernel(A)
     end
     if !Metal.command_batching() || Metal.profiling_command_buffers()
-        @test queue.cmdbuf === nothing
+        @test !Metal.has_open_batch(queue)
     elseif Metal.command_batching_ops() > 1
         @test queue.nops == 8
     end
     synchronize(queue)
     @test Array(A) == Int32[8]
-    @test queue.cmdbuf === nothing
+    @test !Metal.has_open_batch(queue)
 
     @metal threads=1 queue=queue submit=true increment_kernel(A)
-    @test queue.cmdbuf === nothing
+    @test !Metal.has_open_batch(queue)
     synchronize(queue)
     @test Array(A) == Int32[9]
 
@@ -357,7 +357,7 @@ end
     @metal threads=1 queue=queue write_kernel(D, UInt8(1))
     cmdbuf = MTL.MTLCommandBuffer(queue)
     if !Metal.command_batching() || Metal.profiling_command_buffers()
-        @test queue.cmdbuf === nothing
+        @test !Metal.has_open_batch(queue)
     elseif Metal.command_batching_ops() > 1
         @test queue.nops == 1
     end
@@ -501,8 +501,8 @@ end
     synchronize(queue)
 
     @test_throws ErrorException @metal threads=1 queue=queue failed_encode_kernel(EncodeFailure(1))
-    @test queue.cmdbuf === nothing
-    @test queue.encoder === nothing
+    @test !Metal.has_open_batch(queue)
+    @test queue.backend.encoder === nothing
     @test queue.nops == 0
 
     A = MtlArray(Int32[0])
@@ -511,8 +511,8 @@ end
 
     if Metal.command_batching() && !Metal.profiling_command_buffers() &&
        Metal.command_batching_ops() > 1
-        @test queue.cmdbuf !== nothing
-        @test queue.encoder === nothing
+        @test Metal.has_open_batch(queue)
+        @test queue.backend.encoder === nothing
         @test queue.nops == 1
     end
 
@@ -565,8 +565,8 @@ end
         end
         queue = fetch(t)
         @test Array(a) == ones(Float32, 16)
-        @test queue.cmdbuf === nothing
-        @test isempty(queue.cleanups)
+        @test !Metal.has_open_batch(queue)
+        @test isempty(Metal.pending_commands(queue))
         @test MTL.last_committed(queue.queue).status == MTL.MTLCommandBufferStatusCompleted
     end
 

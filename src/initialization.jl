@@ -96,9 +96,7 @@ function __init__()
         has_active_batched_queues() || return
         try
             for bq in active_batched_queues()
-                cmdbuf = bq.cmdbuf
-                end_encoder!(bq)
-                cmdbuf === nothing || reset_open_cmdbuf!(bq, cmdbuf)
+                abandon_open_batch!(bq)
             end
         catch err
             @error "Failed to close open batched command queues at exit" exception=(err, catch_backtrace())
