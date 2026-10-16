@@ -114,6 +114,7 @@ end
 
 Base.@kwdef struct MetalLibFunction
     name::String
+    type::ProgramType = PROGRAM_KERNEL
     air_version::VersionNumber
     metal_version::VersionNumber
 
@@ -767,6 +768,7 @@ function Base.read(io::IO, ::Type{MetalLib})
 
         push!(functions, MetalLibFunction(;
             name = function_list[i]["NAME"],
+            type = function_list[i]["TYPE"],
             air_module = module_list[i],
             air_version=function_list[i]["VERS"].air,
             metal_version=function_list[i]["VERS"].metal,
@@ -896,7 +898,7 @@ function Base.write(io::IO, lib::MetalLib)
         # tags
         function_tags = TagGroup()
         function_tags["NAME"] = fun.name
-        function_tags["TYPE"] = PROGRAM_KERNEL
+        function_tags["TYPE"] = fun.type
         function_tags["HASH"] = module_hash
         function_tags["OFFT"] = (; public_md=public_md_offset,
                                    private_md=private_md_offset,
