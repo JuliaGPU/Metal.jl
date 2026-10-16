@@ -3,7 +3,8 @@ METALLIB := xcrun -sdk macosx metallib
 MACOSX_VERSIONS := 11 12 13 14 15 26
 
 # sources that need a dedicated rule (see below)
-SPECIAL_SOURCES := dependencies.metal dependencies_helper.metal coreimage.metal dylib.metal imports.metal
+SPECIAL_SOURCES := dependencies.metal dependencies_helper.metal coreimage.metal dylib.metal imports.metal \
+                   optional_constants.metal
 
 SOURCES := $(filter-out $(SPECIAL_SOURCES),$(wildcard *.metal))
 METALLIBS := $(foreach ver,$(MACOSX_VERSIONS),$(SOURCES:.metal=.$(ver).metallib))
@@ -11,14 +12,18 @@ METALLIBS := $(foreach ver,$(MACOSX_VERSIONS),$(SOURCES:.metal=.$(ver).metallib)
 # libraries packaged by the standalone `metallib` tool instead of the compiler driver
 STANDALONE_METALLIBS := kernel.standalone.metallib dependencies.standalone.metallib
 
-SPECIAL_METALLIBS := coreimage.metallib dylib.metallib imports.metallib kernels.compressed.metallib
+SPECIAL_METALLIBS := coreimage.metallib dylib.metallib imports.metallib kernels.compressed.metallib \
+                     optional_constants.metallib
+
+# unlinked AIR, to build libraries from
+AIR_MODULES := optional_constants.air
 
 .PHONY: all
-all: $(METALLIBS) $(STANDALONE_METALLIBS) $(SPECIAL_METALLIBS)
+all: $(METALLIBS) $(STANDALONE_METALLIBS) $(SPECIAL_METALLIBS) $(AIR_MODULES)
 
 .PHONY: clean
 clean:
-	$(RM) $(METALLIBS) $(STANDALONE_METALLIBS) $(SPECIAL_METALLIBS)
+	$(RM) $(METALLIBS) $(STANDALONE_METALLIBS) $(SPECIAL_METALLIBS) $(AIR_MODULES)
 
 define METALLIB_RULE
 %.${1}.metallib: %.metal
@@ -51,3 +56,9 @@ imports.metallib: imports.metal dylib.metallib
 # compressed modules and reflection need metallib v1.2.9 (macOS 26)
 kernels.compressed.metallib: kernels.metal
 	$(METAL) -mmacosx-version-min=26 -Xlinker --compress-sections -o $@ $<
+
+# function constants in an unlinked module, and as the linker records them
+optional_constants.air: optional_constants.metal
+	$(METAL) -mmacosx-version-min=15 -c -o $@ $<
+optional_constants.metallib: optional_constants.metal
+	$(METAL) -mmacosx-version-min=15 -o $@ $<
