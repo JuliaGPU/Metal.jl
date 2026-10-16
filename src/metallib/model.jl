@@ -57,6 +57,11 @@ struct FunctionLayout
     public_tags::TagGroup
     private_tags::TagGroup
     reflection_tags::Union{Nothing,TagGroup}
+
+    # the SHA-256 of the module as read, to detect whether it was replaced: the HASH tag is
+    # not always a digest of the module (Apple's compressed and Core Image libraries differ),
+    # so we only recompute it for new modules
+    module_digest::Vector{UInt8}
 end
 
 Base.@kwdef struct MetalLibFunction
@@ -325,14 +330,27 @@ function Base.read(io::IO, ::Type{MetalLib})
     @assert position(io) == module_list_offset
 
     # module list
+    #
+    # functions can share a module (e.g., in Core Image libraries and dynamic libraries),
+    # in which case they also share the vector holding it
+    modules = Dict{UInt64,Vector{UInt8}}()
     module_list = Vector{UInt8}[]
     for i in 1:function_count
+        offset = decoded(function_list[i], "OFFT", NamedTuple).air_module
         module_size = decoded(function_list[i], "MDSZ", UInt64)
-        push!(module_list, read(io, module_size))
+        @assert offset + module_size <= module_list_size
+        air_module = get!(modules, offset) do
+            seek(io, module_list_offset + offset)
+            read(io, module_size)
+        end
+        @assert sizeof(air_module) == module_size
+        push!(module_list, air_module)
     end
-    @assert position(io) == module_list_offset + module_list_size
+    module_digests = IdDict{Vector{UInt8},Vector{UInt8}}(m => sha256(m) for m in values(modules))
 
     # reflection list
+    #
+    # like modules, reflection entries can be shared by several functions
     reflection_tags = Vector{Union{Nothing,TagGroup}}(nothing, function_count)
     if (rlst = decoded(header_ex, "RLST")) !== nothing
         seek(io, rlst.offset)
@@ -343,14 +361,14 @@ function Base.read(io::IO, ::Type{MetalLib})
 
             reflection_buf = read!(io, TagGroup())
 
-            # check if any function points to this reflection
-            function_idx = findfirst(function_list) do fun
+            # check which functions point to this reflection
+            function_idxs = findall(function_list) do fun
                 decoded(fun, "RFLT") == reflection_offset
             end
-            if function_idx === nothing
+            if isempty(function_idxs)
                 error("No function points to this reflection")
             end
-            reflection_tags[function_idx] = reflection_buf
+            reflection_tags[function_idxs] .= Ref(reflection_buf)
         end
         @assert position(io) == rlst.offset + rlst.size
     end
@@ -451,7 +469,7 @@ function Base.read(io::IO, ::Type{MetalLib})
             air_version = versions.air,
             metal_version = versions.metal,
             layout = FunctionLayout(function_list[i], public_md[i], private_md[i],
-                                    reflection_tags[i]),
+                                    reflection_tags[i], module_digests[module_list[i]]),
             optional_args...
         ))
     end
@@ -512,17 +530,25 @@ function Base.write(io::IO, lib::MetalLib)
     reflection_list_offsets = Vector{Union{Nothing,Int}}(nothing, length(lib.functions))
 
     reflection_list = let io=IOBuffer()
-        reflection_groups = map(lib.functions) do fun
+        # functions that were read sharing a reflection entry share its tag group; keep
+        # sharing it unless their reflection data changed
+        reflection_groups = Dict{Tuple{UInt,UInt},Tuple{Vector{Int},TagGroup}}()
+        for (i, fun) in enumerate(lib.functions)
             template = fun.layout === nothing ? nothing : fun.layout.reflection_tags
-            layout_group(template, ["RBUF" => fun.reflection_data])
+            key = (objectid(template), objectid(fun.reflection_data))
+            if haskey(reflection_groups, key)
+                push!(reflection_groups[key][1], i)
+            else
+                tg = layout_group(template, ["RBUF" => fun.reflection_data])
+                isempty(tg.data) || (reflection_groups[key] = ([i], tg))
+            end
         end
-        reflection_count = count(tg -> !isempty(tg.data), reflection_groups)
 
-        if reflection_count > 0
-            write(io, UInt32(reflection_count))
-            for (i, reflection_tags) in enumerate(reflection_groups)
-                isempty(reflection_tags.data) && continue
-                reflection_list_offsets[i] = position(io)
+        if !isempty(reflection_groups)
+            write(io, UInt32(length(reflection_groups)))
+            entries = sort!(collect(values(reflection_groups)); by=first)
+            for (function_idxs, reflection_tags) in entries
+                reflection_list_offsets[function_idxs] .= position(io)
                 write(io, reflection_tags)
             end
         end
@@ -537,6 +563,10 @@ function Base.write(io::IO, lib::MetalLib)
     module_list_stream = IOBuffer()
 
     function_tag_groups = []
+
+    # modules shared by several functions are only written once
+    module_offsets = IdDict{Vector{UInt8},Int}()
+    module_digests = IdDict{Vector{UInt8},Vector{UInt8}}()
 
     for (i, fun) in enumerate(lib.functions)
         layout = fun.layout
@@ -554,10 +584,16 @@ function Base.write(io::IO, lib::MetalLib)
         write(private_md_stream, private_md_tags)
 
         # module
-        module_list_offset = position(module_list_stream)
-        module_hash = sha256(fun.air_module)
+        module_list_offset = get!(module_offsets, fun.air_module) do
+            offset = position(module_list_stream)
+            write(module_list_stream, fun.air_module)
+            offset
+        end
+        module_hash = get!(() -> sha256(fun.air_module), module_digests, fun.air_module)
+        if layout !== nothing && module_hash == layout.module_digest
+            module_hash = something(decoded(layout.function_tags, "HASH"), module_hash)
+        end
         module_size = sizeof(fun.air_module)
-        write(module_list_stream, fun.air_module)
 
         # tags
         source_offset = if fun.source_id !== nothing
