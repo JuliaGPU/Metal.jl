@@ -21,8 +21,8 @@
 # are kept as raw bytes and written back unchanged.
 #
 # parts we do not support at all:
-# - dynamic libraries and symbol companions: variable lists and imported/exported symbol
-#   lists (the install name maps onto the dynamic header's NAME tag, which we do support)
+# - dynamic libraries and symbol companions: we keep variable lists (VLST) and imported symbol
+#   lists (ILST) as raw bytes, and only decode the dynamic header's NAME tag (the install name)
 
 using CEnum: @cenum
 using UUIDs: UUID
@@ -202,6 +202,11 @@ tag_value_io["RLST"] = (
     @NamedTuple{offset::UInt64, size::UInt64},
     (io, _)   -> (; offset=read(io, UInt64), size=read(io, UInt64)),
     (io, val) -> write(io, UInt64[val.offset, val.size]))
+# offset and size of the variable list and imported symbol list sections of dynamic
+# libraries and the libraries linking against them, which we keep as raw bytes;
+# 2 x 64-bit unsigned integers
+tag_value_io["VLST"] = tag_value_io["RLST"]
+tag_value_io["ILST"] = tag_value_io["RLST"]
 tag_value_io["SLST"] = (
     # Offset and size of the script list section; 2 x 64-bit unsigned integers
     @NamedTuple{offset::UInt64, size::UInt64},
