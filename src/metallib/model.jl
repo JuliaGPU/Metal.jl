@@ -527,6 +527,11 @@ function read_metallib(io::IOBuffer, bytes::Vector{UInt8})
                      "reflection list does not match its size", rlst.offset)
     end
 
+    for (i, fun) in enumerate(function_list)
+        format_check(decoded(fun, "RFLT") === nothing || reflection_tags[i] !== nothing,
+                     "function $(i-1) refers to a missing reflection entry")
+    end
+
     # script list
     #
     # this section contains pipeline descriptor scripts
@@ -612,6 +617,10 @@ function read_metallib(io::IOBuffer, bytes::Vector{UInt8})
                      section.offset)
 
         embedded_source = EmbeddedSource(command_line_info, working_directory, archives)
+    end
+    for (i, fun) in enumerate(function_list)
+        format_check(decoded(fun, "SOFF") === nothing || haskey(function_sources, i),
+                     "function $(i-1) refers to a missing source archive")
     end
 
     # reconstruct objects
