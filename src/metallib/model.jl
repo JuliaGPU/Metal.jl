@@ -220,6 +220,13 @@ function layout_group(template::Union{Nothing,TagGroup}, values; kwargs...)
     return tg
 end
 
+# the value to write for a tag holding a collection, which we omit when empty unless the
+# template had the tag (with an empty value)
+function optional_tag(template, tag::String, value)
+    isempty(value) && decoded(template, tag) === nothing && return nothing
+    return value
+end
+
 # look up a decoded tag value, or `nothing` if the tag is missing or was kept as raw bytes
 function decoded(tg::Union{Nothing,TagGroup}, tag::String)
     tg === nothing && return nothing
@@ -810,15 +817,17 @@ function write_metallib(io::IOBuffer, lib::MetalLib)
 
             # public metadata
             public_md_offset = position(public_md_stream)
-            public_md_tags = layout_group(layout === nothing ? nothing : layout.public_tags,
-                ["CNST" => isempty(fun.constants) ? nothing : fun.constants])
+            template = layout === nothing ? nothing : layout.public_tags
+            public_md_tags = layout_group(template,
+                ["CNST" => optional_tag(template, "CNST", fun.constants)])
             write(public_md_stream, public_md_tags)
 
             # private metadata
             private_md_offset = position(private_md_stream)
-            private_md_tags = layout_group(layout === nothing ? nothing : layout.private_tags,
+            template = layout === nothing ? nothing : layout.private_tags
+            private_md_tags = layout_group(template,
                 ["DEBI" => fun.debug_info,
-                 "DEPF" => isempty(fun.dependencies) ? nothing : fun.dependencies])
+                 "DEPF" => optional_tag(template, "DEPF", fun.dependencies)])
             write(private_md_stream, private_md_tags)
 
             # module
