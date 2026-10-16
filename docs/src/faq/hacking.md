@@ -143,9 +143,9 @@ recorded per function and stamped into the bitcode:
 
 | `-mmacosx-version-min` | metallib | AIR | MSL |
 |:-----------------------|:---------|:----|:----|
-| 14                     | 1.2.7    | 2.6 | 3.1 |
 | 15                     | 1.2.8    | 2.7 | 3.2 |
 | 26                     | 1.2.9    | 2.8 | 4.0 |
+| 27                     | 1.2.9    | 2.9 | 4.1 |
 
 The `Metal.metallib_support`, `Metal.air_support` and `Metal.metal_support` functions encode
 this mapping, and Metal.jl emits the same versions the offline compiler would when targeting

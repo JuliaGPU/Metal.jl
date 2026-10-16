@@ -16,12 +16,10 @@
 @test Metal.metallib_target() <= Metal.metallib_support()
 
 # the version mapping, as derived from the offline compiler (see src/version.jl)
-@test Metal.metallib_support(v"13") == v"1.2.7"
-@test Metal.air_support(v"13") == v"2.5"
-@test Metal.metal_support(v"13") == v"3.0"
-@test Metal.metallib_support(v"14") == v"1.2.7"
-@test Metal.air_support(v"14") == v"2.6"
-@test Metal.metal_support(v"14") == v"3.1"
+# Metal.jl doesn't support anything older than macOS 15
+@test_throws "requires macOS 15" Metal.metallib_support(v"14")
+@test_throws "requires macOS 15" Metal.air_support(v"14")
+@test_throws "requires macOS 15" Metal.metal_support(v"14")
 @test Metal.metallib_support(v"15") == v"1.2.8"
 @test Metal.air_support(v"15") == v"2.7"
 @test Metal.metal_support(v"15") == v"3.2"

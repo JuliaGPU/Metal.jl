@@ -384,9 +384,6 @@ end
     end
     if air === nothing
         air = max(air_support(macos), air_floor(metal))
-        if air < v"2.7"
-            error("""Metal.jl requires AIR 2.7 (macOS 15) or newer, but macOS $(macos) only supports AIR $(air_support(macos)).""")
-        end
     elseif air < v"2.7"
         error("""Metal.jl requires AIR 2.7 (macOS 15) or newer; cannot target AIR $(air).""")
     elseif air < air_floor(metal)
