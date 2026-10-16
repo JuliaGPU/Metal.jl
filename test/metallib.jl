@@ -524,6 +524,7 @@ end
             @test (metallib, fun.name, built.type) == (metallib, fun.name, fun.type)
             @test built.air_version == fun.air_version
             @test built.metal_version == fun.metal_version
+            @test built.constants == fun.constants
         end
     end
 
@@ -537,6 +538,43 @@ end
         @test built.type == Metal.METALLIB_VISIBLE_FUNCTION
         @test_throws ArgumentError MetalLibFunction(mod, "bar"; fun.air_module)
     end
+end
+
+@testset "function constants from unlinked modules" begin
+    # in an unlinked module, constants the function checks with `is_function_constant_defined`
+    # are optional
+    ref = only(parse(MetalLib, joinpath(metallib_dir, "optional_constants.metallib")).functions)
+    @test [(c.name, c.required) for c in ref.constants] == [("scale", true), ("offset", false)]
+    air = read(joinpath(metallib_dir, "optional_constants.air"))
+    fun = @dispose ctx=LLVM.Context() mod=parse(LLVM.Module, air) begin
+        MetalLibFunction(mod, "affine"; air_module=air)
+    end
+    @test fun.constants == ref.constants
+
+    # the runtime needs the constants to specialize the function
+    lib = MTL.MTLLibraryFromData(device(), sprint(write, MetalLib(; functions=[fun])))
+    @test length(MTL.MTLFunction(lib, "affine").functionConstantsDictionary) == 2
+    function run_affine(constants...)
+        fcv = MTL.MTLFunctionConstantValues()
+        for (name, value) in constants
+            MTL.setConstantValue!(fcv, Ref(value), MTL.MTLDataTypeUInt, name)
+        end
+        buf = MTL.MTLBuffer(device(), 4 * sizeof(UInt32); storage=MTL.SharedStorage)
+        ptr = convert(Ptr{UInt32}, buf)
+        unsafe_store!.(ptr, UInt32[1, 2, 3, 4], 1:4)
+        pso = MTL.MTLComputePipelineState(device(), MTL.MTLFunction(lib, "affine", fcv))
+        cmdbuf = MTL.MTLCommandBuffer(MTL.MTLCommandQueue(device()))
+        MTL.MTLComputeCommandEncoder(cmdbuf) do cce
+            MTL.set_function!(cce, pso)
+            MTL.set_buffer!(cce, buf, 0, 1)
+            MTL.dispatchThreadgroups!(cce, MTL.MTLSize(1, 1, 1), MTL.MTLSize(4, 1, 1))
+        end
+        MTL.commit!(cmdbuf)
+        MTL.wait_completed(cmdbuf)
+        return unsafe_wrap(Array, ptr, 4) |> copy
+    end
+    @test run_affine("scale" => UInt32(3), "offset" => UInt32(1)) == [4, 7, 10, 13]
+    @test run_affine("scale" => UInt32(3)) == [3, 6, 9, 12]
 end
 
 function metallib_kernel(a)
