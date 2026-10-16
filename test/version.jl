@@ -43,3 +43,11 @@ end
 
 # paravirtualized GPUs don't expose an AGXAccelerator IOService to query the core count
 @test Metal.num_gpu_cores() > 0 broken=Metal.MTL.is_virtual(Metal.device())
+
+# the default language version depends on the SDK Julia was linked against, and can be
+# newer than the versions we know about. that must not prevent loading Metal.jl.
+@test Metal.describe_language_version(MTL.MTLLanguageVersion4_0) == "v4.0.0"
+@test Metal.describe_language_version(MTL.MTLLanguageVersion(0x50000)) == "unknown (0x50000)"
+# explicit conversions stay strict
+@test_throws ErrorException convert(VersionNumber, MTL.MTLLanguageVersion(0x50000))
+@test_throws ErrorException convert(MTL.MTLLanguageVersion, v"5.0")
