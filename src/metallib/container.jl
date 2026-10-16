@@ -316,11 +316,18 @@ function Base.read!(io::IO, tg::TagGroup)
         else
             read(io, tg.size_type)
         end
-        tg.offsets[tag_name] = position(io)
+        # (like values, offsets are those of a tag's first occurrence)
+        haskey(tg.offsets, tag_name) || (tg.offsets[tag_name] = position(io))
         value_bytes = read(io, value_size)
         sizeof(value_bytes) == value_size || throw(EOFError())
 
-        push!(tg.data, tag_name => decode_tag(tag_name, value_bytes))
+        # we only decode the first occurrence of a tag, as that's the one we use
+        value = if haskey(tg, tag_name)
+            RawTag(value_bytes)
+        else
+            decode_tag(tag_name, value_bytes)
+        end
+        push!(tg.data, tag_name => value)
     end
 
     # ensure we consumed the entire group
@@ -340,6 +347,7 @@ function Base.read!(io::IO, tg::TagGroup)
 end
 
 function Base.write(io::IO, tg::TagGroup)
+    empty!(tg.offsets)
     # emit the data and their values
     group_data = let io=IOBuffer()
         for (tag, value) in tg.data
@@ -356,7 +364,7 @@ function Base.write(io::IO, tg::TagGroup)
             else
                 write(io, tg.size_type(value_size))
             end
-            tg.offsets[tag] = position(io)
+            haskey(tg.offsets, tag) || (tg.offsets[tag] = position(io))
             write(io, value_bytes)
         end
         write(io, "ENDT")
