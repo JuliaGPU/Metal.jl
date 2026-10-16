@@ -9,6 +9,8 @@ const use_nonblocking_synchronization =
 is_completed(cmdbuf::MTL.MTLCommandBufferLike) =
     cmdbuf.status >= MTL.MTLCommandBufferStatusCompleted
 
+wait_completed!(cmdbuf::MTL.MTLCommandBufferLike) = wait_cmdbuf!(cmdbuf)
+
 # wait for a committed command buffer to complete, without blocking the calling thread so
 # that other tasks can run in the meantime. pass `handlers=true` to also wait for its
 # completion handlers to have run (e.g., to flush `addLogHandler:` output); otherwise, this
@@ -83,7 +85,8 @@ function synchronize(queue = global_queue(device()))
     bq = batched_queue(queue)
     committed = Base.@lock submission_lock begin
         commit_batch!(bq)
-        isempty(bq.cleanups) ? nothing : bq.cleanups[end]
+        cleanups = pending_commands(bq)
+        isempty(cleanups) ? nothing : cleanups[end]
     end
     orphans = flush_orphaned_queues!()
     maybe_collect(bq.queue.device; will_block=true)
@@ -93,10 +96,10 @@ function synchronize(queue = global_queue(device()))
     # completion handlers is what processes its `addLogHandler:` blocks)
     drain_logging_cmdbufs!(bq.queue)
 
-    last, submissions = MTL.take_queue_submissions(bq.queue)
+    last, submissions = take_submissions!(bq)
 
     # Handles the already-completed fast path internally.
-    last === nothing || wait_cmdbuf!(last)
+    last === nothing || wait_completed!(last)
 
     # waiting for orphaned queues changes the type of `submissions`, so keep the paths
     # apart for `finish_synchronization!` to be called with concrete arguments
@@ -129,9 +132,9 @@ function synchronize_queue(bq::BatchedCommandQueue)
 
     last = Base.@lock submission_lock begin
         commit_batch!(bq)
-        MTL.last_committed(bq.queue)
+        last_submission(bq)
     end
-    last === nothing || wait_cmdbuf!(last)
+    last === nothing || wait_completed!(last)
     return
 end
 
@@ -149,8 +152,8 @@ function wait_orphaned_queues!(orphans, submissions)
     submissions === nothing || push!(states, submissions)
     for bq in orphans
         drain_logging_cmdbufs!(bq.queue)
-        last, state = MTL.take_queue_submissions(bq.queue)
-        last === nothing || wait_cmdbuf!(last)
+        last, state = take_submissions!(bq)
+        last === nothing || wait_completed!(last)
         state === nothing || push!(states, state)
     end
     return states

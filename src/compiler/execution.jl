@@ -125,16 +125,16 @@ function claim!(ptr::MtlPtr, bq::BatchedCommandQueue)
 end
 
 struct Adaptor
-    # the current command encoder, if any.
+    # the current encoding context (see `CommandBackend`), if any.
     cce::Union{Nothing,MTLComputeCommandEncoder}
     # the queue the encoder belongs to, if any.
-    queue::Union{Nothing,BatchedCommandQueue}
+    queue::Union{Nothing,ConcreteBatchedQueue}
 end
 
 # convert Metal buffers to their GPU address
 function Adapt.adapt_storage(to::Adaptor, buf::MTLBuffer)
     if to.cce !== nothing
-        MTL.use!(to.cce, buf, MTL.ReadWriteUsage)
+        make_resident!(to.cce, buf, MTL.ReadWriteUsage)
     end
     reinterpret(Core.LLVMPtr{Nothing,AS.Device}, buf.gpuAddress)
 end
@@ -364,11 +364,11 @@ end
         (isghosttype(dt) || Core.Compiler.isconstType(dt)) && continue
         if typ <: MTLBuffer
             # top-level buffers are passed as a pointer-valued argument
-            push!(ex.args, :(set_buffer!(cce, $val, 0, $idx)))
+            push!(ex.args, :(bind_buffer!(cce, $val, 0, $idx)))
         elseif typ <: MtlPtr
             # the same as a buffer, but with an offset
             push!(ex.args, :(claim!($val, bq)))
-            push!(ex.args, :(set_buffer!(cce, $val.buffer, $val.offset, $idx)))
+            push!(ex.args, :(bind_buffer!(cce, $val.buffer, $val.offset, $idx)))
         else
             # everything else is passed by reference, copied into Metal's transient buffer
             push!(ex.args, :(convert_argument!(cce, bq, $val, $idx)))
@@ -383,10 +383,10 @@ end
 
 # Not inlined into `encode_arguments!`, which is compiled for every kernel signature, so
 # that the conversion of each argument type is compiled once and shared between kernels.
-@noinline convert_argument!(cce::MTLComputeCommandEncoder, bq, arg, idx::Integer) =
+@noinline convert_argument!(cce, bq, arg, idx::Integer) =
     set_argument!(cce, mtlconvert(arg, cce, bq), idx)
 
-@inline function set_argument!(cce::MTLComputeCommandEncoder, arg, idx::Integer)
+@inline function set_argument!(cce, arg, idx::Integer)
     argtyp = typeof(arg)
 
     # A non-isbits argument has no fields the kernel could read — compilation would have
@@ -401,7 +401,7 @@ end
     ref = Base.RefValue(arg)
     GC.@preserve ref begin
         ptr = Base.unsafe_convert(Ptr{argtyp}, ref)
-        set_bytes!(cce, reinterpret(Ptr{Cvoid}, ptr), sizeof(argtyp), idx)
+        bind_bytes!(cce, reinterpret(Ptr{Cvoid}, ptr), sizeof(argtyp), idx)
     end
     return
 end
@@ -431,7 +431,9 @@ end
 Base.@nospecializeinfer @inline function launch_with_queue(
         @nospecialize(kernel::HostKernel), queue, gs::MTLSize, ts::MTLSize,
         @nospecialize(args::Tuple), submit::Bool)
-    launch(kernel, gs, ts, batched_queue(queue), args, submit)
+    # (asserting the queue type keeps inference from specializing the launch path on an
+    #  abstract queue type)
+    launch(kernel, gs, ts, batched_queue(queue)::ConcreteBatchedQueue, args, submit)
 end
 
 Base.@nospecializeinfer function kernel_operation(@nospecialize(kernel::HostKernel),
@@ -441,9 +443,10 @@ Base.@nospecializeinfer function kernel_operation(@nospecialize(kernel::HostKern
        tgmem = kernel.tgmem, maxthreads = kernel.maxthreads)
 end
 
+# logging needs a command buffer of its own, with a log state, so it bypasses the batch
 Base.@nospecializeinfer function launch_logging!(
         @nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
-        bq::BatchedCommandQueue, @nospecialize(args::Tuple), kernel_state, buf, exc)
+        bq::Metal3Queue, @nospecialize(args::Tuple), kernel_state, buf, exc)
     flush!(bq)
     queue = bq.queue
 
@@ -574,31 +577,27 @@ Base.@nospecializeinfer function encode_launch!(
     pipeline = kernel.pipeline
     reloc = kernel.reloc_table
     try
-        cce = compute_encoder(bq)
-        set_pipeline!(bq, cce, pipeline)
+        cce = kernel_encoder!(bq, pipeline)
 
         # The kernel state holds GPU addresses to per-device scratch buffers (malloc bump
         # allocator, exception mailbox) that aren't otherwise bound to the encoder. Declare
         # them so Metal Shader Validation tracks the accesses instead of dropping them.
         if !kernel.use_residency_sets
-            MTL.use!(cce, buf, MTL.ReadWriteUsage)
-            MTL.use!(cce, exc, MTL.ReadWriteUsage)
+            make_resident!(cce, buf, MTL.ReadWriteUsage)
+            make_resident!(cce, exc, MTL.ReadWriteUsage)
         end
         # The relocation table is per-kernel, so it cannot join the queue's residency set
         # (which only holds the per-device scratch buffers): declare it every launch.
-        reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
+        reloc === nothing || make_resident!(cce, reloc, MTL.ReadUsage)
 
         encode_arguments!(cce, bq, kernel, kernel_state, source, args)
-        MTL.append_current_function!(cce, gs, ts)
+        dispatch!(cce, gs, ts)
     catch err
         # The failing launch has not been recorded yet. Keep any earlier
         # operations in this batch, but close encoder state dirtied by the
-        # failed encode and drop an otherwise empty command buffer.
+        # failed encode and drop an otherwise empty batch.
         end_encoder!(bq)
-        if bq.nops == 0
-            cmdbuf = bq.cmdbuf
-            cmdbuf === nothing || discard_open_cmdbuf!(bq, cmdbuf)
-        end
+        bq.nops == 0 && discard_open_batch!(bq)
         err isa OwnershipConflict && return err.managed
         rethrow()
     end
@@ -609,9 +608,8 @@ Base.@nospecializeinfer function encode_launch!(
     record_operation!(bq, source, args; op=op)
 
     if precompiling
-        cmdbuf = bq.cmdbuf
         end_encoder!(bq)
-        cmdbuf === nothing || discard_open_cmdbuf!(bq, cmdbuf)
+        discard_open_batch!(bq)
     end
     return nothing
 end
