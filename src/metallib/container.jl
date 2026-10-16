@@ -28,39 +28,39 @@ using UUIDs: UUID
 
 ## enums
 
+# named like Apple's `metal-readobj` prints them
+
 @cenum FileType::UInt8 begin
-    FILE_EXECUTABLE          = 0
-    FILE_CORE_IMAGE          = 1
-    FILE_DYNAMIC             = 2
-    FILE_SYMBOL_COMPANION    = 3
+    METALLIB_EXECUTE    = 0
+    METALLIB_CI         = 1     # Core Image kernels
+    METALLIB_DYLIB      = 2
+    METALLIB_COMPANION  = 3     # symbol companion (.metallibsym)
 end
 
-# https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/BinaryFormat/MachO.def
+# the values match LLVM's Mach-O platforms (llvm/include/llvm/BinaryFormat/MachO.def)
 @cenum PlatformType::UInt8 begin
-    PLATFORM_UNKNOWN              = 0
-    PLATFORM_MACOS                = 1
-    PLATFORM_IOS                  = 2
-    PLATFORM_TVOS                 = 3
-    PLATFORM_WATCHOS              = 4
-    PLATFORM_BRIDGEOS             = 5
-    PLATFORM_MACCATALYST          = 6
-    PLATFORM_IOS_SIMULATOR        = 7
-    PLATFORM_TVOS_SIMULATOR       = 8
-    PLATFORM_WATCHOS_SIMULATOR    = 9
-    PLATFORM_DRIVERKIT            = 10
-    PLATFORM_XROS                 = 11
-    PLATFORM_MACOS_SIMULATOR      = 12
+    METALLIB_PLATFORM_MACOS             = 1
+    METALLIB_PLATFORM_IOS               = 2
+    METALLIB_PLATFORM_TVOS              = 3
+    METALLIB_PLATFORM_WATCHOS           = 4
+    METALLIB_PLATFORM_MACCATALYST       = 6
+    METALLIB_PLATFORM_IOS_SIMULATOR     = 7
+    METALLIB_PLATFORM_TVOS_SIMULATOR    = 8
+    METALLIB_PLATFORM_WATCHOS_SIMULATOR = 9
+    METALLIB_PLATFORM_XROS              = 11
+    METALLIB_PLATFORM_XROS_SIMULATOR    = 12
 end
 
 @cenum ProgramType::UInt8 begin
-    PROGRAM_VERTEX       = 0
-    PROGRAM_FRAGMENT     = 1
-    PROGRAM_KERNEL       = 2
-    PROGRAM_UNQUALIFIED  = 3
-    PROGRAM_VISIBLE      = 4
-    PROGRAM_EXTERN       = 5
-    PROGRAM_INTERSECTION = 6
-    PROGRAM_NONE         = 255
+    METALLIB_VERTEX_FUNCTION        = 0
+    METALLIB_FRAGMENT_FUNCTION      = 1
+    METALLIB_COMPUTE_FUNCTION       = 2
+    METALLIB_UNQUALIFIED_FUNCTION   = 3
+    METALLIB_VISIBLE_FUNCTION       = 4
+    METALLIB_CI_FUNCTION            = 5
+    METALLIB_INTERSECTION_FUNCTION  = 6
+    METALLIB_MESH_FUNCTION          = 7
+    METALLIB_OBJECT_FUNCTION        = 8
 end
 
 
