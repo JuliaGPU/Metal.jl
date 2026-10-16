@@ -79,6 +79,13 @@ opts.fastMathEnabled = val
 opts.languageVersion = v"1.0"
 @test opts.languageVersion == v"1.0"
 
+@test convert(MTL.MTLLanguageVersion, v"4.1") == MTL.MTLLanguageVersion4_1
+@test convert(VersionNumber, MTL.MTLLanguageVersion4_1) == v"4.1"
+if Metal.macos_version() >= v"27"
+    opts.languageVersion = v"4.1"
+    @test opts.languageVersion == v"4.1"
+end
+
 end
 
 @testset "libraries" begin
