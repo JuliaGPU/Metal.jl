@@ -1054,4 +1054,16 @@ end
     @test Array(pow.(MtlArray(h), MtlArray(m))) ≈ pow.(h, m)
 end
 
+# Apple's back-end can't select a 64-bit multiplication with overflow check, as used by
+# `checked_mul` and thus `Rational` arithmetic (#570); GPUCompiler expands it using `mul_hi`.
+@testset "multiplication with overflow $T" for T in (Int64, UInt64)
+    edge = T[0, 1, 3, typemax(T), typemin(T), typemax(T) ÷ 2 + 1, T(2)^31, T(2)^32]
+    T <: Signed && append!(edge, T[-1, -3, -(T(2)^31), -(T(2)^32)])
+    x, y = vec([x for x in edge, y in edge]), vec([y for x in edge, y in edge])
+    mulo(x, y) = Base.Checked.mul_with_overflow(x, y)
+    @test Array(mulo.(MtlArray(x), MtlArray(y))) == mulo.(x, y)
+
+    @test Array(map(x -> x * 3 // 2, MtlArray(T[1, 4]))) == T[1, 4] .* 3 .// 2
+end
+
 end
