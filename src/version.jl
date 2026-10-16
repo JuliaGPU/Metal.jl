@@ -31,6 +31,14 @@ const darwin_version = ObjectiveC.darwin_version
 
 ## support queries
 
+# Metal.jl supports macOS 15 and later, so the tables below don't go further back.
+function check_macos(macos::VersionNumber)
+    macos = normalize_macos(macos)
+    macos >= v"15" ||
+        throw(ArgumentError("Metal.jl requires macOS 15 or later; cannot target macOS $macos"))
+    return macos
+end
+
 # these can queried using the Metal compiler:
 # $ xcrun metal -mmacosx-version-min=10.12 dummy.metal -o dummy.metallib
 #
@@ -50,12 +58,11 @@ host macOS version).
 See also [`Metal.air_support`](@ref) and [`Metal.metal_support`](@ref).
 """
 function metallib_support(macos::VersionNumber = macos_version())
-    if macos >= v"16" # macos 26-27
+    macos = check_macos(macos)
+    if macos >= v"26"
         v"1.2.9"
-    elseif macos >= v"15"
+    else
         v"1.2.8"
-    else # macOS 13-14
-        v"1.2.7"
     end
 end
 
@@ -68,16 +75,13 @@ host macOS version).
 See also [`Metal.metallib_support`](@ref) and [`Metal.metal_support`](@ref).
 """
 function air_support(macos::VersionNumber = macos_version())
+    macos = check_macos(macos)
     if macos >= v"27"
         v"2.9"
-    elseif macos >= v"16" # Tahoe is v"26" but can report v"16" with julia versions not compiled with the Tahoe SDK
+    elseif macos >= v"26"
         v"2.8"
-    elseif macos >= v"15"
+    else
         v"2.7"
-    elseif macos >= v"14"
-        v"2.6"
-    else # macOS 13
-        v"2.5"
     end
 end
 
@@ -90,16 +94,13 @@ host macOS version).
 See also [`Metal.metallib_support`](@ref) and [`Metal.air_support`](@ref).
 """
 function metal_support(macos::VersionNumber = macos_version())
+    macos = check_macos(macos)
     if macos >= v"27"
         v"4.1"
-    elseif macos >= v"16" # Tahoe is v"26" but can report v"16" with julia versions not compiled with the Tahoe SDK
+    elseif macos >= v"26"
         v"4"
-    elseif macos >= v"15"
+    else
         v"3.2"
-    elseif macos >= v"14"
-        v"3.1"
-    else # macOS 13
-        v"3.0"
     end
 end
 
@@ -114,12 +115,8 @@ function air_floor(metal::VersionNumber)
         v"2.9"
     elseif metal >= v"4.0"
         v"2.8"
-    elseif metal >= v"3.2"
-        v"2.7"
-    elseif metal >= v"3.1"
-        v"2.6"
     else
-        v"2.5"
+        v"2.7"
     end
 end
 

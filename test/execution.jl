@@ -239,7 +239,7 @@ end
                                                       dump_module=true, kernel=true)))
 
         # targeting macOS < 15, or the AIR versions that come with it, is not supported
-        @test_throws "Metal.jl requires AIR 2.7" begin
+        @test_throws "Metal.jl requires macOS 15" begin
             Metal.code_llvm(devnull, dummy, Tuple{}; macos=v"14")
         end
         @test_throws "Metal.jl requires AIR 2.7" begin
