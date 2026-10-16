@@ -5,6 +5,9 @@ Performance Shaders functions. For more information about these functions, or to
 which functions have yet to be implemented in this package, please consult
 the [Metal Performance Shaders Documentation](https://developer.apple.com/documentation/metalperformanceshaders?language=objc).
 
+For most array operations, the [Metal Performance Shaders Graph](@ref) wrappers in
+`MPSGraphs` cover more operations and element types.
+
 ## Matrices and Vectors
 
 ```@docs
