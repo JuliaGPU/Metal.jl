@@ -400,7 +400,7 @@ end
     else
         gpufamily = convert(MTL.MTLGPUFamily, gpufamily)
         family = Int(gpufamily) - 1000
-        if !(1 <= family <= 10)
+        if !(1 <= family <= 11)
             throw(ArgumentError("gpufamily must be an MTLGPUFamilyApple<n>, got $(gpufamily)"))
         end
         family

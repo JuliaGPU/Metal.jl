@@ -220,6 +220,11 @@ end
             device(); gpufamily=MTL.MTLGPUFamilyMetal3)
         @test Metal.compiler_config(
             device(); gpufamily=MTL.MTLGPUFamilyApple7).params.apple_family == 7
+        # newer than any device we test on, but code can still be generated for it
+        @test Metal.compiler_config(
+            device(); gpufamily=MTL.MTLGPUFamilyApple11).params.apple_family == 11
+        @test !isempty(sprint(io->Metal.code_llvm(io, dummy, Tuple{};
+                                                  gpufamily=MTL.MTLGPUFamilyApple11)))
 
         @test occursin("""!{!"Metal", i32 3, i32 2, i32 1}""",
                        sprint(io->Metal.code_llvm(io, dummy, Tuple{}; metal=v"3.2.1",
