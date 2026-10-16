@@ -18,6 +18,9 @@ end
 function MTLCaptureScope(queue::MTLCommandQueue, manager=MTLCaptureManager())
     @objc [manager::id{MTLCaptureManager} newCaptureScopeWithCommandQueue:queue::id{MTLCommandQueue}]::MTLCaptureScope
 end
+function MTLCaptureScope(queue::MTL4CommandQueue, manager=MTLCaptureManager())
+    @objc [manager::id{MTLCaptureManager} newCaptureScopeWithMTL4CommandQueue:queue::id{MTL4CommandQueue}]::MTLCaptureScope
+end
 
 # @objcwrapper MTLCaptureScope <: NSObject
 
