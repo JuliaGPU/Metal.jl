@@ -549,6 +549,21 @@ function reloc_table_buffer(dev::MTLDevice,
     return buf
 end
 
+# The runtime rejects libraries with a container, AIR or MSL version it doesn't know, with a
+# generic error. Kernels can be compiled for newer systems (e.g. to inspect their code), so
+# this is only checked when loading. Only major and minor versions matter: the function list
+# doesn't encode patch versions, and newer container patch versions load fine. The
+# deployment target itself isn't checked: the newest macOS emits the same versions as its
+# successors, and the runtime ignores the header's OS.
+function check_loadable(target)
+    host = macos_version()
+    newer(a, b) = (a.major, a.minor) > (b.major, b.minor)
+    if newer(metallib_target(target.macos), metallib_support(host)) ||
+       newer(target.air, air_support(host)) || newer(target.metal, metal_support(host))
+        error("""Kernel was compiled for metallib $(metallib_target(target.macos)), AIR $(target.air) and MSL $(target.metal) (macOS $(target.macos)), which this system (macOS $host) cannot load.""")
+    end
+end
+
 # link the metallib into a session-local pipeline state on the given device.
 function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
                                         metallib::Vector{UInt8}, entry::String)
