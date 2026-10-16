@@ -1,4 +1,4 @@
-const N = Int(typemax(UInt32)) + 1
+const N = Int(typemax(Metal.T_IDX)) + 1
 const T = Int8
 
 @testset "len = $n" for n in (N - 1024, N - 3, N - 1, N, N + 4)
@@ -11,6 +11,9 @@ const T = Int8
     if n == 2^32
         push!(_dims, (2^16, 2^16))
         push!(_dims, (2^16, 2^8, 2^8))
+    elseif n == 2^16
+        push!(_dims, (2^8, 2^8))
+        push!(_dims, (2^8, 2^4, 2^4))
     end
 
     @testset "$dims" for (i, dims) in enumerate(_dims)
