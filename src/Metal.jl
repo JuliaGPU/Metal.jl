@@ -73,7 +73,9 @@ include("memory.jl")
 include("array.jl")
 
 # compiler implementation
-include("compiler/library.jl")
+include("metallib/container.jl")
+include("metallib/model.jl")
+include("metallib/show.jl")
 include("compiler/compilation.jl")
 include("compiler/exceptions.jl")
 include("compiler/execution.jl")
