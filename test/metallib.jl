@@ -436,6 +436,20 @@ end
     @test edited.uuid != reread.uuid
 end
 
+@testset "embedded source layout" begin
+    # tags we don't know in the groups of the embedded source section are preserved too
+    lib = parse(MetalLib, joinpath(metallib_dir, "sources.26.metallib"))
+    for tg in lib.layout.source_tags
+        push!(tg.data, "ZZZZ" => Metal.RawTag(UInt8[1, 2, 3]))
+    end
+    bytes = sprint(write, lib)
+    reread = read(IOBuffer(bytes), MetalLib)
+    @test all(tg -> get(tg, "ZZZZ", nothing).data == UInt8[1, 2, 3],
+              reread.layout.source_tags)
+    unchanged = sprint(write, reread) == bytes
+    @test unchanged
+end
+
 @testset "malformed libraries" begin
     # reading a malformed library either works or throws a `MetalLibFormatError`
     function check_parse(bytes)
@@ -465,6 +479,12 @@ end
     end
 
     @test_throws MetalLibFormatError read(IOBuffer(codeunits("MTLX")), MetalLib)
+
+    # sections are parsed within their bounds
+    bytes = read(joinpath(metallib_dir, "sources.26.metallib"))
+    hsrd = last(findfirst(codeunits("HSRD"), bytes))
+    bytes[hsrd+2+8+1:hsrd+2+16] .= 0      # the section's size
+    @test_throws MetalLibFormatError read(IOBuffer(bytes), MetalLib)
 
     # stub libraries, which only describe their functions, are not supported
     bytes = read(joinpath(metallib_dir, "kernel.26.metallib"))
