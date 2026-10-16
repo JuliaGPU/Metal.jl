@@ -85,6 +85,13 @@ if filter_tests!(testsuite, args)
         delete!(testsuite, "scripts")
     end
 
+    # the Metal 4 command API needs macOS 26 and a device that supports it (virtual
+    # GPUs, like the ones on hosted CI runners, don't)
+    if Metal.macos_version() < v"26" ||
+       !MTL.supports_family(Metal.device(), MTL.MTLGPUFamilyMetal4)
+        delete!(testsuite, "mtl/metal4")
+    end
+
     # only run large copy test on machines with >12GiB memory
     if parse(Bool, get(ENV, "CI", "false")) || Sys.total_memory() < 12 * 2^30
         delete!(testsuite, "largecopy")
