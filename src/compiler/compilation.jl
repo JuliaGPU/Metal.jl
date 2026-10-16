@@ -372,7 +372,8 @@ end
                                          debug_level=Base.JLOptions().debug_level,
                                          opt_level=2,
                                          macos=nothing, air=nothing, metal=nothing,
-                                         gpufamily=nothing, kwargs...)
+                                         gpufamily=nothing, minthreads=nothing,
+                                         maxthreads=nothing, kwargs...)
     # determine the versions of things to target
     if macos === nothing
         macos = macos_version()
@@ -404,8 +405,39 @@ end
         family
     end
 
+    # threadgroup size properties. These are checked here because a pipeline descriptor
+    # requiring an unsupported size aborts the process. Apple GPUs limit the total number of
+    # threads per threadgroup to the same value as each dimension.
+    limits = dev.maxThreadsPerThreadgroup
+    maxtotal = Int(limits.width)
+    if minthreads !== nothing
+        if !(1 <= length(minthreads) <= 3)
+            throw(ArgumentError("minthreads should be an integer or a tuple of up to three integers, got $(minthreads)"))
+        end
+        # normalize, so that equivalent sizes share a compiled kernel
+        minthreads = ntuple(i -> i <= length(minthreads) ? Int(minthreads[i]) : 1, 3)
+        if any(<(1), minthreads) || any(minthreads .> (limits.width, limits.height, limits.depth)) ||
+           prod(minthreads) > maxtotal
+            throw(ArgumentError("minthreads $(minthreads) is not a valid threadgroup size for this device (at most $(Int(limits.width))×$(Int(limits.height))×$(Int(limits.depth)) and $(maxtotal) threads in total)"))
+        end
+        # enforced through the pipeline descriptor's `requiredThreadsPerThreadgroup`, which the
+        # runtime only provides on macOS 26, regardless of the targeted Metal version
+        if macos_version() < v"26"
+            throw(ArgumentError("minthreads requires macOS 26 or newer; running macOS $(macos_version())"))
+        end
+    end
+    if maxthreads !== nothing
+        if !(1 <= maxthreads <= maxtotal)
+            throw(ArgumentError("maxthreads should be between 1 and $(maxtotal), got $(maxthreads)"))
+        end
+        if minthreads !== nothing && maxthreads < prod(minthreads)
+            throw(ArgumentError("maxthreads ($(maxthreads)) should not be lower than the total of minthreads $(minthreads)"))
+        end
+    end
+
     # create GPUCompiler objects
-    target = MetalCompilerTarget(; macos, air, metal, apple_family, kwargs...)
+    target = MetalCompilerTarget(; macos, air, metal, apple_family, minthreads, maxthreads,
+                                   kwargs...)
     params = MetalCompilerParams(something(apple_family, 0))
     CompilerConfig(target, params; kernel, name, always_inline, debug_level, opt_level)
 end
@@ -551,14 +583,21 @@ end
 
 # link the metallib into a session-local pipeline state on the given device.
 function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
-                                        metallib::Vector{UInt8}, entry::String)
+                                        metallib::Vector{UInt8}, entry::String,
+                                        minthreads::Union{Nothing,NTuple{3,Int}})
     @signpost_event log=log_compiler() "Link" entry
 
     @signpost_interval log=log_compiler() "Instantiate compute pipeline" begin
         lib = MTLLibraryFromData(dev, metallib)
         fun = MTLFunction(lib, entry)
+        desc = MTLComputePipelineDescriptor()
+        desc.computeFunction = fun
+        # the kernel's IR only carries the required size as a hint; this enforces it
+        if minthreads !== nothing
+            desc.requiredThreadsPerThreadgroup = MTLSize(minthreads)
+        end
         try
-            return MTLComputePipelineState(dev, fun)
+            return MTLComputePipelineState(dev, desc)
         catch err
             isa(err, NSError) || rethrow()
 
