@@ -1,6 +1,6 @@
 # test that we can parse and regenerate Metal libraries accurately
 
-using Metal: MetalLibFunction, MetalLib, content_uuid
+using Metal: MetalLibFunction, MetalLib, MetalLibFormatError, content_uuid
 using UUIDs: UUID, uuid_version
 
 using Printf: @printf
@@ -281,7 +281,7 @@ end
         @test take!(write(IOBuffer(), tg)) == bytes
     end
     bytes = [reinterpret(UInt8, [UInt32(6)]); codeunits("ENDT")]
-    @test_throws ErrorException read!(IOBuffer(bytes), Metal.TagGroup())
+    @test_throws MetalLibFormatError read!(IOBuffer(bytes), Metal.TagGroup())
 end
 
 @testset "standalone metallib tool" begin
@@ -295,4 +295,43 @@ end
     @test bytes == String(read(path))
     mtllib = MTL.MTLLibraryFromData(device(), bytes)
     @test MTL.MTLComputePipelineState(device(), MTL.MTLFunction(mtllib, "foo")) isa MTL.MTLComputePipelineState
+end
+
+@testset "malformed libraries" begin
+    # reading a malformed library either works or throws a `MetalLibFormatError`
+    function check_parse(bytes)
+        try
+            read(IOBuffer(bytes), MetalLib)
+            return true
+        catch err
+            err isa MetalLibFormatError && return true
+            @error "Unexpected error reading a malformed library" exception=(err, catch_backtrace())
+            return false
+        end
+    end
+
+    # every truncation, and every byte set to a few values, of libraries with modules,
+    # metadata and reflection, shared modules and a dynamic header
+    for metallib in ["constants.26.metallib", "dylib.metallib"]
+        bytes = read(joinpath(metallib_dir, metallib))
+        @test all(n -> check_parse(bytes[1:n]), 0:length(bytes)-1)
+        @test_throws MetalLibFormatError read(IOBuffer(bytes[1:end-1]), MetalLib)
+        for value in (0x00, 0xff)
+            @test all(1:length(bytes)) do i
+                corrupted = copy(bytes)
+                corrupted[i] = value
+                check_parse(corrupted)
+            end
+        end
+    end
+
+    @test_throws MetalLibFormatError read(IOBuffer(codeunits("MTLX")), MetalLib)
+
+    # stub libraries, which only describe their functions, are not supported
+    bytes = read(joinpath(metallib_dir, "kernel.26.metallib"))
+    mdsz = findfirst(codeunits("MDSZ"), bytes)
+    bytes[mdsz] .= codeunits("XDSZ")
+    err = try read(IOBuffer(bytes), MetalLib) catch err; err end
+    @test err isa MetalLibFormatError
+    @test contains(sprint(showerror, err), "stub")
 end
