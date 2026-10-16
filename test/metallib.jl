@@ -245,6 +245,14 @@ end
     end
 end
 
+@testset "function dependencies" begin
+    path = joinpath(metallib_dir, "dependencies.standalone.metallib")
+    lib = parse(MetalLib, path)
+    dependencies = Dict(fun.name => fun.dependencies for fun in lib.functions)
+    @test dependencies == Dict("foo" => ["dependencies.air", "dependencies_helper.air"],
+                               "bar" => ["dependencies.air"])
+end
+
 @testset "enum names" begin
     # our enums are named like Apple's metal-readobj prints them
     readobj = metal_tool("metal-readobj")
