@@ -323,6 +323,30 @@ end
           [fun.reflection_data for fun in lib.functions]
 end
 
+@testset "script lists" begin
+    # none of the tools we have produce pipeline scripts, so attach some ourselves
+    lib = parse(MetalLib, joinpath(metallib_dir, "kernels.26.metallib"))
+    scripts = [rand(UInt8, 100), rand(UInt8, 3)]
+    new_lib = MetalLib(; (name => getfield(lib, name) for name in fieldnames(MetalLib))...,
+                       scripts)
+    bytes = sprint(write, new_lib)
+    reread = read(IOBuffer(bytes), MetalLib)
+    @test reread.scripts == scripts
+    @test sprint(write, reread) == bytes
+    readobj = metal_tool("metal-readobj")
+    if readobj === nothing
+        @test_skip "Apple's metal-readobj not available"
+    else
+        mktemp() do path, io
+            write(io, bytes)
+            close(io)
+            # (it rejects our scripts, which are not valid flatbuffers, after the header)
+            cmd = pipeline(ignorestatus(`$readobj --all $path`), stderr=devnull)
+            @test contains(read(cmd, String), "ScriptListSize: 0x")
+        end
+    end
+end
+
 @testset "malformed libraries" begin
     # reading a malformed library either works or throws a `MetalLibFormatError`
     function check_parse(bytes)

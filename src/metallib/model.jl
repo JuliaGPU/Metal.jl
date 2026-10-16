@@ -96,6 +96,9 @@ struct LibraryLayout
 
     # sections we don't decode, by the header extension tag that points to them
     raw_sections::Dict{String,Vector{UInt8}}
+
+    # the tag groups of the script list
+    script_tags::Vector{TagGroup}
 end
 
 # sections we keep as raw bytes, in the order they appear in a library
@@ -121,6 +124,10 @@ Base.@kwdef struct MetalLib
 
     functions::Vector{MetalLibFunction}
     embedded_source::Union{Nothing, EmbeddedSource} = nothing
+
+    # pipeline scripts (SBUF tags of the script list), kept as raw flatbuffers; compare with
+    # `metal-source -flatbuffers=json`
+    scripts::Vector{Vector{UInt8}} = Vector{UInt8}[]
 
     # how the library was laid out when it was read, if it was
     layout::Union{Nothing, LibraryLayout} = nothing
@@ -452,15 +459,16 @@ function read_metallib(io::IOBuffer)
     # script list
     #
     # this section contains pipeline descriptor scripts
+    scripts = Vector{UInt8}[]
+    script_tags = TagGroup[]
     if (slst = decoded(header_ex, "SLST")) !== nothing
         seek_section(io, slst.offset, slst.size, "script list")
         script_count = read(io, UInt32)
         for _ in 1:script_count
-            _script_buf = read!(io, TagGroup())
-
-            # script_buf["SBUF"] contains flatbuffer data; compare with:
-            # $ metal-source -flatbuffers=binary
-            # $ metal-source -flatbuffers=json
+            tg = read!(io, TagGroup())
+            push!(script_tags, tg)
+            script = decoded(tg, "SBUF")
+            script === nothing || push!(scripts, script)
         end
         format_check(position(io) == slst.offset + slst.size,
                      "script list does not match its size", slst.offset)
@@ -566,7 +574,8 @@ function read_metallib(io::IOBuffer)
                platform_version, platform_type, is_64bit,
                functions, embedded_source,
                uuid = decoded(header_ex, "UUID"), library_name,
-               layout = LibraryLayout(header_ex, dynamic_header, raw_sections))
+               scripts, layout = LibraryLayout(header_ex, dynamic_header, raw_sections,
+                                               script_tags))
 end
 
 Base.write(path::AbstractString, lib::MetalLib) = open(path, "w") do io
@@ -617,6 +626,33 @@ function Base.write(io::IO, lib::MetalLib)
 
     raw_sections = lib.layout === nothing ? Dict{String,Vector{UInt8}}() :
                    lib.layout.raw_sections
+
+
+    ## script list
+
+    script_list = let buf=IOBuffer()
+        # lay scripts out like the script groups they were read from, in order; a group
+        # whose SBUF could not be decoded holds no script, but is written back
+        templates = lib.layout === nothing ? TagGroup[] : lib.layout.script_tags
+        groups = TagGroup[]
+        script = 1
+        for template in templates
+            if decoded(template, "SBUF") === nothing
+                push!(groups, layout_group(template, []))
+            elseif script <= length(lib.scripts)
+                push!(groups, layout_group(template, ["SBUF" => lib.scripts[script]]))
+                script += 1
+            end
+        end
+        for data in lib.scripts[script:end]
+            push!(groups, layout_group(nothing, ["SBUF" => data]))
+        end
+        if !isempty(groups)
+            write(buf, UInt32(length(groups)))
+            foreach(tg -> write(buf, tg), groups)
+        end
+        take!(buf)
+    end
 
 
     ## reflection list
@@ -747,6 +783,7 @@ function Base.write(io::IO, lib::MetalLib)
             "HDYN" => section(dynamic_header),
             (tag => section(get(raw_sections, tag, UInt8[])) for tag in raw_section_tags)...,
             "RLST" => lib.file_version >= v"1.2.7" ? section(reflection_list) : nothing,
+            "SLST" => section(script_list),
             "UUID" => lib.uuid]; has_size=false)
 
         buf = IOBuffer()
@@ -873,6 +910,10 @@ function Base.write(io::IO, lib::MetalLib)
         mark_placeholder(:reflection_list_offset,
                          position(io) + offsetof(header_ex_tags, "RLST"))
     end
+    if sizeof(script_list) > 0
+        mark_placeholder(:script_list_offset,
+                         position(io) + offsetof(header_ex_tags, "SLST"))
+    end
     write(io, header_ex)
 
     # public metadata
@@ -914,7 +955,11 @@ function Base.write(io::IO, lib::MetalLib)
         write(io, reflection_list)
     end
 
-    # TODO: script list
+    # script list
+    if sizeof(script_list) > 0
+        patch_placeholder(io, :script_list_offset, position(io))
+        write(io, script_list)
+    end
 
     patch_placeholder(io, :file_size, position(io))
 end
