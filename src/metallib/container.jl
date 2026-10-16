@@ -66,6 +66,30 @@ end
 end
 
 
+## errors
+
+"""
+    MetalLibFormatError
+
+Thrown when reading a Metal library that is malformed or that uses parts of the format
+Metal.jl does not support. `offset` is the position in the library where the problem was
+detected, if known.
+"""
+struct MetalLibFormatError <: Exception
+    msg::String
+    offset::Union{Nothing,Int}
+end
+MetalLibFormatError(msg) = MetalLibFormatError(msg, nothing)
+
+function Base.showerror(io::IO, err::MetalLibFormatError)
+    print(io, "MetalLibFormatError: ", err.msg)
+    err.offset === nothing || print(io, " (at offset ", err.offset, ")")
+end
+
+format_check(cond::Bool, msg, offset=nothing) =
+    cond || throw(MetalLibFormatError(msg, offset === nothing ? nothing : Int(offset)))
+
+
 ## tag groups
 
 # a tag value we keep as raw bytes: either the tag is unknown to us, or its decoded value
@@ -261,7 +285,8 @@ function decode_tag(tag::String, bytes::Vector{UInt8})
     value = try
         value_parser(IOBuffer(bytes), sizeof(bytes))
     catch err
-        err isa EOFError || rethrow()
+        # a value we cannot parse is kept as raw bytes too
+        err isa InterruptException && rethrow()
         nothing
     end
     if !isa(value, value_type) || encode_tag(tag, value) != bytes
@@ -280,6 +305,7 @@ function Base.read!(io::IO, tg::TagGroup)
     while true
         # read the tag name
         tag_name = String(read(io, 4*sizeof(Cchar)))
+        sizeof(tag_name) == 4 || throw(EOFError())
         if tag_name == "ENDT"
             break
         end
@@ -305,8 +331,8 @@ function Base.read!(io::IO, tg::TagGroup)
         elseif group_end == group_start + sizeof(UInt32) + group_size
             tg.counts_size = false
         else
-            error("Tag group at offset $group_start ends at offset $group_end, " *
-                  "which does not match its recorded size of $group_size bytes")
+            throw(MetalLibFormatError("tag group ends at offset $group_end, which does not " *
+                                      "match its size of $group_size bytes", group_start))
         end
     end
 
