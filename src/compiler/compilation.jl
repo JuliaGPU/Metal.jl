@@ -379,13 +379,16 @@ end
     if macos === nothing
         macos = macos_version()
     else
-        macos = normalize_macos(macos)
+        macos = check_macos(macos)
     end
     if metal === nothing
         metal = metal_target(macos)
     end
+    # like the offline compiler, derive everything from a single deployment target,
+    # raised to what the language version requires
+    macos = max(macos, macos_floor(metal))
     if air === nothing
-        air = max(air_support(macos), air_floor(metal))
+        air = air_support(macos)
     elseif air < v"2.7"
         error("""Metal.jl requires AIR 2.7 (macOS 15) or newer; cannot target AIR $(air).""")
     elseif air < air_floor(metal)

@@ -242,6 +242,9 @@ end
         @test_throws "Metal.jl requires macOS 15" begin
             Metal.code_llvm(devnull, dummy, Tuple{}; macos=v"14")
         end
+        @test_throws "Metal.jl requires macOS 15" begin
+            Metal.code_llvm(devnull, dummy, Tuple{}; macos=v"14", metal=v"3.2")
+        end
         @test_throws "Metal.jl requires AIR 2.7" begin
             Metal.code_llvm(devnull, dummy, Tuple{}; air=v"2.6")
         end
@@ -252,6 +255,35 @@ end
         @test Metal.compiler_config(device(); macos=v"15", metal=v"4.1").target.air == v"2.9"
         @test_throws "Metal 4.1.0 requires AIR 2.9.0" begin
             Metal.code_llvm(devnull, dummy, Tuple{}; metal=v"4.1", air=v"2.8")
+        end
+
+        # like the offline compiler, everything follows one effective deployment target:
+        # a language version that needs a newer macOS raises the target, including the
+        # metallib's file format and platform version.
+        function compiled_library(; kwargs...)
+            cfg = Metal.compiler_config(device(); kernel=true, kwargs...)
+            src = Metal.methodinstance(typeof(dummy), Tuple{}, Base.get_world_counter())
+            job = Metal.CompilerJob(src, cfg, Base.get_world_counter())
+            lib = read(IOBuffer(Metal.compile_to_metallib(job).metallib), Metal.MetalLib)
+            return cfg.target, lib
+        end
+        let (target, lib) = compiled_library(; macos=v"15", metal=v"4.1")
+            @test target.macos == v"27"
+            @test target.air == v"2.9"
+            @test lib.file_version == v"1.2.9"
+            @test lib.platform_version == v"27"
+        end
+        let (target, lib) = compiled_library(; macos=v"15", metal=v"4.0")
+            @test target.macos == v"26"
+            @test target.air == v"2.8"
+            @test lib.file_version == v"1.2.9"
+            @test lib.platform_version == v"26"
+        end
+        let (target, lib) = compiled_library(; macos=v"15", metal=v"3.2")
+            @test target.macos == v"15"
+            @test target.air == v"2.7"
+            @test lib.file_version == v"1.2.8"
+            @test lib.platform_version == v"15"
         end
     end
 
