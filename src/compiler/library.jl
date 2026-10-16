@@ -97,8 +97,8 @@ function decompress_source_archive(compressed::Vector{UInt8})
 end
 
 # derive a UUID from library contents. the official toolchain stamps every library with
-# a UUID, but generates it randomly and nothing seems to inspect the contents; deriving
-# one from the modules keeps our output deterministic.
+# a deterministic, name-based (version 3) UUID whose inputs are not documented, and nothing
+# seems to inspect it; deriving one from the modules keeps our output deterministic too.
 function content_uuid(datas::Vector{UInt8}...)
     ctx = SHA2_256_CTX()
     for data in datas
@@ -106,7 +106,7 @@ function content_uuid(datas::Vector{UInt8}...)
     end
     dgst = digest!(ctx)
     u = ntoh(only(reinterpret(UInt128, dgst[1:16])))
-    # stamp the version and variant bits of a random (version 4) UUID, like Apple does
+    # stamp the version and variant bits of a random (version 4) UUID
     u = (u & ~(UInt128(0xf) << 76)) | (UInt128(0x4) << 76)
     u = (u & ~(UInt128(0x3) << 62)) | (UInt128(0x2) << 62)
     return UUID(u)
@@ -339,17 +339,10 @@ tag_value_io["SLST"] = (
     (io, _)   -> (; offset=read(io, UInt64), size=read(io, UInt64)),
     (io, val) -> write(io, UInt64[val.offset, val.size]))
 tag_value_io["UUID"] = (
-    # UUID of the module; 16 bytes
+    # UUID of the module; 16 bytes in RFC 4122 (big-endian) order
     UUID,
-    (io, _)   -> begin
-        uuid_bits = Vector{UInt64}(undef, 2)
-        read!(io, uuid_bits)
-        UUID(Tuple(uuid_bits))
-    end,
-    (io, val) -> begin
-        bits = convert(Tuple{UInt64,UInt64}, val)
-        write(io, UInt64[bits...])
-    end)
+    (io, _)   -> UUID(ntoh(read(io, UInt128))),
+    (io, val) -> write(io, hton(val.value)))
 ## public metadata
 tag_value_io["CNST"] = (
     # A list of function constants

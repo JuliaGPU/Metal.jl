@@ -1,6 +1,7 @@
 # test that we can parse and regenerate Metal libraries accurately
 
 using Metal: MetalLibFunction, MetalLib, content_uuid
+using UUIDs: UUID, uuid_version
 
 using Printf: @printf
 
@@ -159,6 +160,19 @@ function compare(ref_path)
     end
 end
 
+# Apple's Metal toolchain, used as an oracle when available (see the Makefile)
+const metal_toolchain = get(ENV, "METAL_TOOLCHAIN",
+    "/Volumes/MetalToolchainCryptex/Metal.xctoolchain/usr/metal/current/bin")
+metal_tool(name) = (path = joinpath(metal_toolchain, name); isfile(path) ? path : nothing)
+
+# the library UUID as reported by Apple's `metal-readobj`
+function readobj_uuid(path)
+    readobj = metal_tool("metal-readobj")
+    readobj === nothing && return nothing
+    m = match(r"UUID: ([0-9A-F-]+)", read(`$readobj --all $path`, String))
+    return UUID(m[1])
+end
+
 ## tests begin
 metallib_dir = joinpath(@__DIR__, "metallib")
 metallibs = String[]
@@ -195,4 +209,38 @@ end
     str = string(u)
     @test str[15] == '4'
     @test str[20] in ('8', '9', 'a', 'b')
+end
+
+@testset "UUID byte order" begin
+    # reference value from `metal-readobj --all kernel.26.metallib`
+    lib = parse(MetalLib, joinpath(metallib_dir, "kernel.26.metallib"))
+    @test lib.uuid == UUID("602B95E8-464B-3967-9B41-A4CD7F83F583")
+    @test uuid_version(lib.uuid) == 3
+
+    if metal_tool("metal-readobj") === nothing
+        @test_skip "Apple's metal-readobj not available"
+    else
+        for metallib in metallibs
+            path = joinpath(metallib_dir, metallib)
+            @test parse(MetalLib, path).uuid == readobj_uuid(path)
+        end
+    end
+
+    # the UUIDs we generate are stored in RFC 4122 byte order, i.e. Apple's tools see a
+    # version 4, variant 1 UUID
+    fun = only(lib.functions)
+    uuid = content_uuid(fun.air_module)
+    new_lib = MetalLib(; lib.file_version, lib.platform_version, functions=[fun], uuid)
+    bytes = sprint(write, new_lib)
+    uuid_offset = findfirst("UUID", bytes)[end] + 3     # skip the 16-bit size field
+    @test codeunits(bytes)[uuid_offset:uuid_offset+15] == reinterpret(UInt8, [hton(uuid.value)])
+    if metal_tool("metal-readobj") === nothing
+        @test_skip "Apple's metal-readobj not available"
+    else
+        mktemp() do path, io
+            write(io, bytes)
+            close(io)
+            @test readobj_uuid(path) == uuid
+        end
+    end
 end
