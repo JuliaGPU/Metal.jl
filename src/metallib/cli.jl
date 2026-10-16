@@ -10,6 +10,11 @@ using ..Metal
 using ..Metal: MetalLib, MetalLibFunction, MetalLibFormatError, TagGroup, RawTag
 using UUIDs: UUID
 using CEnum: CEnum
+using LLVM, LLVM.IR
+using ..MTL
+using ..MTL.ObjectiveC: @objc, id, Out
+using ..MTL.ObjectiveC.Foundation: NSError
+using SHA: sha256
 
 const program = "metallib"
 
@@ -464,5 +469,296 @@ register!("info", Command(
     Example:
       $program info --json shaders.metallib""",
     String[], String[], info, info_text))
+
+
+## dis
+
+# LLVM bitcode, plain or in the wrapper Apple's toolchain uses
+is_bitcode(data) = length(data) >= 4 && (data[1:4] == [0x42, 0x43, 0xc0, 0xde] ||
+                                         data[1:4] == [0xde, 0xc0, 0x17, 0x0b])
+
+# open an output file, refusing to overwrite one unless forced
+function write_output(ctx::Context, path::AbstractString, data; force::Bool)
+    if path == "-"
+        ctx.json && throw(UsageError("cannot write the output to standard output with --json"))
+        write(ctx.io, data)
+    else
+        !force && ispath(path) &&
+            throw(CommandError("$path already exists; use -f to overwrite it"))
+        write(path, data)
+    end
+    return
+end
+
+function dis(ctx::Context, args::Arguments)
+    1 <= length(args.positionals) <= 2 || throw(UsageError("expected FILE [FUNCTION]"))
+    input = args.positionals[1]
+    lib = read_library(ctx, input)
+    output = get(args.options, "-o", nothing)
+    text = "-S" in args.flags ||
+           output !== nothing && (endswith(output, ".ll") ||
+                                  output == "-" && ctx.io isa Base.TTY)
+
+    isempty(lib.functions) && throw(CommandError("the library has no functions"))
+    fun = if length(args.positionals) == 2
+        name = args.positionals[2]
+        i = findfirst(fun -> fun.name == name, lib.functions)
+        i === nothing && throw(CommandError("no function named $name; the library has " *
+                                            join([f.name for f in lib.functions], ", ")))
+        lib.functions[i]
+    elseif length(lib.functions) == 1
+        only(lib.functions)
+    else
+        throw(CommandError("the library has several functions; name one of " *
+                           join([f.name for f in lib.functions], ", ")))
+    end
+
+    if output === nothing
+        input == "-" && throw(UsageError("reading standard input requires -o"))
+        output = splitext(input)[1] * (text ? ".ll" : ".bc")
+    end
+    data = if text
+        is_bitcode(fun.air_module) ||
+            throw(CommandError("the module of $(fun.name) is not plain LLVM bitcode " *
+                               "(it may be compressed); disassemble it without -S"))
+        @dispose llvm=LLVM.Context() mod=parse(LLVM.Module, fun.air_module) begin
+            string(mod)
+        end
+    else
+        fun.air_module
+    end
+    write_output(ctx, output, data; force = "-f" in args.flags)
+
+    return (; function_name = fun.name, output, format = text ? "text" : "bitcode",
+              size = sizeof(data))
+end
+
+dis_text(io::IO, r) = r.output == "-" ||
+    println(io, "wrote the $(r.format == "text" ? "IR" : "bitcode") of $(r.function_name) ",
+            "to $(r.output)")
+
+register!("dis", Command(
+    "Extract a function's AIR module as LLVM bitcode or IR.",
+    """
+    Usage: $program dis [-S] [-f] [-o OUTPUT] FILE [FUNCTION]
+
+    Extract the AIR module (LLVM bitcode) of a function from the library in FILE (`-` for
+    standard input). FUNCTION can be left out when the library has only one function.
+
+    Options:
+      -S            Disassemble the module into textual LLVM IR. This is the default when
+                    OUTPUT ends in `.ll`, or is `-` and standard output is a terminal.
+      -o OUTPUT     Write to OUTPUT (`-` for standard output) instead of to FILE with its
+                    extension replaced by `.bc` or `.ll`.
+      -f            Overwrite OUTPUT if it exists.
+
+    Example:
+      $program dis -S -o kernel.ll shaders.metallib my_kernel""",
+    ["-S", "-f"], ["-o"], dis, dis_text))
+
+
+## as
+
+function as(ctx::Context, args::Arguments)
+    inputs = args.positionals
+    isempty(inputs) && throw(UsageError("expected at least one input"))
+    count(==("-"), inputs) <= 1 || throw(UsageError("can only read standard input once"))
+    output = get(args.options, "-o", nothing)
+    if output === nothing
+        length(inputs) == 1 && inputs[1] != "-" ||
+            throw(UsageError("specify the output with -o"))
+        output = replace(basename(inputs[1]), r"\..*$" => "") * ".metallib"
+    end
+    output == "-" && ctx.io isa Base.TTY &&
+        throw(CommandError("refusing to write a binary library to a terminal"))
+
+    lib_functions = MetalLibFunction[]
+    @dispose llvm=LLVM.Context() begin
+        for input in inputs
+            data = read_input(ctx, input)
+            bitcode = is_bitcode(data)
+            try
+                @dispose mod=parse(LLVM.Module, bitcode ? data : String(data)) begin
+                    entries = filter(collect(mod.functions)) do f
+                        !isdeclaration(f) && f.linkage == LLVM.Linkage.External
+                    end
+                    isempty(entries) && throw(CommandError("no external function in $input"))
+                    length(entries) == 1 ||
+                        throw(CommandError("several external functions in $input: " *
+                                           join([f.name for f in entries], ", ")))
+                    try
+                        verify(mod)
+                    catch e
+                        e isa LLVM.LLVMException || rethrow()
+                        throw(CommandError("$input is not valid LLVM IR: $(e.info)"))
+                    end
+                    name = LLVM.name(entries[1])
+
+                    # Metal reads bitcode of the LLVM version it is based on; downgrade the
+                    # rest (the downgrader consumes bitcode, so re-emit the module as such)
+                    air_module = if bitcode && !("-d" in args.flags)
+                        data
+                    else
+                        Metal.GPUCompiler.downgrade(sprint(write, mod) |> codeunits |> collect,
+                                                    v"14.0")
+                    end
+
+                    # describe the function from the module's metadata, like Apple's linker
+                    versions = Pair{Symbol,VersionNumber}[]
+                    for (md, field, default) in (("air.version", :air_version, Metal.air_support()),
+                                                 ("air.language_version", :metal_version,
+                                                  Metal.metal_support()))
+                        haskey(mod.metadata, md) && continue
+                        diagnose!(ctx, "warning", "$input has no $md metadata; assuming " *
+                                  "v$default, what this system supports")
+                        push!(versions, field => default)
+                    end
+                    fun = MetalLibFunction(mod, name; air_module, versions...)
+                    fun.type == Metal.METALLIB_UNQUALIFIED_FUNCTION &&
+                        diagnose!(ctx, "note", "$name is not listed as an entry point (e.g. " *
+                                  "in air.kernel), so the library describes it as a plain function")
+                    push!(lib_functions, fun)
+                end
+            catch e
+                e isa LLVM.LLVMException || rethrow()
+                throw(CommandError("could not parse $input as LLVM IR: $(e.info)"))
+            end
+        end
+    end
+
+    lib = MetalLib(; functions = lib_functions)
+    data = sprint(write, lib) |> codeunits |> collect
+    write_output(ctx, output, data; force = "-f" in args.flags)
+    return (; output, size = sizeof(data),
+              functions = [(; f.name, input, module_size = sizeof(f.air_module))
+                           for (f, input) in zip(lib_functions, inputs)])
+end
+
+as_text(io::IO, r) = r.output == "-" ||
+    println(io, "wrote $(r.output) with ", join([f.name for f in r.functions], ", "))
+
+register!("as", Command(
+    "Package LLVM IR or bitcode into a library.",
+    """
+    Usage: $program as [-d] [-f] [-o OUTPUT] INPUT...
+
+    Create a library with one function per INPUT, an LLVM module in textual IR or bitcode
+    (`-` for standard input) with exactly one external function, which becomes the
+    function's name. Inputs are checked with the LLVM verifier. Textual IR is downgraded to the bitcode format Metal reads (that of
+    LLVM 14), so IR from a newer LLVM works too; bitcode is used as is unless -d is given.
+    Like Apple's linker, the tool derives each function's type, AIR and Metal versions,
+    function constants and debug info from the module's metadata (`air.kernel`,
+    `air.version`, ...); without version metadata, it assumes what this system supports.
+
+    Options:
+      -o OUTPUT     Write the library to OUTPUT (`-` for standard output). Defaults to the
+                    name of the only INPUT, with its extension replaced by `.metallib`.
+      -d            Downgrade bitcode inputs too.
+      -f            Overwrite OUTPUT if it exists.
+
+    Example:
+      $program as -o kernel.metallib kernel.ll""",
+    ["-d", "-f"], ["-o"], as, as_text))
+
+
+## load
+
+# view an object as one of its subclasses, to access their properties
+downcast(T, obj::MTL.ObjectiveC.Object) = downcast(T, obj.ptr)
+downcast(T, ptr::id) = T(reinterpret(id{T}, ptr))
+
+# the function named `name` in `lib`, ready to create a pipeline for, or the function
+# constants it needs values for. Metal aborts the process, rather than failing with an error,
+# when creating a pipeline for a function with constants that was not specialized, so
+# specialize functions whose constants are all optional, leaving the constants undefined.
+function pipeline_function(lib::MTLLibrary, name::String)
+    fun = MTL.MTLFunction(lib, name)
+    dict = fun.functionConstantsDictionary
+    (dict === nothing || isempty(dict)) && return fun, String[]
+    constants = [downcast(MTL.MTLFunctionConstant, c) for c in values(dict)]
+    required = sort!([String(c.name) for c in constants if c.required])
+    isempty(required) || return nothing, required
+    return MTL.MTLFunction(lib, name, MTL.MTLFunctionConstantValues()), String[]
+end
+
+function load(ctx::Context, args::Arguments)
+    isempty(args.positionals) && throw(UsageError("expected FILE [FUNCTION...]"))
+    input = args.positionals[1]
+    data = read_input(ctx, input)
+    isempty(data) && throw(CommandError("the input is empty"))
+    verbose = "-v" in args.flags && !ctx.json
+
+    dev = Metal.device()
+    verbose && println(ctx.io, "using device: ", dev.name)
+    lib = try
+        MTL.MTLLibraryFromData(dev, data)
+    catch e
+        throw(CommandError("Metal failed to load the library: " * sprint(showerror, e)))
+    end
+    verbose && println(ctx.io, "loaded the library")
+
+    names = length(args.positionals) > 1 ? args.positionals[2:end] :
+                                           String.(lib.functionNames)
+    functions = map(names) do name
+        fun = try
+            MTL.MTLFunction(lib, name)
+        catch e
+            diagnose!(ctx, "error", "the library has no function $name")
+            return (; name, type = nothing, pipeline = nothing)
+        end
+        type = fun.functionType
+        pipeline = if !("--pipeline" in args.flags)
+            nothing
+        elseif type != MTL.MTLFunctionTypeKernel
+            # other functions, e.g. visible ones, cannot be instantiated on their own
+            verbose && println(ctx.io, "skipping $type function $name")
+            "skipped"
+        elseif (pf = pipeline_function(lib, name); pf[1] === nothing)
+            diagnose!(ctx, "note", "skipping $name, which needs values for its function " *
+                      "constants $(join(pf[2], ", "))")
+            "skipped"
+        else
+            verbose && println(ctx.io, "creating a compute pipeline for $name")
+            try
+                MTL.MTLComputePipelineState(dev, pf[1])
+                "ok"
+            catch e
+                diagnose!(ctx, "error", "creating a compute pipeline for $name failed, so " *
+                          "Metal could not compile it: " * sprint(showerror, e))
+                "failed"
+            end
+        end
+        (; name, type, pipeline)
+    end
+    return (; device = String(dev.name), functions)
+end
+
+function load_text(io::IO, r)
+    for fun in r.functions
+        fun.type === nothing && continue
+        println(io, "$(fun.name): $(fun.type)",
+                fun.pipeline === nothing ? "" : ", pipeline $(fun.pipeline)")
+    end
+end
+
+register!("load", Command(
+    "Load a library on the GPU, optionally compiling its kernels.",
+    """
+    Usage: $program load [--pipeline] [-v] FILE [FUNCTION...]
+
+    Load the library in FILE (`-` for standard input) on the default Metal device and look up
+    its functions (all of them, or the ones named). Loading only validates the container;
+    with --pipeline, a compute pipeline is created for every kernel that does not need
+    values for function constants, which makes Metal
+    compile it to machine code, so this is where back-end compiler crashes show up. Failing
+    to load the library and failing to create a pipeline are reported separately.
+
+    Options:
+      --pipeline    Create a compute pipeline for every kernel.
+      -v            Report progress.
+
+    Example:
+      $program load --pipeline shaders.metallib""",
+    ["--pipeline", "-v"], String[], load, load_text))
 
 end # module MetalLibCLI
