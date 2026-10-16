@@ -120,6 +120,23 @@ function air_floor(metal::VersionNumber)
     end
 end
 
+"""
+    macos_floor(metal)::VersionNumber
+
+Return the oldest macOS that supports the Metal Shading Language version `metal`. The
+offline compiler raises the deployment target to this floor, and derives the AIR version,
+the metallib file format and the platform version from the raised target.
+"""
+function macos_floor(metal::VersionNumber)
+    if metal >= v"4.1"
+        v"27"
+    elseif metal >= v"4.0"
+        v"26"
+    else
+        v"15"
+    end
+end
+
 # The versions Metal.jl emits by default. These track the `*_support` ceilings, which is
 # also what the offline `metal` compiler does: compiling with `-mmacosx-version-min=N`
 # yields the AIR, MSL and metallib versions that `N` supports. Since we compile for the
