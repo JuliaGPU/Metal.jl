@@ -405,6 +405,37 @@ end
     @test String(take!(io)) == "prefix" * sprint(write, lib)
 end
 
+@testset "repeated and empty tags" begin
+    # libraries can contain tags we decode more than once, or with an empty value; both are
+    # written back as they were
+    lib = parse(MetalLib, joinpath(metallib_dir, "kernel.26.metallib"))
+    fun = only(lib.functions)
+    push!(fun.layout.private_tags.data, "DEPF" => Metal.RawTag(Metal.encode_tag("DEPF", ["a.air"])),
+                                        "DEPF" => Metal.RawTag(Metal.encode_tag("DEPF", ["b.air"])))
+    push!(fun.layout.public_tags.data, "CNST" => Metal.RawTag(Metal.encode_tag("CNST", Metal.FunctionConstant[])))
+    bytes = sprint(write, lib)
+    @test contains(bytes, "b.air")
+    reread = read(IOBuffer(bytes), MetalLib)
+    @test only(reread.functions).dependencies == ["a.air"]
+    unchanged = sprint(write, reread) == bytes
+    @test unchanged
+
+    # offsets and the UUID are patched into the first occurrence of a tag, which is the one
+    # we decode
+    lib = parse(MetalLib, joinpath(metallib_dir, "kernels.26.metallib"))
+    push!(lib.layout.header_extension.data, "RLST" => Metal.RawTag(zeros(UInt8, 16)),
+                                            "UUID" => Metal.RawTag(zeros(UInt8, 16)))
+    bytes = sprint(write, lib)
+    reread = read(IOBuffer(bytes), MetalLib)
+    @test [fun.reflection_data for fun in reread.functions] ==
+          [fun.reflection_data for fun in lib.functions]
+    unchanged = sprint(write, reread) == bytes
+    @test unchanged
+    edited = read(IOBuffer(sprint(write, MetalLib(reread; functions=reread.functions[1:2]))),
+                  MetalLib)
+    @test edited.uuid != reread.uuid
+end
+
 @testset "malformed libraries" begin
     # reading a malformed library either works or throws a `MetalLibFormatError`
     function check_parse(bytes)
