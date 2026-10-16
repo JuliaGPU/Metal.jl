@@ -79,3 +79,35 @@ end
     kernel(A; ndrange=length(A))
     @test Array(A) == 1:length(A)
 end
+
+KA.@kernel function const_copy!(A, @Const(B))
+    I = KA.@index(Global)
+    @inbounds A[I] = B[I]
+end
+
+KA.@kernel function const_copy_2d!(A, @Const(B))
+    i, j = KA.@index(Global, NTuple)
+    @inbounds A[i, j] = B[i, j]
+end
+
+@testset "@Const" begin
+    backend = MetalBackend()
+
+    A = Metal.zeros(Float32, 1024)
+    B = MtlArray(rand(Float32, 1024))
+    ir = sprint() do io
+        Metal.@device_code_llvm io=io raw=true begin
+            const_copy!(backend)(A, B; ndrange=length(A))
+            KA.synchronize(backend)
+        end
+    end
+    @test Array(A) == Array(B)
+    # loads from a constified argument are marked as invariant
+    @test occursin("!invariant.load", ir)
+
+    A = Metal.zeros(Float32, 32, 32)
+    B = MtlArray(rand(Float32, 32, 32))
+    const_copy_2d!(backend)(A, B; ndrange=size(A))
+    KA.synchronize(backend)
+    @test Array(A) == Array(B)
+end

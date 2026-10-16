@@ -89,10 +89,33 @@ end
     return A
 end
 
+# a load from memory that is not written for the duration of the kernel. Metal has no
+# dedicated instruction for this (MSL's `const device` only changes argument metadata), but
+# Apple's back-end does take `!invariant.load` into account.
+@inline function unsafe_invariant_load(ptr::Core.LLVMPtr{T}, i::Integer,
+                                       ::Val{align}) where {T,align}
+    sizeof(T) == 0 && return T.instance
+    _unsafe_invariant_load(ptr, Int(i) - 1, Val(align))
+end
+
+@llvmgenerated builder function _unsafe_invariant_load(ptr::Core.LLVMPtr{T,A}, i::Int,
+                                                       ::Val{align})::T where {T,A,align}
+    eltyp = convert(LLVMType, T)
+    if supports_typed_pointers(LLVM.context())
+        ptr = bitcast!(builder, ptr, LLVM.PointerType(eltyp, A))
+    end
+    ld = load!(builder, eltyp, inbounds_gep!(builder, eltyp, ptr, [i]); align)
+    if A != 0
+        ld.metadata[LLVM.MD_tbaa] = tbaa_addrspace(A)
+    end
+    ld.metadata[LLVM.MD_invariant_load] = MDNode(LLVM.Metadata[])
+    ld
+end
+
 @inline function const_arrayref(A::MtlDeviceArray{T}, index::Integer) where {T}
     @boundscheck checkbounds(A, index)
     align = Base.datatype_alignment(T)
-    unsafe_cached_load(pointer(A), index, Val(align))
+    unsafe_invariant_load(pointer(A), index, Val(align))
 end
 
 
@@ -124,7 +147,10 @@ Base.@propagate_inbounds Base.setindex!(A::MtlDeviceArray, x,
 """
     Const(A::MtlDeviceArray)
 
-Mark a MtlDeviceArray as constant/read-only and to use the constant address space.
+Mark a MtlDeviceArray as constant/read-only. The invariant guaranteed is that you will not
+modify the MtlDeviceArray for the duration of the current kernel. Loads from it are emitted
+as `!invariant.load`, so violating that invariant is undefined behavior.
+
 !!! warning
     Experimental API. Subject to change without deprecation.
 """
@@ -137,6 +163,12 @@ Base.IndexStyle(::Type{<:Const}) = IndexLinear()
 Base.size(C::Const) = size(C.a)
 Base.axes(C::Const) = axes(C.a)
 Base.@propagate_inbounds Base.getindex(A::Const, i1::Integer) = const_arrayref(A.a, i1)
+
+# as for MtlDeviceArray, preserve the index type and handle ND indices ourselves
+Base.to_index(::Const, i::Integer) = i
+Base.@propagate_inbounds Base.getindex(A::Const,
+                                       I::Union{Integer, CartesianIndex}...) =
+    A[Base._to_linear_index(A, to_indices(A, I)...)]
 
 
 ## other

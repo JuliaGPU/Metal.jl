@@ -1048,6 +1048,30 @@ end
     end
 end
 
+@testset "read-only arrays" begin
+    function const_copy(A, B)
+        i = thread_position_in_grid().x
+        @inbounds A[i] = Base.Experimental.Const(B)[i]
+        return
+    end
+    function const_copy_2d(A, B)
+        i, j = thread_position_in_grid().x, thread_position_in_grid().y
+        @inbounds A[i, j] = Base.Experimental.Const(B)[i, j]
+        return
+    end
+
+    A = Metal.zeros(Float32, 64)
+    B = MtlArray(rand(Float32, 64))
+    ir = sprint(io -> Metal.@device_code_llvm io=io raw=true @metal threads=length(A) const_copy(A, B))
+    @test Array(A) == Array(B)
+    @test occursin("!invariant.load", ir)
+
+    A = Metal.zeros(Float32, 8, 8)
+    B = MtlArray(rand(Float32, 8, 8))
+    @metal threads=size(A) const_copy_2d(A, B)
+    @test Array(A) == Array(B)
+end
+
 @testset "Symbols in device memory" begin
     # loaded as a pointer into thread memory, a Symbol used to lose its upper bits (#1017)
     syms = MtlArray([(:begin, :end), (:end, :begin)])
