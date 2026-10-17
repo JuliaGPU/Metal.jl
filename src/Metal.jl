@@ -46,6 +46,7 @@ export MTL
 include("state.jl")
 include("memory_pressure.jl")
 include("command_batching.jl")
+include("command_batching4.jl")
 include("synchronization.jl")
 include("initialization.jl")
 

@@ -160,7 +160,7 @@ Several independent versions determine what Metal.jl generates and how it runs c
 |:--------|:---------|:----------|
 | host macOS | which Metal framework, runtime and back-end compiler exist | the system |
 | deployment target and MSL version | AIR version, metallib format and platform, language features | `macos=` and `metal=` compiler options, defaulting to the newest the host supports |
-| Metal API | command submission, residency, argument binding | Metal.jl uses the Metal 3 API on all supported systems |
+| Metal API | command submission, residency, argument binding | the `command_api` preference, defaulting to Metal 3 on all supported systems |
 | GPU family (Apple7 and up) | hardware features, back-end compiler workarounds | `gpufamily=` compiler option, defaulting to the highest the device reports |
 
 Like Apple's offline compiler, Metal.jl derives everything from one effective deployment
@@ -180,6 +180,18 @@ host loads fine.
 The Metal Shading Language and the Metal API are versioned separately: kernels can use MSL
 4 features, such as the tensor operations in the matrix multiplication kernels, while being
 launched through the Metal 3 command API.
+
+The Metal 4 command API can be selected by setting the `command_api` preference to
+`"metal4"` (the default, `"auto"`, currently selects `"metal3"`). It needs macOS 26 and a
+GPU that supports the `MTLGPUFamilyMetal4` feature set, which excludes virtualized GPUs.
+Like other policy preferences, it is read when Metal.jl is compiled, so that the batched
+queue type is known statically; whether the system supports the selected API is checked
+when Metal.jl is loaded. The Metal 4 backend submits Metal.jl's own work (kernel launches,
+copies and fills) to an `MTL4CommandQueue`, while MPS, MPSGraph and command buffers derived
+from the queue still use the Metal 3 queue it batches for; the two are ordered with shared
+events, so program order is the same as with the Metal 3 backend. It is tested on macOS 27
+by a separate Buildkite job, but it is not the default yet: kernel launches have more host
+overhead than with the Metal 3 backend, and it doesn't enable any functionality on its own.
 
 Workarounds for back-end compiler bugs key on the deployment target, assuming code is
 compiled for the host it runs on, since the back-end compiler ships with the OS. Targeting

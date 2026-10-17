@@ -53,6 +53,10 @@ function describe_language_version(ver::MTL.MTLLanguageVersion)
 end
 
 function __init__()
+    # buffers freed while generating the package image don't exist in this process. this
+    # also applies when precompiling another package, whose workload may allocate.
+    Base.@atomic freed_buffers.head = nothing
+
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     precompiling && return
 
@@ -76,6 +80,15 @@ function __init__()
         opts = MTL.MTLCompileOptions()
         ver = @objc [opts::id{MTL.MTLCompileOptions} languageVersion]::MTL.MTLLanguageVersion
         @debug "Successfully loaded Metal; default language version $(describe_language_version(ver))."
+
+        # the preference is fixed at compile time, but support depends on this system
+        if COMMAND_API === :metal4
+            reason = metal4_unsupported_reason(MTLDevice(1))
+            if reason !== nothing
+                @error "The `command_api` preference selects the Metal 4 command API, but $reason."
+                return
+            end
+        end
 
         initialized[] = true
     catch err

@@ -126,7 +126,7 @@ end
 
 struct Adaptor
     # the current encoding context (see `CommandBackend`), if any.
-    cce::Union{Nothing,MTLComputeCommandEncoder}
+    cce::Union{Nothing,MTLComputeCommandEncoder,Metal4Backend}
     # the queue the encoder belongs to, if any.
     queue::Union{Nothing,ConcreteBatchedQueue}
 end
@@ -443,10 +443,12 @@ Base.@nospecializeinfer function kernel_operation(@nospecialize(kernel::HostKern
        tgmem = kernel.tgmem, maxthreads = kernel.maxthreads)
 end
 
-# logging needs a command buffer of its own, with a log state, so it bypasses the batch
+# logging needs a command buffer of its own, with a log state, so it bypasses the batch.
+# that's a Metal 3 command buffer, also with the Metal 4 backend: logging isn't performance
+# critical, so it doesn't need a Metal 4 implementation of its own.
 Base.@nospecializeinfer function launch_logging!(
         @nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
-        bq::Metal3Queue, @nospecialize(args::Tuple), kernel_state, buf, exc)
+        bq::BatchedCommandQueue, @nospecialize(args::Tuple), kernel_state, buf, exc)
     flush!(bq)
     queue = bq.queue
 
@@ -484,7 +486,8 @@ Base.@nospecializeinfer function launch_logging!(
         cce = MTLComputeCommandEncoder(cmdbuf)
         try
             MTL.set_function!(cce, kernel.pipeline)
-            if !kernel.use_residency_sets
+            # (only Metal 3 queues have a residency set with the scratch buffers)
+            if !kernel.use_residency_sets || bq isa Metal4Queue
                 MTL.use!(cce, buf, MTL.ReadWriteUsage)
                 MTL.use!(cce, exc, MTL.ReadWriteUsage)
             end
@@ -502,6 +505,7 @@ Base.@nospecializeinfer function launch_logging!(
 
         # the batch was flushed above, so commit directly instead of via the submission
         # hook, which may wait for the GPU and must not be called with the lock held
+        order_external!(bq)
         MTL.commit_with_queue_key!(cmdbuf, pointer(queue))
         defer_cleanup!(bq, cmdbuf, Any[kernel.source, args])
     end
