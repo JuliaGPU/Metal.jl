@@ -9,6 +9,27 @@ const COMMAND_BATCHING = @load_preference("command_batching", true)
 
 @inline command_batching() = COMMAND_BATCHING
 
+# The Metal API that batched queues submit their work with (see `CommandBackend`): "metal3",
+# "metal4", or "auto", which currently selects Metal 3. Like `command_batching`, this is a
+# preference only, so that the queue type is known when compiling. Whether the host and
+# device can use the selected API is only known at run time, and checked by `__init__`.
+const COMMAND_API = let api = @load_preference("command_api", "auto")
+    api in ("auto", "metal3", "metal4") ||
+        error("unknown command API preference: $(repr(api)); expected \"auto\", \"metal3\" or \"metal4\"")
+    api == "metal4" ? :metal4 : :metal3
+end
+
+# The reason the Metal 4 command API can't be used on `dev`, or `nothing` if it can.
+function metal4_unsupported_reason(dev::MTLDevice)
+    macos_version() >= v"26" ||
+        return "it requires macOS 26 or later, while this system runs macOS $(macos_version())"
+    is_virtual(dev) &&
+        return "virtualized GPUs do not support it"
+    supports_family(dev, MTL.MTLGPUFamilyMetal4) ||
+        return "the GPU ($(dev.name)) does not support the MTLGPUFamilyMetal4 feature set"
+    return nothing
+end
+
 function load_command_batching_tunable(name::String, env::String, pref)
     s = get(ENV, env, nothing)
     value = s === nothing ? pref : parse(Int, s)
@@ -76,11 +97,17 @@ while holding `submission_lock`:
   for it, then call `reset_open_batch!(bq)`;
 - `pending_commands(bq)`: the mutable vector of `PendingCommand`s for submitted work whose
   roots are still alive, in submission order;
+- `retire!(bq, token)`: recycle what completed work used, once its roots are released;
+  `can_force(token)` tells whether that may happen because later work completed;
+- `order_external!(bq)`: order a command buffer that is about to be submitted to the Metal 3
+  queue `bq.queue` outside of the batch (e.g., by MPS) after the work batched so far;
 - `take_submissions!(bq)` and `last_submission(bq)`: the most recent submission to wait
-  for, the former together with the errors reported since it was last called.
+  for, the former together with the submissions and errors recorded since it was last
+  called.
 
-`device_synchronize` and the error reporting still rely on the per-queue submission
-tracking in `MTL` that Metal 3 command buffers feed.
+Submissions are recorded per Metal 3 queue in `MTL` (see `MTL.QueueSubmissionState`), also
+those of backends that submit to another queue, which `device_synchronize` and the error
+reporting rely on.
 
 Completion tokens support `is_completed(token)` and `wait_completed!(token)`.
 """
@@ -104,6 +131,117 @@ end
 Metal3Backend() = Metal3Backend(nothing, nothing, NoEncoder, nothing,
                                 PendingCommand{MTL.MTLCommandBufferLike}[])
 
+# Metal 4 argument tables bind GPU addresses only; there is no `setBytes:`. Arguments that
+# are passed by value are therefore bump-allocated out of a shared-storage scratch buffer,
+# whose address is bound instead. A scratch buffer belongs to the batch that filled it and
+# is recycled once that batch completes.
+mutable struct ArgumentScratch
+    const buf::MTLBuffer
+    const ptr::Ptr{UInt8}
+    const addr::UInt64
+    offset::Int
+end
+
+# A buffer that was freed while in the device's residency set (see `DeviceResidency`). It
+# stays in the set, which keeps it alive, until the Metal 4 work that may use it is done.
+mutable struct PendingRemoval
+    const buffer::MTLBuffer
+    # the number of batches that still have to complete
+    count::Int
+end
+
+# What a Metal 4 batch leaves behind once it is committed: the submission to wait for, and
+# the resources to recycle or release once it has completed.
+struct Metal4Batch
+    submission::MTL.MTL4Submission
+    allocator::MTL4CommandAllocator
+    resset::Union{Nothing,MTLResidencySet}
+    scratch::Vector{ArgumentScratch}
+    removals::Vector{PendingRemoval}
+end
+
+# Work tracked by a Metal 4 queue: its batches, and Metal 3 command buffers committed to the
+# Metal 3 queue it batches for (e.g., by logging kernel launches).
+const Metal4Token = Union{Metal4Batch,MTL.MTLCommandBufferLike}
+
+# a node of the lock-free list of buffers that finalizers freed (see `DeviceResidency`)
+struct FreedBuffer
+    buffer::MTLBuffer
+    next::Union{Nothing,FreedBuffer}
+end
+
+"""
+    DeviceResidency
+
+The residency set that Metal 4 queues of a device share, with the buffers Metal.jl
+allocates (and other long-lived ones, like scratch buffers). Metal 4 command buffers do not
+retain the resources they use, so a buffer that's freed stays in the set (which retains it)
+until the batches that may use it have completed, see `PendingRemoval`.
+"""
+mutable struct DeviceResidency
+    const set::MTLResidencySet
+    # protects the set and the fields below. taken after `submission_lock`, if at all.
+    const lock::ReentrantLock
+    # the addresses of the buffers in the set
+    const members::Set{UInt}
+    # whether the set changed since it was last committed
+    dirty::Bool
+    # argument scratch buffers (which are in the set) that no batch uses. shared by the
+    # queues of all tasks, so only accessed while holding the `submission_lock`.
+    const free_scratch::Vector{ArgumentScratch}
+end
+
+"""
+    Metal4Backend
+
+Encodes into an `MTL4CommandBuffer` per batch, submitted to an `MTL4CommandQueue`, with a
+single compute encoder for kernel launches, copies and fills. Arguments are bound through an
+`MTL4ArgumentTable`, and by-value arguments copied to a scratch buffer, since Metal 4 has no
+`setBytes:`. Buffers are made resident by the device's residency set (see `DeviceResidency`),
+or a per-batch one for buffers that weren't allocated by Metal.jl. Metal 4 doesn't order the
+commands of an encoder, nor the command buffers of a queue, so barriers are encoded between
+operations and at the start of every batch.
+
+Work committed to the Metal 3 queue that this backend batches for (MPS, user command
+buffers) is ordered against the batches with two shared events: Metal 3 command buffers
+wait for `event4` to reach the value of the batches committed before them, and batches wait
+for `event3`, which a command buffer committed to the Metal 3 queue after other Metal 3 work
+signals.
+"""
+mutable struct Metal4Backend <: CommandBackend
+    const queue4::MTL4CommandQueue
+    const argtable::MTL4ArgumentTable
+    const residency::DeviceResidency
+    const label::Union{Nothing,String}
+
+    # the open batch
+    cmdbuf::Union{Nothing,MTL4CommandBuffer}
+    allocator::Union{Nothing,MTL4CommandAllocator}
+    encoder::Union{Nothing,MTL4ComputeCommandEncoder}
+    resset::Union{Nothing,MTLResidencySet}
+    scratch::Vector{ArgumentScratch}
+    removals::Vector{PendingRemoval}
+    last_pipeline::Union{Nothing,MTLComputePipelineState}
+    # whether the next operation has to wait for the ones encoded before it
+    needs_barrier::Bool
+
+    # ordering against the Metal 3 queue (see above)
+    const event4::MTLSharedEvent
+    seq4::UInt64        # the value of the most recently committed batch
+    gated4::UInt64      # the value Metal 3 work was last made to wait for
+    const event3::MTLSharedEvent
+    seq3::UInt64        # the value most recently signalled from the Metal 3 queue
+    waited3::UInt64     # the value batches were last made to wait for
+    metal3_dirty::Bool  # whether Metal 3 work was submitted since `seq3`
+
+    cleanups::Vector{PendingCommand{Metal4Token}}
+
+    # recycled objects
+    free_cmdbufs::Vector{MTL4CommandBuffer}
+    free_allocators::Vector{MTL4CommandAllocator}
+    free_ressets::Vector{MTLResidencySet}
+end
+
 """
     BatchedCommandQueue
 
@@ -115,8 +253,9 @@ lazily, instead of one command buffer per operation.
 It wraps, and is a drop-in for, the `MTLCommandQueue` it batches: properties that
 aren't its own (e.g. `label`) forward to the underlying queue.
 
-How the work is encoded and submitted is up to its `CommandBackend` type parameter;
-currently, that's always `Metal3Backend`, using the Metal 3 command API.
+How the work is encoded and submitted is up to its `CommandBackend` type parameter:
+`Metal3Backend` using the Metal 3 command API, or `Metal4Backend` using the Metal 4 one,
+as selected by the `command_api` preference.
 
 The open batch is committed ("flushed") when any of the following happens:
 
@@ -156,15 +295,22 @@ mutable struct BatchedCommandQueue{B<:CommandBackend}
 end
 
 const Metal3Queue = BatchedCommandQueue{Metal3Backend}
+const Metal4Queue = BatchedCommandQueue{Metal4Backend}
 
-# The concrete queue types, one per backend. Containers and fields that hold queues use
-# this instead of the abstract `BatchedCommandQueue`, to keep dispatch on them static.
-const ConcreteBatchedQueue = Metal3Queue
+# The type of the queues created by `BatchedCommandQueue(::MTLCommandQueue)`, depending on
+# the `command_api` preference. Containers and fields that hold queues use this instead of
+# the abstract `BatchedCommandQueue`, to keep dispatch on them static.
+const ConcreteBatchedQueue = COMMAND_API === :metal4 ? Metal4Queue : Metal3Queue
 
 function BatchedCommandQueue(queue::MTLCommandQueue)
     dev = queue.device
-    can_use_residency_sets(dev) && install_queue_residency!(queue, dev)
-    BatchedCommandQueue(queue, dev, current_task(), Metal3Backend(), Any[], 0, 0, Any[])
+    backend = @static if COMMAND_API === :metal4
+        Metal4Backend(queue, dev)
+    else
+        can_use_residency_sets(dev) && install_queue_residency!(queue, dev)
+        Metal3Backend()
+    end
+    BatchedCommandQueue(queue, dev, current_task(), backend, Any[], 0, 0, Any[])
 end
 
 # Properties that aren't our own fields (e.g. `label`) forward to the wrapped
@@ -245,8 +391,12 @@ raw_queue(queue::MTLCommandQueue) = queue
 profiling_command_buffers() =
     MTL.profile_hook[] !== nothing || MTL.profile_metadata[] !== nothing
 
+# passing the queue to Metal (e.g., to create an `MPSCommandBuffer`) orders what's
+# submitted to it after the work encoded so far. that also covers command buffers that are
+# committed without `submit_command_buffer` seeing them, as MPS does internally.
 function Base.cconvert(::Type{<:id{MTLCommandQueue}}, bq::BatchedCommandQueue)
     flush!(bq)
+    Base.@lock submission_lock order_external!(bq)
     return bq.queue
 end
 
@@ -270,13 +420,16 @@ function MTL.MTLCommandBuffer(f::Base.Callable, bq::BatchedCommandQueue,
     return cmdbuf
 end
 
-# submit a command buffer that was encoded outside of the batch (e.g., by MPS). this first
-# commits the open batch, preserving program order, and registers the use of buffers that
-# were passed to Metal since the previous submission.
+# submit a command buffer that was encoded outside of the batch (e.g., by MPS), by
+# enqueueing (`commit=false`) or committing it. this first commits the open batch,
+# preserving program order, and registers the use of buffers that were passed to Metal
+# since the previous submission.
 function submit_command_buffer(f, cmdbuf, commit::Bool)
     queue = cmdbuf.commandQueue
     bq = get(task_local_storage(), batched_queue_key(queue), nothing)
     bq === nothing || flush!(bq)
+    # the work encoded since a command buffer was enqueued executes after it
+    ordered = bq !== nothing && (!commit || cmdbuf.status == MTL.MTLCommandBufferStatusNotEnqueued)
 
     pending = pending_ownership()
     # creating a batched queue takes the autorelease pool lock, so do so before locking
@@ -284,6 +437,7 @@ function submit_command_buffer(f, cmdbuf, commit::Bool)
     while true
         conflict = Base.@lock submission_lock begin
             if isempty(pending)
+                ordered && order_external!(bq)
                 f()
                 return
             end
@@ -291,6 +445,7 @@ function submit_command_buffer(f, cmdbuf, commit::Bool)
             if i === nothing
                 foreach(managed -> take_ownership!(managed, owner), pending)
                 empty!(pending)
+                ordered && order_external!(bq)
                 f()
                 return
             end
@@ -315,13 +470,19 @@ function synchronize_pending!()
     return
 end
 
+# what frame capture of a queue captures. for Metal 4 queues, that's the device: capture
+# scopes can't be created from Metal 4 queues, and that also covers work submitted to the
+# Metal 3 queue (e.g., by MPS).
+capture_object(bq::Metal3Queue) = bq.queue
+capture_object(bq::Metal4Queue) = bq.device
+
 function MTL.MTLCaptureScope(bq::BatchedCommandQueue, manager=MTLCaptureManager())
     flush!(bq)
-    return MTLCaptureScope(bq.queue, manager)
+    return MTLCaptureScope(capture_object(bq), manager)
 end
 
 function Base.setproperty!(desc::MTLCaptureDescriptor, name::Symbol, bq::BatchedCommandQueue)
-    name === :captureObject && return setproperty!(desc, name, bq.queue)
+    name === :captureObject && return setproperty!(desc, name, capture_object(bq))
     return invoke(Base.setproperty!, Tuple{MTLCaptureDescriptor, Symbol, Any},
                   desc, name, bq)
 end
@@ -329,14 +490,14 @@ end
 function MTL.MTLCaptureDescriptor(bq::BatchedCommandQueue,
                                   destination::MTL.MTLCaptureDestination;
                                   folder::String=nothing)
-    return MTLCaptureDescriptor(bq.queue, destination; folder)
+    return MTLCaptureDescriptor(capture_object(bq), destination; folder)
 end
 
 function MTL.startCapture(bq::BatchedCommandQueue,
                           destination::MTL.MTLCaptureDestination=MTL.MTLCaptureDestinationGPUTraceDocument;
                           folder::String=nothing)
     flush!(bq)
-    return MTL.startCapture(bq.queue, destination; folder)
+    return MTL.startCapture(capture_object(bq), destination; folder)
 end
 
 ## Metal 3 backend
@@ -448,6 +609,14 @@ function abandon_open_batch!(bq::Metal3Queue)
     return
 end
 
+# what a backend does with the token of completed work, besides releasing its roots
+retire!(::Metal3Queue, token) = nothing
+
+# whether the token can be retired because work committed after it completed
+can_force(token) = true
+
+order_external!(::Metal3Queue) = nothing
+
 take_submissions!(bq::Metal3Queue) = MTL.take_queue_submissions(bq.queue)
 last_submission(bq::Metal3Queue) = MTL.last_committed(bq.queue)
 
@@ -490,7 +659,8 @@ function defer_cleanup!(bq::BatchedCommandQueue, token, roots::Vector{Any})
 end
 
 # release the roots of completed command buffers. `until` treats the entries up to and
-# including it as completed, e.g., because a command buffer committed later has completed.
+# including it as completed, e.g., because a command buffer committed later has completed,
+# unless the backend needs to know for sure (see `can_force`).
 function drain_cleanups!(bq::BatchedCommandQueue;
                          until::Union{Nothing,PendingCommand}=nothing)
     Base.@lock submission_lock begin
@@ -499,10 +669,13 @@ function drain_cleanups!(bq::BatchedCommandQueue;
                   something(findfirst(cleanup -> cleanup === until, cleanups), 0)
         n = 0
         for cleanup in cleanups
-            if !(n < nforced || is_completed(cleanup.token))
+            if !(is_completed(cleanup.token) || n < nforced && can_force(cleanup.token))
                 break
             end
             n += 1
+        end
+        @static if COMMAND_API === :metal4
+            process_freed!()
         end
         n == 0 && return
 
@@ -511,6 +684,7 @@ function drain_cleanups!(bq::BatchedCommandQueue;
 
         for cleanup in completed
             empty!(cleanup.roots)
+            retire!(bq, cleanup.token)
         end
 
         unregister_queue_if_idle!(bq)

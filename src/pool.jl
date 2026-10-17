@@ -64,9 +64,15 @@ function alloc(dev::Union{MTLDevice,MTLHeap}, sz::Integer, args...; kwargs...)
     end
 
     maybe_collect(dev)
+    @static if COMMAND_API === :metal4
+        has_freed_buffers() && Base.@lock submission_lock process_freed!()
+    end
 
     time = Base.@elapsed begin
         buf = alloc_buffer_with_retry(dev, sz, args...; kwargs...)
+        @static if COMMAND_API === :metal4
+            track_allocation!(buf)
+        end
     end
 
     Base.@atomic alloc_stats.alloc_count + 1
@@ -97,7 +103,13 @@ function free(buf::MTLBuffer)
     sz::Int = buf.length
 
     time = Base.@elapsed begin
-        release(buf)
+        @static if COMMAND_API === :metal4
+            # Metal 4 command buffers don't retain the buffers they use, so this may
+            # have to wait (see `process_freed!`)
+            defer_release!(buf)
+        else
+            release(buf)
+        end
     end
 
     Base.@atomic alloc_stats.free_count + 1
