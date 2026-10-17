@@ -106,6 +106,12 @@ function json_value(io::IO, x::AbstractString, indent)
     print(io, '"')
 end
 json_value(io::IO, x::NamedTuple, indent) = json_object(io, pairs(x), indent)
+json_value(io::IO, x::Metal.ReflectionObject, indent) =
+    json_object(io, [k => v for (k, v) in getfield(x, :fields) if v !== nothing], indent)
+json_value(io::IO, x::Metal.ReflectionEnum, indent) =
+    json_value(io, (; name = x.name === nothing ? nothing : string(x.name), x.value), indent)
+json_value(io::IO, x::Metal.UnknownReflectionNode, indent) =
+    json_value(io, (; unknown_type = x.tag, x.offset), indent)
 json_value(io::IO, x::AbstractVector{<:Pair}, indent) = json_object(io, x, indent)
 function json_value(io::IO, x::Union{AbstractVector,Tuple}, indent)
     if isempty(x)
@@ -1017,14 +1023,30 @@ function reflect(ctx::Context, args::Arguments)
     end
 
     if !("--runtime" in args.flags)
-        # TODO: decode the AIRR reflection data
-        diagnose!(ctx, "warning", "decoding the reflection data in the library is not " *
-                  "supported yet; use --runtime to ask Metal for the reflection of the " *
-                  "library's kernels")
-        return (:unsupported, (; file = input, functions = [
-            (; f.name, f.type, reflection_size = f.reflection_data === nothing ? nothing :
-                                                 sizeof(f.reflection_data))
-            for f in funs]))
+        complete = true
+        functions = map(funs) do f
+            reflection = try
+                Metal.reflection(f)
+            catch e
+                e isa Metal.FlatBufferError || rethrow()
+                diagnose!(ctx, "error", "the reflection data of $(f.name) is invalid: " *
+                          "$(e.msg) (at offset $(e.offset) in the data)")
+                nothing
+            end
+            if reflection === nothing && f.reflection_data === nothing
+                tags = f.layout === nothing || f.layout.reflection_tags === nothing ?
+                       nothing : f.layout.reflection_tags
+                if tags !== nothing && haskey(tags, "RBUZ")
+                    diagnose!(ctx, "warning", "the reflection data of $(f.name) is " *
+                              "compressed, which is not supported")
+                    complete = false
+                else
+                    diagnose!(ctx, "note", "$(f.name) has no reflection data")
+                end
+            end
+            (; f.name, f.type, reflection)
+        end
+        return complete ? (; file = input, functions) : (:partial, (; file = input, functions))
     end
 
     dev = Metal.device()
@@ -1064,9 +1086,10 @@ end
 function reflect_text(io::IO, r)
     for f in r.functions
         if !haskey(f, :bindings)
-            println(io, "$(f.name): $(f.type)",
-                    f.reflection_size === nothing ? ", no reflection data" :
-                                                    ", $(f.reflection_size) bytes of reflection data")
+            f.reflection === nothing && continue
+            print(io, "$(f.name): ")
+            show(io, MIME"text/plain"(), f.reflection)
+            println(io)
             continue
         end
         f.bindings === nothing && continue
@@ -1089,25 +1112,32 @@ function reflect_text(io::IO, r)
 end
 
 register!("reflect", Command(
-    "Show the arguments of a library's functions.",
+    "Describe a library's functions and their arguments.",
     """
-    Usage: $program reflect --runtime FILE [FUNCTION]
+    Usage: $program reflect [--runtime] FILE [FUNCTION]
 
-    Describe the arguments of the kernels in the library in FILE (`-` for standard input),
-    or only of FUNCTION: for every binding its index, name, kind, access, whether the kernel
-    uses it, and for buffers the data type, size, alignment and struct members.
+    Describe the functions in the library in FILE (`-` for standard input), or only
+    FUNCTION, with their arguments.
 
-    Metal builds this reflection from the metadata in a function's AIR module, not from the
-    reflection data Apple's toolchain stores in the library, which this tool cannot decode
-    yet. --runtime, which is required for now, loads the library on the default Metal
-    device and creates a compute pipeline for every kernel to ask Metal for it. Functions
-    other than kernels, and kernels that need values for function constants, are skipped.
+    By default, this decodes the reflection data that Apple's toolchain stores in libraries
+    (Metal.jl does not generate it): a list of nodes describing each function, its arguments
+    and return values, attributes, function constants and the types involved, in the
+    vocabulary of Apple's schema. Nodes refer to each other by number (`#1`, or {"id": 1}
+    in JSON).
+
+    The Metal runtime does not use that data: it reflects functions from the metadata in
+    their AIR modules. --runtime shows that reflection instead, by loading the library on the
+    default Metal device and creating a compute pipeline for every kernel: for every binding
+    its index, name, kind, access, whether the kernel uses it, and for buffers the data type,
+    size, alignment and struct members. Functions other than kernels, and kernels that need
+    values for function constants, are skipped.
 
     Options:
       --runtime     Ask Metal for the reflection of the kernels.
 
-    Example:
-      $program reflect --runtime --json shaders.metallib my_kernel""",
+    Examples:
+      $program reflect --json shaders.metallib my_kernel
+      $program reflect --runtime shaders.metallib""",
     ["--runtime"], String[], reflect, reflect_text))
 
 

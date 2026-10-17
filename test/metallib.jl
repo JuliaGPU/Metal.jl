@@ -787,10 +787,168 @@ using ObjectiveC.Foundation: NSError
 end
 end
 
+# the reflection entries of a library, in the order of its reflection list
+function reflection_entries(lib::MetalLib)
+    entries = []
+    for fun in lib.functions
+        tags = fun.layout.reflection_tags
+        tags === nothing || any(e -> e.tags === tags, entries) || push!(entries, (; tags, fun))
+    end
+    sort!(entries; by = e -> first(e.tags.extent))
+    return [e.fun for e in entries]
+end
+
+# a decoded reflection as Apple's tools print it, i.e. with enumerations by name
+apple_json(x) = x
+apple_json(x::Integer) = Int(x)
+apple_json(x::Bool) = x
+apple_json(x::Metal.ReflectionEnum) = string(x.name)
+apple_json(x::AbstractVector) = Any[apple_json(v) for v in x]
+apple_json(x::Metal.ReflectionObject) =
+    Pair{String,Any}[string(k) => apple_json(v) for (k, v) in getfield(x, :fields)
+                                                if v !== nothing]
+
+@testset "reflection data" begin
+    # compare with Apple's decoding (`metal-objdump --reflection`, see the Makefile)
+    for file in readdir(joinpath(metallib_dir, "reflection"))
+        lib = parse(MetalLib, joinpath(metallib_dir, replace(file, ".txt" => ".metallib")))
+        text = read(joinpath(metallib_dir, "reflection", file), String)
+        expected = map(parse_json, split(text, r"^Reflection No\. \d+:$"m)[2:end])
+        entries = reflection_entries(lib)
+        @test length(entries) == length(expected)
+        for (fun, json) in zip(entries, expected)
+            if fun.reflection_data === nothing
+                # compressed reflection data (RBUZ) is not supported
+                @test haskey(fun.layout.reflection_tags, "RBUZ")
+            else
+                @test apple_json(Metal.reflection(fun)) == json
+            end
+        end
+    end
+
+    lib = parse(MetalLib, joinpath(metallib_dir, "visible.26.metallib"))
+    r = Metal.reflection(lib.functions[1])
+    @test nameof(r) == :Reflection
+    kernel = r[only(r.kernel_functions)]
+    @test nameof(kernel) == :KernelFunction && kernel.name == "foo"
+    a = r[kernel.arguments[1]]
+    @test nameof(a) == :BufferArg
+    @test a.address_space.name == :Global
+    @test a.location_index.value == 0
+    @test a.buffer_size === nothing     # (absent, not 0)
+    @test contains(sprint(show, MIME"text/plain"(), r), "#1 BufferArg(")
+    @test Metal.reflection(MetalLibFunction(lib.functions[1]; reflection_data=nothing)) === nothing
+
+    # malformed data either decodes or throws a `FlatBufferError`
+    function check_decode(data)
+        try
+            Metal.reflection(data)
+            return true
+        catch err
+            err isa Metal.FlatBufferError && return true
+            @error "Unexpected error decoding malformed reflection data" exception=(err, catch_backtrace())
+            return false
+        end
+    end
+    data = lib.functions[1].reflection_data
+    @test all(n -> check_decode(data[1:n]), 0:length(data)-1)
+    for value in (0x00, 0x7f, 0xff)
+        @test all(1:length(data)) do i
+            corrupted = copy(data)
+            corrupted[i] = value
+            check_decode(corrupted)
+        end
+    end
+    @test_throws Metal.FlatBufferError Metal.reflection(UInt8[])
+
+    # a minimal reflection: `count` nodes that all refer to the same kernel function (but no
+    # version, which is optional)
+    function shared_reflection(count; name="kernel")
+        buf = UInt8[]
+        u32(x) = append!(buf, reinterpret(UInt8, [UInt32(x)]))
+        u16(x) = append!(buf, reinterpret(UInt8, [UInt16(x)]))
+        offset_to(target) = u32(target - length(buf))   # (relative to where it is stored)
+        u32(16); append!(buf, codeunits("AIRR"))         # root table, identifier
+        u16(8); u16(8); u16(0); u16(4)                   # 8: vtable (no version, nodes)
+        u32(16 - 8); offset_to(24)                       # 16: Reflection
+        node = 24 + 4 + 4count + 8                       # (after the vector and the vtable)
+        u32(count); foreach(_ -> offset_to(node), 1:count)
+        u16(8); u16(12); u16(4); u16(8)                  # vtable (node_type, node)
+        u32(8); u32(2); offset_to(node + 12 + 8)         # Node: a KernelFunction
+        u16(6); u16(8); u16(4); u16(0)                   # vtable (name)
+        u32(8); offset_to(node + 12 + 8 + 8)             # KernelFunction
+        u32(sizeof(name)); append!(buf, codeunits(name)); push!(buf, 0x00)
+        return buf
+    end
+    data = shared_reflection(2)
+    r = Metal.reflection(data)
+    @test r.version === nothing
+    @test r.nodes[1].node.name == "kernel"
+    @test contains(sprint(show, MIME"text/plain"(), r), "AIRR reflection with 2 nodes")
+    # (shared objects decode once, also when there are many references to them)
+    @test r.nodes[1] === r.nodes[2]
+    # (copies of the name would take 6.5 GB)
+    data = shared_reflection(100_000; name="x"^65536)
+    Metal.reflection(data)
+    @test (@allocated Metal.reflection(data)) < 100 * sizeof(data)
+
+    # `count` kernel functions whose names overlap: name i starts at word i of a run of words
+    # that each hold the number of bytes after them, so all names end at the same NUL
+    function overlapping_reflection(count)
+        nodes = 24 + 4 + 4count + 16        # (after the vector and two vtables)
+        strings = nodes + 20count
+        buf = UInt8[]
+        u32(x) = append!(buf, reinterpret(UInt8, [UInt32(x)]))
+        u16(x) = append!(buf, reinterpret(UInt8, [UInt16(x)]))
+        offset_to(target) = u32(target - length(buf))
+        u32(16); append!(buf, codeunits("AIRR"))
+        u16(8); u16(8); u16(0); u16(4)                      # 8: Reflection vtable
+        u32(16 - 8); offset_to(24)                          # 16: Reflection
+        u32(count); foreach(i -> offset_to(nodes + 20i), 0:count-1)
+        node_vtable = length(buf)
+        u16(8); u16(12); u16(4); u16(8)
+        kernel_vtable = length(buf)
+        u16(6); u16(8); u16(4); u16(0)
+        for i in 0:count-1
+            u32(length(buf) - node_vtable); u32(2); offset_to(length(buf) + 4)
+            u32(length(buf) - kernel_vtable); offset_to(strings + 4i)
+        end
+        foreach(i -> u32(4 * (count - i - 1)), 0:count-1)
+        push!(buf, 0x00)
+        return buf
+    end
+    r = Metal.reflection(overlapping_reflection(4))
+    @test [node.node.name for node in r.nodes][end] == ""
+    @test sizeof(r.nodes[1].node.name) == 12
+    # (overlapping names can't be shared, so they count towards a limit instead)
+    err = try Metal.reflection(overlapping_reflection(4096)) catch err; err end
+    @test err isa Metal.FlatBufferError && contains(err.msg, "much more than the buffer")
+
+    # what FlatBuffers requires is checked
+    data = shared_reflection(1)
+    data[end] = UInt8('x')      # (strings must be NUL-terminated)
+    @test_throws Metal.FlatBufferError Metal.reflection(data)
+    data = shared_reflection(1)
+    data[11] = 4                # (the root table can't hold its fields anymore)
+    @test_throws Metal.FlatBufferError Metal.reflection(data)
+
+    # decoded objects compare and hash by value
+    a, b = (Metal.reflection(lib.functions[1]) for _ in 1:2)
+    @test a == b && hash(a) == hash(b) && b in Set([a])
+
+    # nodes of an unknown kind are kept as such
+    data = copy(lib.functions[1].reflection_data)
+    tag = findfirst(reinterpret(UInt8, [UInt32(266240)]), data)   # ThreadPositionInGridArg
+    data[tag] .= reinterpret(UInt8, [UInt32(999999)])
+    node = Metal.reflection(data).nodes[3].node
+    @test node isa Metal.UnknownReflectionNode && node.tag == 999999
+end
+
 @static if VERSION >= v"1.11"
     @testset "public API" begin
         for name in (:MetalLib, :MetalLibFunction, :FunctionConstant, :DebugInfo,
-                     :MetalLibFormatError)
+                     :MetalLibFormatError, :reflection, :ReflectionObject, :ReflectionEnum,
+                     :UnknownReflectionNode, :FlatBufferError)
             @test Base.ispublic(Metal, name)
         end
     end

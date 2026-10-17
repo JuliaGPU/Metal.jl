@@ -31,3 +31,30 @@ Metal.FunctionConstant
 Metal.DebugInfo
 Metal.MetalLibFormatError
 ```
+
+## Reflection data
+
+Libraries built by Apple's toolchain describe each function with reflection data: its
+arguments, return values, attributes, function constants and the types involved. Metal.jl
+decodes it with the schema Apple's tools use, but does not generate it for its own kernels,
+and the Metal runtime does not need it.
+
+```julia
+julia> r = Metal.reflection(lib.functions[1])
+AIRR reflection v0.4.0 with 3 nodes
+  #0 KernelFunction(name="foo", arguments=[#1, #2])
+  #1 BufferArg(function_constant=false, location_index=UIntValue(value=0), ..., type_name="float", name="a", unused=false)
+  #2 ThreadPositionInGridArg(function_constant=false, type_name="uint", name="i", unused=false)
+  kernel_functions: [#0]
+
+julia> r[r.kernel_functions[1]].name
+"foo"
+```
+
+```@docs
+Metal.reflection
+Metal.ReflectionObject
+Metal.ReflectionEnum
+Metal.UnknownReflectionNode
+Metal.FlatBufferError
+```

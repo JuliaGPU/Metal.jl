@@ -1,0 +1,142 @@
+constants.15.metallib:
+Dump of section REFLECTIONS:
+
+Reflection No. 0:
+{
+  "version": {
+    "major": 0,
+    "minor": 3,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "vadd",
+        "arguments": [
+          {
+            "id": 1
+          },
+          {
+            "id": 2
+          },
+          {
+            "id": 3
+          },
+          {
+            "id": 4
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "float",
+        "name": "a",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 1
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "float",
+        "name": "b",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 2
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "ReadWrite",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "float",
+        "name": "c",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "ThreadPositionInGridArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "uint",
+        "name": "i",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "FunctionConstant",
+      "node": {
+        "type_name": "float",
+        "name": "foo",
+        "index": 0,
+        "required": true
+      }
+    },
+    {
+      "node_type": "FunctionConstant",
+      "node": {
+        "type_name": "float",
+        "name": "bar",
+        "index": 2,
+        "required": true
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ],
+  "function_constants": [
+    {
+      "id": 5
+    },
+    {
+      "id": 6
+    }
+  ]
+}
