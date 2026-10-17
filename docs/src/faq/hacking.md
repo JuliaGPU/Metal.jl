@@ -55,79 +55,90 @@ A few things to watch for:
   LLVM, and small differences in metadata or intrinsic spelling are usually the reason a
   kernel that looks correct fails to compile.
 
-## Disassembling, assembling, and loading Metal libraries
+## The `metallib` tool
 
 A `.metallib` is a container that wraps one or more AIR modules (LLVM bitcode) together with
-the metadata Metal needs to instantiate them. Three scripts in `bin/` let you move between
-that container and plain LLVM IR, and load the result onto a real device.
+the metadata Metal needs to instantiate them. Metal.jl comes with a `metallib` command-line
+tool to inspect such libraries, move between them and plain LLVM IR, and load them on a
+device. It works on libraries from Apple's toolchain as well as on the ones Metal.jl
+generates (set `JULIA_METAL_DUMP_DIR` to a directory to have Metal.jl write the `.metallib`
+of every kernel it compiles there).
 
-The scripts are built on `Metal.MetalLib`, which you can also use directly from Julia to
-inspect or edit a library; see the [Libraries](@ref) page of the API reference.
-
-`metallib-dis` unpacks a library back into LLVM modules:
-
-```
-./metallib-dis -S broken.metallib -o reduced.ll
-```
-
-Without `-S` you get bitcode (`.bc`); with `-S` it runs the disassembler and gives you
-textual IR. If the library holds more than one function, name the one you want or let the
-script write each to a numbered file.
-
-`metallib-as` does the reverse, packaging an LLVM module into a library:
+On Julia 1.12 and later, install it as a [Pkg app](https://pkgdocs.julialang.org/v1/apps/):
 
 ```
-./metallib-as reduced.ll -o reduced.metallib
+pkg> app add Metal        # or `app develop /path/to/Metal.jl` for a checkout
 ```
 
-The input can be textual IR or bitcode, and `-` reads from standard input. The module has to
-contain exactly one external function, which becomes the library's entry point. Behind the
-scenes the script downgrades the IR to the bitcode version Metal accepts (5.0), so this is
-also the path you take when you have IR from a newer LLVM than Metal understands.
+which puts a `metallib` executable in `~/.julia/bin` (add that directory to your `PATH`).
+Note that Apple's toolchain also has a `metallib` command, the linker behind
+`xcrun metallib`; `xcrun` finds Apple's, a plain `metallib` finds whichever comes first on
+your `PATH`. On any Julia version, the `bin/metallib-dis`, `bin/metallib-as` and
+`bin/metallib-load` scripts of a Metal.jl checkout run the `dis`, `as` and `load`
+commands, and from Julia, `Metal.MetalLibCLI.main(["info", "shaders.metallib"])` runs the
+tool in-process and returns its exit code.
 
-`metallib-load` takes a library and instantiates it on the GPU:
+`metallib --help` lists the commands, and `metallib <command> --help` describes each one
+with an example:
+
+| Command    | What it does |
+|:-----------|:-------------|
+| `info`     | summarize a library: versions, platform, UUID, and every function's type, versions, module size, constants, debug info and reflection data |
+| `dump`     | list every section, tag group and tag with its offset, size and decoded value (`--raw` adds the bytes) |
+| `reflect`  | with `--runtime`, ask Metal for the arguments of every kernel: their bindings, data types, sizes and struct members |
+| `dis`      | extract a function's AIR module as bitcode, or with `-S` as textual LLVM IR |
+| `as`       | package LLVM IR or bitcode into a library |
+| `load`     | load a library on the GPU, and with `--pipeline` compile its kernels |
+| `validate` | check a library's structure, modules and hashes; `--runtime` also loads it, `--apple` also runs Apple's `metal-validate` |
+
+The commands compose, so you can take a library apart, edit the IR, and put it back together:
 
 ```
-./metallib-load -v reduced.metallib
-```
-
-This loads the library and then builds a compute pipeline state for each function, which is
-the step that forces Apple's *backend* compiler to translate the AIR into machine code for
-your GPU. A library can load fine and still fail here, because loading only validates the
-container while pipeline creation is what actually compiles the code. This is where backend
-crashes surface, which makes `metallib-load` the tool you use to confirm a crash and, once
-you start cutting the IR down, to check that you still have it.
-
-The three compose, so you can take a library apart, edit the IR, and put it back together:
-
-```
-./metallib-dis -S input.metallib -o kernel.ll
+metallib dis -S -o kernel.ll input.metallib my_kernel
 $EDITOR kernel.ll
-./metallib-as kernel.ll -o - | ./metallib-load -
+metallib as -o - kernel.ll | metallib load --pipeline -
 ```
 
-When you feed them something they cannot handle, the error tells you which stage rejected
-it. Malformed IR fails in `metallib-as` while LLVM is still parsing:
+`as` downgrades textual IR to the bitcode version Metal reads (that of LLVM 14), so this is
+also the path to take with IR from a newer LLVM than Metal understands. `as` also runs
+the LLVM verifier on its input, which catches malformed IR (for example an `air.*` call
+with the wrong argument types) before Apple's compiler sees it.
+
+`load --pipeline` is the step that makes Apple's *back-end* compiler translate the AIR into
+machine code for your GPU: a library can load fine and still fail there, because loading
+only validates the container. `load` reports the two failures differently, which makes it
+the tool to confirm a back-end crash with and, while cutting the IR down, to check that you
+still have it. Similarly, `reflect --runtime` shows what the runtime makes of a kernel's
+argument metadata (whether a buffer is seen as `float` or as a struct, its size and
+access), without writing host code.
+
+### For scripts and LLM agents
+
+Every command accepts `--json`, which writes a single JSON document to standard output and
+nothing else, so prefer it whenever a program reads the output:
 
 ```
-ERROR: LoadError: LLVM error: error: expected top-level entity
+$ metallib info --json shaders.metallib
+{
+  "schema": "metal.jl/metallib-cli/1",
+  "command": "info",
+  "status": "ok",
+  "result": { "file": "shaders.metallib", ... },
+  "diagnostics": []
+}
 ```
 
-A file that is not a valid container fails in `metallib-load`:
-
-```
-ERROR: Failed to load Metal library; the library is likely invalid or corrupt.
-```
-
-Round-tripping IR through `metallib-as | metallib-dis -S` is useful on its own: the bitcode
-downgrade and the re-parse both run the LLVM verifier, which catches malformed intrinsic
-signatures (for example an `air.*` call with the wrong argument types) before Apple's
-compiler ever sees them.
+`status` is `ok`, `partial` (some of the work could not be done; see the diagnostics),
+`unsupported` or `error`. Diagnostics carry a severity, a message and, where one applies,
+the offset in the input file they refer to. Enumerations are written as
+`{"name": ..., "value": ...}` objects. The exit code is 0 for `ok` and `partial`, 1 when the
+command failed, and 2 when it was invoked incorrectly. The `schema` changes when the
+format changes incompatibly.
 
 ## The metallib container format
 
 The `.metallib` container is undocumented, but understood well enough to implement.
-Metal.jl has a pure-Julia reader and writer in `src/compiler/library.jl`; useful outside
+Metal.jl has a pure-Julia reader and writer in `src/metallib/`; useful outside
 references are [MetalLibraryArchive](https://github.com/YuAo/MetalLibraryArchive) and the
 [floor](https://github.com/a2flo/floor_llvm) project, whose `MetalLibWriterPass.cpp` and
 `metallib-dis` tool are the most complete third-party implementation.
@@ -166,7 +177,7 @@ to a second table with the type-specific fields. floor implements writing these 
 
 Metal.jl reads and round-trips all of the above, but only generates the sections it has
 data for. In practice that means libraries without reflection buffers or script lists,
-which the runtime accepts. The header of `src/compiler/library.jl` lists what is not
+which the runtime accepts. The header of `src/metallib/container.jl` lists what is not
 implemented yet.
 
 ## Reproducing and reducing backend compiler crashes
@@ -180,7 +191,7 @@ clue Metal.jl can give the user is "Compilation to native code failed; attach th
 
 The starting point is that `.metallib`. Disassemble it to IR, then cut the IR down by hand:
 delete instructions and basic blocks, drop arguments, replace called functions with stubs,
-and re-run `metallib-as | metallib-load` after each change. As long as the crash reproduces,
+and re-run `metallib as -o - candidate.ll | metallib load --pipeline -` after each change. As long as the crash reproduces,
 keep cutting. When it stops, back up one step. The aim is an IR file small enough to read
 and to attach to a bug report. The reduced module for the atomic crash above is only a
 handful of lines: a kernel that calls an internal function whose entire body is a single
@@ -206,7 +217,7 @@ at the top of the backtrace:
 
 ```sh
 rm -f ~/Library/Logs/DiagnosticReports/MTLCompilerService*.ips
-./metallib-as candidate.ll -o - | ./metallib-load -
+metallib as -o - candidate.ll | metallib load --pipeline -
 grep -q buildAtomic ~/Library/Logs/DiagnosticReports/MTLCompilerService*.ips && echo "same crash"
 ```
 
@@ -216,7 +227,7 @@ swapped one bug for another while cutting.
 
 ## Offline pipeline compilation with `metal-tt`
 
-`metallib-load` goes through the GPU driver and its XPC compiler service. There is also an
+`metallib load` goes through the GPU driver and its XPC compiler service. There is also an
 offline path that runs the same backend compiler directly from the command line, which gives
 you a normal process with a normal exit code instead of a dropped connection. The tool is
 `metal-tt`, the AIR translator driver:
@@ -263,7 +274,7 @@ applegpu-nt -arch applegpu_g15s -platform_version macos <ver> <sdk> \
 The offline route has one drawback worth knowing. The standalone translator ships stripped,
 so its crash log has no symbol names. For a readable backtrace you want the crash log from
 the GPU-driver path, which links the symbolicated compiler core. In practice it is worth
-having both: `metal-tt` for a scriptable repro with a clean exit code, and `metallib-load`
+having both: `metal-tt` for a scriptable repro with a clean exit code, and `metallib load`
 for the crash log that actually names the failing function.
 
 ## Reading crash logs
