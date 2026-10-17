@@ -273,7 +273,7 @@ end
 # submit a command buffer that was encoded outside of the batch (e.g., by MPS). this first
 # commits the open batch, preserving program order, and registers the use of buffers that
 # were passed to Metal since the previous submission.
-function submit_command_buffer(f, cmdbuf)
+function submit_command_buffer(f, cmdbuf, commit::Bool)
     queue = cmdbuf.commandQueue
     bq = get(task_local_storage(), batched_queue_key(queue), nothing)
     bq === nothing || flush!(bq)
