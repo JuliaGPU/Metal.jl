@@ -1,0 +1,927 @@
+julia.metallib:
+Dump of section REFLECTIONS:
+
+Reflection No. 0:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "_Z4vadd14MtlDeviceArrayI7Float32Li1ELi1EES1_6UInt32",
+        "arguments": [
+          {
+            "id": 1
+          },
+          {
+            "id": 3
+          },
+          {
+            "id": 5
+          },
+          {
+            "id": 6
+          },
+          {
+            "id": 7
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "buffer_size": {
+          "value": 32
+        },
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "struct_type_info": {
+          "id": 2
+        },
+        "type_size": {
+          "value": 32
+        },
+        "type_align": {
+          "value": 8
+        },
+        "type_name": "KernelState",
+        "name": "kernel_state",
+        "unused": true
+      }
+    },
+    {
+      "node_type": "StructTypeInfo",
+      "node": {
+        "fields": [
+          {
+            "offset": 0,
+            "size": 4,
+            "array_entries": 0,
+            "type_name": "uint",
+            "field_name": "random_seed"
+          },
+          {
+            "offset": 8,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "ulong",
+            "field_name": "malloc_buf"
+          },
+          {
+            "offset": 16,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "ulong",
+            "field_name": "exception_info"
+          },
+          {
+            "offset": 24,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "ulong",
+            "field_name": "reloc_table"
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "buffer_size": {
+          "value": 16
+        },
+        "location_index": {
+          "value": 1
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "struct_type_info": {
+          "id": 4
+        },
+        "type_size": {
+          "value": 16
+        },
+        "type_align": {
+          "value": 8
+        },
+        "type_name": "MtlDeviceArray_Float32_1_1",
+        "name": "a",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "StructTypeInfo",
+      "node": {
+        "fields": [
+          {
+            "offset": 0,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "ulong",
+            "field_name": "ptr"
+          },
+          {
+            "offset": 8,
+            "size": 8,
+            "array_entries": 1,
+            "type_name": "long",
+            "field_name": "shape"
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "buffer_size": {
+          "value": 16
+        },
+        "location_index": {
+          "value": 2
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "struct_type_info": {
+          "id": 4
+        },
+        "type_size": {
+          "value": 16
+        },
+        "type_align": {
+          "value": 8
+        },
+        "type_name": "MtlDeviceArray_Float32_1_1",
+        "name": "b",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "buffer_size": {
+          "value": 4
+        },
+        "location_index": {
+          "value": 3
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "uint",
+        "name": "n",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "ThreadPositionInGridArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "uint3",
+        "name": "thread_position_in_grid",
+        "unused": false
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ]
+}
+
+Reflection No. 1:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "_Z7structs14MtlDeviceArrayI7Float32Li1ELi1EE6Params5Outer5Int32",
+        "arguments": [
+          {
+            "id": 1
+          },
+          {
+            "id": 3
+          },
+          {
+            "id": 5
+          },
+          {
+            "id": 7
+          },
+          {
+            "id": 9
+          },
+          {
+            "id": 10
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "buffer_size": {
+          "value": 32
+        },
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "struct_type_info": {
+          "id": 2
+        },
+        "type_size": {
+          "value": 32
+        },
+        "type_align": {
+          "value": 8
+        },
+        "type_name": "KernelState",
+        "name": "kernel_state",
+        "unused": true
+      }
+    },
+    {
+      "node_type": "StructTypeInfo",
+      "node": {
+        "fields": [
+          {
+            "offset": 0,
+            "size": 4,
+            "array_entries": 0,
+            "type_name": "uint",
+            "field_name": "random_seed"
+          },
+          {
+            "offset": 8,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "ulong",
+            "field_name": "malloc_buf"
+          },
+          {
+            "offset": 16,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "ulong",
+            "field_name": "exception_info"
+          },
+          {
+            "offset": 24,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "ulong",
+            "field_name": "reloc_table"
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "buffer_size": {
+          "value": 16
+        },
+        "location_index": {
+          "value": 1
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "struct_type_info": {
+          "id": 4
+        },
+        "type_size": {
+          "value": 16
+        },
+        "type_align": {
+          "value": 8
+        },
+        "type_name": "MtlDeviceArray_Float32_1_1",
+        "name": "a",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "StructTypeInfo",
+      "node": {
+        "fields": [
+          {
+            "offset": 0,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "ulong",
+            "field_name": "ptr"
+          },
+          {
+            "offset": 8,
+            "size": 8,
+            "array_entries": 1,
+            "type_name": "long",
+            "field_name": "shape"
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "buffer_size": {
+          "value": 16
+        },
+        "location_index": {
+          "value": 2
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "struct_type_info": {
+          "id": 6
+        },
+        "type_size": {
+          "value": 16
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "Params",
+        "name": "p",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "StructTypeInfo",
+      "node": {
+        "fields": [
+          {
+            "offset": 0,
+            "size": 4,
+            "array_entries": 0,
+            "type_name": "float",
+            "field_name": "scale"
+          },
+          {
+            "offset": 4,
+            "size": 4,
+            "array_entries": 0,
+            "type_name": "uint",
+            "field_name": "offset"
+          },
+          {
+            "offset": 8,
+            "size": 4,
+            "array_entries": 2,
+            "type_name": "float",
+            "field_name": "shift"
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "buffer_size": {
+          "value": 20
+        },
+        "location_index": {
+          "value": 3
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "struct_type_info": {
+          "id": 8
+        },
+        "type_size": {
+          "value": 20
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "Outer",
+        "name": "o",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "StructTypeInfo",
+      "node": {
+        "fields": [
+          {
+            "struct_type_info": {
+              "id": 6
+            },
+            "offset": 0,
+            "size": 16,
+            "array_entries": 0,
+            "type_name": "Params",
+            "field_name": "p"
+          },
+          {
+            "offset": 16,
+            "size": 1,
+            "array_entries": 0,
+            "type_name": "bool",
+            "field_name": "flag"
+          },
+          {
+            "offset": 18,
+            "size": 2,
+            "array_entries": 0,
+            "type_name": "half",
+            "field_name": "h"
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "buffer_size": {
+          "value": 4
+        },
+        "location_index": {
+          "value": 4
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "int",
+        "name": "unused",
+        "unused": true
+      }
+    },
+    {
+      "node_type": "ThreadPositionInGridArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "uint3",
+        "name": "thread_position_in_grid",
+        "unused": false
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ]
+}
+
+Reflection No. 2:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "_Z8pointers7LLVMPtrI7Float32Li1EES0_",
+        "arguments": [
+          {
+            "id": 1
+          },
+          {
+            "id": 3
+          },
+          {
+            "id": 4
+          },
+          {
+            "id": 5
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "buffer_size": {
+          "value": 32
+        },
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "struct_type_info": {
+          "id": 2
+        },
+        "type_size": {
+          "value": 32
+        },
+        "type_align": {
+          "value": 8
+        },
+        "type_name": "KernelState",
+        "name": "kernel_state",
+        "unused": true
+      }
+    },
+    {
+      "node_type": "StructTypeInfo",
+      "node": {
+        "fields": [
+          {
+            "offset": 0,
+            "size": 4,
+            "array_entries": 0,
+            "type_name": "uint",
+            "field_name": "random_seed"
+          },
+          {
+            "offset": 8,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "ulong",
+            "field_name": "malloc_buf"
+          },
+          {
+            "offset": 16,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "ulong",
+            "field_name": "exception_info"
+          },
+          {
+            "offset": 24,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "ulong",
+            "field_name": "reloc_table"
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 1
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "ReadWrite",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "float",
+        "name": "p",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "buffer_size": {
+          "value": 4
+        },
+        "location_index": {
+          "value": 2
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "float",
+        "name": "x",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "ThreadPositionInGridArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "uint3",
+        "name": "thread_position_in_grid",
+        "unused": false
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ]
+}
+
+Reflection No. 3:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "_Z13reduce_groups14MtlDeviceArrayI7Float32Li1ELi1EES1_",
+        "arguments": [
+          {
+            "id": 1
+          },
+          {
+            "id": 3
+          },
+          {
+            "id": 5
+          },
+          {
+            "id": 6
+          },
+          {
+            "id": 7
+          },
+          {
+            "id": 8
+          },
+          {
+            "id": 9
+          },
+          {
+            "id": 10
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "buffer_size": {
+          "value": 32
+        },
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "struct_type_info": {
+          "id": 2
+        },
+        "type_size": {
+          "value": 32
+        },
+        "type_align": {
+          "value": 8
+        },
+        "type_name": "KernelState",
+        "name": "kernel_state",
+        "unused": true
+      }
+    },
+    {
+      "node_type": "StructTypeInfo",
+      "node": {
+        "fields": [
+          {
+            "offset": 0,
+            "size": 4,
+            "array_entries": 0,
+            "type_name": "uint",
+            "field_name": "random_seed"
+          },
+          {
+            "offset": 8,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "ulong",
+            "field_name": "malloc_buf"
+          },
+          {
+            "offset": 16,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "ulong",
+            "field_name": "exception_info"
+          },
+          {
+            "offset": 24,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "ulong",
+            "field_name": "reloc_table"
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "buffer_size": {
+          "value": 16
+        },
+        "location_index": {
+          "value": 1
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "struct_type_info": {
+          "id": 4
+        },
+        "type_size": {
+          "value": 16
+        },
+        "type_align": {
+          "value": 8
+        },
+        "type_name": "MtlDeviceArray_Float32_1_1",
+        "name": "out",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "StructTypeInfo",
+      "node": {
+        "fields": [
+          {
+            "offset": 0,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "ulong",
+            "field_name": "ptr"
+          },
+          {
+            "offset": 8,
+            "size": 8,
+            "array_entries": 1,
+            "type_name": "long",
+            "field_name": "shape"
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "buffer_size": {
+          "value": 16
+        },
+        "location_index": {
+          "value": 2
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "struct_type_info": {
+          "id": 4
+        },
+        "type_size": {
+          "value": 16
+        },
+        "type_align": {
+          "value": 8
+        },
+        "type_name": "MtlDeviceArray_Float32_1_1",
+        "name": "a",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "ThreadgroupPositionInGridArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "uint3",
+        "name": "threadgroup_position_in_grid",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "SimdgroupIndexInThreadgroupArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "uint",
+        "name": "simdgroup_index_in_threadgroup",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "ThreadsPerThreadgroupArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "uint3",
+        "name": "threads_per_threadgroup",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "ThreadIndexInSimdgroupArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "uint",
+        "name": "thread_index_in_simdgroup",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "ThreadPositionInThreadgroupArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "uint3",
+        "name": "thread_position_in_threadgroup",
+        "unused": false
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ],
+  "static_local_allocations": [
+    {
+      "size": 256,
+      "alignment": 4
+    }
+  ]
+}
