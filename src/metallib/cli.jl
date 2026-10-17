@@ -950,4 +950,150 @@ register!("dump", Command(
       $program dump --json shaders.metallib""",
     ["--raw"], String[], dump, dump_text))
 
+
+## reflect
+
+
+# create a compute pipeline, asking Metal for the reflection of its arguments
+function reflected_pipeline(dev::MTLDevice, fun::MTLFunction)
+    err = Out{NSError}()
+    reflection = Out{MTL.MTLComputePipelineReflection}()
+    options = MTL.MTLPipelineOption(Integer(MTL.MTLPipelineOptionBindingInfo) |
+                                    Integer(MTL.MTLPipelineOptionBufferTypeInfo))
+    pipeline = @objc [dev::id{MTLDevice} newComputePipelineStateWithFunction:fun::id{MTLFunction}
+                      options:options::MTL.MTLPipelineOption
+                      reflection:reflection::Out{MTL.MTLComputePipelineReflection}
+                      error:err::Out{NSError}]::Union{Nothing,MTL.MTLComputePipelineState}
+    pipeline === nothing && throw(CommandError(string(err[])))
+    return pipeline, reflection[]
+end
+
+function binding_info(b::MTL.MTLBinding)
+    info = Pair{Symbol,Any}[:name => String(b.name), :type => b.type, :index => Int(b.index),
+                            :access => b.access, :used => b.used]
+    if b.type == MTL.MTLBindingTypeBuffer
+        bb = downcast(MTL.MTLBufferBinding, b)
+        st = bb.bufferStructType
+        push!(info, :data_type => bb.bufferDataType, :data_size => Int(bb.bufferDataSize),
+                    :alignment => Int(bb.bufferAlignment),
+                    :struct_members => st === nothing ? nothing :
+                        [(; name = String(m.name), offset = Int(m.offset), type = m.dataType)
+                         for m in st.members])
+    elseif b.type == MTL.MTLBindingTypeThreadgroupMemory
+        tb = downcast(MTL.MTLThreadgroupBinding, b)
+        push!(info, :data_size => Int(tb.threadgroupMemoryDataSize),
+                    :alignment => Int(tb.threadgroupMemoryAlignment))
+    end
+    return info
+end
+
+function reflect(ctx::Context, args::Arguments)
+    1 <= length(args.positionals) <= 2 || throw(UsageError("expected FILE [FUNCTION]"))
+    input = args.positionals[1]
+    data = read_input(ctx, input)
+    lib = read(IOBuffer(data), MetalLib)
+    funs = if length(args.positionals) == 2
+        name = args.positionals[2]
+        any(f -> f.name == name, lib.functions) ||
+            throw(CommandError("no function named $name"))
+        filter(f -> f.name == name, lib.functions)
+    else
+        lib.functions
+    end
+
+    if !("--runtime" in args.flags)
+        # TODO: decode the AIRR reflection data
+        diagnose!(ctx, "warning", "decoding the reflection data in the library is not " *
+                  "supported yet; use --runtime to ask Metal for the reflection of the " *
+                  "library's kernels")
+        return (:unsupported, (; file = input, functions = [
+            (; f.name, f.type, reflection_size = f.reflection_data === nothing ? nothing :
+                                                 sizeof(f.reflection_data))
+            for f in funs]))
+    end
+
+    dev = Metal.device()
+    mtl_lib = try
+        MTL.MTLLibraryFromData(dev, data)
+    catch e
+        throw(CommandError("Metal failed to load the library: " * sprint(showerror, e)))
+    end
+    functions = map(funs) do f
+        if f.type != Metal.METALLIB_COMPUTE_FUNCTION
+            diagnose!(ctx, "note", "skipping $(f.name): Metal only reflects kernels")
+            return (; f.name, f.type, bindings = nothing)
+        end
+        fun, required = pipeline_function(mtl_lib, f.name)
+        if fun === nothing
+            diagnose!(ctx, "note", "skipping $(f.name), which needs values for its function " *
+                      "constants $(join(required, ", "))")
+            return (; f.name, f.type, bindings = nothing)
+        end
+        pipeline, reflection = try
+            reflected_pipeline(dev, fun)
+        catch e
+            e isa CommandError || rethrow()
+            diagnose!(ctx, "error", "creating a compute pipeline for $(f.name) failed: $(e.msg)")
+            return (; f.name, f.type, bindings = nothing)
+        end
+        (; f.name, f.type,
+           max_total_threads_per_threadgroup = Int(pipeline.maxTotalThreadsPerThreadgroup),
+           static_threadgroup_memory = Int(pipeline.staticThreadgroupMemoryLength),
+           bindings = reflection === nothing ? nothing : map(binding_info, reflection.bindings))
+    end
+    # partial results when some functions could not be reflected
+    status = all(f -> f.bindings !== nothing, functions) ? :ok : :partial
+    return (status, (; file = input, device = String(dev.name), functions))
+end
+
+function reflect_text(io::IO, r)
+    for f in r.functions
+        if !haskey(f, :bindings)
+            println(io, "$(f.name): $(f.type)",
+                    f.reflection_size === nothing ? ", no reflection data" :
+                                                    ", $(f.reflection_size) bytes of reflection data")
+            continue
+        end
+        f.bindings === nothing && continue
+        println(io, "$(f.name): at most $(f.max_total_threads_per_threadgroup) threads ",
+                "per threadgroup, $(f.static_threadgroup_memory) bytes of static threadgroup memory")
+        for b in f.bindings
+            b = Dict(b)
+            line = "  [$(b[:index])] $(b[:name]): $(b[:type]), $(b[:access])"
+            b[:used] || (line *= ", unused")
+            haskey(b, :data_type) && (line *= ", $(b[:data_type])")
+            haskey(b, :data_size) && (line *= ", $(b[:data_size]) bytes aligned to $(b[:alignment])")
+            println(io, line)
+            members = get(b, :struct_members, nothing)
+            members === nothing && continue
+            for m in members
+                println(io, "      +$(m.offset) $(m.name): $(m.type)")
+            end
+        end
+    end
+end
+
+register!("reflect", Command(
+    "Show the arguments of a library's functions.",
+    """
+    Usage: $program reflect --runtime FILE [FUNCTION]
+
+    Describe the arguments of the kernels in the library in FILE (`-` for standard input),
+    or only of FUNCTION: for every binding its index, name, kind, access, whether the kernel
+    uses it, and for buffers the data type, size, alignment and struct members.
+
+    Metal builds this reflection from the metadata in a function's AIR module, not from the
+    reflection data Apple's toolchain stores in the library, which this tool cannot decode
+    yet. --runtime, which is required for now, loads the library on the default Metal
+    device and creates a compute pipeline for every kernel to ask Metal for it. Functions
+    other than kernels, and kernels that need values for function constants, are skipped.
+
+    Options:
+      --runtime     Ask Metal for the reflection of the kernels.
+
+    Example:
+      $program reflect --runtime --json shaders.metallib my_kernel""",
+    ["--runtime"], String[], reflect, reflect_text))
+
+
 end # module MetalLibCLI
