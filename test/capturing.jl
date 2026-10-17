@@ -26,7 +26,8 @@ desc = MTLCaptureDescriptor()
 @test desc.captureObject === nothing
 cmdq = global_queue(device())
 desc.captureObject = cmdq
-@test desc.captureObject == cmdq
+# (Metal 4 queues are captured through their device, see `Metal.capture_object`)
+@test desc.captureObject == (cmdq isa Metal.Metal4Queue ? device() : cmdq)
 dev = device()
 desc.captureObject = dev
 @test desc.captureObject == dev

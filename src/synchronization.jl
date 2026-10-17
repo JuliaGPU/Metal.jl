@@ -29,6 +29,16 @@ function wait_cmdbuf!(cmdbuf::MTL.MTLCommandBufferLike; handlers::Bool=false)
     return
 end
 
+# with the Metal 4 backend, the last submission isn't necessarily the last to complete (see
+# `last_submission`), and a Metal 4 submission is only known to have completed once its
+# feedback has been processed, so wait for each of them
+function wait_submissions!(state::Union{Nothing,MTL.QueueSubmissionState})
+    state === nothing && return
+    foreach(wait_completed!, state.pending)
+    return
+end
+wait_submissions!(states::AbstractVector) = foreach(wait_submissions!, states)
+
 function command_buffer_errors(state::Union{Nothing,MTL.QueueSubmissionState})
     state === nothing && return nothing
     return MTL.finish_submissions!(state)
@@ -100,6 +110,7 @@ function synchronize(queue = global_queue(device()))
 
     # Handles the already-completed fast path internally.
     last === nothing || wait_completed!(last)
+    wait_submissions!(submissions)
 
     # waiting for orphaned queues changes the type of `submissions`, so keep the paths
     # apart for `finish_synchronization!` to be called with concrete arguments
@@ -154,6 +165,7 @@ function wait_orphaned_queues!(orphans, submissions)
         drain_logging_cmdbufs!(bq.queue)
         last, state = take_submissions!(bq)
         last === nothing || wait_completed!(last)
+        wait_submissions!(state)
         state === nothing || push!(states, state)
     end
     return states
@@ -174,6 +186,9 @@ Synchronize all committed GPU work across all global queues.
 """
 function device_synchronize()
     flush_batched_queues!()
+    @static if COMMAND_API === :metal4
+        Base.@lock submission_lock process_freed!()
+    end
     maybe_collect(device(); will_block=true)
 
     queues = active_global_queues()
@@ -182,12 +197,9 @@ function device_synchronize()
         drain_logging_cmdbufs!(raw_queue(queue))
     end
 
-    cmdbufs, submissions = MTL.take_all_submissions()
-
-    # the last command buffer committed to each queue completes after the earlier ones
-    for cmdbuf in cmdbufs
-        wait_cmdbuf!(cmdbuf)
-    end
+    lasts, submissions = MTL.take_all_submissions()
+    foreach(wait_completed!, lasts)
+    submissions === nothing || wait_submissions!(submissions)
 
     # other tasks may have committed work while we were waiting, so only clean up after
     # command buffers that have completed

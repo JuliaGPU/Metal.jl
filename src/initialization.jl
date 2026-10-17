@@ -58,6 +58,9 @@ function __init__()
 
     MTL.submit_hook[] = submit_command_buffer
 
+    # buffers freed while generating the package image don't exist in this process
+    Base.@atomic freed_buffers.head = nothing
+
     if !Sys.isapple() || Sys.ARCH != :aarch64
         @error "Metal.jl is only supported on Apple Silicon"
         return
@@ -76,6 +79,15 @@ function __init__()
         opts = MTL.MTLCompileOptions()
         ver = @objc [opts::id{MTL.MTLCompileOptions} languageVersion]::MTL.MTLLanguageVersion
         @debug "Successfully loaded Metal; default language version $(describe_language_version(ver))."
+
+        # the preference is fixed at compile time, but support depends on this system
+        if COMMAND_API === :metal4
+            reason = metal4_unsupported_reason(MTLDevice(1))
+            if reason !== nothing
+                @error "The `command_api` preference selects the Metal 4 command API, but $reason."
+                return
+            end
+        end
 
         initialized[] = true
     catch err

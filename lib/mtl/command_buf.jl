@@ -51,13 +51,10 @@ into the command buffers and those threads can complete in any order.
 function enqueue!(cmdbuf::MTLCommandBufferLike)
     cmdbuf.status in [MTLCommandBufferStatusCompleted, MTLCommandBufferStatusEnqueued] &&
         error("Cannot enqueue an already enqueued command buffer")
-    submit(cmdbuf) do
+    submit(cmdbuf, false) do
         @objc [cmdbuf::id{MTLCommandBuffer} enqueue]::Nothing
     end
 end
-
-const last_committed_lock = ReentrantLock()
-const last_committed_per_queue = Dict{id{MTLCommandQueue}, MTLCommandBufferLike}()
 
 struct CommandBufferErrorInfo
     domain::String
@@ -93,12 +90,44 @@ function Base.showerror(io::IO, exc::CommandBufferError)
     end
 end
 
+"""
+    MTL4Submission
+
+The completion state of Metal 4 command buffers that were committed together (see
+[`commit_tracked!`](@ref)). Metal 4 command buffers are recycled as soon as they are
+committed, so unlike a Metal 3 `MTLCommandBuffer` they can't be asked whether they have
+completed: their commit feedback, and a shared event the queue signals after them, report
+it instead.
+"""
+mutable struct MTL4Submission
+    # signalled to `value` by the queue once the GPU is done with the command buffers
+    const event::MTLSharedEvent
+    const value::UInt64
+    const label::Union{Nothing,String}
+    const queue_label::Union{Nothing,String}
+    # whether a feedback handler reports completion. without one (e.g., while generating
+    # output, where Metal's threads can't run Julia code), only the event does, and errors
+    # aren't reported.
+    const feedback::Bool
+    # set by the feedback handler, after the error and timings
+    Base.@atomic completed::Bool
+    Base.@atomic error::Union{Nothing,CommandBufferErrorInfo}
+    Base.@atomic gpu_start::Float64
+    Base.@atomic gpu_end::Float64
+end
+
+# what is tracked per queue: Metal 3 command buffers, or Metal 4 submissions
+const Submission = Union{MTLCommandBufferLike,MTL4Submission}
+
 mutable struct QueueSubmissionState
-    pending::Vector{MTLCommandBufferLike}
+    pending::Vector{Submission}
     errors::Union{Nothing,Vector{CommandBufferErrorInfo}}
 end
 
-QueueSubmissionState() = QueueSubmissionState(MTLCommandBufferLike[], nothing)
+QueueSubmissionState() = QueueSubmissionState(Submission[], nothing)
+
+const last_committed_lock = ReentrantLock()
+const last_committed_per_queue = Dict{id{MTLCommandQueue},Submission}()
 
 const submission_state_per_queue = Dict{id{MTLCommandQueue},QueueSubmissionState}()
 
@@ -138,16 +167,18 @@ function _prune_completed_submissions!(pending, errors, is_completed, error_info
     return errors
 end
 
+is_completed(cmdbuf::MTLCommandBufferLike) = cmdbuf.status >= MTLCommandBufferStatusCompleted
+
+error_info(cmdbuf::MTLCommandBufferLike) =
+    cmdbuf.status == MTLCommandBufferStatusError ? command_buffer_error_info(cmdbuf) : nothing
+
 function prune_completed_submissions!(state::QueueSubmissionState)
-    state.errors = _prune_completed_submissions!(
-        state.pending, state.errors,
-        cmdbuf -> cmdbuf.status >= MTLCommandBufferStatusCompleted,
-        cmdbuf -> cmdbuf.status == MTLCommandBufferStatusError ?
-                  command_buffer_error_info(cmdbuf) : nothing)
+    state.errors = _prune_completed_submissions!(state.pending, state.errors,
+                                                 is_completed, error_info)
     return
 end
 
-function record_committed!(cmdbuf::MTLCommandBufferLike, key::id{MTLCommandQueue})
+function record_committed!(cmdbuf::Submission, key::id{MTLCommandQueue})
     @lock last_committed_lock begin
         state = get!(submission_state_per_queue, key) do
             QueueSubmissionState()
@@ -199,13 +230,13 @@ end
 # optional profiling hook. when set, it is invoked for every committed command buffer.
 const profile_hook = Ref{Any}(nothing)
 
-# optional submission hook. when set, it is invoked as `hook(f, cmdbuf)` to enqueue or
-# commit a command buffer, which happens by calling `f()`.
+# optional submission hook. when set, it is invoked as `hook(f, cmdbuf, commit)` to enqueue
+# (`commit=false`) or commit (`commit=true`) a command buffer, which happens by calling `f()`.
 const submit_hook = Ref{Any}(nothing)
 
-@inline function submit(f, cmdbuf::MTLCommandBufferLike)
+@inline function submit(f, cmdbuf::MTLCommandBufferLike, commit::Bool)
     hook = submit_hook[]
-    hook === nothing ? f() : hook(f, cmdbuf)
+    hook === nothing ? f() : hook(f, cmdbuf, commit)
 end
 
 # optional profiling data for operation metadata (e.g. kernel dimensions, copy sizes).
@@ -220,7 +251,7 @@ end
 ProfileCollector() = ProfileCollector(ReentrantLock(), IdDict{Any,Vector{Any}}(),
                                       Tuple{String,Any}[])
 
-@inline function note_operation!(collector::ProfileCollector, cmdbuf::MTLCommandBufferLike, op)
+@inline function note_operation!(collector::ProfileCollector, cmdbuf::Submission, op)
     @lock collector.lock begin
         ops = get(collector.metadata, cmdbuf, nothing)
         if ops === nothing
@@ -233,10 +264,10 @@ ProfileCollector() = ProfileCollector(ReentrantLock(), IdDict{Any,Vector{Any}}()
 end
 
 """
-    last_committed(queue::MTLCommandQueue)::Union{MTLCommandBufferLike, Nothing}
+    last_committed(queue::MTLCommandQueue)::Union{MTL.Submission, Nothing}
 
-Return the most recently committed command buffer on `queue`, or `nothing` if
-nothing has been committed.
+Return the most recently committed command buffer (or Metal 4 submission) on `queue`, or
+`nothing` if nothing has been committed.
 """
 function last_committed(queue::MTLCommandQueue)
     key = pointer(queue)
@@ -246,13 +277,13 @@ function last_committed(queue::MTLCommandQueue)
 end
 
 function commit!(cmdbuf::MTLCommandBufferLike)
-    submit(cmdbuf) do
+    submit(cmdbuf, true) do
         commit_with_queue_key!(cmdbuf, pointer(cmdbuf.commandQueue))
     end
 end
 
 function commit!(cmdbuf::MTLCommandBufferLike, queue::MTLCommandQueue)
-    submit(cmdbuf) do
+    submit(cmdbuf, true) do
         commit_with_queue_key!(cmdbuf, pointer(queue))
     end
 end
