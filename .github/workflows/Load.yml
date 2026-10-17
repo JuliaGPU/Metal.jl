@@ -19,7 +19,7 @@ jobs:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} (load)
     runs-on: ${{ matrix.os }}
     if: github.event.pull_request.draft == false
-    timeout-minutes: 10
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -38,6 +38,16 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: 'default'
+
+      # this only checks that Metal.jl loads, so skip the dependencies' precompilation
+      # workloads, which account for about a third of a cold precompile
+      - name: Disable precompilation workloads
+        shell: bash
+        run: |
+          cat > LocalPreferences.toml <<EOF
+          [PrecompileTools]
+          precompile_workloads = false
+          EOF
 
       - uses: julia-actions/cache@v3
       - uses: julia-actions/julia-buildpkg@v1
