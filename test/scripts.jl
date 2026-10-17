@@ -271,6 +271,33 @@ metallib_dir = joinpath(@__DIR__, "metallib")
             write(joinpath(dir, "broken.ll"), "this is not LLVM IR")
             r = metallib("as", "-o", joinpath(dir, "broken.metallib"), joinpath(dir, "broken.ll"))
             @test r.code == 1 && contains(r.err, "could not parse")
+            # (IR that parses, but that the verifier rejects)
+            write(joinpath(dir, "invalid.ll"), """
+                define void @foo() {
+                  %a = add i32 %b, 1
+                  %b = add i32 %a, 1
+                  ret void
+                }""")
+            r = metallib("as", "-o", joinpath(dir, "invalid.metallib"), joinpath(dir, "invalid.ll"))
+            @test r.code == 1 && contains(r.err, "not valid LLVM IR")
+
+            # plain bitcode, as written by LLVM rather than Apple's toolchain
+            # (LLVM wraps the bitcode for Darwin targets like AIR)
+            @dispose ctx=Context() mod=parse(LLVM.Module, read(joinpath(dir, "foo.ll"), String)) begin
+                LLVM.triple!(mod, "")
+                write(joinpath(dir, "plain.bc"), mod)
+            end
+            @test read(joinpath(dir, "plain.bc"))[1:4] == [0x42, 0x43, 0xc0, 0xde]
+            @test metallib("as", "-o", joinpath(dir, "plain.metallib"), joinpath(dir, "plain.bc")).code == 0
+            r = metallib("dis", "-S", "-o", "-", joinpath(dir, "plain.metallib"))
+            @test r.code == 0 && contains(r.out, "define void @foo()")
+            r = metallib("validate", "--json", joinpath(dir, "plain.metallib"))
+            @test getkey(parse_json(r.out), "status") == "ok"
+
+            # failing to write the output
+            r = metallib("dis", "--json", "-o", joinpath(dir, "nonexistent", "foo.bc"), path, "foo")
+            @test r.code == 1
+            @test getkey(parse_json(r.out), "status") == "error"
         end
 
         # pipelines are only created for kernels
@@ -342,4 +369,50 @@ metallib_dir = joinpath(@__DIR__, "metallib")
         @test r.code == 1 && contains(r.err, "no function named bar")
     end
 
+    @testset "validate" begin
+        path = joinpath(metallib_dir, "kernels.13.metallib")
+        r = metallib("validate", "--runtime", "--json", path)
+        @test r.code == 0
+        result = getkey(parse_json(r.out), "result")
+        @test getkey(result, "valid") == true
+        @test getkey(result, "checked") == ["structure", "modules", "runtime"]
+
+        # a HASH that doesn't match the module
+        lib = parse(Metal.MetalLib, path)
+        bytes = read(path)
+        offset = lib.functions[2].layout.function_tags.offsets["HASH"]
+        bytes[offset+1] ⊻= 0xff
+        r = metallib("validate", "--json", "-"; input=IOBuffer(bytes))
+        @test r.code == 0
+        doc = parse_json(r.out)
+        diagnostic = only(getkey(doc, "diagnostics"))
+        @test getkey(diagnostic, "severity") == "warning"
+        @test getkey(diagnostic, "offset") == offset
+        @test contains(getkey(diagnostic, "message"), "HASH of bar")
+
+        # a module that isn't bitcode can't be checked
+        functions = copy(lib.functions)
+        functions[2] = Metal.MetalLibFunction(functions[2]; air_module=[0x00, 0x01, 0x02, 0x03])
+        broken = sprint(write, Metal.MetalLib(lib; functions))
+        r = metallib("validate", "--json", "-"; input=IOBuffer(broken))
+        @test r.code == 0
+        doc = parse_json(r.out)
+        @test getkey(doc, "status") == "partial"
+        @test getkey(getkey(doc, "result"), "unchecked_modules") == ["bar"]
+
+        # a module that is broken bitcode, or doesn't define the function
+        for (air_module, message) in ([0xde, 0xc0, 0x17, 0x0b, 0x00] => "not valid LLVM bitcode",
+                                      lib.functions[1].air_module => "does not define it")
+            functions = copy(lib.functions)
+            functions[2] = Metal.MetalLibFunction(functions[2]; air_module)
+            broken = sprint(write, Metal.MetalLib(lib; functions))
+            r = metallib("validate", "-"; input=IOBuffer(broken))
+            @test r.code == 1 && contains(r.err, message)
+        end
+
+        # a truncated library
+        r = metallib("validate", "--json", "-"; input=IOBuffer(read(path)[1:200]))
+        @test r.code == 1
+        @test getkey(parse_json(r.out), "status") == "error"
+    end
 end

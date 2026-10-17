@@ -1096,4 +1096,126 @@ register!("reflect", Command(
     ["--runtime"], String[], reflect, reflect_text))
 
 
+## validate
+
+function validate(ctx::Context, args::Arguments)
+    path = only_positional(args, "input file")
+    data = read_input(ctx, path)
+    # the reader checks the structure: sizes, offsets and references between sections
+    lib = read(IOBuffer(data), MetalLib)
+    checked = ["structure", "modules"]
+    unchecked_modules = String[]
+
+    air, metal = Metal.air_support(), Metal.metal_support()
+    for f in lib.functions
+        offset = f.layout === nothing ? nothing : first(f.layout.function_tags.extent)
+        if f.air_version > air || f.metal_version > metal
+            diagnose!(ctx, "warning", "$(f.name) targets AIR v$(f.air_version) and Metal " *
+                      "v$(f.metal_version), but this system supports up to AIR v$air and " *
+                      "Metal v$metal"; offset)
+        end
+        if !is_bitcode(f.air_module)
+            diagnose!(ctx, "warning", "the module of $(f.name) is not LLVM bitcode (it may " *
+                      "be compressed), so it was not checked"; offset)
+            push!(unchecked_modules, f.name)
+            continue
+        end
+        hash = f.layout === nothing ? nothing : Metal.decoded(f.layout.function_tags, "HASH")
+        if hash !== nothing && hash != sha256(f.air_module)
+            diagnose!(ctx, "warning", "the HASH of $(f.name) is not the SHA-256 of its module";
+                      offset = f.layout.function_tags.offsets["HASH"])
+        end
+        try
+            @dispose llvm=LLVM.Context() mod=parse(LLVM.Module, f.air_module) begin
+                haskey(mod.functions, f.name) && !isdeclaration(mod.functions[f.name]) ||
+                    diagnose!(ctx, "error", "the module of $(f.name) does not define it";
+                              offset)
+            end
+        catch e
+            e isa LLVM.LLVMException || rethrow()
+            diagnose!(ctx, "error", "the module of $(f.name) is not valid LLVM bitcode: " *
+                      e.info; offset)
+        end
+    end
+    if "--runtime" in args.flags
+        push!(checked, "runtime")
+        try
+            MTL.MTLLibraryFromData(Metal.device(), data)
+        catch e
+            diagnose!(ctx, "error", "Metal failed to load the library: " * sprint(showerror, e))
+        end
+    end
+
+    if "--apple" in args.flags
+        tool = apple_tool("metal-validate")
+        if tool === nothing
+            diagnose!(ctx, "warning", "Apple's metal-validate was not found, so the library " *
+                      "was not checked with it; set METAL_TOOLCHAIN to the directory that " *
+                      "contains it")
+        else
+            mktemp() do tmp, io
+                write(io, data)
+                close(io)
+                out, err = IOBuffer(), IOBuffer()
+                ok = success(pipeline(ignorestatus(`$tool $tmp`); stdout=out, stderr=err))
+                msg = strip(String(take!(out)) * String(take!(err)))
+                ok || diagnose!(ctx, "error", "metal-validate rejected the library" *
+                                (isempty(msg) ? "" : ": " * replace(msg, tmp => path)))
+                push!(checked, "apple")
+            end
+        end
+    end
+
+    errors = count(d -> d.severity == "error", ctx.diagnostics)
+    warnings = count(d -> d.severity == "warning", ctx.diagnostics)
+    result = (; file = path, valid = errors == 0, errors, warnings, checked, unchecked_modules)
+    # (when not everything that was asked for could be checked)
+    complete = isempty(unchecked_modules) && !("--apple" in args.flags && !("apple" in checked))
+    return complete ? result : (:partial, result)
+end
+
+# find one of Apple's Metal tools, in METAL_TOOLCHAIN or with `xcrun`
+function apple_tool(name)
+    dir = get(ENV, "METAL_TOOLCHAIN", nothing)
+    if dir !== nothing
+        path = joinpath(dir, name)
+        return isfile(path) ? path : nothing
+    end
+    Sys.isapple() || return nothing
+    out = IOBuffer()
+    success(pipeline(ignorestatus(`xcrun --find $name`); stdout=out, stderr=devnull)) ||
+        return nothing
+    path = strip(String(take!(out)))
+    return isfile(path) ? path : nothing
+end
+
+function validate_text(io::IO, r)
+    println(io, "$(r.file): ", r.valid ? "valid" : "invalid",
+            " ($(r.errors) error(s), $(r.warnings) warning(s); checked ",
+            join(r.checked, ", "), ")")
+    isempty(r.unchecked_modules) ||
+        println(io, "  not checked: the modules of ", join(r.unchecked_modules, ", "))
+end
+
+register!("validate", Command(
+    "Check that a library is well formed.",
+    """
+    Usage: $program validate [--runtime] [--apple] FILE
+
+    Check the library in FILE (`-` for standard input): that its sections, tag groups and
+    offsets are consistent, and for every function that its module is LLVM bitcode that
+    defines the function, that its HASH is the SHA-256 of the module, and that it targets AIR
+    and Metal versions this system supports. Problems are reported as diagnostics; the
+    command fails if any of them is an error. The status is "partial" when something could
+    not be checked, e.g. compressed modules, or with --apple when metal-validate is missing.
+
+    Options:
+      --runtime     Also load the library on the default Metal device.
+      --apple       Also run Apple's metal-validate, found in the directory METAL_TOOLCHAIN
+                    names or with `xcrun`.
+
+    Example:
+      $program validate --runtime --json shaders.metallib""",
+    ["--runtime", "--apple"], String[], validate, validate_text))
+
 end # module MetalLibCLI
