@@ -245,6 +245,41 @@ metallib_dir = joinpath(@__DIR__, "metallib")
             r = metallib("validate", "--json", joinpath(dir, "plain.metallib"))
             @test getkey(parse_json(r.out), "status") == "ok"
 
+            # with reflection data, derived from the module's metadata
+            vadd = joinpath(dir, "vadd.metallib")
+            r = metallib("as", "--reflect", "--json", "-o", vadd,
+                         joinpath(metallib_dir, "julia", "vadd.air"))
+            @test r.code == 0
+            @test getkey(only(getkey(getkey(parse_json(r.out), "result"), "functions")),
+                         "reflection") == true
+            r = metallib("reflect", vadd)
+            @test r.code == 0 && contains(r.out, "ThreadPositionInGridArg(")
+            # (functions it can't describe get none)
+            render = joinpath(metallib_dir, "render.26.metallib")
+            @test metallib("dis", "-o", joinpath(dir, "frag.bc"), render, "frag").code == 0
+            r = metallib("as", "--reflect", "-o", joinpath(dir, "frag.metallib"),
+                         joinpath(dir, "frag.bc"))
+            @test r.code == 0 && contains(r.err, "cannot describe")
+            @test only(parse(Metal.MetalLib, joinpath(dir, "frag.metallib")).functions).reflection_data ===
+                  nothing
+            # (and malformed metadata is an error)
+            @dispose ctx=Context() begin
+                kernel = LLVM.supports_typed_pointers(ctx) ? "void (i32)* @kernel" : "ptr @kernel"
+                write(joinpath(dir, "malformed.ll"), """
+                    define void @kernel(i32 %x) {
+                      ret void
+                    }
+                    !air.kernel = !{!0}
+                    !0 = !{$kernel, !1, !2}
+                    !1 = !{}
+                    !2 = !{!3}
+                    !3 = !{i32 0, !"air.buffer", !"air.location_index", i32 0}
+                    """)
+            end
+            r = metallib("as", "--reflect", "-o", joinpath(dir, "malformed.metallib"),
+                         joinpath(dir, "malformed.ll"))
+            @test r.code == 1 && contains(r.err, "malformed argument metadata")
+
             # failing to write the output
             r = metallib("dis", "--json", "-o", joinpath(dir, "nonexistent", "foo.bc"), path, "foo")
             @test r.code == 1
