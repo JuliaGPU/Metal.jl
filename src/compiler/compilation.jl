@@ -565,10 +565,37 @@ function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
             # the back-end compiler likely failed
             # XXX: check more accurately? the error domain doesn't help much here
             air_file, metallib_file = dump_artifacts(".air" => air, ".metallib" => metallib)
-            error("""Compilation to native code failed; see below for details.
+            msg = """Compilation to native code failed; see below for details.
                      If you think this is a bug, please file an issue and attach:
                      - $(air_file)
-                     - $(metallib_file)""")
+                     - $(metallib_file)"""
+            is_virtual(dev) && (msg *= "\n\n" * virtual_compilation_hint(dev))
+            error(msg)
         end
+    end
+end
+
+# The paravirtualized GPU driver compiles pipelines on the host and only reports a generic
+# error back. After a couple of such failures, the host stops servicing the process's
+# compilations, also of valid kernels. New buffers lacking a GPU address are the only
+# observable sign of that.
+function virtual_compilation_hint(dev::MTLDevice)
+    ignored = try
+        buf = MTLBuffer(dev, 4; storage=SharedStorage)
+        try
+            iszero(UInt(buf.gpuAddress))
+        finally
+            release(buf)
+        end
+    catch
+        false
+    end
+    if ignored
+        """The virtualized GPU driver no longer compiles pipelines for this process because of
+           this or earlier failures, so all further compilations will fail. Restart Julia."""
+    else
+        """The virtualized GPU driver does not report the back-end compiler's error message;
+           compiling the metallib on a non-virtualized Mac may reveal it. Note that after
+           repeated failures, the driver stops compiling pipelines for this process."""
     end
 end
