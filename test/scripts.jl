@@ -300,4 +300,46 @@ metallib_dir = joinpath(@__DIR__, "metallib")
         r = metallib("load", joinpath(metallib_dir, "kernel.13.metallib"), "nonexistent")
         @test r.code == 1 && contains(r.err, "no function nonexistent")
     end
+
+    @testset "reflect" begin
+        # the reflection data in the library isn't decoded yet
+        r = metallib("reflect", "--json", joinpath(metallib_dir, "kernel.13.metallib"))
+        @test r.code == 1
+        doc = parse_json(r.out)
+        @test getkey(doc, "status") == "unsupported"
+        @test getkey(only(getkey(getkey(doc, "result"), "functions")), "name") == "foo"
+
+        # ... but Metal can reflect the kernels
+        r = metallib("reflect", "--runtime", "--json", joinpath(metallib_dir, "visible.13.metallib"))
+        @test r.code == 0
+        doc = parse_json(r.out)
+        functions = getkey(getkey(doc, "result"), "functions")
+        @test [getkey(f, "name") for f in functions] == ["foo", "twice"]
+        # (visible functions can't be reflected on their own)
+        @test getkey(functions[2], "bindings") === nothing
+        @test getkey(only(getkey(doc, "diagnostics")), "severity") == "note"
+        binding = only(getkey(functions[1], "bindings"))
+        @test getkey(binding, "name") == "a"
+        @test getkey(getkey(binding, "type"), "name") == "MTLBindingTypeBuffer"
+        @test getkey(getkey(binding, "data_type"), "name") == "MTLDataTypeFloat"
+        @test getkey(binding, "data_size") == 4
+
+        r = metallib("reflect", "--runtime", "--json", joinpath(metallib_dir, "constants.13.metallib"))
+        @test r.code == 0
+        doc = parse_json(r.out)
+        @test getkey(doc, "status") == "partial"
+        @test getkey(only(getkey(getkey(doc, "result"), "functions")), "bindings") === nothing
+        r = metallib("reflect", "--runtime", "--json", joinpath(metallib_dir, "optional.13.metallib"))
+        @test r.code == 0
+        doc = parse_json(r.out)
+        @test getkey(doc, "status") == "ok"
+        @test getkey(only(getkey(getkey(getkey(doc, "result"), "functions")[1], "bindings")),
+                     "name") == "a"
+
+        r = metallib("reflect", "--runtime", joinpath(metallib_dir, "visible.13.metallib"), "foo")
+        @test r.code == 0 && contains(r.out, "[0] a: MTLBindingTypeBuffer")
+        r = metallib("reflect", "--runtime", joinpath(metallib_dir, "visible.13.metallib"), "bar")
+        @test r.code == 1 && contains(r.err, "no function named bar")
+    end
+
 end
