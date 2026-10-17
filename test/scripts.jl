@@ -280,12 +280,32 @@ metallib_dir = joinpath(@__DIR__, "metallib")
     end
 
     @testset "reflect" begin
-        # the reflection data in the library isn't decoded yet
-        r = metallib("reflect", "--json", joinpath(metallib_dir, "kernel.13.metallib"))
-        @test r.code == 1
+        # the reflection data in the library
+        r = metallib("reflect", "--json", joinpath(metallib_dir, "visible.13.metallib"))
+        @test r.code == 0
         doc = parse_json(r.out)
-        @test getkey(doc, "status") == "unsupported"
-        @test getkey(only(getkey(getkey(doc, "result"), "functions")), "name") == "foo"
+        @test getkey(doc, "status") == "ok"
+        functions = getkey(getkey(doc, "result"), "functions")
+        @test [getkey(f, "name") for f in functions] == ["foo", "twice"]
+        nodes = getkey(getkey(functions[1], "reflection"), "nodes")
+        arg = getkey(nodes[2], "node")
+        @test getkey(getkey(nodes[2], "node_type"), "name") == "BufferArg"
+        @test getkey(arg, "name") == "a"
+        @test getkey(arg, "address_space") == ["name" => "Global", "value" => 1]
+        @test getkey(getkey(arg, "location_index"), "value") == 0
+
+        r = metallib("reflect", joinpath(metallib_dir, "visible.13.metallib"), "foo")
+        @test r.code == 0 && contains(r.out, "#1 BufferArg(")
+
+        # functions without (decodable) reflection data
+        r = metallib("reflect", "--json", joinpath(metallib_dir, "kernel.11.metallib"))
+        @test r.code == 0
+        doc = parse_json(r.out)
+        @test getkey(only(getkey(getkey(doc, "result"), "functions")), "reflection") === nothing
+        @test getkey(only(getkey(doc, "diagnostics")), "severity") == "note"
+        r = metallib("reflect", "--json", joinpath(metallib_dir, "kernels.compressed.metallib"))
+        @test r.code == 0
+        @test getkey(parse_json(r.out), "status") == "partial"
 
         # ... but Metal can reflect the kernels
         r = metallib("reflect", "--runtime", "--json", joinpath(metallib_dir, "visible.13.metallib"))
