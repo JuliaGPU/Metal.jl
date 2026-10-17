@@ -55,9 +55,15 @@ function exception_info_buffer_and_gpu_address(dev::MTLDevice)
     Base.@lock device_exception_lock begin
         buf, _, gpuaddr = get!(device_exception_info, dev) do
             local buf = MTLBuffer(dev, sizeof(ExceptionInfo_st); storage=SharedStorage)
+            addr = try
+                MTL.gpu_address(buf)
+            catch
+                release(buf)
+                rethrow()
+            end
             ptr = convert(Ptr{ExceptionInfo_st}, MTL.contents(buf))
             unsafe_store!(ptr, ExceptionInfo_st())
-            (buf, ptr, UInt64(buf.gpuAddress))
+            (buf, ptr, UInt64(addr))
         end
         return buf, gpuaddr
     end

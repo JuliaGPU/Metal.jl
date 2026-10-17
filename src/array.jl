@@ -257,7 +257,7 @@ Base.sizeof(x::MtlArray) = Base.elsize(x) * length(x)
 
 # GPUArrays implements `Base.dataids` and `Base.mightalias` from where an array lives,
 # identifying the buffer by its GPU address
-GPUArrays.memory_location(x::MtlArray) = (UInt(x.data[].buffer.gpuAddress), x.offset)
+GPUArrays.memory_location(x::MtlArray) = (UInt(MTL.gpu_address(x.data[].buffer)), x.offset)
 
 Base.unaliascopy(x::MtlArray) = copy(x)
 
