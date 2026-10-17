@@ -634,7 +634,19 @@ function as(ctx::Context, args::Arguments)
                                   "v$default, what this system supports")
                         push!(versions, field => default)
                     end
-                    fun = MetalLibFunction(mod, name; air_module, versions...)
+                    reflection_data = nothing
+                    if "--reflect" in args.flags
+                        reflection_data = try
+                            Metal.reflection_data(Metal.reflection(mod, name))
+                        catch e
+                            e isa ArgumentError &&
+                                throw(CommandError("$input: $(sprint(showerror, e))"))
+                            e isa Metal.UnsupportedReflection || rethrow()
+                            diagnose!(ctx, "warning", "$input: $(sprint(showerror, e))")
+                            nothing
+                        end
+                    end
+                    fun = MetalLibFunction(mod, name; air_module, reflection_data, versions...)
                     fun.type == Metal.METALLIB_UNQUALIFIED_FUNCTION &&
                         diagnose!(ctx, "note", "$name is not listed as an entry point (e.g. " *
                                   "in air.kernel), so the library describes it as a plain function")
@@ -651,7 +663,8 @@ function as(ctx::Context, args::Arguments)
     data = sprint(write, lib) |> codeunits |> collect
     write_output(ctx, output, data; force = "-f" in args.flags)
     return (; output, size = sizeof(data),
-              functions = [(; f.name, input, module_size = sizeof(f.air_module))
+              functions = [(; f.name, input, module_size = sizeof(f.air_module),
+                              reflection = f.reflection_data !== nothing)
                            for (f, input) in zip(lib_functions, inputs)])
 end
 
@@ -661,7 +674,7 @@ as_text(io::IO, r) = r.output == "-" ||
 register!("as", Command(
     "Package LLVM IR or bitcode into a library.",
     """
-    Usage: $program as [-d] [-f] [-o OUTPUT] INPUT...
+    Usage: $program as [-d] [-f] [--reflect] [-o OUTPUT] INPUT...
 
     Create a library with one function per INPUT, an LLVM module in textual IR or bitcode
     (`-` for standard input) with exactly one external function, which becomes the
@@ -670,16 +683,21 @@ register!("as", Command(
     Like Apple's linker, the tool derives each function's type, AIR and Metal versions,
     function constants and debug info from the module's metadata (`air.kernel`,
     `air.version`, ...); without version metadata, it assumes what this system supports.
+    With --reflect, it also derives reflection data (see `reflect`), which Apple's tools
+    and `MTLLibrary`'s `reflectionForFunctionWithName:` use, but the runtime does not need.
+    Only kernels and visible functions with buffer and built-in arguments can be described;
+    other functions get none, with a warning.
 
     Options:
       -o OUTPUT     Write the library to OUTPUT (`-` for standard output). Defaults to the
                     name of the only INPUT, with its extension replaced by `.metallib`.
       -d            Downgrade bitcode inputs too.
       -f            Overwrite OUTPUT if it exists.
+      --reflect     Add reflection data.
 
     Example:
       $program as -o kernel.metallib kernel.ll""",
-    ["-d", "-f"], ["-o"], as, as_text))
+    ["-d", "-f", "--reflect"], ["-o"], as, as_text))
 
 
 ## load
