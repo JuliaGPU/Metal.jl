@@ -1,0 +1,335 @@
+render.26.metallib:
+Dump of section REFLECTIONS:
+
+Reflection No. 0:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "VertexFunction",
+      "node": {
+        "name": "vert",
+        "return_types": [
+          {
+            "id": 1
+          },
+          {
+            "id": 2
+          },
+          {
+            "id": 3
+          }
+        ],
+        "arguments": [
+          {
+            "id": 4
+          },
+          {
+            "id": 5
+          },
+          {
+            "id": 6
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "PositionRet",
+      "node": {
+        "function_constant": false,
+        "invariant": false,
+        "shared": false,
+        "type_name": "float4",
+        "name": "position"
+      }
+    },
+    {
+      "node_type": "VertexOutputRet",
+      "node": {
+        "function_constant": false,
+        "attribute_name": "generated(2uvDv2_f)",
+        "shared": false,
+        "type_name": "float2",
+        "name": "uv"
+      }
+    },
+    {
+      "node_type": "RenderTargetArrayIndexRet",
+      "node": {
+        "function_constant": false,
+        "shared": false,
+        "type_name": "uint",
+        "name": "layer"
+      }
+    },
+    {
+      "node_type": "VertexInputArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "type_name": "float4",
+        "name": "position",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "VertexInputArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 1
+        },
+        "location_count": {
+          "value": 1
+        },
+        "type_name": "float2",
+        "name": "uv",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "InstanceIDArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "uint",
+        "name": "iid",
+        "unused": false
+      }
+    }
+  ],
+  "vertex_functions": [
+    {
+      "id": 0
+    }
+  ]
+}
+
+Reflection No. 1:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "VertexFunction",
+      "node": {
+        "name": "tess",
+        "return_types": [
+          {
+            "id": 1
+          },
+          {
+            "id": 2
+          },
+          {
+            "id": 3
+          }
+        ],
+        "arguments": [
+          {
+            "id": 4
+          },
+          {
+            "id": 7
+          }
+        ],
+        "patch": {
+          "id": 8
+        }
+      }
+    },
+    {
+      "node_type": "PositionRet",
+      "node": {
+        "function_constant": false,
+        "invariant": false,
+        "shared": false,
+        "type_name": "float4",
+        "name": "position"
+      }
+    },
+    {
+      "node_type": "VertexOutputRet",
+      "node": {
+        "function_constant": false,
+        "attribute_name": "generated(2uvDv2_f)",
+        "shared": false,
+        "type_name": "float2",
+        "name": "uv"
+      }
+    },
+    {
+      "node_type": "RenderTargetArrayIndexRet",
+      "node": {
+        "function_constant": false,
+        "shared": false,
+        "type_name": "uint",
+        "name": "layer"
+      }
+    },
+    {
+      "node_type": "ControlPointInputArg",
+      "node": {
+        "function_constant": false,
+        "fields": [
+          {
+            "id": 5
+          },
+          {
+            "id": 6
+          }
+        ],
+        "unused": false
+      }
+    },
+    {
+      "node_type": "ControlPointField",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "type_name": "float4",
+        "name": "position",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "ControlPointField",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 1
+        },
+        "location_count": {
+          "value": 1
+        },
+        "type_name": "float2",
+        "name": "uv",
+        "unused": true
+      }
+    },
+    {
+      "node_type": "PositionInPatchArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "float2",
+        "name": "uv",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "PatchFnAttr",
+      "node": {
+        "kind": "Quad",
+        "control_points": {
+          "value": 4
+        }
+      }
+    }
+  ],
+  "vertex_functions": [
+    {
+      "id": 0
+    }
+  ]
+}
+
+Reflection No. 2:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "FragmentFunction",
+      "node": {
+        "name": "frag",
+        "return_type": [
+          {
+            "id": 1
+          }
+        ],
+        "arguments": [
+          {
+            "id": 2
+          },
+          {
+            "id": 3
+          },
+          {
+            "id": 4
+          }
+        ],
+        "early_fragment_tests": false
+      }
+    },
+    {
+      "node_type": "RenderTargetRet",
+      "node": {
+        "function_constant": false,
+        "render_target_index": {
+          "value": 0
+        },
+        "blend_source_index": {
+          "value": 0
+        },
+        "rounding_mode": "Native",
+        "type_name": "float4"
+      }
+    },
+    {
+      "node_type": "PositionArg",
+      "node": {
+        "function_constant": false,
+        "sampling_qualifier": "Center",
+        "interpolation_qualifier": "NoPerspective",
+        "type_name": "float4",
+        "name": "position",
+        "unused": true
+      }
+    },
+    {
+      "node_type": "FragmentInputArg",
+      "node": {
+        "function_constant": false,
+        "attribute_name": "generated(2uvDv2_f)",
+        "sampling_qualifier": "Center",
+        "interpolation_qualifier": "Perspective",
+        "type_name": "float2",
+        "name": "uv",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "RenderTargetArrayIndexArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "uint",
+        "name": "layer",
+        "unused": true
+      }
+    }
+  ],
+  "fragment_functions": [
+    {
+      "id": 0
+    }
+  ]
+}
