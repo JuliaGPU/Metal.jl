@@ -579,6 +579,111 @@ end
     end
     @test run_affine("scale" => UInt32(3), "offset" => UInt32(1)) == [4, 7, 10, 13]
     @test run_affine("scale" => UInt32(3)) == [3, 6, 9, 12]
+
+    # functions require the constants they use, unless that use checks them. Apple's
+    # linker only lists those, as it removes the others from the function's module
+    ref = parse(MetalLib, joinpath(metallib_dir, "used_constants.metallib"))
+    constants(f) = [(c.name, c.required) for c in f.constants]
+    reffuns = Dict(f.name => f for f in ref.functions)
+    @test constants(reffuns["derived"]) == [("c1", true)]
+    @test constants(reffuns["checked"]) == [("c2", true), ("c3", false)]
+    @test constants(reffuns["unrelated"]) == []
+    @test constants(reffuns["called"]) == [("c3", true)]
+    @test constants(reffuns["selected"]) == [("c4", true), ("c5", true), ("c6", true)]
+    @test constants(reffuns["field"]) == [("c7", true)]
+    @test constants(reffuns["second_field"]) == [("c9", true)]
+    # (without optimization, the initializers branch, and Apple's linker lists all constants)
+    for air_file in ("used_constants.air", "used_constants.O0.air")
+        air = read(joinpath(metallib_dir, air_file))
+        funs = @dispose ctx=LLVM.Context() mod=parse(LLVM.Module, air) begin
+            [MetalLibFunction(mod, name; air_module=air) for name in keys(reffuns)]
+        end
+        lib = MTL.MTLLibraryFromData(device(), sprint(write, MetalLib(; functions=funs)))
+        for fun in funs
+            reffun = reffuns[fun.name]
+            used = filter(c -> any(r -> r.name == c.name, reffun.constants), fun.constants)
+            unused = setdiff(fun.constants, used)
+            @test (air_file, fun.name, used) == (air_file, fun.name, reffun.constants)
+            @test !any(c -> c.required, unused)
+
+            # the function can be built by specializing only the constants it requires
+            fcv = MTL.MTLFunctionConstantValues()
+            for c in fun.constants
+                c.required || continue
+                value = c.datatype == MTL.MTLDataTypeBool ? Ref(true) : Ref(UInt32(1))
+                MTL.setConstantValue!(fcv, value, c.datatype, c.name)
+            end
+            @test MTL.MTLComputePipelineState(device(), MTL.MTLFunction(lib, fun.name, fcv)) isa
+                  MTL.MTLComputePipelineState
+        end
+    end
+
+    # a store to a part of a global that depends on a constant depends on that constant
+    @dispose ctx=LLVM.Context() mod=LLVM.Module("dynamic") builder=LLVM.IRBuilder() begin
+        i32 = LLVM.Int32Type()
+        arr = LLVM.ArrayType(i32, 2)
+        fc = LLVM.GlobalVariable(mod, i32, "fc.MTL_FC_INIT", 2)
+        d = LLVM.GlobalVariable(mod, arr, "d", 2)
+        LLVM.initializer!(d, LLVM.null(arr))
+        zero = LLVM.ConstantInt(i32, 0)
+
+        # `d[fc & 1] = 1`
+        init = LLVM.Function(mod, "init", LLVM.FunctionType(LLVM.VoidType()))
+        LLVM.section!(init, "air.static_init")
+        LLVM.position!(builder, LLVM.at_end(LLVM.BasicBlock(init, "entry")))
+        index = LLVM.and!(builder, LLVM.load!(builder, i32, fc), LLVM.ConstantInt(i32, 1))
+        LLVM.store!(builder, LLVM.ConstantInt(i32, 1), LLVM.gep!(builder, arr, d, [zero, index]))
+        LLVM.ret!(builder)
+
+        # `return d[0]`
+        kernel = LLVM.Function(mod, "kernel", LLVM.FunctionType(i32))
+        LLVM.position!(builder, LLVM.at_end(LLVM.BasicBlock(kernel, "entry")))
+        LLVM.ret!(builder, LLVM.load!(builder, i32, LLVM.gep!(builder, arr, d, [zero, zero])))
+
+        push!(get!(mod.metadata, "air.function_constants").operands,
+              LLVM.MDNode([LLVM.Metadata(fc), LLVM.MDString("uint"), LLVM.MDString("fc"),
+                           LLVM.Metadata(zero)]))
+        @test Metal.function_constants(mod, kernel) ==
+              [Metal.FunctionConstant("fc", MTL.MTLDataTypeUInt, 0, true)]
+    end
+
+    # a check that only decides about other stores does not make a use optional
+    @dispose ctx=LLVM.Context() mod=LLVM.Module("reconverging") builder=LLVM.IRBuilder() begin
+        i32 = LLVM.Int32Type()
+        fc = LLVM.GlobalVariable(mod, i32, "fc.MTL_FC_INIT", 2)
+        x = LLVM.GlobalVariable(mod, i32, "x", 2)
+        y = LLVM.GlobalVariable(mod, i32, "y", 2)
+        for gv in (x, y)
+            LLVM.initializer!(gv, LLVM.ConstantInt(i32, 0))
+        end
+        isdefined_typ = LLVM.FunctionType(LLVM.Int1Type(), [LLVM.value_type(fc)])
+        isdefined = LLVM.Function(mod, "air.is_function_constant_defined", isdefined_typ)
+
+        # `if (is_function_constant_defined(fc)) x = 1; y = fc;`
+        init = LLVM.Function(mod, "init", LLVM.FunctionType(LLVM.VoidType()))
+        LLVM.section!(init, "air.static_init")
+        entry_bb, then_bb, join_bb = (LLVM.BasicBlock(init, name)
+                                      for name in ("entry", "then", "join"))
+        LLVM.position!(builder, LLVM.at_end(entry_bb))
+        LLVM.br!(builder, LLVM.call!(builder, isdefined_typ, isdefined, [fc]), then_bb, join_bb)
+        LLVM.position!(builder, LLVM.at_end(then_bb))
+        LLVM.store!(builder, LLVM.ConstantInt(i32, 1), x)
+        LLVM.br!(builder, join_bb)
+        LLVM.position!(builder, LLVM.at_end(join_bb))
+        LLVM.store!(builder, LLVM.load!(builder, i32, fc), y)
+        LLVM.ret!(builder)
+
+        # `return y`
+        kernel = LLVM.Function(mod, "kernel", LLVM.FunctionType(i32))
+        LLVM.position!(builder, LLVM.at_end(LLVM.BasicBlock(kernel, "entry")))
+        LLVM.ret!(builder, LLVM.load!(builder, i32, y))
+
+        push!(get!(mod.metadata, "air.function_constants").operands,
+              LLVM.MDNode([LLVM.Metadata(fc), LLVM.MDString("uint"), LLVM.MDString("fc"),
+                           LLVM.Metadata(LLVM.ConstantInt(i32, 0))]))
+        @test Metal.function_constants(mod, kernel) ==
+              [Metal.FunctionConstant("fc", MTL.MTLDataTypeUInt, 0, true)]
+    end
 end
 
 function metallib_kernel(a)
