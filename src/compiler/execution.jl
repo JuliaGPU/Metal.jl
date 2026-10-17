@@ -214,8 +214,13 @@ Low-level interface to compile a function invocation for the currently-active GP
 a callable kernel object. For a higher-level interface, use [`@metal`](@ref).
 
 The following keyword arguments are supported:
-- `macos`, `metal` and `air`: to override the macOS OS, Metal language and AIR bitcode
-   versions used during compilation. Value should be a valid version number.
+- `macos` and `metal`: to override the deployment target (macOS 15 or later) and Metal
+   Shading Language version used during compilation, which default to the newest the host
+   supports. A language version that needs a newer macOS raises the deployment target.
+   Code using versions the host doesn't support can be generated and inspected, but not
+   loaded.
+- `air`: to override the AIR bitcode version, which otherwise follows the deployment
+   target. Meant for testing.
 - `gpufamily`: to override the Apple GPU family (`MTL.MTLGPUFamilyApple<n>`) that the
    generated code may rely on. Defaults to the highest family the device supports.
 - `source`: the callable before [`mtlconvert`](@ref) turned it into `f`, which is what
@@ -251,6 +256,7 @@ end
             end
         end
         if !isassigned(pipeline)
+            check_loadable(config.target)
             pipeline[] = link_pipeline(dev, res.air::Vector{UInt8},
                                      res.metallib::Vector{UInt8},
                                      res.entry::String)

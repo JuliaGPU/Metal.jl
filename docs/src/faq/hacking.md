@@ -143,14 +143,48 @@ recorded per function and stamped into the bitcode:
 
 | `-mmacosx-version-min` | metallib | AIR | MSL |
 |:-----------------------|:---------|:----|:----|
-| 14                     | 1.2.7    | 2.6 | 3.1 |
 | 15                     | 1.2.8    | 2.7 | 3.2 |
 | 26                     | 1.2.9    | 2.8 | 4.0 |
+| 27                     | 1.2.9    | 2.9 | 4.1 |
 
 The `Metal.metallib_support`, `Metal.air_support` and `Metal.metal_support` functions encode
 this mapping, and Metal.jl emits the same versions the offline compiler would when targeting
 the host. The header of `src/version.jl` describes how to re-derive the table for a new
 macOS release using `xcrun metal` and a hex editor.
+
+## Version support
+
+Several independent versions determine what Metal.jl generates and how it runs code:
+
+| Version | Controls | Chosen by |
+|:--------|:---------|:----------|
+| host macOS | which Metal framework, runtime and back-end compiler exist | the system |
+| deployment target and MSL version | AIR version, metallib format and platform, language features | `macos=` and `metal=` compiler options, defaulting to the newest the host supports |
+| Metal API | command submission, residency, argument binding | Metal.jl uses the Metal 3 API on all supported systems |
+| GPU family (Apple7 and up) | hardware features, back-end compiler workarounds | `gpufamily=` compiler option, defaulting to the highest the device reports |
+
+Like Apple's offline compiler, Metal.jl derives everything from one effective deployment
+target: the requested `macos` raised to the oldest macOS that supports the requested MSL
+version (`Metal.macos_floor`: 3.2 needs macOS 15, 4.0 needs 26, 4.1 needs 27). Compiling
+for macOS 15 with `metal=v"4.1"` thus produces the same AIR 2.9, metallib 1.2.9 and macOS 27
+platform version that `xcrun metal -mmacosx-version-min=15 -std=metal4.1` does. An older
+MSL on a newer system stays useful for testing older lowerings. The `air=` option overrides
+the AIR version independently, but only exists for testing.
+
+Code for a newer system than the host can be generated and inspected, but loading it fails
+if it uses a metallib, AIR or MSL version the host doesn't know (Metal.jl checks this
+before linking, to give a clearer error than the runtime). The runtime doesn't check the
+platform version in the header, so code for a newer macOS that uses the same versions as the
+host loads fine.
+
+The Metal Shading Language and the Metal API are versioned separately: kernels can use MSL
+4 features, such as the tensor operations in the matrix multiplication kernels, while being
+launched through the Metal 3 command API.
+
+Workarounds for back-end compiler bugs key on the deployment target, assuming code is
+compiled for the host it runs on, since the back-end compiler ships with the OS. Targeting
+an older macOS on a newer host may therefore enable workarounds the host doesn't need,
+which costs performance but not correctness.
 
 Since metallib v1.2.7 the toolchain attaches reflection data to every function: an `RBUF`
 buffer holding a flatbuffer with an `AIRR` file identifier, describing the function's
