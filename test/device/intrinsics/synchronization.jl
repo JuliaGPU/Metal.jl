@@ -75,6 +75,7 @@
             simdgroup_barrier(Metal.MemoryFlagDevice, Metal.memory_order_acquire,
                               Metal.thread_scope_device)
             threadgroup_barrier()
+            simdgroup_barrier(Metal.MemoryFlagThreadGroup)
             return
         end
         # the AIR 2.9 form, with an order, which GPUCompiler legalizes for the target
@@ -91,11 +92,14 @@
                 @test occursin("@air.simdgroup.barrier(i32 1, i32 $acquire, i32 2)", ir)
                 @test occursin("@air.simdgroup.barrier(i32 2, i32 5, i32 4)", ir)
                 @test occursin("@air.wg.barrier(i32 0, i32 5, i32 1)", ir)
+                # (like in MSL, simdgroup_barrier defaults to the SIMD-group scope)
+                @test count("@air.simdgroup.barrier(i32 2, i32 5, i32 4)", ir) == 2
             else
                 @test occursin("@air.wg.barrier(i32 1, i32 2)", ir)
                 @test occursin("@air.simdgroup.barrier(i32 1, i32 2)", ir)
                 @test occursin("@air.simdgroup.barrier(i32 2, i32 4)", ir)
                 @test occursin("@air.wg.barrier(i32 0, i32 1)", ir)
+                @test count("@air.simdgroup.barrier(i32 2, i32 4)", ir) == 2
             end
         end
 
@@ -113,6 +117,16 @@
         end
         @test err isa Metal.InvalidIRError
         @test occursin("Barrier scopes need Metal 3.2.", sprint(showerror, err))
+
+        # before MSL 3.2, simdgroup_barrier has the threadgroup scope by default
+        function default_barrier(::Core.LLVMPtr{Int32,Metal.AS.Device})
+            simdgroup_barrier(Metal.MemoryFlagThreadGroup)
+            return
+        end
+        ir = sprint(io -> Metal.code_air(io, default_barrier,
+                                         Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
+                                         kernel=true, metal=v"3.1", air=v"2.7"))
+        @test occursin("@air.simdgroup.barrier(i32 2, i32 1)", ir)
     end
 
     # TODO: Actually test for races
