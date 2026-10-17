@@ -152,6 +152,15 @@ metallib_dir = joinpath(@__DIR__, "metallib")
         @test r.code == 2 && getkey(parse_json(r.out), "status") == "error"
     end
 
+    # the entry point of the Pkg app (`julia -m` needs Julia 1.12)
+    @static if VERSION >= v"1.12"
+        project = Base.active_project()
+        cmd = `$(Base.julia_cmd()) --project=$project -m Metal.MetalLibCLI info $(joinpath(metallib_dir, "kernel.13.metallib"))`
+        @test contains(read(cmd, String), "foo: METALLIB_COMPUTE_FUNCTION")
+        cmd = `$(Base.julia_cmd()) --project=$project -m Metal.MetalLibCLI info nonexistent`
+        @test !success(pipeline(cmd; stderr=devnull))
+    end
+
     @testset "info" begin
         path = joinpath(metallib_dir, "kernels.26.metallib")
         r = metallib("info", path)
