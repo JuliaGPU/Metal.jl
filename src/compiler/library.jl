@@ -97,8 +97,8 @@ function decompress_source_archive(compressed::Vector{UInt8})
 end
 
 # derive a UUID from library contents. the official toolchain stamps every library with
-# a UUID, but generates it randomly and nothing seems to inspect the contents; deriving
-# one from the modules keeps our output deterministic.
+# a deterministic, name-based (version 3) UUID whose inputs are not documented, and nothing
+# seems to inspect it; deriving one from the modules keeps our output deterministic too.
 function content_uuid(datas::Vector{UInt8}...)
     ctx = SHA2_256_CTX()
     for data in datas
@@ -106,7 +106,7 @@ function content_uuid(datas::Vector{UInt8}...)
     end
     dgst = digest!(ctx)
     u = ntoh(only(reinterpret(UInt128, dgst[1:16])))
-    # stamp the version and variant bits of a random (version 4) UUID, like Apple does
+    # stamp the version and variant bits of a random (version 4) UUID
     u = (u & ~(UInt128(0xf) << 76)) | (UInt128(0x4) << 76)
     u = (u & ~(UInt128(0x3) << 62)) | (UInt128(0x2) << 62)
     return UUID(u)
@@ -114,6 +114,7 @@ end
 
 Base.@kwdef struct MetalLibFunction
     name::String
+    type::ProgramType = PROGRAM_KERNEL
     air_version::VersionNumber
     metal_version::VersionNumber
 
@@ -209,7 +210,7 @@ end
 ## tag groups
 
 # a helper type for reading and writing tag groups
-Base.@kwdef struct TagGroup
+Base.@kwdef mutable struct TagGroup
     data::Vector{Pair{String,Any}}=Pair{String,Any}[]   # like an ordered dict
 
     offsets::Dict{String,Int} = Dict()
@@ -220,7 +221,9 @@ Base.@kwdef struct TagGroup
     # whether the tag group starts with a 32-bit size field for the entire group
     has_size::Bool=true
 
-    # whether the tag group size field is included in the size
+    # whether the tag group size field is included in the size. the compiler driver and
+    # air-lld include it, but Apple's standalone `metallib` tool does not for metadata
+    # groups, so the reader detects and records which convention a group uses.
     counts_size::Bool=true
 end
 
@@ -338,17 +341,10 @@ tag_value_io["SLST"] = (
     (io, _)   -> (; offset=read(io, UInt64), size=read(io, UInt64)),
     (io, val) -> write(io, UInt64[val.offset, val.size]))
 tag_value_io["UUID"] = (
-    # UUID of the module; 16 bytes
+    # UUID of the module; 16 bytes in RFC 4122 (big-endian) order
     UUID,
-    (io, _)   -> begin
-        uuid_bits = Vector{UInt64}(undef, 2)
-        read!(io, uuid_bits)
-        UUID(Tuple(uuid_bits))
-    end,
-    (io, val) -> begin
-        bits = convert(Tuple{UInt64,UInt64}, val)
-        write(io, UInt64[bits...])
-    end)
+    (io, _)   -> UUID(ntoh(read(io, UInt128))),
+    (io, val) -> write(io, hton(val.value)))
 ## public metadata
 tag_value_io["CNST"] = (
     # A list of function constants
@@ -433,13 +429,8 @@ const wide_size_tags = ["RBUF", "SBUF"]
 
 function Base.read!(io::IO, tg::TagGroup)
     if tg.has_size
-        if tg.counts_size
-            group_start = position(io)
-        end
+        group_start = position(io)
         group_size = read(io, UInt32)
-        if !tg.counts_size
-            group_start = position(io)
-        end
     end
 
     while true
@@ -475,7 +466,15 @@ function Base.read!(io::IO, tg::TagGroup)
 
     # ensure we consumed the entire group
     if tg.has_size
-        @assert position(io) == group_start + group_size
+        group_end = position(io)
+        if group_end == group_start + group_size
+            tg.counts_size = true
+        elseif group_end == group_start + sizeof(UInt32) + group_size
+            tg.counts_size = false
+        else
+            error("Tag group at offset $group_start ends at offset $group_end, " *
+                  "which does not match its recorded size of $group_size bytes")
+        end
     end
 
     return tg
@@ -767,6 +766,7 @@ function Base.read(io::IO, ::Type{MetalLib})
 
         push!(functions, MetalLibFunction(;
             name = function_list[i]["NAME"],
+            type = function_list[i]["TYPE"],
             air_module = module_list[i],
             air_version=function_list[i]["VERS"].air,
             metal_version=function_list[i]["VERS"].metal,
@@ -896,7 +896,7 @@ function Base.write(io::IO, lib::MetalLib)
         # tags
         function_tags = TagGroup()
         function_tags["NAME"] = fun.name
-        function_tags["TYPE"] = PROGRAM_KERNEL
+        function_tags["TYPE"] = fun.type
         function_tags["HASH"] = module_hash
         function_tags["OFFT"] = (; public_md=public_md_offset,
                                    private_md=private_md_offset,

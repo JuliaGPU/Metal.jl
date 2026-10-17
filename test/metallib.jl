@@ -1,6 +1,7 @@
 # test that we can parse and regenerate Metal libraries accurately
 
 using Metal: MetalLibFunction, MetalLib, content_uuid
+using UUIDs: UUID, uuid_version
 
 using Printf: @printf
 
@@ -159,17 +160,44 @@ function compare(ref_path)
     end
 end
 
+# Apple's Metal toolchain, used as an oracle when available (see the Makefile)
+const metal_toolchain = get(ENV, "METAL_TOOLCHAIN",
+    "/Volumes/MetalToolchainCryptex/Metal.xctoolchain/usr/metal/current/bin")
+metal_tool(name) = (path = joinpath(metal_toolchain, name); isfile(path) ? path : nothing)
+
+# the library UUID as reported by Apple's `metal-readobj`
+function readobj_uuid(path)
+    readobj = metal_tool("metal-readobj")
+    readobj === nothing && return nothing
+    m = match(r"UUID: ([0-9A-F-]+)", read(`$readobj --all $path`, String))
+    return UUID(m[1])
+end
+
 ## tests begin
 metallib_dir = joinpath(@__DIR__, "metallib")
 metallibs = String[]
 for file in readdir(metallib_dir)
-    if endswith(file, ".metallib")
+    # TODO: the standalone `metallib` tool's group layout is not reproduced yet
+    if endswith(file, ".metallib") && !endswith(file, ".standalone.metallib")
         push!(metallibs, file)
     end
 end
 
 @testset for metallib in metallibs
     @test compare(joinpath(metallib_dir, metallib))
+end
+
+@testset "function types" begin
+    for metallib in filter(startswith("visible."), metallibs)
+        lib = parse(MetalLib, joinpath(metallib_dir, metallib))
+        types = Dict(fun.name => fun.type for fun in lib.functions)
+        @test types == Dict("foo" => Metal.PROGRAM_KERNEL, "twice" => Metal.PROGRAM_VISIBLE)
+
+        # the runtime takes the function type from the TYPE tag
+        lib.platform_version <= Metal.macos_version() || continue
+        mtllib = MTL.MTLLibraryFromData(device(), sprint(write, lib))
+        @test MTL.MTLFunction(mtllib, "twice").functionType == MTL.MTLFunctionTypeVisible
+    end
 end
 
 @testset "content-derived UUID" begin
@@ -182,4 +210,62 @@ end
     str = string(u)
     @test str[15] == '4'
     @test str[20] in ('8', '9', 'a', 'b')
+end
+
+@testset "UUID byte order" begin
+    # reference value from `metal-readobj --all kernel.26.metallib`
+    lib = parse(MetalLib, joinpath(metallib_dir, "kernel.26.metallib"))
+    @test lib.uuid == UUID("602B95E8-464B-3967-9B41-A4CD7F83F583")
+    @test uuid_version(lib.uuid) == 3
+
+    if metal_tool("metal-readobj") === nothing
+        @test_skip "Apple's metal-readobj not available"
+    else
+        for metallib in metallibs
+            path = joinpath(metallib_dir, metallib)
+            @test parse(MetalLib, path).uuid == readobj_uuid(path)
+        end
+    end
+
+    # the UUIDs we generate are stored in RFC 4122 byte order, i.e. Apple's tools see a
+    # version 4, variant 1 UUID
+    fun = only(lib.functions)
+    uuid = content_uuid(fun.air_module)
+    new_lib = MetalLib(; lib.file_version, lib.platform_version, functions=[fun], uuid)
+    bytes = sprint(write, new_lib)
+    uuid_offset = findfirst("UUID", bytes)[end] + 3     # skip the 16-bit size field
+    @test codeunits(bytes)[uuid_offset:uuid_offset+15] == reinterpret(UInt8, [hton(uuid.value)])
+    if metal_tool("metal-readobj") === nothing
+        @test_skip "Apple's metal-readobj not available"
+    else
+        mktemp() do path, io
+            write(io, bytes)
+            close(io)
+            @test readobj_uuid(path) == uuid
+        end
+    end
+end
+
+@testset "tag group size conventions" begin
+    for (group_size, counts_size) in ((8, true), (4, false))
+        bytes = [reinterpret(UInt8, [UInt32(group_size)]); codeunits("ENDT")]
+        tg = read!(IOBuffer(bytes), Metal.TagGroup())
+        @test tg.counts_size == counts_size
+        @test take!(write(IOBuffer(), tg)) == bytes
+    end
+    bytes = [reinterpret(UInt8, [UInt32(6)]); codeunits("ENDT")]
+    @test_throws ErrorException read!(IOBuffer(bytes), Metal.TagGroup())
+end
+
+@testset "standalone metallib tool" begin
+    # Apple's standalone `metallib` tool does not count the size field in the size of
+    # metadata groups, unlike the compiler driver
+    path = joinpath(metallib_dir, "kernel.standalone.metallib")
+    lib = parse(MetalLib, path)
+    @test only(lib.functions).name == "foo"
+
+    bytes = sprint(write, lib)
+    @test_broken bytes == String(read(path))
+    mtllib = MTL.MTLLibraryFromData(device(), bytes)
+    @test MTL.MTLComputePipelineState(device(), MTL.MTLFunction(mtllib, "foo")) isa MTL.MTLComputePipelineState
 end
