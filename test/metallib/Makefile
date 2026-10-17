@@ -18,12 +18,17 @@ SPECIAL_METALLIBS := coreimage.metallib dylib.metallib imports.metallib kernels.
 # unlinked AIR, to build libraries from
 AIR_MODULES := optional_constants.air used_constants.air used_constants.O0.air
 
+# Metal.jl kernels (see res/airr/kernels.jl), and a library of them that Apple's toolchain
+# linked, to compare our reflection data with
+JULIA := julia
+JULIA_KERNELS := julia/vadd.air julia/structs.air julia/reduce_groups.air julia/pointers.air
+
 # Apple's decoding of the reflection data of every library that has some, to check ours
 OBJDUMP := xcrun -sdk macosx metal-objdump
 REFLECTIONS = $(patsubst %.metallib,reflection/%.txt,$(wildcard *.metallib))
 
 .PHONY: all
-all: $(METALLIBS) $(STANDALONE_METALLIBS) $(SPECIAL_METALLIBS) $(AIR_MODULES)
+all: $(METALLIBS) $(STANDALONE_METALLIBS) $(SPECIAL_METALLIBS) $(AIR_MODULES) julia.metallib
 
 .PHONY: reflections
 reflections: $(REFLECTIONS)
@@ -35,7 +40,8 @@ reflection/%.txt: %.metallib
 
 .PHONY: clean
 clean:
-	$(RM) $(METALLIBS) $(STANDALONE_METALLIBS) $(SPECIAL_METALLIBS) $(AIR_MODULES)
+	$(RM) $(METALLIBS) $(STANDALONE_METALLIBS) $(SPECIAL_METALLIBS) $(AIR_MODULES) \
+	      $(JULIA_KERNELS) julia.metallib
 
 define METALLIB_RULE
 %.${1}.metallib: %.metal
@@ -80,3 +86,9 @@ used_constants.metallib: used_constants.metal
 	$(METAL) -mmacosx-version-min=15 -o $@ $<
 used_constants.O0.air: used_constants.metal
 	$(METAL) -mmacosx-version-min=15 -O0 -c -o $@ $<
+
+julia/%.air: ../../res/airr/kernels.jl
+	@mkdir -p julia
+	$(JULIA) --project=.. $< $* $@
+julia.metallib: $(JULIA_KERNELS)
+	$(METAL) -o $@ $^
