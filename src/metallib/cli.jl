@@ -251,6 +251,16 @@ Run the `metallib` command-line tool with arguments `args`, writing results to `
 diagnostics to `err`, and reading standard input (`-`) from `input`. Returns the exit code.
 """
 function main(args::Vector{String}; io::IO=stdout, err::IO=stderr, input::IO=stdin)
+    try
+        run_command(args; io, err, input)
+    catch e
+        # the reader went away, e.g. `metallib dump ... | head`; stop like other tools do
+        e isa Base.IOError && e.code == Base.UV_EPIPE || rethrow()
+        return 141  # (the exit code of a process killed by SIGPIPE)
+    end
+end
+
+function run_command(args::Vector{String}; io::IO, err::IO, input::IO)
     if isempty(args) || args[1] in ("-h", "--help", "help") && length(args) == 1
         print(isempty(args) ? err : io, overview())
         return isempty(args) ? 2 : 0
@@ -347,6 +357,11 @@ function usage_error(ctx::Context, name, cmd, msg)
         cmd === nothing || println(ctx.err, "\n", cmd.help)
     end
     return 2
+end
+
+# make `main` the entry point of `julia -m Metal.MetalLibCLI`, which the Pkg app runs
+@static if isdefined(Base, Symbol("@main"))
+    @main
 end
 
 
