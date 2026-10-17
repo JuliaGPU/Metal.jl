@@ -116,6 +116,11 @@ Base.@kwdef mutable struct TagGroup
     # air-lld include it, but Apple's standalone `metallib` tool does not for metadata
     # groups, so the reader detects and records which convention a group uses.
     counts_size::Bool=true
+
+    # when read: where the group starts and ends, and the position and size of each value
+    # (for inspecting libraries; positions are relative to the stream the group was read from)
+    extent::Union{Nothing,UnitRange{Int}} = nothing
+    value_extents::Vector{UnitRange{Int}} = UnitRange{Int}[]
 end
 
 # Dict-like methods to interact with a tag group
@@ -297,6 +302,7 @@ function decode_tag(tag::String, bytes::Vector{UInt8})
 end
 
 function Base.read!(io::IO, tg::TagGroup)
+    start = position(io)
     if tg.has_size
         group_start = position(io)
         group_size = read(io, UInt32)
@@ -318,6 +324,7 @@ function Base.read!(io::IO, tg::TagGroup)
         end
         # (like values, offsets are those of a tag's first occurrence)
         haskey(tg.offsets, tag_name) || (tg.offsets[tag_name] = position(io))
+        push!(tg.value_extents, position(io) .+ (0:Int(value_size)-1))
         value_bytes = read(io, value_size)
         sizeof(value_bytes) == value_size || throw(EOFError())
 
@@ -342,6 +349,7 @@ function Base.read!(io::IO, tg::TagGroup)
                                       "match its size of $group_size bytes", group_start))
         end
     end
+    tg.extent = start:position(io)-1
 
     return tg
 end
