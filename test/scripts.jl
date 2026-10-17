@@ -189,6 +189,40 @@ metallib_dir = joinpath(@__DIR__, "metallib")
         @test r.code == 1 && contains(r.err, "no such file")
     end
 
+    @testset "dump" begin
+        r = metallib("dump", joinpath(metallib_dir, "visible.26.metallib"))
+        @test r.code == 0
+        @test contains(r.out, "TYPE METALLIB_VISIBLE_FUNCTION")
+        @test contains(r.out, "UUID BC93EDA2-6985-3FA6-84A2-A4877AA6E6FB")
+
+        # the sections cover the library, and tags are where we say they are
+        for file in readdir(metallib_dir)
+            endswith(file, ".metallib") || continue
+            bytes = read(joinpath(metallib_dir, file))
+            r = metallib("dump", "--json", "--raw", joinpath(metallib_dir, file))
+            @test r.code == 0
+            result = getkey(parse_json(r.out), "result")
+            position = 88
+            for section in getkey(result, "sections")
+                @test getkey(section, "offset") == position
+                position += getkey(section, "size")
+                any(k == "groups" for (k, _) in section) || continue
+                for group in getkey(section, "groups"), tag in getkey(group, "tags")
+                    offset, size = getkey(tag, "offset"), getkey(tag, "size")
+                    @test getkey(tag, "raw") == bytes2hex(bytes[offset+1:offset+size])
+                end
+            end
+            @test position == length(bytes)
+        end
+
+        # tags that are not decoded
+        r = metallib("dump", "--json", joinpath(metallib_dir, "render.26.metallib"))
+        sections = getkey(getkey(parse_json(r.out), "result"), "sections")
+        public = only(s for s in sections if getkey(s, "name") == "PUBLIC_METADATA")
+        tags = [tag for g in getkey(public, "groups") for tag in getkey(g, "tags")]
+        @test any(t -> getkey(t, "tag") == "VATT" && getkey(t, "decoded") == false, tags)
+    end
+
     @testset "dis, as and load" begin
         mktempdir() do dir
             # (a library that loads on every supported macOS)

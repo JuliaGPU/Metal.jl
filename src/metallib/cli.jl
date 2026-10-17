@@ -761,4 +761,193 @@ register!("load", Command(
       $program load --pipeline shaders.metallib""",
     ["--pipeline", "-v"], String[], load, load_text))
 
+
+## dump
+
+bytes2hex(data) = join(string(b, base=16, pad=2) for b in data)
+
+# a JSON-friendly rendering of a decoded tag value; byte strings longer than 32 bytes are
+# left out (their size is reported anyway, and `--raw` adds the bytes of every tag)
+dump_value(x) = x
+dump_value(x::Vector{UInt8}) = sizeof(x) <= 32 ? bytes2hex(x) : nothing
+dump_value(x::NamedTuple) = map(dump_value, x)
+dump_value(x::Vector{Metal.FunctionConstant}) =
+    [(; c.name, type=c.datatype, c.index, c.required) for c in x]
+dump_value(x::Metal.DebugInfo) = (; x.line, x.path)
+
+# the tags of a group, at their positions in the library (`base` for groups that were read
+# from a section on its own)
+function dump_group(tg::TagGroup, label, bytes, raw::Bool; base=0)
+    tags = map(enumerate(tg.data)) do (i, (tag, value))
+        extent = tg.value_extents[i] .+ base
+        (; tag, offset = first(extent), size = length(extent),
+           decoded = !(value isa RawTag),
+           value = value isa RawTag ? nothing : dump_value(value),
+           raw = raw ? bytes2hex(view(bytes, extent .+ 1)) : nothing)
+    end
+    return (; label, offset = first(tg.extent) + base, size = length(tg.extent),
+              size_includes_size_field = tg.has_size ? tg.counts_size : nothing, tags)
+end
+
+function dump(ctx::Context, args::Arguments)
+    path = only_positional(args, "input file")
+    bytes = read_input(ctx, path)
+    lib = read(IOBuffer(bytes), MetalLib)
+    raw = "--raw" in args.flags
+    layout = lib.layout
+
+    # the section table, which follows the 16 bytes of magic, versions and platform
+    header = let io = IOBuffer(bytes)
+        seek(io, 16)
+        fields = (:file_size, :function_list_offset, :function_list_size, :public_md_offset,
+                  :public_md_size, :private_md_offset, :private_md_size,
+                  :module_list_offset, :module_list_size)
+        NamedTuple{fields}(ntuple(_ -> Int(read(io, UInt64)), length(fields)))
+    end
+    funs = lib.functions
+    group(f, label) = f === nothing ? nothing : dump_group(f, label, bytes, raw)
+
+    sections = Any[]
+    push!(sections, (; name = "FUNCTION_LIST", offset = header.function_list_offset,
+                       size = header.function_list_size + 4,
+                       groups = [group(f.layout.function_tags, "function $(i-1) ($(f.name))")
+                                 for (i, f) in enumerate(funs)]))
+    if layout.header_extension !== nothing
+        tg = layout.header_extension
+        push!(sections, (; name = "HEADER_EXTENSION", offset = first(tg.extent),
+                           size = length(tg.extent), groups = [group(tg, "header extension")]))
+    end
+    push!(sections, (; name = "PUBLIC_METADATA", offset = header.public_md_offset,
+                       size = header.public_md_size,
+                       groups = [group(f.layout.public_tags, "function $(i-1) ($(f.name))")
+                                 for (i, f) in enumerate(funs)]))
+    push!(sections, (; name = "PRIVATE_METADATA", offset = header.private_md_offset,
+                       size = header.private_md_size,
+                       groups = [group(f.layout.private_tags, "function $(i-1) ($(f.name))")
+                                 for (i, f) in enumerate(funs)]))
+    modules = Dict{UInt64,Any}()
+    for f in funs
+        offset = Metal.decoded(f.layout.function_tags, "OFFT").air_module
+        entry = get!(modules, offset) do
+            (; offset = header.module_list_offset + offset, size = sizeof(f.air_module),
+               format = is_bitcode(f.air_module) ? "bitcode" : "other",
+               functions = String[])
+        end
+        push!(entry.functions, f.name)
+    end
+    push!(sections, (; name = "MODULE_LIST", offset = header.module_list_offset,
+                       size = header.module_list_size,
+                       modules = sort!(collect(values(modules)); by = m -> m.offset)))
+
+    ext(tag) = Metal.decoded(layout.header_extension, tag)
+    for tag in ("HSRC", "HSRD")
+        section = ext(tag)
+        section === nothing && continue
+        push!(sections, (; name = "EMBEDDED_SOURCE", section.offset, section.size,
+                           groups = [dump_group(tg, "archive $(i-1)", bytes, raw;
+                                                base = section.offset)
+                                     for (i, tg) in enumerate(layout.source_tags)]))
+    end
+    if (section = ext("HDYN")) !== nothing
+        push!(sections, (; name = "DYNAMIC_HEADER", section.offset, section.size,
+                           groups = [group(layout.dynamic_header, "dynamic header")]))
+    end
+    for (tag, name) in ("VLST" => "VARIABLE_LIST", "ILST" => "IMPORTED_SYMBOL_LIST")
+        section = ext(tag)
+        section === nothing && continue
+        push!(sections, (; name, section.offset, section.size, decoded = false,
+                           raw = raw ? bytes2hex(view(bytes, section.offset .+ (1:section.size)))
+                                     : nothing))
+    end
+    if (section = ext("RLST")) !== nothing
+        entries = unique(f.layout.reflection_tags for f in funs
+                         if f.layout.reflection_tags !== nothing)
+        sort!(entries; by = tg -> first(tg.extent))
+        push!(sections, (; name = "REFLECTION_LIST", section.offset, section.size,
+                           groups = [group(tg, "entry for " * join([f.name for f in funs
+                                        if f.layout.reflection_tags === tg], ", "))
+                                     for tg in entries]))
+    end
+    if (section = ext("SLST")) !== nothing
+        push!(sections, (; name = "SCRIPT_LIST", section.offset, section.size,
+                           groups = [group(tg, "script $(i-1)")
+                                     for (i, tg) in enumerate(layout.script_tags)]))
+    end
+    sort!(sections; by = s -> s.offset)
+
+    return (; file = path,
+              header = (; offset = 0, size = 88, version = lib.file_version,
+                          type = lib.file_type, macos = lib.is_macos, stub = lib.is_stub,
+                          platform = lib.platform_type,
+                          platform_version = lib.platform_version,
+                          is_64bit = lib.is_64bit, header.file_size),
+              sections)
+end
+
+hex(x) = "0x" * string(x, base=16)
+
+# a plain rendering of a `dump_value` for the text output
+text_value(x) = string(x)
+text_value(x::AbstractString) = repr(x)
+text_value(x::Unsigned) = string(Int(x))
+text_value(x::UUID) = uppercase(string(x))
+text_value(x::AbstractVector) =
+    "[" * join([v isa NamedTuple ? "{$(text_value(v))}" : text_value(v) for v in x], ", ") * "]"
+text_value(x::NamedTuple) =
+    join(["$k=$(v === nothing ? "(not shown)" : text_value(v))" for (k, v) in pairs(x)], ", ")
+
+function dump_text(io::IO, r)
+    h = r.header
+    println(io, "$(r.file): header at 0x0, $(h.size) bytes")
+    println(io, "  MTLB v$(h.version), $(h.type)", h.macos ? ", macOS" : "",
+            h.stub ? ", stub" : "", ", $(h.platform) v$(h.platform_version)",
+            h.is_64bit ? ", 64-bit" : "", ", file size $(h.file_size)")
+    for section in r.sections
+        println(io, "$(section.name) at $(hex(section.offset)), $(section.size) bytes")
+        if haskey(section, :groups)
+            for g in section.groups
+                print(io, "  $(g.label): group at $(hex(g.offset)), $(g.size) bytes")
+                g.size_includes_size_field === false && print(io, " (size excludes its field)")
+                println(io)
+                for t in g.tags
+                    value = if !t.decoded
+                        "(not decoded)"
+                    elseif t.value === nothing
+                        "($(t.size) bytes)"
+                    else
+                        text_value(t.value)
+                    end
+                    println(io, "    ", rpad(hex(t.offset), 9), t.tag, " ", value)
+                    t.raw === nothing || println(io, "             ", t.raw)
+                end
+            end
+        elseif haskey(section, :modules)
+            for m in section.modules
+                println(io, "  $(m.format) module at $(hex(m.offset)), $(m.size) bytes: ",
+                        join(m.functions, ", "))
+            end
+        else
+            println(io, "  (not decoded)")
+            section.raw === nothing || println(io, "  ", section.raw)
+        end
+    end
+end
+
+register!("dump", Command(
+    "List every section and tag of a library, with offsets and values.",
+    """
+    Usage: $program dump [--raw] FILE
+
+    List the header, sections, tag groups and tags of the library in FILE (`-` for standard
+    input), with the offset and size of each, and the decoded value of the tags Metal.jl
+    understands. Byte strings longer than 32 bytes (modules, reflection data) are not
+    printed, and neither are sections and tags that are not decoded, unless --raw is given.
+
+    Options:
+      --raw         Also print the bytes of every tag value and undecoded section, in hex.
+
+    Example:
+      $program dump --json shaders.metallib""",
+    ["--raw"], String[], dump, dump_text))
+
 end # module MetalLibCLI
