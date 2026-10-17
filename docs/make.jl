@@ -38,6 +38,7 @@ function main()
                 "api/array.md",
                 "api/mps.md",
                 "api/mpsgraphs.md",
+                "api/libraries.md",
             ],
             "FAQ" => Any[
                 "faq/faq.md",

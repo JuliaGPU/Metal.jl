@@ -1,6 +1,6 @@
 # test that we can parse and regenerate Metal libraries accurately
 
-using Metal: MetalLibFunction, MetalLib, content_uuid
+using Metal: MetalLibFunction, MetalLib, MetalLibFormatError, content_uuid
 using UUIDs: UUID, uuid_version
 
 using Printf: @printf
@@ -170,15 +170,14 @@ function readobj_uuid(path)
     readobj = metal_tool("metal-readobj")
     readobj === nothing && return nothing
     m = match(r"UUID: ([0-9A-F-]+)", read(`$readobj --all $path`, String))
-    return UUID(m[1])
+    return m === nothing ? nothing : UUID(m[1])
 end
 
 ## tests begin
 metallib_dir = joinpath(@__DIR__, "metallib")
 metallibs = String[]
 for file in readdir(metallib_dir)
-    # TODO: the standalone `metallib` tool's group layout is not reproduced yet
-    if endswith(file, ".metallib") && !endswith(file, ".standalone.metallib")
+    if endswith(file, ".metallib")
         push!(metallibs, file)
     end
 end
@@ -191,7 +190,7 @@ end
     for metallib in filter(startswith("visible."), metallibs)
         lib = parse(MetalLib, joinpath(metallib_dir, metallib))
         types = Dict(fun.name => fun.type for fun in lib.functions)
-        @test types == Dict("foo" => Metal.PROGRAM_KERNEL, "twice" => Metal.PROGRAM_VISIBLE)
+        @test types == Dict("foo" => Metal.METALLIB_COMPUTE_FUNCTION, "twice" => Metal.METALLIB_VISIBLE_FUNCTION)
 
         # the runtime takes the function type from the TYPE tag
         lib.platform_version <= Metal.macos_version() || continue
@@ -246,6 +245,51 @@ end
     end
 end
 
+@testset "function constants" begin
+    readobj = metal_tool("metal-readobj")
+    if readobj === nothing
+        @test_skip "Apple's metal-readobj not available"
+    else
+        for metallib in filter(startswith("constants."), metallibs)
+            path = joinpath(metallib_dir, metallib)
+            lib = parse(MetalLib, path)
+            output = read(`$readobj --all $path`, String)
+            expected = [(m[1], m[2] == "Yes") for m in
+                        eachmatch(r"Name: (\w+)\n\s+Type: \w+ \(\w+\)\n\s+Index: \d+\n\s+Required: (\w+)", output)]
+            @test !isempty(expected)
+            @test [(c.name, c.required) for fun in lib.functions for c in fun.constants] == expected
+        end
+    end
+end
+
+@testset "function dependencies" begin
+    path = joinpath(metallib_dir, "dependencies.standalone.metallib")
+    lib = parse(MetalLib, path)
+    dependencies = Dict(fun.name => fun.dependencies for fun in lib.functions)
+    @test dependencies == Dict("foo" => ["dependencies.air", "dependencies_helper.air"],
+                               "bar" => ["dependencies.air"])
+end
+
+@testset "enum names" begin
+    # our enums are named like Apple's metal-readobj prints them
+    readobj = metal_tool("metal-readobj")
+    if readobj === nothing
+        @test_skip "Apple's metal-readobj not available"
+    else
+        for metallib in metallibs
+            path = joinpath(metallib_dir, metallib)
+            lib = parse(MetalLib, path)
+            output = read(`$readobj --all $path`, String)
+            @test match(r"FileType: (\w+) ", output)[1] == string(lib.file_type)
+            if lib.file_version >= v"1.2.6"
+                @test match(r"Platform: (\w+) ", output)[1] == string(lib.platform_type)
+            end
+            function_types = [m[1] for m in eachmatch(r"Type: (METALLIB_\w+_FUNCTION) ", output)]
+            @test function_types == [string(fun.type) for fun in lib.functions]
+        end
+    end
+end
+
 @testset "tag group size conventions" begin
     for (group_size, counts_size) in ((8, true), (4, false))
         bytes = [reinterpret(UInt8, [UInt32(group_size)]); codeunits("ENDT")]
@@ -254,7 +298,7 @@ end
         @test take!(write(IOBuffer(), tg)) == bytes
     end
     bytes = [reinterpret(UInt8, [UInt32(6)]); codeunits("ENDT")]
-    @test_throws ErrorException read!(IOBuffer(bytes), Metal.TagGroup())
+    @test_throws MetalLibFormatError read!(IOBuffer(bytes), Metal.TagGroup())
 end
 
 @testset "standalone metallib tool" begin
@@ -265,7 +309,203 @@ end
     @test only(lib.functions).name == "foo"
 
     bytes = sprint(write, lib)
-    @test_broken bytes == String(read(path))
+    @test bytes == String(read(path))
     mtllib = MTL.MTLLibraryFromData(device(), bytes)
     @test MTL.MTLComputePipelineState(device(), MTL.MTLFunction(mtllib, "foo")) isa MTL.MTLComputePipelineState
+end
+
+@testset "reflection alignment" begin
+    # reflection data is the flatbuffer itself, without the padding in front of it
+    for metallib in metallibs
+        lib = parse(MetalLib, joinpath(metallib_dir, metallib))
+        for fun in lib.functions
+            fun.reflection_data === nothing && continue
+            @test fun.reflection_data[5:8] == codeunits("AIRR")
+        end
+    end
+
+    # when an edit moves the reflection list, the flatbuffers stay 16-byte aligned
+    lib = parse(MetalLib, joinpath(metallib_dir, "kernels.26.metallib"))
+    renamed(fun) = MetalLibFunction(fun; name = fun.name * "_x")
+    new_lib = MetalLib(lib; functions = map(renamed, lib.functions))
+    bytes = collect(codeunits(sprint(write, new_lib)))
+    flatbuffers = findall(codeunits("AIRR"), bytes)
+    @test length(flatbuffers) == length(lib.functions)
+    @test all(range -> mod(first(range) - 1 - 4, 16) == 0, flatbuffers)
+    reread = read(IOBuffer(bytes), MetalLib)
+    @test [fun.reflection_data for fun in reread.functions] ==
+          [fun.reflection_data for fun in lib.functions]
+end
+
+@testset "script lists" begin
+    # none of the tools we have produce pipeline scripts, so attach some ourselves
+    lib = parse(MetalLib, joinpath(metallib_dir, "kernels.26.metallib"))
+    scripts = [rand(UInt8, 100), rand(UInt8, 3)]
+    new_lib = MetalLib(lib; scripts)
+    bytes = sprint(write, new_lib)
+    reread = read(IOBuffer(bytes), MetalLib)
+    @test reread.scripts == scripts
+    @test sprint(write, reread) == bytes
+    readobj = metal_tool("metal-readobj")
+    if readobj === nothing
+        @test_skip "Apple's metal-readobj not available"
+    else
+        mktemp() do path, io
+            write(io, bytes)
+            close(io)
+            # (it rejects our scripts, which are not valid flatbuffers, after the header)
+            cmd = pipeline(ignorestatus(`$readobj --all $path`), stderr=devnull)
+            @test contains(read(cmd, String), "ScriptListSize: 0x")
+        end
+    end
+end
+
+@testset "editing libraries" begin
+    # (a library that loads on every supported macOS)
+    lib = parse(MetalLib, joinpath(metallib_dir, "kernels.13.metallib"))
+    @test MetalLib(lib) == lib
+    @test sprint(write, MetalLib(lib)) == String(read(joinpath(metallib_dir, "kernels.13.metallib")))
+
+    # an edited library gets a new UUID, and loads
+    lib2 = MetalLib(lib; functions = lib.functions[1:2])
+    bytes = sprint(write, lib2)
+    reread = read(IOBuffer(bytes), MetalLib)
+    @test [fun.name for fun in reread.functions] == ["foo", "bar"]
+    @test reread.uuid != lib.uuid
+    @test uuid_version(reread.uuid) == 4
+    @test sprint(write, reread) == bytes
+    mtllib = MTL.MTLLibraryFromData(device(), bytes)
+    @test sort(String.(mtllib.functionNames)) == ["bar", "foo"]
+    for name in mtllib.functionNames
+        @test MTL.MTLComputePipelineState(device(), MTL.MTLFunction(mtllib, name)) isa
+              MTL.MTLComputePipelineState
+    end
+
+    # ... unless we pick one
+    uuid = UUID("12345678-1234-4234-8234-123456789abc")
+    @test read(IOBuffer(sprint(write, MetalLib(lib2; uuid))), MetalLib).uuid == uuid
+
+    # replacing a module recomputes its hash, while the other functions keep theirs
+    other = parse(MetalLib, joinpath(metallib_dir, "kernel.13.metallib"))
+    foo = MetalLibFunction(lib.functions[1]; air_module = only(other.functions).air_module)
+    lib3 = MetalLib(lib; functions = [foo; lib.functions[2:end]])
+    reread = read(IOBuffer(sprint(write, lib3)), MetalLib)
+    hashes = [Metal.decoded(fun.layout.function_tags, "HASH") for fun in reread.functions]
+    @test hashes[1] == Metal.sha256(foo.air_module)
+    @test hashes[2:end] == [Metal.decoded(fun.layout.function_tags, "HASH")
+                            for fun in lib.functions[2:end]]
+    mtllib = MTL.MTLLibraryFromData(device(), sprint(write, lib3))
+    @test MTL.MTLComputePipelineState(device(), MTL.MTLFunction(mtllib, "foo")) isa
+          MTL.MTLComputePipelineState
+
+    # writing to a stream that already holds data
+    io = IOBuffer()
+    write(io, "prefix")
+    @test write(io, lib) == sizeof(sprint(write, lib))
+    @test String(take!(io)) == "prefix" * sprint(write, lib)
+end
+
+@testset "repeated and empty tags" begin
+    # libraries can contain tags we decode more than once, or with an empty value; both are
+    # written back as they were
+    lib = parse(MetalLib, joinpath(metallib_dir, "kernel.26.metallib"))
+    fun = only(lib.functions)
+    push!(fun.layout.private_tags.data, "DEPF" => Metal.RawTag(Metal.encode_tag("DEPF", ["a.air"])),
+                                        "DEPF" => Metal.RawTag(Metal.encode_tag("DEPF", ["b.air"])))
+    push!(fun.layout.public_tags.data, "CNST" => Metal.RawTag(Metal.encode_tag("CNST", Metal.FunctionConstant[])))
+    bytes = sprint(write, lib)
+    @test contains(bytes, "b.air")
+    reread = read(IOBuffer(bytes), MetalLib)
+    @test only(reread.functions).dependencies == ["a.air"]
+    unchanged = sprint(write, reread) == bytes
+    @test unchanged
+
+    # offsets and the UUID are patched into the first occurrence of a tag, which is the one
+    # we decode
+    lib = parse(MetalLib, joinpath(metallib_dir, "kernels.26.metallib"))
+    push!(lib.layout.header_extension.data, "RLST" => Metal.RawTag(zeros(UInt8, 16)),
+                                            "UUID" => Metal.RawTag(zeros(UInt8, 16)))
+    bytes = sprint(write, lib)
+    reread = read(IOBuffer(bytes), MetalLib)
+    @test [fun.reflection_data for fun in reread.functions] ==
+          [fun.reflection_data for fun in lib.functions]
+    unchanged = sprint(write, reread) == bytes
+    @test unchanged
+    edited = read(IOBuffer(sprint(write, MetalLib(reread; functions=reread.functions[1:2]))),
+                  MetalLib)
+    @test edited.uuid != reread.uuid
+end
+
+@testset "embedded source layout" begin
+    # tags we don't know in the groups of the embedded source section are preserved too
+    lib = parse(MetalLib, joinpath(metallib_dir, "sources.26.metallib"))
+    for tg in lib.layout.source_tags
+        push!(tg.data, "ZZZZ" => Metal.RawTag(UInt8[1, 2, 3]))
+    end
+    bytes = sprint(write, lib)
+    reread = read(IOBuffer(bytes), MetalLib)
+    @test all(tg -> get(tg, "ZZZZ", nothing).data == UInt8[1, 2, 3],
+              reread.layout.source_tags)
+    unchanged = sprint(write, reread) == bytes
+    @test unchanged
+end
+
+@testset "malformed libraries" begin
+    # reading a malformed library either works or throws a `MetalLibFormatError`
+    function check_parse(bytes)
+        try
+            read(IOBuffer(bytes), MetalLib)
+            return true
+        catch err
+            err isa MetalLibFormatError && return true
+            @error "Unexpected error reading a malformed library" exception=(err, catch_backtrace())
+            return false
+        end
+    end
+
+    # every truncation, and every byte set to a few values, of libraries with modules,
+    # metadata and reflection, shared modules and a dynamic header
+    for metallib in ["constants.26.metallib", "dylib.metallib"]
+        bytes = read(joinpath(metallib_dir, metallib))
+        @test all(n -> check_parse(bytes[1:n]), 0:length(bytes)-1)
+        @test_throws MetalLibFormatError read(IOBuffer(bytes[1:end-1]), MetalLib)
+        for value in (0x00, 0xff)
+            @test all(1:length(bytes)) do i
+                corrupted = copy(bytes)
+                corrupted[i] = value
+                check_parse(corrupted)
+            end
+        end
+    end
+
+    @test_throws MetalLibFormatError read(IOBuffer(codeunits("MTLX")), MetalLib)
+
+    # sections are parsed within their bounds
+    bytes = read(joinpath(metallib_dir, "sources.26.metallib"))
+    hsrd = last(findfirst(codeunits("HSRD"), bytes))
+    bytes[hsrd+2+8+1:hsrd+2+16] .= 0      # the section's size
+    @test_throws MetalLibFormatError read(IOBuffer(bytes), MetalLib)
+
+    # every reference to a reflection entry must resolve
+    bytes = read(joinpath(metallib_dir, "dylib.metallib"))
+    rflt = last(findlast(codeunits("RFLT"), bytes))
+    bytes[rflt+2+1:rflt+2+8] .= 0xff
+    @test_throws MetalLibFormatError read(IOBuffer(bytes), MetalLib)
+
+    # stub libraries, which only describe their functions, are not supported
+    bytes = read(joinpath(metallib_dir, "kernel.26.metallib"))
+    mdsz = findfirst(codeunits("MDSZ"), bytes)
+    bytes[mdsz] .= codeunits("XDSZ")
+    err = try read(IOBuffer(bytes), MetalLib) catch err; err end
+    @test err isa MetalLibFormatError
+    @test contains(sprint(showerror, err), "stub")
+end
+
+@static if VERSION >= v"1.11"
+    @testset "public API" begin
+        for name in (:MetalLib, :MetalLibFunction, :FunctionConstant, :DebugInfo,
+                     :MetalLibFormatError)
+            @test Base.ispublic(Metal, name)
+        end
+    end
 end
