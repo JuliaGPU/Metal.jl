@@ -4,7 +4,7 @@ export @metal
 ## high-level @metal interface
 
 const MACRO_KWARGS = [:launch]
-const COMPILER_KWARGS = [:kernel, :name, :fastmath, :always_inline, :debug_level, :opt_level, :macos, :air, :metal, :gpufamily]
+const COMPILER_KWARGS = [:kernel, :name, :fastmath, :always_inline, :debug_level, :opt_level, :macos, :air, :metal, :gpufamily, :minthreads, :maxthreads]
 const LAUNCH_KWARGS = [:groups, :threads, :queue, :submit]
 
 """
@@ -26,6 +26,13 @@ There are a few keyword arguments that influence the behavior of `@metal`:
   generated name.
 - `opt_level`: the optimization level used when compiling the kernel, an integer from `0`
   to `3`. Defaults to `2`, independent of the host session's `-O` level.
+- `minthreads`: the exact threadgroup size the kernel will be launched with, as an integer
+  or a tuple of up to three integers, like MSL's `required_threads_per_threadgroup`. The
+  compiler can specialize for that size, and launches with any other size are rejected.
+  Requires macOS 26.
+- `maxthreads`: the maximum number of threads per threadgroup the kernel will be launched
+  with, like MSL's `max_total_threads_per_threadgroup`. A lower maximum leaves the compiler
+  more registers per thread, e.g. to avoid running out of them in complex kernels.
 - `queue`: the command queue to use for this kernel. Defaults to the global command queue.
 - `submit`: whether to submit the current command batch immediately after encoding this
   kernel. Defaults to `false`.
@@ -196,6 +203,8 @@ struct HostKernel{F,S,TT}
     loggingEnabled::Bool
     device::MTLDevice
     maxthreads::Int
+    # the threadgroup size launches have to use (`minthreads`), or all zeros
+    reqthreads::MTLSize
     tgmem::Int
     exec_width::Int
     use_residency_sets::Bool
@@ -214,6 +223,9 @@ Low-level interface to compile a function invocation for the currently-active GP
 a callable kernel object. For a higher-level interface, use [`@metal`](@ref).
 
 The following keyword arguments are supported:
+- `minthreads` and `maxthreads`: the required and the maximum threadgroup size, see
+   [`@metal`](@ref). The maximum a kernel can actually be launched with may be lower, so
+   check `kernel.maxthreads` before launching.
 - `macos`, `metal` and `air`: to override the macOS OS, Metal language and AIR bitcode
    versions used during compilation. Value should be a valid version number.
 - `gpufamily`: to override the Apple GPU family (`MTL.MTLGPUFamilyApple<n>`) that the
@@ -253,7 +265,7 @@ end
         if !isassigned(pipeline)
             pipeline[] = link_pipeline(dev, res.air::Vector{UInt8},
                                      res.metallib::Vector{UInt8},
-                                     res.entry::String)
+                                     res.entry::String, job.config.target.minthreads)
             # Don't cache session-local pipeline handles while precompiling: the
             # results struct is serialized into the package image along with its
             # CodeInstance, and ObjectiveC handles would come back dangling.
@@ -280,9 +292,14 @@ end
             end
         end
 
+        # normalized by `compiler_config`; asserted to keep `link_kernel` inferable
+        minthreads = job.config.target.minthreads::Union{Nothing,NTuple{3,Int}}
+        reqthreads = minthreads === nothing ? MTLSize(0, 0, 0) : MTLSize(minthreads)
+
         # the fields of `HostKernel` following `f` and `source`
         (pipeline[], res.loggingEnabled::Bool, dev,
          Int(pipeline[].maxTotalThreadsPerThreadgroup),
+         reqthreads,
          Int(pipeline[].staticThreadgroupMemoryLength),
          Int(pipeline[].threadExecutionWidth),
          can_use_residency_sets(dev),
@@ -492,6 +509,12 @@ Base.@nospecializeinfer function launch(
         throw(ArgumentError("All group dimensions should be non-zero"))
     (ts.width>0 && ts.height>0 && ts.depth>0) ||
         throw(ArgumentError("All thread dimensions should be non-zero"))
+
+    # Metal only checks this in its debug layer; other sizes otherwise silently misbehave
+    reqthreads = kernel.reqthreads
+    if reqthreads.width > 0 && ts != reqthreads
+        throw(ArgumentError("Threads in group ($(Int(ts.width)), $(Int(ts.height)), $(Int(ts.depth))) should equal the kernel's minthreads ($(Int(reqthreads.width)), $(Int(reqthreads.height)), $(Int(reqthreads.depth)))"))
+    end
 
     maxthreads = kernel.maxthreads
     nthreads = ts.width * ts.height * ts.depth
