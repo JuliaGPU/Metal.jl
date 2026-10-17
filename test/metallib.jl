@@ -633,6 +633,55 @@ end
     end
 end
 
+struct MetallibPoint
+    x::Float32
+    y::Int32
+end
+function metallib_reflection_kernel(a, x::Float32, p::MetallibPoint)
+    @inbounds a[1] = x + p.x + p.y
+    return
+end
+
+# the runtime builds pipeline reflection from the argument metadata in the module, which
+# describes arguments in MSL terms since GPUCompiler 2.15
+if pkgversion(Metal.GPUCompiler) >= v"2.15"
+using ObjectiveC: @objc, id, Out
+using ObjectiveC.Foundation: NSError
+@testset "pipeline reflection" begin
+    tt = Tuple{MtlDeviceVector{Float32,1}, Float32, MetallibPoint}
+    bytes = compile_metallib(metallib_reflection_kernel, tt)
+    name = only(read(IOBuffer(bytes), MetalLib).functions).name
+    dev = device()
+    fun = MTL.MTLFunction(MTL.MTLLibraryFromData(dev, bytes), name)
+
+    options = MTL.MTLPipelineOption(MTL.MTLPipelineOptionBindingInfo |
+                                    MTL.MTLPipelineOptionBufferTypeInfo)
+    reflection = Out{MTL.MTLComputePipelineReflection}()
+    err = Out{NSError}()
+    pipeline = @objc [dev::id{MTL.MTLDevice} newComputePipelineStateWithFunction:fun::id{MTL.MTLFunction}
+                      options:options::MTL.MTLPipelineOption
+                      reflection:reflection::Out{MTL.MTLComputePipelineReflection}
+                      error:err::Out{NSError}]::Union{Nothing,MTL.MTLComputePipelineState}
+    @test pipeline !== nothing
+    bindings = Dict(String(b.name) => MTL.MTLBufferBinding(reinterpret(id{MTL.MTLBufferBinding}, b.ptr))
+                    for b in reflection[].bindings if b.type == MTL.MTLBindingTypeBuffer)
+
+    # a scalar passed by reference has an MSL type
+    @test bindings["x"].bufferDataType == MTL.MTLDataTypeFloat
+    @test bindings["x"].bufferStructType === nothing
+
+    # a struct passed by reference has its layout
+    p = bindings["p"]
+    @test p.bufferDataType == MTL.MTLDataTypeStruct
+    @test p.bufferDataSize == sizeof(MetallibPoint)
+    @test p.bufferStructType !== nothing
+    members = p.bufferStructType.members
+    @test [String(m.name) for m in members] == ["x", "y"]
+    @test [m.offset for m in members] == [0, 4]
+    @test [m.dataType for m in members] == [MTL.MTLDataTypeFloat, MTL.MTLDataTypeInt]
+end
+end
+
 @static if VERSION >= v"1.11"
     @testset "public API" begin
         for name in (:MetalLib, :MetalLibFunction, :FunctionConstant, :DebugInfo,
