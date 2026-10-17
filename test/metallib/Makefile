@@ -4,7 +4,7 @@ MACOSX_VERSIONS := 11 12 13 14 15 26
 
 # sources that need a dedicated rule (see below)
 SPECIAL_SOURCES := dependencies.metal dependencies_helper.metal coreimage.metal dylib.metal imports.metal \
-                   optional_constants.metal
+                   optional_constants.metal used_constants.metal
 
 SOURCES := $(filter-out $(SPECIAL_SOURCES),$(wildcard *.metal))
 METALLIBS := $(foreach ver,$(MACOSX_VERSIONS),$(SOURCES:.metal=.$(ver).metallib))
@@ -13,10 +13,10 @@ METALLIBS := $(foreach ver,$(MACOSX_VERSIONS),$(SOURCES:.metal=.$(ver).metallib)
 STANDALONE_METALLIBS := kernel.standalone.metallib dependencies.standalone.metallib
 
 SPECIAL_METALLIBS := coreimage.metallib dylib.metallib imports.metallib kernels.compressed.metallib \
-                     optional_constants.metallib
+                     optional_constants.metallib used_constants.metallib
 
 # unlinked AIR, to build libraries from
-AIR_MODULES := optional_constants.air
+AIR_MODULES := optional_constants.air used_constants.air used_constants.O0.air
 
 .PHONY: all
 all: $(METALLIBS) $(STANDALONE_METALLIBS) $(SPECIAL_METALLIBS) $(AIR_MODULES)
@@ -62,3 +62,9 @@ optional_constants.air: optional_constants.metal
 	$(METAL) -mmacosx-version-min=15 -c -o $@ $<
 optional_constants.metallib: optional_constants.metal
 	$(METAL) -mmacosx-version-min=15 -o $@ $<
+used_constants.air: used_constants.metal
+	$(METAL) -mmacosx-version-min=15 -c -o $@ $<
+used_constants.metallib: used_constants.metal
+	$(METAL) -mmacosx-version-min=15 -o $@ $<
+used_constants.O0.air: used_constants.metal
+	$(METAL) -mmacosx-version-min=15 -O0 -c -o $@ $<
