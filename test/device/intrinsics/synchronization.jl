@@ -50,6 +50,71 @@
         @test Array(buf)[1] == threads - 1
     end
 
+    @testset "barrier order and scope" begin
+        # (a smoke test: weaker orders and narrower scopes don't make writes visible to the
+        # whole threadgroup, so every thread only accesses its own element)
+        function barrier_kernel(buf, ::Val{ORDER}, ::Val{SCOPE}) where {ORDER,SCOPE}
+            i = thread_position_in_threadgroup().x
+            @inbounds buf[i] = i
+            threadgroup_barrier(Metal.MemoryFlagDevice, ORDER, SCOPE)
+            simdgroup_barrier(Metal.MemoryFlagDevice, ORDER, SCOPE)
+            @inbounds buf[i] += 1
+            return
+        end
+        @testset "$order, $scope" for order in instances(Metal.memory_order),
+                                      scope in instances(Metal.thread_scope)
+            buf = Metal.zeros(Int32, 64)
+            @metal threads=64 barrier_kernel(buf, Val(order), Val(scope))
+            @test Array(buf) == 2:65
+        end
+
+        function barrier_abi(::Core.LLVMPtr{Int32,Metal.AS.Device})
+            threadgroup_barrier(Metal.MemoryFlagDevice, Metal.memory_order_release,
+                                Metal.thread_scope_device)
+            simdgroup_barrier(Metal.MemoryFlagThreadGroup, Metal.thread_scope_simdgroup)
+            simdgroup_barrier(Metal.MemoryFlagDevice, Metal.memory_order_acquire,
+                              Metal.thread_scope_device)
+            threadgroup_barrier()
+            return
+        end
+        # the AIR 2.9 form, with an order, which GPUCompiler legalizes for the target
+        @testset "Metal $metal, AIR $air" for (metal, air) in ((v"3.2", v"2.7"),
+                                                              (v"4.0", v"2.9"),
+                                                              (v"4.1", v"2.9"))
+            ir = sprint(io -> Metal.code_air(io, barrier_abi,
+                                             Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
+                                             kernel=true, metal, air))
+            # (before MSL 4.1, GPUCompiler makes barriers sequentially consistent)
+            release, acquire = metal >= v"4.1" ? (3, 2) : (5, 5)
+            if air >= v"2.9"
+                @test occursin("@air.wg.barrier(i32 1, i32 $release, i32 2)", ir)
+                @test occursin("@air.simdgroup.barrier(i32 1, i32 $acquire, i32 2)", ir)
+                @test occursin("@air.simdgroup.barrier(i32 2, i32 5, i32 4)", ir)
+                @test occursin("@air.wg.barrier(i32 0, i32 5, i32 1)", ir)
+            else
+                @test occursin("@air.wg.barrier(i32 1, i32 2)", ir)
+                @test occursin("@air.simdgroup.barrier(i32 1, i32 2)", ir)
+                @test occursin("@air.simdgroup.barrier(i32 2, i32 4)", ir)
+                @test occursin("@air.wg.barrier(i32 0, i32 1)", ir)
+            end
+        end
+
+        # MSL has no barrier scopes before 3.2
+        function scoped_barrier(a)
+            threadgroup_barrier(Metal.MemoryFlagDevice, Metal.thread_scope_device)
+            return
+        end
+        a = Metal.zeros(Int32, 1)
+        err = try
+            @metal launch=false metal=v"3.1" air=v"2.7" scoped_barrier(a)
+            nothing
+        catch err
+            err
+        end
+        @test err isa Metal.InvalidIRError
+        @test occursin("Barrier scopes need Metal 3.2.", sprint(showerror, err))
+    end
+
     # TODO: Actually test for races
     @testset "atomic thread fence" begin
         function fence_kernel(buf, ::Val{ORDER}, ::Val{FLAGS}, ::Val{SCOPE}) where {ORDER,FLAGS,SCOPE}
