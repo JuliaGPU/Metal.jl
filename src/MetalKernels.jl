@@ -218,8 +218,7 @@ function KI.wait_event(::MetalBackend, ev::Tuple{MTLSharedEvent, UInt64})
     bq = global_queue(device())
     # other tasks may commit the open batch, but only while holding this lock
     Base.@lock Metal.submission_lock begin
-        Metal.end_encoder!(bq)
-        encode_wait!(Metal.ensure_cmdbuf!(bq), event, value)
+        Metal.encode_event_wait!(bq, event, value)
         Metal.record_operation!(bq, event)
     end
     Metal.maybe_autoflush!(bq)

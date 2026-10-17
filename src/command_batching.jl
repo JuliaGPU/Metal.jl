@@ -42,10 +42,67 @@ end::Int
 # Completion handlers run on libdispatch worker threads, where compiling or
 # running Julia code can overflow the small foreign stack. Keep command buffers
 # alive and drain Julia roots from normal managed threads instead.
-struct PendingCommand
-    cmdbuf::MTL.MTLCommandBufferLike
+struct PendingCommand{T}
+    # what the backend reports the command's completion on
+    token::T
     roots::Vector{Any}
 end
+
+"""
+    CommandBackend
+
+The Metal API that a [`BatchedCommandQueue`](@ref) encodes and submits its work with. The
+batching itself (recording operations and their roots, deciding when to flush, limiting
+the work in flight, ownership of managed memory) is shared; a backend implements the
+following for `BatchedCommandQueue{B}`. The encoding and submission functions are called
+while holding `submission_lock`:
+
+- `has_open_batch(bq)`: whether there is uncommitted work;
+- `kernel_encoder!(bq, pipeline)`: return an encoding context for a kernel launch using
+  `pipeline`, opening the batch if needed (and then calling `register_queue!(bq)`, so that
+  other tasks can flush it). The context supports
+  `bind_buffer!(ctx, buf, offset, index)`, `bind_bytes!(ctx, ptr, length, index)` (which
+  must copy the bytes before returning), `make_resident!(ctx, buf, usage)` for buffers
+  that are only reachable through a GPU address, and `dispatch!(ctx, groups, threads)`;
+- `blit_encoder(bq)`: return a context supporting `append_copy!` and `append_fillbuffer!`;
+- `encode_event_wait!(bq, event, value)`: make subsequent work wait for `event`;
+- `end_encoder!(bq)`: close the current encoder, if any;
+- `commit_open_batch!(bq)`: submit the open batch, returning a completion token, and
+  forget about it (`has_open_batch` becomes false). Profiling metadata recorded with the
+  batch's operations must be attached before submitting;
+- `discard_open_batch!(bq)`: drop and release the open batch without submitting it, then
+  call `reset_open_batch!(bq)`;
+- `abandon_open_batch!(bq)`: at exit, close the open batch without submitting or waiting
+  for it, then call `reset_open_batch!(bq)`;
+- `pending_commands(bq)`: the mutable vector of `PendingCommand`s for submitted work whose
+  roots are still alive, in submission order;
+- `take_submissions!(bq)` and `last_submission(bq)`: the most recent submission to wait
+  for, the former together with the errors reported since it was last called.
+
+`device_synchronize` and the error reporting still rely on the per-queue submission
+tracking in `MTL` that Metal 3 command buffers feed.
+
+Completion tokens support `is_completed(token)` and `wait_completed!(token)`.
+"""
+abstract type CommandBackend end
+
+"""
+    Metal3Backend
+
+Encodes into a single `MTLCommandBuffer` per batch, using compute and blit encoders.
+Arguments are bound with `setBuffer:`/`setBytes:` and other buffers declared with
+`useResource:`; Metal 3 orders the commands of a compute encoder by itself.
+"""
+mutable struct Metal3Backend <: CommandBackend
+    cmdbuf::Union{Nothing,MTLCommandBuffer}
+    encoder::Union{Nothing,MTLComputeCommandEncoder,MTLBlitCommandEncoder}
+    kind::EncoderKind
+    last_pipeline::Union{Nothing,MTLComputePipelineState}
+    cleanups::Vector{PendingCommand{MTL.MTLCommandBufferLike}}
+end
+
+Metal3Backend() = Metal3Backend(nothing, nothing, NoEncoder, nothing,
+                                PendingCommand{MTL.MTLCommandBufferLike}[])
 
 """
     BatchedCommandQueue
@@ -57,6 +114,9 @@ lazily, instead of one command buffer per operation.
 
 It wraps, and is a drop-in for, the `MTLCommandQueue` it batches: properties that
 aren't its own (e.g. `label`) forward to the underlying queue.
+
+How the work is encoded and submitted is up to its `CommandBackend` type parameter;
+currently, that's always `Metal3Backend`, using the Metal 3 command API.
 
 The open batch is committed ("flushed") when any of the following happens:
 
@@ -82,41 +142,44 @@ and waits for the work it left behind, so results of a task are visible after `w
 for it. [`device_synchronize`](@ref) flushes the batches of all tasks, which supports
 `@async` work and the REPL synchronization hook.
 """
-mutable struct BatchedCommandQueue
+mutable struct BatchedCommandQueue{B<:CommandBackend}
+    # the Metal 3 queue that this one batches for, and that work submitted outside of the
+    # batch (e.g. by MPS) is ordered against
     queue::MTLCommandQueue
     device::MTLDevice
     owner::Task
-    cmdbuf::Union{Nothing,MTLCommandBuffer}
-    encoder::Union{Nothing,MTLComputeCommandEncoder,MTLBlitCommandEncoder}
-    kind::EncoderKind
+    backend::B
     roots::Vector{Any}
-    last_pipeline::Union{Nothing,MTLComputePipelineState}
     nops::Int
     nbytes::Int
     pending_ops::Vector{Any}
-    cleanups::Vector{PendingCommand}
 end
+
+const Metal3Queue = BatchedCommandQueue{Metal3Backend}
+
+# The concrete queue types, one per backend. Containers and fields that hold queues use
+# this instead of the abstract `BatchedCommandQueue`, to keep dispatch on them static.
+const ConcreteBatchedQueue = Metal3Queue
 
 function BatchedCommandQueue(queue::MTLCommandQueue)
     dev = queue.device
     can_use_residency_sets(dev) && install_queue_residency!(queue, dev)
-    BatchedCommandQueue(queue, dev, current_task(), nothing, nothing, NoEncoder,
-                        Any[], nothing, 0, 0, Any[], PendingCommand[])
+    BatchedCommandQueue(queue, dev, current_task(), Metal3Backend(), Any[], 0, 0, Any[])
 end
 
 # Properties that aren't our own fields (e.g. `label`) forward to the wrapped
 # queue, so a BatchedCommandQueue is a drop-in for the MTLCommandQueue it batches.
 @inline function Base.getproperty(bq::BatchedCommandQueue, name::Symbol)
-    hasfield(BatchedCommandQueue, name) && return getfield(bq, name)
+    hasfield(typeof(bq), name) && return getfield(bq, name)
     return getproperty(getfield(bq, :queue), name)
 end
 
 @inline function Base.setproperty!(bq::BatchedCommandQueue, name::Symbol, value)
-    hasfield(BatchedCommandQueue, name) && return setfield!(bq, name, value)
+    hasfield(typeof(bq), name) && return setfield!(bq, name, value)
     return setproperty!(getfield(bq, :queue), name, value)
 end
 
-const batched_queues = IdDict{BatchedCommandQueue,Nothing}()
+const batched_queues = IdDict{ConcreteBatchedQueue,Nothing}()
 const batched_queues_lock = ReentrantLock()
 
 @inline batched_queue_key(queue::MTLCommandQueue) =
@@ -130,9 +193,9 @@ function register_queue!(bq::BatchedCommandQueue)
 end
 
 function unregister_queue_if_idle!(bq::BatchedCommandQueue)
-    (bq.cmdbuf === nothing && isempty(bq.cleanups)) || return
+    (!has_open_batch(bq) && isempty(pending_commands(bq))) || return
     Base.@lock batched_queues_lock begin
-        if bq.cmdbuf === nothing && isempty(bq.cleanups)
+        if !has_open_batch(bq) && isempty(pending_commands(bq))
             delete!(batched_queues, bq)
         end
     end
@@ -161,7 +224,7 @@ function orphaned_batched_queues()
         bqs = nothing
         for bq in keys(batched_queues)
             istaskdone(bq.owner) || continue
-            bqs === nothing && (bqs = BatchedCommandQueue[])
+            bqs === nothing && (bqs = ConcreteBatchedQueue[])
             push!(bqs, bq)
         end
         bqs
@@ -173,7 +236,7 @@ batched_queue(bq::BatchedCommandQueue) = bq
 function batched_queue(queue::MTLCommandQueue)
     get!(task_local_storage(), batched_queue_key(queue)) do
         BatchedCommandQueue(queue)
-    end::BatchedCommandQueue
+    end::ConcreteBatchedQueue
 end
 
 raw_queue(bq::BatchedCommandQueue) = bq.queue
@@ -276,60 +339,117 @@ function MTL.startCapture(bq::BatchedCommandQueue,
     return MTL.startCapture(bq.queue, destination; folder)
 end
 
-function ensure_cmdbuf!(bq::BatchedCommandQueue)
-    cmdbuf = bq.cmdbuf
+## Metal 3 backend
+
+has_open_batch(bq::Metal3Queue) = bq.backend.cmdbuf !== nothing
+
+pending_commands(bq::Metal3Queue) = bq.backend.cleanups
+
+function ensure_cmdbuf!(bq::Metal3Queue)
+    be = bq.backend
+    cmdbuf = be.cmdbuf
     if cmdbuf === nothing
         cmdbuf = MTLCommandBuffer(bq.queue)
         @label! cmdbuf "MTLCommandBuffer(batched queue)"
-        bq.cmdbuf = cmdbuf
+        be.cmdbuf = cmdbuf
         register_queue!(bq)
     end
     return cmdbuf::MTLCommandBuffer
 end
 
-function end_encoder!(bq::BatchedCommandQueue)
-    enc = bq.encoder
+function end_encoder!(bq::Metal3Queue)
+    be = bq.backend
+    enc = be.encoder
     enc === nothing && return
 
-    bq.encoder = nothing
-    bq.kind = NoEncoder
-    bq.last_pipeline = nothing
+    be.encoder = nothing
+    be.kind = NoEncoder
+    be.last_pipeline = nothing
     close(enc)
     return
 end
 
-function compute_encoder(bq::BatchedCommandQueue)
-    if bq.kind == ComputeEncoder
-        return bq.encoder::MTLComputeCommandEncoder
+function compute_encoder(bq::Metal3Queue)
+    be = bq.backend
+    if be.kind == ComputeEncoder
+        return be.encoder::MTLComputeCommandEncoder
     end
 
     end_encoder!(bq)
     enc = MTLComputeCommandEncoder(ensure_cmdbuf!(bq))
-    bq.encoder = enc
-    bq.kind = ComputeEncoder
+    be.encoder = enc
+    be.kind = ComputeEncoder
     return enc
 end
 
-function blit_encoder(bq::BatchedCommandQueue)
-    if bq.kind == BlitEncoder
-        return bq.encoder::MTLBlitCommandEncoder
+function blit_encoder(bq::Metal3Queue)
+    be = bq.backend
+    if be.kind == BlitEncoder
+        return be.encoder::MTLBlitCommandEncoder
     end
 
     end_encoder!(bq)
     enc = MTLBlitCommandEncoder(ensure_cmdbuf!(bq))
-    bq.encoder = enc
-    bq.kind = BlitEncoder
+    be.encoder = enc
+    be.kind = BlitEncoder
     return enc
 end
 
-function set_pipeline!(bq::BatchedCommandQueue, cce::MTLComputeCommandEncoder,
-                       pipeline::MTLComputePipelineState)
-    if bq.last_pipeline !== pipeline
+function kernel_encoder!(bq::Metal3Queue, pipeline::MTLComputePipelineState)
+    cce = compute_encoder(bq)
+    be = bq.backend
+    if be.last_pipeline !== pipeline
         MTL.set_function!(cce, pipeline)
-        bq.last_pipeline = pipeline
+        be.last_pipeline = pipeline
     end
+    return cce
+end
+
+@inline bind_buffer!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, offset, index) =
+    set_buffer!(cce, buf, offset, index)
+@inline bind_bytes!(cce::MTLComputeCommandEncoder, ptr::Ptr, len::Integer, index::Integer) =
+    set_bytes!(cce, ptr, len, index)
+@inline make_resident!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, usage) =
+    MTL.use!(cce, buf, usage)
+@inline dispatch!(cce::MTLComputeCommandEncoder, groups::MTLSize, threads::MTLSize) =
+    MTL.append_current_function!(cce, groups, threads)
+
+function encode_event_wait!(bq::Metal3Queue, event, value)
+    end_encoder!(bq)
+    encode_wait!(ensure_cmdbuf!(bq), event, value)
     return
 end
+
+function commit_open_batch!(bq::Metal3Queue)
+    end_encoder!(bq)
+    cmdbuf = bq.backend.cmdbuf::MTLCommandBuffer
+    register_operations!(bq, cmdbuf)
+    MTL.commit_with_queue_key!(cmdbuf, pointer(bq.queue))
+    bq.backend.cmdbuf = nothing
+    return cmdbuf
+end
+
+function discard_open_batch!(bq::Metal3Queue)
+    cmdbuf = bq.backend.cmdbuf
+    cmdbuf === nothing && return
+    bq.backend.cmdbuf = nothing
+    reset_open_batch!(bq)
+    release(cmdbuf)
+    return
+end
+
+# at exit, an open encoder must be ended before it's released, but the command buffer
+# must not be committed or waited on
+function abandon_open_batch!(bq::Metal3Queue)
+    end_encoder!(bq)
+    bq.backend.cmdbuf === nothing && return
+    bq.backend.cmdbuf = nothing
+    reset_open_batch!(bq)
+    return
+end
+
+take_submissions!(bq::Metal3Queue) = MTL.take_queue_submissions(bq.queue)
+last_submission(bq::Metal3Queue) = MTL.last_committed(bq.queue)
 
 function note_operation!(bq::BatchedCommandQueue, op)
     MTL.profile_metadata[] === nothing && return
@@ -360,36 +480,34 @@ function register_operations!(bq::BatchedCommandQueue, cmdbuf)
     return
 end
 
-function defer_cleanup!(bq::BatchedCommandQueue, cmdbuf::MTL.MTLCommandBufferLike,
-                        roots::Vector{Any})
+function defer_cleanup!(bq::BatchedCommandQueue, token, roots::Vector{Any})
     Base.@lock submission_lock begin
-        push!(bq.cleanups, PendingCommand(cmdbuf, roots))
+        cleanups = pending_commands(bq)
+        push!(cleanups, eltype(cleanups)(token, roots))
         register_queue!(bq)
     end
     return
 end
-
-defer_cleanup!(queue, cmdbuf::MTL.MTLCommandBufferLike, roots::Vector{Any}) =
-    defer_cleanup!(batched_queue(queue), cmdbuf, roots)
 
 # release the roots of completed command buffers. `until` treats the entries up to and
 # including it as completed, e.g., because a command buffer committed later has completed.
 function drain_cleanups!(bq::BatchedCommandQueue;
                          until::Union{Nothing,PendingCommand}=nothing)
     Base.@lock submission_lock begin
+        cleanups = pending_commands(bq)
         nforced = until === nothing ? 0 :
-                  something(findfirst(cleanup -> cleanup === until, bq.cleanups), 0)
+                  something(findfirst(cleanup -> cleanup === until, cleanups), 0)
         n = 0
-        for cleanup in bq.cleanups
-            if !(n < nforced || cleanup.cmdbuf.status >= MTL.MTLCommandBufferStatusCompleted)
+        for cleanup in cleanups
+            if !(n < nforced || is_completed(cleanup.token))
                 break
             end
             n += 1
         end
         n == 0 && return
 
-        completed = bq.cleanups[1:n]
-        deleteat!(bq.cleanups, 1:n)
+        completed = cleanups[1:n]
+        deleteat!(cleanups, 1:n)
 
         for cleanup in completed
             empty!(cleanup.roots)
@@ -410,34 +528,29 @@ function drain_cleanups!(queue)
 end
 
 function pending_cleanup_count(bq::BatchedCommandQueue)
-    return length(bq.cleanups)
+    return length(pending_commands(bq))
 end
 
 # wait until fewer than `command_batching_inflight()` command buffers are in flight
 function limit_inflight!(bq::BatchedCommandQueue)
     while true
-        cmdbuf = Base.@lock submission_lock begin
+        token = Base.@lock submission_lock begin
             drain_cleanups!(bq)
             pending_cleanup_count(bq) < command_batching_inflight() && return
-            first(bq.cleanups).cmdbuf
+            first(pending_commands(bq)).token
         end
-        wait_cmdbuf!(cmdbuf)
+        wait_completed!(token)
     end
 end
 
-function reset_open_cmdbuf!(bq::BatchedCommandQueue, cmdbuf)
-    bq.cmdbuf = nothing
+# forget the operations recorded for the open batch, once the backend has submitted or
+# dropped it
+function reset_open_batch!(bq::BatchedCommandQueue)
     bq.roots = Any[]
     bq.pending_ops = Any[]
     bq.nops = 0
     bq.nbytes = 0
     unregister_queue_if_idle!(bq)
-    return
-end
-
-function discard_open_cmdbuf!(bq::BatchedCommandQueue, cmdbuf)
-    reset_open_cmdbuf!(bq, cmdbuf)
-    release(cmdbuf)
     return
 end
 
@@ -450,15 +563,12 @@ end
 # commit the open batch, if any. this may be another task's queue.
 function commit_batch!(bq::BatchedCommandQueue)
     Base.@lock submission_lock begin
-        cmdbuf = bq.cmdbuf
-        cmdbuf === nothing && return
+        has_open_batch(bq) || return
 
-        end_encoder!(bq)
-        register_operations!(bq, cmdbuf)
         roots = bq.roots
-        MTL.commit_with_queue_key!(cmdbuf, pointer(bq.queue))
-        defer_cleanup!(bq, cmdbuf, roots)
-        reset_open_cmdbuf!(bq, cmdbuf)
+        token = commit_open_batch!(bq)
+        defer_cleanup!(bq, token, roots)
+        reset_open_batch!(bq)
     end
     return
 end

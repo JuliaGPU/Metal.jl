@@ -18,7 +18,7 @@ mutable struct Managed
     const host_ptr::Ptr{Cvoid}
 
     # the queue that last used the buffer
-    queue::Union{Nothing,BatchedCommandQueue}
+    queue::Union{Nothing,ConcreteBatchedQueue}
 
     # whether operations on `queue` may still be using the buffer
     Base.@atomic dirty::Bool
