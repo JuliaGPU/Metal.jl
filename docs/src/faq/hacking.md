@@ -215,11 +215,17 @@ which costs performance but not correctness.
 Since metallib v1.2.7 the toolchain attaches reflection data to every function: an `RBUF`
 buffer holding a flatbuffer with an `AIRR` file identifier, describing the function's
 signature and resource bindings. The flatbuffer schemas are not published, but Apple embeds
-them as binary flatbuffer schemas (BFBS) in the Metal toolchain binaries, from where they
-can be extracted and fed to a flatbuffers implementation. The one non-standard part is that
-nodes are encoded through a double table: the first table holds the node type and an offset
-to a second table with the type-specific fields. floor implements writing these buffers
-(see its `metal_reflection_types.hpp` and `metal_reflection_writing.hpp`).
+them as binary flatbuffer schemas (BFBS) in the Metal toolchain binaries (`air-objdump`
+decodes the reflection data for `metal-objdump --reflection`), from where
+`res/airr/generate.jl` extracts the one Metal.jl uses to decode it (`Metal.reflection`).
+The data is a list of nodes, a flatbuffers union of over 250 kinds (functions, arguments,
+attributes, types), whose type field is 32 bits wide instead of the usual 8; nodes refer to
+each other by index. floor implements writing these buffers (see its
+`metal_reflection_types.hpp` and `metal_reflection_writing.hpp`).
+
+The Metal runtime does not use the reflection data: it reflects functions from the
+`air.*` metadata in their modules, so the bindings it reports are the same with the data
+stripped. Only `MTLLibrary.reflectionForFunctionWithName:` and Apple's tools read it.
 
 Metal.jl reads and round-trips all of the above, but only generates the sections it has
 data for. In practice that means libraries without reflection buffers or script lists,
