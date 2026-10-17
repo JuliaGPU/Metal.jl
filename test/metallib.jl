@@ -525,6 +525,10 @@ end
             @test built.air_version == fun.air_version
             @test built.metal_version == fun.metal_version
             @test built.constants == fun.constants
+            # (older toolchains strip the debug info from the module)
+            if haskey(mod.metadata, "llvm.dbg.cu") || fun.debug_info === nothing
+                @test built.debug_info == fun.debug_info
+            end
         end
     end
 
@@ -582,16 +586,51 @@ function metallib_kernel(a)
     return
 end
 
+# compile a kernel the way `@metal` does, returning the library
+function compile_metallib(f, tt; kwargs...)
+    cfg = Metal.compiler_config(device(); kernel=true, name=nothing, kwargs...)
+    src = Metal.methodinstance(typeof(f), tt, Base.get_world_counter())
+    job = Metal.GPUCompiler.CompilerJob(src, cfg, Base.get_world_counter())
+    return Metal.compile_to_metallib(job).metallib
+end
+
 @testset "generated libraries" begin
     cfg = Metal.compiler_config(device(); kernel=true, name=nothing)
-    src = Metal.methodinstance(typeof(metallib_kernel), Tuple{MtlDeviceVector{Float32,1}},
-                               Base.get_world_counter())
-    job = Metal.GPUCompiler.CompilerJob(src, cfg, Base.get_world_counter())
-    lib = read(IOBuffer(Metal.compile_to_metallib(job).metallib), MetalLib)
-    fun = only(lib.functions)
+    tt = Tuple{MtlDeviceVector{Float32,1}}
+    bytes = compile_metallib(metallib_kernel, tt)
+    fun = only(read(IOBuffer(bytes), MetalLib).functions)
     @test fun.type == Metal.METALLIB_COMPUTE_FUNCTION
     @test fun.air_version == cfg.target.air
     @test fun.metal_version == cfg.target.metal
+
+    # the debug info points to the kernel's definition
+    method = only(methods(metallib_kernel))
+    @test fun.debug_info == Metal.DebugInfo(method.line, abspath(@__FILE__))
+
+    # ... unless we don't have debug info, or the kernel isn't defined in a file
+    fun = only(read(IOBuffer(compile_metallib(metallib_kernel, tt; debug_level=0)),
+                    MetalLib).functions)
+    @test fun.debug_info === nothing
+    for file in (Symbol("REPL[1]"), :none)
+        body = Expr(:block, LineNumberNode(1, file), :(@inbounds a[1] = 42f0), nothing)
+        kernel = Core.eval(Module(), Expr(:function, :(kernel(a)), body))
+        @test only(methods(kernel)).file == file
+        # (`invokelatest` as the kernel was defined after this test started)
+        lib = read(IOBuffer(Base.invokelatest(compile_metallib, kernel, tt)), MetalLib)
+        fun = only(lib.functions)
+        @test fun.debug_info === nothing
+    end
+
+    validate = metal_tool("metal-validate")
+    if validate === nothing
+        @test_skip "Apple's metal-validate not available"
+    else
+        mktemp() do path, io
+            write(io, bytes)
+            close(io)
+            @test success(`$validate $path`)
+        end
+    end
 end
 
 @static if VERSION >= v"1.11"
