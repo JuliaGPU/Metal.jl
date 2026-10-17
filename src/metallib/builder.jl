@@ -16,7 +16,7 @@ const program_type_metadata = [
 ]
 
 """
-    MetalLibFunction(mod::LLVM.Module, entry::String; air_module, kwargs...)
+    MetalLibFunction(mod::LLVM.Module, entry::String; air_module, reflect=false, kwargs...)
 
 Create a [`MetalLibFunction`](@ref) for the function `entry` of the AIR module `mod`,
 deriving its metadata from the module like Apple's toolchain does:
@@ -35,6 +35,10 @@ deriving its metadata from the module like Apple's toolchain does:
   relative paths for Base methods, and pseudo-files like `REPL[1]` or `none` for code that
   is not defined in a file).
 
+With `reflect=true`, the function also gets reflection data (see
+[`Metal.reflection`](@ref)), which Apple's tools and `MTLLibrary`'s
+`reflectionForFunctionWithName:` use; the Metal runtime does not need it.
+
 `air_module` is the bitcode to store in the library, i.e. `mod` as Metal should see it
 (typically downgraded). Other keyword arguments set fields of the function directly,
 overriding what would be derived from the module.
@@ -42,7 +46,7 @@ overriding what would be derived from the module.
 The module's LLVM context must be active.
 """
 function MetalLibFunction(mod::LLVM.Module, entry::String; air_module::Vector{UInt8},
-                          kwargs...)
+                          reflect::Bool=false, kwargs...)
     haskey(mod.functions, entry) ||
         throw(ArgumentError("module does not contain a function named $entry"))
     fn = mod.functions[entry]
@@ -53,6 +57,9 @@ function MetalLibFunction(mod::LLVM.Module, entry::String; air_module::Vector{UI
     get!(() -> metal_version(mod), fields, :metal_version)
     get!(() -> function_constants(mod, fn), fields, :constants)
     get!(() -> debug_info(mod, fn), fields, :debug_info)
+    if reflect
+        get!(() -> reflection_data(reflection(mod, entry)), fields, :reflection_data)
+    end
     return MetalLibFunction(; name=entry, air_module, fields...)
 end
 
