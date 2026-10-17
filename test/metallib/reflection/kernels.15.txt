@@ -1,0 +1,68 @@
+kernels.15.metallib:
+Dump of section REFLECTIONS:
+
+Reflection No. 0:
+{
+  "version": {
+    "major": 0,
+    "minor": 3,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "foo"
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ]
+}
+
+Reflection No. 1:
+{
+  "version": {
+    "major": 0,
+    "minor": 3,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "bar"
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ]
+}
+
+Reflection No. 2:
+{
+  "version": {
+    "major": 0,
+    "minor": 3,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "baz"
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ]
+}
