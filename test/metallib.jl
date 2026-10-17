@@ -1080,6 +1080,68 @@ end
         """!{i32 0, !"air.buffer", !"air.frobnicate"}""")
 end
 
+@testset "functions with reflection data" begin
+    # rebuild the functions of a library, with reflection data
+    function with_reflection(lib)
+        functions = map(lib.functions) do fun
+            @dispose ctx=LLVM.Context() mod=parse(LLVM.Module, fun.air_module) begin
+                MetalLibFunction(mod, fun.name; fun.air_module, fun.debug_info, reflect=true)
+            end
+        end
+        return MetalLib(lib; functions)
+    end
+    # the bindings `MTLLibrary` reflects for a function, if any
+    function bindings(bytes, name)
+        mtllib = MTL.MTLLibraryFromData(device(), bytes)
+        refl = @objc [mtllib::id{MTL.MTLLibrary} reflectionForFunctionWithName:name::id{MTL.NSString}]::id{MTL.MTLFunctionReflection}
+        refl == nil && return nothing
+        return [(String(b.name), b.type, b.index) for b in MTL.MTLFunctionReflection(refl).bindings]
+    end
+    objdump = metal_tool("metal-objdump")
+
+    for file in ["arguments.26.metallib", "julia.metallib"]
+        path = joinpath(metallib_dir, file)
+        lib = parse(MetalLib, path)
+        ours = with_reflection(lib)
+        @test [Metal.reflection(fun)[only(Metal.reflection(fun).kernel_functions)]
+               for fun in ours.functions if fun.type == Metal.METALLIB_COMPUTE_FUNCTION] ==
+              [Metal.reflection(fun)[only(Metal.reflection(fun).kernel_functions)]
+               for fun in lib.functions if fun.type == Metal.METALLIB_COMPUTE_FUNCTION]
+        bytes = sprint(write, ours)
+
+        # Apple's tools decode it like the data Apple's linker wrote
+        if objdump !== nothing
+            decoded(file) = replace(read(`$objdump -ml --reflection $file`, String),
+                                    r"^.*metallib:$"m => "")
+            ours_path = tempname() * ".metallib"
+            write(ours_path, bytes)
+            @test decoded(ours_path) == decoded(path)
+        end
+
+        # and so does the runtime, which reflects nothing without it
+        lib.platform_version <= Metal.macos_version() || continue
+        for fun in lib.functions
+            fun.type == Metal.METALLIB_COMPUTE_FUNCTION || continue
+            expected = bindings(read(path), fun.name)
+            @test !isempty(expected)
+            @test bindings(bytes, fun.name) == expected
+            stripped = MetalLib(lib; functions=[MetalLibFunction(f; reflection_data=nothing)
+                                                for f in lib.functions])
+            @test bindings(sprint(write, stripped), fun.name) === nothing
+        end
+    end
+
+    # pipelines are unaffected
+    ours = with_reflection(parse(MetalLib, joinpath(metallib_dir, "julia.metallib")))
+    if ours.platform_version <= Metal.macos_version()
+        mtllib = MTL.MTLLibraryFromData(device(), sprint(write, ours))
+        for fun in ours.functions
+            @test MTL.MTLComputePipelineState(device(), MTL.MTLFunction(mtllib, fun.name)) isa
+                  MTL.MTLComputePipelineState
+        end
+    end
+end
+
 @static if VERSION >= v"1.11"
     @testset "public API" begin
         for name in (:MetalLib, :MetalLibFunction, :FunctionConstant, :DebugInfo,
