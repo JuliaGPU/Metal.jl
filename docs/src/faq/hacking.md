@@ -85,7 +85,7 @@ with an example:
 |:-----------|:-------------|
 | `info`     | summarize a library: versions, platform, UUID, and every function's type, versions, module size, constants, debug info and reflection data |
 | `dump`     | list every section, tag group and tag with its offset, size and decoded value (`--raw` adds the bytes) |
-| `reflect`  | with `--runtime`, ask Metal for the arguments of every kernel: their bindings, data types, sizes and struct members |
+| `reflect`  | decode the reflection data Apple's toolchain stores, or with `--runtime` ask Metal for the arguments of every kernel: their bindings, data types, sizes and struct members |
 | `dis`      | extract a function's AIR module as bitcode, or with `-S` as textual LLVM IR |
 | `as`       | package LLVM IR or bitcode into a library |
 | `load`     | load a library on the GPU, and with `--pipeline` compile its kernels |
