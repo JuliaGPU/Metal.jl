@@ -26,7 +26,11 @@ deriving its metadata from the module like Apple's toolchain does:
 - `constants` from `air.function_constants`. Constants the module checks with
   `air.is_function_constant_defined` are optional, unless the module records whether they
   are required (as linked modules do). Note that this lists all of the module's constants,
-  while Apple's linker only lists those the function uses.
+  while Apple's linker only lists those the function uses;
+- `debug_info` from the debug info of `entry`, if the module was compiled with debug info
+  (not `debug_level=0`) and it names the source file by an absolute path (Julia records
+  relative paths for Base methods, and pseudo-files like `REPL[1]` or `none` for code that
+  is not defined in a file).
 
 `air_module` is the bitcode to store in the library, i.e. `mod` as Metal should see it
 (typically downgraded). Other keyword arguments set fields of the function directly,
@@ -45,6 +49,7 @@ function MetalLibFunction(mod::LLVM.Module, entry::String; air_module::Vector{UI
     get!(() -> air_version(mod), fields, :air_version)
     get!(() -> metal_version(mod), fields, :metal_version)
     get!(() -> function_constants(mod), fields, :constants)
+    get!(() -> debug_info(mod, fn), fields, :debug_info)
     return MetalLibFunction(; name=entry, air_module, fields...)
 end
 
@@ -145,4 +150,26 @@ function optional_function_constants(mod::LLVM.Module)
         push!(optional, strip_casts(LLVM.arguments(call)[1]))
     end
     return optional
+end
+
+# where the function was defined, like the `DEBI` Apple's toolchain records with `-g`
+function debug_info(mod::LLVM.Module, fn::LLVM.Function)
+    emits_debug_info(mod) || return nothing
+    sp = LLVM.subprogram(fn)
+    sp === nothing && return nothing
+    file = LLVM.file(sp)
+    file === nothing && return nothing
+    path = joinpath(LLVM.directory(file), LLVM.filename(file))
+    line = LLVM.line(sp)
+    isabspath(path) && line >= 0 || return nothing
+    return DebugInfo(line, path)
+end
+
+# Julia emits subprograms and locations even without `-g`, but then marks its compile unit
+# `NoDebug` (which LLVM's C API has no getter for)
+function emits_debug_info(mod::LLVM.Module)
+    haskey(mod.metadata, "llvm.dbg.cu") || return false
+    return any(LLVM.operands(mod.metadata["llvm.dbg.cu"])) do cu
+        !occursin("emissionKind: NoDebug", string(cu))
+    end
 end
