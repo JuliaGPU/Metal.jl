@@ -525,8 +525,10 @@ end
             @test built.air_version == fun.air_version
             @test built.metal_version == fun.metal_version
             @test built.constants == fun.constants
-            # (older toolchains strip the debug info from the module)
-            if haskey(mod.metadata, "llvm.dbg.cu") || fun.debug_info === nothing
+            # (older toolchains strip the debug info from the module, and Apple's linker
+            #  prefixes absolute file names, which Julia emits, with their directory)
+            if (haskey(mod.metadata, "llvm.dbg.cu") || fun.debug_info === nothing) &&
+               metallib != "julia.metallib"
                 @test built.debug_info == fun.debug_info
             end
         end
@@ -999,6 +1001,83 @@ end
     tag = findfirst(reinterpret(UInt8, [UInt32(266240)]), data)   # ThreadPositionInGridArg
     data[tag] .= reinterpret(UInt8, [UInt32(999999)])
     @test_throws ArgumentError Metal.reflection_data(Metal.reflection(data))
+end
+
+@testset "building reflection data" begin
+    # ignoring the version, which is that of the toolchain that built a library
+    describe(mod, name) = apple_json(Metal.reflection(mod, name))[2:end]
+    linked(fun) = apple_json(Metal.reflection(fun))[2:end]
+
+    # Apple's linker derives reflection data from the metadata of the module it links,
+    # which a library contains
+    for file in readdir(joinpath(metallib_dir, "reflection"))
+        lib = parse(MetalLib, joinpath(metallib_dir, replace(file, ".txt" => ".metallib")))
+        each_module(lib) do fun, mod
+            fun.reflection_data === nothing && return
+            if fun.type in (Metal.METALLIB_COMPUTE_FUNCTION, Metal.METALLIB_VISIBLE_FUNCTION)
+                @test describe(mod, fun.name) == linked(fun)
+            else
+                @test_throws Metal.UnsupportedReflection Metal.reflection(mod, fun.name)
+            end
+        end
+    end
+
+    # Metal.jl's kernels, before they were linked (which records unused arguments in the
+    # metadata, while we look at their uses)
+    lib = parse(MetalLib, joinpath(metallib_dir, "julia.metallib"))
+    for file in readdir(joinpath(metallib_dir, "julia"); join=true)
+        @dispose ctx=LLVM.Context() mod=parse(LLVM.Module, read(file)) begin
+            fun = only(filter(fun -> haskey(LLVM.functions(mod), fun.name), lib.functions))
+            @test describe(mod, fun.name) == linked(fun)
+        end
+    end
+
+    @dispose ctx=LLVM.Context() mod=LLVM.Module("empty") begin
+        @test_throws ArgumentError Metal.reflection(mod, "kernel")
+    end
+
+    # metadata of an unexpected form
+    function kernel_reflection(argument; attributes="")
+        @dispose ctx=LLVM.Context() begin
+            kernel = LLVM.supports_typed_pointers(ctx) ? "void (i32)* @kernel" : "ptr @kernel"
+            ir = """
+                define void @kernel(i32 %x) {
+                  ret void
+                }
+                !air.kernel = !{!3, !0}
+                !0 = !{$kernel, !1, !2$attributes}
+                !1 = !{}
+                !2 = !{$argument}
+                !3 = !{}
+                """
+            @dispose mod=parse(LLVM.Module, ir) begin
+                Metal.reflection(mod, "kernel")
+            end
+        end
+    end
+    buffer = "!{i32 0, !\"air.buffer\", !\"air.location_index\", i32 0, i32 1, " *
+             "!\"air.address_space\", i32 1, !\"air.arg_type_name\", !\"uint\", " *
+             "!\"air.arg_name\", !\"x\"}"
+    @test kernel_reflection(buffer) isa Metal.ReflectionObject
+    for argument in [replace(buffer, "i32 0, !\"air.buffer\"" => "i32 1, !\"air.buffer\""),
+                     replace(buffer, "!\"air.buffer\"" => "i32 1"),
+                     replace(buffer, ", !\"air.arg_name\", !\"x\"" => ", !\"air.arg_name\""),
+                     replace(buffer, "!\"air.arg_name\", !\"x\"" => "!\"air.arg_name\", i32 0"),
+                     """!{i32 0, !"air.buffer", !"air.location_index", i32 0}""",
+                     """!{i32 0, !"air.buffer", !"air.struct_type_info", !{i32 0, i32 4}}""",
+                     """!{i32 0, !"air.buffer", !"air.struct_type_info", i32 0}""",
+                     replace(buffer, "i32 0, i32 1" => "i32 -1, i32 1"),
+                     "i32 0"]
+        @test_throws ArgumentError kernel_reflection(argument)
+    end
+    @test_throws ArgumentError kernel_reflection(buffer;
+                                                 attributes=", !{!\"air.max_work_group_size\"}")
+    @test_throws Metal.UnsupportedReflection kernel_reflection(buffer;
+                                                               attributes=", !{!\"air.frobnicate\"}")
+    @test_throws Metal.UnsupportedReflection kernel_reflection(
+        """!{i32 0, !"air.texture", !"air.arg_name", !"x"}""")
+    @test_throws Metal.UnsupportedReflection kernel_reflection(
+        """!{i32 0, !"air.buffer", !"air.frobnicate"}""")
 end
 
 @static if VERSION >= v"1.11"

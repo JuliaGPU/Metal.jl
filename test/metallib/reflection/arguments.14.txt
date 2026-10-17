@@ -1,0 +1,341 @@
+arguments.14.metallib:
+Dump of section REFLECTIONS:
+
+Reflection No. 0:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "arguments",
+        "arguments": [
+          {
+            "id": 1
+          },
+          {
+            "id": 2
+          },
+          {
+            "id": 3
+          },
+          {
+            "id": 4
+          },
+          {
+            "id": 7
+          },
+          {
+            "id": 8
+          },
+          {
+            "id": 9
+          },
+          {
+            "id": 10
+          },
+          {
+            "id": 11
+          },
+          {
+            "id": 12
+          }
+        ],
+        "workgroup_max_size": {
+          "id": 13
+        }
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "ReadWrite",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "float",
+        "name": "a",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 1
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "float",
+        "name": "b",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "buffer_size": {
+          "value": 4
+        },
+        "location_index": {
+          "value": 2
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Constant",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "uint",
+        "name": "n",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "buffer_size": {
+          "value": 32
+        },
+        "location_index": {
+          "value": 3
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "Read",
+        "address_space": "Constant",
+        "struct_type_info": {
+          "id": 5
+        },
+        "type_size": {
+          "value": 32
+        },
+        "type_align": {
+          "value": 8
+        },
+        "type_name": "Params",
+        "name": "p",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "StructTypeInfo",
+      "node": {
+        "fields": [
+          {
+            "struct_type_info": {
+              "id": 6
+            },
+            "offset": 0,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "Inner",
+            "field_name": "inner"
+          },
+          {
+            "offset": 8,
+            "size": 8,
+            "array_entries": 0,
+            "type_name": "float2",
+            "field_name": "shift"
+          },
+          {
+            "offset": 16,
+            "size": 4,
+            "array_entries": 3,
+            "type_name": "float",
+            "field_name": "weights"
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "StructTypeInfo",
+      "node": {
+        "fields": [
+          {
+            "offset": 0,
+            "size": 4,
+            "array_entries": 0,
+            "type_name": "float",
+            "field_name": "scale"
+          },
+          {
+            "offset": 4,
+            "size": 4,
+            "array_entries": 0,
+            "type_name": "uint",
+            "field_name": "offset"
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 4
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "ReadWrite",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "float",
+        "name": "unused",
+        "unused": true
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "ReadWrite",
+        "address_space": "Local",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "float",
+        "name": "scratch",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "ThreadPositionInGridArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "uint",
+        "name": "i",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "ThreadPositionInThreadgroupArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "uint",
+        "name": "tid",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "ThreadIndexInSimdgroupArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "uint",
+        "name": "lane",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "ThreadgroupPositionInGridArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "uint",
+        "name": "group",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "WorkgroupMaxSizeFnAttr",
+      "node": {
+        "size": {
+          "value": 256
+        }
+      }
+    },
+    {
+      "node_type": "VisibleFunctionReference",
+      "node": {
+        "function_name": "twice"
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ],
+  "static_local_allocations": [
+    {
+      "size": 256,
+      "alignment": 4
+    }
+  ],
+  "visible_function_references": [
+    {
+      "id": 14
+    }
+  ]
+}
+
+Reflection No. 1:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "VisibleFunction",
+      "node": {
+        "name": "twice"
+      }
+    }
+  ],
+  "visible_functions": [
+    {
+      "id": 0
+    }
+  ]
+}
