@@ -112,6 +112,15 @@ still have it. Similarly, `reflect --runtime` shows what the runtime makes of a 
 argument metadata (whether a buffer is seen as `float` or as a struct, its size and
 access), without writing host code.
 
+Libraries that Metal.jl compiles have no reflection data, which the runtime does not need.
+To inspect a kernel with Apple's tools (e.g. `metal-objdump --reflection`), which do, add
+it with `as --reflect` to the AIR that `JULIA_METAL_DUMP_DIR` dumps:
+
+```
+JULIA_METAL_DUMP_DIR=dump julia script.jl
+metallib as --reflect -o kernel.metallib dump/*.air
+```
+
 ### For scripts and LLM agents
 
 Every command accepts `--json`, which writes a single JSON document to standard output and

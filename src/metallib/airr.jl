@@ -278,6 +278,206 @@ function reflection(data::Vector{UInt8})
 end
 
 
+## construction and encoding
+
+const airr_objects = Dict(short_name(obj.name) => i - 1
+                          for (i, obj) in enumerate(airr_schema.objects))
+
+function schema_object(schema::FBSchema, kind::Symbol)
+    schema === airr_schema || throw(ArgumentError("unsupported schema"))
+    index = get(airr_objects, kind, nothing)
+    index === nothing && throw(ArgumentError("unknown reflection object $kind"))
+    return index
+end
+
+"""
+    Metal.ReflectionObject(kind::Symbol; fields...)
+
+Create a reflection object of the type `kind` in Apple's schema (e.g. `:BufferArg`), to
+encode with [`Metal.reflection_data`](@ref). Fields that are not given are absent (or have
+their default value, for numbers and booleans). Numbers are converted to the type of their
+field, enumerations can be given by name, and the type of a union (e.g. the `node_type` of a
+`:Node`) is derived from its value.
+
+```julia
+julia> Metal.ReflectionObject(:NodeId; id=1)
+#1
+```
+"""
+function ReflectionObject(kind::Symbol; kwargs...)
+    schema = airr_schema
+    obj = schema.objects[schema_object(schema, kind)+1]
+    given = Dict{Symbol,Any}(kwargs)
+    fields = Pair{Symbol,Any}[]
+    for f in obj.fields
+        f.deprecated && continue
+        value = pop!(given, f.name, nothing)
+        if haskey(fb_scalar_types, f.type.base)
+            if value === nothing && f.type.base in (FB_UTYPE, FB_UTYPE32)
+                # the type of the union that follows
+                union = obj.fields[findfirst(g -> g.id == f.id + 1, obj.fields)]
+                member = get(kwargs, union.name, nothing)
+                value = member === nothing ? 0 : union_tag(schema, union, member)
+            end
+            value = value === nothing ? default_value(schema, f) :
+                    scalar_value(schema, f.type, f.type.base, value)
+        elseif value !== nothing && f.type.base == FB_VECTOR
+            value = if haskey(fb_scalar_types, f.type.element)
+                Any[scalar_value(schema, f.type, f.type.element, v) for v in value]
+            else
+                Any[value...]
+            end
+        end
+        push!(fields, f.name => value)
+    end
+    isempty(given) || throw(ArgumentError("$kind has no field $(first(keys(given)))"))
+    return ReflectionObject(kind, fields)
+end
+
+function scalar_value(schema::FBSchema, type::FBType, base::FBBaseType, value)
+    T = fb_scalar_types[base]
+    type.index >= 0 || return convert(T, value)
+    enum = schema.enums[type.index+1]
+    if value isa Symbol
+        i = findfirst(v -> first(v) == String(value), enum.values)
+        i === nothing && throw(ArgumentError("$(short_name(enum.name)) has no value $value"))
+        value = last(enum.values[i])
+    elseif value isa ReflectionEnum
+        value = value.value
+    end
+    return enum_value(schema, type.index, convert(T, value))
+end
+
+function union_tag(schema::FBSchema, f::FBField, member::ReflectionObject)
+    enum = schema.enums[f.type.index+1]
+    index = schema_object(schema, nameof(member))
+    i = findfirst(==(index), enum.union_objects)
+    i === nothing &&
+        throw(ArgumentError("$(nameof(member)) is not a member of $(short_name(enum.name))"))
+    return last(enum.values[i])
+end
+
+"""
+    Metal.reflection_data(root::ReflectionObject)
+
+Encode reflection data, the inverse of [`Metal.reflection`](@ref): `root` is a
+`:Reflection`, e.g. as decoded, or built with the [`ReflectionObject`](@ref) constructor.
+Nodes that were decoded as an [`UnknownReflectionNode`](@ref) cannot be encoded.
+"""
+function reflection_data(root::ReflectionObject)
+    schema = airr_schema
+    nameof(root) === :Reflection ||
+        throw(ArgumentError("expected a Reflection, got $(nameof(root))"))
+    return fb_finish(; identifier=schema.file_identifier) do b
+        encode_table!(b, schema, schema.root_table, root)
+    end
+end
+
+function check_kind(schema::FBSchema, index, value)
+    expected = short_name(schema.objects[index+1].name)
+    value isa ReflectionObject && nameof(value) === expected ||
+        throw(ArgumentError("expected a $expected, got $(repr(value))"))
+end
+
+function encode_table!(b::FBBuilder, schema::FBSchema, index, obj::ReflectionObject)
+    check_kind(schema, index, obj)
+    fields = Any[]
+    schema_fields = schema.objects[index+1].fields
+    for f in schema_fields
+        f.deprecated && continue
+        value = getproperty(obj, f.name)
+        value === nothing && continue
+        base = f.type.base
+        if haskey(fb_scalar_types, base)
+            if base in (FB_UTYPE, FB_UTYPE32)
+                # (the type of a union, which must match its value)
+                union = schema_fields[findfirst(g -> g.id == f.id + 1, schema_fields)]
+                member = getproperty(obj, union.name)
+                member isa ReflectionObject && (value = union_tag(schema, union, member))
+            end
+            T = fb_scalar_types[base]
+            bytes = encode_scalar(schema, f.type, base, value)
+            push!(fields, FBInlineField(f.id, bytes, sizeof(T)))
+        elseif base == FB_STRING
+            push!(fields, FBOffsetField(f.id, b -> fb_string!(b, value)))
+        elseif base == FB_OBJ && schema.objects[f.type.index+1].is_struct
+            push!(fields, FBInlineField(f.id, encode_struct(schema, f.type.index, value),
+                                        struct_alignment(schema, f.type.index)))
+        elseif base == FB_OBJ
+            push!(fields, FBOffsetField(f.id, b -> encode_table!(b, schema, f.type.index, value)))
+        elseif base == FB_UNION
+            value isa UnknownReflectionNode &&
+                throw(ArgumentError("cannot encode an unknown node (tag $(value.tag))"))
+            push!(fields, FBOffsetField(f.id,
+                b -> encode_table!(b, schema, schema_object(schema, nameof(value)), value)))
+        elseif base == FB_VECTOR
+            push!(fields, FBOffsetField(f.id, b -> encode_vector!(b, schema, f.type, value)))
+        else
+            throw(ArgumentError("unsupported field type $base"))
+        end
+    end
+    return fb_table!(b, fields)
+end
+
+function encode_scalar(schema, type, base, value)
+    value = scalar_value(schema, type, base, value)
+    return fb_bytes(value isa ReflectionEnum ? fb_scalar_types[base](value.value) : value)
+end
+
+function struct_alignment(schema::FBSchema, index)
+    align = 1
+    for f in schema.objects[index+1].fields
+        base = f.type.base == FB_ARRAY ? f.type.element : f.type.base
+        align = max(align, base == FB_OBJ ? struct_alignment(schema, f.type.index) :
+                           sizeof(fb_scalar_types[base]))
+    end
+    return align
+end
+
+function encode_struct(schema::FBSchema, index, obj)
+    check_kind(schema, index, obj)
+    s = schema.objects[index+1]
+    bytes = Base.zeros(UInt8, s.bytesize)
+    for f in s.fields
+        value = getproperty(obj, f.name)
+        value === nothing && continue
+        if f.type.base == FB_ARRAY
+            length(value) == f.type.fixed_length ||
+                throw(ArgumentError("$(f.name) needs $(f.type.fixed_length) elements"))
+            elements, element_type = value, f.type.element
+        else
+            elements, element_type = (value,), f.type.base
+        end
+        pos = Int(f.offset)
+        for el in elements
+            data = element_type == FB_OBJ ? encode_struct(schema, f.type.index, el) :
+                                            encode_scalar(schema, f.type, element_type, el)
+            copyto!(bytes, pos + 1, data, 1, length(data))
+            pos += length(data)
+        end
+    end
+    return bytes
+end
+
+function encode_vector!(b::FBBuilder, schema::FBSchema, type::FBType, values::AbstractVector)
+    base = type.element
+    if base == FB_STRING
+        return fb_offset_vector!(b, Any[b -> fb_string!(b, v) for v in values])
+    elseif base == FB_OBJ && !schema.objects[type.index+1].is_struct
+        return fb_offset_vector!(b, Any[b -> encode_table!(b, schema, type.index, v)
+                                        for v in values])
+    elseif base == FB_OBJ
+        return fb_inline_vector!(b, [encode_struct(schema, type.index, v) for v in values],
+                                 struct_alignment(schema, type.index))
+    elseif haskey(fb_scalar_types, base)
+        return fb_inline_vector!(b, [encode_scalar(schema, type, base, v) for v in values],
+                                 sizeof(fb_scalar_types[base]))
+    else
+        throw(ArgumentError("unsupported element type $base"))
+    end
+end
+
+
 ## display
 
 function Base.show(io::IO, obj::ReflectionObject)
@@ -335,4 +535,5 @@ Base.show(io::IO, e::ReflectionEnum) =
 Base.show(io::IO, n::UnknownReflectionNode) =
     print(io, "UnknownReflectionNode(tag=$(n.tag), offset=$(n.offset))")
 
-@public reflection, ReflectionObject, ReflectionEnum, UnknownReflectionNode, FlatBufferError
+@public reflection, reflection_data, ReflectionObject, ReflectionEnum, UnknownReflectionNode,
+        FlatBufferError

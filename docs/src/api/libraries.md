@@ -36,8 +36,10 @@ Metal.MetalLibFormatError
 
 Libraries built by Apple's toolchain describe each function with reflection data: its
 arguments, return values, attributes, function constants and the types involved. Metal.jl
-decodes it with the schema Apple's tools use, but does not generate it for its own kernels,
-and the Metal runtime does not need it.
+decodes it with the schema Apple's tools use. The Metal runtime does not need it, so
+Metal.jl does not generate it for the kernels it compiles, but `MetalLibFunction(mod, name;
+air_module, reflect=true)` derives it from a module's metadata like Apple's linker does, for
+`MTLLibrary`'s `reflectionForFunctionWithName:` and Apple's tools.
 
 ```julia
 julia> r = Metal.reflection(lib.functions[1])
@@ -51,8 +53,12 @@ julia> r[r.kernel_functions[1]].name
 "foo"
 ```
 
+[`Metal.reflection_data`](@ref) encodes reflection objects again, e.g. after editing them or
+building them with the [`Metal.ReflectionObject`](@ref) constructor.
+
 ```@docs
 Metal.reflection
+Metal.reflection_data
 Metal.ReflectionObject
 Metal.ReflectionEnum
 Metal.UnknownReflectionNode

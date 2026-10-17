@@ -525,8 +525,10 @@ end
             @test built.air_version == fun.air_version
             @test built.metal_version == fun.metal_version
             @test built.constants == fun.constants
-            # (older toolchains strip the debug info from the module)
-            if haskey(mod.metadata, "llvm.dbg.cu") || fun.debug_info === nothing
+            # (older toolchains strip the debug info from the module, and Apple's linker
+            #  prefixes absolute file names, which Julia emits, with their directory)
+            if (haskey(mod.metadata, "llvm.dbg.cu") || fun.debug_info === nothing) &&
+               metallib != "julia.metallib"
                 @test built.debug_info == fun.debug_info
             end
         end
@@ -944,11 +946,207 @@ apple_json(x::Metal.ReflectionObject) =
     @test node isa Metal.UnknownReflectionNode && node.tag == 999999
 end
 
+@testset "encoding reflection data" begin
+    # decoded reflection data encodes to the same reflection
+    for file in readdir(joinpath(metallib_dir, "reflection"))
+        lib = parse(MetalLib, joinpath(metallib_dir, replace(file, ".txt" => ".metallib")))
+        for fun in lib.functions
+            fun.reflection_data === nothing && continue
+            r = Metal.reflection(fun)
+            data = Metal.reflection_data(r)
+            @test data[5:8] == codeunits("AIRR")
+            @test Metal.reflection(data) == r
+        end
+    end
+
+    # constructing reflection objects
+    arg = Metal.ReflectionObject(:BufferArg; name="a", access_qualifier=:ReadWrite,
+                                 location_index=Metal.ReflectionObject(:UIntValue; value=1))
+    @test arg.name == "a"
+    @test arg.access_qualifier == Metal.ReflectionEnum(:AccessQualifier, :ReadWrite, 3)
+    @test arg.address_space.name === :Global        # (the default)
+    @test arg.location_index.value === UInt32(1)
+    @test arg.type_name === nothing
+    node = Metal.ReflectionObject(:Node; node=arg)
+    @test node.node_type.name === :BufferArg
+    kernel = Metal.ReflectionObject(:KernelFunction; name="kernel",
+                                    arguments=[Metal.ReflectionObject(:NodeId; id=1)])
+    r = Metal.ReflectionObject(:Reflection;
+                               nodes=[Metal.ReflectionObject(:Node; node=kernel), node],
+                               kernel_functions=[Metal.ReflectionObject(:NodeId; id=0)])
+    r′ = Metal.reflection(Metal.reflection_data(r))
+    @test r′ == r
+    @test r′[only(r′[only(r′.kernel_functions)].arguments)] == arg
+
+    # vectors of scalars, of 8 bytes here
+    for extents in ([], [1, 2])
+        type = Metal.ReflectionObject(:ExtentsType; extents)
+        r = Metal.ReflectionObject(:Reflection; nodes=[Metal.ReflectionObject(:Node; node=type)])
+        r′ = Metal.reflection(Metal.reflection_data(r))
+        @test r′ == r
+        @test r′.nodes[1].node.extents == UInt64.(extents)
+    end
+
+    @test_throws ArgumentError Metal.ReflectionObject(:Frobnicate)
+    @test_throws ArgumentError Metal.ReflectionObject(:BufferArg; frobnicate=1)
+    @test_throws ArgumentError Metal.ReflectionObject(:BufferArg; access_qualifier=:Frobnicate)
+    @test_throws ArgumentError Metal.reflection_data(arg)
+    # (objects must have the type of their field)
+    @test_throws ArgumentError Metal.reflection_data(Metal.ReflectionObject(:Reflection; nodes=[arg]))
+    @test_throws ArgumentError Metal.ReflectionObject(:Node; node=Metal.ReflectionObject(:UIntValue))
+
+    # nodes of an unknown kind can't be encoded
+    lib = parse(MetalLib, joinpath(metallib_dir, "visible.26.metallib"))
+    data = copy(lib.functions[1].reflection_data)
+    tag = findfirst(reinterpret(UInt8, [UInt32(266240)]), data)   # ThreadPositionInGridArg
+    data[tag] .= reinterpret(UInt8, [UInt32(999999)])
+    @test_throws ArgumentError Metal.reflection_data(Metal.reflection(data))
+end
+
+@testset "building reflection data" begin
+    # ignoring the version, which is that of the toolchain that built a library
+    describe(mod, name) = apple_json(Metal.reflection(mod, name))[2:end]
+    linked(fun) = apple_json(Metal.reflection(fun))[2:end]
+
+    # Apple's linker derives reflection data from the metadata of the module it links,
+    # which a library contains
+    for file in readdir(joinpath(metallib_dir, "reflection"))
+        lib = parse(MetalLib, joinpath(metallib_dir, replace(file, ".txt" => ".metallib")))
+        each_module(lib) do fun, mod
+            fun.reflection_data === nothing && return
+            if fun.type in (Metal.METALLIB_COMPUTE_FUNCTION, Metal.METALLIB_VISIBLE_FUNCTION)
+                @test describe(mod, fun.name) == linked(fun)
+            else
+                @test_throws Metal.UnsupportedReflection Metal.reflection(mod, fun.name)
+            end
+        end
+    end
+
+    # Metal.jl's kernels, before they were linked (which records unused arguments in the
+    # metadata, while we look at their uses)
+    lib = parse(MetalLib, joinpath(metallib_dir, "julia.metallib"))
+    for file in readdir(joinpath(metallib_dir, "julia"); join=true)
+        @dispose ctx=LLVM.Context() mod=parse(LLVM.Module, read(file)) begin
+            fun = only(filter(fun -> haskey(LLVM.functions(mod), fun.name), lib.functions))
+            @test describe(mod, fun.name) == linked(fun)
+        end
+    end
+
+    @dispose ctx=LLVM.Context() mod=LLVM.Module("empty") begin
+        @test_throws ArgumentError Metal.reflection(mod, "kernel")
+    end
+
+    # metadata of an unexpected form
+    function kernel_reflection(argument; attributes="")
+        @dispose ctx=LLVM.Context() begin
+            kernel = LLVM.supports_typed_pointers(ctx) ? "void (i32)* @kernel" : "ptr @kernel"
+            ir = """
+                define void @kernel(i32 %x) {
+                  ret void
+                }
+                !air.kernel = !{!3, !0}
+                !0 = !{$kernel, !1, !2$attributes}
+                !1 = !{}
+                !2 = !{$argument}
+                !3 = !{}
+                """
+            @dispose mod=parse(LLVM.Module, ir) begin
+                Metal.reflection(mod, "kernel")
+            end
+        end
+    end
+    buffer = "!{i32 0, !\"air.buffer\", !\"air.location_index\", i32 0, i32 1, " *
+             "!\"air.address_space\", i32 1, !\"air.arg_type_name\", !\"uint\", " *
+             "!\"air.arg_name\", !\"x\"}"
+    @test kernel_reflection(buffer) isa Metal.ReflectionObject
+    for argument in [replace(buffer, "i32 0, !\"air.buffer\"" => "i32 1, !\"air.buffer\""),
+                     replace(buffer, "!\"air.buffer\"" => "i32 1"),
+                     replace(buffer, ", !\"air.arg_name\", !\"x\"" => ", !\"air.arg_name\""),
+                     replace(buffer, "!\"air.arg_name\", !\"x\"" => "!\"air.arg_name\", i32 0"),
+                     """!{i32 0, !"air.buffer", !"air.location_index", i32 0}""",
+                     """!{i32 0, !"air.buffer", !"air.struct_type_info", !{i32 0, i32 4}}""",
+                     """!{i32 0, !"air.buffer", !"air.struct_type_info", i32 0}""",
+                     replace(buffer, "i32 0, i32 1" => "i32 -1, i32 1"),
+                     "i32 0"]
+        @test_throws ArgumentError kernel_reflection(argument)
+    end
+    @test_throws ArgumentError kernel_reflection(buffer;
+                                                 attributes=", !{!\"air.max_work_group_size\"}")
+    @test_throws Metal.UnsupportedReflection kernel_reflection(buffer;
+                                                               attributes=", !{!\"air.frobnicate\"}")
+    @test_throws Metal.UnsupportedReflection kernel_reflection(
+        """!{i32 0, !"air.texture", !"air.arg_name", !"x"}""")
+    @test_throws Metal.UnsupportedReflection kernel_reflection(
+        """!{i32 0, !"air.buffer", !"air.frobnicate"}""")
+end
+
+@testset "functions with reflection data" begin
+    # rebuild the functions of a library, with reflection data
+    function with_reflection(lib)
+        functions = map(lib.functions) do fun
+            @dispose ctx=LLVM.Context() mod=parse(LLVM.Module, fun.air_module) begin
+                MetalLibFunction(mod, fun.name; fun.air_module, fun.debug_info, reflect=true)
+            end
+        end
+        return MetalLib(lib; functions)
+    end
+    # the bindings `MTLLibrary` reflects for a function, if any
+    function bindings(bytes, name)
+        mtllib = MTL.MTLLibraryFromData(device(), bytes)
+        refl = @objc [mtllib::id{MTL.MTLLibrary} reflectionForFunctionWithName:name::id{MTL.NSString}]::id{MTL.MTLFunctionReflection}
+        refl == nil && return nothing
+        return [(String(b.name), b.type, b.index) for b in MTL.MTLFunctionReflection(refl).bindings]
+    end
+    objdump = metal_tool("metal-objdump")
+
+    for file in ["arguments.26.metallib", "julia.metallib"]
+        path = joinpath(metallib_dir, file)
+        lib = parse(MetalLib, path)
+        ours = with_reflection(lib)
+        @test [Metal.reflection(fun)[only(Metal.reflection(fun).kernel_functions)]
+               for fun in ours.functions if fun.type == Metal.METALLIB_COMPUTE_FUNCTION] ==
+              [Metal.reflection(fun)[only(Metal.reflection(fun).kernel_functions)]
+               for fun in lib.functions if fun.type == Metal.METALLIB_COMPUTE_FUNCTION]
+        bytes = sprint(write, ours)
+
+        # Apple's tools decode it like the data Apple's linker wrote
+        if objdump !== nothing
+            decoded(file) = replace(read(`$objdump -ml --reflection $file`, String),
+                                    r"^.*metallib:$"m => "")
+            ours_path = tempname() * ".metallib"
+            write(ours_path, bytes)
+            @test decoded(ours_path) == decoded(path)
+        end
+
+        # and so does the runtime, which reflects nothing without it
+        lib.platform_version <= Metal.macos_version() || continue
+        for fun in lib.functions
+            fun.type == Metal.METALLIB_COMPUTE_FUNCTION || continue
+            expected = bindings(read(path), fun.name)
+            @test !isempty(expected)
+            @test bindings(bytes, fun.name) == expected
+            stripped = MetalLib(lib; functions=[MetalLibFunction(f; reflection_data=nothing)
+                                                for f in lib.functions])
+            @test bindings(sprint(write, stripped), fun.name) === nothing
+        end
+    end
+
+    # pipelines are unaffected
+    ours = with_reflection(parse(MetalLib, joinpath(metallib_dir, "julia.metallib")))
+    if ours.platform_version <= Metal.macos_version()
+        mtllib = MTL.MTLLibraryFromData(device(), sprint(write, ours))
+        for fun in ours.functions
+            @test MTL.MTLComputePipelineState(device(), MTL.MTLFunction(mtllib, fun.name)) isa
+                  MTL.MTLComputePipelineState
+        end
+    end
+end
+
 @static if VERSION >= v"1.11"
     @testset "public API" begin
         for name in (:MetalLib, :MetalLibFunction, :FunctionConstant, :DebugInfo,
-                     :MetalLibFormatError, :reflection, :ReflectionObject, :ReflectionEnum,
-                     :UnknownReflectionNode, :FlatBufferError)
+                     :MetalLibFormatError, :reflection, :reflection_data, :ReflectionObject,
+                     :ReflectionEnum, :UnknownReflectionNode, :FlatBufferError)
             @test Base.ispublic(Metal, name)
         end
     end

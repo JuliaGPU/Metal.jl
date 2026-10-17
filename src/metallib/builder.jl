@@ -16,7 +16,7 @@ const program_type_metadata = [
 ]
 
 """
-    MetalLibFunction(mod::LLVM.Module, entry::String; air_module, kwargs...)
+    MetalLibFunction(mod::LLVM.Module, entry::String; air_module, reflect=false, kwargs...)
 
 Create a [`MetalLibFunction`](@ref) for the function `entry` of the AIR module `mod`,
 deriving its metadata from the module like Apple's toolchain does:
@@ -35,6 +35,10 @@ deriving its metadata from the module like Apple's toolchain does:
   relative paths for Base methods, and pseudo-files like `REPL[1]` or `none` for code that
   is not defined in a file).
 
+With `reflect=true`, the function also gets reflection data (see
+[`Metal.reflection`](@ref)), which Apple's tools and `MTLLibrary`'s
+`reflectionForFunctionWithName:` use; the Metal runtime does not need it.
+
 `air_module` is the bitcode to store in the library, i.e. `mod` as Metal should see it
 (typically downgraded). Other keyword arguments set fields of the function directly,
 overriding what would be derived from the module.
@@ -42,7 +46,7 @@ overriding what would be derived from the module.
 The module's LLVM context must be active.
 """
 function MetalLibFunction(mod::LLVM.Module, entry::String; air_module::Vector{UInt8},
-                          kwargs...)
+                          reflect::Bool=false, kwargs...)
     haskey(mod.functions, entry) ||
         throw(ArgumentError("module does not contain a function named $entry"))
     fn = mod.functions[entry]
@@ -53,6 +57,9 @@ function MetalLibFunction(mod::LLVM.Module, entry::String; air_module::Vector{UI
     get!(() -> metal_version(mod), fields, :metal_version)
     get!(() -> function_constants(mod, fn), fields, :constants)
     get!(() -> debug_info(mod, fn), fields, :debug_info)
+    if reflect
+        get!(() -> reflection_data(reflection(mod, entry)), fields, :reflection_data)
+    end
     return MetalLibFunction(; name=entry, air_module, fields...)
 end
 
@@ -388,4 +395,312 @@ function emits_debug_info(mod::LLVM.Module)
     return any(LLVM.operands(mod.metadata["llvm.dbg.cu"])) do cu
         !occursin("emissionKind: NoDebug", string(cu))
     end
+end
+
+
+## reflection
+
+# the built-in arguments of compute functions, which are described by their type and name
+const builtin_argument_kinds = Dict(
+    "air.$(name)" => Symbol(join(uppercasefirst.(split(name, '_'))), "Arg")
+    for name in ["thread_position_in_grid", "threads_per_grid", "threadgroup_position_in_grid",
+                 "threadgroups_per_grid", "thread_position_in_threadgroup",
+                 "threads_per_threadgroup", "dispatch_threads_per_threadgroup",
+                 "thread_index_in_threadgroup", "thread_execution_width",
+                 "thread_index_in_simdgroup", "threads_per_simdgroup",
+                 "simdgroup_index_in_threadgroup", "simdgroups_per_threadgroup",
+                 "dispatch_simdgroups_per_threadgroup", "thread_index_in_quadgroup",
+                 "quadgroup_index_in_threadgroup", "quadgroups_per_threadgroup",
+                 "dispatch_quadgroups_per_threadgroup"])
+
+struct UnsupportedReflection <: Exception
+    msg::String
+end
+Base.showerror(io::IO, err::UnsupportedReflection) =
+    print(io, "cannot describe this function with reflection data: ", err.msg)
+
+"""
+    Metal.reflection(mod::LLVM.Module, entry::String)
+
+Derive the reflection data of the function `entry` of an AIR module from the module's
+metadata, like Apple's linker does. The result can be encoded with
+[`Metal.reflection_data`](@ref).
+
+Only kernels and visible functions are supported, with buffer (incl. threadgroup memory)
+and built-in arguments. Other functions or arguments (e.g. textures) throw an error, as does
+malformed metadata.
+
+An argument is `unused` if the metadata says so (as in modules Apple's linker linked), or if
+the module does not use it. Arguments that only dead code uses count as used.
+
+The function constants are those of the library function (see [`MetalLibFunction`](@ref)).
+For a module that is shared by several functions, that may include constants the function
+doesn't use, which Apple's linker would have removed.
+
+The module's LLVM context must be active.
+"""
+function reflection(mod::LLVM.Module, entry::String)
+    haskey(mod.functions, entry) ||
+        throw(ArgumentError("module does not contain a function named $entry"))
+    fn = mod.functions[entry]
+    nodes = Any[]
+    function add_node!(node=nothing)
+        push!(nodes, node)
+        return ReflectionObject(:NodeId; id=length(nodes) - 1)
+    end
+    set_node!(id, node) = (nodes[id.id+1] = ReflectionObject(:Node; node))
+
+    fields = Dict{Symbol,Any}(:version => ReflectionObject(:Version; major=0, minor=4,
+                                                            sub_minor=0))
+    type = program_type(mod, fn)
+    if type == METALLIB_COMPUTE_FUNCTION
+        md = function_metadata(mod, "air.kernel", fn)
+        id = add_node!()
+        fields[:kernel_functions] = [id]
+        set_node!(id, kernel_function(mod, fn, md, add_node!, set_node!))
+    elseif type == METALLIB_VISIBLE_FUNCTION
+        # (Apple's linker only records the name of visible functions)
+        fields[:visible_functions] = [add_node!(ReflectionObject(:Node;
+            node=ReflectionObject(:VisibleFunction; name=entry)))]
+    else
+        throw(UnsupportedReflection("$entry is a $type"))
+    end
+
+    constants = map(reflected_constants(mod, fn)) do (type, constant)
+        add_node!(ReflectionObject(:Node; node=ReflectionObject(:FunctionConstant;
+            type_name=type, constant.name, constant.index, constant.required)))
+    end
+    isempty(constants) || (fields[:function_constants] = constants)
+
+    functions, globals = reachable(fn)
+    if haskey(mod.metadata, "air.visible_function_references")
+        references = ReflectionObject[]
+        for ref in LLVM.operands(mod.metadata["air.visible_function_references"])
+            ops = LLVM.operands(ref)
+            length(ops) == 3 && ops[2] isa LLVM.ValueAsMetadata ||
+                malformed("visible function reference", ref)
+            metadata_value(ops[2]) in functions || continue
+            name = md_string(ops[3], "visible function reference", ref)
+            push!(references, add_node!(ReflectionObject(:Node;
+                node=ReflectionObject(:VisibleFunctionReference; function_name=name))))
+        end
+        isempty(references) || (fields[:visible_function_references] = references)
+    end
+
+    allocations = ReflectionObject[]
+    dl = LLVM.datalayout(mod)
+    for gv in globals
+        LLVM.addrspace(LLVM.value_type(gv)) == 3 || continue
+        push!(allocations, ReflectionObject(:LocalAllocation;
+            size=LLVM.storage_size(dl, LLVM.global_value_type(gv)),
+            alignment=LLVM.alignment(gv)))
+    end
+    isempty(allocations) || (fields[:static_local_allocations] = allocations)
+
+    return ReflectionObject(:Reflection; nodes, fields...)
+end
+
+# the entry for `fn` in a list of functions (e.g. `!air.kernel`)
+function function_metadata(mod::LLVM.Module, name::String, fn::LLVM.Function)
+    for node in LLVM.operands(mod.metadata[name])
+        ops = LLVM.operands(node)
+        !isempty(ops) && ops[1] isa LLVM.ValueAsMetadata && metadata_value(ops[1]) == fn &&
+            return ops
+    end
+end
+
+# reading metadata, failing clearly on metadata of an unexpected form
+malformed(what, md) = throw(ArgumentError("malformed $what metadata: $md"))
+md_operand(ops, i, what, node) = i <= length(ops) ? ops[i] : malformed(what, node)
+function md_int(op, what, node)
+    val = op isa LLVM.ValueAsMetadata ? LLVM.Value(op) : nothing
+    val isa LLVM.ConstantInt || malformed(what, node)
+    return convert(Int, val)
+end
+function md_unsigned(op, what, node)
+    val = md_int(op, what, node)
+    0 <= val <= typemax(UInt32) || malformed(what, node)
+    return val
+end
+md_string(op, what, node) = op isa LLVM.MDString ? convert(String, op) : malformed(what, node)
+md_tuple(op, what, node) = op isa LLVM.MDTuple ? op : malformed(what, node)
+
+md_uint(op, what, node) = ReflectionObject(:UIntValue; value=md_unsigned(op, what, node))
+
+# `!{ptr @kernel, !{return values...}, !{arguments...}, attributes...}`
+function kernel_function(mod, fn, md, add_node!, set_node!)
+    node = "kernel $(LLVM.name(fn))"
+    length(md) >= 3 || malformed("kernel", node)
+    isempty(LLVM.operands(md_tuple(md[2], "kernel", node))) ||
+        throw(UnsupportedReflection("kernels return nothing"))
+    params = LLVM.parameters(fn)
+    struct_types = Dict{LLVM.Metadata,ReflectionObject}()
+    arguments = map(LLVM.operands(md_tuple(md[3], "kernel", node))) do arg
+        ops = LLVM.operands(md_tuple(arg, "argument", arg))
+        index = md_int(md_operand(ops, 1, "argument", arg), "argument", arg)
+        0 <= index < length(params) || malformed("argument", arg)
+        kind = md_string(md_operand(ops, 2, "argument", arg), "argument", arg)
+        id = add_node!()
+        properties = if kind == "air.buffer"
+            buffer_properties(arg, struct_types, add_node!, set_node!)
+        elseif haskey(builtin_argument_kinds, kind)
+            argument_properties(arg) do properties, key, i
+                throw(UnsupportedReflection("unknown property $key of argument $kind"))
+            end
+        else
+            throw(UnsupportedReflection("unsupported argument kind $kind"))
+        end
+        # (Apple's linker records unused arguments, otherwise look at the IR)
+        unused = pop!(properties, :unused, isempty(LLVM.uses(params[index+1])))
+        type = kind == "air.buffer" ? :BufferArg : builtin_argument_kinds[kind]
+        set_node!(id, ReflectionObject(type; function_constant=false, unused, properties...))
+        id
+    end
+
+    attributes = Dict{Symbol,Any}()
+    for attr in md[4:end]
+        attr isa LLVM.MDTuple ||
+            throw(UnsupportedReflection("unsupported function attribute $attr"))
+        ops = LLVM.operands(attr)
+        name = md_string(md_operand(ops, 1, "function attribute", attr), "function attribute",
+                         attr)
+        if name == "air.max_work_group_size"
+            length(ops) == 2 || malformed("function attribute", attr)
+            size = md_uint(ops[2], "function attribute", attr)
+            attributes[:workgroup_max_size] =
+                add_node!(ReflectionObject(:Node;
+                                           node=ReflectionObject(:WorkgroupMaxSizeFnAttr; size)))
+        else
+            throw(UnsupportedReflection("unsupported function attribute $name"))
+        end
+    end
+    return ReflectionObject(:KernelFunction; name=LLVM.name(fn),
+                            arguments=isempty(arguments) ? nothing : arguments, attributes...)
+end
+
+# the properties of an argument after its index and kind, `!"key", values...`, as fields of
+# its reflection node. `other(properties, key, i)` handles keys that are specific to the kind
+# of argument, whose values start at operand `i`, returning how many values it used.
+function argument_properties(other, arg)
+    ops = LLVM.operands(arg)
+    properties = Dict{Symbol,Any}()
+    i = 3
+    while i <= length(ops)
+        key = md_string(ops[i], "argument", arg)
+        if key == "air.arg_type_name"
+            properties[:type_name] = md_string(md_operand(ops, i + 1, "argument", arg),
+                                               "argument", arg)
+            i += 2
+        elseif key == "air.arg_name"
+            properties[:name] = md_string(md_operand(ops, i + 1, "argument", arg), "argument",
+                                          arg)
+            i += 2
+        elseif key == "air.arg_unused"
+            properties[:unused] = true
+            i += 1
+        else
+            i += 1 + other(properties, key, i + 1)
+        end
+    end
+    return properties
+end
+
+function buffer_properties(arg, struct_types, add_node!, set_node!)
+    ops = LLVM.operands(arg)
+    value(i) = md_operand(ops, i, "argument", arg)
+    uint(i) = md_uint(value(i), "argument", arg)
+    return argument_properties(arg) do properties, key, i
+        if key == "air.buffer_size"
+            properties[:buffer_size] = uint(i)
+            return 1
+        elseif key == "air.location_index"
+            properties[:location_index] = uint(i)
+            properties[:location_count] = uint(i + 1)
+            return 2
+        elseif key in ("air.read", "air.write", "air.read_write")
+            properties[:access_qualifier] = Dict("air.read" => :Read, "air.write" => :Write,
+                                                 "air.read_write" => :ReadWrite)[key]
+            return 0
+        elseif key == "air.address_space"
+            space = md_unsigned(value(i), "argument", arg)
+            space <= typemax(UInt8) || malformed("argument", arg)
+            properties[:address_space] = space
+            return 1
+        elseif key == "air.struct_type_info"
+            properties[:struct_type_info] =
+                struct_type_info(md_tuple(value(i), "argument", arg), struct_types,
+                                 add_node!, set_node!)
+            return 1
+        elseif key == "air.arg_type_size"
+            properties[:type_size] = uint(i)
+            return 1
+        elseif key == "air.arg_type_align_size"
+            properties[:type_align] = uint(i)
+            return 1
+        else
+            throw(UnsupportedReflection("unknown property $key of a buffer argument"))
+        end
+    end
+end
+
+# `!{[!"air.struct_type_info", !{...},] offset, size, array entries, !"type", !"name", ...}`,
+# described once per module like Apple's linker does
+function struct_type_info(md, struct_types, add_node!, set_node!)
+    haskey(struct_types, md) && return struct_types[md]
+    id = struct_types[md] = add_node!()
+    ops = LLVM.operands(md)
+    value(i) = md_operand(ops, i, "struct type", md)
+    fields = ReflectionObject[]
+    i = 1
+    while i <= length(ops)
+        nested = nothing
+        if ops[i] isa LLVM.MDString
+            key = convert(String, ops[i])
+            key == "air.struct_type_info" ||
+                throw(UnsupportedReflection("unsupported struct field property $key"))
+            nested = struct_type_info(md_tuple(value(i + 1), "struct type", md), struct_types,
+                                      add_node!, set_node!)
+            i += 2
+        end
+        offset, size, entries = (md_unsigned(value(j), "struct type", md) for j in i:i+2)
+        push!(fields, ReflectionObject(:StructTypeInfoField; struct_type_info=nested,
+                                       offset, size, array_entries=entries,
+                                       type_name=md_string(value(i + 3), "struct type", md),
+                                       field_name=md_string(value(i + 4), "struct type", md)))
+        i += 5
+    end
+    set_node!(id, ReflectionObject(:StructTypeInfo; fields))
+    return id
+end
+
+# the function constants of a function, with their type as spelled in the module
+function reflected_constants(mod::LLVM.Module, fn::LLVM.Function)
+    constants = function_constants(mod, fn)
+    isempty(constants) && return []
+    types = Dict(convert(String, LLVM.operands(node)[3]) => convert(String, LLVM.operands(node)[2])
+                 for node in LLVM.operands(mod.metadata["air.function_constants"]))
+    return [(types[c.name], c) for c in constants]
+end
+
+# the functions `fn` (transitively) refers to, and the globals they use
+function reachable(fn::LLVM.Function)
+    functions = Set{LLVM.Value}([fn])
+    globals = LLVM.GlobalVariable[]
+    worklist = LLVM.Value[fn]
+    seen = Set{LLVM.Value}()
+    visit(val) = (val in seen || (push!(seen, val); push!(worklist, val)))
+    while !isempty(worklist)
+        val = pop!(worklist)
+        if val isa LLVM.Function
+            push!(functions, val)
+            for bb in LLVM.blocks(val), inst in LLVM.instructions(bb), op in LLVM.operands(inst)
+                visit(op)
+            end
+        elseif val isa LLVM.GlobalVariable
+            push!(globals, val)
+        elseif val isa LLVM.ConstantExpr
+            foreach(visit, LLVM.operands(val))
+        end
+    end
+    return functions, globals
 end
