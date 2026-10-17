@@ -339,6 +339,15 @@ end
     end
 end
 
+# cmp: LLVM 19+ folds Julia's `ifelse` chain into `llvm.{s,u}cmp`, which AIR lacks
+@testset "cmp $T" for (T, iN, sgn) in INT_TYPES
+    @eval @test @filecheck begin
+        @check_not "@llvm.{{[su]}}cmp"
+        @check $("icmp $(sgn)lt $iN")
+        Metal.code_air((x, y) -> cmp(x, y), Tuple{$T,$T})
+    end
+end
+
 # mul_hi: no LLVM intrinsic, so the @device_override here supplies air.mul_hi.{s,u}.iN
 @testset "mul_hi $T" for (T, iN, sgn) in INT_TYPES
     @eval @test @filecheck begin
@@ -920,6 +929,11 @@ end
     end
     Metal.@sync @metal threads = N kernel(mtlout, mtlarr1, mtlarr2)
     @eval @test Array($mtlout) ≈ $fun.($arr1, $arr2)
+end
+@testset "cmp()::$T" for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64)
+    x = T[0, 1, 2, typemin(T), typemax(T)]
+    y = T[1, 1, 1, typemax(T), typemin(T)]
+    @test Array(cmp.(MtlArray(x), MtlArray(y))) == cmp.(x, y)
 end
 # 3-arg functions
 @testset "$(fun)()::$T" for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64), fun in INT_MATH_INTR_FUNCS_3_ARG
