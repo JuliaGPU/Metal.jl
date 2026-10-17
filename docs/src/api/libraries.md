@@ -51,8 +51,12 @@ julia> r[r.kernel_functions[1]].name
 "foo"
 ```
 
+[`Metal.reflection_data`](@ref) encodes reflection objects again, e.g. after editing them or
+building them with the [`Metal.ReflectionObject`](@ref) constructor.
+
 ```@docs
 Metal.reflection
+Metal.reflection_data
 Metal.ReflectionObject
 Metal.ReflectionEnum
 Metal.UnknownReflectionNode
