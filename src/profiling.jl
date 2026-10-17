@@ -178,9 +178,9 @@ function profile_internally(@nospecialize(f); trace::Bool=false, raw::Bool=false
             records
         end
         for (opname, cmdbuf) in records
-            if cmdbuf.status == MTL.MTLCommandBufferStatusCompleted
-                t0 = cmdbuf.GPUStartTime
-                t1 = cmdbuf.GPUEndTime
+            range = MTL.gpu_time_range(cmdbuf)
+            if range !== nothing
+                t0, t1 = range
                 if t1 > t0
                     push!(name, opname)
                     push!(start, t0)
