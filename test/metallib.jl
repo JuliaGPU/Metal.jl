@@ -1,6 +1,7 @@
 # test that we can parse and regenerate Metal libraries accurately
 
 using Metal: MetalLibFunction, MetalLib, MetalLibFormatError, content_uuid
+using LLVM: LLVM, @dispose
 using UUIDs: UUID, uuid_version
 
 using Printf: @printf
@@ -499,6 +500,291 @@ end
     err = try read(IOBuffer(bytes), MetalLib) catch err; err end
     @test err isa MetalLibFormatError
     @test contains(sprint(showerror, err), "stub")
+end
+
+# the modules of a library, parsed for the functions whose module is plain bitcode (not
+# compressed), as `name => module` pairs
+function each_module(f, lib::MetalLib)
+    for fun in lib.functions
+        fun.air_module[1:4] in (UInt8[0x42, 0x43, 0xc0, 0xde], UInt8[0xde, 0xc0, 0x17, 0x0b]) ||
+            continue
+        @dispose ctx=LLVM.Context() mod=parse(LLVM.Module, fun.air_module) begin
+            f(fun, mod)
+        end
+    end
+end
+
+@testset "building functions from modules" begin
+    # Apple's toolchain derives a function's library metadata from its module like we do
+    for metallib in metallibs
+        lib = parse(MetalLib, joinpath(metallib_dir, metallib))
+        each_module(lib) do fun, mod
+            built = MetalLibFunction(mod, fun.name; fun.air_module)
+            @test built.air_module === fun.air_module
+            @test (metallib, fun.name, built.type) == (metallib, fun.name, fun.type)
+            @test built.air_version == fun.air_version
+            @test built.metal_version == fun.metal_version
+            @test built.constants == fun.constants
+            # (older toolchains strip the debug info from the module)
+            if haskey(mod.metadata, "llvm.dbg.cu") || fun.debug_info === nothing
+                @test built.debug_info == fun.debug_info
+            end
+        end
+    end
+
+    # fields can be overridden
+    lib = parse(MetalLib, joinpath(metallib_dir, "kernel.26.metallib"))
+    each_module(lib) do fun, mod
+        built = MetalLibFunction(mod, fun.name; fun.air_module, air_version=v"2.7",
+                                 type=Metal.METALLIB_VISIBLE_FUNCTION)
+        @test built.air_version == v"2.7"
+        @test built.metal_version == fun.metal_version
+        @test built.type == Metal.METALLIB_VISIBLE_FUNCTION
+        @test_throws ArgumentError MetalLibFunction(mod, "bar"; fun.air_module)
+    end
+end
+
+@testset "function constants from unlinked modules" begin
+    # in an unlinked module, constants the function checks with `is_function_constant_defined`
+    # are optional
+    ref = only(parse(MetalLib, joinpath(metallib_dir, "optional_constants.metallib")).functions)
+    @test [(c.name, c.required) for c in ref.constants] == [("scale", true), ("offset", false)]
+    air = read(joinpath(metallib_dir, "optional_constants.air"))
+    fun = @dispose ctx=LLVM.Context() mod=parse(LLVM.Module, air) begin
+        MetalLibFunction(mod, "affine"; air_module=air)
+    end
+    @test fun.constants == ref.constants
+
+    # the runtime needs the constants to specialize the function
+    lib = MTL.MTLLibraryFromData(device(), sprint(write, MetalLib(; functions=[fun])))
+    @test length(MTL.MTLFunction(lib, "affine").functionConstantsDictionary) == 2
+    function run_affine(constants...)
+        fcv = MTL.MTLFunctionConstantValues()
+        for (name, value) in constants
+            MTL.setConstantValue!(fcv, Ref(value), MTL.MTLDataTypeUInt, name)
+        end
+        buf = MTL.MTLBuffer(device(), 4 * sizeof(UInt32); storage=MTL.SharedStorage)
+        ptr = convert(Ptr{UInt32}, buf)
+        unsafe_store!.(ptr, UInt32[1, 2, 3, 4], 1:4)
+        pso = MTL.MTLComputePipelineState(device(), MTL.MTLFunction(lib, "affine", fcv))
+        cmdbuf = MTL.MTLCommandBuffer(MTL.MTLCommandQueue(device()))
+        MTL.MTLComputeCommandEncoder(cmdbuf) do cce
+            MTL.set_function!(cce, pso)
+            MTL.set_buffer!(cce, buf, 0, 1)
+            MTL.dispatchThreadgroups!(cce, MTL.MTLSize(1, 1, 1), MTL.MTLSize(4, 1, 1))
+        end
+        MTL.commit!(cmdbuf)
+        MTL.wait_completed(cmdbuf)
+        return unsafe_wrap(Array, ptr, 4) |> copy
+    end
+    @test run_affine("scale" => UInt32(3), "offset" => UInt32(1)) == [4, 7, 10, 13]
+    @test run_affine("scale" => UInt32(3)) == [3, 6, 9, 12]
+
+    # functions require the constants they use, unless that use checks them. Apple's
+    # linker only lists those, as it removes the others from the function's module
+    ref = parse(MetalLib, joinpath(metallib_dir, "used_constants.metallib"))
+    constants(f) = [(c.name, c.required) for c in f.constants]
+    reffuns = Dict(f.name => f for f in ref.functions)
+    @test constants(reffuns["derived"]) == [("c1", true)]
+    @test constants(reffuns["checked"]) == [("c2", true), ("c3", false)]
+    @test constants(reffuns["unrelated"]) == []
+    @test constants(reffuns["called"]) == [("c3", true)]
+    @test constants(reffuns["selected"]) == [("c4", true), ("c5", true), ("c6", true)]
+    @test constants(reffuns["field"]) == [("c7", true)]
+    @test constants(reffuns["second_field"]) == [("c9", true)]
+    # (without optimization, the initializers branch, and Apple's linker lists all constants)
+    for air_file in ("used_constants.air", "used_constants.O0.air")
+        air = read(joinpath(metallib_dir, air_file))
+        funs = @dispose ctx=LLVM.Context() mod=parse(LLVM.Module, air) begin
+            [MetalLibFunction(mod, name; air_module=air) for name in keys(reffuns)]
+        end
+        lib = MTL.MTLLibraryFromData(device(), sprint(write, MetalLib(; functions=funs)))
+        for fun in funs
+            reffun = reffuns[fun.name]
+            used = filter(c -> any(r -> r.name == c.name, reffun.constants), fun.constants)
+            unused = setdiff(fun.constants, used)
+            @test (air_file, fun.name, used) == (air_file, fun.name, reffun.constants)
+            @test !any(c -> c.required, unused)
+
+            # the function can be built by specializing only the constants it requires
+            fcv = MTL.MTLFunctionConstantValues()
+            for c in fun.constants
+                c.required || continue
+                value = c.datatype == MTL.MTLDataTypeBool ? Ref(true) : Ref(UInt32(1))
+                MTL.setConstantValue!(fcv, value, c.datatype, c.name)
+            end
+            @test MTL.MTLComputePipelineState(device(), MTL.MTLFunction(lib, fun.name, fcv)) isa
+                  MTL.MTLComputePipelineState
+        end
+    end
+
+    # a store to a part of a global that depends on a constant depends on that constant
+    @dispose ctx=LLVM.Context() mod=LLVM.Module("dynamic") builder=LLVM.IRBuilder() begin
+        i32 = LLVM.Int32Type()
+        arr = LLVM.ArrayType(i32, 2)
+        fc = LLVM.GlobalVariable(mod, i32, "fc.MTL_FC_INIT", 2)
+        d = LLVM.GlobalVariable(mod, arr, "d", 2)
+        LLVM.initializer!(d, LLVM.null(arr))
+        zero = LLVM.ConstantInt(i32, 0)
+
+        # `d[fc & 1] = 1`
+        init = LLVM.Function(mod, "init", LLVM.FunctionType(LLVM.VoidType()))
+        LLVM.section!(init, "air.static_init")
+        LLVM.position!(builder, LLVM.at_end(LLVM.BasicBlock(init, "entry")))
+        index = LLVM.and!(builder, LLVM.load!(builder, i32, fc), LLVM.ConstantInt(i32, 1))
+        LLVM.store!(builder, LLVM.ConstantInt(i32, 1), LLVM.gep!(builder, arr, d, [zero, index]))
+        LLVM.ret!(builder)
+
+        # `return d[0]`
+        kernel = LLVM.Function(mod, "kernel", LLVM.FunctionType(i32))
+        LLVM.position!(builder, LLVM.at_end(LLVM.BasicBlock(kernel, "entry")))
+        LLVM.ret!(builder, LLVM.load!(builder, i32, LLVM.gep!(builder, arr, d, [zero, zero])))
+
+        push!(get!(mod.metadata, "air.function_constants").operands,
+              LLVM.MDNode([LLVM.Metadata(fc), LLVM.MDString("uint"), LLVM.MDString("fc"),
+                           LLVM.Metadata(zero)]))
+        @test Metal.function_constants(mod, kernel) ==
+              [Metal.FunctionConstant("fc", MTL.MTLDataTypeUInt, 0, true)]
+    end
+
+    # a check that only decides about other stores does not make a use optional
+    @dispose ctx=LLVM.Context() mod=LLVM.Module("reconverging") builder=LLVM.IRBuilder() begin
+        i32 = LLVM.Int32Type()
+        fc = LLVM.GlobalVariable(mod, i32, "fc.MTL_FC_INIT", 2)
+        x = LLVM.GlobalVariable(mod, i32, "x", 2)
+        y = LLVM.GlobalVariable(mod, i32, "y", 2)
+        for gv in (x, y)
+            LLVM.initializer!(gv, LLVM.ConstantInt(i32, 0))
+        end
+        isdefined_typ = LLVM.FunctionType(LLVM.Int1Type(), [LLVM.value_type(fc)])
+        isdefined = LLVM.Function(mod, "air.is_function_constant_defined", isdefined_typ)
+
+        # `if (is_function_constant_defined(fc)) x = 1; y = fc;`
+        init = LLVM.Function(mod, "init", LLVM.FunctionType(LLVM.VoidType()))
+        LLVM.section!(init, "air.static_init")
+        entry_bb, then_bb, join_bb = (LLVM.BasicBlock(init, name)
+                                      for name in ("entry", "then", "join"))
+        LLVM.position!(builder, LLVM.at_end(entry_bb))
+        LLVM.br!(builder, LLVM.call!(builder, isdefined_typ, isdefined, [fc]), then_bb, join_bb)
+        LLVM.position!(builder, LLVM.at_end(then_bb))
+        LLVM.store!(builder, LLVM.ConstantInt(i32, 1), x)
+        LLVM.br!(builder, join_bb)
+        LLVM.position!(builder, LLVM.at_end(join_bb))
+        LLVM.store!(builder, LLVM.load!(builder, i32, fc), y)
+        LLVM.ret!(builder)
+
+        # `return y`
+        kernel = LLVM.Function(mod, "kernel", LLVM.FunctionType(i32))
+        LLVM.position!(builder, LLVM.at_end(LLVM.BasicBlock(kernel, "entry")))
+        LLVM.ret!(builder, LLVM.load!(builder, i32, y))
+
+        push!(get!(mod.metadata, "air.function_constants").operands,
+              LLVM.MDNode([LLVM.Metadata(fc), LLVM.MDString("uint"), LLVM.MDString("fc"),
+                           LLVM.Metadata(LLVM.ConstantInt(i32, 0))]))
+        @test Metal.function_constants(mod, kernel) ==
+              [Metal.FunctionConstant("fc", MTL.MTLDataTypeUInt, 0, true)]
+    end
+end
+
+function metallib_kernel(a)
+    @inbounds a[1] = 42f0
+    return
+end
+
+# compile a kernel the way `@metal` does, returning the library
+function compile_metallib(f, tt; kwargs...)
+    cfg = Metal.compiler_config(device(); kernel=true, name=nothing, kwargs...)
+    src = Metal.methodinstance(typeof(f), tt, Base.get_world_counter())
+    job = Metal.GPUCompiler.CompilerJob(src, cfg, Base.get_world_counter())
+    return Metal.compile_to_metallib(job).metallib
+end
+
+@testset "generated libraries" begin
+    cfg = Metal.compiler_config(device(); kernel=true, name=nothing)
+    tt = Tuple{MtlDeviceVector{Float32,1}}
+    bytes = compile_metallib(metallib_kernel, tt)
+    fun = only(read(IOBuffer(bytes), MetalLib).functions)
+    @test fun.type == Metal.METALLIB_COMPUTE_FUNCTION
+    @test fun.air_version == cfg.target.air
+    @test fun.metal_version == cfg.target.metal
+
+    # the debug info points to the kernel's definition
+    method = only(methods(metallib_kernel))
+    @test fun.debug_info == Metal.DebugInfo(method.line, abspath(@__FILE__))
+
+    # ... unless we don't have debug info, or the kernel isn't defined in a file
+    fun = only(read(IOBuffer(compile_metallib(metallib_kernel, tt; debug_level=0)),
+                    MetalLib).functions)
+    @test fun.debug_info === nothing
+    for file in (Symbol("REPL[1]"), :none)
+        body = Expr(:block, LineNumberNode(1, file), :(@inbounds a[1] = 42f0), nothing)
+        kernel = Core.eval(Module(), Expr(:function, :(kernel(a)), body))
+        @test only(methods(kernel)).file == file
+        # (`invokelatest` as the kernel was defined after this test started)
+        lib = read(IOBuffer(Base.invokelatest(compile_metallib, kernel, tt)), MetalLib)
+        fun = only(lib.functions)
+        @test fun.debug_info === nothing
+    end
+
+    validate = metal_tool("metal-validate")
+    if validate === nothing
+        @test_skip "Apple's metal-validate not available"
+    else
+        mktemp() do path, io
+            write(io, bytes)
+            close(io)
+            @test success(`$validate $path`)
+        end
+    end
+end
+
+struct MetallibPoint
+    x::Float32
+    y::Int32
+end
+function metallib_reflection_kernel(a, x::Float32, p::MetallibPoint)
+    @inbounds a[1] = x + p.x + p.y
+    return
+end
+
+# the runtime builds pipeline reflection from the argument metadata in the module, which
+# describes arguments in MSL terms since GPUCompiler 2.15
+if pkgversion(Metal.GPUCompiler) >= v"2.15"
+using ObjectiveC: @objc, id, Out
+using ObjectiveC.Foundation: NSError
+@testset "pipeline reflection" begin
+    tt = Tuple{MtlDeviceVector{Float32,1}, Float32, MetallibPoint}
+    bytes = compile_metallib(metallib_reflection_kernel, tt)
+    name = only(read(IOBuffer(bytes), MetalLib).functions).name
+    dev = device()
+    fun = MTL.MTLFunction(MTL.MTLLibraryFromData(dev, bytes), name)
+
+    options = MTL.MTLPipelineOption(MTL.MTLPipelineOptionBindingInfo |
+                                    MTL.MTLPipelineOptionBufferTypeInfo)
+    reflection = Out{MTL.MTLComputePipelineReflection}()
+    err = Out{NSError}()
+    pipeline = @objc [dev::id{MTL.MTLDevice} newComputePipelineStateWithFunction:fun::id{MTL.MTLFunction}
+                      options:options::MTL.MTLPipelineOption
+                      reflection:reflection::Out{MTL.MTLComputePipelineReflection}
+                      error:err::Out{NSError}]::Union{Nothing,MTL.MTLComputePipelineState}
+    @test pipeline !== nothing
+    bindings = Dict(String(b.name) => MTL.MTLBufferBinding(reinterpret(id{MTL.MTLBufferBinding}, b.ptr))
+                    for b in reflection[].bindings if b.type == MTL.MTLBindingTypeBuffer)
+
+    # a scalar passed by reference has an MSL type
+    @test bindings["x"].bufferDataType == MTL.MTLDataTypeFloat
+    @test bindings["x"].bufferStructType === nothing
+
+    # a struct passed by reference has its layout
+    p = bindings["p"]
+    @test p.bufferDataType == MTL.MTLDataTypeStruct
+    @test p.bufferDataSize == sizeof(MetallibPoint)
+    @test p.bufferStructType !== nothing
+    members = p.bufferStructType.members
+    @test [String(m.name) for m in members] == ["x", "y"]
+    @test [m.offset for m in members] == [0, 4]
+    @test [m.dataType for m in members] == [MTL.MTLDataTypeFloat, MTL.MTLDataTypeInt]
+end
 end
 
 @static if VERSION >= v"1.11"
