@@ -677,7 +677,7 @@ function library_digest(bytes::Vector{UInt8}, uuid_offset)
     uuid_offset === nothing && return sha256(bytes)
     ctx = SHA2_256_CTX()
     update!(ctx, view(bytes, 1:uuid_offset))
-    update!(ctx, zeros(UInt8, 16))
+    update!(ctx, Base.zeros(UInt8, 16))
     update!(ctx, view(bytes, uuid_offset+17:length(bytes)))
     return digest!(ctx)
 end
@@ -808,7 +808,7 @@ function write_metallib(io::IOBuffer, lib::MetalLib)
                     # find where the buffer lands: after the group size and the tags before it
                     write(IOBuffer(), tg)
                     data_offset = list_offset + position(buf) + sizeof(UInt32) + tg.offsets["RBUF"]
-                    padding = zeros(UInt8, reflection_padding(data_offset))
+                    padding = Base.zeros(UInt8, reflection_padding(data_offset))
                     tg = layout_group(entry.template, ["RBUF" => [padding; entry.data]])
                 end
                 write(buf, tg)
