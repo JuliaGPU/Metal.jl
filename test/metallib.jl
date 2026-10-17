@@ -944,11 +944,68 @@ apple_json(x::Metal.ReflectionObject) =
     @test node isa Metal.UnknownReflectionNode && node.tag == 999999
 end
 
+@testset "encoding reflection data" begin
+    # decoded reflection data encodes to the same reflection
+    for file in readdir(joinpath(metallib_dir, "reflection"))
+        lib = parse(MetalLib, joinpath(metallib_dir, replace(file, ".txt" => ".metallib")))
+        for fun in lib.functions
+            fun.reflection_data === nothing && continue
+            r = Metal.reflection(fun)
+            data = Metal.reflection_data(r)
+            @test data[5:8] == codeunits("AIRR")
+            @test Metal.reflection(data) == r
+        end
+    end
+
+    # constructing reflection objects
+    arg = Metal.ReflectionObject(:BufferArg; name="a", access_qualifier=:ReadWrite,
+                                 location_index=Metal.ReflectionObject(:UIntValue; value=1))
+    @test arg.name == "a"
+    @test arg.access_qualifier == Metal.ReflectionEnum(:AccessQualifier, :ReadWrite, 3)
+    @test arg.address_space.name === :Global        # (the default)
+    @test arg.location_index.value === UInt32(1)
+    @test arg.type_name === nothing
+    node = Metal.ReflectionObject(:Node; node=arg)
+    @test node.node_type.name === :BufferArg
+    kernel = Metal.ReflectionObject(:KernelFunction; name="kernel",
+                                    arguments=[Metal.ReflectionObject(:NodeId; id=1)])
+    r = Metal.ReflectionObject(:Reflection;
+                               nodes=[Metal.ReflectionObject(:Node; node=kernel), node],
+                               kernel_functions=[Metal.ReflectionObject(:NodeId; id=0)])
+    r′ = Metal.reflection(Metal.reflection_data(r))
+    @test r′ == r
+    @test r′[only(r′[only(r′.kernel_functions)].arguments)] == arg
+
+    # vectors of scalars, of 8 bytes here
+    for extents in ([], [1, 2])
+        type = Metal.ReflectionObject(:ExtentsType; extents)
+        r = Metal.ReflectionObject(:Reflection; nodes=[Metal.ReflectionObject(:Node; node=type)])
+        r′ = Metal.reflection(Metal.reflection_data(r))
+        @test r′ == r
+        @test r′.nodes[1].node.extents == UInt64.(extents)
+    end
+
+    @test_throws ArgumentError Metal.ReflectionObject(:Frobnicate)
+    @test_throws ArgumentError Metal.ReflectionObject(:BufferArg; frobnicate=1)
+    @test_throws ArgumentError Metal.ReflectionObject(:BufferArg; access_qualifier=:Frobnicate)
+    @test_throws ArgumentError Metal.reflection_data(arg)
+    # (objects must have the type of their field)
+    @test_throws ArgumentError Metal.reflection_data(Metal.ReflectionObject(:Reflection; nodes=[arg]))
+    @test_throws ArgumentError Metal.ReflectionObject(:Node; node=Metal.ReflectionObject(:UIntValue))
+
+    # nodes of an unknown kind can't be encoded
+    lib = parse(MetalLib, joinpath(metallib_dir, "visible.26.metallib"))
+    data = copy(lib.functions[1].reflection_data)
+    tag = findfirst(reinterpret(UInt8, [UInt32(266240)]), data)   # ThreadPositionInGridArg
+    data[tag] .= reinterpret(UInt8, [UInt32(999999)])
+    @test_throws ArgumentError Metal.reflection_data(Metal.reflection(data))
+end
+
 @static if VERSION >= v"1.11"
     @testset "public API" begin
         for name in (:MetalLib, :MetalLibFunction, :FunctionConstant, :DebugInfo,
-                     :MetalLibFormatError, :reflection, :ReflectionObject, :ReflectionEnum,
-                     :UnknownReflectionNode, :FlatBufferError)
+                     :MetalLibFormatError, :reflection, :reflection_data, :ReflectionObject,
+                     :ReflectionEnum, :UnknownReflectionNode, :FlatBufferError)
             @test Base.ispublic(Metal, name)
         end
     end

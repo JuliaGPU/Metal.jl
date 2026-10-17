@@ -198,3 +198,121 @@ function read_bfbs(buf::Vector{UInt8})
     end
     return FBSchema(str(root, 2), root_table, objects, enums)
 end
+
+
+## building
+#
+# buffers are written front to back. a table is preceded by its vtable (unless an identical
+# one was written before, which it then shares), and followed by the strings, vectors and
+# tables it refers to, because offsets to those are unsigned and must point forward.
+
+struct FBBuilder
+    buf::Vector{UInt8}
+    vtables::Dict{Vector{UInt16},Int}
+end
+FBBuilder() = FBBuilder(UInt8[], Dict{Vector{UInt16},Int}())
+
+fb_pad!(b::FBBuilder, align) = append!(b.buf, Base.zeros(UInt8, mod(-length(b.buf), align)))
+
+fb_bytes(x) = reinterpret(UInt8, [htol(x)])
+
+# append a value, returning its position
+function fb_put!(b::FBBuilder, x)
+    pos = length(b.buf)
+    append!(b.buf, fb_bytes(x))
+    return pos
+end
+
+fb_patch!(b::FBBuilder, pos, bytes::AbstractVector{UInt8}) =
+    copyto!(b.buf, pos + 1, bytes, 1, length(bytes))
+# make the offset at `pos` refer to `target`
+fb_patch_offset!(b::FBBuilder, pos, target) = fb_patch!(b, pos, fb_bytes(UInt32(target - pos)))
+
+function fb_string!(b::FBBuilder, str::String)
+    fb_pad!(b, 4)
+    pos = fb_put!(b, UInt32(ncodeunits(str)))
+    append!(b.buf, codeunits(str))
+    push!(b.buf, 0x00)
+    return pos
+end
+
+# a vector of scalars or structs, each given as its bytes
+function fb_inline_vector!(b::FBBuilder, elements::AbstractVector, align)
+    # (the elements, which follow the length, must be aligned)
+    fb_pad!(b, 4)
+    while (length(b.buf) + 4) % align != 0
+        append!(b.buf, Base.zeros(UInt8, 4))
+    end
+    pos = fb_put!(b, UInt32(length(elements)))
+    foreach(el -> append!(b.buf, el), elements)
+    return pos
+end
+
+# a vector of strings or tables, each written by a function that returns its position
+function fb_offset_vector!(b::FBBuilder, writers::Vector)
+    fb_pad!(b, 4)
+    pos = fb_put!(b, UInt32(length(writers)))
+    slots = [fb_put!(b, UInt32(0)) for _ in writers]
+    for (slot, write) in zip(slots, writers)
+        fb_patch_offset!(b, slot, write(b))
+    end
+    return pos
+end
+
+# a field of a table: either stored inline (scalars and structs, as bytes), or an offset to
+# an object that `write` writes after the table, returning its position
+struct FBInlineField
+    id::Int
+    bytes::Vector{UInt8}
+    align::Int
+end
+struct FBOffsetField
+    id::Int
+    write::Any
+end
+
+function fb_table!(b::FBBuilder, fields::Vector)
+    # lay out the fields after the offset to the vtable, the most aligned ones first
+    size(f) = f isa FBInlineField ? length(f.bytes) : 4
+    align(f) = f isa FBInlineField ? f.align : 4
+    offsets = Dict{Int,Int}()
+    tsize = 4
+    for f in sort(fields; by = f -> -align(f))
+        tsize += mod(-tsize, align(f))
+        offsets[f.id] = tsize
+        tsize += size(f)
+    end
+    nfields = maximum(f -> f.id + 1, fields; init=0)
+    vtable = UInt16[4 + 2nfields, tsize, (get(offsets, id, 0) for id in 0:nfields-1)...]
+
+    vpos = get!(b.vtables, vtable) do
+        fb_pad!(b, 2)
+        pos = length(b.buf)
+        foreach(x -> fb_put!(b, x), vtable)
+        pos
+    end
+    fb_pad!(b, maximum(align, fields; init=4))
+    pos = length(b.buf)
+    append!(b.buf, Base.zeros(UInt8, tsize))
+    fb_patch!(b, pos, fb_bytes(Int32(pos - vpos)))
+    for f in fields
+        f isa FBInlineField && fb_patch!(b, pos + offsets[f.id], f.bytes)
+    end
+    for f in sort(filter(f -> f isa FBOffsetField, fields); by = f -> f.id)
+        fb_patch_offset!(b, pos + offsets[f.id], f.write(b))
+    end
+    return pos
+end
+
+# a complete buffer, with the root table written by `write_root`
+function fb_finish(write_root; identifier::Union{Nothing,String}=nothing)
+    b = FBBuilder()
+    fb_put!(b, UInt32(0))
+    if identifier !== nothing
+        ncodeunits(identifier) == 4 || throw(ArgumentError("file identifiers have 4 bytes"))
+        append!(b.buf, codeunits(identifier))
+    end
+    fb_patch_offset!(b, 0, write_root(b))
+    fb_pad!(b, 4)
+    return b.buf
+end
