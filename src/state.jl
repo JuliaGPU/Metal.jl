@@ -7,7 +7,13 @@ log_array(args...)      = log_array()(args...)
 
 const LABEL_RESOURCES = @load_preference("label_resources", nothing)
 
-@inline label_resources() = @something(LABEL_RESOURCES, Base.JLOptions().debug_level >= 2)
+# without a preference, label when debugging (`-g2`). set by `__init__`.
+const label_resources_default = Ref(false)
+function init_label_resources!()
+    label_resources_default[] = Base.JLOptions().debug_level >= 2
+end
+
+@inline label_resources() = @something(LABEL_RESOURCES, label_resources_default[])
 
 macro label!(obj, str)
     quote

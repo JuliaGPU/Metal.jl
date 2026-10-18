@@ -1238,3 +1238,28 @@ end
     Base.invokelatest(launch)
     @test count() == n+2
 end
+
+@testset "resource labelling" begin
+    # enable labelling here rather than in a `-g2` process: that would precompile Metal
+    # again, and later sessions would load that image without the kernels it precompiles
+    default = Metal.label_resources_default[]
+    Metal.label_resources_default[] = true
+    try
+        @test Metal.label_resources()
+
+        function kernel(a)
+            a[thread_position_in_grid().x] += 1f0
+            return
+        end
+
+        # a new queue creates its own command API objects, labelling them
+        queue = MTL.MTLCommandQueue(device())
+        a = Metal.zeros(Float32, 4)
+        @test startswith(String(a.data[].buffer.label), "MtlArray{Float32,1,")
+        @metal threads=4 queue=queue kernel(a)
+        synchronize(queue)
+        @test Array(a) == ones(Float32, 4)
+    finally
+        Metal.label_resources_default[] = default
+    end
+end
