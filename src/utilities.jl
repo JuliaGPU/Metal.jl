@@ -53,6 +53,7 @@ function versioninfo(io::IO=stdout; verbose=false)
     prefs = [
         "default_storage" => load_preference(Metal, "default_storage"),
         "label_resources" => load_preference(Metal, "label_resources"),
+        "embed_sources" => load_preference(Metal, "embed_sources"),
         "nonblocking_synchronization" => load_preference(Metal, "nonblocking_synchronization"),
         "command_batching" => load_preference(Metal, "command_batching"),
         "command_batching_ops" => load_preference(Metal, "command_batching_ops"),

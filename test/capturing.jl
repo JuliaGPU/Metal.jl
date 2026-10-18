@@ -81,6 +81,17 @@ stopCapture(manager)
     @test String(bufferA.data[].buffer.label) == "MtlArray{Float32,1,Metal.SharedStorage}(dims=(4,))"
 end
 
+# ... and embeds the sources of kernels in their libraries
+@test Metal.embed_sources()
+# (a kernel whose sources can't be embedded still loads)
+let art = Metal.compile_to_metallib(Metal.GPUCompiler.CompilerJob(
+        Metal.methodinstance(typeof(tester), Tuple{MtlDeviceVector{Float32,1}}),
+        Metal.compiler_config(device())))
+    pipeline = @test_logs (:error, r"Failed to embed") Metal.link_pipeline(
+        device(), UInt8[], art.metallib, art.entry)
+    @test pipeline isa MTLComputePipelineState
+end
+
 # Profile Macro
 @testset "macro" begin
     Metal.@capture @metal threads=4 tester(bufferA)

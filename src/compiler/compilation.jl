@@ -600,12 +600,102 @@ function kernel_label(mi::Core.MethodInstance)
     return label
 end
 
+## embedded sources
+
+# Xcode's GPU frame capture shows a kernel's source, and the profiler's per-line costs, only
+# for library functions it can pair with an embedded source archive: the function's
+# dependency list (DEPF) has to name the file the archive's `original-input-filename.txt`
+# names, and the archive has to come with the command that compiled that file. Apple's
+# toolchain archives the MSL sources (with `-frecord-sources`); we archive the AIR module
+# with the command that would compile it, plus the Julia files its debug info refers to,
+# which is what Xcode displays. Neither the AIR file nor that command are used: Xcode only
+# rebuilds sources for its shader debugger, which doesn't support AIR input.
+#
+# This happens when linking a pipeline, not when compiling a kernel, so that it doesn't
+# affect cached compilation results, and so that the archive holds the source files as
+# they are when the kernel is loaded.
+
+const EMBED_SOURCES = @load_preference("embed_sources", nothing)
+
+# without a preference, only embed sources when frame capture is enabled
+embed_sources() = @something(EMBED_SOURCES, get(ENV, "METAL_CAPTURE_ENABLED", "0") == "1")
+
+# files larger than this are left out of source archives
+const MAX_EMBEDDED_SOURCE = 1 << 20
+
+# a library like `metallib`, but with the sources of its function embedded
+function embed_sources(metallib::Vector{UInt8}, air::Vector{UInt8})
+    lib = read(IOBuffer(metallib), MetalLib)
+    fun = only(lib.functions)
+    sources = @dispose ctx=LLVM.Context() mod=parse(LLVM.Module, air) begin
+        debug_source_files(mod)
+    end
+
+    # the AIR file the function claims to be linked from. it doesn't exist, but its name
+    # has to be stable, and short enough for the archive format (mangled names are not).
+    name = fun.name
+    if (m = match(r"^_Z(\d+)", name)) !== nothing    # mangled: _Z<length><name><types>
+        name = first(name[length(m.match)+1:end], parse(Int, m[1]))
+    end
+    name = first(replace(name, r"[^A-Za-z0-9_]" => "_"), 32) * "-" *
+           bytes2hex(sha256(fun.name))[1:16]
+    air_path = joinpath(tempdir(), "metal.jl", name * ".air")
+
+    working_directory = try pwd() catch; "/" end
+    options = join(["metal", "--driver-mode=metal", "-x", "ir", "-gline-tables-only",
+                    "-frecord-sources=yes", Base.shell_escape(air_path),
+                    "-o", Base.shell_escape(name * ".metallib")], " ")
+    files = Pair{String,Vector{UInt8}}[
+        "metal-options.txt" => codeunits(options),
+        "metal-working-dir.txt" => codeunits(working_directory * "\n"),
+        "original-input-filename.txt" => codeunits(air_path * "\n")]
+    # when Xcode can't tell which file holds the kernel, it opens the first one, so put the
+    # kernel's file first and the AIR file last
+    if fun.debug_info !== nothing
+        sort!(sources; by = !=(fun.debug_info.path))
+    end
+    for path in sources
+        if isfile(path) && filesize(path) <= MAX_EMBEDDED_SOURCE && ustar_name(path) !== nothing
+            push!(files, path => read(path))
+        end
+    end
+    push!(files, air_path => air)
+    archive = source_archive(files)
+
+    # the command that would link the AIR file into this library
+    arch = "air64_v$(fun.air_version.major)$(fun.air_version.minor)"
+    platform = let v = lib.platform_version
+        "$(v.major).$(v.minor).$(v.patch)"
+    end
+    link_options = join(["air-lld", "-arch", arch, "-platform_version", "macos", platform,
+                         platform, "-o", Base.shell_escape(name * ".metallib"),
+                         Base.shell_escape(air_path), "-embed_sources"], " ")
+
+    fun = MetalLibFunction(fun; source_id="0", dependencies=[air_path], layout=nothing)
+    lib = MetalLib(lib; functions=[fun], layout=nothing,
+                   embedded_source=EmbeddedSource(link_options, working_directory,
+                                                  ["0" => archive]),
+                   uuid=content_uuid(metallib, archive))
+    io = IOBuffer()
+    write(io, lib)
+    return take!(io)
+end
+
 # link the metallib into a session-local pipeline state on the given device. `label`
 # names the library, function and pipeline in Metal's developer tools.
 function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
                                         metallib::Vector{UInt8}, entry::String,
                                         label::String=entry)
     @signpost_event log=log_compiler() "Link" entry
+
+    if embed_sources()
+        metallib = try
+            embed_sources(metallib, air)
+        catch err
+            @error "Failed to embed the sources of kernel $label; continuing without" exception=(err, catch_backtrace())
+            metallib
+        end
+    end
 
     @signpost_interval log=log_compiler() "Instantiate compute pipeline" begin
         lib = MTLLibraryFromData(dev, metallib)
