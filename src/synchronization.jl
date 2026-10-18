@@ -21,10 +21,12 @@ wait_completed!(cmdbuf::MTL.MTLCommandBufferLike) = wait_cmdbuf!(cmdbuf)
 function wait_cmdbuf!(cmdbuf::MTL.MTLCommandBufferLike; handlers::Bool=false)
     !handlers && is_completed(cmdbuf) && return
 
-    if use_nonblocking_synchronization
-        cooperative_wait(wait_completed, cmdbuf; isdone=handlers ? nothing : is_completed)
-    else
-        wait_completed(cmdbuf)
+    @signpost_interval log=log_tracing() start="" stop="" "Wait for GPU" begin
+        if use_nonblocking_synchronization
+            cooperative_wait(wait_completed, cmdbuf; isdone=handlers ? nothing : is_completed)
+        else
+            wait_completed(cmdbuf)
+        end
     end
     return
 end
