@@ -79,7 +79,7 @@ end
         kernel = @metal launch=false broadcast_cartesian_static(dest, bc, Is)
         elements = cld(length(dest), 4)
         threads = min(elements, kernel.maxthreads)
-        groups = cld(min(elements, typemax(UInt32).-threads), threads)
+        groups = cld(min(elements, typemax(T_IDX).-threads), threads)
         kernel(dest, bc, Is; threads, groups)
         return dest
     end
@@ -174,7 +174,7 @@ end
         threads = min(elements, kernel.maxthreads)
     end
 
-    groups = cld.(min.(elements, typemax(UInt32) .- (2 .* threads)), threads)
+    groups = cld.(min.(elements, typemax(T_IDX) .- (2 .* threads)), threads)
 
     kernel(dest, bc; threads, groups)
 

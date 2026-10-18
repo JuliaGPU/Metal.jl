@@ -74,6 +74,13 @@ if filter_tests!(testsuite, args)
         end
     end
 
+    # don't run the examples with UInt16 indexing
+    if Metal.T_IDX == UInt16
+        filter!(testsuite) do (name, _)
+            !startswith(name, "examples/")
+        end
+    end
+
     if Metal.DefaultStorageMode != Metal.PrivateStorage
         # GPUArrays' scalar indexing tests assume that indexing is not supported
         delete!(testsuite, "gpuarrays/indexing scalar")
@@ -91,7 +98,7 @@ if filter_tests!(testsuite, args)
     end
 
     # only run large broadcast test on machines with >12GiB memory
-    if parse(Bool, get(ENV, "CI", "false")) || Sys.total_memory() < 12 * 2^30
+    if Metal.T_IDX == UInt32 && (parse(Bool, get(ENV, "CI", "false")) || Sys.total_memory() < 12 * 2^30)
         delete!(testsuite, "largebroadcast")
     end
 end

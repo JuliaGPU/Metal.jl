@@ -510,7 +510,7 @@ end
 end
 
 @testset "handing off arrays between tasks" begin
-    n = 1 << 16
+    n = Metal.T_IDX == UInt16 ? 1 << 15 : 1 << 16
 
     # accessing an array waits for the work of the task that last used it, even if that
     # task is still running and hasn't synchronized
