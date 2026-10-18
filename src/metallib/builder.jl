@@ -388,6 +388,32 @@ function debug_info(mod::LLVM.Module, fn::LLVM.Function)
     return DebugInfo(line, path)
 end
 
+# the source files the debug info of a module refers to, through its functions and the
+# locations of their instructions (including the functions they inlined), as the absolute
+# paths they are recorded with; Julia records some files (e.g. Base's) by a bare name.
+function debug_source_files(mod::LLVM.Module)
+    paths = String[]
+    emits_debug_info(mod) || return paths
+    add!(file) = file === nothing ||
+        push!(paths, joinpath(something(LLVM.directory(file), ""), LLVM.filename(file)))
+    for fn in mod.functions
+        sp = LLVM.subprogram(fn)
+        sp === nothing && continue
+        add!(LLVM.file(sp))
+        for bb in LLVM.blocks(fn), inst in LLVM.instructions(bb)
+            md = LLVM.metadata(inst)
+            haskey(md, LLVM.MD_dbg) || continue
+            loc = md[LLVM.MD_dbg]
+            while loc isa LLVM.DILocation
+                scope = LLVM.scope(loc)
+                scope === nothing || add!(LLVM.file(scope))
+                loc = LLVM.inlined_at(loc)
+            end
+        end
+    end
+    return filter!(isabspath, unique!(paths))
+end
+
 # Julia emits subprograms and locations even without `-g`, but then marks its compile unit
 # `NoDebug` (which LLVM's C API has no getter for)
 function emits_debug_info(mod::LLVM.Module)

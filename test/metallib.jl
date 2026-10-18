@@ -769,6 +769,60 @@ end
     @test_throws ArgumentError Metal.source_archive(["/" * "x"^300 => UInt8[]])
 end
 
+@testset "embedded kernel sources" begin
+    tt = Tuple{MtlDeviceVector{Float32,1}}
+    cfg = Metal.compiler_config(device(); kernel=true, name=nothing)
+    src = Metal.methodinstance(typeof(metallib_kernel), tt, Base.get_world_counter())
+    art = Metal.compile_to_metallib(Metal.GPUCompiler.CompilerJob(src, cfg, Base.get_world_counter()))
+    bytes = Metal.embed_sources(art.metallib, art.air)
+    lib = read(IOBuffer(bytes), MetalLib)
+    @test lib.uuid !== nothing
+    @test lib.uuid != read(IOBuffer(art.metallib), MetalLib).uuid
+    fun = only(lib.functions)
+
+    # Xcode pairs the function with the archive that has its AIR file as input
+    @test fun.source_id == "0"
+    air_path = only(fun.dependencies)
+    @test endswith(air_path, ".air") && isabspath(air_path)
+    archives = Dict(lib.embedded_source.archives)
+    entries = Metal.source_archive_files(archives[fun.source_id])
+    files = Dict(entries)
+    # the kernel's file comes first, the AIR file last
+    @test first(entries[4]) == abspath(@__FILE__)
+    @test first(entries[end]) == air_path
+    text(name) = String(copy(files[name]))
+    @test text("original-input-filename.txt") == air_path * "\n"
+    @test files[air_path] == art.air
+    @test occursin("-x ir", text("metal-options.txt"))
+    @test occursin(air_path, text("metal-options.txt"))
+    @test isabspath(chomp(text("metal-working-dir.txt")))
+
+    # with the Julia files the debug info refers to
+    @test text(abspath(@__FILE__)) == read(@__FILE__, String)
+    @test haskey(files, joinpath(pkgdir(Metal), "src", "device", "array.jl"))
+
+    # the name of the AIR file only depends on the kernel
+    @test only(read(IOBuffer(Metal.embed_sources(art.metallib, art.air)),
+                    MetalLib).functions).dependencies == [air_path]
+
+    # the library still works
+    dev = device()
+    mtlfun = MTL.MTLFunction(MTL.MTLLibraryFromData(dev, bytes), fun.name)
+    @test MTL.MTLComputePipelineState(dev, mtlfun) isa MTL.MTLComputePipelineState
+
+    source_tool = metal_tool("metal-source")
+    if source_tool === nothing
+        @test_skip "Apple's metal-source not available"
+    else
+        mktempdir() do dir
+            path = joinpath(dir, "lib.metallib")
+            write(path, bytes)
+            @test success(`$source_tool --extract=raw -o $(joinpath(dir, "src")) $path`)
+            @test read(joinpath(dir, "src", "0", relpath(air_path, "/"))) == art.air
+        end
+    end
+end
+
 struct MetallibPoint
     x::Float32
     y::Int32
