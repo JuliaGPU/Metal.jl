@@ -466,7 +466,7 @@ Base.@nospecializeinfer function launch_logging!(
                 reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
             end
             encode_arguments!(cce, bq, kernel, kernel_state, kernel.source, args)
-            MTL.append_current_function!(cce, gs, ts)
+            dispatch!(cce, kernel.pipeline, gs, ts)
         catch err
             err isa OwnershipConflict && return err.managed
             rethrow()
@@ -560,7 +560,7 @@ Base.@nospecializeinfer function encode_launch!(
         reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
 
         encode_arguments!(cce, bq, kernel, kernel_state, source, args)
-        MTL.append_current_function!(cce, gs, ts)
+        dispatch!(cce, pipeline, gs, ts)
     catch err
         # The failing launch has not been recorded yet. Keep any earlier
         # operations in this batch, but close encoder state dirtied by the
@@ -585,6 +585,31 @@ Base.@nospecializeinfer function encode_launch!(
         cmdbuf === nothing || discard_open_cmdbuf!(bq, cmdbuf)
     end
     return nothing
+end
+
+# Dispatch the kernel, wrapped (when labelling resources) in a debug group named after the
+# pipeline, which `link_pipeline` labelled with the kernel's Julia signature: a batched
+# command buffer interleaves many kernels in one encoder, and the debug groups tell them
+# apart in a GPU frame capture.
+@inline function dispatch!(cce::MTLComputeCommandEncoder, pipeline::MTLComputePipelineState,
+                           gs::MTLSize, ts::MTLSize)
+    if label_resources()
+        label = pipeline.label
+        if label === nothing
+            MTL.append_current_function!(cce, gs, ts)
+        else
+            # the encoder gets closed after a failed launch, so keep the groups balanced
+            MTL.push_debug_group!(cce, label)
+            try
+                MTL.append_current_function!(cce, gs, ts)
+            finally
+                MTL.pop_debug_group!(cce)
+            end
+        end
+    else
+        MTL.append_current_function!(cce, gs, ts)
+    end
+    return
 end
 
 ## Intra-warp Helpers
