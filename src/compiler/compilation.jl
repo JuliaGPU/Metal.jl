@@ -680,8 +680,10 @@ end
 # names, and the archive has to come with the command that compiled that file. Apple's
 # toolchain archives the MSL sources (with `-frecord-sources`); we archive the AIR module
 # with the command that would compile it, plus the Julia files its debug info refers to,
-# which is what Xcode displays. Neither the AIR file nor that command are used: Xcode only
-# rebuilds sources for its shader debugger, which doesn't support AIR input.
+# which is what Xcode displays. Xcode also rebuilds the library from the archived AIR file
+# with that command, to attribute profiling costs within inlined code: if the rebuild
+# fails, inlined functions are missing from the call stack, and their costs are attributed
+# to their call sites.
 #
 # This happens when linking a pipeline, not when compiling a kernel, so that it doesn't
 # affect cached compilation results, and so that the archive holds the source files as
