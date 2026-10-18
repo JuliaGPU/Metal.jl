@@ -339,6 +339,15 @@ end
     end
 end
 
+# cmp: LLVM 19+ folds Julia's `ifelse` chain into `llvm.{s,u}cmp`, which AIR lacks
+@testset "cmp $T" for (T, iN, sgn) in INT_TYPES
+    @eval @test @filecheck begin
+        @check_not "@llvm.{{[su]}}cmp"
+        @check $("icmp $(sgn)lt $iN")
+        Metal.code_air((x, y) -> cmp(x, y), Tuple{$T,$T})
+    end
+end
+
 # mul_hi: no LLVM intrinsic, so the @device_override here supplies air.mul_hi.{s,u}.iN
 @testset "mul_hi $T" for (T, iN, sgn) in INT_TYPES
     @eval @test @filecheck begin
@@ -921,6 +930,11 @@ end
     Metal.@sync @metal threads = N kernel(mtlout, mtlarr1, mtlarr2)
     @eval @test Array($mtlout) ≈ $fun.($arr1, $arr2)
 end
+@testset "cmp()::$T" for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64)
+    x = T[0, 1, 2, typemin(T), typemax(T)]
+    y = T[1, 1, 1, typemax(T), typemin(T)]
+    @test Array(cmp.(MtlArray(x), MtlArray(y))) == cmp.(x, y)
+end
 # 3-arg functions
 @testset "$(fun)()::$T" for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64), fun in INT_MATH_INTR_FUNCS_3_ARG
     N = 4
@@ -1052,6 +1066,38 @@ end
     # the CPU computes Float16 powers in Float32
     h, m = Float16[0.5, -1.5, 3, -3, 1.25], Int32[-3, 2, 5, -4, 7]
     @test Array(pow.(MtlArray(h), MtlArray(m))) ≈ pow.(h, m)
+end
+
+# Apple's back-end can't select a 64-bit multiplication with overflow check, as used by
+# `checked_mul` and thus `Rational` arithmetic (#570); GPUCompiler expands it using `mul_hi`.
+@testset "multiplication with overflow $T" for T in (Int64, UInt64)
+    edge = T[0, 1, 3, typemax(T), typemin(T), typemax(T) ÷ 2 + 1, T(2)^31, T(2)^32]
+    T <: Signed && append!(edge, T[-1, -3, -(T(2)^31), -(T(2)^32)])
+    x, y = vec([x for x in edge, y in edge]), vec([y for x in edge, y in edge])
+    mulo(x, y) = Base.Checked.mul_with_overflow(x, y)
+    @test Array(mulo.(MtlArray(x), MtlArray(y))) == mulo.(x, y)
+
+    @test Array(map(x -> x * 3 // 2, MtlArray(T[1, 4]))) == T[1, 4] .* 3 .// 2
+end
+
+# Base compares rationals using the 128-bit products of their numerators and denominators,
+# which GPUToolbox computes in 64-bit words instead (#550)
+@testset "rational comparisons" begin
+    xs = Float32[0, -1, 1.4, 1.5, 1.6, Inf, NaN]
+    @test Array(map(x -> x < 3 // 2, MtlArray(xs))) == (xs .< 3 // 2)
+
+    qs = [1//3, -5//7, 3//2, typemax(Int)//2, 2^40//3, -typemax(Int)//(2^40 + 1)]
+    ns = [0, -1, 2, 2^35, typemax(Int), typemin(Int)]
+    fs = Float32[0.3, -0.7, 1.5, 2f0^62, 3.6f11, -Inf]
+    for op in (<, <=, cmp)
+        @test Array(op.(MtlArray(qs), MtlArray(fs))) == op.(qs, fs)
+        @test Array(op.(MtlArray(fs), MtlArray(qs))) == op.(fs, qs)
+    end
+    for op in (<, <=)
+        @test Array(op.(MtlArray(qs), MtlArray(reverse(qs)))) == op.(qs, reverse(qs))
+        @test Array(op.(MtlArray(qs), MtlArray(ns))) == op.(qs, ns)
+        @test Array(op.(MtlArray(ns), MtlArray(qs))) == op.(ns, qs)
+    end
 end
 
 end
