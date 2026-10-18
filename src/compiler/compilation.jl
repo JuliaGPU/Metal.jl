@@ -679,7 +679,7 @@ function embed_sources(metallib::Vector{UInt8}, air::Vector{UInt8})
         sort!(sources; by = !=(fun.debug_info.path))
     end
     for path in sources
-        if isfile(path) && filesize(path) <= MAX_EMBEDDED_SOURCE && ustar_name(path) !== nothing
+        if isfile(path) && filesize(path) <= MAX_EMBEDDED_SOURCE
             push!(files, path => read(path))
         end
     end
