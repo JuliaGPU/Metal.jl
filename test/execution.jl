@@ -42,9 +42,60 @@ end
     # TODO: kernel introspection
 end
 
+@testset "threadgroup size hints" begin
+    # maxthreads is forwarded to the GPUCompiler target
+    @test Metal.compiler_config(device(); maxthreads=256).target.maxthreads == 256
+    # and applied to the compute pipeline
+    k = Metal.mtlfunction(dummy; maxthreads=256)
+    @test k.pipeline.maxTotalThreadsPerThreadgroup == 256
+    @test k.maxthreads == 256
+    k(; threads=256)
+    @test_throws ArgumentError k(; threads=512)
+    # and accepted by the `@metal` macro
+    @metal maxthreads=256 dummy()
+    k = @metal launch=false maxthreads=256 dummy()
+    @test k.maxthreads == 256
+
+    # invalid sizes are rejected before reaching Metal, which would abort or fail to compile
+    @test_throws ArgumentError Metal.compiler_config(device(); maxthreads=0)
+    @test_throws ArgumentError Metal.compiler_config(device(); maxthreads=2048)
+    @test_throws ArgumentError Metal.compiler_config(device(); minthreads=0)
+    @test_throws ArgumentError Metal.compiler_config(device(); minthreads=(32, 0, 1))
+    @test_throws ArgumentError Metal.compiler_config(device(); minthreads=(1, 1, 1, 1))
+    @test_throws ArgumentError Metal.compiler_config(device(); minthreads=2048)
+    @test_throws ArgumentError Metal.compiler_config(device(); minthreads=(32, 32, 2))
+    @test_throws ArgumentError Metal.compiler_config(device(); minthreads=(1 << 32, 1 << 32, 1))
+
+    # minthreads requires macOS 26, independent of the targeted Metal version
+    if Metal.macos_version() >= v"26"
+        # sizes are normalized to three dimensions
+        @test Metal.compiler_config(device(); minthreads=32).target.minthreads == (32, 1, 1)
+        @test Metal.compiler_config(device(); minthreads=(8, 4)).target.minthreads == (8, 4, 1)
+        @test Metal.compiler_config(device(); metal=v"3.2", minthreads=32).target.minthreads == (32, 1, 1)
+        @test_throws ArgumentError Metal.compiler_config(device(); minthreads=32, maxthreads=16)
+
+        k = Metal.mtlfunction(dummy; minthreads=(32, 1, 1))
+        @test k.pipeline.requiredThreadsPerThreadgroup == MTL.MTLSize(32, 1, 1)
+        @test k.pipeline.maxTotalThreadsPerThreadgroup == 32
+        @test k.reqthreads == MTL.MTLSize(32, 1, 1)
+        k(; threads=32)
+        k(; threads=(32, 1, 1))
+        # launching with any other threadgroup size is rejected up front,
+        # whether it has fewer or more threads, or the same number in another shape
+        @test_throws "should equal the kernel's minthreads (32, 1, 1)" k(; threads=16)
+        @test_throws "should equal the kernel's minthreads (32, 1, 1)" k(; threads=64)
+        @test_throws "should equal the kernel's minthreads (32, 1, 1)" k(; threads=(16, 2))
+    else
+        @test_throws ArgumentError Metal.compiler_config(device(); minthreads=32)
+    end
+end
+
 @testset "inference" begin
     foo() = @metal dummy()
     @inferred foo()
+    # the kernel object is constructed on every launch, so its fields should be inferred
+    fields = only(Base.return_types(Metal.link_kernel, (Core.MethodInstance,)))
+    @test Any ∉ fieldtypes(fields)
 
     # with arguments, we call mtlconvert
     kernel(a) = return
