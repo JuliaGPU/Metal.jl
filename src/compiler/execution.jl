@@ -22,8 +22,8 @@ There are a few keyword arguments that influence the behavior of `@metal`:
 
 - `launch`: whether to launch this kernel, defaults to `true`. If `false`, the returned
   kernel object should be launched by calling it and passing arguments again.
-- `name`: the name of the kernel in the generated code. Defaults to an automatically-
-  generated name.
+- `name`: the name of the kernel in the generated code. Defaults to the name of the
+  kernel function.
 - `opt_level`: the optimization level used when compiling the kernel, an integer from `0`
   to `3`. Defaults to `2`, independent of the host session's `-O` level.
 - `minthreads`: the exact threadgroup size the kernel will be launched with, as an integer

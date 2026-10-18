@@ -49,7 +49,8 @@ a fresh session.
 
 In the trace, the compute pipeline, function and library of every kernel are labelled with
 its Julia signature, e.g., `saxpy(::MtlDeviceVector{Float32, 1}, ::MtlDeviceVector{Float32,
-1}, ::Float32)`, in addition to the mangled name of the generated function.
+1}, ::Float32)`. The generated function itself is named after the Julia function (`saxpy`),
+the same for every specialization of the kernel, unless `@metal name=...` names it.
 
 When frame capture is enabled, or Julia runs with `-g2`, Metal.jl also:
 
@@ -81,6 +82,10 @@ it calls that are defined in packages (e.g. Metal.jl's own device code). Files l
 1 MiB, or whose path is longer than the archive format allows (about 255 bytes), are left
 out. Code inlined into
 the kernel is attributed to the line of the kernel that called it.
+
+The *Call Stack* view (in the menu above the list of source files) breaks the kernel's time
+down by call stack, but names every frame after the kernel, including those of functions
+inlined into it: Xcode only knows the names of inlined functions in MSL sources.
 
 To embed sources without enabling frame capture, or to stop embedding them, set the
 `embed_sources` preference (with Preferences.jl's `set_preferences!`, or in
@@ -146,8 +151,8 @@ $ xcrun xctrace record --template 'Metal System Trace' \
 
 The list of subsystems can include those of your own signposts too.
 
-In the trace, the GPU's list of shaders names kernels by their mangled names (e.g.
-`_Z5saxpy14MtlDeviceArrayI7Float32Li1ELi1EES1_S0_`), while the Metal driver's signposts,
+In the trace, the GPU's list of shaders names kernels after their function (e.g. `saxpy`),
+while the Metal driver's signposts,
 which mark when pipelines are compiled, show the Julia signatures that Metal.jl uses as
 pipeline labels. Metal.jl
 batches many kernels into one command buffer, so the GPU track shows a command buffer per

@@ -306,7 +306,7 @@ state the way the driver would at runtime:
   "pipelines": {
     "compute_pipelines": [
       {
-        "compute_function": "_Z1g",
+        "compute_function": "g",
         "threadgroup_size_is_multiple_of_thread_execution_width": true,
         "max_total_threads_per_threadgroup": 704
       }
