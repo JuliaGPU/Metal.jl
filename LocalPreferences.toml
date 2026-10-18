@@ -11,6 +11,11 @@
 # defaults to true when running Julia with -g2, and false otherwise.
 #label_resources = true
 
+# which Metal API to submit work with. possible values: "auto", "metal3", "metal4".
+# "auto" currently selects "metal3". "metal4" requires macOS 26 and a GPU supporting
+# the Metal 4 feature set (no virtualized GPUs).
+#command_api = "auto"
+
 # whether to batch command-buffers, to amortize launch overhead
 #command_batching = true
 #

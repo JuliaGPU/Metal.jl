@@ -618,7 +618,7 @@ end
         @test Array(a) == ones(Float32, 16)
         @test !Metal.has_open_batch(queue)
         @test isempty(Metal.pending_commands(queue))
-        @test MTL.last_committed(queue.queue).status == MTL.MTLCommandBufferStatusCompleted
+        @test MTL.is_completed(MTL.last_committed(queue.queue))
     end
 
     # host reads of shared memory
