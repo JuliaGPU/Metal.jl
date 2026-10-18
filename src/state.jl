@@ -7,10 +7,12 @@ log_array(args...)      = log_array()(args...)
 
 const LABEL_RESOURCES = @load_preference("label_resources", nothing)
 
-# without a preference, label when debugging (`-g2`). set by `__init__`.
+# without a preference, label when debugging (`-g2`) or when frame capture is enabled,
+# since that is when somebody looks at the labels. set by `__init__`.
 const label_resources_default = Ref(false)
 function init_label_resources!()
-    label_resources_default[] = Base.JLOptions().debug_level >= 2
+    label_resources_default[] = Base.JLOptions().debug_level >= 2 ||
+                                get(ENV, "METAL_CAPTURE_ENABLED", "0") == "1"
 end
 
 @inline label_resources() = @something(LABEL_RESOURCES, label_resources_default[])
