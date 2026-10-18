@@ -550,9 +550,11 @@ end
 # an argument (only its address travels, inside the state), so each launch declares it
 # resident — same as the malloc and exception scratch buffers.
 function reloc_table_buffer(dev::MTLDevice,
-                                             relocations::GPUCompiler.Relocations)
+                                             relocations::GPUCompiler.Relocations,
+                                             label::String="kernel")
     words = GPUCompiler.resolved_relocation_table(relocations)
     buf = MTLBuffer(dev, sizeof(words); storage=SharedStorage)
+    buf.label = "Metal.jl relocations of $label"
     GC.@preserve words unsafe_copyto!(convert(Ptr{UInt}, MTL.contents(buf)),
                                       pointer(words), length(words))
     return buf

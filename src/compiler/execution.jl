@@ -273,7 +273,7 @@ end
                 end
             end
             if reloc_table === nothing
-                reloc_table = reloc_table_buffer(dev, relocations)
+                reloc_table = reloc_table_buffer(dev, relocations, kernel_label(mi))
                 if ccall(:jl_generating_output, Cint, ()) != 1
                     push!(res.reloc_tables, (dev, reloc_table))
                 end

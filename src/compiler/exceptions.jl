@@ -55,6 +55,7 @@ function exception_info_buffer_and_gpu_address(dev::MTLDevice)
     Base.@lock device_exception_lock begin
         buf, _, gpuaddr = get!(device_exception_info, dev) do
             local buf = MTLBuffer(dev, sizeof(ExceptionInfo_st); storage=SharedStorage)
+            buf.label = "Metal.jl exception info"
             ptr = convert(Ptr{ExceptionInfo_st}, MTL.contents(buf))
             unsafe_store!(ptr, ExceptionInfo_st())
             (buf, ptr, UInt64(buf.gpuAddress))
