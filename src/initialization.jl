@@ -45,6 +45,13 @@ function is_supported(dev)
                           supports_family(dev, MTL.MTLGPUFamilyMetal3)
 end
 
+# the default language version depends on the SDK Julia was linked against, so it can be
+# newer than the versions we know about. it's only informational: don't throw on it.
+function describe_language_version(ver::MTL.MTLLanguageVersion)
+    v = get(MTL.language_versions, ver, nothing)
+    v === nothing ? "unknown (0x$(string(UInt64(ver); base=16)))" : "v$v"
+end
+
 function __init__()
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     precompiling && return
@@ -66,8 +73,9 @@ function __init__()
     try
         load_framework("CoreGraphics")
         load_framework("MetalPerformanceShadersGraph")
-        ver = MTL.MTLCompileOptions().languageVersion
-        @debug "Successfully loaded Metal; targeting v$ver."
+        opts = MTL.MTLCompileOptions()
+        ver = @objc [opts::id{MTL.MTLCompileOptions} languageVersion]::MTL.MTLLanguageVersion
+        @debug "Successfully loaded Metal; default language version $(describe_language_version(ver))."
 
         initialized[] = true
     catch err
