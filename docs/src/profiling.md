@@ -77,12 +77,11 @@ durations.
 ## Application tracing
 
 For a system-level view, or to inspect operations the integrated profiler does not capture,
-`Metal.@profile external=true` uses Xcode to record a trace of the GPU work. This macro tells
-your system to track GPU calls and usage statistics and will save this information in a
-temporary folder ending in '.trace'. For later viewing in Xcode's Instruments app, copy this
-folder to a stable location.
-
-The resulting trace can be opened with the Instruments app, part of Xcode.
+`Metal.@profile external=true` uses Xcode's `xctrace` to record a trace of the GPU work with
+Instruments' *Metal System Trace* template. The trace is saved in the current directory, in
+a folder named after the kernel or function being profiled and ending in `.trace`, and can be
+opened with the Instruments app, part of Xcode (or pass `open=true`). To record a whole
+script with Instruments, see [Profiling with Instruments](@ref).
 
 ```julia
 julia> using Metal
@@ -96,7 +95,7 @@ julia> a = MtlArray([1]); b = MtlArray([2]); c = similar(a);
 
 julia> Metal.@profile external=true @metal threads=length(c) vadd(a, b, c);
 ...
-[ Info: System trace saved to julia_3.trace; open the resulting trace in Instruments
+[ Info: System trace saved to /Users/tim/vadd_1.trace; open the resulting trace in Instruments
 ```
 
 It is possible to augment the trace with additional information by using signposts: Similar
@@ -142,12 +141,12 @@ julia> a = MtlArray([1]); b = MtlArray([2]); c = similar(a);
 
 julia> Metal.@capture @metal threads=length(c) vadd(a, b, c);
 ...
-[ Info: GPU frame capture saved to julia_1.gputrace; open the resulting trace in Xcode
+[ Info: GPU frame capture saved to /Users/tim/vadd_1.gputrace; open the resulting trace in Xcode
 ```
 
 What the trace shows about Julia kernels (their names, the arrays they use, and their
 source code with per-line costs), and how to find it in Xcode, is described in
-[Debugging and profiling with Xcode](@ref).
+[Debugging and profiling with Xcode and Instruments](@ref).
 
 ## Dumping compiled code
 

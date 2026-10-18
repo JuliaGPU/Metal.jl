@@ -1,13 +1,16 @@
-# Debugging and profiling with Xcode
+# Debugging and profiling with Xcode and Instruments
 
 Xcode can open the GPU traces that `Metal.@capture` records (see [Frame capture](@ref)),
-replay them, and profile the captured work. This page describes what such a trace shows of
-Julia code, and how to find it.
+replay them, and profile the captured work. Instruments records a timeline of a whole
+session instead: command buffers, kernels and their GPU time, next to what the CPU does.
+This page describes how to record both, and what they show of Julia code.
 
 ## Capturing a trace
 
 Frame capture has to be enabled when Julia starts, by setting the `METAL_CAPTURE_ENABLED`
-environment variable to 1:
+environment variable to 1. Metal reads the variable when the process starts, so setting it
+from within Julia (`ENV["METAL_CAPTURE_ENABLED"] = "1"`) has no effect; without it,
+`Metal.@capture` fails with an error saying so.
 
 ```
 $ METAL_CAPTURE_ENABLED=1 julia --project
@@ -25,15 +28,22 @@ julia> function saxpy(y, x, a)
 julia> x = MtlArray(rand(Float32, 1024)); y = MtlArray(rand(Float32, 1024));
 
 julia> Metal.@capture @metal threads=1024 saxpy(y, x, 2f0)
-[ Info: GPU frame capture saved to julia_1.gputrace; open the resulting trace in Xcode
+[ Info: GPU frame capture saved to /Users/tim/saxpy_1.gputrace; open the resulting trace in Xcode
+"/Users/tim/saxpy_1.gputrace"
 ```
 
-Open the trace with `open julia_1.gputrace` (or *File > Open* in Xcode), then click *Replay*
-to replay it on the GPU. Replaying and profiling need the same kind of GPU that recorded the
-trace.
+The trace is named after the kernel that `@metal` launches, or the function that the
+captured expression calls, and numbered so that it does not overwrite earlier traces. Pass
+`name="..."` to choose another name, and `open=true` to open the trace in Xcode when the
+capture finishes. Otherwise, open it with `open saxpy_1.gputrace` (or *File > Open* in
+Xcode), then click *Replay* to replay it on the GPU. Replaying and profiling need the same
+kind of GPU that recorded the trace.
 
-A trace contains every Metal library the process has loaded so far, not only those of the
-captured kernels. To keep traces small and easy to navigate, capture in a fresh session.
+A trace contains every Metal library and pipeline the process has created so far, not only
+those of the captured kernels: Metal records all live objects of the device, and offers no
+way to leave some out. Xcode lists the ones the capture does not use as unused resources,
+but they still make the trace larger. To keep traces small and easy to navigate, capture in
+a fresh session.
 
 ## Kernels, arrays and dispatches
 
@@ -90,3 +100,54 @@ recompiled for it.
   only).
 - The sources are read when a kernel is first loaded. If a file changed after the kernel was
   compiled (e.g., when using Revise), the lines Xcode shows may not match the code.
+
+## Profiling with Instruments
+
+Instruments' *Metal System Trace* template records when command buffers and kernels run on
+the GPU, how busy the GPU is, and what each CPU thread does in the meantime. It needs no
+environment variable. To record a piece of code from within Julia, use
+`Metal.@profile external=true`, which starts `xctrace`, Instruments' command-line tool, on
+the running process:
+
+```julia
+julia> Metal.@profile external=true begin
+           for i in 1:100
+               @metal threads=1024 saxpy(y, x, 2f0)
+           end
+       end
+[ Info: System trace saved to /Users/tim/julia_1.trace; open the resulting trace in Instruments
+"/Users/tim/julia_1.trace"
+```
+
+It names the trace like `Metal.@capture` does, and takes the `name` and `open` keyword
+arguments, as well as `template` to record with another Instruments template.
+
+To record a whole script instead, including the compilation of its kernels, run Julia under
+`xctrace`:
+
+```
+$ xcrun xctrace record --template 'Metal System Trace' --output saxpy.trace \
+      --launch -- $(which julia) --project script.jl
+```
+
+`xctrace` needs the path of the executable, hence `$(which julia)` (the juliaup launcher
+works too). To
+record a session that is already running, attach to it by process ID (`getpid()` in Julia)
+with `--attach PID` instead of `--launch`, and stop the recording with Ctrl-C. Open the
+result with `open saxpy.trace`.
+
+In the trace, the GPU's list of shaders names kernels by their mangled names (e.g.
+`_Z5saxpy14MtlDeviceArrayI7Float32Li1ELi1EES1_S0_`), while the Metal driver's signposts,
+which mark when pipelines are compiled, show the Julia signatures that Metal.jl uses as
+pipeline labels. Metal.jl
+batches many kernels into one command buffer, so the GPU track shows a command buffer per
+batch rather than per kernel. With resource labels enabled (when frame capture is enabled,
+when running with `-g2`, or with the `label_resources` preference), command buffers are
+labelled, e.g. `MTLCommandBuffer(batched queue)`; otherwise they show as `Command Buffer 0`.
+
+A trace recorded with `--launch` stores the environment variables of the process, so
+check them before sharing a trace.
+
+The integrated profiler (`Metal.@profile` without `external=true`, see
+[Profiling](@ref)) reports the GPU time of each operation in the REPL, and is the quicker
+tool to find which kernel to look at.
