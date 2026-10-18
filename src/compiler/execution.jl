@@ -129,7 +129,7 @@ function Adapt.adapt_storage(to::Adaptor, buf::MTLBuffer)
     if to.cce !== nothing
         MTL.use!(to.cce, buf, MTL.ReadWriteUsage)
     end
-    reinterpret(Core.LLVMPtr{Nothing,AS.Device}, buf.gpuAddress)
+    reinterpret(Core.LLVMPtr{Nothing,AS.Device}, MTL.gpu_address(buf))
 end
 function Adapt.adapt_storage(to::Adaptor, ptr::MtlPtr{T}) where {T}
     to.queue === nothing || claim!(ptr, to.queue)
@@ -517,7 +517,7 @@ Base.@nospecializeinfer function launch(
     exc_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, exc_addr)
     reloc = kernel.reloc_table
     reloc_ptr = reinterpret(Core.LLVMPtr{UInt64, AS.Device},
-                            reloc === nothing ? UInt64(0) : UInt64(reloc.gpuAddress))
+                            reloc === nothing ? UInt64(0) : UInt64(MTL.gpu_address(reloc)))
     kernel_state = KernelState(Random.rand(UInt32), buf_ptr, exc_ptr, reloc_ptr)
 
     if kernel.loggingEnabled
