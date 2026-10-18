@@ -566,10 +566,31 @@ function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
             # the back-end compiler likely failed
             # XXX: check more accurately? the error domain doesn't help much here
             air_file, metallib_file = dump_artifacts(".air" => air, ".metallib" => metallib)
-            error("""Compilation to native code failed; see below for details.
+            msg = """Compilation to native code failed; see below for details.
                      If you think this is a bug, please file an issue and attach:
                      - $(air_file)
-                     - $(metallib_file)""")
+                     - $(metallib_file)"""
+            if !gpu_addresses_available(dev)
+                msg *= """\n\nMetal also returned a null GPU address for a new buffer. The driver may
+                          have stopped servicing this process, failing all further compilations.
+                          Restart Julia."""
+            end
+            error(msg)
         end
+    end
+end
+
+# After repeated GPU errors, the driver may stop servicing the process, failing every
+# compilation, also of valid kernels. New buffers then lack a GPU address.
+function gpu_addresses_available(dev::MTLDevice)
+    try
+        buf = MTLBuffer(dev, 4; storage=SharedStorage)
+        try
+            !iszero(UInt(buf.gpuAddress))
+        finally
+            release(buf)
+        end
+    catch
+        true    # inconclusive
     end
 end
