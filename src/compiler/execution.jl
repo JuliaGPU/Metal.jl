@@ -305,7 +305,9 @@ end
     GPUCompiler.run_compile_hook(job)
     res = GPUCompiler.cached_results(MetalResults, job)
     if res === nothing || res.metallib === nothing
-        artifacts = compile_to_metallib(job)
+        artifacts = @signpost_interval log=log_compiler() start=kernel_label(job.source) stop="" "Compile" begin
+            compile_to_metallib(job)
+        end
         res = @something res GPUCompiler.cached_results(MetalResults, job)
         res.air = artifacts.air
         res.metallib = artifacts.metallib
@@ -396,8 +398,26 @@ end
 Base.@nospecializeinfer function try_launch(@nospecialize(kernel::HostKernel), @nospecialize(queue),
                                             gs::MTLSize, ts::MTLSize,
                                             @nospecialize(args::Tuple), submit::Bool)
-    launch_with_queue(kernel, queue, gs, ts, args, submit)
+    @signpost_interval log=log_tracing() start=launch_message(kernel, gs, ts) stop="" "Launch" begin
+        launch_with_queue(kernel, queue, gs, ts, args, submit)
+    end
 end
+
+# the pipeline is labelled with the kernel's Julia signature by `link_pipeline`
+Base.@nospecializeinfer function launch_message(@nospecialize(kernel::HostKernel),
+                                                gs::MTLSize, ts::MTLSize)
+    label = kernel.pipeline.label
+    name = if label === nothing
+        f = kernel.f
+        string(f isa Function ? nameof(f) : typeof(f))
+    else
+        String(label)
+    end::String
+    name * " groups=(" * size_string(gs) * ") threads=(" * size_string(ts) * ")"
+end
+# concatenation is several times faster than `string` with many arguments
+size_string(sz::MTLSize) =
+    string(sz.width) * "," * string(sz.height) * "," * string(sz.depth)
 
 Base.@nospecializeinfer @inline function launch_with_queue(
         @nospecialize(kernel::HostKernel), ::Nothing, gs::MTLSize, ts::MTLSize,
