@@ -19,6 +19,7 @@ Metal.device!
 Metal.devices
 Metal.device
 Metal.global_queue
+Metal.BatchedCommandQueue
 synchronize
 device_synchronize
 ```
