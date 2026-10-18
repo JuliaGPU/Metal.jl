@@ -145,14 +145,9 @@ julia> Metal.@capture @metal threads=length(c) vadd(a, b, c);
 [ Info: GPU frame capture saved to julia_1.gputrace; open the resulting trace in Xcode
 ```
 
-In the trace, the compute pipeline, function and library of every kernel are labelled
-with its Julia signature (e.g. `vadd(::MtlDeviceVector{Int64, 1}, ...)`), rather than only
-the mangled name of the generated function. When frame capture is enabled (or Julia is
-started with `-g2`), Metal.jl also labels the buffers backing `MtlArray`s with their type
-and dimensions, and wraps every kernel dispatch in a debug group named after the kernel,
-which tells apart the many kernels batched into a single command buffer. The
-`label_resources` preference forces these array labels and debug groups on or off; the
-kernel labels, and the labels of Metal.jl's internal buffers, are always set.
+What the trace shows about Julia kernels (their names, the arrays they use, and their
+source code with per-line costs), and how to find it in Xcode, is described in
+[Debugging and profiling with Xcode](@ref).
 
 ## Dumping compiled code
 
