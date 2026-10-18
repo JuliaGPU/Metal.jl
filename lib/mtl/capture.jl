@@ -50,7 +50,7 @@ export MTLCaptureDescriptor
     MTLCaptureDescriptor()
     MTLCaptureDescriptor(obj::Union{MTLDevice,MTLCommandQueue},
                          destination::MTLCaptureDestination;
-                         folder::String=nothing)
+                         folder::Union{Nothing,String}=nothing)
 
 Create a GPU frame capture descriptor to alter the parameters of a profiling session.
 """
@@ -65,7 +65,7 @@ end
 # TODO: Add capture state
 function MTLCaptureDescriptor(obj::Union{MTLDevice, MTLCommandQueue, MTLCaptureScope},
                               destination::MTLCaptureDestination;
-                              folder::String=nothing)
+                              folder::Union{Nothing,String}=nothing)
     desc = MTLCaptureDescriptor()
     desc.destination = destination
     desc.captureObject = obj
@@ -109,13 +109,13 @@ end
 """
     startCapture(obj::Union{MTLDevice,MTLCommandQueue},
                  destination::MTLCaptureDestination=MTLCaptureDestinationGPUTraceDocument;
-                 folder::String=nothing)
+                 folder::Union{Nothing,String}=nothing)
 
 Start GPU frame capture using the default capture object and specifying capture descriptor parameters directly.
 """
 function startCapture(obj::Union{MTLDevice, MTLCommandQueue, MTLCaptureScope},
                       destination::MTLCaptureDestination=MTLCaptureDestinationGPUTraceDocument;
-                      folder::String=nothing)
+                      folder::Union{Nothing,String}=nothing)
     if destination == MTLCaptureDestinationGPUTraceDocument && folder === nothing
         throw(ArgumentError("Must specify output folder if destination is GPUTraceDocument"))
     end

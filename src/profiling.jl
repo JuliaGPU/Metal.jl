@@ -536,7 +536,7 @@ end # module Profiling
 
 """
     Metal.@profile [trace=false] [raw=false] code...
-    Metal.@profile external=true code...
+    Metal.@profile external=true [name=...] [template=...] [open=false] code...
 
 Profile the GPU execution of `code`.
 
@@ -573,9 +573,20 @@ individual durations.
 
 ## External profiler (`external=true`)
 
-Drives Xcode's `xctrace` to record a system trace of `code`, which can then be opened in the
-Instruments app. This requires Xcode to be installed. See also [`Metal.@capture`](@ref) for
-Metal's GPU frame capture.
+Drives Xcode's `xctrace` to record a trace of `code` with Instruments' *Metal System Trace*
+template, which can then be opened in the Instruments app. This requires Xcode to be
+installed. The trace is saved in the current directory as `NAME_N.trace`, named like the
+traces of [`Metal.@capture`](@ref), and its path is returned. The following keyword
+arguments are supported:
+
+- `name`: the base name of the trace file, instead of the one derived from `code`.
+- `template`: the Instruments template to record with (default: `"Metal System Trace"`;
+  `xcrun xctrace list templates` lists the others).
+- `open`: open the trace in Instruments when the recording finishes (default: `false`).
+
+To record a whole Julia session or script instead, run it under `xctrace`, as described in
+[Debugging and profiling with Xcode and Instruments](@ref). See also
+[`Metal.@capture`](@ref) for Metal's GPU frame capture.
 """
 macro profile(ex...)
     code = ex[end]
@@ -597,10 +608,14 @@ macro profile(ex...)
     end
 
     if external
-        isempty(remaining) ||
-            throw(ArgumentError("Metal.@profile external=true does not accept other keyword arguments"))
+        for kw in remaining
+            kw.args[1] in (:name, :open, :template) ||
+                throw(ArgumentError("Invalid keyword argument to Metal.@profile external=true: $(kw.args[1])"))
+        end
+        any(kw -> kw.args[1] === :name, remaining) ||
+            push!(remaining, Expr(:kw, :name, trace_name(code)))
         quote
-            $profiled() do
+            $profiled(; $(remaining...)) do
                 $(esc(code))
             end
         end
