@@ -558,16 +558,63 @@ function reloc_table_buffer(dev::MTLDevice,
     return buf
 end
 
-# link the metallib into a session-local pipeline state on the given device.
+# A readable name for the kernel `mi` is compiled from, e.g.,
+# `saxpy(::MtlDeviceVector{Float32, 1}, ::MtlDeviceVector{Float32, 1}, ::UInt32)`.
+# Tools like Xcode's GPU frame capture otherwise only show the mangled entry point name.
+# Long argument types (broadcasts, KernelAbstractions contexts) get their type parameters
+# abbreviated the way stack traces do, and the label is truncated if that doesn't suffice.
+const MAX_KERNEL_LABEL = 256
+const MAX_KERNEL_LABEL_ARG = 96
+function kernel_label(mi::Core.MethodInstance)
+    ft, argtypes... = mi.specTypes.parameters
+    name = if ft <: Function
+        # closures, including those of `@kernel` and broadcast, have type names like
+        # `#broadcast_linear#_copyto!##1`: keep the name they were defined with.
+        # anonymous functions (`#3#4`) are told apart by where they were defined.
+        m = match(r"^#*([^#]+)", String(nameof(ft)))
+        if m === nothing || all(isdigit, m[1])
+            meth = mi.def
+            meth isa Method ? "anonymous@$(basename(String(meth.file))):$(meth.line)" :
+                              "anonymous"
+        else
+            m[1]
+        end
+    else
+        "(::$ft)"
+    end
+    args = String["::" * sprint(show, t) for t in argtypes]
+    # `type_depth_limit` is internal (it limits the types in stack traces), so don't
+    # rely on it being there
+    if sum(length, args; init=0) > MAX_KERNEL_LABEL && isdefined(Base, :type_depth_limit)
+        args = map(args) do arg
+            length(arg) > MAX_KERNEL_LABEL_ARG ?
+                Base.type_depth_limit(arg, MAX_KERNEL_LABEL_ARG) : arg
+        end
+    end
+    label = name * "(" * join(args, ", ") * ")"
+    if length(label) > MAX_KERNEL_LABEL
+        label = first(label, MAX_KERNEL_LABEL - 1) * "…"
+    end
+    return label
+end
+
+# link the metallib into a session-local pipeline state on the given device. `label`
+# names the library, function and pipeline in Metal's developer tools.
 function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
-                                        metallib::Vector{UInt8}, entry::String)
+                                        metallib::Vector{UInt8}, entry::String,
+                                        label::String=entry)
     @signpost_event log=log_compiler() "Link" entry
 
     @signpost_interval log=log_compiler() "Instantiate compute pipeline" begin
         lib = MTLLibraryFromData(dev, metallib)
+        lib.label = label
         fun = MTLFunction(lib, entry)
+        fun.label = label
+        desc = MTLComputePipelineDescriptor()
+        desc.computeFunction = fun
+        desc.label = label
         try
-            return MTLComputePipelineState(dev, fun)
+            return MTLComputePipelineState(dev, desc)
         catch err
             isa(err, NSError) || rethrow()
 
