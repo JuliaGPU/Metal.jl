@@ -73,11 +73,43 @@ end
 end
 
 
-@device_function @inline threadgroup_barrier(flag=MemoryFlagNone) =
-    ccall("extern air.wg.barrier", llvmcall, Cvoid, (Cuint, Cuint, ), flag, UInt32(1))
+@device_function @inline threadgroup_barrier(flags=MemoryFlagNone,
+                                             order::memory_order=memory_order_seq_cst,
+                                             scope::thread_scope=thread_scope_threadgroup) =
+    barrier(Val(:threadgroup), Val(UInt32(flags)), Val(order), Val(scope))
+@device_function @inline threadgroup_barrier(flags, scope::thread_scope) =
+    threadgroup_barrier(flags, memory_order_seq_cst, scope)
 
-@device_function @inline simdgroup_barrier(flag=MemoryFlagNone) =
-    ccall("extern air.simdgroup.barrier", llvmcall, Cvoid, (Cuint, Cuint, ), flag, UInt32(1))
+# like in MSL, the scope defaults to the SIMD-group where it can be chosen
+@device_function @inline function simdgroup_barrier(flags=MemoryFlagNone,
+                                                    order::memory_order=memory_order_seq_cst)
+    if metal_version() >= sv"3.2"
+        simdgroup_barrier(flags, order, thread_scope_simdgroup)
+    else
+        simdgroup_barrier(flags, order, thread_scope_threadgroup)
+    end
+end
+@device_function @inline simdgroup_barrier(flags, order::memory_order, scope::thread_scope) =
+    barrier(Val(:simdgroup), Val(UInt32(flags)), Val(order), Val(scope))
+@device_function @inline simdgroup_barrier(flags, scope::thread_scope) =
+    simdgroup_barrier(flags, memory_order_seq_cst, scope)
+
+# barriers are emitted in the form of AIR 2.9, with a memory order, which GPUCompiler drops
+# for older targets (and strengthens to sequentially consistent before MSL 4.1)
+@device_function @inline function barrier(::Val{group}, ::Val{flags}, ::Val{order},
+                                          ::Val{scope}) where {group, flags, order, scope}
+    if scope !== thread_scope_threadgroup
+        @static_assert(metal_version() >= sv"3.2", "Barrier scopes need Metal 3.2.")
+    end
+    if group === :threadgroup
+        @typed_ccall("air.wg.barrier", llvmcall, Nothing, (Int32, Int32, Int32),
+                     Val(flags), Val(order), Val(scope))
+    else
+        @typed_ccall("air.simdgroup.barrier", llvmcall, Nothing, (Int32, Int32, Int32),
+                     Val(flags), Val(order), Val(scope))
+    end
+    return
+end
 
 @device_function @inline atomic_thread_fence(flags::Union{MemoryFlags,UInt32},
                                               order::memory_order,
@@ -104,19 +136,26 @@ end
 end
 
 @doc """
-    threadgroup_barrier(flag=MemoryFlagNone)
+    threadgroup_barrier(flags=MemoryFlagNone, order=memory_order_seq_cst,
+                        scope=thread_scope_threadgroup)
+    threadgroup_barrier(flags, scope)
 
-Synchronize all threads in a threadgroup.
-
-Possible flags that affect the memory synchronization behavior are found in [`MemoryFlags`](@ref)
+Synchronize all threads in a threadgroup, and order their memory accesses to the memory
+selected by `flags` (see [`MemoryFlags`](@ref)) with `order`, for threads in `scope`. The
+arguments must be compile-time constants. A `scope` other than `thread_scope_threadgroup`
+needs Metal 3.2; before Metal 4.1, every barrier is sequentially consistent.
 """ threadgroup_barrier
 
 @doc """
-    simdgroup_barrier(flag=MemoryFlagNone)
+    simdgroup_barrier(flags=MemoryFlagNone, order=memory_order_seq_cst,
+                      scope=thread_scope_simdgroup)
+    simdgroup_barrier(flags, scope)
 
-Synchronize all threads in a SIMD-group.
-
-Possible flags that affect the memory synchronization behavior are found in [`MemoryFlags`](@ref)
+Synchronize all threads in a SIMD-group, and order their memory accesses to the memory
+selected by `flags` (see [`MemoryFlags`](@ref)) with `order`, for threads in `scope`. The
+arguments must be compile-time constants. A `scope` other than `thread_scope_threadgroup`
+needs Metal 3.2, and before Metal 3.2 the scope defaults to `thread_scope_threadgroup`;
+before Metal 4.1, every barrier is sequentially consistent.
 """ simdgroup_barrier
 
 @doc """
