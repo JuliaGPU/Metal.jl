@@ -179,6 +179,7 @@ function malloc_buffer_and_gpu_address(dev::MTLDevice)
     Base.@lock device_malloc_lock begin
         get!(device_malloc_bufs, dev) do
             buf = MTLBuffer(dev, MALLOC_BUF_SIZE; storage=SharedStorage)
+            buf.label = "Metal.jl device malloc heap"
             # initialize the counter (first 4 bytes) to 4 so the first
             # allocation lands past the counter itself
             unsafe_store!(convert(Ptr{UInt32}, MTL.contents(buf)), UInt32(4))
