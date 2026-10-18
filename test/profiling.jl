@@ -89,6 +89,13 @@ else
                 path = Metal.@profile external=true identity(nothing)
                 @test path == joinpath(pwd(), "identity_1.trace")
                 @test isdir(path)
+
+                # Metal.jl's signposts, including the dynamic tracing ones, are recorded
+                a = MtlArray([1f0])
+                path = Metal.@profile external=true name="signposts" a .= 2f0
+                xpath = """/trace-toc/run[@number="1"]/data/table[@schema="os-signpost" and @subsystem='"org.juliagpu.metal"']"""
+                xml = read(`xcrun xctrace export --input $path --xpath $xpath`, String)
+                @test occursin("Launch", xml)
             end
         end
     end
