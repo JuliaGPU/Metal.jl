@@ -57,7 +57,7 @@ function exception_info_buffer_and_gpu_address(dev::MTLDevice)
             local buf = MTLBuffer(dev, sizeof(ExceptionInfo_st); storage=SharedStorage)
             ptr = convert(Ptr{ExceptionInfo_st}, MTL.contents(buf))
             unsafe_store!(ptr, ExceptionInfo_st())
-            (buf, ptr, UInt64(buf.gpuAddress))
+            (buf, ptr, UInt64(MTL.gpu_address(buf)))
         end
         return buf, gpuaddr
     end

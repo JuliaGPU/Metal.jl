@@ -58,6 +58,25 @@ function MTLBuffer(dev::MTLDevice, bytesize::Integer, ptr::Ptr;
     return MTLBuffer(ptr)
 end
 
+"""
+    gpu_address(buf::MTLBuffer)
+
+Return the GPU address of `buf`, as used by kernels to access it. Throws if Metal returns
+a null address.
+"""
+@inline function gpu_address(buf::MTLBuffer)
+    addr = buf.gpuAddress
+    # Metal may return a null address once the driver stops servicing the process, e.g.,
+    # after repeated GPU errors. Kernels would then silently access address 0.
+    iszero(UInt(addr)) && throw_no_gpu_address()
+    return addr
+end
+
+@noinline throw_no_gpu_address() =
+    error("""Metal returned a null GPU address for a buffer.
+             The driver may have stopped servicing this process, e.g., after earlier GPU
+             errors such as failed kernel compilations. Restart Julia.""")
+
 page_size() = @memoize begin
     Int(ccall(:getpagesize, Cint, ()))
 end::Int

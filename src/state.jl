@@ -176,7 +176,7 @@ function malloc_buffer_and_gpu_address(dev::MTLDevice)
             # initialize the counter (first 4 bytes) to 4 so the first
             # allocation lands past the counter itself
             unsafe_store!(convert(Ptr{UInt32}, MTL.contents(buf)), UInt32(4))
-            (buf, UInt64(buf.gpuAddress))
+            (buf, UInt64(MTL.gpu_address(buf)))
         end
     end
 end

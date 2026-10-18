@@ -128,7 +128,7 @@ end
 # return the GPU virtual address, so that alignment checks like
 # `UInt(ptr) % N == 0` work the same as for a regular Ptr. note that this is
 # the GPU-side address, distinct from the CPU-side `contents` pointer.
-Base.UInt(ptr::MtlPtr) = UInt(ptr.buffer.gpuAddress) + ptr.offset
+Base.UInt(ptr::MtlPtr) = UInt(MTL.gpu_address(ptr.buffer)) + ptr.offset
 Base.Int(ptr::MtlPtr) = Int(UInt(ptr))
 
 
