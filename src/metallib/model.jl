@@ -1,7 +1,7 @@
 # the Metal library model: functions, their metadata, and the library container
 
 using SHA: sha256, SHA2_256_CTX, update!, digest!
-using CodecBzip2: Bzip2DecompressorStream
+using CodecBzip2: Bzip2DecompressorStream, Bzip2Compressor
 
 ## structures
 
@@ -43,6 +43,68 @@ end
 function decompress_source_archive(compressed::Vector{UInt8})
     stream = Bzip2DecompressorStream(IOBuffer(compressed); stop_on_end=true)
     read(stream, typemax(Int))
+end
+
+# Apple's toolchain writes each archive as a ustar tarball of regular files. paths are
+# absolute (sources are extracted under their original location), which ustar fits in 255
+# bytes by splitting them at a slash into a 155-byte prefix and a 100-byte name.
+function ustar_name(path::String)
+    sizeof(path) <= 100 && return ("", path)
+    for i in reverse(findall(==(UInt8('/')), codeunits(path)))
+        prefix, name = path[1:prevind(path, i)], path[nextind(path, i):end]
+        sizeof(prefix) <= 155 && 0 < sizeof(name) <= 100 && return (prefix, name)
+    end
+    return nothing
+end
+
+# build a source archive for an `EmbeddedSource` from `path => contents` pairs. paths that
+# don't fit the tarball format are an error; check them with `ustar_name`.
+function source_archive(files)
+    io = IOBuffer()
+    for (path, contents) in files
+        split = ustar_name(path)
+        split === nothing && throw(ArgumentError("path too long for a source archive: $path"))
+        prefix, name = split
+        header = Base.zeros(UInt8, 512)
+        field!(offset, str) = copyto!(header, offset + 1, codeunits(str))
+        field!(0, name)
+        field!(100, "000644 \0")                           # mode
+        field!(108, "000000 \0")                           # uid
+        field!(116, "000000 \0")                           # gid
+        field!(124, string(sizeof(contents), base=8, pad=11) * "\0")
+        field!(136, string(0, base=8, pad=11) * "\0")      # mtime
+        field!(148, " "^8)                                 # checksum, computed below
+        header[157] = UInt8('0')                           # regular file
+        field!(257, "ustar\0" * "00")
+        field!(345, prefix)
+        field!(148, string(sum(Int, header), base=8, pad=6) * "\0 ")
+        write(io, header)
+        write(io, contents)
+        write(io, Base.zeros(UInt8, cld(sizeof(contents), 512) * 512 - sizeof(contents)))
+    end
+    write(io, Base.zeros(UInt8, 1024))                      # end of archive
+    return transcode(Bzip2Compressor, take!(io))
+end
+
+# the files in a source archive, as `path => contents` pairs
+function source_archive_files(compressed::Vector{UInt8})
+    tarball = decompress_source_archive(compressed)
+    files = Pair{String,Vector{UInt8}}[]
+    cstring(bytes) = String(bytes[1:something(findfirst(iszero, bytes), length(bytes) + 1) - 1])
+    offset = 0
+    while offset + 512 <= length(tarball) && !iszero(tarball[offset + 1])
+        header = @view tarball[offset+1:offset+512]
+        name, prefix = cstring(header[1:100]), cstring(header[346:500])
+        size = tryparse(Int, strip(cstring(header[125:136])), base=8)
+        size !== nothing && 0 <= size <= length(tarball) - offset - 512 ||
+            throw(MetalLibFormatError("malformed source archive entry", offset))
+        if header[157] in (UInt8('0'), 0x00)
+            path = isempty(prefix) ? name : prefix * "/" * name
+            push!(files, path => tarball[offset+513:offset+512+size])
+        end
+        offset += 512 + cld(size, 512) * 512
+    end
+    return files
 end
 
 # derive a UUID from library contents. the official toolchain stamps every library with
