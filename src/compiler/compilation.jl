@@ -379,16 +379,16 @@ end
     if macos === nothing
         macos = macos_version()
     else
-        macos = normalize_macos(macos)
+        macos = check_macos(macos)
     end
     if metal === nothing
         metal = metal_target(macos)
     end
+    # like the offline compiler, derive everything from a single deployment target,
+    # raised to what the language version requires
+    macos = max(macos, macos_floor(metal))
     if air === nothing
-        air = max(air_support(macos), air_floor(metal))
-        if air < v"2.7"
-            error("""Metal.jl requires AIR 2.7 (macOS 15) or newer, but macOS $(macos) only supports AIR $(air_support(macos)).""")
-        end
+        air = air_support(macos)
     elseif air < v"2.7"
         error("""Metal.jl requires AIR 2.7 (macOS 15) or newer; cannot target AIR $(air).""")
     elseif air < air_floor(metal)
@@ -400,7 +400,7 @@ end
     else
         gpufamily = convert(MTL.MTLGPUFamily, gpufamily)
         family = Int(gpufamily) - 1000
-        if !(1 <= family <= 10)
+        if !(1 <= family <= 11)
             throw(ArgumentError("gpufamily must be an MTLGPUFamilyApple<n>, got $(gpufamily)"))
         end
         family
@@ -580,6 +580,21 @@ function reloc_table_buffer(dev::MTLDevice,
     GC.@preserve words unsafe_copyto!(convert(Ptr{UInt}, MTL.contents(buf)),
                                       pointer(words), length(words))
     return buf
+end
+
+# The runtime rejects libraries with a container, AIR or MSL version it doesn't know, with a
+# generic error. Kernels can be compiled for newer systems (e.g. to inspect their code), so
+# this is only checked when loading. Only major and minor versions matter: the function list
+# doesn't encode patch versions, and newer container patch versions load fine. The
+# deployment target itself isn't checked: the newest macOS emits the same versions as its
+# successors, and the runtime ignores the header's OS.
+function check_loadable(target)
+    host = macos_version()
+    newer(a, b) = (a.major, a.minor) > (b.major, b.minor)
+    if newer(metallib_target(target.macos), metallib_support(host)) ||
+       newer(target.air, air_support(host)) || newer(target.metal, metal_support(host))
+        error("""Kernel was compiled for metallib $(metallib_target(target.macos)), AIR $(target.air) and MSL $(target.metal) (macOS $(target.macos)), which this system (macOS $host) cannot load.""")
+    end
 end
 
 # link the metallib into a session-local pipeline state on the given device.

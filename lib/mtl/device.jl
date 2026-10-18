@@ -83,7 +83,7 @@ Returns the number `n` of the highest `MTLGPUFamilyApple`n` feature set that `de
 support for (e.g. `7` for `MTLGPUFamilyApple7`), or `nothing` if it supports none of them.
 """
 function highest_apple_family(dev::MTLDevice)
-    for n in 10:-1:1
+    for n in 11:-1:1
         supports_family(dev, MTLGPUFamily(1000 + n)) && return n
     end
     return nothing

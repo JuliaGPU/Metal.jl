@@ -39,6 +39,8 @@ if you want to use it. PRs are very [welcome](#contributing)!
 These requirements are fairly strict, and are due to our limited development
 resources (manpower, hardware). Supported OS versions follow Apple's support,
 which is typically the three latest major verions.
+The full test suite runs on macOS 27 hardware; older macOS versions are covered
+by a subset of the tests on virtual GPUs.
 
 
 ## Quick start
