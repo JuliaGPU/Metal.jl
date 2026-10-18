@@ -740,6 +740,35 @@ end
     end
 end
 
+@testset "source archives" begin
+    # Apple's archives parse
+    lib = parse(MetalLib, joinpath(metallib_dir, "sources.26.metallib"))
+    for (_, archive) in lib.embedded_source.archives
+        files = Metal.source_archive_files(archive)
+        @test any(file -> first(file) == "original-input-filename.txt", files)
+        @test sum(sizeof ∘ last, files) < sizeof(Metal.decompress_source_archive(archive))
+    end
+
+    # ours round-trip, including paths that need the ustar prefix field
+    long = "/" * join(fill("directory", 15), "/") * "/file.jl"
+    @test sizeof(long) > 100
+    files = ["metal-options.txt" => codeunits("metal -x ir x.air"),
+             "/tmp/x.air" => rand(UInt8, 1000),
+             long => codeunits("println(42)\n"),
+             "/tmp/empty.jl" => UInt8[]]
+    @test Metal.source_archive_files(Metal.source_archive(files)) == files
+    # malformed sizes are rejected, rather than read past or looped over
+    tarball = Metal.decompress_source_archive(Metal.source_archive(files))
+    for size in ("-0001000000", "77777777777")
+        bad = copy(tarball)
+        copyto!(bad, 125, codeunits(size))
+        @test_throws Metal.MetalLibFormatError Metal.source_archive_files(
+            Metal.transcode(Metal.Bzip2Compressor, bad))
+    end
+    @test Metal.ustar_name("/" * "x"^300) === nothing
+    @test_throws ArgumentError Metal.source_archive(["/" * "x"^300 => UInt8[]])
+end
+
 struct MetallibPoint
     x::Float32
     y::Int32
