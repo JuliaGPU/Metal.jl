@@ -697,6 +697,18 @@ embed_sources() = @something(EMBED_SOURCES, get(ENV, "METAL_CAPTURE_ENABLED", "0
 # files larger than this are left out of source archives
 const MAX_EMBEDDED_SOURCE = 1 << 20
 
+# Xcode finds a file in a source archive by its standardized path (see NSString's
+# `stringByStandardizingPath`), without the `/private` of e.g. `/private/tmp`. Julia records
+# such paths as given, or resolved by the working directory: `include("kernel.jl")` in
+# `/tmp` results in `/private/tmp/kernel.jl`. Archive those under the standardized path.
+function standardized_path(path::String)
+    if startswith(path, "/private/")
+        short = path[sizeof("/private")+1:end]
+        ispath(short) && samefile(short, path) && return short
+    end
+    return path
+end
+
 # a library like `metallib`, but with the sources of its function embedded
 function embed_sources(metallib::Vector{UInt8}, air::Vector{UInt8})
     lib = read(IOBuffer(metallib), MetalLib)
@@ -720,14 +732,14 @@ function embed_sources(metallib::Vector{UInt8}, air::Vector{UInt8})
         "metal-options.txt" => codeunits(options),
         "metal-working-dir.txt" => codeunits(working_directory * "\n"),
         "original-input-filename.txt" => codeunits(air_path * "\n")]
-    # when Xcode can't tell which file holds the kernel, it opens the first one, so put the
-    # kernel's file first and the AIR file last
+    # when Xcode can't tell which file holds the kernel, it opens the AIR file, or without
+    # one, the first file. put the kernel's file first and the AIR file last.
     if fun.debug_info !== nothing
         sort!(sources; by = !=(fun.debug_info.path))
     end
     for path in sources
         if isfile(path) && filesize(path) <= MAX_EMBEDDED_SOURCE
-            push!(files, path => read(path))
+            push!(files, standardized_path(path) => read(path))
         end
     end
     push!(files, air_path => air)

@@ -839,7 +839,8 @@ end
     entries = Metal.source_archive_files(archives[fun.source_id])
     files = Dict(entries)
     # the kernel's file comes first, the AIR file last
-    @test first(entries[4]) == abspath(@__FILE__)
+    archived(path) = Metal.standardized_path(path)
+    @test first(entries[4]) == archived(abspath(@__FILE__))
     @test first(entries[end]) == air_path
     text(name) = String(copy(files[name]))
     @test text("original-input-filename.txt") == air_path * "\n"
@@ -849,8 +850,8 @@ end
     @test isabspath(chomp(text("metal-working-dir.txt")))
 
     # with the Julia files the debug info refers to
-    @test text(abspath(@__FILE__)) == read(@__FILE__, String)
-    @test haskey(files, joinpath(pkgdir(Metal), "src", "device", "array.jl"))
+    @test text(archived(abspath(@__FILE__))) == read(@__FILE__, String)
+    @test haskey(files, archived(joinpath(pkgdir(Metal), "src", "device", "array.jl")))
 
     # the name of the AIR file only depends on the kernel
     @test only(read(IOBuffer(Metal.embed_sources(art.metallib, art.air)),
