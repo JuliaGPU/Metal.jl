@@ -292,6 +292,10 @@ end
 
 @inline dispatch!(be::Metal4Backend, groups::MTLSize, threads::MTLSize) =
     MTL.dispatchThreadgroups!(be.encoder::MTL4ComputeCommandEncoder, groups, threads)
+MTL.push_debug_group!(be::Metal4Backend, label) =
+    MTL.push_debug_group!(be.encoder::MTL4ComputeCommandEncoder, label)
+MTL.pop_debug_group!(be::Metal4Backend) =
+    MTL.pop_debug_group!(be.encoder::MTL4ComputeCommandEncoder)
 
 function MTL.append_copy!(be::Metal4Backend, dst::MTLBuffer, doff, src::MTLBuffer, soff, len)
     make_resident!(be, dst)

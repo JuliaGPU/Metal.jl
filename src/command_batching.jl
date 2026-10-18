@@ -84,7 +84,8 @@ while holding `submission_lock`:
   other tasks can flush it). The context supports
   `bind_buffer!(ctx, buf, offset, index)`, `bind_bytes!(ctx, ptr, length, index)` (which
   must copy the bytes before returning), `make_resident!(ctx, buf, usage)` for buffers
-  that are only reachable through a GPU address, and `dispatch!(ctx, groups, threads)`;
+  that are only reachable through a GPU address, `dispatch!(ctx, groups, threads)`, and
+  `MTL.push_debug_group!(ctx, label)`/`MTL.pop_debug_group!(ctx)`;
 - `blit_encoder(bq)`: return a context supporting `append_copy!` and `append_fillbuffer!`;
 - `encode_event_wait!(bq, event, value)`: make subsequent work wait for `event`;
 - `end_encoder!(bq)`: close the current encoder, if any;

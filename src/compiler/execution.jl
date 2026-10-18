@@ -496,7 +496,7 @@ Base.@nospecializeinfer function launch_logging!(
                 reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
             end
             encode_arguments!(cce, bq, kernel, kernel_state, kernel.source, args)
-            MTL.append_current_function!(cce, gs, ts)
+            dispatch!(cce, kernel.pipeline, gs, ts)
         catch err
             err isa OwnershipConflict && return err.managed
             rethrow()
@@ -596,7 +596,7 @@ Base.@nospecializeinfer function encode_launch!(
         reloc === nothing || make_resident!(cce, reloc, MTL.ReadUsage)
 
         encode_arguments!(cce, bq, kernel, kernel_state, source, args)
-        dispatch!(cce, gs, ts)
+        dispatch!(cce, pipeline, gs, ts)
     catch err
         # The failing launch has not been recorded yet. Keep any earlier
         # operations in this batch, but close encoder state dirtied by the
@@ -617,6 +617,30 @@ Base.@nospecializeinfer function encode_launch!(
         discard_open_batch!(bq)
     end
     return nothing
+end
+
+# Dispatch the kernel through the backend's encoding context `ctx`, wrapped (when labelling
+# resources) in a debug group named after the pipeline, which `link_pipeline` labelled with
+# the kernel's Julia signature: a batched command buffer interleaves many kernels in one
+# encoder, and the debug groups tell them apart in a GPU frame capture.
+@inline function dispatch!(ctx, pipeline::MTLComputePipelineState, gs::MTLSize, ts::MTLSize)
+    if label_resources()
+        label = pipeline.label
+        if label === nothing
+            dispatch!(ctx, gs, ts)
+        else
+            # the encoder gets closed after a failed launch, so keep the groups balanced
+            MTL.push_debug_group!(ctx, label)
+            try
+                dispatch!(ctx, gs, ts)
+            finally
+                MTL.pop_debug_group!(ctx)
+            end
+        end
+    else
+        dispatch!(ctx, gs, ts)
+    end
+    return
 end
 
 ## Intra-warp Helpers
