@@ -14,6 +14,14 @@ great lengths to perform accurate measurements. Due to the asynchronous nature o
 need to ensure the GPU is synchronized at the end of every sample, e.g. by calling
 `synchronize()` or, even better, wrapping your code in `Metal.@sync`:
 
+```julia
+julia> using Metal, BenchmarkTools
+
+julia> a = Metal.rand(Float32, 1024, 1024);
+
+julia> @btime Metal.@sync sin.($a);
+```
+
 Note that the allocations as reported by BenchmarkTools are CPU allocations.
 
 ## Integrated profiler
@@ -31,7 +39,7 @@ julia> using Metal
 
 julia> a = Metal.rand(Float32, 1024, 1024); b = similar(a); c = similar(a);
 
-julia> b .= a .+ 1f0; Metal.synchronize();   # warm up kernel compilation
+julia> b .= a .+ 1f0; c .= sqrt.(b); Metal.synchronize();   # warm up kernel compilation
 
 julia> Metal.@profile begin
            b .= a .+ 1f0
@@ -63,100 +71,27 @@ julia> Metal.@bprofile time=2.0 b .= a .+ 1f0
 ```
 
 Because Metal runs independent command buffers in parallel, operations may overlap in time;
-the reported percentages are relative to the wall-clock GPU span, not the sum of the individual
-durations.
+the reported percentages are relative to the wall-clock time of the profiled code
+(including waiting for the GPU to finish), not to the sum of the individual durations.
 
 !!! note
     The integrated profiler captures the GPU operations that go through Metal.jl's
     command-buffer submission path: compute kernels (`@metal`, broadcast, mapreduce, ...) and
     blit operations (copies, fills). Operations performed through Metal Performance Shaders or
     MPSGraph — most notably the default matrix-multiplication backend — submit their own command
-    buffers and do not appear in the trace yet. Use the external profiler or frame capture
-    (below) to inspect those.
+    buffers and do not appear in the trace yet. Use Instruments or frame capture (see
+    [Xcode and Instruments](@ref)) to inspect those.
 
-## Application tracing
+## Xcode and Instruments
 
-For a system-level view, or to inspect operations the integrated profiler does not capture,
-`Metal.@profile external=true` uses Xcode's `xctrace` to record a trace of the GPU work with
-Instruments' *Metal System Trace* template. The trace is saved in the current directory, in
-a folder named after the kernel or function being profiled and ending in `.trace`, and can be
-opened with the Instruments app, part of Xcode (or pass `open=true`). To record a whole
-script with Instruments, see [Profiling with Instruments](@ref).
+The integrated profiler tells which operations take the time. To look deeper, Metal.jl works
+with Apple's tools, described in
+[Debugging and profiling with Xcode and Instruments](@ref):
 
-```julia
-julia> using Metal
-
-julia> function vadd(a, b, c)
-           i = thread_position_in_grid().x
-           c[i] = a[i] + b[i]
-           return
-       end
-julia> a = MtlArray([1]); b = MtlArray([2]); c = similar(a);
-
-julia> Metal.@profile external=true @metal threads=length(c) vadd(a, b, c);
-...
-[ Info: System trace saved to /Users/tim/vadd_1.trace; open the resulting trace in Instruments
-```
-
-Metal.jl adds signposts to the trace that show when kernels are compiled and launched, and
-when the CPU waits for the GPU; see [Signposts](@ref).
-
-You can add your own: similar to NVTX markers and ranges in CUDA.jl, signpost intervals and
-events add respectively time intervals and points of interest to the trace. Use the
-signpost functionality from ObjectiveC.jl:
-
-```julia
-using ObjectiveC, .OS
-
-@signpost_interval "My Interval" begin
-    # code to profile
-    @signpost_event "My Event"
-end
-```
-
-Instruments shows the names of signposts only if they are string literals in a package
-(i.e., code that is precompiled). Other signposts, e.g. from the REPL or a script, are
-called `Julia`, with their name prepended to the message.
-
-Signposts on the default logger are always emitted, also when no trace is being recorded.
-For signposts on hot code paths, create a logger with the dynamic tracing
-category, `OSLog("com.example.MyPackage", OS.CATEGORY_DYNAMIC_TRACING)`, which only emits
-signposts while an instrument asks for them: build that instrument with
-`OS.instruments_package(["com.example.MyPackage"])`. For more information, e.g. how to pass
-additional messages to the signposts, consult the docstrings of the `@signpost_interval`
-and `@signpost_event` macros.
-
-## Frame capture
-
-For more details on specific operations, you can use Metal's frame capture feature to
-generate a more detailed, and replayable trace of the GPU operations. This requires that
-Julia is started with the `METAL_CAPTURE_ENABLED` environment variable set to 1. Frames are
-captured by wrapping the code of interest in `Metal.@capture`, and the resulting trace can
-be opened with Xcode.
-
-```julia
-$ METAL_CAPTURE_ENABLED=1 julia
-...
-
-julia> using Metal
-
-julia> function vadd(a, b, c)
-           i = thread_position_in_grid().x
-           c[i] = a[i] + b[i]
-           return
-       end
-
-julia> a = MtlArray([1]); b = MtlArray([2]); c = similar(a);
-... Metal GPU Frame Capture Enabled
-
-julia> Metal.@capture @metal threads=length(c) vadd(a, b, c);
-...
-[ Info: GPU frame capture saved to /Users/tim/vadd_1.gputrace; open the resulting trace in Xcode
-```
-
-What the trace shows about Julia kernels (their names, the arrays they use, and their
-source code with per-line costs), and how to find it in Xcode, is described in
-[Debugging and profiling with Xcode and Instruments](@ref).
+- `Metal.@profile external=true` records the code with Instruments, for a timeline of GPU
+  work, CPU activity, and Metal.jl's compilations, kernel launches and waits;
+- `Metal.@capture` records a GPU frame capture that Xcode can replay, to inspect a kernel's
+  arguments and buffers, and profile it line by line.
 
 ## Dumping compiled code
 
@@ -185,4 +120,12 @@ julia> readdir("/tmp/metal-dumps")
  "jl_8kQ2Xv.air"
  "jl_8kQ2Xv.ll"
  "jl_8kQ2Xv.metallib"
+```
+
+
+## API
+
+```@docs
+Metal.@profile
+Metal.@bprofile
 ```
