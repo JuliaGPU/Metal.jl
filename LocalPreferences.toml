@@ -7,8 +7,9 @@
 # making it possible to do use cooperative multitasking.
 #nonblocking_synchronization = true
 
-# whether to label Metal resources and command buffers.
-# defaults to true when running Julia with -g2, and false otherwise.
+# whether to label Metal resources and command buffers, and to wrap every kernel launch
+# in a debug group named after the kernel, for Xcode's GPU frame capture. defaults to
+# true when running Julia with -g2 or with METAL_CAPTURE_ENABLED=1, and false otherwise.
 #label_resources = true
 
 # whether to batch command-buffers, to amortize launch overhead

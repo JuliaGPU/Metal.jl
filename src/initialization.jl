@@ -46,6 +46,8 @@ function is_supported(dev)
 end
 
 function __init__()
+    init_label_resources!()
+
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     precompiling && return
 
