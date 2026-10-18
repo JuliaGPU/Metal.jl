@@ -47,7 +47,8 @@ end
 
 # Apple's toolchain writes each archive as a ustar tarball of regular files. paths are
 # absolute (sources are extracted under their original location), which ustar fits in 255
-# bytes by splitting them at a slash into a 155-byte prefix and a 100-byte name.
+# bytes by splitting them at a slash into a 155-byte prefix and a 100-byte name. longer
+# paths go in a pax extended header, as libarchive (which Apple's tools use) does.
 function ustar_name(path::String)
     sizeof(path) <= 100 && return ("", path)
     for i in reverse(findall(==(UInt8('/')), codeunits(path)))
@@ -57,33 +58,85 @@ function ustar_name(path::String)
     return nothing
 end
 
-# build a source archive for an `EmbeddedSource` from `path => contents` pairs. paths that
-# don't fit the tarball format are an error; check them with `ustar_name`.
+# the first or last characters of `str` that fit in `n` bytes
+function head_bytes(str::String, n::Int)
+    sizeof(str) <= n && return str
+    return str[1:prevind(str, thisind(str, n + 1))]
+end
+function tail_bytes(str::String, n::Int)
+    sizeof(str) <= n && return str
+    return str[nextind(str, thisind(str, sizeof(str) - n)):end]
+end
+
+function write_tar_header(io::IO, prefix::String, name::String, size::Integer, type::Char)
+    header = Base.zeros(UInt8, 512)
+    field!(offset, str) = copyto!(header, offset + 1, codeunits(str))
+    field!(0, name)
+    field!(100, "000644 \0")                               # mode
+    field!(108, "000000 \0")                               # uid
+    field!(116, "000000 \0")                               # gid
+    field!(124, string(size, base=8, pad=11) * "\0")
+    field!(136, string(0, base=8, pad=11) * "\0")          # mtime
+    field!(148, " "^8)                                     # checksum, computed below
+    header[157] = UInt8(type)
+    field!(257, "ustar\0" * "00")
+    field!(345, prefix)
+    field!(148, string(sum(Int, header), base=8, pad=6) * "\0 ")
+    write(io, header)
+end
+
+function write_tar_data(io::IO, data)
+    write(io, data)
+    write(io, Base.zeros(UInt8, cld(sizeof(data), 512) * 512 - sizeof(data)))
+end
+
+# a pax extended header record: "<length> <key>=<value>\n", where the length counts itself
+function pax_record(key::String, value::String)
+    record = " $key=$value\n"
+    len = sizeof(record) + ndigits(sizeof(record))
+    len = sizeof(record) + ndigits(len)
+    return "$len$record"
+end
+
+# build a source archive for an `EmbeddedSource` from `path => contents` pairs
 function source_archive(files)
     io = IOBuffer()
     for (path, contents) in files
         split = ustar_name(path)
-        split === nothing && throw(ArgumentError("path too long for a source archive: $path"))
+        if split === nothing
+            # the header fields hold a truncated path, and the extended header the real one.
+            # like libarchive, name the extended header `<directory>/PaxHeader/<file>`.
+            dir, file = head_bytes(dirname(path), 155), basename(path)
+            record = pax_record("path", path)
+            write_tar_header(io, dir, "PaxHeader/" * tail_bytes(file, 90), sizeof(record), 'x')
+            write_tar_data(io, codeunits(record))
+            split = (dir, tail_bytes(file, 100))
+        end
         prefix, name = split
-        header = Base.zeros(UInt8, 512)
-        field!(offset, str) = copyto!(header, offset + 1, codeunits(str))
-        field!(0, name)
-        field!(100, "000644 \0")                           # mode
-        field!(108, "000000 \0")                           # uid
-        field!(116, "000000 \0")                           # gid
-        field!(124, string(sizeof(contents), base=8, pad=11) * "\0")
-        field!(136, string(0, base=8, pad=11) * "\0")      # mtime
-        field!(148, " "^8)                                 # checksum, computed below
-        header[157] = UInt8('0')                           # regular file
-        field!(257, "ustar\0" * "00")
-        field!(345, prefix)
-        field!(148, string(sum(Int, header), base=8, pad=6) * "\0 ")
-        write(io, header)
-        write(io, contents)
-        write(io, Base.zeros(UInt8, cld(sizeof(contents), 512) * 512 - sizeof(contents)))
+        write_tar_header(io, prefix, name, sizeof(contents), '0')
+        write_tar_data(io, contents)
     end
     write(io, Base.zeros(UInt8, 1024))                      # end of archive
     return transcode(Bzip2Compressor, take!(io))
+end
+
+# the key-value records of a pax extended header
+function pax_records(data::AbstractVector{UInt8}, offset::Int)
+    records = Pair{String,String}[]
+    pos = 1
+    while pos <= length(data)
+        space = findnext(==(UInt8(' ')), data, pos)
+        len = space === nothing ? nothing : tryparse(Int, String(data[pos:space-1]))
+        len !== nothing && space < pos + len - 1 <= length(data) && data[pos+len-1] == UInt8('\n') ||
+            throw(MetalLibFormatError("malformed pax extended header", offset))
+        record = String(data[space+1:pos+len-2])
+        equals = findfirst('=', record)
+        equals === nothing &&
+            throw(MetalLibFormatError("malformed pax extended header", offset))
+        push!(records, record[1:prevind(record, equals)] => record[nextind(record, equals):end])
+        pos += len
+    end
+    return records
 end
 
 # the files in a source archive, as `path => contents` pairs
@@ -91,6 +144,9 @@ function source_archive_files(compressed::Vector{UInt8})
     tarball = decompress_source_archive(compressed)
     files = Pair{String,Vector{UInt8}}[]
     cstring(bytes) = String(bytes[1:something(findfirst(iszero, bytes), length(bytes) + 1) - 1])
+    # pax extended header records, for all following entries (`g`) or the next one (`x`)
+    global_records = Dict{String,String}()
+    local_records = Dict{String,String}()
     offset = 0
     while offset + 512 <= length(tarball) && !iszero(tarball[offset + 1])
         header = @view tarball[offset+1:offset+512]
@@ -98,9 +154,24 @@ function source_archive_files(compressed::Vector{UInt8})
         size = tryparse(Int, strip(cstring(header[125:136])), base=8)
         size !== nothing && 0 <= size <= length(tarball) - offset - 512 ||
             throw(MetalLibFormatError("malformed source archive entry", offset))
-        if header[157] in (UInt8('0'), 0x00)
-            path = isempty(prefix) ? name : prefix * "/" * name
-            push!(files, path => tarball[offset+513:offset+512+size])
+        data = tarball[offset+513:offset+512+size]
+        type = Char(header[157])
+        if type == 'x'
+            # an empty value overrides a global one with the header field
+            merge!(local_records, Dict(pax_records(data, offset)))
+        elseif type == 'g'
+            for (key, value) in pax_records(data, offset)
+                isempty(value) ? delete!(global_records, key) : (global_records[key] = value)
+            end
+        else
+            if type == '0' || type == '\0'
+                path = get(() -> get(global_records, "path", ""), local_records, "path")
+                if isempty(path)
+                    path = isempty(prefix) ? name : prefix * "/" * name
+                end
+                push!(files, path => data)
+            end
+            empty!(local_records)
         end
         offset += 512 + cld(size, 512) * 512
     end

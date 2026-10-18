@@ -748,15 +748,59 @@ end
         @test any(file -> first(file) == "original-input-filename.txt", files)
         @test sum(sizeof ∘ last, files) < sizeof(Metal.decompress_source_archive(archive))
     end
+    # including paths too long for ustar, which are stored in a pax extended header
+    lib = parse(MetalLib, joinpath(metallib_dir, "sources.long.metallib"))
+    files = Metal.source_archive_files(Dict(lib.embedded_source.archives)["0"])
+    source = only(filter(endswith("/sources.metal") ∘ first, files))
+    @test sizeof(first(source)) > 255
+    @test startswith(first(source), "/private/tmp/metal.jl-long/")   # (Apple resolves symlinks)
+    @test last(source) == read(joinpath(metallib_dir, "sources.metal"))
 
-    # ours round-trip, including paths that need the ustar prefix field
+    # ours round-trip, including paths that need the ustar prefix field or a pax header
     long = "/" * join(fill("directory", 15), "/") * "/file.jl"
     @test sizeof(long) > 100
+    longer = "/" * join(fill("directory", 30), "/") * "/file.jl"
+    @test Metal.ustar_name(longer) === nothing
     files = ["metal-options.txt" => codeunits("metal -x ir x.air"),
              "/tmp/x.air" => rand(UInt8, 1000),
              long => codeunits("println(42)\n"),
+             longer => codeunits("println(43)\n"),
+             "/tmp/" * "δ"^120 * "/" * "ε"^120 * ".jl" => codeunits("println(44)\n"),
              "/tmp/empty.jl" => UInt8[]]
-    @test Metal.source_archive_files(Metal.source_archive(files)) == files
+    archive = Metal.source_archive(files)
+    @test Metal.source_archive_files(archive) == files
+    @test Metal.source_archive_files(Metal.source_archive(["/" * "x"^300 => UInt8[1]])) ==
+          ["/" * "x"^300 => UInt8[1]]
+    # global pax headers apply to all following entries, unless overridden
+    let io = IOBuffer()
+        for (name, type, data) in (("g", 'g', Metal.pax_record("path", "/global.jl")),
+                                   ("x", 'x', Metal.pax_record("path", "")),
+                                   ("a.jl", '0', ""), ("b.jl", '0', ""))
+            Metal.write_tar_header(io, "", name, sizeof(data), type)
+            Metal.write_tar_data(io, codeunits(data))
+        end
+        write(io, zeros(UInt8, 1024))
+        tarball = Metal.transcode(Metal.Bzip2Compressor, take!(io))
+        @test first.(Metal.source_archive_files(tarball)) == ["a.jl", "/global.jl"]
+    end
+    # ... and extract with Apple's tools
+    metal_source = metal_tool("metal-source")
+    if metal_source === nothing
+        @test_skip "Apple's metal-source not available"
+    else
+        lib = parse(MetalLib, joinpath(metallib_dir, "sources.26.metallib"))
+        source = Metal.EmbeddedSource(lib.embedded_source.link_options,
+                                      lib.embedded_source.working_directory, ["0" => archive])
+        lib = MetalLib(lib; embedded_source=source, layout=nothing)
+        mktempdir() do dir
+            path = joinpath(dir, "sources.metallib")
+            open(io -> write(io, lib), path, "w")
+            @test success(`$metal_source --extract=raw -o $dir/out $path`)
+            for (name, contents) in files
+                @test read(joinpath(dir, "out", "0", lstrip(name, '/'))) == contents
+            end
+        end
+    end
     # malformed sizes are rejected, rather than read past or looped over
     tarball = Metal.decompress_source_archive(Metal.source_archive(files))
     for size in ("-0001000000", "77777777777")
@@ -765,8 +809,15 @@ end
         @test_throws Metal.MetalLibFormatError Metal.source_archive_files(
             Metal.transcode(Metal.Bzip2Compressor, bad))
     end
-    @test Metal.ustar_name("/" * "x"^300) === nothing
-    @test_throws ArgumentError Metal.source_archive(["/" * "x"^300 => UInt8[]])
+    # as are malformed pax headers
+    tarball = Metal.decompress_source_archive(Metal.source_archive([longer => UInt8[]]))
+    record = findfirst(codeunits(" path="), tarball)
+    for len in ("99", "x9", "01")
+        bad = copy(tarball)
+        copyto!(bad, first(record) - 3, codeunits(len))
+        @test_throws Metal.MetalLibFormatError Metal.source_archive_files(
+            Metal.transcode(Metal.Bzip2Compressor, bad))
+    end
 end
 
 @testset "embedded kernel sources" begin
