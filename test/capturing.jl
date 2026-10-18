@@ -95,10 +95,16 @@ end
 
 # Profile Macro
 @testset "macro" begin
-    Metal.@capture @metal threads=4 tester(bufferA)
-    @test isdir("julia_1.gputrace")
+    # traces are named after the captured kernel
+    path = Metal.@capture @metal threads=4 tester(bufferA)
+    @test path == joinpath(pwd(), "tester_1.gputrace")
+    @test isdir(path)
     Metal.@capture object=device() @metal threads=4 tester(bufferA)
-    @test isdir("julia_2.gputrace")
+    @test isdir("tester_2.gputrace")
+    custom = "custom"
+    path = Metal.@capture name=custom Metal.@sync @metal threads=4 tester(bufferA)
+    @test path == joinpath(pwd(), "custom_1.gputrace")
+    @test isdir(path)
 end
 
 end # cd(tmpdir) do
