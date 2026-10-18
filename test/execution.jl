@@ -90,6 +90,41 @@ end
     end
 end
 
+@testset "kernel labels" begin
+    function labelled_kernel(a, x)
+        a[1] = x
+        return
+    end
+    a = MtlArray(zeros(Float32, 1))
+    k = @metal launch=false labelled_kernel(a, 1f0)
+    # the pipeline is named after the Julia signature, not the mangled entry point
+    label = "labelled_kernel(::MtlDeviceVector{Float32, 1}, ::Float32)"
+    @test String(k.pipeline.label) == label
+
+    # (and with resource labelling, names the debug group around each dispatch)
+    k(a, 2f0)
+    @test Array(a) == [2f0]
+
+    # closures are named after the function they were defined as
+    function outer_function(a)
+        inner_kernel(x) = (a[1] = x; return)
+        return inner_kernel
+    end
+    k = @metal launch=false outer_function(a)(1f0)
+    @test String(k.pipeline.label) == "inner_kernel(::Float32)"
+
+    # anonymous functions are named after where they were defined
+    k = @metal launch=false (x -> (a[1] = x; return))(1f0)
+    @test occursin(r"^anonymous@execution\.jl:\d+\(::Float32\)$", String(k.pipeline.label))
+
+    # long signatures are abbreviated
+    long_kernel(a, x) = (a[1] = 1; return)
+    k = @metal launch=false long_kernel(a, ntuple(Val, 40))
+    label = String(k.pipeline.label)
+    @test length(label) <= Metal.MAX_KERNEL_LABEL
+    @test startswith(label, "long_kernel(::MtlDeviceVector{Float32, 1}, ::Tuple{")
+end
+
 @testset "inference" begin
     foo() = @metal dummy()
     @inferred foo()
