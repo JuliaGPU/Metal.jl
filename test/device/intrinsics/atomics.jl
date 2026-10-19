@@ -4,8 +4,6 @@ n = 128 # NOTE: also hard-coded in MtlThreadGroupArray constructors
 # newer systems, so we can execute each of the lowerings GPUCompiler selects for them
 const targets = ((v"3.2", v"2.7"), (v"4.0", v"2.8"), (v"4.1", v"2.9"))
 
-# JuliaGPU/Metal.jl#217: threadgroup atomics seem to requires all-atomic operations
-
 @testset "low-level" begin
     # TODO: make these tests actually write to the overlapping memory locations
 
@@ -57,12 +55,8 @@ const targets = ((v"3.2", v"2.7"), (v"4.0", v"2.8"), (v"4.1", v"2.9"))
         function local_kernel(a::AbstractArray{T}, b::AbstractArray{T}) where T
             i = thread_position_in_grid().x
             c = MtlThreadGroupArray(T, 128)
-            #c[i] = a[i]
-            val = Metal.atomic_load_explicit(pointer(a, i))
-            Metal.atomic_store_explicit(pointer(c, i), val)
-            val = Metal.atomic_load_explicit(pointer(c, i))
-            #b[i] = val
-            Metal.atomic_store_explicit(pointer(b, i), val)
+            c[i] = a[i]
+            b[i] = Metal.atomic_load_explicit(pointer(c, i))
             return
         end
 
@@ -122,15 +116,11 @@ const targets = ((v"3.2", v"2.7"), (v"4.0", v"2.8"), (v"4.1", v"2.9"))
         function local_kernel(a, expected::AbstractArray{T}, desired::T) where T
             i = thread_position_in_grid().x
             b = MtlThreadGroupArray(T, 128)
-            #b[i] = a[i]
-            val = Metal.atomic_load_explicit(pointer(a, i))
-            Metal.atomic_store_explicit(pointer(b, i), val)
+            b[i] = a[i]
             while Metal.atomic_compare_exchange_weak_explicit(pointer(b, i), expected[i], desired) != expected[i]
                 # keep on trying
             end
-            #a[i] = b[i]
-            val = Metal.atomic_load_explicit(pointer(b, i))
-            Metal.atomic_store_explicit(pointer(a, i), val)
+            a[i] = b[i]
             return
         end
 
@@ -163,13 +153,9 @@ const targets = ((v"3.2", v"2.7"), (v"4.0", v"2.8"), (v"4.1", v"2.9"))
             function local_kernel(f, a, arg::T) where T
                 i = thread_position_in_grid().x
                 b = MtlThreadGroupArray(T, 128)
-                #b[i] = a[i]
-                val = Metal.atomic_load_explicit(pointer(a, i))
-                Metal.atomic_store_explicit(pointer(b, i), val)
+                b[i] = a[i]
                 f(pointer(b, i), arg)
-                #a[i] = b[i]
-                val = Metal.atomic_load_explicit(pointer(b, i))
-                Metal.atomic_store_explicit(pointer(a, i), val)
+                a[i] = b[i]
                 return
             end
 
@@ -214,13 +200,9 @@ const targets = ((v"3.2", v"2.7"), (v"4.0", v"2.8"), (v"4.1", v"2.9"))
         function local_kernel(a, op, arg::T) where T
             i = thread_position_in_grid().x
             b = MtlThreadGroupArray(T, 128)
-            #b[i] = a[i]
-            val = Metal.atomic_load_explicit(pointer(a, i))
-            Metal.atomic_store_explicit(pointer(b, i), val)
+            b[i] = a[i]
             Metal.atomic_fetch_op_explicit(pointer(b, i), op, arg)
-            #a[i] = b[i]
-            val = Metal.atomic_load_explicit(pointer(b, i))
-            Metal.atomic_store_explicit(pointer(a, i), val)
+            a[i] = b[i]
             return
         end
 
