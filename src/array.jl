@@ -452,16 +452,23 @@ end
 # We don't convert isbits types in `adapt`, since they are already
 # considered GPU-compatible.
 
-Adapt.adapt_storage(::Type{MtlArray}, xs::AT) where {AT<:AbstractArray} =
-    isbitstype(AT) ? xs : convert(MtlArray, xs)
+# Type parameters that are specified are preserved, the others are taken from the source
+# array (or the default storage mode). Any subset can be given, e.g. `MtlArray{<:Any,<:Any,S}`.
+adapt_eltype(::Type{<:MtlArray{T}}, xs) where {T} = T
+adapt_eltype(::Type{<:MtlArray}, xs) = eltype(xs)
+adapt_ndims(::Type{<:MtlArray{<:Any,N}}, xs) where {N} = N
+adapt_ndims(::Type{<:MtlArray}, xs) = ndims(xs)
+adapt_storagemode(::Type{<:MtlArray{<:Any,<:Any,S}}, xs) where {S} = S
+adapt_storagemode(::Type{<:MtlArray}, xs) =
+    xs isa MtlArray ? storagemode(xs) : DefaultStorageMode
 
-# if specific type parameters are specified, preserve those
-Adapt.adapt_storage(::Type{<:MtlArray{T}}, xs::AT) where {T,AT<:AbstractArray} =
-    isbitstype(AT) ? xs : convert(MtlArray{T}, xs)
-Adapt.adapt_storage(::Type{<:MtlArray{T,N}}, xs::AT) where {T,N,AT<:AbstractArray} =
-    isbitstype(AT) ? xs : convert(MtlArray{T,N}, xs)
-Adapt.adapt_storage(::Type{<:MtlArray{T,N,S}}, xs::AT) where {T,N,S,AT<:AbstractArray} =
-    isbitstype(AT) ? xs : convert(MtlArray{T,N,S}, xs)
+function Adapt.adapt_storage(::Type{A}, xs::AT) where {A<:MtlArray,AT<:AbstractArray}
+    isbitstype(AT) && return xs
+    B = MtlArray{adapt_eltype(A, xs),adapt_ndims(A, xs),adapt_storagemode(A, xs)}
+    # parameters taken from the source may violate bounds in `A`, e.g. `MtlArray{<:Real}`
+    B <: A || throw(ArgumentError("cannot adapt a $AT to $A"))
+    return convert(B, xs)
+end
 
 
 ## opinionated gpu array adaptor

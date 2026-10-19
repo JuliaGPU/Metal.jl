@@ -76,6 +76,25 @@ end
     @test Adapt.adapt(MtlMatrix{ComplexF32, Metal.PrivateStorage}, [1 2;3 4]) isa MtlArray{ComplexF32, 2, Metal.PrivateStorage}
     @test Adapt.adapt(MtlArray{Float16}, Float64[1]) isa MtlArray{Float16}
 
+    # unspecified type parameters are taken from the source array (#363)
+    @test Adapt.adapt(MtlMatrix, [1 2;3 4]) isa MtlArray{Int, 2, Metal.DefaultStorageMode}
+    @test Adapt.adapt(MtlArray{<:Any, <:Any, Metal.PrivateStorage}, [1 2;3 4]) isa MtlArray{Int, 2, Metal.PrivateStorage}
+    @test Adapt.adapt(MtlVector{<:Any, Metal.PrivateStorage}, [1, 2]) isa MtlArray{Int, 1, Metal.PrivateStorage}
+    @test Adapt.adapt(MtlArray{Float32, <:Any, Metal.PrivateStorage}, [1 2;3 4]) isa MtlArray{Float32, 2, Metal.PrivateStorage}
+    let xs = Adapt.adapt(MtlArray{<:Any, <:Any, Metal.PrivateStorage}, (Float32[1], Int32[1 2]))
+        @test xs[1] isa MtlArray{Float32, 1, Metal.PrivateStorage}
+        @test xs[2] isa MtlArray{Int32, 2, Metal.PrivateStorage}
+    end
+    @test_throws MethodError Adapt.adapt(MtlVector{Float32}, [1 2;3 4])
+    @test_throws ArgumentError Adapt.adapt(MtlArray{<:Real}, ComplexF32[1])
+    let xs = MtlArray{Float32, 1, Metal.PrivateStorage}([1])
+        @test Adapt.adapt(MtlArray, xs) === xs
+        @test Adapt.adapt(MtlArray{Float32}, xs) === xs
+        @test Adapt.adapt(MtlArray{Int32}, xs) isa MtlArray{Int32, 1, Metal.PrivateStorage}
+        @test Adapt.adapt(typeof(xs), xs) === xs
+        @test Adapt.adapt(MtlArray{<:Any, <:Any, Metal.SharedStorage}, xs) isa MtlArray{Float32, 1, Metal.SharedStorage}
+    end
+
     # Test a few explicitly unsupported types
     @test_throws "MtlArray only supports element types that are stored inline" MtlArray(BigInt[1])
     @test_throws "Metal does not support Float64 values" MtlArray(Float64[1])
