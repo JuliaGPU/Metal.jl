@@ -117,6 +117,11 @@ end
 # path as just the status flag in `signal_exception`. the actual claim is `@noinline`.
 @inline lock_output!(info) = kernel_debug_level() < 1 ? false : claim_output!(info)
 
+# code reachable from the throw overlays must not contain calls that can throw themselves,
+# such as checked conversions (`Int32(1)`). those would form an inference cycle through the
+# overlay, which on Julia 1.12+ taints Base's conversion methods with the effects of this
+# runtime and keeps everything calling them from being evaluated at compile time.
+
 # the body of `lock_output!`, kept out of line. with `--check-bounds=yes` every indexing
 # operation grows a throw path, and inlining this claim into each one balloons the kernel.
 # Apple's shader validator compiles that bloated kernel on every PSO creation and, on the
@@ -136,14 +141,14 @@ end
         # regressed accumulate by ~50% (JuliaGPU/Metal.jl#796), independently of the
         # other costly construct (see `report_exception`). the lane's position is hence
         # only recorded, and reported, at `-g2`.
-        return atomic_exchange_explicit(lock_ptr, Int32(1)) == Int32(0)
+        return atomic_exchange_explicit(lock_ptr, 1 % Int32) == 0 % Int32
     end
     # re-entrant claim: the `-g2` reporting sequence spans multiple calls (the exception
     # name, then each stack frame), so the holder must be able to re-claim, recognized by
     # its recorded position (which doubles as the reported fault location).
     t  = thread_position_in_threadgroup()
     tg = threadgroup_position_in_grid()
-    if atomic_exchange_explicit(lock_ptr, Int32(1)) == Int32(0)
+    if atomic_exchange_explicit(lock_ptr, 1 % Int32) == 0 % Int32
         # we just claimed it; record our position so later calls recognize us
         unsafe_store!(info_field(info, Val(:thread)), (t.x, t.y, t.z))
         unsafe_store!(info_field(info, Val(:threadgroup)), (tg.x, tg.y, tg.z))
@@ -190,7 +195,7 @@ function signal_exception()
     # `@gputhrow`) have already claimed the mailbox and recorded what there is to record,
     # and at `-g0` there is nothing to claim for, keeping this -- the one call present at
     # every throw site regardless of debug level -- free of mailbox traffic.
-    atomic_store_explicit(info_field(info, Val(:status)), Int32(1))
+    atomic_store_explicit(info_field(info, Val(:status)), 1 % Int32)
     return
 end
 

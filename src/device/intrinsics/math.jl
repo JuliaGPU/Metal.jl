@@ -13,9 +13,13 @@ import Core: Float16, Float32
 # - add support for vector types
 
 ### Constants
-# π and ℯ
+
+# without consistent overlays (Julia 1.10), the overlays on Base's throw paths prevent the
+# BigFloat-based conversion from being evaluated at compile time.
+@static if !HAS_CONSISTENT_OVERLAY
 for T in (:Float16,:Float32), R in (RoundUp, RoundDown), irr in (π, ℯ)
     @eval @device_override $T(::typeof($irr), ::typeof($R)) = $@eval($T($irr,$R))
+end
 end
 
 ### Common Intrinsics
