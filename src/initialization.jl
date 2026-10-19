@@ -60,10 +60,11 @@ function __init__()
     init_label_resources!()
     init_log_tracing!()
 
+    # also needed by precompilation workloads of packages that use Metal.jl
+    MTL.submit_hook[] = submit_command_buffer
+
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     precompiling && return
-
-    MTL.submit_hook[] = submit_command_buffer
 
     if !Sys.isapple() || Sys.ARCH != :aarch64
         @error "Metal.jl is only supported on Apple Silicon"
