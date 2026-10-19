@@ -18,9 +18,11 @@ macro gputhrow(name::String, reason::String)
     end
 end
 
+const HAS_CONSISTENT_OVERLAY = VERSION >= v"1.12.0-DEV.745" || v"1.11-rc1" <= VERSION < v"1.12-"
+
 macro device_override(ex)
     ex = macroexpand(__module__, ex)
-    if VERSION >= v"1.12.0-DEV.745" || v"1.11-rc1" <= VERSION < v"1.12-"
+    if HAS_CONSISTENT_OVERLAY
         # this requires that the overlay method f′ is consistent with f, i.e.,
         #   - if f(x) returns a value, f′(x) must return the identical value.
         #   - if f(x) throws an exception, f′(x) must also throw an exception

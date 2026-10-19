@@ -22,11 +22,11 @@ for (intr, offset) in nodim_intr
     @eval begin
         # UInt32
         export $(intr)
-        @device_function $(intr)() = ccall($"extern julia.air.$intr.i32", llvmcall, UInt32, ()) + UInt32($offset)
+        @device_function $(intr)() = ccall($"extern julia.air.$intr.i32", llvmcall, UInt32, ()) + $(UInt32(offset))
 
         # UInt16
         export $(intr_i16)
-        @device_function $(intr_i16)() = ccall($"extern julia.air.$intr.i16", llvmcall, UInt16, ()) + UInt16($offset)
+        @device_function $(intr_i16)() = ccall($"extern julia.air.$intr.i16", llvmcall, UInt16, ()) + $(UInt16(offset))
     end
 end
 
@@ -52,9 +52,9 @@ for (intr, offset) in dim_intr
         @device_function function $(intr)()
             vec = ccall($"extern julia.air.$intr.v3i32", llvmcall,
                         NTuple{3, VecElement{UInt32}}, ())
-            (x = vec[1].value + UInt32($offset),
-             y = vec[2].value + UInt32($offset),
-             z = vec[3].value + UInt32($offset))
+            (x = vec[1].value + $(UInt32(offset)),
+             y = vec[2].value + $(UInt32(offset)),
+             z = vec[3].value + $(UInt32(offset)))
         end
 
         # UInt16
@@ -62,9 +62,9 @@ for (intr, offset) in dim_intr
         @device_function function $(intr_i16)()
             vec = ccall($"extern julia.air.$intr.v3i16", llvmcall,
                         NTuple{3, VecElement{UInt16}}, ())
-            (x = vec[1].value + UInt16($offset),
-             y = vec[2].value + UInt16($offset),
-             z = vec[3].value + UInt16($offset))
+            (x = vec[1].value + $(UInt16(offset)),
+             y = vec[2].value + $(UInt16(offset)),
+             z = vec[3].value + $(UInt16(offset)))
         end
     end
 
