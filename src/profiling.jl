@@ -9,8 +9,6 @@ import ObjectiveC
 using Printf: @sprintf
 using Statistics: mean, std, quantile
 
-using PrettyTables: pretty_table, TextHighlighter
-using Crayons: @crayon_str
 
 @inline mach_time() = ccall(:mach_absolute_time, UInt64, ())
 max_thread_id() = isdefined(Threads, :maxthreadid) ? Threads.maxthreadid() : Threads.nthreads()
@@ -291,20 +289,91 @@ function summarize_trace(names, times, span)
             time_dist=out_dist[perm], time_ratio=out_ratio[perm])
 end
 
-function time_highlighters(df)
+# highlight the slowest operations: returns a function that maps a cell to the style to
+# print it with, if any
+function time_highlighter(df)
     relevant = Float64[t for t in df.time if t !== missing && t >= 1e-8]
-    isempty(relevant) && return TextHighlighter[]
+    isempty(relevant) && return (i, j) -> nothing
     p75 = quantile(relevant, 0.75)
     p95 = quantile(relevant, 0.95)
 
     atleast(v, p) = v !== missing && v >= p
-    hl_p95 = TextHighlighter((data, i, j) -> keys(data)[j] == :time && atleast(data[j][i], p95),
-                             crayon"red")
-    hl_p75 = TextHighlighter((data, i, j) -> keys(data)[j] == :time && atleast(data[j][i], p75),
-                             crayon"yellow")
-    hl_bold = TextHighlighter((data, i, j) -> keys(data)[j] == :name && atleast(data.time[i], p75),
-                              crayon"bold")
-    TextHighlighter[hl_p95, hl_p75, hl_bold]
+    return function (i, j)
+        col = keys(df)[j]
+        if col === :time
+            atleast(df.time[i], p95) && return (; color=:red)
+            atleast(df.time[i], p75) && return (; color=:yellow)
+        elseif col === :name
+            atleast(df.time[i], p75) && return (; bold=true)
+        end
+        return nothing
+    end
+end
+
+# print the columns of `df` as a table. when `crop` is set, columns that don't fit the
+# display are cut off.
+function print_table(io::IO, df, header, alignment, formatter, highlighter; crop::Bool)
+    ncols = length(header)
+    nrows = length(first(df))
+    cells = [string(formatter(df[j][i], i, j)) for i in 1:nrows, j in 1:ncols]
+    widths = [max(textwidth(header[j]), maximum(textwidth, view(cells, :, j); init=0))
+              for j in 1:ncols]
+
+    # every column takes its width plus padding and a separator. the first column that
+    # doesn't fit is truncated, and the remaining ones are omitted.
+    shown = ncols
+    omitted = 0
+    if crop
+        available = displaysize(io)[2] - 1
+        used = 0
+        for j in 1:ncols
+            if used + widths[j] + 3 > available
+                widths[j] = available - used - 3
+                shown = widths[j] > 0 ? j : j - 1
+                omitted = ncols - j + 1
+                break
+            end
+            used += widths[j] + 3
+        end
+    end
+    cropped = omitted > 0
+
+    function fit(str, j)
+        w = widths[j]
+        if textwidth(str) > w
+            str = first(str, max(w - 1, 0)) * "…"
+        end
+        pad = repeat(' ', w - textwidth(str))
+        alignment[j] === :l ? str * pad : pad * str
+    end
+    function rule(left, mid, right)
+        print(io, left, join((repeat('─', widths[j] + 2) for j in 1:shown), mid))
+        println(io, cropped ? "" : right)
+    end
+    function row(strs, style)
+        for j in 1:shown
+            print(io, "│")
+            s = style(j)
+            if s === nothing
+                print(io, " ", fit(strs[j], j), " ")
+            else
+                printstyled(io, " ", fit(strs[j], j), " "; s...)
+            end
+        end
+        println(io, cropped ? " ⋯" : "│")
+    end
+
+    rule('┌', '┬', '┐')
+    row(header, _ -> (; bold=true))
+    rule('├', '┼', '┤')
+    for i in 1:nrows
+        row(view(cells, i, :), j -> highlighter(i, j))
+    end
+    rule('└', '┴', '┘')
+    if cropped
+        printstyled(io, lpad("$omitted column$(omitted == 1 ? "" : "s") omitted",
+                             displaysize(io)[2] - 1), "\n"; color=:cyan)
+    end
 end
 
 const trace_column_names = Dict(
@@ -403,10 +472,8 @@ end
 function print_trace(io, df, crop)
     header = [trace_column_names[k] for k in keys(df)]
     alignment = [k === :name ? :l : :r for k in keys(df)]
-    pretty_table(io, df; column_labels=header, alignment, formatters=[trace_formatter(df)],
-                 highlighters=time_highlighters(df),
-                 fit_table_in_display_horizontally=(crop == :horizontal),
-                 fit_table_in_display_vertically=false)
+    print_table(io, df, header, alignment, trace_formatter(df), time_highlighter(df);
+                crop=(crop == :horizontal))
 end
 
 function summary_formatter(df)
@@ -429,10 +496,8 @@ end
 function print_summary(io, df, crop)
     header = [summary_column_names[k] for k in keys(df)]
     alignment = [k in (:name, :time_dist) ? :l : :r for k in keys(df)]
-    pretty_table(io, df; column_labels=header, alignment, formatters=[summary_formatter(df)],
-                 highlighters=time_highlighters(df),
-                 fit_table_in_display_horizontally=(crop == :horizontal),
-                 fit_table_in_display_vertically=false)
+    print_table(io, df, header, alignment, summary_formatter(df), time_highlighter(df);
+                crop=(crop == :horizontal))
 end
 
 function table_crop(io)
