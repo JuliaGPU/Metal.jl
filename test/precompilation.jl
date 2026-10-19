@@ -21,8 +21,6 @@ if GPUCompiler.supports_relocatable_ir() && LLVM.version() >= v"17"
     local job = GPUCompiler.CompilerJob(src, cfg, Base.get_world_counter())
     @test GPUCompiler.can_persist_results(job)
 
-    # the main Metal project resolves Metal + PrecompileTools (+ the dev'd GPUCompiler)
-    metal_project = joinpath(dirname(dirname(pathof(Metal))), "Project.toml")
     mktempdir() do load_path
         # The workload precompiles both a plain (relocation-free) broadcast kernel and a
         # relocation-carrying kernel: the isbits-`Union` return boxes a non-smalltag `RGB`
@@ -54,7 +52,9 @@ if GPUCompiler.supports_relocatable_ir() && LLVM.version() >= v"17"
         """)
 
         env = copy(ENV)
-        env["JULIA_LOAD_PATH"] = join([load_path, metal_project, "@stdlib"], Sys.iswindows() ? ';' : ':')
+        # resolve Metal and PrecompileTools from the test environment, which (unlike Metal's
+        # own project) is instantiated whether or not Metal is checked out as a workspace
+        env["JULIA_LOAD_PATH"] = join([load_path, Base.load_path()...], Sys.iswindows() ? ';' : ':')
         jl = Base.julia_cmd()
         # `julia_cmd` propagates `--code-coverage` from the parent (CI runs tests under
         # coverage), and a coverage-enabled session refuses precompiled code for the packages
