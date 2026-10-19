@@ -31,10 +31,6 @@ for name in keys(TestSuite.tests)
 end
 ## examples
 function find_examples(dir, examples=String[])
-    if VERSION < v"1.12"
-        # we rely on workspaces to add dependencies to examples
-        return examples
-    end
     for entry in readdir(dir; join=true)
         if isfile(entry) && endswith(entry, ".jl") && readline(entry) != "# EXCLUDE FROM TESTING"
             push!(examples, entry)
@@ -44,7 +40,16 @@ function find_examples(dir, examples=String[])
     end
     return examples
 end
-for example in find_examples(joinpath(@__DIR__, "..", "examples"))
+# the examples' dependencies come from the workspace manifest, which only exists in a
+# checkout of the repository (not when Metal is installed as a package)
+examples_dir = joinpath(@__DIR__, "..", "examples")
+examples = if VERSION >= v"1.12" &&
+              Base.project_file_manifest_path(joinpath(examples_dir, "Project.toml")) !== nothing
+    find_examples(examples_dir)
+else
+    String[]
+end
+for example in examples
     name = splitext(basename(example))[1]
     dir = dirname(example)
     testsuite["examples/$name"] = quote
