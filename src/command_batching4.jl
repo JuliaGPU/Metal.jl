@@ -169,8 +169,9 @@ function Metal4Backend(queue::MTLCommandQueue, dev::MTLDevice)
     residency = device_residency(dev)
     MTL.add_residency_set!(queue4, residency.set)
 
-    argtable = MTL4ArgumentTable(dev; buffers=MAX_BUFFER_BINDINGS)
-    @label! argtable "batched queue arguments"
+    # (an argument table's label is read-only, so it has to be set on the descriptor)
+    argtable = MTL4ArgumentTable(dev; buffers=MAX_BUFFER_BINDINGS,
+                                 label=label_resources() ? "batched queue arguments" : nothing)
 
     event4 = MTLSharedEvent(dev)
     @label! event4 "batched queue completion"
