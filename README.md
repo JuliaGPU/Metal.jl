@@ -1,6 +1,6 @@
 # Metal.jl
 
-*Metal programming in Julia*
+*Programming Apple Silicon GPUs in Julia using the Metal framework*
 
 [![][doi-img]][doi-url] [![][docs-stable-img]][docs-stable-url] [![][docs-dev-img]][docs-dev-url] [![][buildkite-img]][buildkite-url] [![][codecov-img]][codecov-url] [![][benchmark-img]][benchmark-url]
 
@@ -21,13 +21,6 @@
 
 [benchmark-img]: https://img.shields.io/badge/benchmarks-Chart-yellowgreen
 [benchmark-url]: https://metal.juliagpu.org/bench/
-
-With Metal.jl it's possible to program GPUs on macOS using the Metal programming
-framework.
-
-**The package is a work-in-progress.** There are bugs, functionality is missing,
-and performance hasn't been optimized. Expect to have to make changes to this package
-if you want to use it. PRs are very [welcome](#contributing)!
 
 
 ## Requirements
