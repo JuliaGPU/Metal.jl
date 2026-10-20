@@ -40,8 +40,11 @@ function main()
                 "usage/tasks.md",
                 "usage/kernel.md",
                 "usage/kernel_advanced.md",
+                "usage/numerical.md",
+                "usage/kernelabstractions.md",
             ],
             "Development" => Any[
+                "development/performance.md",
                 "development/profiling.md",
                 "development/xcode.md",
                 "development/troubleshooting.md",
