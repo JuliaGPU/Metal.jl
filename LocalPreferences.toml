@@ -17,6 +17,11 @@
 # the Metal 4 feature set (no virtualized GPUs).
 #command_api = "auto"
 
+# whether to embed the sources of kernels in their Metal libraries, so that Xcode's GPU
+# frame capture can show them, along with per-line profiling costs. defaults to true when
+# running Julia with METAL_CAPTURE_ENABLED=1, and false otherwise.
+#embed_sources = true
+
 # whether to batch command-buffers, to amortize launch overhead
 #command_batching = true
 #
