@@ -26,13 +26,16 @@ function main()
         pages = Any[
             "Home" => "index.md",
             "Usage" => Any[
-                "usage/overview.md",
                 "usage/array.md",
+                "usage/memory.md",
+                "usage/tasks.md",
                 "usage/kernel.md",
             ],
             "Development" => Any[
                 "development/profiling.md",
                 "development/xcode.md",
+                "development/troubleshooting.md",
+                "development/configuration.md",
             ],
             "API reference" => Any[
                 "api/essentials.md",
@@ -43,7 +46,6 @@ function main()
                 "api/mpsgraphs.md",
                 "api/libraries.md",
             ],
-            "FAQ" => "faq/faq.md",
             "Developers" => Any[
                 "developers/contributing.md",
                 "developers/hacking.md",
