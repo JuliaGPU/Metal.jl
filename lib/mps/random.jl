@@ -2,9 +2,13 @@ using Random
 using Metal: DefaultStorageMode
 
 """
-    MPS.RNG()
+    MPS.RNG([device], [seed])
 
-A random number generator using `rand()` in a device kernel.
+A random number generator backed by Metal Performance Shaders' Philox generator
+([`MPSMatrixRandomPhilox`](https://developer.apple.com/documentation/metalperformanceshaders/mpsmatrixrandomphilox)).
+It fills `MtlArray`s with uniformly distributed `Float32`s or integers (`rand!`), or normally
+distributed `Float32`s (`randn!`); other element types are not supported. Every task has one,
+returned by [`Metal.mps_rng`](@ref).
 """
 mutable struct RNG <: AbstractRNG
     device::MTLDevice

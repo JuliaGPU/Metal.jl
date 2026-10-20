@@ -37,9 +37,22 @@ function valist_size(dl, param_types)
 end
 
 """
-    @mtlprintf("%Fmt", args...)
+    @mtlprintf(fmt::String, args...)
 
-Print a formatted string in device context on the host standard output.
+Print a formatted string from a kernel, with C `printf` formatting. The format string has to
+be a literal. Arguments are passed as C variadic arguments, so use the length modifier of
+their type (e.g., `%d` for `Int32`, `%ld` for `Int64`, `%u` for `UInt32`, `%f` for
+`Float32`); the `%n` and `%s` conversions are not supported.
+
+Metal collects the output in a log buffer, which Metal.jl prints to the host's standard
+output when the kernel's command buffer completes. When the log buffer is full, further
+messages are dropped. Kernels that print are submitted in a command buffer of their own,
+bypassing command batching, and cannot run on virtualized GPUs or during a GPU frame
+capture.
+
+```julia
+@mtlprintf("thread %u: %f\n", thread_position_in_grid().x, 1f0)
+```
 """
 macro mtlprintf(fmt::String, args...)
     fmt_val = Val(Symbol(fmt))
@@ -212,11 +225,10 @@ end
     @mtlprint(xs...)
     @mtlprintln(xs...)
 
-Print a textual representation of values `xs` to standard output from the GPU. The
-functionality builds on `@mtlprintf`, and is intended as a more use friendly alternative of
-that API. However, that also means there's only limited support for argument types, handling
-16/32/64-bit signed and unsigned integers, 32 and 64-bit floating point numbers, `Cchar`s
-and pointers. For more complex output, use `@mtlprintf` directly.
+Print a textual representation of values `xs` from a kernel, followed by a newline for
+`@mtlprintln`. This builds on [`@mtlprintf`](@ref), choosing the format specifiers for you,
+and supports 16-, 32- and 64-bit integers, `Float32`, `Bool`, `Cchar`, pointers, and
+tuples of those. For other output, use `@mtlprintf` directly.
 
 Limited string interpolation is also possible:
 
@@ -271,10 +283,11 @@ export @mtlshow
 """
     @mtlshow(ex)
 
-GPU analog of `Base.@show`. It comes with the same type restrictions as [`@mtlprintf`](@ref).
+Print `ex` and its value from a kernel, like `Base.@show`, and return the value. The value
+has to be of a type that [`@mtlprint`](@ref) supports.
 
 ```julia
-@mtlshow thread_position_in_grid_1d()
+@mtlshow thread_position_in_grid().x
 ```
 """
 macro mtlshow(exs...)

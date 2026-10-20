@@ -90,131 +90,79 @@ end
 
 ## Documentation
 
-# Dimensionless intrinsics
+const xyz = "@NamedTuple{x::UInt32, y::UInt32, z::UInt32}"
 
-@doc """
-    dispatch_quadgroups_per_threadgroup()::UInt32
+for (intr, ret, desc) in (
+        # dimensionless
+        ("thread_index_in_threadgroup", "UInt32",
+         "Return the 1-based linear index of the current thread in its threadgroup."),
+        ("simdgroup_index_in_threadgroup", "UInt32",
+         "Return the 1-based index of the current SIMD-group in its threadgroup."),
+        ("thread_index_in_simdgroup", "UInt32",
+         "Return the 1-based index of the current thread in its SIMD-group (its lane)."),
+        ("quadgroup_index_in_threadgroup", "UInt32",
+         "Return the 1-based index of the current quad-group in its threadgroup."),
+        ("thread_index_in_quadgroup", "UInt32",
+         "Return the 1-based index of the current thread in its quad-group (1 to 4)."),
+        ("simdgroups_per_threadgroup", "UInt32",
+         "Return the number of SIMD-groups in the current threadgroup."),
+        ("dispatch_simdgroups_per_threadgroup", "UInt32",
+         """Return the number of SIMD-groups in a threadgroup of the size specified at dispatch.
+         As [`@metal`](@ref) only launches whole threadgroups, this equals
+         [`simdgroups_per_threadgroup`](@ref)."""),
+        ("quadgroups_per_threadgroup", "UInt32",
+         "Return the number of quad-groups in the current threadgroup."),
+        ("dispatch_quadgroups_per_threadgroup", "UInt32",
+         """Return the number of quad-groups in a threadgroup of the size specified at dispatch.
+         As [`@metal`](@ref) only launches whole threadgroups, this equals
+         [`quadgroups_per_threadgroup`](@ref)."""),
+        ("threads_per_simdgroup", "UInt32",
+         """Return the number of threads in a SIMD-group, i.e., the thread execution width
+         (32 on current Apple GPUs)."""),
+        ("thread_execution_width", "UInt32",
+         """Return the thread execution width, i.e., the number of threads in a SIMD-group.
+         Deprecated in MSL; use [`threads_per_simdgroup`](@ref) instead."""),
+        # dimensioned
+        ("thread_position_in_grid", xyz,
+         """Return the 1-based position of the current thread in the grid, per dimension. For
+         a one-dimensional launch, `thread_position_in_grid().x` is the global index of the
+         thread."""),
+        ("thread_position_in_threadgroup", xyz,
+         "Return the 1-based position of the current thread in its threadgroup, per dimension."),
+        ("threadgroup_position_in_grid", xyz,
+         "Return the 1-based position of the current threadgroup in the grid, per dimension."),
+        ("threads_per_grid", xyz,
+         """Return the size of the grid in threads, per dimension: the product of the `groups`
+         and `threads` arguments of [`@metal`](@ref)."""),
+        ("threads_per_threadgroup", xyz,
+         """Return the number of threads in the current threadgroup, per dimension: the
+         `threads` argument of [`@metal`](@ref)."""),
+        ("dispatch_threads_per_threadgroup", xyz,
+         """Return the threadgroup size specified at dispatch, per dimension. As
+         [`@metal`](@ref) only launches whole threadgroups, this equals
+         [`threads_per_threadgroup`](@ref)."""),
+        ("threadgroups_per_grid", xyz,
+         """Return the number of threadgroups in the grid, per dimension: the `groups`
+         argument of [`@metal`](@ref)."""),
+        ("grid_origin", xyz,
+         "Return the 1-based origin of the grid, for kernels that read per-thread stage-in data."),
+        ("grid_size", xyz,
+         "Return the size of the grid, for kernels that read per-thread stage-in data."),
+    )
+    ret16 = replace(ret, "UInt32" => "UInt16")
+    doc = """
+        $intr()::$ret
 
-Return the quadgroup execution width of a threadgroup specified at dispatch.
-""" dispatch_quadgroups_per_threadgroup
+    $desc
 
-@doc """
-    dispatch_simdgroups_per_threadgroup()::UInt32
+    See also `$(intr)_i16`, which returns `UInt16` values.
+    """
+    @eval @doc $doc $(Symbol(intr))
 
-Return the simdgroup execution width of a threadgroup specified at dispatch.
-""" dispatch_simdgroups_per_threadgroup
+    doc16 = """
+        $(intr)_i16()::$ret16
 
-@doc """
-    quadgroup_index_in_threadgroup()::UInt32
-
-Return the index of a quadgroup within a threadgroup.
-""" quadgroup_index_in_threadgroup
-
-@doc """
-    quadgroups_per_threadgroup()::UInt32
-
-Return the quadgroup execution width of a threadgroup.
-""" quadgroups_per_threadgroup
-
-@doc """
-    simdgroup_index_in_threadgroup()::UInt32
-
-Return the index of a simdgroup within a threadgroup.
-""" simdgroup_index_in_threadgroup
-
-@doc """
-    simdgroups_per_threadgroup()::UInt32
-
-Return the simdgroup execution width of a threadgroup.
-""" simdgroups_per_threadgroup
-
-@doc """
-    thread_index_in_quadgroup()::UInt32
-
-Return the index of the current thread in its quadgroup.
-""" thread_index_in_quadgroup
-
-@doc """
-    thread_index_in_simdgroup()::UInt32
-
-Return the index of the current thread in its simdgroup.
-""" thread_index_in_simdgroup
-
-@doc """
-    thread_index_in_threadgroup()::UInt32
-
-Return the index of the current thread in its threadgroup.
-""" thread_index_in_threadgroup
-
-@doc """
-    thread_execution_width()::UInt32
-
-Return the execution width of the compute unit.
-
-This function has been deprecated as of Metal 3.
-
-Use [`threads_per_simdgroup`](@ref) instead.
-""" thread_execution_width
-
-@doc """
-    threads_per_simdgroup()::UInt32
-
-Return the thread execution width of a simdgroup.
-""" threads_per_simdgroup
-
-
-# Dimensioned intrinsics
-
-@doc """
-    dispatch_threads_per_threadgroup()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
-
-Return the thread execution width specified at dispatch for a threadgroup.
-""" dispatch_threads_per_threadgroup
-
-@doc """
-    grid_origin()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
-
-Return the origin offset of the grid for threads that read per-thread stage-in data.
-""" grid_origin
-
-@doc """
-    grid_size()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
-
-Return maximum size of the grid for threads that read per-thread stage-in data.
-""" grid_size
-
-@doc """
-    thread_position_in_threadgroup()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
-
-Return the current thread's unique position within a threadgroup.
-""" thread_position_in_threadgroup
-
-@doc """
-    thread_position_in_grid()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
-
-Return the current thread's position in an N-dimensional grid of threads.
-""" thread_position_in_grid
-
-@doc """
-    threadgroup_position_in_grid()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
-
-Return the current threadgroup's unique position within the grid.
-""" threadgroup_position_in_grid
-
-@doc """
-    threadgroups_per_grid()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
-
-Return the number of threadgroups per grid.
-""" threadgroups_per_grid
-
-@doc """
-    threads_per_grid()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
-
-Return the grid size.
-""" threads_per_grid
-
-@doc """
-    threads_per_threadgroup()::@NamedTuple{x::UInt32, y::UInt32, z::UInt32}
-
-Return the thread execution width of a threadgroup.
-""" threads_per_threadgroup
+    Like [`$intr`](@ref), but returns `UInt16` values.
+    """
+    @eval @doc $doc16 $(Symbol(intr, "_i16"))
+end

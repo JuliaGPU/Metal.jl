@@ -1,5 +1,7 @@
 export @metal
 
+@public mtlconvert, mtlfunction, HostKernel
+
 
 ## high-level @metal interface
 
@@ -8,34 +10,74 @@ const COMPILER_KWARGS = [:kernel, :name, :fastmath, :always_inline, :debug_level
 const LAUNCH_KWARGS = [:groups, :threads, :queue, :submit]
 
 """
-    @metal threads=... groups=... [kwargs...] func(args...)
+    @metal [kwargs...] f(args...)
 
-High-level interface for executing code on a GPU.
+Compile `f(args...)` as a GPU kernel and launch it on the current device. `f` must return
+`nothing`. The kernel is compiled on first use for the types of `f` and `args`, and cached;
+arguments are converted to their device counterparts with [`mtlconvert`](@ref) (e.g., an
+`MtlArray` becomes an `MtlDeviceArray`).
 
-The `@metal` macro should prefix a call, with `func` a callable function or object that
-should return nothing. It will be compiled to a Metal function upon first use, and to a
-certain extent arguments will be converted and managed automatically using `mtlconvert`.
-Finally, a call to `mtlcall` is performed, encoding the kernel onto the selected command
-queue and submitting according to that queue's batching policy.
+The launch is asynchronous: it is recorded on the command queue of the current task, and
+submitted together with other work. Use [`synchronize`](@ref) to wait for it, which is also
+where errors thrown by the kernel are reported (see [`Metal.KernelException`](@ref)).
 
-There are a few keyword arguments that influence the behavior of `@metal`:
+`@metal` dispatches `groups` threadgroups of `threads` threads each, so the grid holds
+`groups .* threads` threads per dimension. If that is more than the number of elements to
+process, the kernel has to check bounds itself, e.g., `i <= length(a) || return`.
 
-- `launch`: whether to launch this kernel, defaults to `true`. If `false`, the returned
-  kernel object should be launched by calling it and passing arguments again.
-- `name`: the name of the kernel in the generated code. Defaults to the name of the
-  kernel function.
-- `opt_level`: the optimization level used when compiling the kernel, an integer from `0`
-  to `3`. Defaults to `2`, independent of the host session's `-O` level.
-- `minthreads`: the exact threadgroup size the kernel will be launched with, as an integer
-  or a tuple of up to three integers, like MSL's `required_threads_per_threadgroup`. The
-  compiler can specialize for that size, and launches with any other size are rejected.
-  Requires macOS 26.
+# Launch keywords
+
+- `threads` (default `1`): the number of threads per threadgroup, an integer or a tuple of
+  up to three integers. The product cannot exceed the kernel's limit, which is at most 1024
+  on Apple GPUs but can be lower for complex kernels: compile the kernel with `launch=false`
+  and check its `maxthreads` (see [`HostKernel`](@ref)).
+- `groups` (default `1`): the number of threadgroups in the grid, an integer or a tuple of
+  up to three integers.
+- `queue`: the command queue to submit to, instead of the task's [`global_queue`](@ref).
+- `submit` (default `false`): submit the queue's pending work right after this launch,
+  instead of when the batch is full or the queue is synchronized.
+- `launch` (default `true`): when `false`, only compile the kernel and return it as a
+  [`HostKernel`](@ref), to be launched later by calling it with arguments and launch
+  keywords. This is not allowed together with other launch keywords.
+
+# Compiler keywords
+
+- `name`: the name of the kernel in the generated code, e.g., as shown in Xcode. Defaults to
+  the name of `f`.
+- `fastmath` (default `false`, or `true` when Julia runs with `--math-mode=fast`): apply
+  `@fastmath` semantics to all floating-point code in the kernel, and compile it with
+  Metal's fast-math mode.
+- `debug_level` (default: Julia's `-g` level): how much information is kept to report
+  device-side exceptions; `2` adds the position of the faulting thread and a backtrace.
+- `opt_level` (default `2`): the optimization level, from `0` to `3`, independent of the
+  host session's `-O` level.
+- `always_inline` (default `false`): inline every function called by the kernel.
+- `minthreads`: the exact threadgroup size the kernel will be launched with, an integer or a
+  tuple of up to three integers, like MSL's `required_threads_per_threadgroup`. The compiler
+  can specialize for it, and launches with any other size are rejected. Requires macOS 26.
 - `maxthreads`: the maximum number of threads per threadgroup the kernel will be launched
   with, like MSL's `max_total_threads_per_threadgroup`. A lower maximum leaves the compiler
-  more registers per thread, e.g. to avoid running out of them in complex kernels.
-- `queue`: the command queue to use for this kernel. Defaults to the global command queue.
-- `submit`: whether to submit the current command batch immediately after encoding this
-  kernel. Defaults to `false`.
+  more registers per thread, e.g., to avoid running out of them in complex kernels.
+- `macos`, `metal`, `air`, `gpufamily`: the deployment target, Metal Shading Language
+  version, AIR version and Apple GPU family to compile for, which default to what the host
+  supports. See [`mtlfunction`](@ref).
+
+# Examples
+
+```julia
+function vadd(c, a, b)
+    i = thread_position_in_grid().x
+    if i <= length(c)
+        @inbounds c[i] = a[i] + b[i]
+    end
+    return
+end
+
+a = Metal.rand(Float32, 10_000); b = Metal.rand(Float32, 10_000)
+c = similar(a)
+threads = 256
+@metal threads groups=cld(length(c), threads) vadd(c, a, b)
+```
 """
 macro metal(ex...)
     call = ex[end]
@@ -186,20 +228,44 @@ Adapt.adapt_structure(to::Adaptor, f::Base.Fix2{<:Any, <:Type{T}}) where {T} =
     let g = adapt(to, f.f); (x...) -> g(x..., T) end
 
 """
-    mtlconvert(x, [cce, [queue]])
+    mtlconvert(x)
 
-This function is called for every argument to be passed to a kernel, allowing it to be
-converted to a GPU-friendly format. By default, the function does nothing and returns the
-input object `x` as-is.
+Convert a kernel argument `x` to the object the kernel receives, e.g., an `MtlArray` to an
+`MtlDeviceArray`. [`@metal`](@ref) calls it on every argument. Tuples, named tuples and
+array wrappers are converted recursively; other objects are passed as-is.
 
-Do not add methods to this function, but instead extend the underlying Adapt.jl package and
-register methods for the the `Metal.Adaptor` type.
+To convert the fields of your own types, don't add methods to this function, but use
+[Adapt.jl](https://github.com/JuliaGPU/Adapt.jl) (e.g., `Adapt.@adapt_structure MyType`),
+which all JuliaGPU back-ends share.
 """
 mtlconvert(arg, cce=nothing, queue=nothing) = adapt(Adaptor(cce, queue), arg)
 
 
 ## host-side kernel API
 
+"""
+    HostKernel
+
+A compiled kernel, as returned by [`mtlfunction`](@ref) or `@metal launch=false`. Launch it
+by calling it (see below). Its fields describe the compute pipeline Metal created for it:
+
+- `maxthreads`: the maximum number of threads per threadgroup this kernel can be launched
+  with ([`maxTotalThreadsPerThreadgroup`](https://developer.apple.com/documentation/metal/mtlcomputepipelinestate/maxtotalthreadsperthreadgroup)),
+  which can be lower than the device's limit of 1024 for kernels that use many registers.
+- `exec_width`: the thread execution width, i.e., the number of threads in a SIMD-group
+  ([`threadExecutionWidth`](https://developer.apple.com/documentation/metal/mtlcomputepipelinestate/threadexecutionwidth)).
+  Threadgroup sizes that are a multiple of it use the GPU best.
+- `tgmem`: the amount of threadgroup memory, in bytes, that the kernel allocates
+  statically (with [`MtlThreadGroupArray`](@ref)).
+- `pipeline`: the [`MTLComputePipelineState`](https://developer.apple.com/documentation/metal/mtlcomputepipelinestate),
+  for other properties.
+
+```julia
+kernel = @metal launch=false vadd(c, a, b)
+threads = min(length(c), kernel.maxthreads)
+kernel(c, a, b; threads, groups=cld(length(c), threads))
+```
+"""
 struct HostKernel{F,S,TT}
     f::F
     # the callable before conversion, which is converted again at every launch: only then
@@ -224,32 +290,31 @@ end
 const mtlfunction_lock = ReentrantLock()
 
 """
-    mtlfunction(f, tt=Tuple{}; kwargs...)
+    mtlfunction(f, tt=Tuple{}; kwargs...)::HostKernel
 
-Low-level interface to compile a function invocation for the currently-active GPU, returning
-a callable kernel object. For a higher-level interface, use [`@metal`](@ref).
+Compile `f` for argument types `tt` (the types after [`mtlconvert`](@ref)) for the current
+device, and return the kernel as a [`HostKernel`](@ref). This is what [`@metal`](@ref) uses;
+call it directly to compile without converting arguments.
 
-The following keyword arguments are supported:
-- `minthreads` and `maxthreads`: the required and the maximum threadgroup size, see
-   [`@metal`](@ref). The maximum a kernel can actually be launched with may be lower, so
-   check `kernel.maxthreads` before launching.
-- `macos` and `metal`: to override the deployment target (macOS 15 or later) and Metal
-   Shading Language version used during compilation, which default to the newest the host
-   supports. A language version that needs a newer macOS raises the deployment target.
-   Code using versions the host doesn't support can be generated and inspected, but not
-   loaded.
-- `air`: to override the AIR bitcode version, which otherwise follows the deployment
-   target. Meant for testing.
-- `gpufamily`: to override the Apple GPU family (`MTL.MTLGPUFamilyApple<n>`) that the
-   generated code may rely on. Defaults to the highest family the device supports.
-- `source`: the callable before [`mtlconvert`](@ref) turned it into `f`, which is what
-  gets converted again at every launch (so it should convert to an object of the same type
-  as `f`). Defaults to `f`, but should be set when `f` captures GPU arrays, so that their
-  buffers are made available to the GPU and kept alive as long as the kernel is in use.
+The compiler keywords of [`@metal`](@ref) are supported, and:
 
-The output of this function is automatically cached, i.e. you can simply call `mtlfunction`
-in a hot path without degrading performance. New code will be generated automatically when
-the function changes, or when different types or keyword arguments are provided.
+- `macos` and `metal`: the deployment target (macOS 15 or later) and Metal Shading Language
+  version to compile for, which default to the newest the host supports
+  ([`Metal.metal_target`](@ref)). A language version that needs a newer macOS raises the
+  deployment target. Code for versions the host doesn't support can be generated and
+  inspected, but not loaded. Targeting Metal 3.1 or older rules out barrier and fence
+  scopes, and ordered atomics.
+- `air`: the AIR bitcode version, which otherwise follows the deployment target. Meant for
+  testing.
+- `gpufamily`: the Apple GPU family (`MTL.MTLGPUFamilyApple<n>`) that the generated code may
+  rely on (see [`apple_family`](@ref)). Defaults to the highest family the device supports.
+- `source`: the callable before [`mtlconvert`](@ref) turned it into `f`, which is converted
+  again at every launch (so it should convert to an object of the same type as `f`).
+  Defaults to `f`, but should be set when `f` captures GPU arrays, so that their buffers are
+  made available to the GPU and kept alive as long as the kernel is in use.
+
+The result is cached, so calling `mtlfunction` in a hot path is cheap. Code is regenerated
+when `f` is redefined, or for different types or keyword arguments.
 """
 function mtlfunction(f::F, tt::TT=Tuple{}; source::S=f, kwargs...) where {F,TT,S}
     HostKernel{F,S,tt}(f, source, link_kernel(methodinstance(F, tt); kwargs...)...)
@@ -416,6 +481,13 @@ end
     return
 end
 
+"""
+    (kernel::HostKernel)(args...; threads=1, groups=1, queue=global_queue(device()),
+                         submit=false)
+
+Launch `kernel` with arguments `args`, which have to have the same types as the ones it was
+compiled for. The keyword arguments are the launch keywords of [`@metal`](@ref).
+"""
 function (kernel::HostKernel)(args...; groups=1, threads=1, queue=nothing,
                               submit::Bool=false)
     gs, ts = MTLSize(groups), MTLSize(threads)
@@ -660,14 +732,14 @@ end
     return
 end
 
-## Intra-warp Helpers
+## SIMD-group helpers
 
 """
-    nextwarp(dev, threads)
-    prevwarp(dev, threads)
+    nextwarp(kernel, threads)
+    prevwarp(kernel, threads)
 
-Returns the next or previous nearest number of threads that is a multiple of the warp size
-of a device `dev`. This is a common requirement when using intra-warp communication.
+Round `threads` up or down to a multiple of the thread execution width (the SIMD-group size)
+of `kernel`, a [`HostKernel`](@ref) or `MTLComputePipelineState`.
 """
 function nextwarp(pipe::MTLComputePipelineState, threads::Integer)
     ws = pipe.threadExecutionWidth

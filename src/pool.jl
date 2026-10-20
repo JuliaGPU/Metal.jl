@@ -32,22 +32,14 @@ const alloc_stats = AllocStats()
 
 
 """
-    alloc(device, bytesize, [ptr=nothing];
-          storage=Default, hazard_tracking=Default, cache_mode=Default)
+    alloc(device, bytesize, [ptr]; storage=PrivateStorage, hazard_tracking, cache_mode)
 
-Allocates a Metal buffer on `device` of `bytesize` bytes. If a CPU-pointer is passed as last
-argument, then the buffer is initialized with the content of the memory starting at `ptr`,
-otherwise it's zero-initialized.
-
-! Note: You are responsible for freeing the returned buffer
-
-The storage kwarg controls where the buffer is stored. Possible values are:
- - PrivateStorage : Residing on the device
- - SharedStorage  : Residing on the host
- - Memoryless : A render pipeline exclusive mode. Render pipelines are not yet supported on Metal.jl.
-
-Note that `PrivateStorage` buffers can't be directly accessed from the CPU, therefore you cannot
-use this option if you pass a ptr to initialize the memory.
+Allocate an `MTLBuffer` of `bytesize` bytes on `device`, initialized with the memory at the
+CPU pointer `ptr` if given, or with zeros otherwise. Free it with [`free`](@ref). `storage`
+is [`Metal.PrivateStorage`](@ref) or [`Metal.SharedStorage`](@ref); a buffer initialized
+from `ptr` cannot be private. `hazard_tracking` and `cache_mode` take
+[`MTLResourceOptions`](https://developer.apple.com/documentation/metal/mtlresourceoptions)
+values from `Metal.MTL`.
 
 Without a `ptr`, the buffer is padded to whole 4-byte words (and at least one): Metal does not
 support empty buffers, and GPUCompiler implements 8- and 16-bit atomics on the containing
@@ -96,8 +88,7 @@ end
 """
     free(buffer::MTLBuffer)
 
-Frees the buffer if the handle is valid.
-This does not protect against double-freeing of the same buffer!
+Free a buffer allocated with [`alloc`](@ref). Freeing a buffer twice is undefined behavior.
 """
 function free(buf::MTLBuffer)
     sz::Int = buf.length
@@ -123,11 +114,13 @@ end
 
 ## utilities
 
-"""
-    @allocated
+@public var"@allocated", var"@time"
 
-A macro to evaluate an expression, discarding the resulting value, instead returning the
-total number of bytes allocated during evaluation of the expression.
+"""
+    Metal.@allocated ex
+
+Evaluate `ex`, discarding its value, and return the number of bytes of GPU memory that
+Metal.jl allocated during the evaluation.
 """
 macro allocated(ex)
     quote
@@ -144,11 +137,11 @@ macro allocated(ex)
 end
 
 """
-    @time ex
+    Metal.@time ex
 
-Run expression `ex` and report on execution time and GPU/CPU memory behavior. The GPU is
-synchronized right before and after executing `ex` to exclude any external effects.
-
+Evaluate `ex`, and print the time it took and the CPU and GPU memory it allocated, like
+`Base.@time`. The GPU is synchronized right before and after evaluating `ex`, so the time
+includes the GPU work of `ex` and excludes earlier work.
 """
 macro time(ex)
     quote

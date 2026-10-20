@@ -1,6 +1,3 @@
-# Uncomment once all supported julia versions support public
-# public SharedStorage, PrivateStorage
-
 # Metal Has 4 storage types
 # SharedStorage  -> Buffer in Host memory, accessed by the GPU. Requires no sync
 # ManagedStorage -> Mirrored memory buffers in host and GPU. Requires syncing
@@ -9,37 +6,39 @@
 
 abstract type StorageMode end
 
+@public SharedStorage, PrivateStorage
+
 """
-    struct Metal.SharedStorage <: Metal.StorageMode
+    Metal.SharedStorage
 
-Used to indicate that the resource is stored using `MTLStorageModeShared` in memory.
+The shared storage mode ([`MTLStorageModeShared`](https://developer.apple.com/documentation/metal/mtlstoragemode/shared)),
+the default for `MtlArray`s: the memory is accessible from both the CPU and the GPU. Indexing
+such an array from the CPU, or wrapping it as an `Array`, accesses the memory directly,
+waiting for GPU work that uses the array to finish first.
 
-For more information on Metal storage modes, refer to the official Metal documentation.
-
-See also [`Metal.PrivateStorage`](@ref).
+See [Choosing a resource storage mode for Apple GPUs](https://developer.apple.com/documentation/metal/choosing-a-resource-storage-mode-for-apple-gpus),
+and [`Metal.PrivateStorage`](@ref).
 """
 struct SharedStorage  <: StorageMode end
 
 """
-    struct Metal.ManagedStorage <: Metal.StorageMode
+    Metal.ManagedStorage
 
-Used to indicate that the resource is stored using `MTLStorageModeManaged` in memory.
-
-For more information on Metal storage modes, refer to the official Metal documentation.
-
-!!! warning
-    `ManagedStorage` is no longer supported with `MtlArray`s. Instead, use `SharedStorage` or use the Metal api directly from `Metal.MTL`.
-
-See also [`Metal.SharedStorage`](@ref) and [`Metal.PrivateStorage`](@ref).
+The managed storage mode (`MTLStorageModeManaged`), which keeps separate CPU and GPU copies
+of the memory. Apple silicon GPUs don't need it, and `MtlArray`s don't support it: use
+[`Metal.SharedStorage`](@ref) instead.
 """
 struct ManagedStorage <: StorageMode end
 
 """
-    struct Metal.PrivateStorage <: Metal.StorageMode
+    Metal.PrivateStorage
 
-Used to indicate that the resource is stored using `MTLStorageModePrivate` in memory.
-
-For more information on Metal storage modes, refer to the official Metal documentation.
+The private storage mode ([`MTLStorageModePrivate`](https://developer.apple.com/documentation/metal/mtlstoragemode/private)):
+the memory is only accessible from the GPU, and indexing such an array from the CPU makes a
+slow copy, subject to `allowscalar`. Use it for data that
+only the GPU accesses, or to make sure that operations on an array execute on the GPU.
+Create private arrays with, e.g., `MtlArray{Float32,1,Metal.PrivateStorage}(undef, n)`, or
+`mtl(A; storage=Metal.PrivateStorage)`.
 
 See also [`Metal.SharedStorage`](@ref).
 """

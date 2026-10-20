@@ -1,9 +1,26 @@
 export MtlThreadGroupArray
 
 """
-    MtlThreadGroupArray(::Type{T}, dims)
+    MtlThreadGroupArray(T, dims)
 
-Create an array local to each threadgroup launched during kernel execution.
+Allocate an array of element type `T` and size `dims` in threadgroup memory, and return it as
+an [`MtlDeviceArray`](@ref). Every threadgroup gets its own array, shared by its threads. The
+size has to be a compile-time constant (e.g., a literal, or derived from type parameters),
+the memory is uninitialized, and a kernel can use at most 32 KiB of threadgroup memory.
+
+Use [`threadgroup_barrier`](@ref) with `Metal.MemoryFlagThreadGroup` between writing the
+array and reading what other threads wrote:
+
+```julia
+function reverse_kernel(a)
+    i = thread_position_in_threadgroup().x
+    tmp = MtlThreadGroupArray(Float32, 64)
+    tmp[i] = a[i]
+    threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+    a[i] = tmp[65 - i]
+    return
+end
+```
 """
 @inline function MtlThreadGroupArray(::Type{T}, dims) where {T}
     len = prod(dims)

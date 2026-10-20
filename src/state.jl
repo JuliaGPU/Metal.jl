@@ -1,4 +1,5 @@
 export device, device!, global_queue, BatchedCommandQueue
+@public devices
 
 log_compiler()          = OSLog("org.juliagpu.metal", "Compiler")
 log_compiler(args...)   = log_compiler()(args...)

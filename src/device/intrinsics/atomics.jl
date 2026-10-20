@@ -125,16 +125,17 @@ end
 # documentation
 
 const atomic_semantics = """
-The `order` is a `memory_order` (or a `Val` of one), `memory_order_relaxed` by
-default, and has to be a compile-time constant, as in MSL. As in MSL, the operation synchronizes with the other threads on the device for
-device memory, and with those in the threadgroup for threadgroup memory. An ordered
-operation orders accesses to both device and threadgroup memory. Ordered operations need
-Metal 3.2; before Metal 4.1, they are implemented with fences. A load only uses the
+The `order` is a [`memory_order`](@ref) (or a `Val` of one), `Metal.memory_order_relaxed`
+by default, and has to be a compile-time constant, as in MSL. As in MSL, the operation
+synchronizes with the other threads on the device for device memory, and with those in the
+threadgroup for threadgroup memory. An ordered operation orders accesses to both device and
+threadgroup memory; before Metal 4.1, it is implemented with fences. A load only uses the
 acquire part of an order, and a store only its release part.
 
-The optional `flags` ([`MemoryFlags`](@ref)), also a compile-time constant, name the memory
-an ordered operation orders instead: e.g., only device memory (`MemoryFlagDevice`), or also
-texture memory (`MemoryFlagDevice | MemoryFlagThreadGroup | MemoryFlagTexture`).
+The optional `flags` ([`MemoryFlags`](@ref)), also a compile-time constant, select the
+memory an ordered operation orders instead: e.g., only device memory
+(`Metal.MemoryFlagDevice`), or also texture memory
+(`Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup | Metal.MemoryFlagTexture`).
 """
 
 @doc """
@@ -255,8 +256,14 @@ end
 Base.showerror(io::IO, err::AtomicError) =
     print(io, "AtomicError: ", err.msg)
 
+@public var"@atomic", atomic_load_explicit, atomic_store_explicit, atomic_exchange_explicit,
+        atomic_compare_exchange_weak_explicit, atomic_fetch_add_explicit,
+        atomic_fetch_sub_explicit, atomic_fetch_min_explicit, atomic_fetch_max_explicit,
+        atomic_fetch_and_explicit, atomic_fetch_or_explicit, atomic_fetch_xor_explicit,
+        atomic_min_explicit, atomic_max_explicit, atomic_fetch_op_explicit
+
 """
-    @atomic a[I] = op(a[I], val)
+    Metal.@atomic a[I] = op(a[I], val)
     @atomic a[I] ...= val
 
 Atomically perform a sequence of operations that loads an array element `a[I]`, performs the
@@ -266,9 +273,23 @@ array element should be used in the left and right hand side of the assignment, 
 in-place application of a known operator. In both cases, the array reference should be pure
 and not induce any side-effects.
 
-!!! warn
-    This interface is experimental, and might change without warning.  Use the lower-level
-    `atomic_...!` functions for a stable API, albeit one limited to natively-supported ops.
+`@atomic a[I]` atomically loads an element. The element type and memory have to be
+supported by the low-level functions such as [`Metal.atomic_fetch_add_explicit`](@ref):
+operations without a native atomic, e.g., `*`, are implemented with a compare-exchange loop.
+All operations are relaxed (`Metal.memory_order_relaxed`); use the low-level functions for
+other memory orders.
+
+This interface is experimental, and might change without deprecation.
+
+```julia
+function histogram(counts, data)
+    i = thread_position_in_grid().x
+    if i <= length(data)
+        Metal.@atomic counts[data[i]] += 1
+    end
+    return
+end
+```
 """
 macro atomic(ex)
     # decode assignment and call

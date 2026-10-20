@@ -139,7 +139,7 @@ per-lane element layout is implementation-defined and elements cannot be
 accessed directly. To inspect or modify individual entries, store the
 matrix to device or threadgroup memory first.
 
-Construct via [`simdgroup_load`](@ref), [`zero`](@ref) or the explicit
+Construct via [`simdgroup_load`](@ref), `zero` or the explicit
 fill constructor `MtlSimdgroupMatrix{T,8,8}(val::T)`.
 """
 struct MtlSimdgroupMatrix{T,R,C}
@@ -264,111 +264,83 @@ end
 
 ## Documentation
 
-@doc """
-    simd_shuffle_xor(data::T, simd_lane_id::Integer)
+const shuffle_types = "`Float32`, `Float16`, `Int32`, `UInt32`, `Int16`, `UInt16`, `Int8` or `UInt8`"
 
-Return `data` from the thread whose SIMD lane ID is equal to the bitwise `xor` of the
-caller's (0-based) SIMD lane ID and `mask`. The value of `mask` needs to be the same
-for all threads in a SIMD-group.
+for (prefix, group, n, modulos) in (("simd", "SIMD-group", "threads_per_simdgroup()", "2, 4, 8, 16 or 32"),
+                                    ("quad", "quad-group", "4", "2 or 4"))
+    @eval begin
+        @doc """
+            $($prefix)_shuffle(data::T, lane::Integer)
 
-T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
-"""
-simd_shuffle_xor
+        Return `data` of the thread in the $($group) whose 1-based index is `lane` (see
+        [`thread_index_in_$($prefix)group`](@ref)). Different threads can read from different
+        lanes. `T` can be $shuffle_types.
+        """ $(Symbol(prefix, "_shuffle"))
 
-@doc """
-    simd_shuffle(data::T, simd_lane_id::Integer)
+        @doc """
+            $($prefix)_shuffle_xor(data::T, mask::Integer)
 
-Return `data` from the thread whose SIMD lane ID is `simd_lane_id`. The `simd_lane_id`
-needs to be a valid SIMD lane ID but doesn't have to be the same for all threads in the
-SIMD-group
+        Return `data` of the thread in the $($group) whose 0-based index is the bitwise xor of
+        the caller's 0-based index and `mask`, which has to be the same for all threads. `T` can
+        be $shuffle_types.
+        """ $(Symbol(prefix, "_shuffle_xor"))
 
-T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
-"""
-simd_shuffle
+        @doc """
+            $($prefix)_shuffle_down(data::T, delta::Integer)
 
-@doc """
-    simd_shuffle_down(data::T, delta::Integer)
+        Return `data` of the thread `delta` lanes higher in the $($group). The last `delta`
+        threads, which have no such thread, get their own `data`. `delta` has to be the same
+        for all threads. `T` can be $shuffle_types.
+        """ $(Symbol(prefix, "_shuffle_down"))
 
-Return `data` from the thread whose SIMD lane ID is the sum of caller's SIMD lane ID and `delta`.
+        @doc """
+            $($prefix)_shuffle_up(data::T, delta::Integer)
 
-The value for `delta` must be the same for all threads in the SIMD-group. This function
-doesn't modify the upper `delta` lanes of `data` because it doesn't wrap values around
-the SIMD-group.
+        Return `data` of the thread `delta` lanes lower in the $($group). The first `delta`
+        threads, which have no such thread, get their own `data`. `delta` has to be the same
+        for all threads. `T` can be $shuffle_types.
+        """ $(Symbol(prefix, "_shuffle_up"))
 
-T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
-"""
-simd_shuffle_down
+        @doc """
+            $($prefix)_shuffle_and_fill_down(data::T, filling_data::T, delta::Integer,
+                                       [modulo::Integer=$($n)])
 
-@doc """
-    simd_shuffle_up(data::T, delta::Integer)
+        Like [`$($prefix)_shuffle_down`](@ref), but the last `delta` threads get
+        `filling_data` of the first `delta` threads instead. With `modulo`, the $($group) is
+        split into vectors of that many threads ($($modulos)), each shuffled on its own.
+        `delta` and `modulo` have to be the same for all threads. `T` can be $shuffle_types.
+        """ $(Symbol(prefix, "_shuffle_and_fill_down"))
 
-Return `data` from the thread whose SIMD lane ID is the difference from the caller's SIMD
-lane ID minus `delta`.
+        @doc """
+            $($prefix)_shuffle_and_fill_up(data::T, filling_data::T, delta::Integer,
+                                     [modulo::Integer=$($n)])
 
-The value of `delta` must be the same for all threads in a SIMD-group. This function doesn't
-modify the lower `delta` lanes of `data` because it doesn't wrap values around the SIMD-group.
+        Like [`$($prefix)_shuffle_up`](@ref), but the first `delta` threads get
+        `filling_data` of the last `delta` threads instead. With `modulo`, the $($group) is
+        split into vectors of that many threads ($($modulos)), each shuffled on its own.
+        `delta` and `modulo` have to be the same for all threads. `T` can be $shuffle_types.
+        """ $(Symbol(prefix, "_shuffle_and_fill_up"))
 
-T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
-"""
-simd_shuffle_up
+        @doc """
+            $($prefix)_ballot(predicate::Bool)::UInt64
 
-@doc """
-    simd_shuffle_and_fill_down(data::T, filling_data::T, delta::Integer, [modulo::Integer])
+        Return a bitmask in which bit `i-1` is set if `predicate` is true for the active thread
+        with index `i` in the $($group). Bits of inactive threads are zero, and bits past the
+        end of the $($group) are undefined: mask them off before, e.g., `count_ones`.
+        """ $(Symbol(prefix, "_ballot"))
 
-Returns `data` or `filling_data` for each vector from the thread whose SIMD lane ID is the
-difference from the caller's SIMD lane ID minus `delta`.
+        @doc """
+            $($prefix)_vote_all(bitmask::UInt64)::Bool
 
-If the difference is negative, the operation copies values from the upper `delta` lanes of
-`filling_data` to the lower `delta` lanes of `data`.
+        Return whether the bits of all active threads of the $($group) are set in `bitmask`,
+        e.g., as returned by [`$($prefix)_ballot`](@ref).
+        """ $(Symbol(prefix, "_vote_all"))
 
-The value of `delta` needs to be the same for all threads in a SIMD-group.
+        @doc """
+            $($prefix)_vote_any(bitmask::UInt64)::Bool
 
-The `modulo` parameter defines the vector width that splits the SIMD-group into separate vectors
- and must be 2, 4, 8, 16, or 32.
-
-T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
-"""
-simd_shuffle_and_fill_down
-
-@doc """
-    simd_shuffle_and_fill_up(data::T, filling_data::T, delta::Integer, [modulo::Integer])
-
-Returns `data` or `filling_data` for each vector from the thread whose SIMD lane ID is the
-sum of the caller's SIMD lane ID and `delta`.
-
-If the sum is greater than `modulo`, the function copies values from the lower `delta` lanes of
-`filling_data` into the upper `delta` lanes of `data`.
-
-The value of `delta` needs to be the same for all threads in a SIMD-group.
-
-The `modulo` parameter defines the vector width that splits the SIMD-group into separate vectors
- and must be 2, 4, 8, 16, or 32.
-
-T must be one of the following: Float32, Float16, Int32, UInt32, Int16, UInt16, Int8, or UInt8
-"""
-simd_shuffle_and_fill_up
-
-@doc """
-    simd_ballot(predicate::Bool)
-
-Returns a UInt64 bitmask of the evaluation of the Boolean expression for all active
-threads in the SIMD-group for which `predicate` is true. The function sets the bits that correspond
-to inactive threads to 0.
-"""
-simd_ballot
-
-@doc """
-    simd_vote_all(bitmask::UInt64)
-
-Returns true if all bits corresponding to threads in the SIMD-group are set. The input is a
-voting `bitmask`, such as the one returned by `simd_ballot`.
-"""
-simd_vote_all
-
-@doc """
-    simd_vote_any(bitmask::UInt64)
-
-Returns true if any bits corresponding to threads in the SIMD-group are set. The input is a
-voting `bitmask`, such as the one returned by `simd_ballot`.
-"""
-simd_vote_any
+        Return whether the bit of any active thread of the $($group) is set in `bitmask`, e.g.,
+        as returned by [`$($prefix)_ballot`](@ref).
+        """ $(Symbol(prefix, "_vote_any"))
+    end
+end

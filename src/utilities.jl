@@ -1,9 +1,11 @@
+@public var"@sync", versioninfo
+
 """
-    @sync ex
+    Metal.@sync ex
 
-Run expression `ex` and synchronize the GPU afterwards.
-
-See also: [`synchronize`](@ref).
+Evaluate `ex`, then wait for the GPU work of the current task to finish, with
+[`synchronize`](@ref), and return the value of `ex`. Use it, e.g., to time GPU work with
+`@time` or `@btime`.
 """
 macro sync(code)
     quote
@@ -13,6 +15,13 @@ macro sync(code)
     end
 end
 
+"""
+    Metal.versioninfo(io::IO=stdout)
+
+Print the versions of macOS, the toolchain and the Metal shading language, AIR and metallib
+versions Metal.jl generates code for, the relevant Julia packages, Metal-related environment
+variables and preferences, and the available GPUs. Include this when reporting issues.
+"""
 function versioninfo(io::IO=stdout; verbose=false)
     println(io, "macOS $(macos_version()), Darwin $(darwin_version())")
     println(io)
@@ -235,6 +244,8 @@ function captured(f; name::AbstractString="julia",
     end
     return folder
 end
+
+@public var"@capture"
 
 """
     Metal.@capture [kwargs...] ex

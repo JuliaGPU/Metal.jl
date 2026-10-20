@@ -1,4 +1,6 @@
 export macos_version, darwin_version
+@public metal_support, air_support, metallib_support, metal_target, air_target,
+        metallib_target
 
 # Julia binaries built against a pre-Tahoe SDK observe compatibility versions (macOS 26
 # reports as 16); normalize user-provided versions to the marketing version, like the
