@@ -1,8 +1,9 @@
 # Commit message tags select what to run: `[only X]` runs only the listed steps, `[skip X]`
-# skips them, where X is a comma-separated list of: `tests` (everything but docs and
-# benchmarks), `julia` (released Julia versions), `nightly`, `special`, `validation`, `docs`,
-# `benchmarks`. Draft pull requests only test the newest Julia release and nightly, unless
-# steps are selected explicitly. See also GPUCompiler.jl's CI, which uses the same tags.
+# skips them, where X is a comma-separated list of: `tests` (everything but benchmarks),
+# `julia` (released Julia versions), `nightly`, `special`, `validation`, `benchmarks`. Draft
+# pull requests only test the newest Julia release and nightly, unless steps are selected
+# explicitly. See also GPUCompiler.jl's CI, which uses the same tags. The documentation is
+# built by .github/workflows/Documentation.yml.
 steps:
   - group: ":julia: Julia"
     key: "julia"
@@ -155,30 +156,6 @@ steps:
       #       build.message !~ /\[skip large\]/ &&
       #       build.message !~ /\[skip special\]/
       #   timeout_in_minutes: 15
-
-  - label: ":books: Documentation"
-    depends_on: "julia"
-    plugins:
-      - JuliaCI/julia#v1:
-          version: "1.13"
-    command: |
-      julia --project -e '
-        println("--- :julia: Instantiating project")
-        using Pkg
-        Pkg.instantiate()
-        Pkg.activate("docs")
-        Pkg.instantiate()
-        push!(LOAD_PATH, @__DIR__)
-
-        println("+++ :julia: Building documentation")
-        include("docs/make.jl")'
-    agents:
-      queue: "metal"
-    if: |
-      build.message !~ /\[skip [^\]]*(docs)/ &&
-      (build.message =~ /\[only [^\]]*(docs)/ ||
-       build.message !~ /\[only / && !build.pull_request.draft)
-    timeout_in_minutes: 30
 
   - wait: ~
     continue_on_failure: true

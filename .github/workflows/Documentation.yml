@@ -1,0 +1,51 @@
+name: Documentation
+
+on:
+  push:
+    branches:
+      - main
+    tags: '*'
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  # to (re)build the documentation of an existing tag
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: write   # push to the gh-pages branch
+  statuses: write   # report the deployed preview on pull requests
+  # needed for julia-actions/cache to delete old caches
+  actions: write
+
+jobs:
+  docs:
+    name: Documentation
+    # the doctests need a GPU; the paravirtualized one of the macOS runners suffices
+    runs-on: macos-15
+    if: github.event.pull_request.draft != true
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1.13'
+          arch: aarch64
+      - uses: julia-actions/cache@v3
+
+      - name: Instantiate the docs environment
+        shell: julia --color=yes --project=docs {0}
+        run: |
+          using Pkg
+          Pkg.develop(PackageSpec(path=pwd()))
+          Pkg.instantiate()
+
+      # Documenter deploys with the Actions token, so this needs no deploy key. Tag builds
+      # do rely on TagBot pushing its tags with the DOCUMENTER_KEY deploy key: tags pushed
+      # with the Actions token don't trigger workflows.
+      - name: Build and deploy
+        run: julia --color=yes --project=docs docs/make.jl
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
