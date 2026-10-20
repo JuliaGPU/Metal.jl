@@ -239,6 +239,20 @@ end
 end
 
 
+@testset "GPU addresses as arguments" begin
+    # only buffers can be bound to pointer parameters
+    function store_kernel(p)
+        unsafe_store!(p, 42f0)
+        return
+    end
+    a = MtlArray(zeros(Float32, 1))
+    p = reinterpret(Core.LLVMPtr{Float32,1}, MTL.gpu_address(pointer(a).buffer))
+    @test_throws "Argument 1 should be an MtlArray, MtlPtr or MTLBuffer" @metal store_kernel(p)
+    @metal store_kernel(pointer(a))
+    @test Array(a) == [42f0]
+end
+
+
 @testset "reflection" begin
     Metal.code_lowered(dummy, Tuple{})
     Metal.code_typed(dummy, Tuple{})

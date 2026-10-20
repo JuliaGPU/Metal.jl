@@ -639,8 +639,14 @@ end
     # converted here, with the encoder, so that the buffers it contains are declared to it.
     ex = quote end
     idx = 1
-    for (dt, val, typ) in zip(sig, vals, typs)
+    for (i, (dt, val, typ)) in enumerate(zip(sig, vals, typs))
         (isghosttype(dt) || Core.Compiler.isconstType(dt)) && continue
+        # pointer parameters are bound as buffers, so a GPU address on its own can't be
+        # passed (it would be passed by reference, i.e., as the address of a copy of it)
+        if dt <: Union{Ptr,Core.LLVMPtr} && !(typ <: Union{MTLBuffer,MtlPtr})
+            msg = "Argument $(i-2) should be an MtlArray, MtlPtr or MTLBuffer to be bound to a pointer parameter, not a $typ"
+            return :(throw(ArgumentError($msg)))
+        end
         if typ <: MTLBuffer
             # top-level buffers are passed as a pointer-valued argument
             push!(ex.args, :(bind_buffer!(cce, $val, 0, $idx)))
