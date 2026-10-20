@@ -1,6 +1,15 @@
 using PrecompileTools: @setup_workload, @compile_workload
 
+function precompile_kernel(a)
+    i = thread_position_in_grid().x
+    a[i] += 1f0
+    return
+end
+
 @setup_workload begin
+    # `__init__` installs this, but it doesn't run before the workload
+    MTL.submit_hook[] = submit_command_buffer
+
     metallib_file = joinpath(dirname(@__DIR__), "test", "dummy.metallib")
 
     @compile_workload begin
@@ -13,8 +22,6 @@ using PrecompileTools: @setup_workload, @compile_workload
         # CodeInstance) in the package image, so that loading Metal.jl can launch it
         # without invoking the compiler. session-local state (pipeline handles,
         # relocation tables) is kept out of the image below and by `mtlfunction`.
-        # NOTE: only compile and link; actually launching a kernel (committing a
-        #       command buffer and waiting for it) hangs during precompilation.
         mtlfunction(identity, Tuple{Nothing})
 
         # the rest needs a command queue, which can't be created when the `command_api`
@@ -26,7 +33,7 @@ using PrecompileTools: @setup_workload, @compile_workload
         command_api_supported && sprint(show, @profile @metal identity(nothing))
 
         # exercise MtlArray creation and host↔device copy paths in both 1D and 2D
-        for h in (Float32[0], Float32[0;;])
+        for h in (Float32[0], Float32[0;;], [0])
             a = MtlArray(h)
             Array(a)
         end
@@ -42,21 +49,30 @@ using PrecompileTools: @setup_workload, @compile_workload
         # compiles the corresponding `Base` method.
         @static if VERSION >= v"1.11"; if command_api_supported
             let a = MtlArray([1, 2, 3])
-                a .+ 1
+                Array(a .+ 1)
+            end
+            # a kernel with bounds checks, which links the exception runtime
+            let a = MtlArray(Float32[1, 2, 3])
+                @metal threads=3 precompile_kernel(a)
                 synchronize()
             end
+            Array(rand(Float32, 3))
+            Array(rand(Float32, 2, 2))
             let a = MtlArray(Float32[1, 2, 3])
                 a .+ 1f0
                 sum(a)
                 sum(reshape(a, 3, 1); dims=1)   # a dimensioned reduction kernel
                 synchronize()
             end
-            # a native matrix multiply. use an integer eltype so it routes through the
-            # GPUArrays generic-matmul kernels rather than MPSGraph, which can't be
-            # instantiated during precompilation.
+            # matrix multiplication, both with the GPUArrays generic-matmul kernels and
+            # with MPSGraph (whose framework `__init__` loads at run time)
             let a = MtlArray(Int32[1 2; 3 4])
                 LinearAlgebra.mul!(similar(a), a, a)
                 synchronize()
+            end
+            load_framework("MetalPerformanceShadersGraph")
+            let a = MtlArray(Float32[1 2; 3 4])
+                Array(a * a)
             end
         end; end
     end
@@ -75,4 +91,5 @@ using PrecompileTools: @setup_workload, @compile_workload
     empty!(MTL.last_committed_per_queue)
     empty!(MTL.submission_state_per_queue)
     empty!(device_exception_info)
+    Base.@lock MPSGraphs.graph_cache_lock empty!(MPSGraphs.graph_cache)
 end

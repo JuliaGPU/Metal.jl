@@ -544,8 +544,6 @@ end
 Base.@nospecializeinfer function launch(
         @nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         bq::BatchedCommandQueue, @nospecialize(args::Tuple), submit::Bool)
-    precompiling = ccall(:jl_generating_output, Cint, ()) != 0
-
     (gs.width>0 && gs.height>0 && gs.depth>0) ||
         throw(ArgumentError("All group dimensions should be non-zero"))
     (ts.width>0 && ts.height>0 && ts.depth>0) ||
@@ -585,15 +583,13 @@ Base.@nospecializeinfer function launch(
     kernel_state = KernelState(Random.rand(UInt32), buf_ptr, exc_ptr, reloc_ptr)
 
     if kernel.loggingEnabled
-        precompiling && return
         return launch_logging!(kernel, gs, ts, bq, args, kernel_state, buf, exc)
     end
 
     conflict = Base.@lock submission_lock begin
-        encode_launch!(kernel, gs, ts, bq, args, kernel_state, buf, exc, precompiling)
+        encode_launch!(kernel, gs, ts, bq, args, kernel_state, buf, exc)
     end
     conflict === nothing || return conflict
-    precompiling && return
 
     submit ? flush!(bq) : maybe_autoflush!(bq)
     return
@@ -603,8 +599,7 @@ end
 # that is still in use by another queue, if any, without encoding anything.
 Base.@nospecializeinfer function encode_launch!(
         @nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
-        bq::BatchedCommandQueue, @nospecialize(args::Tuple), kernel_state, buf, exc,
-        precompiling::Bool)
+        bq::BatchedCommandQueue, @nospecialize(args::Tuple), kernel_state, buf, exc)
     source = kernel.source
     pipeline = kernel.pipeline
     reloc = kernel.reloc_table
@@ -638,11 +633,6 @@ Base.@nospecializeinfer function encode_launch!(
     # resources alive for which we've encoded the GPU address ourselves.
     op = MTL.profile_metadata[] === nothing ? nothing : kernel_operation(kernel, gs, ts)
     record_operation!(bq, source, args; op=op)
-
-    if precompiling
-        end_encoder!(bq)
-        discard_open_batch!(bq)
-    end
     return nothing
 end
 
