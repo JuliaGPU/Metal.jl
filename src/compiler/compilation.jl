@@ -493,11 +493,10 @@ end
 const compilations = Threads.Atomic{Int}(0)
 function compile_to_metallib(@nospecialize(job::CompilerJob))
     Threads.atomic_add!(compilations, 1)
-    @signpost_event log=log_compiler() "Compile" "Job=$job"
 
     # TODO: on 1.9, this actually creates a context. cache those.
     ir, air, fun, entry, loggingEnabled, relocations = JuliaContext() do _
-        @signpost_interval log=log_compiler() "Generate LLVM IR" begin
+        @signpost_interval log=log_compiler() start="" stop="" "Generate LLVM IR" begin
             mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)
         end
 
@@ -506,7 +505,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
             # Detect logging after optimization so dead logging calls do not enable log state.
             local loggingEnabled = haskey(mod.functions, "air.os_log")
 
-            @signpost_interval log=log_compiler() "Downgrade to AIR" begin
+            @signpost_interval log=log_compiler() start="" stop="" "Downgrade to AIR" begin
                 # generate AIR, having GPUCompiler lower the IR to AIR-compatible form and
                 # invoke the LLVM downgrader (both as part of Metal's `mcgen`).
                 #
@@ -543,7 +542,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
         end
     end
 
-    @signpost_interval log=log_compiler() "Create Metal library" begin
+    @signpost_interval log=log_compiler() start="" stop="" "Create Metal library" begin
         metallib = try
             lib = MetalLib(; functions = [fun],
                              file_version = metallib_target(job.config.target.macos),
@@ -734,8 +733,6 @@ function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
                                         metallib::Vector{UInt8}, entry::String,
                                         minthreads::Union{Nothing,NTuple{3,Int}},
                                         label::String=entry)
-    @signpost_event log=log_compiler() "Link" entry
-
     if embed_sources()
         metallib = try
             embed_sources(metallib, air)
@@ -745,7 +742,7 @@ function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
         end
     end
 
-    @signpost_interval log=log_compiler() "Instantiate compute pipeline" begin
+    @signpost_interval log=log_compiler() start=label stop="" "Instantiate compute pipeline" begin
         lib = MTLLibraryFromData(dev, metallib)
         lib.label = label
         fun = MTLFunction(lib, entry)
@@ -758,7 +755,7 @@ function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
         end
         desc.label = label
         try
-            return MTLComputePipelineState(dev, desc)
+            MTLComputePipelineState(dev, desc)
         catch err
             isa(err, NSError) || rethrow()
 

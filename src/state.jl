@@ -5,6 +5,20 @@ log_compiler(args...)   = log_compiler()(args...)
 log_array()             = OSLog("org.juliagpu.metal", "Array")
 log_array(args...)      = log_array()(args...)
 
+# Signposts on hot paths use the dynamic tracing category: these cost a single check while
+# disabled, and are only enabled while Instruments records with the instrument from
+# `instruments_package`. The handle is created once per session, by `__init__`, and at
+# load time for the precompilation workload, which runs before `__init__`. Metal.jl has to
+# load on other platforms too, where the OS framework does not exist.
+const log_tracing_handle = Ref{OSLog}()
+function init_log_tracing!()
+    Sys.isapple() || return
+    log_tracing_handle[] = OSLog("org.juliagpu.metal", OS.CATEGORY_DYNAMIC_TRACING)
+    return
+end
+init_log_tracing!()
+log_tracing() = log_tracing_handle[]
+
 const LABEL_RESOURCES = @load_preference("label_resources", nothing)
 
 # without a preference, label when debugging (`-g2`) or when frame capture is enabled,

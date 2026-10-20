@@ -134,7 +134,17 @@ $ xcrun xctrace record --template 'Metal System Trace' --output saxpy.trace \
 works too). To
 record a session that is already running, attach to it by process ID (`getpid()` in Julia)
 with `--attach PID` instead of `--launch`, and stop the recording with Ctrl-C. Open the
-result with `open saxpy.trace`.
+result with `open saxpy.trace`. To include Metal.jl's signposts (see below), build the
+instrument that records them, and add it to the recording:
+
+```
+$ julia --project -e 'using Metal; Metal.OS.instruments_package(["org.juliagpu.metal"]; dir=".")'
+$ xcrun xctrace record --template 'Metal System Trace' \
+      --package Julia.instrdst --instrument 'Julia Signposts' --output saxpy.trace \
+      --launch -- $(which julia) --project script.jl
+```
+
+The list of subsystems can include those of your own signposts too.
 
 In the trace, the GPU's list of shaders names kernels by their mangled names (e.g.
 `_Z5saxpy14MtlDeviceArrayI7Float32Li1ELi1EES1_S0_`), while the Metal driver's signposts,
@@ -151,3 +161,25 @@ check them before sharing a trace.
 The integrated profiler (`Metal.@profile` without `external=true`, see
 [Profiling](@ref)) reports the GPU time of each operation in the REPL, and is the quicker
 tool to find which kernel to look at.
+
+### Signposts
+
+Metal.jl marks what it does on the CPU with signposts (subsystem `org.juliagpu.metal`),
+which `Metal.@profile external=true` records with the *Julia Signposts* instrument:
+
+- **Compile** intervals, with the kernel's Julia signature as message, containing *Generate
+  LLVM IR*, *Downgrade to AIR* and *Create Metal library* intervals.
+- **Instantiate compute pipeline** intervals when a kernel is loaded onto the GPU, which
+  also happens for kernels that were compiled before (e.g., during precompilation).
+- A **Launch** interval for every kernel launch, with the kernel's signature and its
+  `groups` and `threads` as message.
+- **Wait for GPU** intervals when a task waits for GPU work to finish (`synchronize`,
+  copying an array to the CPU), but only when the GPU was not done yet.
+
+An interval that ends with the message `error` failed.
+
+Launch and wait signposts are only emitted while an instrument asks for them, and cost a
+few nanoseconds otherwise. The *Julia Signposts* instrument does so; `Metal.@profile
+external=true` builds it with Xcode's `instrumentbuilder` the first time it is needed.
+Signposts of your own code can be added with ObjectiveC.jl, as described in
+[Application tracing](@ref).

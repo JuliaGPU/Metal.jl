@@ -98,10 +98,12 @@ julia> Metal.@profile external=true @metal threads=length(c) vadd(a, b, c);
 [ Info: System trace saved to /Users/tim/vadd_1.trace; open the resulting trace in Instruments
 ```
 
-It is possible to augment the trace with additional information by using signposts: Similar
-to NVTX markers and ranges in CUDA.jl, signpost intervals and events can be used to add
-respectively time intervals and points of interest to the trace. This can be done by using
-the signpost functionality from ObjectiveC.jl:
+Metal.jl adds signposts to the trace that show when kernels are compiled and launched, and
+when the CPU waits for the GPU; see [Signposts](@ref).
+
+You can add your own: similar to NVTX markers and ranges in CUDA.jl, signpost intervals and
+events add respectively time intervals and points of interest to the trace. Use the
+signpost functionality from ObjectiveC.jl:
 
 ```julia
 using ObjectiveC, .OS
@@ -112,9 +114,17 @@ using ObjectiveC, .OS
 end
 ```
 
-For more information, e.g. how to pass additional messages to the signposts, or how to
-use a custom logger, consult the ObjectiveC.jl documentation, or the docstrings of the
-`@signpost_interval` and `@signpost_event` macros.
+Instruments shows the names of signposts only if they are string literals in a package
+(i.e., code that is precompiled). Other signposts, e.g. from the REPL or a script, are
+called `Julia`, with their name prepended to the message.
+
+Signposts on the default logger are always emitted, also when no trace is being recorded.
+For signposts on hot code paths, create a logger with the dynamic tracing
+category, `OSLog("com.example.MyPackage", OS.CATEGORY_DYNAMIC_TRACING)`, which only emits
+signposts while an instrument asks for them: build that instrument with
+`OS.instruments_package(["com.example.MyPackage"])`. For more information, e.g. how to pass
+additional messages to the signposts, consult the docstrings of the `@signpost_interval`
+and `@signpost_event` macros.
 
 ## Frame capture
 

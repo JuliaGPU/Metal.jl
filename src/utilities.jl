@@ -295,6 +295,20 @@ end
 ## external profiler (Instruments)
 ## COV_EXCL_START
 
+# Instruments only enables the dynamic tracing signposts of subsystems that an instrument
+# asks for, so recordings add the one from `OS.instruments_package`. It is built once per
+# session (in about half a second), so that it always matches the loaded ObjectiveC.jl.
+const signposts_instrument = Ref{Tuple{String,String}}()
+const signposts_instrument_lock = ReentrantLock()
+function signposts_instrument_package()
+    @lock signposts_instrument_lock begin
+        if !isassigned(signposts_instrument)
+            signposts_instrument[] = OS.instruments_package(["org.juliagpu.metal"])
+        end
+        signposts_instrument[]
+    end
+end
+
 function profiled(f; name::AbstractString="julia", template::AbstractString="Metal System Trace",
                   open::Bool=false)
     # check if xctrace is available
@@ -302,11 +316,23 @@ function profiled(f; name::AbstractString="julia", template::AbstractString="Met
         error("xctrace is not available; please install Xcode first")
     end
 
-    # build the xctrace invocation
+    # build the xctrace invocation. templates generally lack the generic signpost
+    # instrument, which records the signposts of the user's own code.
     notification_name = "julia.metal.profile"
     path = trace_path(name, "trace")
     cmd = `xctrace record --quiet --no-prompt --template $template --output $path
-                          --notify-tracing-started $notification_name --attach $(getpid())`
+                          --notify-tracing-started $notification_name --attach $(getpid())
+                          --instrument os_signpost`
+    package = try
+        signposts_instrument_package()
+    catch err
+        @warn "Could not build the Instruments package for Metal.jl's signposts; kernel launches will be missing from the trace" exception=(err, catch_backtrace())
+        nothing
+    end
+    if package !== nothing
+        package_path, instrument = package
+        cmd = `$cmd --package $package_path --instrument $instrument`
+    end
 
     # listen for the notification indicating tracing was started
     tracing_started = Ref(false)

@@ -58,6 +58,7 @@ function __init__()
     Base.@atomic freed_buffers.head = nothing
 
     init_label_resources!()
+    init_log_tracing!()
 
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     precompiling && return
