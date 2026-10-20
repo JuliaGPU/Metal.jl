@@ -60,3 +60,17 @@ results["integration"] = integration_results
 # and is stable to <1% across trials. Real regressions still show up in the minimum.
 result_file = length(ARGS) >= 1 ? ARGS[1] : "benchmarkresults.json"
 BenchmarkTools.save(result_file, minimum(results))
+
+# The suite keeps less than 100 MiB of arrays alive, so device memory that is still in use
+# after collecting garbage was leaked. Leaks put Metal.jl under memory pressure, making
+# allocations and synchronizations trigger collections that inflate unrelated results,
+# so fail instead of publishing them.
+GC.gc(true)
+Metal.device_synchronize()  # releases collected buffers with the Metal 4 command API
+let dev = Metal.device(), allocated = Int(dev.currentAllocatedSize)
+    budget = Metal.working_set_size(dev) ÷ 8
+    if budget > 0 && allocated > budget
+        error("Benchmarks left $(Base.format_bytes(allocated)) of device memory allocated, " *
+              "which indicates a memory leak; results are not representative.")
+    end
+end
