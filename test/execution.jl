@@ -90,6 +90,39 @@ end
     end
 end
 
+@testset "compiler crash reports" begin
+    # the shape of a real report: a JSON header line, then a pretty-printed JSON body
+    report(pid, reasons) = """
+        {"app_name":"MTLCompilerService","bug_type":"309"}
+        {
+          "pid" : 1234,
+          "responsiblePid" : $pid,
+          "responsibleProc" : "julia",
+          "termination" : {"code":1,"namespace":"METAL","reasons":[$(join(map(repr, reasons), ","))]},
+          "threads" : [{"frames":[{"symbol":"abort_with_reason"}]}]
+        }
+        """
+    reasons = ["unable to legalize instruction: %7:_(s16) = 191 %0:_, %6:_", "Context:",
+               "%0:_(s16) = 90 %2:_(p64) :: (load (s16) from `i16 addrspace(64)*`)",
+               "(in function: agc.main)"]
+
+    mktempdir() do dir
+        write(joinpath(dir, "MTLCompilerService-stale.ips"), report(42, ["stale"]))
+        sleep(0.01)
+        started = time()
+        write(joinpath(dir, "MTLCompilerService-other.ips"), report(43, ["other process"]))
+        write(joinpath(dir, "ReportCrash-unrelated.ips"), report(42, ["unrelated"]))
+        @test Metal.compiler_crash_report(started; dir, pid=42, timeout=0) === nothing
+
+        path = joinpath(dir, "MTLCompilerService-ours.ips")
+        write(path, report(42, reasons))
+        @test Metal.compiler_crash_report(started; dir, pid=42, timeout=0) == (path, reasons)
+    end
+
+    @test Metal.crash_reasons(report(42, String[]), 42) === nothing
+    @test Metal.compiler_crash_report(time(); dir="/nonexistent", timeout=0) === nothing
+end
+
 @testset "kernel labels" begin
     function labelled_kernel(a, x)
         a[1] = x
