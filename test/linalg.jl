@@ -452,6 +452,17 @@ using Metal: storagemode
     A = MtlMatrix{Float32}([1 2; 0 0])
     @test_throws SingularException lu(A)
 
+    # MPS only decomposes Float32 matrices, and aborts the process on others; they use
+    # LinearAlgebra's generic implementation instead, which needs CPU access to the array
+    if Metal.DefaultStorageMode == Metal.SharedStorage
+        a = Float16[4 1; 1 3]
+        A = MtlMatrix(a)
+        lua = lu(A)
+        @test Array(lua.L * lua.U) ≈ a[lua.p, :]
+        @test Array(cholesky(A).U) ≈ cholesky(a).U
+        @test Array(A \ MtlVector(Float16[1, 2])) ≈ a \ Float16[1, 2]
+    end
+
     altStorage = Metal.DefaultStorageMode != Metal.SharedStorage ? Metal.SharedStorage : Metal.PrivateStorage
     A = MtlMatrix{Float32, altStorage}(rand(Float32, 1024, 1024))
     lua = lu(A)

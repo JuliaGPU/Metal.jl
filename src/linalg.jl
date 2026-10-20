@@ -1,7 +1,7 @@
 using LinearAlgebra
 using LinearAlgebra: MulAddMul, wrap
 using .MPS
-using .MPS: MPS_VALID_MATMUL_TYPES, MPS_VALID_MATVECMUL_TYPES, MtlFloat
+using .MPS: MPS_VALID_MATMUL_TYPES, MPS_VALID_MATVECMUL_TYPES, MPSSolveFloat
 
 @inline function supports_mps_matmul(A, B, C, valid_types)
     MPS.is_supported(device(C)) &&
@@ -266,7 +266,7 @@ LinearAlgebra.ipiv2perm(v::MtlVector{<:Any, CPUStorage}, maxi::Integer) =
     LinearAlgebra.ipiv2perm(unsafe_wrap(Array, v), maxi)
 
 function LinearAlgebra.lu(A::MtlMatrix{T};
-                                           check::Bool = true) where {T <: MtlFloat}
+                                           check::Bool = true) where {T <: MPSSolveFloat}
     M, N = size(A)
     dev = device()
     queue = global_queue(dev)
@@ -324,7 +324,7 @@ end
 # TODO: dispatch on pivot strategy
 function LinearAlgebra.lu!(A::MtlMatrix{T};
                                             check::Bool = true,
-                                            allowsingular::Bool = false) where {T <: MtlFloat}
+                                            allowsingular::Bool = false) where {T <: MPSSolveFloat}
     M, N = size(A)
     dev = device()
     queue = global_queue(dev)
@@ -387,7 +387,7 @@ function LinearAlgebra.transpose!(B::MtlMatrix{T},
     return B
 end
 
-function Base.:\(A::MtlMatrix{T}, B::MtlVecOrMat{T}) where {T<:MtlFloat}
+function Base.:\(A::MtlMatrix{T}, B::MtlVecOrMat{T}) where {T<:MPSSolveFloat}
     if size(A, 1) == size(A, 2)
         return MPS.solve_lu(A, B)
     else
@@ -396,18 +396,18 @@ function Base.:\(A::MtlMatrix{T}, B::MtlVecOrMat{T}) where {T<:MtlFloat}
 end
 
 function LinearAlgebra.ldiv!(F::LU{T,<:MtlMatrix{T}},
-                             B::MtlVecOrMat{T}) where {T<:MtlFloat}
+                             B::MtlVecOrMat{T}) where {T<:MPSSolveFloat}
     return MPS.solve_lu(F, B)
 end
 
 function Base.:\(F::LU{T,<:MtlMatrix{T}},
-                 B::MtlVecOrMat{T}) where {T<:MtlFloat}
+                 B::MtlVecOrMat{T}) where {T<:MPSSolveFloat}
     return ldiv!(F, copy(B))
 end
 
 function LinearAlgebra.cholesky!(A::MtlMatrix{T},
                                  ::LinearAlgebra.NoPivot=LinearAlgebra.NoPivot();
-                                 check::Bool=true) where {T<:MtlFloat}
+                                 check::Bool=true) where {T<:MPSSolveFloat}
     factors, info = MPS.decompose_cholesky!(A; uplo='U')
     check && checkpositivedefinite(info)
     return LinearAlgebra.Cholesky(factors, 'U', info)
@@ -415,7 +415,7 @@ end
 
 function LinearAlgebra.cholesky(A::MtlMatrix{T},
                                 ::LinearAlgebra.NoPivot=LinearAlgebra.NoPivot();
-                                check::Bool=true) where {T<:MtlFloat}
+                                check::Bool=true) where {T<:MPSSolveFloat}
     return cholesky!(copy(A), LinearAlgebra.NoPivot(); check)
 end
 
@@ -423,7 +423,7 @@ for wrapper in (:Symmetric, :Hermitian)
     @eval begin
         function LinearAlgebra.cholesky!(A::$wrapper{T,<:MtlMatrix{T}},
                                          ::LinearAlgebra.NoPivot=LinearAlgebra.NoPivot();
-                                         check::Bool=true) where {T<:MtlFloat}
+                                         check::Bool=true) where {T<:MPSSolveFloat}
             factors, info = MPS.decompose_cholesky!(parent(A); uplo=A.uplo)
             check && checkpositivedefinite(info)
             return LinearAlgebra.Cholesky(factors, A.uplo, info)
@@ -431,7 +431,7 @@ for wrapper in (:Symmetric, :Hermitian)
 
         function LinearAlgebra.cholesky(A::$wrapper{T,<:MtlMatrix{T}},
                                         ::LinearAlgebra.NoPivot=LinearAlgebra.NoPivot();
-                                        check::Bool=true) where {T<:MtlFloat}
+                                        check::Bool=true) where {T<:MPSSolveFloat}
             factors, info = MPS.decompose_cholesky(parent(A); uplo=A.uplo)
             check && checkpositivedefinite(info)
             return LinearAlgebra.Cholesky(factors, A.uplo, info)
@@ -440,12 +440,12 @@ for wrapper in (:Symmetric, :Hermitian)
 end
 
 function LinearAlgebra.ldiv!(C::Cholesky{T,<:MtlMatrix{T}},
-                             B::MtlVecOrMat{T}) where {T<:MtlFloat}
+                             B::MtlVecOrMat{T}) where {T<:MPSSolveFloat}
     return MPS.solve_cholesky(C, B)
 end
 
 function Base.:\(C::Cholesky{T,<:MtlMatrix{T}},
-                 B::MtlVecOrMat{T}) where {T<:MtlFloat}
+                 B::MtlVecOrMat{T}) where {T<:MPSSolveFloat}
     return ldiv!(C, copy(B))
 end
 
@@ -469,7 +469,7 @@ end
 
 function LinearAlgebra.generic_trimatdiv!(C::MtlVecOrMat{T}, uploc, isunitc,
                                           tfun::Function, A::MtlMatrix{T},
-                                          B::MtlVecOrMat{T}) where {T<:MtlFloat}
+                                          B::MtlVecOrMat{T}) where {T<:MPSSolveFloat}
     return MPS.solve_triangular(A, B; upper=triangular_upper(uploc),
                                 unit=triangular_unit(isunitc),
                                 transpose=triangular_transpose(tfun), out=C)
@@ -477,7 +477,7 @@ end
 
 function LinearAlgebra.generic_mattridiv!(C::MtlMatrix{T}, uploc, isunitc,
                                           tfun::Function, A::MtlMatrix{T},
-                                          B::MtlMatrix{T}) where {T<:MtlFloat}
+                                          B::MtlMatrix{T}) where {T<:MPSSolveFloat}
     return MPS.solve_triangular(B, A; upper=triangular_upper(uploc),
                                 unit=triangular_unit(isunitc),
                                 transpose=triangular_transpose(tfun),
@@ -490,24 +490,24 @@ for (triangle, upper, unit) in ((:UpperTriangular, true, false),
                                 (:UnitLowerTriangular, false, true))
     @eval begin
         function LinearAlgebra.ldiv!(A::$triangle{T,<:MtlMatrix{T}},
-                                     B::MtlVecOrMat{T}) where {T<:MtlFloat}
+                                     B::MtlVecOrMat{T}) where {T<:MPSSolveFloat}
             return MPS.solve_triangular(parent(A), B; upper=$upper, unit=$unit)
         end
 
         function Base.:\(A::$triangle{T,<:MtlMatrix{T}},
-                         B::MtlVecOrMat{T}) where {T<:MtlFloat}
+                         B::MtlVecOrMat{T}) where {T<:MPSSolveFloat}
             return ldiv!(A, copy(B))
         end
 
         function LinearAlgebra.rdiv!(B::MtlMatrix{T},
-                                     A::$triangle{T,<:MtlMatrix{T}}) where {T<:MtlFloat}
+                                     A::$triangle{T,<:MtlMatrix{T}}) where {T<:MPSSolveFloat}
             return MPS.solve_triangular(parent(A), B; upper=$upper, unit=$unit,
                                         right=true)
         end
 
         function LinearAlgebra.rdiv!(B::MtlMatrix{T},
                                      A::$triangle{T,<:Union{Transpose{T,<:MtlMatrix{T}},
-                                                            Adjoint{T,<:MtlMatrix{T}}}}) where {T<:MtlFloat}
+                                                            Adjoint{T,<:MtlMatrix{T}}}}) where {T<:MPSSolveFloat}
             return MPS.solve_triangular(parent(parent(A)), B; upper=$(!upper),
                                         unit=$unit, transpose=true, right=true)
         end
@@ -522,54 +522,54 @@ function metal_identity(A::MtlMatrix{T,S}, n::Integer) where {T,S}
     return MtlMatrix{T,S}(I, n, n)
 end
 
-function LinearAlgebra.det(F::LU{T,<:MtlMatrix{T}}) where {T<:MtlFloat}
+function LinearAlgebra.det(F::LU{T,<:MtlMatrix{T}}) where {T<:MPSSolveFloat}
     LinearAlgebra.checksquare(F.factors)
     LinearAlgebra.issuccess(F) || return zero(T)
     return prod(diag(F.factors)) * T(lu_pivot_sign(F.ipiv))
 end
 
-function LinearAlgebra.logabsdet(F::LU{T,<:MtlMatrix{T}}) where {T<:MtlFloat}
+function LinearAlgebra.logabsdet(F::LU{T,<:MtlMatrix{T}}) where {T<:MPSSolveFloat}
     LinearAlgebra.checksquare(F.factors)
     LinearAlgebra.issuccess(F) || return (log(zero(T)), zero(T))
     d = diag(F.factors)
     return (mapreduce(x -> log(abs(x)), +, d), prod(sign, d) * T(lu_pivot_sign(F.ipiv)))
 end
 
-function LinearAlgebra.logdet(F::LU{T,<:MtlMatrix{T}}) where {T<:MtlFloat}
+function LinearAlgebra.logdet(F::LU{T,<:MtlMatrix{T}}) where {T<:MPSSolveFloat}
     logabs, sgndet = logabsdet(F)
     return logabs + log(sgndet)
 end
 
-function LinearAlgebra.det(C::Cholesky{T,<:MtlMatrix{T}}) where {T<:MtlFloat}
+function LinearAlgebra.det(C::Cholesky{T,<:MtlMatrix{T}}) where {T<:MPSSolveFloat}
     LinearAlgebra.checksquare(C.factors)
     LinearAlgebra.issuccess(C) || return zero(T)
     return prod(abs2, diag(C.factors))
 end
 
-function LinearAlgebra.logdet(C::Cholesky{T,<:MtlMatrix{T}}) where {T<:MtlFloat}
+function LinearAlgebra.logdet(C::Cholesky{T,<:MtlMatrix{T}}) where {T<:MPSSolveFloat}
     LinearAlgebra.checksquare(C.factors)
     LinearAlgebra.issuccess(C) || return log(zero(T))
     return 2 * mapreduce(log, +, diag(C.factors))
 end
 
-function LinearAlgebra.logabsdet(C::Cholesky{T,<:MtlMatrix{T}}) where {T<:MtlFloat}
+function LinearAlgebra.logabsdet(C::Cholesky{T,<:MtlMatrix{T}}) where {T<:MPSSolveFloat}
     return (logdet(C), one(T))
 end
 
 for op in (:det, :logabsdet, :logdet)
-    @eval function LinearAlgebra.$op(A::MtlMatrix{T}) where {T<:MtlFloat}
+    @eval function LinearAlgebra.$op(A::MtlMatrix{T}) where {T<:MPSSolveFloat}
         LinearAlgebra.checksquare(A)
         return LinearAlgebra.$op(lu(A; check=false))
     end
 end
 
-function LinearAlgebra.inv(A::MtlMatrix{T}) where {T<:MtlFloat}
+function LinearAlgebra.inv(A::MtlMatrix{T}) where {T<:MPSSolveFloat}
     n = LinearAlgebra.checksquare(A)
     return A \ metal_identity(A, n)
 end
 
 for factorization in (:LU, :Cholesky)
-    @eval function LinearAlgebra.inv(F::$factorization{T,<:MtlMatrix{T}}) where {T<:MtlFloat}
+    @eval function LinearAlgebra.inv(F::$factorization{T,<:MtlMatrix{T}}) where {T<:MPSSolveFloat}
         n = LinearAlgebra.checksquare(F.factors)
         return ldiv!(F, metal_identity(F.factors, n))
     end

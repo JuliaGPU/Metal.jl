@@ -105,6 +105,9 @@ end
             MPSMatrixCopyDescriptor(src, dst))
 end
 
+# element type of the decompositions and solves, which abort on anything else
+const MPSSolveFloat = Float32
+
 @inline function rhs_scratch(::Type{T}, n, nrhs) where {T}
     return MtlMatrix{T, PrivateStorage}(undef, (nrhs, n))
 end
@@ -138,7 +141,7 @@ end
 @inline mps_cholesky_upper(uplo) = uplo_char(uplo) == 'L'
 
 function solve_lu(A::MtlMatrix{T}, B::MtlVecOrMat{T};
-                                   check::Bool=true) where {T<:MtlFloat}
+                                   check::Bool=true) where {T<:MPSSolveFloat}
     n, nrhs = check_square_rhs(A, B)
     dev = device()
     queue = global_queue(dev)
@@ -184,7 +187,7 @@ end
 
 function solve_lu(F::LinearAlgebra.LU{T,<:MtlMatrix{T}},
                                    B::MtlVecOrMat{T};
-                                   out::MtlVecOrMat{T}=B) where {T<:MtlFloat}
+                                   out::MtlVecOrMat{T}=B) where {T<:MPSSolveFloat}
     n = LinearAlgebra.checksquare(F)
     size(B, 1) == n ||
         throw(DimensionMismatch("factorization has $n rows, but right hand side has $(size(B, 1)) rows"))
@@ -226,7 +229,7 @@ function solve_lu(F::LinearAlgebra.LU{T,<:MtlMatrix{T}},
 end
 
 function decompose_cholesky!(A::MtlMatrix{T};
-                                              uplo::Union{Symbol,AbstractChar}='U') where {T<:MtlFloat}
+                                              uplo::Union{Symbol,AbstractChar}='U') where {T<:MPSSolveFloat}
     n = LinearAlgebra.checksquare(A)
     dev = device()
     queue = global_queue(dev)
@@ -244,13 +247,13 @@ function decompose_cholesky!(A::MtlMatrix{T};
 end
 
 function decompose_cholesky(A::MtlMatrix{T};
-                            uplo::Union{Symbol,AbstractChar}='U') where {T<:MtlFloat}
+                            uplo::Union{Symbol,AbstractChar}='U') where {T<:MPSSolveFloat}
     return decompose_cholesky!(copy(A); uplo)
 end
 
 function solve_cholesky(C::LinearAlgebra.Cholesky{T,<:MtlMatrix{T}},
                                          B::MtlVecOrMat{T};
-                                         out::MtlVecOrMat{T}=B) where {T<:MtlFloat}
+                                         out::MtlVecOrMat{T}=B) where {T<:MPSSolveFloat}
     n = LinearAlgebra.checksquare(C)
     size(B, 1) == n ||
         throw(DimensionMismatch("factorization has $n rows, but right hand side has $(size(B, 1)) rows"))
@@ -288,7 +291,7 @@ end
 
 function solve_cholesky(A::MtlMatrix{T}, B::MtlVecOrMat{T};
                                          uplo::Union{Symbol,AbstractChar}='U',
-                                         check::Bool=true) where {T<:MtlFloat}
+                                         check::Bool=true) where {T<:MPSSolveFloat}
     n, nrhs = check_square_rhs(A, B)
     dev = device()
     queue = global_queue(dev)
@@ -334,7 +337,7 @@ function solve_triangular(A::MtlMatrix{T}, B::MtlVecOrMat{T};
                                            upper::Bool, unit::Bool,
                                            transpose::Bool=false, right::Bool=false,
                                            alpha=one(T),
-                                           out::MtlVecOrMat{T}=B) where {T<:MtlFloat}
+                                           out::MtlVecOrMat{T}=B) where {T<:MPSSolveFloat}
     if right
         B isa MtlMatrix && out isa MtlMatrix ||
             throw(ArgumentError("right triangular solve requires matrix inputs"))
@@ -378,7 +381,7 @@ end
 
 function solve_triangular_right(A::MtlMatrix{T}, B::MtlMatrix{T};
                                 upper::Bool, unit::Bool, transpose::Bool=false,
-                                alpha=one(T), out::MtlMatrix{T}=B) where {T<:MtlFloat}
+                                alpha=one(T), out::MtlMatrix{T}=B) where {T<:MPSSolveFloat}
     n, nrhs = check_square_rdiv(A, B)
     check_rhs_out(B, out)
 
