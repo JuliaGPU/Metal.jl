@@ -15,7 +15,7 @@ As this package is still under development, if you spot a bug, please file
 ## Quick Start
 
 Metal.jl ties into your system's existing Metal Shading Language compiler toolchain, so no additional
-installs are required (unless you want to [view profiled GPU operations](profiling.md))
+installs are required (unless you want to [view profiled GPU operations](development/profiling.md))
 
 ```julia
 # install the package
@@ -43,7 +43,7 @@ The following resources may also be of interest (although are mainly focused on 
 
 ## Contributing
 
-If you want to help improve this package, look at [the contributing page](faq/contributing.md) for more details.
+If you want to help improve this package, look at [the contributing page](developers/contributing.md) for more details.
 
 ## Acknowledgements
 

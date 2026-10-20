@@ -84,7 +84,7 @@ compute encoder. Each kernel launch is a folder named after the kernel's Julia s
 *Compute Pipeline State*, double-click the row of type *Function*. The editor now shows
 `kernels.jl`, with each line's share of the kernel's GPU time next to it:
 
-![Xcode showing kernels.jl with per-line GPU time percentages](assets/xcode-source-profile.png)
+![Xcode showing kernels.jl with per-line GPU time percentages](../assets/xcode-source-profile.png)
 
 Here, the gather load on line 6 and the `sin` on line 8 take most of the time. The
 percentage on the `function` line is the total of the whole kernel, not a hot spot. The
@@ -175,7 +175,7 @@ when sharing one.
 
 After replaying, the navigator on the left lists what the captured code submitted:
 
-![Xcode's navigator with a labelled command buffer and kernel folder, and the Bound Resources of a dispatch](assets/xcode-dispatch.png)
+![Xcode's navigator with a labelled command buffer and kernel folder, and the Bound Resources of a dispatch](../assets/xcode-dispatch.png)
 
 - One or more command buffers, labelled `MTLCommandBuffer(batched queue)`. Metal.jl
   batches up to 32 kernel launches into one.
@@ -310,7 +310,7 @@ choose *View > Zoom > Zoom to Fit*. Metal.jl's signposts are on the *Julia Signp
 track. Select the track to list its intervals, with their messages, in the detail area at
 the bottom, as in this screenshot:
 
-![Instruments showing a Metal System Trace with Metal.jl's signposts](assets/instruments-signposts.png)
+![Instruments showing a Metal System Trace with Metal.jl's signposts](../assets/instruments-signposts.png)
 
 This recording, of the `Metal.@profile external=true` example above, shows from top to
 bottom, among others:

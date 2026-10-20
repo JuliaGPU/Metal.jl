@@ -30,8 +30,10 @@ function main()
                 "usage/array.md",
                 "usage/kernel.md",
             ],
-            "Profiling" => "profiling.md",
-            "Debugging and profiling with Xcode and Instruments" => "xcode.md",
+            "Development" => Any[
+                "development/profiling.md",
+                "development/xcode.md",
+            ],
             "API reference" => Any[
                 "api/essentials.md",
                 "api/compiler.md",
@@ -41,10 +43,10 @@ function main()
                 "api/mpsgraphs.md",
                 "api/libraries.md",
             ],
-            "FAQ" => Any[
-                "faq/faq.md",
-                "faq/contributing.md",
-                "faq/hacking.md",
+            "FAQ" => "faq/faq.md",
+            "Developers" => Any[
+                "developers/contributing.md",
+                "developers/hacking.md",
             ],
         ]
     )
