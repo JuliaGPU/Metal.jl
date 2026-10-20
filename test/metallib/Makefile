@@ -13,7 +13,7 @@ METALLIBS := $(foreach ver,$(MACOSX_VERSIONS),$(SOURCES:.metal=.$(ver).metallib)
 STANDALONE_METALLIBS := kernel.standalone.metallib dependencies.standalone.metallib
 
 SPECIAL_METALLIBS := coreimage.metallib dylib.metallib imports.metallib kernels.compressed.metallib \
-                     optional_constants.metallib used_constants.metallib
+                     optional_constants.metallib used_constants.metallib sources.long.metallib
 
 # unlinked AIR, to build libraries from
 AIR_MODULES := optional_constants.air used_constants.air used_constants.O0.air
@@ -74,6 +74,15 @@ imports.metallib: imports.metal dylib.metallib
 # compressed modules and reflection need metallib v1.2.9 (macOS 26)
 kernels.compressed.metallib: kernels.metal
 	$(METAL) -mmacosx-version-min=26 -Xlinker --compress-sections -o $@ $<
+
+# a source path too long for the ustar format, which the source archive puts in a pax header
+X20 := xxxxxxxxxxxxxxxxxxxx
+LONG_DIR := /tmp/metal.jl-long/$(X20)$(X20)$(X20)/$(X20)$(X20)$(X20)/$(X20)$(X20)$(X20)/$(X20)$(X20)$(X20)
+sources.long.metallib: sources.metal
+	mkdir -p $(LONG_DIR)
+	cp $< $(LONG_DIR)/sources.metal
+	$(METAL) -mmacosx-version-min=26 -frecord-sources -o $@ $(LONG_DIR)/sources.metal
+	$(RM) -r /tmp/metal.jl-long
 
 # function constants in an unlinked module, and as the linker records them
 optional_constants.air: optional_constants.metal

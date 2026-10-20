@@ -123,6 +123,31 @@ end
     label = String(k.pipeline.label)
     @test length(label) <= Metal.MAX_KERNEL_LABEL
     @test startswith(label, "long_kernel(::MtlDeviceVector{Float32, 1}, ::Tuple{")
+
+    # the generated function is named after the Julia function, unless named explicitly
+    entry(f, tt; kwargs...) = Metal.compile_to_metallib(Metal.GPUCompiler.CompilerJob(
+        Metal.methodinstance(typeof(f), tt), Metal.compiler_config(device(); kwargs...))).entry
+    @test entry(labelled_kernel, Tuple{MtlDeviceVector{Float32, 1}, Float32}) == "labelled_kernel"
+    @test entry(labelled_kernel, Tuple{MtlDeviceVector{Float32, 1}, Float32};
+                name="custom") == "custom"
+    function kernel_factory()
+        inner_kernel(x) = return
+        return inner_kernel
+    end
+    @test entry(kernel_factory(), Tuple{Float32}) == "inner_kernel"
+    @test entry(x -> return, Tuple{Float32}) == "anonymous"
+
+    # specializations of a kernel share a name, but are separate libraries
+    function update!(a, x)
+        a[1] = x
+        return
+    end
+    @test entry(update!, Tuple{MtlDeviceVector{Float32, 1}, Float32}) == "update_"
+    b = MtlArray(zeros(Int32, 1))
+    @metal update!(a, 3f0)
+    @metal update!(b, Int32(4))
+    @test Array(a) == [3f0]
+    @test Array(b) == [4]
 end
 
 @testset "inference" begin

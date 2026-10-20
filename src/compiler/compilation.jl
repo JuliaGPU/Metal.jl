@@ -351,6 +351,12 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
         end
     end
 
+    # name the kernel readably (see `kernel_symbol`). this has to happen after GPUCompiler
+    # has looked up the entry point by its original name, i.e., not before optimization.
+    if job.config.kernel && job.config.name === nothing
+        LLVM.name!(entry, kernel_symbol(job.source))
+    end
+
     return entry
 end
 
@@ -606,29 +612,49 @@ function check_loadable(target)
     end
 end
 
+# The name a function was defined with, or `nothing` for an anonymous function. Closures,
+# including those of `@kernel` and broadcast, have type names like
+# `#broadcast_linear#_copyto!##1`, and anonymous functions ones like `#3#4`.
+function function_name(@nospecialize(ft::Type{<:Function}))
+    m = match(r"^#*([^#]+)", String(nameof(ft)))
+    (m === nothing || all(isdigit, m[1])) ? nothing : String(m[1])
+end
+
+# The symbol name of the kernel `mi` is compiled from, e.g., `saxpy`. GPUCompiler names
+# kernels after their mangled signature (`_Z5saxpy14MtlDeviceArrayI7Float32...`), which
+# profilers that demangle C++ names group by function, but Apple's tools show symbol names
+# as they are. Xcode's shader profiler even names every inlined frame of a call stack after
+# the kernel, as it can only resolve the names of inlined functions in MSL sources. Each
+# kernel is compiled into its own library, so specializations can share a name.
+function kernel_symbol(mi::Core.MethodInstance)
+    ft = mi.specTypes.parameters[1]
+    name = if !(ft <: Function)
+        String(nameof(ft))
+    else
+        something(function_name(ft), "anonymous")
+    end
+    return GPUCompiler.safe_name(name)
+end
+
 # A readable name for the kernel `mi` is compiled from, e.g.,
 # `saxpy(::MtlDeviceVector{Float32, 1}, ::MtlDeviceVector{Float32, 1}, ::UInt32)`.
-# Tools like Xcode's GPU frame capture otherwise only show the mangled entry point name.
+# Tools like Xcode's GPU frame capture otherwise only show the name of the entry point,
+# which is the same for every specialization of a kernel (see `kernel_symbol`).
 # Long argument types (broadcasts, KernelAbstractions contexts) get their type parameters
 # abbreviated the way stack traces do, and the label is truncated if that doesn't suffice.
 const MAX_KERNEL_LABEL = 256
 const MAX_KERNEL_LABEL_ARG = 96
 function kernel_label(mi::Core.MethodInstance)
     ft, argtypes... = mi.specTypes.parameters
-    name = if ft <: Function
-        # closures, including those of `@kernel` and broadcast, have type names like
-        # `#broadcast_linear#_copyto!##1`: keep the name they were defined with.
-        # anonymous functions (`#3#4`) are told apart by where they were defined.
-        m = match(r"^#*([^#]+)", String(nameof(ft)))
-        if m === nothing || all(isdigit, m[1])
-            meth = mi.def
-            meth isa Method ? "anonymous@$(basename(String(meth.file))):$(meth.line)" :
-                              "anonymous"
-        else
-            m[1]
-        end
-    else
+    name = if !(ft <: Function)
         "(::$ft)"
+    elseif (fn = function_name(ft)) !== nothing
+        fn
+    else
+        # anonymous functions are told apart by where they were defined
+        meth = mi.def
+        meth isa Method ? "anonymous@$(basename(String(meth.file))):$(meth.line)" :
+                          "anonymous"
     end
     args = String["::" * sprint(show, t) for t in argtypes]
     # `type_depth_limit` is internal (it limits the types in stack traces), so don't
@@ -654,8 +680,10 @@ end
 # names, and the archive has to come with the command that compiled that file. Apple's
 # toolchain archives the MSL sources (with `-frecord-sources`); we archive the AIR module
 # with the command that would compile it, plus the Julia files its debug info refers to,
-# which is what Xcode displays. Neither the AIR file nor that command are used: Xcode only
-# rebuilds sources for its shader debugger, which doesn't support AIR input.
+# which is what Xcode displays. Xcode also rebuilds the library from the archived AIR file
+# with that command, to attribute profiling costs within inlined code: if the rebuild
+# fails, inlined functions are missing from the call stack, and their costs are attributed
+# to their call sites.
 #
 # This happens when linking a pipeline, not when compiling a kernel, so that it doesn't
 # affect cached compilation results, and so that the archive holds the source files as
@@ -669,6 +697,18 @@ embed_sources() = @something(EMBED_SOURCES, get(ENV, "METAL_CAPTURE_ENABLED", "0
 # files larger than this are left out of source archives
 const MAX_EMBEDDED_SOURCE = 1 << 20
 
+# Xcode finds a file in a source archive by its standardized path (see NSString's
+# `stringByStandardizingPath`), without the `/private` of e.g. `/private/tmp`. Julia records
+# such paths as given, or resolved by the working directory: `include("kernel.jl")` in
+# `/tmp` results in `/private/tmp/kernel.jl`. Archive those under the standardized path.
+function standardized_path(path::String)
+    if startswith(path, "/private/")
+        short = path[sizeof("/private")+1:end]
+        ispath(short) && samefile(short, path) && return short
+    end
+    return path
+end
+
 # a library like `metallib`, but with the sources of its function embedded
 function embed_sources(metallib::Vector{UInt8}, air::Vector{UInt8})
     lib = read(IOBuffer(metallib), MetalLib)
@@ -678,13 +718,10 @@ function embed_sources(metallib::Vector{UInt8}, air::Vector{UInt8})
     end
 
     # the AIR file the function claims to be linked from. it doesn't exist, but its name
-    # has to be stable, and short enough for the archive format (mangled names are not).
-    name = fun.name
-    if (m = match(r"^_Z(\d+)", name)) !== nothing    # mangled: _Z<length><name><types>
-        name = first(name[length(m.match)+1:end], parse(Int, m[1]))
-    end
-    name = first(replace(name, r"[^A-Za-z0-9_]" => "_"), 32) * "-" *
-           bytes2hex(sha256(fun.name))[1:16]
+    # has to be stable, and short enough for the archive format. kernels are named after
+    # their function, so tell specializations apart by the module's contents.
+    name = first(replace(fun.name, r"[^A-Za-z0-9_]" => "_"), 32) * "-" *
+           bytes2hex(sha256(air))[1:16]
     air_path = joinpath(tempdir(), "metal.jl", name * ".air")
 
     working_directory = try pwd() catch; "/" end
@@ -695,14 +732,14 @@ function embed_sources(metallib::Vector{UInt8}, air::Vector{UInt8})
         "metal-options.txt" => codeunits(options),
         "metal-working-dir.txt" => codeunits(working_directory * "\n"),
         "original-input-filename.txt" => codeunits(air_path * "\n")]
-    # when Xcode can't tell which file holds the kernel, it opens the first one, so put the
-    # kernel's file first and the AIR file last
+    # when Xcode can't tell which file holds the kernel, it opens the AIR file, or without
+    # one, the first file. put the kernel's file first and the AIR file last.
     if fun.debug_info !== nothing
         sort!(sources; by = !=(fun.debug_info.path))
     end
     for path in sources
-        if isfile(path) && filesize(path) <= MAX_EMBEDDED_SOURCE && ustar_name(path) !== nothing
-            push!(files, path => read(path))
+        if isfile(path) && filesize(path) <= MAX_EMBEDDED_SOURCE
+            push!(files, standardized_path(path) => read(path))
         end
     end
     push!(files, air_path => air)
