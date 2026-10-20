@@ -791,18 +791,36 @@ function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
             desc.requiredThreadsPerThreadgroup = MTLSize(minthreads)
         end
         desc.label = label
+        started = time()
         try
             MTLComputePipelineState(dev, desc)
         catch err
             isa(err, NSError) || rethrow()
 
-            # the back-end compiler likely failed
-            # XXX: check more accurately? the error domain doesn't help much here
             air_file, metallib_file = dump_artifacts(".air" => air, ".metallib" => metallib)
-            msg = """Compilation to native code failed; see below for details.
-                     If you think this is a bug, please file an issue and attach:
-                     - $(air_file)
-                     - $(metallib_file)"""
+            msg = if occursin("XPC_ERROR_CONNECTION_INTERRUPTED", String(err.localizedDescription))
+                # the error only says that the compiler service went away. when the back-end
+                # aborted, the reason is in the crash report it left behind.
+                crash = compiler_crash_report(started)
+                details = if crash === nothing
+                    "Look for an MTLCompilerService crash report in $(crash_report_dir()); " *
+                    "macOS stops writing them once 25 have accumulated."
+                else
+                    path, reasons = crash
+                    "It reported:\n" * join(map(r -> "  " * r, reasons), "\n") *
+                    "\n(crash report: $path)"
+                end
+                """Compilation to native code failed: Metal's compiler service crashed.
+                   $details
+                   If you think this is a bug, please file an issue and attach:
+                   - $(air_file)
+                   - $(metallib_file)"""
+            else
+                """Compilation to native code failed; see below for details.
+                   If you think this is a bug, please file an issue and attach:
+                   - $(air_file)
+                   - $(metallib_file)"""
+            end
             if !gpu_addresses_available(dev)
                 msg *= """\n\nMetal also returned a null GPU address for a new buffer. The driver may
                           have stopped servicing this process, failing all further compilations.
@@ -811,6 +829,44 @@ function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
             error(msg)
         end
     end
+end
+
+crash_report_dir() = joinpath(homedir(), "Library", "Logs", "DiagnosticReports")
+
+# Find the MTLCompilerService crash report this process caused since `started`, and return
+# its path with the abort reason (e.g. LLVM's "cannot select" plus context lines), or
+# `nothing`. ReportCrash writes the report about half a second after Metal returns the
+# error, so wait for it a little. Best effort: never throws.
+function compiler_crash_report(started::Float64; dir::String=crash_report_dir(),
+                               pid::Integer=getpid(), timeout::Real=2)
+    deadline = time() + timeout
+    while true
+        try
+            for name in readdir(dir)
+                startswith(name, "MTLCompilerService") && endswith(name, ".ips") || continue
+                path = joinpath(dir, name)
+                mtime(path) >= started || continue
+                reasons = crash_reasons(read(path, String), pid)
+                reasons === nothing || return path, reasons
+            end
+        catch
+            return nothing
+        end
+        time() < deadline || return nothing
+        sleep(0.1)
+    end
+end
+
+# An .ips file is a JSON header line followed by a JSON body. Avoid a JSON dependency by
+# only extracting the responsible pid and the `"reasons"` string array.
+function crash_reasons(report::String, pid::Integer)
+    m = match(r"\"responsiblePid\"\s*:\s*(\d+)", report)
+    m === nothing && return nothing
+    parse(Int, m[1]) == pid || return nothing
+    m = match(r"\"reasons\"\s*:\s*\[((?:\s*\"(?:[^\"\\]|\\.)*\"\s*,?)*)\s*\]", report)
+    m === nothing && return nothing
+    reasons = [unescape_string(s[1]) for s in eachmatch(r"\"((?:[^\"\\]|\\.)*)\"", m[1])]
+    isempty(reasons) ? nothing : reasons
 end
 
 # After repeated GPU errors, the driver may stop servicing the process, failing every
