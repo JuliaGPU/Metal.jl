@@ -616,34 +616,8 @@ end
 Base.@nospecializeinfer function launch(
         @nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         bq::BatchedCommandQueue, @nospecialize(args::Tuple), submit::Bool)
-    (gs.width>0 && gs.height>0 && gs.depth>0) ||
-        throw(ArgumentError("All group dimensions should be non-zero"))
-    (ts.width>0 && ts.height>0 && ts.depth>0) ||
-        throw(ArgumentError("All thread dimensions should be non-zero"))
-
-    # Metal only checks this in its debug layer; other sizes otherwise silently misbehave
-    reqthreads = kernel.reqthreads
-    if reqthreads.width > 0 && ts != reqthreads
-        throw(ArgumentError("Threads in group ($(Int(ts.width)), $(Int(ts.height)), $(Int(ts.depth))) should equal the kernel's minthreads ($(Int(reqthreads.width)), $(Int(reqthreads.height)), $(Int(reqthreads.depth)))"))
-    end
-
-    maxthreads = kernel.maxthreads
-    nthreads = ts.width * ts.height * ts.depth
-    nthreads > maxthreads &&
-        throw(ArgumentError("Number of threads in group ($nthreads) should not exceed $maxthreads"))
-
-    (gs.width * ts.width) > typemax(UInt32) &&
-        throw(ArgumentError("Total threads per grid in a dimension (groups.width($(gs.width)) * threads.width($(ts.width)) = $(gs.width * ts.width)) must not exceed $(typemax(UInt32))"))
-    (gs.height * ts.height) > typemax(UInt32) &&
-        throw(ArgumentError("Total threads per grid in a dimension (groups.height($(gs.height)) * threads.height($(ts.height)) = $(gs.height * ts.height)) must not exceed $(typemax(UInt32))"))
-    (gs.depth * ts.depth) > typemax(UInt32) &&
-        throw(ArgumentError("Total threads per grid in a dimension (groups.depth($(gs.depth)) * threads.depth($(ts.depth)) = $(gs.depth * ts.depth)) must not exceed $(typemax(UInt32))"))
-
+    check_launch(gs, ts, kernel.reqthreads, kernel.maxthreads, kernel.tgmem)
     dev = kernel.device
-    tgmem = kernel.tgmem
-
-    tgmem > 32768 &&
-        throw(ArgumentError("Total used threadgroupMemoryLength($tgmem) must be <= 32768 bytes."))
 
     buf, buf_addr = malloc_buffer_and_gpu_address(dev)
     buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, buf_addr)
@@ -664,6 +638,36 @@ Base.@nospecializeinfer function launch(
     conflict === nothing || return conflict
 
     submit ? flush!(bq) : maybe_autoflush!(bq)
+    return
+end
+
+# check a launch configuration against the pipeline's limits (`reqthreads` all zeros when
+# it doesn't require a threadgroup size), with `tgmem` the threadgroup memory it uses
+function check_launch(gs::MTLSize, ts::MTLSize, reqthreads::MTLSize, maxthreads::Int,
+                      tgmem::Int)
+    (gs.width>0 && gs.height>0 && gs.depth>0) ||
+        throw(ArgumentError("All group dimensions should be non-zero"))
+    (ts.width>0 && ts.height>0 && ts.depth>0) ||
+        throw(ArgumentError("All thread dimensions should be non-zero"))
+
+    # Metal only checks this in its debug layer; other sizes otherwise silently misbehave
+    if reqthreads.width > 0 && ts != reqthreads
+        throw(ArgumentError("Threads in group ($(Int(ts.width)), $(Int(ts.height)), $(Int(ts.depth))) should equal the kernel's minthreads ($(Int(reqthreads.width)), $(Int(reqthreads.height)), $(Int(reqthreads.depth)))"))
+    end
+
+    nthreads = ts.width * ts.height * ts.depth
+    nthreads > maxthreads &&
+        throw(ArgumentError("Number of threads in group ($nthreads) should not exceed $maxthreads"))
+
+    (gs.width * ts.width) > typemax(UInt32) &&
+        throw(ArgumentError("Total threads per grid in a dimension (groups.width($(gs.width)) * threads.width($(ts.width)) = $(gs.width * ts.width)) must not exceed $(typemax(UInt32))"))
+    (gs.height * ts.height) > typemax(UInt32) &&
+        throw(ArgumentError("Total threads per grid in a dimension (groups.height($(gs.height)) * threads.height($(ts.height)) = $(gs.height * ts.height)) must not exceed $(typemax(UInt32))"))
+    (gs.depth * ts.depth) > typemax(UInt32) &&
+        throw(ArgumentError("Total threads per grid in a dimension (groups.depth($(gs.depth)) * threads.depth($(ts.depth)) = $(gs.depth * ts.depth)) must not exceed $(typemax(UInt32))"))
+
+    tgmem > 32768 &&
+        throw(ArgumentError("Total used threadgroupMemoryLength($tgmem) must be <= 32768 bytes."))
     return
 end
 
