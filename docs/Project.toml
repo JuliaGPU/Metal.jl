@@ -9,6 +9,6 @@ Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
 Git_jll = "f8c6e375-362e-5223-8a59-34ff63f689eb"
 
 [compat]
-Documenter = "1"
+Documenter = "1.9"
 KernelAbstractions = "0.10"
 Literate = "2"
