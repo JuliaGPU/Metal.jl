@@ -1,0 +1,472 @@
+used_constants.metallib:
+Dump of section REFLECTIONS:
+
+Reflection No. 0:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "derived",
+        "arguments": [
+          {
+            "id": 1
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "ReadWrite",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "uint",
+        "name": "a",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "FunctionConstant",
+      "node": {
+        "type_name": "uint",
+        "name": "c1",
+        "index": 0,
+        "required": true
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ],
+  "function_constants": [
+    {
+      "id": 2
+    }
+  ]
+}
+
+Reflection No. 1:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "checked",
+        "arguments": [
+          {
+            "id": 1
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "ReadWrite",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "uint",
+        "name": "a",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "FunctionConstant",
+      "node": {
+        "type_name": "uint",
+        "name": "c2",
+        "index": 1,
+        "required": true
+      }
+    },
+    {
+      "node_type": "FunctionConstant",
+      "node": {
+        "type_name": "uint",
+        "name": "c3",
+        "index": 2,
+        "required": false
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ],
+  "function_constants": [
+    {
+      "id": 2
+    },
+    {
+      "id": 3
+    }
+  ]
+}
+
+Reflection No. 2:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "unrelated",
+        "arguments": [
+          {
+            "id": 1
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "ReadWrite",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "uint",
+        "name": "a",
+        "unused": false
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ]
+}
+
+Reflection No. 3:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "called",
+        "arguments": [
+          {
+            "id": 1
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "ReadWrite",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "uint",
+        "name": "a",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "FunctionConstant",
+      "node": {
+        "type_name": "uint",
+        "name": "c3",
+        "index": 2,
+        "required": true
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ],
+  "function_constants": [
+    {
+      "id": 2
+    }
+  ]
+}
+
+Reflection No. 4:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "selected",
+        "arguments": [
+          {
+            "id": 1
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "ReadWrite",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "uint",
+        "name": "a",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "FunctionConstant",
+      "node": {
+        "type_name": "bool",
+        "name": "c4",
+        "index": 3,
+        "required": true
+      }
+    },
+    {
+      "node_type": "FunctionConstant",
+      "node": {
+        "type_name": "uint",
+        "name": "c5",
+        "index": 4,
+        "required": true
+      }
+    },
+    {
+      "node_type": "FunctionConstant",
+      "node": {
+        "type_name": "uint",
+        "name": "c6",
+        "index": 5,
+        "required": true
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ],
+  "function_constants": [
+    {
+      "id": 2
+    },
+    {
+      "id": 3
+    },
+    {
+      "id": 4
+    }
+  ]
+}
+
+Reflection No. 5:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "field",
+        "arguments": [
+          {
+            "id": 1
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "ReadWrite",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "uint",
+        "name": "a",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "FunctionConstant",
+      "node": {
+        "type_name": "uint",
+        "name": "c7",
+        "index": 6,
+        "required": true
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ],
+  "function_constants": [
+    {
+      "id": 2
+    }
+  ]
+}
+
+Reflection No. 6:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "second_field",
+        "arguments": [
+          {
+            "id": 1
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "ReadWrite",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "uint",
+        "name": "a",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "FunctionConstant",
+      "node": {
+        "type_name": "uint",
+        "name": "c9",
+        "index": 8,
+        "required": true
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ],
+  "function_constants": [
+    {
+      "id": 2
+    }
+  ]
+}

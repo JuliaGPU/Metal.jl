@@ -1,0 +1,90 @@
+optional_constants.metallib:
+Dump of section REFLECTIONS:
+
+Reflection No. 0:
+{
+  "version": {
+    "major": 0,
+    "minor": 4,
+    "sub_minor": 0
+  },
+  "nodes": [
+    {
+      "node_type": "KernelFunction",
+      "node": {
+        "name": "affine",
+        "arguments": [
+          {
+            "id": 1
+          },
+          {
+            "id": 2
+          }
+        ]
+      }
+    },
+    {
+      "node_type": "BufferArg",
+      "node": {
+        "function_constant": false,
+        "location_index": {
+          "value": 0
+        },
+        "location_count": {
+          "value": 1
+        },
+        "access_qualifier": "ReadWrite",
+        "address_space": "Global",
+        "type_size": {
+          "value": 4
+        },
+        "type_align": {
+          "value": 4
+        },
+        "type_name": "uint",
+        "name": "a",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "ThreadPositionInGridArg",
+      "node": {
+        "function_constant": false,
+        "type_name": "uint",
+        "name": "i",
+        "unused": false
+      }
+    },
+    {
+      "node_type": "FunctionConstant",
+      "node": {
+        "type_name": "uint",
+        "name": "scale",
+        "index": 0,
+        "required": true
+      }
+    },
+    {
+      "node_type": "FunctionConstant",
+      "node": {
+        "type_name": "uint",
+        "name": "offset",
+        "index": 1,
+        "required": false
+      }
+    }
+  ],
+  "kernel_functions": [
+    {
+      "id": 0
+    }
+  ],
+  "function_constants": [
+    {
+      "id": 3
+    },
+    {
+      "id": 4
+    }
+  ]
+}

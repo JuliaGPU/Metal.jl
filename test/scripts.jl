@@ -60,64 +60,6 @@ function metallib(args...; input=IOBuffer())
     return (; code, out=String(take!(io)), err=String(take!(err)))
 end
 
-# a minimal JSON parser, to check the structure of the tool's output
-function parse_json(str::AbstractString)
-    pos = Ref(1)
-    peek() = (skip_ws(); str[pos[]])
-    skip_ws() = while pos[] <= ncodeunits(str) && isspace(str[pos[]]); pos[] = nextind(str, pos[]); end
-    function expect(s)
-        skip_ws()
-        startswith(SubString(str, pos[]), s) || error("expected $s at $(pos[])")
-        pos[] += ncodeunits(s)
-    end
-    function value()
-        c = peek()
-        if c == '{'
-            expect("{"); obj = Pair{String,Any}[]
-            peek() == '}' && (expect("}"); return obj)
-            while true
-                key = value(); expect(":"); push!(obj, key => value())
-                peek() == ',' ? expect(",") : (expect("}"); return obj)
-            end
-        elseif c == '['
-            expect("["); arr = Any[]
-            peek() == ']' && (expect("]"); return arr)
-            while true
-                push!(arr, value())
-                peek() == ',' ? expect(",") : (expect("]"); return arr)
-            end
-        elseif c == '"'
-            expect("\""); buf = IOBuffer()
-            while (c = str[pos[]]) != '"'
-                if c == '\\'
-                    e = str[pos[] += 1]
-                    if e == 'u'
-                        write(buf, Char(parse(UInt16, str[pos[]+1:pos[]+4]; base=16)))
-                        pos[] += 4
-                    else
-                        write(buf, get(Dict('n' => '\n', 't' => '\t', 'r' => '\r'), e, e))
-                    end
-                    pos[] += 1
-                else
-                    write(buf, c); pos[] = nextind(str, pos[])
-                end
-            end
-            pos[] += 1
-            return String(take!(buf))
-        elseif startswith(SubString(str, pos[]), "true"); expect("true"); return true
-        elseif startswith(SubString(str, pos[]), "false"); expect("false"); return false
-        elseif startswith(SubString(str, pos[]), "null"); expect("null"); return nothing
-        else
-            m = match(r"-?\d+(\.\d+)?([eE][-+]?\d+)?", str, pos[])
-            pos[] += ncodeunits(m.match)
-            return m[1] === nothing && m[2] === nothing ? parse(Int, m.match) : parse(Float64, m.match)
-        end
-    end
-    v = value(); skip_ws()
-    pos[] > ncodeunits(str) || error("trailing data at $(pos[])")
-    return v
-end
-getkey(obj, key) = only(v for (k, v) in obj if k == key)
 
 metallib_dir = joinpath(@__DIR__, "metallib")
 
@@ -338,12 +280,32 @@ metallib_dir = joinpath(@__DIR__, "metallib")
     end
 
     @testset "reflect" begin
-        # the reflection data in the library isn't decoded yet
-        r = metallib("reflect", "--json", joinpath(metallib_dir, "kernel.13.metallib"))
-        @test r.code == 1
+        # the reflection data in the library
+        r = metallib("reflect", "--json", joinpath(metallib_dir, "visible.13.metallib"))
+        @test r.code == 0
         doc = parse_json(r.out)
-        @test getkey(doc, "status") == "unsupported"
-        @test getkey(only(getkey(getkey(doc, "result"), "functions")), "name") == "foo"
+        @test getkey(doc, "status") == "ok"
+        functions = getkey(getkey(doc, "result"), "functions")
+        @test [getkey(f, "name") for f in functions] == ["foo", "twice"]
+        nodes = getkey(getkey(functions[1], "reflection"), "nodes")
+        arg = getkey(nodes[2], "node")
+        @test getkey(getkey(nodes[2], "node_type"), "name") == "BufferArg"
+        @test getkey(arg, "name") == "a"
+        @test getkey(arg, "address_space") == ["name" => "Global", "value" => 1]
+        @test getkey(getkey(arg, "location_index"), "value") == 0
+
+        r = metallib("reflect", joinpath(metallib_dir, "visible.13.metallib"), "foo")
+        @test r.code == 0 && contains(r.out, "#1 BufferArg(")
+
+        # functions without (decodable) reflection data
+        r = metallib("reflect", "--json", joinpath(metallib_dir, "kernel.11.metallib"))
+        @test r.code == 0
+        doc = parse_json(r.out)
+        @test getkey(only(getkey(getkey(doc, "result"), "functions")), "reflection") === nothing
+        @test getkey(only(getkey(doc, "diagnostics")), "severity") == "note"
+        r = metallib("reflect", "--json", joinpath(metallib_dir, "kernels.compressed.metallib"))
+        @test r.code == 0
+        @test getkey(parse_json(r.out), "status") == "partial"
 
         # ... but Metal can reflect the kernels
         r = metallib("reflect", "--runtime", "--json", joinpath(metallib_dir, "visible.13.metallib"))

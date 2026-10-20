@@ -18,8 +18,20 @@ SPECIAL_METALLIBS := coreimage.metallib dylib.metallib imports.metallib kernels.
 # unlinked AIR, to build libraries from
 AIR_MODULES := optional_constants.air used_constants.air used_constants.O0.air
 
+# Apple's decoding of the reflection data of every library that has some, to check ours
+OBJDUMP := xcrun -sdk macosx metal-objdump
+REFLECTIONS = $(patsubst %.metallib,reflection/%.txt,$(wildcard *.metallib))
+
 .PHONY: all
 all: $(METALLIBS) $(STANDALONE_METALLIBS) $(SPECIAL_METALLIBS) $(AIR_MODULES)
+
+.PHONY: reflections
+reflections: $(REFLECTIONS)
+
+reflection/%.txt: %.metallib
+	@mkdir -p reflection
+	$(OBJDUMP) -ml --reflection $< > $@
+	@grep -q "Reflection No" $@ || $(RM) $@
 
 .PHONY: clean
 clean:

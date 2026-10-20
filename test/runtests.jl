@@ -181,6 +181,66 @@ init_worker_code = quote
             end
         end)
     end
+
+    # a minimal JSON parser, to check JSON output (objects become vectors of pairs, to check the
+    # order of their keys)
+    function parse_json(str::AbstractString)
+        pos = Ref(1)
+        peek() = (skip_ws(); str[pos[]])
+        skip_ws() = while pos[] <= ncodeunits(str) && isspace(str[pos[]]); pos[] = nextind(str, pos[]); end
+        function expect(s)
+            skip_ws()
+            startswith(SubString(str, pos[]), s) || error("expected $s at $(pos[])")
+            pos[] += ncodeunits(s)
+        end
+        function value()
+            c = peek()
+            if c == '{'
+                expect("{"); obj = Pair{String,Any}[]
+                peek() == '}' && (expect("}"); return obj)
+                while true
+                    key = value(); expect(":"); push!(obj, key => value())
+                    peek() == ',' ? expect(",") : (expect("}"); return obj)
+                end
+            elseif c == '['
+                expect("["); arr = Any[]
+                peek() == ']' && (expect("]"); return arr)
+                while true
+                    push!(arr, value())
+                    peek() == ',' ? expect(",") : (expect("]"); return arr)
+                end
+            elseif c == '"'
+                expect("\""); buf = IOBuffer()
+                while (c = str[pos[]]) != '"'
+                    if c == '\\'
+                        e = str[pos[] += 1]
+                        if e == 'u'
+                            write(buf, Char(parse(UInt16, str[pos[]+1:pos[]+4]; base=16)))
+                            pos[] += 4
+                        else
+                            write(buf, get(Dict('n' => '\n', 't' => '\t', 'r' => '\r'), e, e))
+                        end
+                        pos[] += 1
+                    else
+                        write(buf, c); pos[] = nextind(str, pos[])
+                    end
+                end
+                pos[] += 1
+                return String(take!(buf))
+            elseif startswith(SubString(str, pos[]), "true"); expect("true"); return true
+            elseif startswith(SubString(str, pos[]), "false"); expect("false"); return false
+            elseif startswith(SubString(str, pos[]), "null"); expect("null"); return nothing
+            else
+                m = match(r"-?\d+(\.\d+)?([eE][-+]?\d+)?", str, pos[])
+                pos[] += ncodeunits(m.match)
+                return m[1] === nothing && m[2] === nothing ? parse(Int, m.match) : parse(Float64, m.match)
+            end
+        end
+        v = value(); skip_ws()
+        pos[] > ncodeunits(str) || error("trailing data at $(pos[])")
+        return v
+    end
+    getkey(obj, key) = only(v for (k, v) in obj if k == key)
 end
 
 init_code = quote
@@ -189,6 +249,7 @@ init_code = quote
     # bring used symbols into the temporary module
     import ..TestSuite, ..testf
     import ..runtime_validation, ..shader_validation, ..capturing, ..@grab_output, ..@on_device
+    import ..parse_json, ..getkey
 end
 
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
