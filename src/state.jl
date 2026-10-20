@@ -7,10 +7,12 @@ log_array(args...)      = log_array()(args...)
 
 const LABEL_RESOURCES = @load_preference("label_resources", nothing)
 
-# without a preference, label when debugging (`-g2`). set by `__init__`.
+# without a preference, label when debugging (`-g2`) or when frame capture is enabled,
+# since that is when somebody looks at the labels. set by `__init__`.
 const label_resources_default = Ref(false)
 function init_label_resources!()
-    label_resources_default[] = Base.JLOptions().debug_level >= 2
+    label_resources_default[] = Base.JLOptions().debug_level >= 2 ||
+                                get(ENV, "METAL_CAPTURE_ENABLED", "0") == "1"
 end
 
 @inline label_resources() = @something(LABEL_RESOURCES, label_resources_default[])
@@ -179,6 +181,7 @@ function malloc_buffer_and_gpu_address(dev::MTLDevice)
     Base.@lock device_malloc_lock begin
         get!(device_malloc_bufs, dev) do
             buf = MTLBuffer(dev, MALLOC_BUF_SIZE; storage=SharedStorage)
+            buf.label = "Metal.jl device malloc heap"
             # initialize the counter (first 4 bytes) to 4 so the first
             # allocation lands past the counter itself
             unsafe_store!(convert(Ptr{UInt32}, MTL.contents(buf)), UInt32(4))

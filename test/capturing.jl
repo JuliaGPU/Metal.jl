@@ -76,6 +76,12 @@ stopCapture(manager)
 @test manager.isCapturing == false
 @test isdir(path)
 
+# frame capture being enabled turns on resource labels and debug groups
+@testset "labels" begin
+    @test Metal.label_resources()
+    @test String(bufferA.data[].buffer.label) == "MtlArray{Float32,1,Metal.SharedStorage}(dims=(4,))"
+end
+
 # Profile Macro
 @testset "macro" begin
     Metal.@capture @metal threads=4 tester(bufferA)
