@@ -1,7 +1,7 @@
 using LinearAlgebra
 using LinearAlgebra: MulAddMul, wrap
 using .MPS
-using .MPS: MPS_VALID_MATMUL_TYPES, MPS_VALID_MATVECMUL_TYPES, MPSSolveFloat
+using .MPS: MPS_VALID_MATMUL_TYPES, MPS_VALID_MATVECMUL_TYPES, MPSSolveFloat, lu_info
 
 @inline function supports_mps_matmul(A, B, C, valid_types)
     MPS.is_supported(device(C)) &&
@@ -243,8 +243,6 @@ end
 
 @inline checkpositivedefinite(status) =
     status != MPS.MPSMatrixDecompositionStatusNonPositiveDefinite || throw(PosDefException(status))
-@inline checknonsingular(status) =
-    status != MPS.MPSMatrixDecompositionStatusSingular || throw(SingularException(status))
 
 # GPU-compatible accessors of the LU decomposition properties
 function Base.getproperty(F::LU{T, <:MtlMatrix}, d::Symbol) where {T}
@@ -303,8 +301,8 @@ function LinearAlgebra.lu(A::MtlMatrix{T};
 
     synchronize(cmdbuf)
 
-    info = convert(LinearAlgebra.BlasInt, status[]::MPS.MPSMatrixDecompositionStatus)
-    check && checknonsingular(info)
+    info = lu_info(status[], B)
+    check && LinearAlgebra.checknonsingular(info)
 
     return LinearAlgebra.LU(B, p, info)
 end
@@ -358,7 +356,7 @@ function LinearAlgebra.lu!(A::MtlMatrix{T};
 
     synchronize(cmdbuf)
 
-    info = convert(LinearAlgebra.BlasInt, status[])
+    info = lu_info(status[], A)
     check && check_lu_success(info, allowsingular)
 
     return LinearAlgebra.LU(A, p, info)

@@ -449,8 +449,13 @@ using Metal: storagemode
     lua = lu!(A)
     @test lua.L * lua.U ≈ MtlMatrix(lua.P) * B
 
-    A = MtlMatrix{Float32}([1 2; 0 0])
-    @test_throws SingularException lu(A)
+    # singular matrices report the first zero pivot, like LAPACK
+    a = Float32[1 2; 2 4]
+    A = MtlMatrix(a)
+    @test_throws SingularException(2) lu(A)
+    @test_throws SingularException(2) lu!(copy(A))
+    @test_throws SingularException(2) A \ MtlVector(Float32[1, 2])
+    @test lu(A; check=false).info == lu(a; check=false).info
 
     # MPS only decomposes Float32 matrices, and aborts the process on others; they use
     # LinearAlgebra's generic implementation instead, which needs CPU access to the array

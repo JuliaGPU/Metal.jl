@@ -115,9 +115,15 @@ end
 @inline status_buffer() =
     MtlArray{MPSMatrixDecompositionStatus, 0, SharedStorage}(undef)
 
-@inline function checknonsingular(status)
-    status != convert(LinearAlgebra.BlasInt, MPSMatrixDecompositionStatusSingular) ||
-        throw(LinearAlgebra.SingularException(status))
+# MPS reports a status, while `LU` expects LAPACK's `info`: for a singular matrix, the index
+# of the first zero on the diagonal of U
+function lu_info(status::MPSMatrixDecompositionStatus, factors)
+    status == MPSMatrixDecompositionStatusSuccess && return 0
+    status == MPSMatrixDecompositionStatusSingular ||
+        error("MPS failed to compute the LU decomposition ($status)")
+    d = Array(factors[LinearAlgebra.diagind(factors)])
+    # MPS may also consider tiny pivots singular
+    return something(findfirst(iszero, d), argmin(abs.(d)))
 end
 
 @inline function checkpositivedefinite(status)
@@ -180,8 +186,8 @@ function solve_lu(A::MtlMatrix{T}, B::MtlVecOrMat{T};
 
     synchronize(cmdbuf)
 
-    info = convert(LinearAlgebra.BlasInt, status[])
-    check && checknonsingular(info)
+    info = lu_info(status[], At)
+    check && LinearAlgebra.checknonsingular(info)
     return X
 end
 
