@@ -292,7 +292,35 @@ using Metal: metal_support
             @test all(result .== expected)
         end
     end
-        @testset "quad_vote_all" begin
+    @testset "quad_ballot" begin
+        function ballot_kernel(output, threshold)
+            idx = thread_position_in_grid().x
+            lane = thread_index_in_quadgroup()
+            output[idx] = quad_ballot(lane ≤ threshold)
+            return
+        end
+
+        @testset "threshold=$threshold" for threshold in [0, 1, 3, 4]
+            output = MtlArray(zeros(UInt64, 8))
+            Metal.@sync @metal threads=8 ballot_kernel(output, UInt32(threshold))
+            @test all(Array(output) .== (UInt64(1) << threshold) - 1)
+        end
+
+        # AIR declares these with `i16` masks and without a type suffix
+        function vote_kernel(output)
+            ballot = quad_ballot(thread_index_in_quadgroup() == 1)
+            output[1] = quad_vote_all(ballot) + quad_vote_any(ballot)
+            return
+        end
+        asm = sprint() do io
+            Metal.code_air(io, vote_kernel, Tuple{MtlDeviceVector{Int, 1}}; kernel=true)
+        end
+        @test occursin(r"declare i16 @air\.quad_ballot\(i1", asm)
+        @test occursin(r"declare (?:zeroext )?i1 @air\.quad_vote_all\(i16", asm)
+        @test occursin(r"declare (?:zeroext )?i1 @air\.quad_vote_any\(i16", asm)
+    end
+
+    @testset "quad_vote_all" begin
         function all_kernel(output, threshold)
             idx = thread_position_in_grid().x
             lane = thread_index_in_quadgroup()

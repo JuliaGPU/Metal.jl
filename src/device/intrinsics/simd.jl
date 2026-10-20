@@ -251,14 +251,15 @@ end
 @device_function simd_vote_any(bitmask::UInt64) =
     ccall("extern air.simd_vote_any.i64", llvmcall, Bool, (UInt64,), bitmask)
 
+# unlike the SIMD-group ones, AIR's quad-group votes are `i16` and not overloaded
 @device_function quad_ballot(predicate::Bool) =
-    ccall("extern air.quad_ballot.i64", llvmcall, UInt64, (Bool,), predicate)
+    UInt64(ccall("extern air.quad_ballot", llvmcall, UInt16, (Bool,), predicate))
 
 @device_function quad_vote_all(bitmask::UInt64) =
-    ccall("extern air.quad_vote_all.i64", llvmcall, Bool, (UInt64,), bitmask)
+    ccall("extern air.quad_vote_all", llvmcall, Bool, (UInt16,), bitmask % UInt16)
 
 @device_function quad_vote_any(bitmask::UInt64) =
-    ccall("extern air.quad_vote_any.i64", llvmcall, Bool, (UInt64,), bitmask)
+    ccall("extern air.quad_vote_any", llvmcall, Bool, (UInt16,), bitmask % UInt16)
 
 
 ## Documentation
