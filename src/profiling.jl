@@ -560,8 +560,8 @@ Set `raw=true` to include them.
 Slow entries are highlighted: yellow is among the slowest 25%, red among the slowest 5%.
 
 Note that, because Metal runs independent command buffers in parallel, operations may overlap
-in time; the reported percentages are relative to the wall-clock GPU span, not the sum of the
-individual durations.
+in time; the reported percentages are relative to the wall-clock time of `code` (including
+waiting for the GPU to finish), not to the sum of the individual durations.
 
 !!! note
     The integrated profiler captures GPU operations that go through Metal.jl's command-buffer
