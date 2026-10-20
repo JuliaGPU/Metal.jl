@@ -31,7 +31,7 @@ function main()
                 "usage/kernel.md",
             ],
             "Profiling" => "profiling.md",
-            "Debugging and profiling with Xcode" => "xcode.md",
+            "Debugging and profiling with Xcode and Instruments" => "xcode.md",
             "API reference" => Any[
                 "api/essentials.md",
                 "api/compiler.md",

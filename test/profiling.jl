@@ -58,7 +58,24 @@
     @test res_bench isa Metal.Profiling.ProfileResults
 
     @test_throws ArgumentError @macroexpand Metal.@profile external=1 (1 + 1)
+    @test_throws ArgumentError @macroexpand Metal.@profile external=true trace=true (1 + 1)
     @test_throws ArgumentError @macroexpand Metal.@bprofile external=true (1 + 1)
+end
+
+@testset "trace names" begin
+    @test Metal.trace_name(:(@metal threads=4 vadd(a, b, c))) == "vadd"
+    @test Metal.trace_name(:(Metal.@sync @metal kernel!(x))) == "kernel!"
+    @test Metal.trace_name(:(y = Metal.@sync f(x))) == "f"
+    @test Metal.trace_name(:(b .= a .+ 1)) == "broadcast"
+    @test Metal.trace_name(:(sin.(a))) == "broadcast"
+    @test Metal.trace_name(:(Base.sum(x))) == "sum"
+    @test Metal.trace_name(:(a * b)) == "julia"
+    @test Metal.trace_name(:(begin f(x); g(x) end)) == "julia"
+end
+
+if !capturing
+    # without METAL_CAPTURE_ENABLED, capturing fails with instructions to enable it
+    @test_throws "METAL_CAPTURE_ENABLED=1" Metal.@capture identity(nothing)
 end
 
 if parse(Bool, get(ENV, "CI", "false"))
@@ -69,8 +86,9 @@ else
     @testset "external profiler" begin
         mktempdir() do tmpdir
             cd(tmpdir) do
-                Metal.@profile external=true identity(nothing)
-                @test isdir("julia_1.trace")
+                path = Metal.@profile external=true identity(nothing)
+                @test path == joinpath(pwd(), "identity_1.trace")
+                @test isdir(path)
             end
         end
     end

@@ -127,17 +127,57 @@ function num_gpu_cores()
 end
 
 
-## capture macro
+## trace names
 
-function capture_dir()
-    root = pwd()
+# Name a trace after the code it records: the kernel launched by `@metal`, or the function
+# called, looking through macros such as `Metal.@sync`. Falls back to "julia".
+function trace_name(ex)
+    if Meta.isexpr(ex, :macrocall)
+        return trace_name(ex.args[end])
+    elseif Meta.isexpr(ex, :block)
+        stmts = filter(x -> !(x isa LineNumberNode), ex.args)
+        return length(stmts) == 1 ? trace_name(only(stmts)) : "julia"
+    elseif Meta.isexpr(ex, :(=)) && length(ex.args) == 2
+        return trace_name(ex.args[2])
+    elseif Meta.isexpr(ex, :.=) || (Meta.isexpr(ex, :.) && Meta.isexpr(ex.args[end], :tuple))
+        return "broadcast"
+    elseif Meta.isexpr(ex, :call)
+        f = ex.args[1]
+        if Meta.isexpr(f, :.) && f.args[end] isa QuoteNode
+            f = f.args[end].value
+        end
+        if f isa Symbol
+            name = replace(String(f), r"[^A-Za-z0-9_!-]" => "")
+            isempty(name) || return name
+        end
+    end
+    return "julia"
+end
+
+# the first unused `name_N.ext` in the current directory
+function trace_path(name::AbstractString, ext::AbstractString)
     i = 1
     while true
-        path = joinpath(root, "julia_$i.gputrace")
-        isdir(path) || return path
+        path = joinpath(pwd(), "$(name)_$i.$ext")
+        ispath(path) || return path
         i += 1
     end
 end
+
+function parse_trace_kwargs(macroname, kwargs)
+    pairs = Pair{Symbol,Any}[]
+    for kwarg in kwargs
+        if !Meta.isexpr(kwarg, :(=))
+            throw(ArgumentError("Invalid keyword argument to $macroname: $kwarg"))
+        end
+        key, value = kwarg.args
+        push!(pairs, key => value)
+    end
+    return pairs
+end
+
+
+## capture macro
 
 function flush_capture_object!(object)
     if applicable(raw_queue, object)
@@ -148,15 +188,30 @@ function flush_capture_object!(object)
     return
 end
 
-function captured(f; dest=MTL.MTLCaptureDestinationGPUTraceDocument,
-                     object=global_queue(device()))
-    if !haskey(ENV, "METAL_CAPTURE_ENABLED") || ENV["METAL_CAPTURE_ENABLED"] != "1"
-        @warn """Environment variable 'METAL_CAPTURE_ENABLED' is not set. In most cases, this
-        will need to be set to 1 before launching Julia to enable GPU frame capture."""
+function check_capture_destination(manager, dest)
+    supports_destination(manager, dest) && return
+    if dest == MTL.MTLCaptureDestinationGPUTraceDocument
+        error("""GPU frame capture is not enabled. Restart Julia with the environment \
+                 variable METAL_CAPTURE_ENABLED=1, e.g., `METAL_CAPTURE_ENABLED=1 julia`. \
+                 Metal reads it when the process starts, so setting it from within Julia \
+                 (`ENV["METAL_CAPTURE_ENABLED"] = "1"`) has no effect.""")
+    else
+        error("""GPU frame capture to $dest is not supported by this process; capturing \
+                 to Xcode directly requires running Julia from Xcode. Use \
+                 `dest=MTL.MTLCaptureDestinationGPUTraceDocument` (the default) to save \
+                 the capture to a trace file instead.""")
     end
+end
 
-    folder = capture_dir()
+function captured(f; name::AbstractString="julia",
+                     dest=MTL.MTLCaptureDestinationGPUTraceDocument,
+                     object=global_queue(device()), open::Bool=false)
+    check_capture_destination(MTLCaptureManager(), dest)
+
+    to_file = dest == MTL.MTLCaptureDestinationGPUTraceDocument
+    folder = to_file ? trace_path(name, "gputrace") : nothing
     scope = MTLCaptureScope(object)
+    scope.label = name
     flush_capture_object!(object)
     startCapture(scope, dest; folder)
     try
@@ -167,9 +222,17 @@ function captured(f; dest=MTL.MTLCaptureDestinationGPUTraceDocument,
         endScope(scope)
         synchronize()
     finally
-        @info "GPU frame capture saved to $folder; open the resulting trace in Xcode"
         stopCapture()
     end
+
+    to_file || return nothing
+    if open
+        @info "GPU frame capture saved to $folder; opening it in Xcode"
+        run(`open $folder`)
+    else
+        @info "GPU frame capture saved to $folder; open the resulting trace in Xcode"
+    end
+    return folder
 end
 
 """
@@ -182,33 +245,44 @@ given expression. The resulting trace can be opened in Xcode, and offers detaile
 information about the GPU work, and how to improve the performance of individual operations.
 For a higher-level overview of the GPU work, use [`Metal.@profile`](@ref) instead.
 
+The trace is saved in the current directory as `NAME_N.gputrace`, where `NAME` defaults to
+the name of the kernel launched by `@metal` (or of the function called) in `ex`, and `N`
+is the first number that does not overwrite an existing trace. The path of the trace is
+returned.
+
 !!! note
 
     Metal frame capture must be enabled by setting the `METAL_CAPTURE_ENABLED`
-    environment variable to `1` before launching Julia.
+    environment variable to `1` before launching Julia. Setting it from within Julia does
+    not work, as Metal reads it when the process starts.
+
+A trace includes every Metal library and pipeline the process has created so far, not only
+those used by `ex`. Xcode lists the ones that `ex` does not use as unused resources.
 
 Several keyword arguments are supported that influence the behavior of `Metal.@capture`:
 
-- `capture`: the object to capture GPU work on. Can be a MTLDevice, MTLCommandQueue, or
+- `name`: the base name of the trace file, instead of the one derived from `ex`.
+- `open`: open the trace in Xcode when the capture finishes (default: `false`).
+- `object`: the object to capture GPU work on. Can be a MTLDevice, MTLCommandQueue, or
    MTLCaptureScope. This defaults to the global command queue, and selecting a different
    capture object may result in no GPU commands detected when viewed from Xcode.
 - `dest`: the type of GPU frame capture output. Potential values:
    - `MTL.MTLCaptureDestinationGPUTraceDocument` for folder output for later
      viewing/sharing. (default)
-   - `MTL.MTLCaptureDestinationDeveloperTools` for direct XCode viewing.
+   - `MTL.MTLCaptureDestinationDeveloperTools` for direct Xcode viewing, which requires
+     running Julia from Xcode.
 
 When profiling the resulting gputrace folder in Xcode, do so one at a time to avoid "no
 profiling data found" errors.
+
+See [Debugging and profiling with Xcode and Instruments](@ref) for what the trace shows of
+Julia code.
 """
 macro capture(ex...)
     work = ex[end]
-    kwargs = map(ex[1:end-1]) do kwarg
-        if !Meta.isexpr(kwarg, :(=))
-            throw(ArgumentError("Invalid keyword argument '$kwarg'"))
-        end
-        key, value = kwarg.args
-        Expr(:kw, key, esc(value))
-    end
+    kwargs = parse_trace_kwargs("Metal.@capture", ex[1:end-1])
+    any(kw -> first(kw) === :name, kwargs) || push!(kwargs, :name => trace_name(work))
+    kwargs = [Expr(:kw, key, esc(value)) for (key, value) in kwargs]
 
     quote
         $captured(; $(kwargs...)) do
@@ -218,19 +292,11 @@ macro capture(ex...)
 end
 
 
-## profile macro
+## external profiler (Instruments)
 ## COV_EXCL_START
-function profile_dir()
-    root = pwd()
-    i = 1
-    while true
-        path = joinpath(root, "julia_$i.trace")
-        isdir(path) || return path
-        i += 1
-    end
-end
 
-function profiled(f)
+function profiled(f; name::AbstractString="julia", template::AbstractString="Metal System Trace",
+                  open::Bool=false)
     # check if xctrace is available
     if !success(`xctrace version`)
         error("xctrace is not available; please install Xcode first")
@@ -238,24 +304,9 @@ function profiled(f)
 
     # build the xctrace invocation
     notification_name = "julia.metal.profile"
-    folder = profile_dir()
-    instruments = [
-        # relevant instruments taken from `xcrun xctrace list instruments`
-        "GPU",
-
-        # CPU
-        "Time Profiler",
-
-        "Metal Application",
-        "Metal GPU Counters",
-        "Metal Resource Events",
-
-        "os_signpost",
-    ]
-    cmd = `xctrace record`
-    for instrument in instruments
-        cmd = `$cmd --output $folder --instrument $instrument --notify-tracing-started $notification_name`
-    end
+    path = trace_path(name, "trace")
+    cmd = `xctrace record --quiet --no-prompt --template $template --output $path
+                          --notify-tracing-started $notification_name --attach $(getpid())`
 
     # listen for the notification indicating tracing was started
     tracing_started = Ref(false)
@@ -266,14 +317,17 @@ function profiled(f)
     add_observer!(center, observer; name=notification_name)
 
     # start xctrace
-    xctrace = run(`$cmd --attach $(getpid())`, devnull, stdout, stderr; wait=false)
+    xctrace = run(cmd, devnull, stdout, stderr; wait=false)
     try
         # wait until the tracing has started
         t0 = time()
         while !tracing_started[]
             run_loop(1; return_after_source_handled=true)
-            if time() - t0 > 10
-                error("xctrace failed to start")
+            if !process_running(xctrace)
+                error("xctrace failed to start recording (exit code $(xctrace.exitcode))")
+            elseif time() - t0 > 30
+                kill(xctrace)
+                error("xctrace failed to start recording within 30 seconds")
             end
         end
 
@@ -284,11 +338,21 @@ function profiled(f)
         finally
             kill(xctrace, Base.SIGINT)
             wait(xctrace)
-            @info "System trace saved to $folder; open the resulting trace in Instruments"
         end
     finally
         remove_observer!(center, observer)
     end
+    if !success(xctrace) || !ispath(path)
+        error("xctrace failed to save the recording (exit code $(xctrace.exitcode))")
+    end
+
+    if open
+        @info "System trace saved to $path; opening it in Instruments"
+        run(`open $path`)
+    else
+        @info "System trace saved to $path; open the resulting trace in Instruments"
+    end
+    return path
 end
 
 ## COV_EXCL_STOP
