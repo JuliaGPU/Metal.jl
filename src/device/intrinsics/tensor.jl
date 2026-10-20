@@ -43,9 +43,11 @@ tensor_datatype(::Type{UInt16})   = Int8(6)
 tensor_datatype(::Type{Int32})    = Int8(7)
 tensor_datatype(::Type{UInt32})   = Int8(8)
 
-# Build an `i32`-indexed strided tensor view over a device-memory buffer.
-# (macOS 27's frontend appends two more arguments — a null device pointer and an `i32 0`,
-# presumably blockwise-quantization scale data — which the back-end accepts omitted.)
+# Build an `i32`-indexed strided tensor view over a device-memory buffer. These are emitted
+# in the form of AIR 2.9, which appends a pointer into the same address space as the data,
+# an index and an `i8`, for which Apple's frontend always passes `null, 0, -1` (presumably
+# describing blockwise-quantization scales, which these views don't have); `finish_ir!`
+# drops them for AIR 2.8.
 @device_function @inline init_strided_tensor_device!(
     handle::TensorDescriptorStorage,
     rank::Int16,
@@ -56,8 +58,9 @@ tensor_datatype(::Type{UInt32})   = Int8(8)
 ) = ccall("extern air.init_strided_private_tensor.i32.global", llvmcall,
           Cvoid,
           (Ref{TensorDescriptor}, Int16, LLVMPtr{UInt8, AS.Device},
-           Ref{Int32}, Ref{Int32}, Int8),
-          handle, rank, data, extents, strides, datatype)
+           Ref{Int32}, Ref{Int32}, Int8, LLVMPtr{UInt8, AS.Device}, Int32, Int8),
+          handle, rank, data, extents, strides, datatype,
+          reinterpret(LLVMPtr{UInt8, AS.Device}, C_NULL), Int32(0), Int8(-1))
 
 @device_function @inline init_strided_tensor_threadgroup!(
     handle::TensorDescriptorStorage,
@@ -69,14 +72,16 @@ tensor_datatype(::Type{UInt32})   = Int8(8)
 ) = ccall("extern air.init_strided_private_tensor.i32.local", llvmcall,
           Cvoid,
           (Ref{TensorDescriptor}, Int16, LLVMPtr{UInt8, AS.ThreadGroup},
-           Ref{Int32}, Ref{Int32}, Int8),
-          handle, rank, data, extents, strides, datatype)
+           Ref{Int32}, Ref{Int32}, Int8, LLVMPtr{UInt8, AS.ThreadGroup}, Int32, Int8),
+          handle, rank, data, extents, strides, datatype,
+          reinterpret(LLVMPtr{UInt8, AS.ThreadGroup}, C_NULL), Int32(0), Int8(-1))
 
+# (in the form of AIR 2.9 too, which appends an operand Apple's frontend passes as `i16 0`)
 @device_function @inline get_extent_private_tensor(handle::TensorDescriptor,
                                                    rank::Int16, dim::Int16) =
     ccall("extern air.get_extent_private_tensor.i32", llvmcall,
-          Int32, (Ref{TensorDescriptor}, Int16, Int16),
-          handle, rank, dim)
+          Int32, (Ref{TensorDescriptor}, Int16, Int16, Int16),
+          handle, rank, dim, Int16(0))
 
 @device_function @inline slice_private_tensor!(
     dst::TensorDescriptorStorage,

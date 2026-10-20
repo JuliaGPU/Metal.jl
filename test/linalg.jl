@@ -365,6 +365,43 @@ end
     # Metal4 family), for the plain C = A·B (N/N, α=1, β=0) with tile-divisible dims and a
     # supported eltype.
     @testset "tensor-ops path" begin
+        # the tensor intrinsics take the operands of the targeted AIR version
+        Mat = MtlDeviceMatrix{Float32, 1}
+        tt = Tuple{Mat, Mat, Mat, UInt32, UInt32, UInt32,
+                   Val{Int32(64)}, Val{Int32(64)}, Val{Int32(32)}, Val{Int32(4)}}
+        air(macos) = sprint() do io
+            Metal.code_air(io, Metal.gemm_tensor_kernel!, tt; kernel=true, macos)
+        end
+        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 (?:signext )?0, (?:i8 addrspace\(1\)\*|ptr addrspace\(1\)) null, i32 0, i8 (?:signext )?-1\)\n",
+                       air(v"27"))
+        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 (?:signext )?0\)\n",
+                       air(v"26"))
+        ## the views over threadgroup memory take a threadgroup pointer
+        function tg_tensor(out)
+            buf = MtlThreadGroupArray(Float32, (8, 4))
+            t = Metal.MtlInlineTensor{Float32, 2, Metal.AS.ThreadGroup}(buf, (8, 4))
+            out[1] = Metal.get_extent_private_tensor(t.storage, Int16(2), Int16(1))
+            return
+        end
+        tg_air(macos) = sprint() do io
+            Metal.code_air(io, tg_tensor, Tuple{MtlDeviceVector{Int32, 1}}; kernel=true, macos)
+        end
+        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.local\(.*, i8 (?:signext )?0, (?:i8 addrspace\(3\)\*|ptr addrspace\(3\)) null, i32 0, i8 (?:signext )?-1\)\n",
+                       tg_air(v"27"))
+        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.local\(.*, i8 (?:signext )?0\)\n",
+                       tg_air(v"26"))
+        @test occursin(r"call i32 @air\.get_extent_private_tensor\.i32\(.*, i16 (?:signext )?1, i16 (?:signext )?0\)\n",
+                       tg_air(v"27"))
+        @test occursin(r"call i32 @air\.get_extent_private_tensor\.i32\(.*, i16 (?:signext )?1\)\n",
+                       tg_air(v"26"))
+        if Metal.tensor_matmul_capable()
+            @testset "macOS $macos" for macos in filter(<=(Metal.macos_version()), [v"26", v"27"])
+                out = MtlArray(zeros(Int32, 1))
+                @metal macos=macos tg_tensor(out)
+                @test Array(out) == [4]
+            end
+        end
+
         if Metal.tensor_matmul_capable()
             ttol(T) = T === Float32 ? 1.0f-3 : 1.0f-1
             @testset "$T $M×$N×$K" for T in (Float32, Float16, BFloat16),
