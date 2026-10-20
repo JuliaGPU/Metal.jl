@@ -84,7 +84,8 @@ while holding `submission_lock`:
   other tasks can flush it). The context supports
   `bind_buffer!(ctx, buf, offset, index)`, `bind_bytes!(ctx, ptr, length, index)` (which
   must copy the bytes before returning), `make_resident!(ctx, buf, usage)` for buffers
-  that are only reachable through a GPU address, `dispatch!(ctx, groups, threads)`, and
+  that are only reachable through a GPU address, `bind_threadgroup_memory!(ctx, length,
+  index)`, `dispatch!(ctx, groups, threads)`, and
   `MTL.push_debug_group!(ctx, label)`/`MTL.pop_debug_group!(ctx)`;
 - `blit_encoder(bq)`: return a context supporting `append_copy!` and `append_fillbuffer!`;
 - `encode_event_wait!(bq, event, value)`: make subsequent work wait for `event`;
@@ -573,6 +574,8 @@ end
     set_bytes!(cce, ptr, len, index)
 @inline make_resident!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, usage) =
     MTL.use!(cce, buf, usage)
+@inline bind_threadgroup_memory!(cce::MTLComputeCommandEncoder, len::Integer, index::Integer) =
+    MTL.set_threadgroup_memory_length!(cce, len, index)
 @inline dispatch!(cce::MTLComputeCommandEncoder, groups::MTLSize, threads::MTLSize) =
     MTL.append_current_function!(cce, groups, threads)
 

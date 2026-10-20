@@ -4,6 +4,11 @@ group = addgroup!(SUITE, "kernel")
 
 group["launch"] = @benchmarkable @metal identity(nothing)
 
+let lib = MTL.MTLLibrary(device(), "kernel void noop() {}")
+    pipeline = MTL.MTLComputePipelineState(device(), MTL.MTLFunction(lib, "noop"))
+    group["metalcall"] = @benchmarkable metalcall($pipeline, Tuple{})
+end
+
 # group["occupancy"] = @benchmarkable begin
 #     kernel = @metal launch=false identity(nothing)
 #     GPUArrays.launch_heuristic(Metal.mtlArrayBackend(), kernel.f; elements=1, elements_per_thread=1)

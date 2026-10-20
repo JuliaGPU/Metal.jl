@@ -29,6 +29,12 @@ function set_bytes!(cce::MTLComputeCommandEncoder, ptr::Ptr, len::Integer, index
                                           atIndex:(index-1)::NSUInteger]::Nothing
 end
 
+function set_threadgroup_memory_length!(cce::MTLComputeCommandEncoder, length::Integer,
+                                        index::Integer)
+    @objc [cce::id{MTLComputeCommandEncoder} setThreadgroupMemoryLength:length::NSUInteger
+                                                                atIndex:(index-1)::NSUInteger]::Nothing
+end
+
 function dispatchThreadgroups!(cce::MTLComputeCommandEncoder, threadgroupsPerGrid, threadsPerThreadgroup)
     @objc [cce::id{MTLComputeCommandEncoder} dispatchThreadgroups:threadgroupsPerGrid::MTLSize
                                              threadsPerThreadgroup:threadsPerThreadgroup::MTLSize]::Nothing

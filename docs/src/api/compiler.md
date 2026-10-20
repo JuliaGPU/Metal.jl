@@ -11,6 +11,14 @@ Metal.mtlfunction
 Metal.mtlconvert
 ```
 
+Kernels that weren't compiled by Metal.jl, e.g., from a precompiled Metal library, can be
+launched with `metalcall`:
+
+```@docs
+metalcall
+Metal.metalcall_tuple
+```
+
 ## Inspecting generated code
 
 The `@device_code_*` macros evaluate an expression and show the code of every kernel it
