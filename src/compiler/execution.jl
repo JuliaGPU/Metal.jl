@@ -150,6 +150,13 @@ function Adapt.adapt_storage(to::Adaptor, xs::MtlArray{T,N}) where {T,N}
     MtlDeviceArray{T,N,AS.Device}(xs.dims, ptr)
 end
 
+# CPU arrays would otherwise only be rejected by the compiler, with an error that dumps the
+# full argument type. they are not wrapped automatically: Metal.jl cannot synchronize host
+# accesses to an `Array` with the GPU, so that would silently race.
+Adapt.adapt_storage(::Adaptor, xs::Array) =
+    throw(ArgumentError("""cannot use a CPU array ($(typeof(xs))) in a Metal kernel.
+                           Convert it to a GPU array first, e.g. using `MtlArray(x)`, or use `unsafe_wrap(MtlArray, x)` to use its memory without copying (see its docstring for the required synchronization)."""))
+
 # Base.RefValue isn't GPU compatible, so provide a compatible alternative
 # TODO: port improvements from CUDA.jl
 struct MtlRefValue{T} <: Ref{T}

@@ -1163,6 +1163,17 @@ end
         @test Array(a)[] == 42f0
     end
 
+    @testset "CPU array argument" begin
+        kernel(a) = return
+        a = MtlArray([1f0])
+        b = [1f0]
+        for f in (() -> @metal(kernel(b)), () -> a .+ b)
+            err = try f(); nothing catch err; err end
+            @test err isa ArgumentError
+            @test occursin("MtlArray", sprint(showerror, err))
+        end
+    end
+
     @testset "wrong number of arguments" begin
         kernel(ptr) = return
         a = MtlArray([0])
