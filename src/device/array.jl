@@ -180,9 +180,9 @@ Base.show(io::IO, a::MtlDeviceArray) =
 
 Base.show(io::IO, mime::MIME"text/plain", a::MtlDeviceArray) = show(io, a)
 
-@inline function Base.unsafe_view(A::MtlDeviceVector{T}, I::Vararg{Base.ViewIndex,1}) where {T}
-    ptr = pointer(A, I[1].start)
-    len = I[1].stop - I[1].start + 1
+@inline function Base.unsafe_view(A::MtlDeviceVector{T}, I::Tuple{AbstractUnitRange}) where {T}
+    ptr = pointer(A, first(I[1]))
+    len = length(I[1])
     return MtlDeviceArray(len, ptr)
 end
 
