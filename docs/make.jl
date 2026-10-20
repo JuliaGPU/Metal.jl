@@ -7,6 +7,14 @@ const dst = "https://metal.juliagpu.org/stable/" # TODO
 function main()
     ci = get(ENV, "CI", "") == "true"
 
+    @info "Building Literate.jl documentation"
+    cd(@__DIR__) do
+        Literate.markdown(
+            "src/tutorials/introduction.jl", "src/tutorials";
+            repo_root_url = "https://github.com/JuliaGPU/Metal.jl/blob/main/docs"
+        )
+    end
+
     @info "Generating Documenter.jl site"
     DocMeta.setdocmeta!(Metal, :DocTestSetup, :(using Metal); recursive=true)
     makedocs(
@@ -25,11 +33,13 @@ function main()
         modules = [Metal],
         pages = Any[
             "Home" => "index.md",
+            "Introduction" => "tutorials/introduction.md",
             "Usage" => Any[
                 "usage/array.md",
                 "usage/memory.md",
                 "usage/tasks.md",
                 "usage/kernel.md",
+                "usage/kernel_advanced.md",
             ],
             "Development" => Any[
                 "development/profiling.md",

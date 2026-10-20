@@ -1,181 +1,277 @@
 # Kernel programming
 
-Metal.jl is based off of Apple's [Metal Shading Language (MSL)](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf)
-and Metal framework. The interface allows you to utilize the graphics and computing power of
-Mac GPUs. Like many other GPU frameworks, its history is rooted in graphics processing but
-has found use in computing/general purpose GPU (GPGPU) applications.
+```@meta
+DocTestSetup = :(using Metal)
+```
 
-The most fundamental idea of programming GPUs (when compared to serial CPU programming) is
-its *parallelism*. A GPU function (kernel), when called, is not just ran once in isolation.
-Rather, numerous (often thousands to millions) psuedo-independent instances (called threads)
-of the kernel are executed in parallel. These threads are arranged in a hierarchy that allows
-for varying levels of synchronization. For Metal, the hierarchy is as follows:
+When array operations aren't flexible or fast enough, you can write GPU kernels as Julia
+functions. This page covers writing, launching and debugging them; [Advanced kernel
+programming](@ref) covers how threads cooperate. If you're new to GPU programming, start
+with the [Introduction](../tutorials/introduction.md).
 
-- Thread: A single execution unit of the kernel
-- Threadgroup: A collection of threads that share a common block of memory and synchronization
-barriers
-- Grid: A collection of threadgroups
 
-The threadgroup and grid sizes are set by the user when launching the GPU kernel. There are
-upper limits determined by the targeted hardware, and the sizes can be 1, 2, or 3-dimensional
-For Metal.jl, these sizes are set using the `@metal` macro's keyword arguments. The `groups`
-keyword determines the number of threadgroups per grid while the `threads` keyword determines
-the threadgroup size.
+## Defining and launching kernels
 
-For example, given a 10x10x3 image that you want to run a function independently on each pixel,
-the kernel launch code might look like the following:
-`@metal threads=(10,10) groups=3 my_kernel(gpu_image_array)`
-This would launch 3 separate threadgroups of 100 threads each (10 in the first dimension and
-10 in the second dimension)
+A kernel returns `nothing` and writes its results to array arguments.
+Launch it with [`@metal`](@ref), passing the number of threads per threadgroup (`threads`)
+and the number of threadgroups (`groups`):
 
-There is also additional hierarchy layers that consists of small groups of threads
-that execute in lockstep called *waves/SIMD groups/*wavefronts* and *quadgroups*. However, the basic
-three-tier hierarchy is enough to get started.
+```jldoctest kernel
+julia> function fill_index!(a)
+           i = thread_position_in_grid().x
+           if i <= length(a)
+               a[i] = i
+           end
+           return
+       end;
 
-[Here](https://developer.apple.com/documentation/metal/compute_passes/creating_threads_and_threadgroups?language=objc)
-is a helpful link with good visualizations of Metal's thread hierarchy (also covering
-SIMD groups).
+julia> a = Metal.zeros(Int32, 5);
 
-Each thread has its own set of private variables. Most importantly, each thread has
-associated unique indices to identify itself within its threadgroup and grid.
-These are traditionally what are used to differentiate execution across threads. You can
-also query what the grid and threadgroup sizes are as well.
+julia> @metal threads=4 groups=2 fill_index!(a);
 
-For Metal.jl, these values are accessed via the following functions:
+julia> Array(a)
+5-element Vector{Int32}:
+ 1
+ 2
+ 3
+ 4
+ 5
+```
 
-- `thread_index_in_threadgroup()`
-- `grid_size()`
-- `thread_position_in_grid()`
-- `thread_position_in_threadgroup()`
-- `threadgroup_position_in_grid()`
-- `threadgroups_per_grid()`
-- `threads_per_grid()`
-- `threads_per_threadgroup()`
+The first launch with given argument types compiles the kernel. Launches are
+asynchronous: operations that need the result, like `Array(a)`, wait for the kernel (see
+[Tasks and synchronization](tasks.md)).
 
-!!! note
-    Prior to Metal.jl v1.9, the aforementioned indexing intrinsics had a `_Xd` suffix,
-    where 'X' was 1, 2, or 3 according to the number of dimensions requested.
 
-    These methods are deprecated and it is now recommended to use the version without a suffix,
-    which behaves like the `_3d` version.
+## Threads, threadgroups and the grid
 
-Using these in a kernel (taken directly from the [vadd example](https://github.com/JuliaGPU/Metal.jl/blob/main/examples/vadd.jl)):
+A launch runs the kernel once per thread, in a hierarchy that Apple describes in
+[Creating threads and
+threadgroups](https://developer.apple.com/documentation/metal/creating-threads-and-threadgroups):
+
+- A **threadgroup** is a set of up to 1024 threads that can share threadgroup memory and
+  synchronize with barriers.
+- The **grid** consists of all threadgroups of a launch.
+- The GPU executes the threads of a threadgroup in **SIMD-groups** of 32 threads (the
+  *thread execution width*), which can exchange values directly (see [SIMD-group
+  functions](@ref simdgroup-functions)).
+
+`@metal threads=t groups=g` launches `g` threadgroups of `t` threads, so the grid is
+`g .* t` threads large. Both default to 1 and accept an integer or a tuple of up to three
+dimensions. When rounding up the grid to cover the data, skip extra threads with a bounds
+check like the `if` above.
+
+These functions return thread positions and launch dimensions as `UInt32` values.
+Positions and indices are 1-based; multidimensional results are named tuples with fields
+`x`, `y` and `z`:
+
+| Function | Returns |
+|---|---|
+| [`thread_position_in_grid`](@ref) | position of the thread in the grid |
+| [`thread_position_in_threadgroup`](@ref) | position of the thread in its threadgroup |
+| [`threadgroup_position_in_grid`](@ref) | position of the threadgroup in the grid |
+| [`threads_per_threadgroup`](@ref) | threadgroup size (`threads`) |
+| [`threadgroups_per_grid`](@ref) | number of threadgroups (`groups`) |
+| [`threads_per_grid`](@ref) | grid size |
+| [`thread_index_in_threadgroup`](@ref) | linear index of the thread in its threadgroup |
+| [`thread_index_in_simdgroup`](@ref), [`simdgroup_index_in_threadgroup`](@ref) | position in the SIMD-group, and of the SIMD-group |
+
+The grid position combines the others:
+`thread_position_in_grid().x == (threadgroup_position_in_grid().x - 1) * threads_per_threadgroup().x + thread_position_in_threadgroup().x`.
+
+
+## Choosing the launch configuration
+
+A compiled kernel may support fewer than 1024 threads per threadgroup, depending on its
+resource requirements. To find the limit, compile the kernel with
+`launch=false`, and call the returned kernel object to launch it:
 
 ```julia
-function vadd(a, b, c)
-    i = thread_position_in_grid().x
-    c[i] = a[i] + b[i]
+kernel = @metal launch=false fill_index!(a)
+threads = min(length(a), kernel.maxthreads)
+groups = cld(length(a), threads)
+kernel(a; threads, groups)
+```
+
+`kernel.maxthreads` is the compute pipeline's
+[`maxTotalThreadsPerThreadgroup`](https://developer.apple.com/documentation/metal/mtlcomputepipelinestate/maxtotalthreadsperthreadgroup).
+Exceeding it throws an error:
+
+```julia
+julia> @metal threads=2048 fill_index!(a)
+ERROR: ArgumentError: Number of threads in group (2048) should not exceed 1024
+```
+
+For two-dimensional data, make the first dimension of the threadgroup a multiple of the
+thread execution width, so that each SIMD-group accesses consecutive elements of a column:
+
+```julia
+function scale!(B, A, s)
+    i, j = thread_position_in_grid().x, thread_position_in_grid().y
+    if i <= size(A, 1) && j <= size(A, 2)
+        @inbounds B[i, j] = s * A[i, j]
+    end
     return
 end
+
+A = Metal.rand(Float32, 100, 300)
+B = similar(A)
+kernel = @metal launch=false scale!(B, A, 2f0)
+width = Int(kernel.pipeline.threadExecutionWidth)    # 32
+threads = (width, kernel.maxthreads ÷ width)         # (32, 32)
+groups = cld.(size(A), threads)                      # (4, 10)
+kernel(B, A, 2f0; threads, groups)
 ```
 
-This kernel takes in three vectors (a,b,c) all of the same length and stores the element-wise
-sum of `a` and `b` into `c`. Each thread in this kernel gets its unique position in the grid
-(arrangement of all threadgroups) and stores this value into the variable `i` which is then
-used as the index into the vectors. Thus, each thread is computing one sum and storing the result
-in the output vector.
+See also Apple's [Calculating threadgroup and grid
+sizes](https://developer.apple.com/documentation/metal/calculating-threadgroup-and-grid-sizes),
+and [Threadgroup size hints](@ref) for constraining the size at compile time.
 
-To ensure this kernel functions properly, we have to launch it with exactly as many threads
-as the length of the vectors. If we under or over-launch threads, the result could be incorrect.
 
-An example of a good launch:
+## Kernel arguments
+
+`@metal` converts every argument with [`Metal.mtlconvert`](@ref): an `MtlArray` becomes an
+[`MtlDeviceArray`](@ref), which supports indexing, `size`, `length` and views in the kernel.
+Other arguments must be *isbits* values, such as numbers, tuples and immutable structs
+of them, which are copied to the GPU:
 
 ```julia
-len = prod(size(d_a))
-@metal threads=len vadd(d_a, d_b, d_c)
+struct Affine
+    a::Float32
+    b::Float32
+end
+
+function apply!(y, x, f)
+    i = thread_position_in_grid().x
+    if i <= length(y)
+        @inbounds y[i] = f.a * x[i] + f.b
+    end
+    return
+end
+
+x = MtlArray(Float32[1, 2, 3])
+y = similar(x)
+@metal threads=3 apply!(y, x, Affine(2, 1))    # y == [3, 5, 7]
 ```
 
-Additional notes:
+CPU arrays are rejected with `ArgumentError: cannot use a CPU array (...) in a Metal
+kernel`: convert them with `MtlArray`, or share their memory as described in [Sharing
+memory with CPU arrays](@ref). To pass
+structs containing `MtlArray`s, make them convertible with
+[Adapt.jl](https://github.com/JuliaGPU/Adapt.jl)'s `Adapt.@adapt_structure`.
 
-- Kernels must always return nothing
-- Kernels are asynchronous. To synchronize, use the `Metal.@sync` macro.
+
+## What kernels can contain
+
+Most Julia code works in kernels, including math functions, structs and tuples, with
+these restrictions:
+
+- Kernels must return `nothing` (`KernelError: kernel returns a value of type ...`).
+- Every call has to be resolved at compile time. Type-unstable code fails with
+  `InvalidIRError: ... unsupported dynamic function invocation`.
+- Kernels can't allocate garbage-collected memory, such as `Array`s, or call into the Julia
+  runtime or C libraries. Use tuples or [`MtlThreadGroupArray`](@ref) for temporary storage.
+- Metal doesn't support `Float64` arithmetic (`InvalidIRError: ... unsupported use of
+  double value`). Use `Float32` literals: write `2f0 * x`, not `2.0 * x`.
+
+[Troubleshooting](../development/troubleshooting.md) explains these errors.
+
 
 ## Printing
 
-When debugging, it's not uncommon to want to print some values. This is achieved with `@mtlprintf`:
+To print from a kernel while debugging, use [`@mtlprintln`](@ref) or [`@mtlprint`](@ref)
+for values and literal strings, [`@mtlshow`](@ref) to print an expression and its value,
+and [`@mtlprintf`](@ref) for C-style formatting:
 
 ```julia
-function gpu_add2_print!(y, x)
-    index = thread_position_in_grid_1d()
-    @mtlprintf("thread %d", index)
-    @inbounds y[i] += x[i]
-    return nothing
-end
+julia> function print_kernel(a)
+           i = thread_position_in_grid().x
+           @mtlprintln("Hello from thread ", i)
+           @mtlprintf("a[%d] = %f\n", i, a[i])
+           return
+       end;
 
-A = Metal.ones(Float32, 8);
-B = Metal.rand(Float32, 8);
-
-@metal threads=length(A) gpu_add2_print!(A, B)
+julia> @metal threads=2 print_kernel(Metal.ones(Float32, 2)); synchronize()
+Hello from thread 1
+Hello from thread 2
+a[1] = 1.000000
+a[2] = 1.000000
 ```
 
-`@mtlprintf` supports most of the format specifiers that `printf`
-supports in C with the following exceptions:
- - `%n` and `%s` conversion specifiers are not supported
- - Default argument promotion applies to arguments of half type which promote to the `double` type
- - The format string must be a string literal
+`@mtlprintf` follows [MSL's `printf`](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf):
+the format must be a string literal, without `%n` or `%s`. Output appears when the kernel
+completes; messages that overflow Metal's log buffer are dropped. Kernels that print bypass
+command batching, which slows them down, and printing doesn't work on virtualized GPUs
+such as those of CI virtual machines.
 
-Metal places output from `@mtlprintf` into a log buffer. The system only removes the messages from the log buffer when the command buffer completes. When the log buffer becomes full, the system drops all subsequent messages.
 
-See also: `@mtlprint`, `@mtlprintln` and `@mtlshow`
+## Errors and debug levels
 
-## Exceptions
-
-When a kernel hits an error condition, such as an out-of-bounds access or a domain error,
-it does not abort the GPU. The faulting lane records the exception in a host-visible
-mailbox and returns, and the next `synchronize()` reads that mailbox and rethrows the
-exception on the host as a `KernelException`:
+When a kernel throws, e.g. on an out-of-bounds access, the faulting thread records the
+error and stops, while the other threads continue. The next synchronization, explicit or
+implicit, throws a `KernelException` on the CPU. Only one error is recorded.
 
 ```julia
 julia> function kernel(a)
-           a[2] = 1f0   # out-of-bounds: `a` has length 1
+           a[2] = 1f0   # out of bounds: `a` has length 1
            return
-       end
+       end;
 
-julia> @metal threads=1 kernel(Metal.zeros(Float32, 1));
-
-julia> synchronize()
+julia> @metal kernel(Metal.zeros(Float32, 1)); synchronize()
 ERROR: KernelException: A BoundsError was thrown on device Apple M1: Out-of-bounds array access
-For more details, run Julia with `-g2`, or launch the kernel with `@metal debug_level=2`.
+For more details, run Julia with `-g2`, or launch the kernel with `@metal debug_level=2`
 ```
 
-How much detail is reported depends on Julia's debug level (the `-g` flag), so the unhappy
-path stays as small as the level allows:
+How much is reported depends on the debug level, which defaults to that of the Julia
+session (the `-g` flag) and can be set per launch with `@metal debug_level=...`:
 
-- At `-g0`, only the fact that an exception occurred is reported:
-  `KernelException: an exception was thrown on device Apple M1`.
-- At `-g1` (the default), the type and reason are reported, as shown above, for the common
-  implicit exceptions (bounds, domain, overflow, inexact, and so on); other throws only
-  report that an exception occurred.
-- At `-g2`, the faulting position (`... was thrown by thread 1×1×1 in threadgroup 1×1×1`)
-  and a device-side stack trace are additionally reported, and throws not covered above
-  report whatever type name the compiler could deduce (often a generic `exception`).
-  This extra detail is not recorded at `-g1` because its machinery taxes every kernel
-  that can throw, even when nothing ever throws, measurably slowing down kernels on
-  M1-era GPUs.
+| Level | Reported |
+|---|---|
+| 0 | that an exception was thrown: `KernelException: An exception was thrown on device Apple M1` |
+| 1 (default) | also the type and reason, for exceptions that Julia's runtime throws (bounds, domain, overflow and inexact errors, ...) |
+| 2 | also the faulting thread and threadgroup, and a stack trace |
 
-The level can also be set per launch, independent of the session's `-g`, with the
-`debug_level` keyword — for example `@metal debug_level=2 kernel(args...)` to capture a
-backtrace for one kernel without restarting Julia, or `debug_level=0` to keep a hot kernel's
-exception path minimal. It defaults to the session's `-g`.
+At level 2 (paths shortened):
 
-Only one faulting lane is recorded.
+```
+ERROR: KernelException: A BoundsError was thrown by thread 1×1×1 in threadgroup 1×1×1 on device Apple M1: Out-of-bounds array access
+Stacktrace:
+ [1] macro expansion at Metal/src/device/utils.jl:17
+ [2] throw_boundserror at Metal/src/device/quirks.jl:52
+ [3] checkbounds at ./abstractarray.jl:702
+ [4] arrayset at Metal/src/device/array.jl:86
+ [5] setindex! at Metal/src/device/array.jl:128
+ [6] kernel at ./none:3
+```
 
-## Compilation caches
+Recording the position and stack trace adds overhead even when no exception is thrown.
 
-Launching a kernel for the first time compiles it in two stages: GPUCompiler.jl lowers
-Julia code to AIR bitcode and wraps it in a `metallib`; the Metal driver compiles that to
-native GPU code when creating the compute pipeline. Both stages are cached:
 
-- The `metallib` is cached in memory for the session, and kernels compiled as part of a
-  package's precompile workload (e.g. using PrecompileTools.jl) are stored in the package
-  image, so that a fresh session can launch them without invoking the compiler at all.
-- The native GPU code is cached by Metal itself, in a per-user shader cache
-  (`$(getconf DARWIN_USER_CACHE_DIR)com.apple.metal`) keyed on the library's contents.
-  Because Metal.jl generates the same `metallib` for a kernel in every session, a later
-  session normally skips the driver compile for kernels compiled before, including kernels
-  compiled at run time. This cache is bounded, so compiling thousands of kernels (e.g.
-  running the Metal.jl test suite) evicts older entries.
+## Compilation and caches
 
-## Other Helpful Links
+The first launch compiles a kernel in two stages: Metal.jl compiles the Julia code to AIR,
+in a Metal library (`metallib`), and the Metal driver compiles that to GPU code. Both stages
+are cached:
 
-[Metal Shading Language Specification](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf)
+- The library is cached in memory for the session. Kernels compiled in a package's
+  precompilation workload (e.g., with PrecompileTools.jl) are stored in the package image,
+  so that a new session can launch them without running the Julia compiler.
+- Metal caches the GPU code in a per-user shader cache
+  (`$(getconf DARWIN_USER_CACHE_DIR)com.apple.metal`), keyed on the library's contents.
+  Since Metal.jl generates the same library for a kernel in every session, later sessions
+  normally skip the driver compilation. The cache is bounded, so compiling thousands of
+  kernels evicts older entries.
+
+
+## Inspecting generated code
+
+Prefix a launch with a `@device_code_*` macro to see the code it compiles:
+[`@device_code_typed`](@ref) and [`@device_code_warntype`](@ref) show Julia IR (useful to
+find type instabilities), [`@device_code_llvm`](@ref) LLVM IR, and
+[`@device_code_air`](@ref) the AIR passed to Metal. [`@device_code`](@ref) writes all of
+them to files. Apple doesn't expose the GPU code; [Xcode and
+Instruments](../development/xcode.md) relates performance to source lines.
+
+```julia
+julia> @device_code_warntype @metal threads=4 groups=2 fill_index!(a)
+```
