@@ -347,14 +347,8 @@ Base.@nospecializeinfer function try_metalcall(pipeline::MTLComputePipelineState
     # (passed on `@nospecialize`d: a `Union{Nothing,NamedTuple}` reaching `record_operation!`
     # crashes the optimizer of Julia 1.10, see JuliaLang/julia#53590)
     op = MTL.profile_metadata[] === nothing ? nothing : pipeline_operation(pipeline, gs, ts)
-    conflict = Base.@lock submission_lock begin
-        encode_metalcall!(pipeline, gs, ts, bq, types, args, threadgroup_memory, resources,
-                          op)
-    end
-    conflict === nothing || return conflict
-
-    submit ? flush!(bq) : maybe_autoflush!(bq)
-    return
+    submit_launch!(pipeline, gs, ts, bq, types, nothing, nothing, args, threadgroup_memory,
+                   resources, op, submit)
 end
 
 Base.@nospecializeinfer function pipeline_operation(pipeline::MTLComputePipelineState,
@@ -366,33 +360,70 @@ Base.@nospecializeinfer function pipeline_operation(pipeline::MTLComputePipeline
        maxthreads = Int(pipeline.maxTotalThreadsPerThreadgroup))
 end
 
-# encode a pipeline launch into the open batch of `bq`. returns the memory of an argument
-# that is still in use by another queue, if any, without encoding anything.
-Base.@nospecializeinfer function encode_metalcall!(
+# Encode a launch of `pipeline` into the open batch of `bq`, and submit it if needed. `args`
+# are bound to the parameters of `target`, a signature or a `HostKernel` (which also takes
+# its kernel `state`, see `bind_arguments!`), and are kept alive with `source`, the callable
+# of a `HostKernel`. `op` describes the launch to the profiler.
+# Returns the memory of an argument that is still in use by another queue, if any, without
+# encoding anything.
+Base.@nospecializeinfer function submit_launch!(
         pipeline::MTLComputePipelineState, gs::MTLSize, ts::MTLSize, bq::BatchedCommandQueue,
-        @nospecialize(types::Type), @nospecialize(args::Tuple),
+        @nospecialize(target), @nospecialize(state::Union{Nothing,KernelState}),
+        @nospecialize(source), @nospecialize(args::Tuple),
+        @nospecialize(threadgroup_memory::Tuple), @nospecialize(resources::Tuple),
+        @nospecialize(op), submit::Bool)
+    conflict = Base.@lock submission_lock begin
+        encode_launch!(pipeline, gs, ts, bq, target, state, source, args,
+                       threadgroup_memory, resources, op)
+    end
+    conflict === nothing || return conflict
+
+    submit ? flush!(bq) : maybe_autoflush!(bq)
+    return
+end
+
+Base.@nospecializeinfer function encode_launch!(
+        pipeline::MTLComputePipelineState, gs::MTLSize, ts::MTLSize, bq::BatchedCommandQueue,
+        @nospecialize(target), @nospecialize(state::Union{Nothing,KernelState}),
+        @nospecialize(source), @nospecialize(args::Tuple),
         @nospecialize(threadgroup_memory::Tuple), @nospecialize(resources::Tuple),
         @nospecialize(op))
     try
         cce = kernel_encoder!(bq, pipeline)
-        for resource in resources
-            declare_resource!(cce, bq, resource)
-        end
-        bind_arguments!(cce, bq, types, args)
-        for (i, len) in enumerate(threadgroup_memory)
-            bind_threadgroup_memory!(cce, len, i)
-        end
+        isempty(resources) || declare_resources!(cce, bq, resources)
+        bind_arguments!(cce, bq, target, state, args)
+        isempty(threadgroup_memory) || bind_threadgroup_memory!(cce, threadgroup_memory)
         dispatch!(cce, pipeline, gs, ts)
     catch err
+        # The failing launch has not been recorded yet. Keep any earlier
+        # operations in this batch, but close encoder state dirtied by the
+        # failed encode and drop an otherwise empty batch.
         end_encoder!(bq)
         bq.nops == 0 && discard_open_batch!(bq)
         err isa OwnershipConflict && return err.managed
         rethrow()
     end
 
-    record_operation!(bq, args, resources; op=op)
+    # The command buffer retains explicitly encoded buffers, but that doesn't keep other
+    # resources alive for which we've encoded the GPU address ourselves.
+    if isempty(resources)
+        record_operation!(bq, source, args; op=op)
+    else
+        record_operation!(bq, source, args, resources; op=op)
+    end
     return nothing
 end
+
+# (specialized on the tuples' types, so that each launch dispatches only once)
+declare_resources!(cce, bq, ::Tuple{}) = nothing
+function declare_resources!(cce, bq, resources::Tuple)
+    declare_resource!(cce, bq, first(resources))
+    declare_resources!(cce, bq, Base.tail(resources))
+end
+bind_threadgroup_memory!(cce, lengths::Tuple) =
+    for (i, len) in enumerate(lengths)
+        bind_threadgroup_memory!(cce, len, i)
+    end
 
 declare_resource!(cce, bq, buf::MTLBuffer) = make_resident!(cce, buf, MTL.ReadWriteUsage)
 function declare_resource!(cce, bq, ptr::MtlPtr)
@@ -403,28 +434,36 @@ declare_resource!(cce, bq, xs::MtlArray) = declare_resource!(cce, bq, pointer(xs
 declare_resource!(cce, bq, x) =
     throw(ArgumentError("Resources should be MtlArray, MtlPtr or MTLBuffer objects, got a $(typeof(x))"))
 
-# Bind the values `args` to the parameters of a kernel with signature `TT`. Pointer-typed
-# parameters are bound as buffers, others are passed by value (see `metalcall`).
-@inline @generated function bind_arguments!(cce, bq, ::Type{TT}, args::Tuple) where {TT}
+@inline bind_arguments!(cce, bq, ::Type{TT}, ::Nothing, args::Tuple) where {TT} =
+    bind_arguments!(cce, bq, TT, (), args)
+
+# Bind the values `head` and `args` (which the user passed, counting from 1 in errors) to
+# the parameters of a kernel with signature `TT`. Pointer-typed parameters are bound as
+# buffers, others are passed by value (see `metalcall`).
+@inline @generated function bind_arguments!(cce, bq, ::Type{TT}, head::Tuple,
+                                            args::Tuple) where {TT}
     types = TT.parameters
-    if length(types) != fieldcount(args)
-        msg = "Kernel expects $(length(types)) arguments, got $(fieldcount(args))"
+    nhead = fieldcount(head)
+    if length(types) != nhead + fieldcount(args)
+        msg = "Kernel expects $(length(types) - nhead) arguments, got $(fieldcount(args))"
         return :(throw(ArgumentError($msg)))
     end
+    vals = ((:(head[$i]) for i in 1:nhead)..., (:(args[$i]) for i in 1:fieldcount(args))...)
+    typs = (head.parameters..., args.parameters...)
 
     ex = quote end
     idx = 1
-    for (i, (dt, typ)) in enumerate(zip(types, args.parameters))
+    for (i, (dt, val, typ)) in enumerate(zip(types, vals, typs))
         (isghosttype(dt) || Core.Compiler.isconstType(dt)) && continue
         if dt <: Union{Ptr,Core.LLVMPtr,MtlPtr}
             # a GPU address can't be bound without the buffer it points into
             if !(typ <: Union{MTLBuffer,MtlPtr,MtlArray})
-                msg = "Argument $i should be an MtlArray, MtlPtr or MTLBuffer to be bound to a pointer parameter, not a $typ"
+                msg = "Argument $(i - nhead) should be an MtlArray, MtlPtr or MTLBuffer to be bound to a pointer parameter, not a $typ"
                 return :(throw(ArgumentError($msg)))
             end
-            push!(ex.args, :(bind_pointer!(cce, bq, args[$i], $idx)))
+            push!(ex.args, :(bind_pointer!(cce, bq, $val, $idx)))
         else
-            push!(ex.args, :(convert_argument!(cce, bq, $dt, args[$i], $idx)))
+            push!(ex.args, :(convert_argument!(cce, bq, $dt, $val, $idx)))
         end
         idx += 1
     end
@@ -441,6 +480,8 @@ end
 @inline bind_pointer!(cce, bq, xs::MtlArray, idx::Integer) =
     bind_pointer!(cce, bq, pointer(xs), idx)
 
+# Not inlined into `bind_arguments!`, which is compiled for every kernel signature, so that
+# the conversion of each argument type is compiled once and shared between kernels.
 @noinline convert_argument!(cce, bq, ::Type{T}, arg, idx::Integer) where {T} =
     set_argument!(cce, convert(T, mtlconvert(arg, cce, bq)), idx)
 
@@ -620,56 +661,16 @@ end
 
 ## kernel launching and argument encoding
 
-# Encode the kernel state, the callable and the arguments, in that order. Which of those
-# values occupy a parameter slot is decided by the kernel's compiled signature, which holds
-# their converted types: the unconverted ones don't tell, e.g., a `Base.Fix1` capturing a
-# type converts to a ghost closure.
-@inline @generated function encode_arguments!(cce, bq, kernel::HostKernel{F,S,TT}, kernel_state,
-                                              f, args::Tuple) where {F,S,TT}
-    sig = (KernelState, F, TT.parameters...)
-    vals = (:kernel_state, :f, (:(args[$i]) for i in 1:fieldcount(args))...)
-    typs = (kernel_state, f, args.parameters...)
-    if length(sig) != length(typs)
-        msg = "Kernel expects $(length(TT.parameters)) arguments, got $(fieldcount(args))"
-        return :(throw(ArgumentError($msg)))
-    end
-
-    # the callable and arguments passed into this function have not been `mtlconvert`ed:
-    # top-level MTLBuffer and MtlPtr objects are bound directly, and everything else is
-    # converted here, with the encoder, so that the buffers it contains are declared to it.
-    ex = quote end
-    idx = 1
-    for (i, (dt, val, typ)) in enumerate(zip(sig, vals, typs))
-        (isghosttype(dt) || Core.Compiler.isconstType(dt)) && continue
-        # pointer parameters are bound as buffers, so a GPU address on its own can't be
-        # passed (it would be passed by reference, i.e., as the address of a copy of it)
-        if dt <: Union{Ptr,Core.LLVMPtr} && !(typ <: Union{MTLBuffer,MtlPtr})
-            msg = "Argument $(i-2) should be an MtlArray, MtlPtr or MTLBuffer to be bound to a pointer parameter, not a $typ"
-            return :(throw(ArgumentError($msg)))
-        end
-        if typ <: MTLBuffer
-            # top-level buffers are passed as a pointer-valued argument
-            push!(ex.args, :(bind_buffer!(cce, $val, 0, $idx)))
-        elseif typ <: MtlPtr
-            # the same as a buffer, but with an offset
-            push!(ex.args, :(claim!($val, bq)))
-            push!(ex.args, :(bind_buffer!(cce, $val.buffer, $val.offset, $idx)))
-        else
-            # everything else is passed by reference, copied into Metal's transient buffer
-            push!(ex.args, :(convert_argument!(cce, bq, $val, $idx)))
-        end
-        idx += 1
-    end
-
-    push!(ex.args, :(return nothing))
-
-    ex
-end
-
-# Not inlined into `encode_arguments!`, which is compiled for every kernel signature, so
-# that the conversion of each argument type is compiled once and shared between kernels.
-@noinline convert_argument!(cce, bq, arg, idx::Integer) =
-    set_argument!(cce, mtlconvert(arg, cce, bq), idx)
+# A kernel's parameters are the kernel state, the callable and the arguments, in that order.
+# Which of those values occupy a parameter slot is decided by the kernel's compiled
+# signature, which holds their converted types: the unconverted ones don't tell, e.g., a
+# `Base.Fix1` capturing a type converts to a ghost closure. The callable and arguments are
+# converted when binding them, with the encoder, so that the buffers they contain are
+# declared to it.
+@inline bind_arguments!(cce, bq, kernel::HostKernel, state::KernelState, args::Tuple) =
+    bind_arguments!(cce, bq, kernel_signature(kernel), (state, kernel.source), args)
+@generated kernel_signature(::HostKernel{F,S,TT}) where {F,S,TT} =
+    Tuple{KernelState, F, TT.parameters...}
 
 @inline function set_argument!(cce, arg, idx::Integer)
     argtyp = typeof(arg)
@@ -804,7 +805,7 @@ Base.@nospecializeinfer function launch_logging!(
             let reloc = kernel.reloc_table
                 reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
             end
-            encode_arguments!(cce, bq, kernel, kernel_state, kernel.source, args)
+            bind_arguments!(cce, bq, kernel, kernel_state, args)
             dispatch!(cce, kernel.pipeline, gs, ts)
         catch err
             err isa OwnershipConflict && return err.managed
@@ -842,13 +843,20 @@ Base.@nospecializeinfer function launch(
         return launch_logging!(kernel, gs, ts, bq, args, kernel_state, buf, exc)
     end
 
-    conflict = Base.@lock submission_lock begin
-        encode_launch!(kernel, gs, ts, bq, args, kernel_state, buf, exc)
+    # The kernel state holds GPU addresses to per-device scratch buffers (malloc bump
+    # allocator, exception mailbox) that aren't otherwise bound to the encoder. Declare
+    # them so Metal Shader Validation tracks the accesses instead of dropping them. The
+    # relocation table is per-kernel, so it cannot join the queue's residency set (which
+    # only holds the scratch buffers): declare it every launch.
+    resources = if kernel.use_residency_sets
+        reloc === nothing ? () : (reloc,)
+    else
+        reloc === nothing ? (buf, exc) : (buf, exc, reloc)
     end
-    conflict === nothing || return conflict
 
-    submit ? flush!(bq) : maybe_autoflush!(bq)
-    return
+    op = MTL.profile_metadata[] === nothing ? nothing : kernel_operation(kernel, gs, ts)
+    submit_launch!(kernel.pipeline, gs, ts, bq, kernel, kernel_state, kernel.source, args, (),
+                   resources, op, submit)
 end
 
 # check a launch configuration against the pipeline's limits (`reqthreads` all zeros when
@@ -879,47 +887,6 @@ function check_launch(gs::MTLSize, ts::MTLSize, reqthreads::MTLSize, maxthreads:
     tgmem > 32768 &&
         throw(ArgumentError("Total used threadgroupMemoryLength($tgmem) must be <= 32768 bytes."))
     return
-end
-
-# encode a kernel launch into the open batch of `bq`. returns the memory of an argument
-# that is still in use by another queue, if any, without encoding anything.
-Base.@nospecializeinfer function encode_launch!(
-        @nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
-        bq::BatchedCommandQueue, @nospecialize(args::Tuple), kernel_state, buf, exc)
-    source = kernel.source
-    pipeline = kernel.pipeline
-    reloc = kernel.reloc_table
-    try
-        cce = kernel_encoder!(bq, pipeline)
-
-        # The kernel state holds GPU addresses to per-device scratch buffers (malloc bump
-        # allocator, exception mailbox) that aren't otherwise bound to the encoder. Declare
-        # them so Metal Shader Validation tracks the accesses instead of dropping them.
-        if !kernel.use_residency_sets
-            make_resident!(cce, buf, MTL.ReadWriteUsage)
-            make_resident!(cce, exc, MTL.ReadWriteUsage)
-        end
-        # The relocation table is per-kernel, so it cannot join the queue's residency set
-        # (which only holds the per-device scratch buffers): declare it every launch.
-        reloc === nothing || make_resident!(cce, reloc, MTL.ReadUsage)
-
-        encode_arguments!(cce, bq, kernel, kernel_state, source, args)
-        dispatch!(cce, pipeline, gs, ts)
-    catch err
-        # The failing launch has not been recorded yet. Keep any earlier
-        # operations in this batch, but close encoder state dirtied by the
-        # failed encode and drop an otherwise empty batch.
-        end_encoder!(bq)
-        bq.nops == 0 && discard_open_batch!(bq)
-        err isa OwnershipConflict && return err.managed
-        rethrow()
-    end
-
-    # The command buffer retains explicitly encoded buffers, but that doesn't keep other
-    # resources alive for which we've encoded the GPU address ourselves.
-    op = MTL.profile_metadata[] === nothing ? nothing : kernel_operation(kernel, gs, ts)
-    record_operation!(bq, source, args; op=op)
-    return nothing
 end
 
 # Dispatch the kernel through the backend's encoding context `ctx`, wrapped (when labelling

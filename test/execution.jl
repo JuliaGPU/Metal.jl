@@ -218,7 +218,8 @@ end
     end
     synchronize()
 
-    for f in (Metal.try_launch, Metal.launch, Metal.encode_launch!, Metal.launch_logging!)
+    for f in (Metal.try_launch, Metal.launch, Metal.launch_logging!, Metal.submit_launch!,
+              Metal.encode_launch!)
         @test length(collect(Base.specializations(only(methods(f))))) <= 1
     end
 end
