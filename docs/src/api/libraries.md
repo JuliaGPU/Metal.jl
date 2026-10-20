@@ -1,9 +1,8 @@
-# Libraries
+# Metal libraries
 
-Metal stores compiled code in libraries (`.metallib` files): containers that hold one or
-more AIR modules (LLVM bitcode) together with the metadata Metal needs to instantiate them.
-Metal.jl generates such libraries for every kernel it compiles, and can read, inspect, edit
-and write them, also when they were produced by Apple's toolchain.
+Metal libraries (`.metallib` files) contain AIR modules (LLVM bitcode) and metadata.
+Metal.jl generates them when compiling kernels and can read, inspect, edit and write
+libraries produced by either Metal.jl or Apple's toolchain.
 
 ```julia
 julia> lib = read("shaders.metallib", Metal.MetalLib)

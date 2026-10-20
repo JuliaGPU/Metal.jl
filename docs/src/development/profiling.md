@@ -12,7 +12,7 @@ For robust measurements, it is advised to use the
 [BenchmarkTools.jl](https://github.com/JuliaCI/BenchmarkTools.jl) package which goes to
 great lengths to perform accurate measurements. Due to the asynchronous nature of GPUs, you
 need to ensure the GPU is synchronized at the end of every sample, e.g. by calling
-`synchronize()` or, even better, wrapping your code in `Metal.@sync`:
+`synchronize()` or, even better, wrapping your code in [`Metal.@sync`](@ref):
 
 ```julia
 julia> using Metal, BenchmarkTools
