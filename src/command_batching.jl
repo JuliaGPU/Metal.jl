@@ -570,8 +570,14 @@ end
 
 @inline bind_buffer!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, offset, index) =
     set_buffer!(cce, buf, offset, index)
-@inline bind_bytes!(cce::MTLComputeCommandEncoder, ptr::Ptr, len::Integer, index::Integer) =
+@inline function bind_bytes!(cce::MTLComputeCommandEncoder, ptr::Ptr, len::Integer,
+                             index::Integer)
+    # larger values abort the process (or only work by accident)
+    len > 4096 && throw_large_bytes(len)
     set_bytes!(cce, ptr, len, index)
+end
+@noinline throw_large_bytes(len) =
+    throw(ArgumentError("Kernel arguments passed by value are limited to 4096 bytes, got one of $len bytes; pass larger data in an array instead"))
 @inline make_resident!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, usage) =
     MTL.use!(cce, buf, usage)
 @inline bind_threadgroup_memory!(cce::MTLComputeCommandEncoder, len::Integer, index::Integer) =

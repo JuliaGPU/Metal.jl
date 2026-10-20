@@ -224,6 +224,21 @@ end
 end
 
 
+@testset "large arguments" begin
+    function last_kernel(out, t)
+        out[1] = t[end]
+        return
+    end
+    out = MtlArray(zeros(Float32, 1))
+    @metal last_kernel(out, ntuple(Float32, 1024))
+    @test Array(out) == [1024f0]
+    if Metal.COMMAND_API !== :metal4
+        # Metal 3 can only pass 4 KiB by value (the Metal 4 backend copies to a buffer)
+        @test_throws "limited to 4096 bytes" @metal last_kernel(out, ntuple(Float32, 1025))
+    end
+end
+
+
 @testset "reflection" begin
     Metal.code_lowered(dummy, Tuple{})
     Metal.code_typed(dummy, Tuple{})
