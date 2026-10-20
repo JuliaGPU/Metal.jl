@@ -61,6 +61,12 @@ function main()
         )
     end
 
+    # On a virtualized GPU, like the one of the macOS runners, creating the device warns.
+    # Doing so here keeps that warning out of the doctest output: Documenter evaluates every
+    # doctest with a fresh logger, defeating `maxlog`, but in this task, which caches the
+    # device.
+    Metal.device()
+
     @info "Generating Documenter.jl site"
     DocMeta.setdocmeta!(Metal, :DocTestSetup, :(using Metal); recursive=true)
     makedocs(
