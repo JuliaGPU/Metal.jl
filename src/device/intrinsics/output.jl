@@ -111,7 +111,7 @@ end
     end
 
     # call it with the arguments
-    call!(builder, llvm_ft, llvm_f, collect(argspec))
+    call!(builder, llvm_ft, llvm_f, collect(LLVM.Value, argspec))
     nothing
 end
 
