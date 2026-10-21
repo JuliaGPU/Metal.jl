@@ -772,62 +772,43 @@ end
 # cooperative synchronization tests independent of timing: waiting for that command buffer
 # can only return after whoever opens the gate has run.
 #
-# the GPU aborts command buffers that wait on an event for more than a few seconds, so the
-# command buffer waits for a sequence of values, which a watchdog on a foreign thread signals
-# one by one while the gate is closed, and all at once when it is opened. if the test does
-# not finish in time (e.g., because the thread that should open the gate is blocked by the
-# wait, or a task never gets to run), the watchdog opens the gate instead of letting the
-# test hang, and records that it timed out.
+# the command buffer is held back by an enqueued but uncommitted blocker, so the GPU does not
+# start it and cannot abort it (as it does with command buffers that wait on an event for more
+# than a few seconds). a watchdog on a foreign thread commits the blocker when the gate is
+# opened. if the test does not do so in time (e.g., because the thread that should open the
+# gate is blocked by the wait, or a task never gets to run), the watchdog commits it anyway
+# instead of letting the test hang, and records that it timed out.
 mutable struct SyncGate
-    const event::MTL.MTLSharedEvent     # what the command buffer waits for
-    const control::MTL.MTLSharedEvent   # GATE_OPEN or GATE_DONE, set by the test
+    const blocker::MTL.MTLCommandBuffer
+    const control::MTL.MTLSharedEvent   # signaled to open the gate
     const watchdog_done::Base.Event
     @atomic timed_out::Bool
 end
 
-const GATE_OPEN = 1
-const GATE_DONE = 2
-const GATE_TICK_MS = 1_000
-const GATE_TICKS = 60       # the timeout, in ticks
+const GATE_TIMEOUT_MS = 60_000
 
 function gate_watchdog(ptr::Ptr{Cvoid})
     gate = unsafe_pointer_to_objref(ptr)::SyncGate
-    opened = finished = false
-    for tick in 1:GATE_TICKS
-        if !opened
-            if MTL.waitUntilSignaledValue(gate.control, GATE_OPEN, GATE_TICK_MS)
-                opened = true
-                gate.event.signaledValue = GATE_TICKS + 1
-            else
-                gate.event.signaledValue = tick
-                continue
-            end
-        end
-        if MTL.waitUntilSignaledValue(gate.control, GATE_DONE, GATE_TICK_MS)
-            finished = true
-            break
-        end
-    end
-    finished || @atomic gate.timed_out = true
-    gate.event.signaledValue = GATE_TICKS + 1
+    MTL.waitUntilSignaledValue(gate.control, 1, GATE_TIMEOUT_MS) ||
+        @atomic gate.timed_out = true
+    # bypass the submission tracking, which is not ours to touch from this thread
+    @objc [gate.blocker::id{MTL.MTLCommandBuffer} commit]::Nothing
     notify(gate.watchdog_done)
     return
 end
 
-open_gate!(gate::SyncGate) =
-    gate.control.signaledValue < GATE_OPEN && (gate.control.signaledValue = GATE_OPEN)
-gate_is_open(gate::SyncGate) = gate.control.signaledValue >= GATE_OPEN
+open_gate!(gate::SyncGate) = (gate.control.signaledValue = 1)
+gate_is_open(gate::SyncGate) = gate.control.signaledValue >= 1
 gate_timed_out(gate::SyncGate) = @atomic gate.timed_out
 
 # run `f(gate)` after committing a command buffer to the current task's queue that only
 # completes once the gate is opened, returning whether `f` finished before the timeout.
 function gated(f)
     dev = device()
-    gate = SyncGate(MTL.MTLSharedEvent(dev), MTL.MTLSharedEvent(dev), Base.Event(), false)
-    cmdbuf = MTL.MTLCommandBuffer(Metal.global_queue(dev))
-    for value in 1:GATE_TICKS+1
-        MTL.encode_wait!(cmdbuf, gate.event, value)
-    end
+    queue = Metal.global_queue(dev)
+    gate = SyncGate(MTL.MTLCommandBuffer(queue), MTL.MTLSharedEvent(dev), Base.Event(), false)
+    MTL.enqueue!(gate.blocker)
+    cmdbuf = MTL.MTLCommandBuffer(queue)
     GC.@preserve gate begin
         # run the watchdog on a thread from libdispatch's pool, which Julia adopts
         dispatch_queue = ccall(:dispatch_get_global_queue, Ptr{Cvoid}, (Clong, Culong), 0, 0)
@@ -839,7 +820,7 @@ function gated(f)
             MTL.commit!(cmdbuf)
             f(gate)
         finally
-            gate.control.signaledValue = GATE_DONE
+            open_gate!(gate)
             wait(gate.watchdog_done)
             cmdbuf.status == MTL.MTLCommandBufferStatusNotEnqueued || MTL.wait_completed(cmdbuf)
         end
