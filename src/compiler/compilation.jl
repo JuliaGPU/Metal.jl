@@ -678,7 +678,7 @@ function kernel_label(mi::Core.MethodInstance)
     name = if !(ft <: Function)
         "(::$ft)"
     elseif (fn = function_name(ft)) !== nothing
-        fn
+        fn::String  # not narrowed by the condition, which assigns it
     else
         # anonymous functions are told apart by where they were defined
         meth = mi.def
