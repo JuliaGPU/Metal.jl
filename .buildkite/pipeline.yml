@@ -13,13 +13,13 @@ steps:
         plugins:
           - JuliaCI/julia#v1:
               version: "{{matrix.julia}}"
-          - JuliaCI/julia-test#v1:
-              test_args: "--quickfail --all --verbose"
           - JuliaCI/julia-coverage#v1:
               codecov: true
               dirs:
                 - src
                 - lib
+        commands: |
+          julia .buildkite/sparse-v13-stack.jl --all --verbose
         agents:
           queue: "metal"
         if: |
@@ -48,7 +48,6 @@ steps:
         if: |
           build.message !~ /\[skip [^\]]*(tests|nightly)/ &&
           (build.message =~ /\[only [^\]]*(tests|nightly)/ || build.message !~ /\[only /)
-        soft_fail: true
         matrix:
           setup:
             julia:
@@ -62,8 +61,6 @@ steps:
         plugins:
           - JuliaCI/julia#v1:
               version: "1.13"
-          - JuliaCI/julia-test#v1:
-              test_args: "--quickfail --all --verbose"
         agents:
           queue: "metal"
         if: |
@@ -73,12 +70,11 @@ steps:
         timeout_in_minutes: 60
         commands: |
           echo -e "[Metal]\ndefault_storage = \"private\"" >LocalPreferences.toml
+          julia .buildkite/sparse-v13-stack.jl --all --verbose
       - label: ":mag: API validation"
         plugins:
           - JuliaCI/julia#v1:
               version: "1.13"
-          - JuliaCI/julia-test#v1:
-              test_args: "--jobs=1 --quickfail --verbose --validate"
           - JuliaCI/julia-coverage#v1:
               codecov: true
               dirs:
@@ -87,6 +83,7 @@ steps:
         commands: |
           # blocking synchronization is easier to validate
           echo -e "[Metal]\nnonblocking_synchronization = false" >LocalPreferences.toml
+          julia .buildkite/sparse-v13-stack.jl --jobs=1 --verbose --validate
         agents:
           queue: "metal"
         if: |
@@ -99,8 +96,6 @@ steps:
         plugins:
           - JuliaCI/julia#v1:
               version: "1.13"
-          - JuliaCI/julia-test#v1:
-              test_args: "--quickfail --all --verbose"
           - JuliaCI/julia-coverage#v1:
               codecov: true
               dirs:
@@ -115,14 +110,14 @@ steps:
         timeout_in_minutes: 60
         commands: |
           echo -e "[Metal]\ncommand_api = \"metal4\"" >LocalPreferences.toml
+          julia .buildkite/sparse-v13-stack.jl --all --verbose
       - label: ":mag: Metal 4 API validation"
         plugins:
           - JuliaCI/julia#v1:
               version: "1.13"
-          - JuliaCI/julia-test#v1:
-              test_args: "--jobs=1 --quickfail --verbose --validate"
         commands: |
           echo -e "[Metal]\ncommand_api = \"metal4\"\nnonblocking_synchronization = false" >LocalPreferences.toml
+          julia .buildkite/sparse-v13-stack.jl --jobs=1 --verbose --validate
         agents:
           queue: "metal"
         if: |
@@ -162,7 +157,8 @@ steps:
       - JuliaCI/julia#v1:
           version: "1.13"
     command: |
-      julia --project -e '
+      julia .buildkite/sparse-v13-stack.jl --setup-project=docs
+      julia --project=docs -e '
         println("--- :julia: Instantiating project")
         using Pkg
         Pkg.instantiate()
@@ -189,6 +185,7 @@ steps:
       - JuliaCI/julia#v1:
           version: "1.13"
     command: |
+      julia .buildkite/sparse-v13-stack.jl --setup-project=perf
       julia --project=perf -e '
         using Pkg
 
