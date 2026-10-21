@@ -5,7 +5,7 @@ using GPUArrays: GPUSparseMatrixCSC
     A = sprand(Float64, 10, 8, 0.3)
     dA = mtl(A)
     @test dA isa MtlSparseMatrixCSR{Float32,Int32}
-    @test nonzeros(dA) isa MtlVector{Float32,Metal.PrivateStorage}
+    @test nonzeros(dA) isa MtlVector{Float32,Metal.DefaultStorageMode}
     @test SparseMatrixCSC(dA) ≈ A
 
     dA = mtl(A; storage=Metal.SharedStorage)
