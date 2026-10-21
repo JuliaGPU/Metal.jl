@@ -105,7 +105,7 @@ Base.@kwdef mutable struct TagGroup
     offsets::Dict{String,Int} = Dict()
 
     # the size of each tag's size fields in the tag group
-    size_type::Type=UInt16
+    size_type::Union{Type{UInt16},Type{UInt32}}=UInt16
 
     # whether the tag group starts with a 32-bit size field for the entire group
     has_size::Bool=true
