@@ -44,12 +44,12 @@ end
 # specialization of the broadcast implementation to avoid expensive integer divisions
 const _broadcast_shapes = Base.IdDict()
 const BROADCAST_SPECIALIZATION_THRESHOLD = 10
-@inline function Base.materialize!(::Style, dest, bc::Broadcasted) where {Style<:MtlArrayStyle}
+@inline function Base.materialize!(::Style, dest::AnyGPUArray, bc::Broadcasted) where {Style<:MtlArrayStyle}
     return _copyto!(dest, Broadcast.instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
 end
 @inline Base.copyto!(dest::MtlArray, bc::Broadcasted{Nothing}) =
     _copyto!(dest, bc) # Keep it for ArrayConflict
-@inline Base.copyto!(dest::AbstractArray, bc::Broadcasted{<:MtlArrayStyle}) =
+@inline Base.copyto!(dest::AnyGPUArray, bc::Broadcasted{<:MtlArrayStyle}) =
     _copyto!(dest, bc)
 @inline function _copyto!(dest::AbstractArray, bc::Broadcasted)
     axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
