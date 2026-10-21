@@ -696,6 +696,48 @@ end
         sum(reshape(PermutedDimsArray(reshape(Float32.(1:30), 5, 3, 2), (3, 1, 2)), (10, 3)); dims=1)
 end
 
+@testset "device-side views" begin
+    function view_kernel!(out, a, f)
+        v = f(a)
+        i = thread_position_in_grid().x
+        if i <= length(v)
+            @inbounds out[i] = v[i]
+        end
+        return
+    end
+
+    a = collect(Float32, 1:20)
+    da = MtlArray(a)
+    @testset "$name" for (name, f) in (
+            ("unit range",       a -> view(a, 2:5)),
+            ("colon",            a -> view(a, :)),
+            ("view of view",     a -> view(view(a, 2:9), :)),      # #1092
+            ("nested ranges",    a -> view(view(a, 2:15), 3:7)),
+            ("step range",       a -> view(a, 1:2:15)),
+            ("reverse range",    a -> view(a, 10:-1:3)),
+            ("matrix column",    a -> view(reshape(a, 4, 5), :, 3)),
+            ("matrix row",       a -> view(reshape(a, 4, 5), 2, :)),
+        )
+        expected = f(a)
+        out = Metal.zeros(Float32, length(expected))
+        @metal threads=length(expected) view_kernel!(out, da, f)
+        @test Array(out) == expected
+    end
+
+    # writes through a view must land in the parent
+    function write_kernel!(a)
+        v = view(view(a, 3:12), 1:3:10)
+        i = thread_position_in_grid().x
+        @inbounds v[i] = -v[i]
+        return
+    end
+    b = copy(a)
+    db = MtlArray(b)
+    @metal threads=4 write_kernel!(db)
+    w = view(view(b, 3:12), 1:3:10); w .= .-w
+    @test Array(db) == b
+end
+
 @testset "reinterpret of view with non-aligned offset" begin
     # reinterpreting a view to a larger element type where the byte offset
     # is not a multiple of the new element size
