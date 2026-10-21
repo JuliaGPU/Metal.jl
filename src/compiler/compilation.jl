@@ -323,6 +323,33 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
             erase!(f)
         end
     end
+    ## tensor
+    if job.config.target.air < v"2.9"
+        # AIR 2.9 appended operands to these, which the front-end always emits; drop them
+        for (fn, nparams) in ("air.init_strided_private_tensor.i32.global" => 6,
+                              "air.init_strided_private_tensor.i32.local" => 6,
+                              "air.get_extent_private_tensor.i32" => 3)
+            f = get(mod.functions, fn, nothing)
+            f === nothing && continue
+            new_ft = f.function_type
+            old_ft = LLVM.FunctionType(new_ft.return_type, new_ft.parameters[1:nparams])
+
+            f.name = fn * ".air29"
+            old_f = LLVM.Function(mod, fn, old_ft)
+            append!(old_f.function_attributes, f.function_attributes)
+            for call in collect(f.users)
+                call::LLVM.CallInst
+                @dispose builder=IRBuilder() begin
+                    position!(builder, LLVM.before(call))
+                    new_call = call!(builder, old_ft, old_f,
+                                     collect(call.arguments)[1:nparams])
+                    replace_uses!(call, new_call)
+                    erase!(call)
+                end
+            end
+            erase!(f)
+        end
+    end
 
     # pointer type information for typed intrinsics
     # (this is consumed by the LLVM IR downgrader)
