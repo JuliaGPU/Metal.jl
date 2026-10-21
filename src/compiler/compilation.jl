@@ -237,8 +237,7 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
 
     # device code emits intrinsics in their newest form; rewrite them for older AIR versions.
     # this lives here, next to the emitters, so that the two change together. GPUCompiler
-    # only legalizes what it emits itself (atomics and fences), and barriers, which share
-    # their ABI.
+    # only legalizes the intrinsics it emits itself (atomics and fences).
     ## simdgroup
     if job.config.target.air < v"2.8"
         # AIR 2.8 generalized the simdgroup matrix load/store intrinsics, replacing
@@ -351,6 +350,37 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
             end
             erase!(f)
         end
+    end
+    ## barriers
+    # AIR 2.9 added a memory order operand between the memory flags and the scope, which
+    # before MSL 4.1 has to be sequentially consistent
+    for fn in ("air.wg.barrier", "air.simdgroup.barrier")
+        f = get(mod.functions, fn, nothing)
+        f === nothing && continue
+        T_i32 = LLVM.Int32Type()
+        if job.config.target.air >= v"2.9"
+            job.config.target.metal >= v"4.1" && continue
+            for call in collect(f.users)
+                call::LLVM.CallInst
+                call.operands[2] = ConstantInt(T_i32, 5)
+            end
+            continue
+        end
+
+        old_ft = LLVM.FunctionType(LLVM.VoidType(), [T_i32, T_i32])
+        f.name = fn * ".air29"
+        old_f = LLVM.Function(mod, fn, old_ft)
+        append!(old_f.function_attributes, f.function_attributes)
+        for call in collect(f.users)
+            call::LLVM.CallInst
+            @dispose builder=IRBuilder() begin
+                position!(builder, LLVM.before(call))
+                flags, _, scope = collect(call.arguments)
+                call!(builder, old_ft, old_f, [flags, scope])
+                erase!(call)
+            end
+        end
+        erase!(f)
     end
 
     # pointer type information for typed intrinsics

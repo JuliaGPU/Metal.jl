@@ -78,14 +78,14 @@
             simdgroup_barrier(Metal.MemoryFlagThreadGroup)
             return
         end
-        # the AIR 2.9 form, with an order, which GPUCompiler legalizes for the target
+        # the AIR 2.9 form, with an order, legalized for the target
         @testset "Metal $metal, AIR $air" for (metal, air) in ((v"3.2", v"2.7"),
                                                               (v"4.0", v"2.9"),
                                                               (v"4.1", v"2.9"))
             ir = sprint(io -> Metal.code_air(io, barrier_abi,
                                              Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}};
                                              kernel=true, metal, air))
-            # (before MSL 4.1, GPUCompiler makes barriers sequentially consistent)
+            # (before MSL 4.1, barriers are sequentially consistent)
             release, acquire = metal >= v"4.1" ? (3, 2) : (5, 5)
             if air >= v"2.9"
                 @test occursin("@air.wg.barrier(i32 1, i32 $release, i32 2)", ir)

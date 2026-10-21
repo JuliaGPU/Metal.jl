@@ -94,7 +94,7 @@ end
 @device_function @inline simdgroup_barrier(flags, scope::thread_scope) =
     simdgroup_barrier(flags, memory_order_seq_cst, scope)
 
-# barriers are emitted in the form of AIR 2.9, with a memory order, which GPUCompiler drops
+# barriers are emitted in the form of AIR 2.9, with a memory order, which `finish_ir!` drops
 # for older targets (and strengthens to sequentially consistent before MSL 4.1)
 @device_function @inline function barrier(::Val{group}, ::Val{flags}, ::Val{order},
                                           ::Val{scope}) where {group, flags, order, scope}
