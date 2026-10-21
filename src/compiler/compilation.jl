@@ -235,8 +235,10 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
                    Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module, LLVM.Function},
                    job, mod, entry)
 
-    # downgrade intrinsics when targeting older AIR versions
-    # (GPUCompiler legalizes atomics, see `lower_atomics!`)
+    # device code emits intrinsics in their newest form; rewrite them for older AIR versions.
+    # this lives here, next to the emitters, so that the two change together. GPUCompiler
+    # only legalizes what it emits itself (atomics and fences), and barriers, which share
+    # their ABI.
     ## simdgroup
     if job.config.target.air < v"2.8"
         # AIR 2.8 generalized the simdgroup matrix load/store intrinsics, replacing
