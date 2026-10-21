@@ -58,3 +58,12 @@ end
     @test MtlSparseVector{Float32,Int32}(SparseVector{Float64}(x)) isa MtlSparseVector{Float32,Int32}
     @test Array(MtlArray(MtlSparseVector(x))) == Vector(x)
 end
+@testset "dense broadcasts into sparse destinations" begin
+    A = GPUSparseMatrixCSC(MtlArray(Int32[1,2,3]), MtlArray(Int32[1,2]),
+                          MtlArray(Float32[1,2]), (2,2))
+    D = MtlArray(ones(Float32,2,2))
+    @test_throws ArgumentError copyto!(A, Base.Broadcast.broadcasted(identity,D))
+    @test_throws ArgumentError (A .= D)
+    @test Array(A) == Float32[1 0; 0 2]
+end
+
