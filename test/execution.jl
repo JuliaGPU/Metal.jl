@@ -802,14 +802,15 @@ gate_is_open(gate::SyncGate) = gate.control.signaledValue >= 1
 gate_timed_out(gate::SyncGate) = @atomic gate.timed_out
 
 # run `f(gate)` after committing a command buffer to the current task's queue that only
-# completes once the gate is opened, returning whether `f` finished before the timeout.
+# completes once the gate is opened, returning whether `f` returned `true` and the gate was
+# opened before the timeout.
 function gated(f)
     dev = device()
     queue = Metal.global_queue(dev)
     gate = SyncGate(MTL.MTLCommandBuffer(queue), MTL.MTLSharedEvent(dev), Base.Event(), false)
     MTL.enqueue!(gate.blocker)
     cmdbuf = MTL.MTLCommandBuffer(queue)
-    GC.@preserve gate begin
+    result = GC.@preserve gate begin
         # run the watchdog on a thread from libdispatch's pool, which Julia adopts
         dispatch_queue = ccall(:dispatch_get_global_queue, Ptr{Cvoid}, (Clong, Culong), 0, 0)
         ccall(:dispatch_async_f, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
@@ -825,7 +826,7 @@ function gated(f)
             cmdbuf.status == MTL.MTLCommandBufferStatusNotEnqueued || MTL.wait_completed(cmdbuf)
         end
     end
-    return !gate_timed_out(gate)
+    return result && !gate_timed_out(gate)
 end
 
 # run `f` while another task on the same thread opens the gate, but only after it got to run
