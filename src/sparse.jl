@@ -28,7 +28,7 @@ and the fastest format for `A * x`. Construct one from a host sparse matrix, a d
 matrix or a sparse matrix in another format with `MtlSparseMatrixCSR(A)` or
 `MtlSparseMatrixCSR{Tv,Ti}(A)`.
 """
-const MtlSparseMatrixCSR{Tv,Ti} = GPUSparseMatrixCSR{Tv,Ti,<:MtlVector{Ti},<:MtlVector{Tv}}
+const MtlSparseMatrixCSR{Tv,Ti} = GPUSparseMatrixCSR{Tv,Ti,<:MtlVector{<:Integer},<:MtlVector{Ti},<:MtlVector{Tv}}
 
 """
     MtlSparseMatrixCSC{Tv,Ti}
@@ -38,7 +38,7 @@ A sparse matrix in compressed sparse column format stored in `MtlVector`s: GPUAr
 `transpose(A) * x` and dense × sparse products. See [`MtlSparseMatrixCSR`](@ref) for the
 constructors.
 """
-const MtlSparseMatrixCSC{Tv,Ti} = GPUSparseMatrixCSC{Tv,Ti,<:MtlVector{Ti},<:MtlVector{Tv}}
+const MtlSparseMatrixCSC{Tv,Ti} = GPUSparseMatrixCSC{Tv,Ti,<:MtlVector{<:Integer},<:MtlVector{Ti},<:MtlVector{Tv}}
 
 """
     MtlSparseMatrixCOO{Tv,Ti}
@@ -53,7 +53,7 @@ const MtlSparseMatrixCOO{Tv,Ti} = GPUSparseMatrixCOO{Tv,Ti,<:MtlVector{Ti},<:Mtl
 # matrices become CSR, indices Int32 (32-bit arithmetic and atomics are much cheaper on
 # Apple GPUs) unless they do not fit, and values follow the dense rules.
 mtl_indtype(A::AbstractSparseArray) =
-    max(size(A)..., nnz(A) + 1) <= typemax(Int32) ? Int32 : SparseArrays.indtype(A)
+    max(size(A)..., Base.checked_add(nnz(A), 1)) <= typemax(Int32) ? Int32 : SparseArrays.indtype(A)
 
 # the CSC buffers of `transpose(A)`, computed on the host, are the CSR buffers of `A`
 function Adapt.adapt_structure(to::MtlArrayAdaptor{S}, A::SparseMatrixCSC) where {S}
