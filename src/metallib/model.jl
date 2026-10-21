@@ -936,7 +936,9 @@ function write_metallib(io::IOBuffer, lib::MetalLib)
             write(buf, UInt32(count(tg -> !isempty(tg.data), groups)))
             for (entry, tg) in zip(reflection_entries, groups)
                 isempty(tg.data) && continue
-                offsets[entry.functions] .= position(buf)
+                # (the entries are stored untyped, which would make this broadcast depend on
+                # the methods for indexing with any kind of index)
+                offsets[entry.functions::Vector{Int}] .= position(buf)
                 if entry.data !== nothing
                     # find where the buffer lands: after the group size and the tags before it
                     write(IOBuffer(), tg)
