@@ -46,7 +46,7 @@ tensor_datatype(::Type{UInt32})   = Int8(8)
 # Build an `i32`-indexed strided tensor view over a device-memory buffer. These are emitted
 # in the form of AIR 2.9, which appends a pointer into the same address space as the data,
 # an index and an `i8`, for which Apple's frontend always passes `null, 0, -1` (presumably
-# describing blockwise-quantization scales, which these views don't have); `finish_ir!`
+# describing blockwise-quantization scales, which these views don't have); GPUCompiler
 # drops them for AIR 2.8.
 @device_function @inline init_strided_tensor_device!(
     handle::TensorDescriptorStorage,

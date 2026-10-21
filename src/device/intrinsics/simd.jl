@@ -16,8 +16,8 @@ end
 # the transposed layout of a column-major matrix is dims = (8, epr), strides = (epr, 1),
 # and a row/column-swapped origin, while the non-transposed layout swaps each to
 # dims = (epr, 8), strides = (1, epr) and an unswapped origin. when targeting older AIR
-# versions, `finish_ir!` rewrites these calls to the legacy elements-per-row + transpose
-# flag signature (keep in sync with the downgrade rule in src/compiler/compilation.jl).
+# versions, GPUCompiler rewrites these calls to the legacy elements-per-row + transpose
+# flag signature, which requires one of the strides to be the literal 1.
 for (jltype, suffix) in ((:Float16, "f16"), (:Float32, "f32"), (:BFloat16, "bf16"))
     for as in (AS.Device, AS.ThreadGroup)
         @eval begin
