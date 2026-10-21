@@ -2,8 +2,9 @@
 # Remove after the v13 dependencies are registered and normal resolution passes.
 using TOML
 const stack_backend_root=normpath(joinpath(@__DIR__,".."))
-const stack_gpuarrays_revision="c0c2482df23681c69edc5556691153962391b95a"
-const stack_checkout=mktempdir(;prefix="metal-sparse-v13-")
+const stack_gpuarrays_revision="31bd874b5b18b3b0e5d86ce0f129b0cdf9d3d456"
+const stack_keep_sources=any(arg->startswith(arg,"--setup-project="),ARGS)
+const stack_checkout=mktempdir(;prefix="metal-sparse-v13-",cleanup=!stack_keep_sources)
 run(`git clone --quiet --filter=blob:none https://github.com/JuliaGPU/GPUArrays.jl $stack_checkout`)
 run(`git -C $stack_checkout checkout --quiet --detach $stack_gpuarrays_revision`)
 readchomp(`git -C $stack_checkout rev-parse HEAD`)==stack_gpuarrays_revision || error("wrong GPUArrays revision")
