@@ -128,10 +128,11 @@ end
 # results
 #
 
-Base.@kwdef struct ProfileResults
-    device::NamedTuple
-    host::NamedTuple
-    host_trace::NamedTuple
+# the tables are parameters, so that the display code is inferred for concrete column types
+Base.@kwdef struct ProfileResults{D<:NamedTuple,H<:NamedTuple,T<:NamedTuple}
+    device::D
+    host::H
+    host_trace::T
 
     trace_start::Float64
     wall::Float64
@@ -446,6 +447,17 @@ function table_crop(io)
 end
 
 function Base.show(io::IO, r::ProfileResults)
+    # render into a buffer, so that the display code is compiled (and precompiled) for a
+    # single type of IO instead of for every type of stream it is printed to
+    buf = IOBuffer()
+    ctx = IOContext(buf, :color => get(io, :color, false)::Bool,
+                    :displaysize => displaysize(io))
+    print_results(ctx, r, table_crop(io))
+    write(io, take!(buf))
+    return
+end
+
+function print_results(io::IO, r::ProfileResults, crop)
     device, host, host_trace = r.device, r.host, r.host_trace
     ndev, nhost = length(device.name), length(host.name)
     if ndev == 0 && nhost == 0
@@ -454,7 +466,6 @@ function Base.show(io::IO, r::ProfileResults)
     end
 
     den = r.wall == 0 ? 1.0 : r.wall   # avoid a zero denominator
-    crop = table_crop(io)
     println(io, "Profiled over $(format_time(r.wall)).")
 
     # host-side activity: the Objective-C API trace, grouped by call

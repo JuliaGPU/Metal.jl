@@ -29,8 +29,34 @@ end
         command_api_supported =
             COMMAND_API === :metal3 || metal4_unsupported_reason(device()) === nothing
 
-        # exercise the integrated profiler and its display path:
-        command_api_supported && sprint(show, @profile @metal identity(nothing))
+        # exercise the integrated profiler
+        command_api_supported && @profile @metal identity(nothing)
+
+        # displaying results takes seconds to compile. each table's columns depend on the
+        # data (e.g. a distribution column for repeated operations), so cover the variants
+        # that are common.
+        let sz = MTL.MTLSize(1, 1, 1)
+            kernel = (; kind=:kernel, name="kernel", threadgroups=sz, threads=sz,
+                      tgmem=0, maxthreads=1024)
+            copy = (; kind=:copy, name="copyto!", bytes=1024)
+            names = ["[MTLDevice newBufferWithLength:options:]", "[MTLCommandBuffer commit]",
+                     "[MTLDevice newBufferWithLength:options:]"]
+            host = (name=names[1:2], calls=[2, 1], time=[2e-6, 1e-6])
+            host_trace = (id=[1, 2, 3], start=[1e-6, 2e-6, 3e-6], time=[1e-6, 1e-6, 1e-6],
+                          tid=[1, 1, 2], name=names)
+            device = (name=["kernel", "copyto!"], start=[1e-6, 3e-6], stop=[2e-6, 4e-6],
+                      ops=[Any[kernel], Any[copy]])
+            single_threaded_host_trace = map(col -> col[1:2], host_trace)
+            kernels_only = (name=["kernel", "kernel"], start=[1e-6, 3e-6], stop=[2e-6, 4e-6],
+                            ops=[Any[kernel], Any[kernel]])
+            for (host_trace, device) in ((host_trace, device),
+                                         (single_threaded_host_trace, kernels_only)),
+                trace in (false, true)
+                r = Profiling.ProfileResults(; device, host, host_trace, trace_start=0.0,
+                                             wall=1e-5, trace, raw=false)
+                show(IOContext(IOBuffer(), :limit => true), MIME"text/plain"(), r)
+            end
+        end
 
         # exercise MtlArray creation and host↔device copy paths in both 1D and 2D
         for h in (Float32[0], Float32[0;;], [0])
