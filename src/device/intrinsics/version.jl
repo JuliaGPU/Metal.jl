@@ -15,13 +15,42 @@ for var in ["metal_major", "metal_minor", "air_major", "air_minor", "apple_famil
 end
 
 @device_function @inline metal_version() = SimpleVersion(metal_major(), metal_minor())
+
+"""
+    metal_version()
+
+Return the Metal Shading Language version that the kernel is compiled for, as a version
+that compares with `sv"..."` literals. This is a compile-time constant, so a branch on it
+is resolved during compilation and can guard code that needs a newer version:
+
+```julia
+if metal_version() >= sv"4.1"
+    # use functionality that needs MSL 4.1
+end
+```
+
+The version defaults to the newest the host supports (see [`Metal.metal_target`](@ref)),
+and can be chosen with the `metal` keyword of [`@metal`](@ref). Only use this in kernels.
+"""
+metal_version
+
 @device_function @inline air_version() = SimpleVersion(air_major(), air_minor())
+
+"""
+    air_version()
+
+Return the AIR version that the kernel is compiled for, as a version that compares with
+`sv"..."` literals. Like [`metal_version`](@ref), this is a compile-time constant. Only use
+this in kernels.
+"""
+air_version
 
 """
     apple_family()
 
-Return the highest targeted `MTLGPUFamilyApple<n>` as `n`, or `0` if the device reports no
-Apple family. Like `metal_version()`, this is a compile-time constant and can guard
-family-specific device code.
+Return the `n` of the highest `MTLGPUFamilyApple<n>` that the kernel is compiled for (e.g.,
+7 for M1, 8 for M2, 9 for M3 and M4, 10 for M5), or `0` if the device reports no Apple
+family. Like [`metal_version`](@ref), this is a compile-time constant that can guard
+family-specific code. Only use this in kernels.
 """
 apple_family

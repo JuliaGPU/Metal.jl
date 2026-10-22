@@ -6,19 +6,22 @@ export MtlDeviceArray, MtlDeviceVector, MtlDeviceMatrix
 ## construction
 
 """
+    MtlDeviceArray{T,N,A} <: DenseArray{T,N}
+
+The array type that kernels see: an `N`-dimensional, column-major array of elements of type
+`T` in address space `A` (device memory for the `MtlArray`s passed to a kernel, threadgroup
+memory for [`MtlThreadGroupArray`](@ref)s). [`@metal`](@ref) converts `MtlArray` arguments
+to it. It supports indexing, iteration and contiguous views, and is only valid inside the
+kernel.
+
     MtlDeviceArray(dims, ptr)
     MtlDeviceArray{T}(dims, ptr)
-    MtlDeviceArray{T,A}(dims, ptr)
-    MtlDeviceArray{T,A,N}(dims, ptr)
+    MtlDeviceArray{T,N}(dims, ptr)
+    MtlDeviceArray{T,N,A}(dims, ptr)
 
-Construct an `N`-dimensional dense Metal device array with element type `T` wrapping a
-pointer, where `N` is determined from the length of `dims` and `T` is determined from the
-type of `ptr`.
-
-`dims` may be a single scalar, or a tuple of integers corresponding to the
-lengths in each dimension). If the rank `N` is supplied explicitly as in `Array{T,N}(dims)`,
-then it must match the length of `dims`. The same applies to the element type `T`, which
-should match the type of the pointer `ptr`.
+Wrap the device pointer `ptr::Core.LLVMPtr{T,A}` in an array of size `dims`, an integer or
+a tuple. `T` and `A` follow from the type of `ptr`, and `N` from the length of `dims`; when
+given, they have to match.
 """
 MtlDeviceArray
 
@@ -32,7 +35,18 @@ struct MtlDeviceArray{T,N,A} <: DenseArray{T,N}
     MtlDeviceArray{T,N,A}(shape::Dims{N}, ptr::Core.LLVMPtr{T,A}) where {T,A,N} = new(ptr,shape)
 end
 
+"""
+    MtlDeviceVector{T,A}
+
+One-dimensional [`MtlDeviceArray`](@ref); an alias for `MtlDeviceArray{T,1,A}`.
+"""
 const MtlDeviceVector = MtlDeviceArray{T,1,A} where {T,A}
+
+"""
+    MtlDeviceMatrix{T,A}
+
+Two-dimensional [`MtlDeviceArray`](@ref); an alias for `MtlDeviceArray{T,2,A}`.
+"""
 const MtlDeviceMatrix = MtlDeviceArray{T,2,A} where {T,A}
 
 # outer constructors, non-parameterized
@@ -145,14 +159,15 @@ Base.@propagate_inbounds Base.setindex!(A::MtlDeviceArray, x,
 ## const indexing
 
 """
-    Const(A::MtlDeviceArray)
+    Metal.Const(A::MtlDeviceArray)
 
-Mark a MtlDeviceArray as constant/read-only. The invariant guaranteed is that you will not
-modify the MtlDeviceArray for the duration of the current kernel. Loads from it are emitted
-as `!invariant.load`, so violating that invariant is undefined behavior.
+Mark a device array as read-only for the duration of the kernel, which lets the compiler
+optimize loads from it (e.g., hoist them out of loops). `Base.Experimental.Const(A)` does the
+same. This interface is experimental, and might change without deprecation.
 
 !!! warning
-    Experimental API. Subject to change without deprecation.
+    Writing to the underlying memory while the kernel executes, through `A` or another
+    array, is undefined behavior, and can produce wrong results.
 """
 struct Const{T,N,AS} <: DenseArray{T,N}
     a::MtlDeviceArray{T,N,AS}

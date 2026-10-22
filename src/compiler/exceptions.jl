@@ -2,6 +2,19 @@
 
 ## exception type
 
+@public KernelException
+
+"""
+    KernelException
+
+An exception thrown by a kernel, e.g., a `BoundsError` from an out-of-bounds access. Kernels
+cannot throw to the host while executing, so the first exception is recorded, and thrown by
+the next [`synchronize`](@ref) or [`device_synchronize`](@ref) after the kernel finished.
+
+How much is reported depends on the kernel's `debug_level` (see [`@metal`](@ref)): at level
+1, the default, the type of exception and its reason; at level 2, also the position of the
+thread that threw and a device-side backtrace.
+"""
 struct KernelException <: Exception
     dev::MTLDevice
     name::String

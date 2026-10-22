@@ -12,9 +12,28 @@ MTLCreateSystemDefaultDevice() =
     MTLDevice(@ccall libmtl.MTLCreateSystemDefaultDevice()::id{MTLDevice})
 
 """
+    MTLDevice
+
+A Metal GPU ([`MTLDevice`](https://developer.apple.com/documentation/metal/mtldevice)), as
+returned by `Metal.device()` and `Metal.devices()`. Its properties are those of Apple's
+`MTLDevice`, e.g.:
+
+- `dev.name`: the name of the GPU, e.g., `"Apple M1"`.
+- `dev.maxThreadsPerThreadgroup`: the maximum threadgroup size, per dimension.
+- `dev.maxThreadgroupMemoryLength`: the maximum amount of threadgroup memory, in bytes.
+- `dev.recommendedMaxWorkingSetSize`: the memory the GPU can use without affecting its
+  performance, in bytes (see `Metal.total_memory`).
+- `dev.currentAllocatedSize`: the memory currently allocated on the GPU, in bytes.
+
+`MTL.supports_family(dev, MTL.MTLGPUFamilyApple9)` checks whether the GPU belongs to a
+[GPU family](https://developer.apple.com/documentation/metal/mtlgpufamily).
+"""
+MTLDevice
+
+"""
     devices()
 
-Get an iterator for the compute devices.
+Return the Metal GPUs of the system, as a vector of [`MTLDevice`](@ref)s.
 """
 function devices()
     # the array is leaked to keep the devices alive, as `MTLDevice` is unmanaged
@@ -25,7 +44,7 @@ end
 """
     MTLDevice(i::Integer)
 
-Get a handle to a compute device.
+Return the `i`-th GPU of [`devices()`](@ref devices).
 """
 MTLDevice(i::Integer) = devices()[i]
 

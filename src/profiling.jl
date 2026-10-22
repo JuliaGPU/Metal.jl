@@ -545,6 +545,8 @@ end
 end # module Profiling
 
 
+@public var"@profile", var"@bprofile"
+
 """
     Metal.@profile [trace=false] [raw=false] code...
     Metal.@profile external=true [name=...] [template=...] [open=false] code...

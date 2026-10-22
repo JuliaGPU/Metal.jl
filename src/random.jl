@@ -13,8 +13,19 @@ using Random
 # - `Metal.KernelRNG`: a custom kernel that calls Metal's on-device Philox2x32.
 #   Kept around for testing and performance comparison; see `Metal.kernel_rng`.
 
+@public rand, randn, seed!, default_rng, mps_rng
+
 const RNG = GPUArrays.RNG{MtlArray}
 
+"""
+    Metal.default_rng()
+
+Return the random number generator that [`Metal.rand`](@ref), [`Metal.randn`](@ref) and
+`rand!`/`randn!` on `MtlArray`s use: a GPUArrays.jl Philox RNG that generates numbers on the
+GPU. Every task has its own, per device.
+
+See also [`Metal.mps_rng`](@ref).
+"""
 function default_rng()
     dev = device()
 
@@ -37,7 +48,12 @@ function default_rng()
     return state.rng
 end
 
-# accessors for the alternative RNGs
+"""
+    Metal.mps_rng()
+
+Return the task's [`MPS.RNG`](@ref), which generates random numbers with Metal Performance
+Shaders. It is seeded together with [`Metal.default_rng`](@ref) by [`Metal.seed!`](@ref).
+"""
 mps_rng() = MPS.default_rng()
 kernel_rng() = _default_kernel_rng()
 
@@ -274,6 +290,22 @@ Random.rand!(A::MtlArray) = Random.rand!(default_rng(), A)
 Random.randn!(A::MtlArray) = Random.randn!(default_rng(), A)
 
 # out-of-place
+"""
+    Metal.rand([T=Float32], dims...; storage)
+
+Create an [`MtlArray`](@ref) of element type `T` and storage mode `storage` (the default
+storage mode, unless given), filled with uniformly distributed random numbers from
+[`Metal.default_rng`](@ref). Without `dims`, return a single number.
+"""
+function rand end
+
+"""
+    Metal.randn([T=Float32], dims...; storage)
+
+Like [`Metal.rand`](@ref), but with normally distributed random numbers.
+"""
+function randn end
+
 rand(T::Type, dims::Dims; storage=DefaultStorageMode) =
     Random.rand!(default_rng(), MtlArray{T,length(dims),storage}(undef, dims...))
 randn(T::Type, dims::Dims; storage=DefaultStorageMode) =
@@ -295,6 +327,12 @@ rand(T::Type=Float32; storage=SharedStorage) = rand(T, 1; storage)[1]
 randn(T::Type=Float32; storage=SharedStorage) = randn(T, 1; storage)[1]
 
 # seeding
+"""
+    Metal.seed!([seed])
+
+Seed the random number generators of the current task, [`Metal.default_rng`](@ref) and
+[`Metal.mps_rng`](@ref), with `seed`, or with a random seed.
+"""
 function seed!(seed=Base.rand(UInt64))
     Random.seed!(default_rng(), seed)
     Random.seed!(mps_rng(), seed)

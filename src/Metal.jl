@@ -1,3 +1,11 @@
+"""
+    Metal
+
+Program Apple GPUs from Julia: GPU arrays ([`MtlArray`](@ref)), kernels written in Julia
+([`@metal`](@ref)), and wrappers of Apple's [Metal](https://developer.apple.com/documentation/metal)
+(`Metal.MTL`), [Metal Performance Shaders](https://developer.apple.com/documentation/metalperformanceshaders)
+(`Metal.MPS`) and Metal Performance Shaders Graph ([`Metal.MPSGraphs`](@ref)) frameworks.
+"""
 module Metal
 
 using GPUArrays

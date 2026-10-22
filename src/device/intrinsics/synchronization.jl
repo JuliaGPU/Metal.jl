@@ -3,7 +3,28 @@ using CEnum
 
 export MemoryFlags, memory_order, thread_scope, atomic_thread_fence,
        threadgroup_barrier, simdgroup_barrier
+@public memory_order_relaxed, memory_order_acquire, memory_order_release,
+        memory_order_acq_rel, memory_order_seq_cst,
+        thread_scope_thread, thread_scope_threadgroup, thread_scope_device,
+        thread_scope_simdgroup,
+        MemoryFlagNone, MemoryFlagDevice, MemoryFlagThreadGroup, MemoryFlagTexture,
+        MemoryFlagThreadGroup_ImgBlock
 
+"""
+    memory_order
+
+The memory order of an atomic operation, fence or barrier, as in MSL and C++:
+
+- `Metal.memory_order_relaxed`: no ordering of other memory accesses.
+- `Metal.memory_order_acquire`: later accesses cannot move before this operation.
+- `Metal.memory_order_release`: earlier accesses cannot move after this operation.
+- `Metal.memory_order_acq_rel`: both acquire and release.
+- `Metal.memory_order_seq_cst`: acquire and release, and a single total order of all
+  sequentially consistent operations.
+
+The order has to be a compile-time constant. Before Metal 4.1 (macOS 27), barriers and
+ordered fences are always sequentially consistent.
+"""
 @enum memory_order::Int32 begin
     memory_order_relaxed = 0
     memory_order_acquire = 2
@@ -12,6 +33,14 @@ export MemoryFlags, memory_order, thread_scope, atomic_thread_fence,
     memory_order_seq_cst = 5
 end
 
+"""
+    thread_scope
+
+The set of threads that a fence or barrier synchronizes with, as in MSL:
+`Metal.thread_scope_thread`, `Metal.thread_scope_simdgroup`,
+`Metal.thread_scope_threadgroup` or `Metal.thread_scope_device`. The scope has to be a
+compile-time constant.
+"""
 @enum thread_scope::Int32 begin
     thread_scope_thread = 0
     thread_scope_threadgroup = 1
@@ -22,23 +51,23 @@ end
 """
     MemoryFlags
 
-Flags to set the memory synchronization behavior of barriers and atomic fences.
+Flags that select the memory a barrier or fence orders accesses to, combined with `|`:
 
-Possible values:
+- `Metal.MemoryFlagNone`: no memory; a barrier only synchronizes execution.
+- `Metal.MemoryFlagDevice`: device memory, e.g., `MtlArray`s passed to the kernel.
+- `Metal.MemoryFlagThreadGroup`: threadgroup memory ([`MtlThreadGroupArray`](@ref)).
+- `Metal.MemoryFlagTexture`: texture memory, for textures with read-write access.
+- `Metal.MemoryFlagThreadGroup_ImgBlock`: threadgroup imageblock memory.
 
-    None: Set barriers to only act as an execution barrier and not apply a memory fence.
+The barriers default to `MemoryFlagNone`, so to make writes to threadgroup memory visible to
+the other threads of the threadgroup, pass `Metal.MemoryFlagThreadGroup`:
 
-    Device: Ensure the GPU correctly orders the memory operations to device memory
-            for threads in the threadgroup or simdgroup.
+```julia
+threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+```
 
-    ThreadGroup: Ensure the GPU correctly orders the memory operations to threadgroup
-            memory for threads in a threadgroup or simdgroup.
-
-    Texture: Ensure the GPU correctly orders the memory operations to texture memory for
-            threads in a threadgroup or simdgroup for a texture with the read_write access qualifier.
-
-    ThreadGroup_ImgBlock: Ensure the GPU correctly orders the memory operations to threadgroup imageblock memory
-            for threads in a threadgroup or simdgroup.
+The flags have to be compile-time constants. See [`mem_flags` in the Metal Shading Language
+specification](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf).
 """
 @cenum MemoryFlags::UInt32 begin
     MemoryFlagNone                  = 0
@@ -136,32 +165,36 @@ end
 end
 
 @doc """
-    threadgroup_barrier(flags=MemoryFlagNone, order=memory_order_seq_cst,
-                        scope=thread_scope_threadgroup)
+    threadgroup_barrier(flags=Metal.MemoryFlagNone, order=Metal.memory_order_seq_cst,
+                        scope=Metal.thread_scope_threadgroup)
     threadgroup_barrier(flags, scope)
 
-Synchronize all threads in a threadgroup, and order their memory accesses to the memory
-selected by `flags` (see [`MemoryFlags`](@ref)) with `order`, for threads in `scope`. The
-arguments must be compile-time constants. A `scope` other than `thread_scope_threadgroup`
-needs Metal 3.2; before Metal 4.1, every barrier is sequentially consistent.
+Wait until all threads in the threadgroup reach the barrier, and order their accesses to the
+memory selected by `flags` (see [`MemoryFlags`](@ref)) with memory order `order` (see
+[`memory_order`](@ref)) for the threads in `scope` (see [`thread_scope`](@ref)). Without
+`flags`, the barrier only synchronizes execution.
+
+All threads in the threadgroup have to reach the same barrier, so don't call it from a branch
+that only some threads take. The arguments have to be compile-time constants.
 """ threadgroup_barrier
 
 @doc """
-    simdgroup_barrier(flags=MemoryFlagNone, order=memory_order_seq_cst,
-                      scope=thread_scope_simdgroup)
+    simdgroup_barrier(flags=Metal.MemoryFlagNone, order=Metal.memory_order_seq_cst,
+                      scope=Metal.thread_scope_simdgroup)
     simdgroup_barrier(flags, scope)
 
-Synchronize all threads in a SIMD-group, and order their memory accesses to the memory
-selected by `flags` (see [`MemoryFlags`](@ref)) with `order`, for threads in `scope`. The
-arguments must be compile-time constants. A `scope` other than `thread_scope_threadgroup`
-needs Metal 3.2, and before Metal 3.2 the scope defaults to `thread_scope_threadgroup`;
-before Metal 4.1, every barrier is sequentially consistent.
+Wait until all threads in the SIMD-group reach the barrier, and order their accesses to the
+memory selected by `flags` (see [`MemoryFlags`](@ref)) with memory order `order` (see
+[`memory_order`](@ref)) for the threads in `scope` (see [`thread_scope`](@ref)). Without
+`flags`, the barrier only synchronizes execution. The arguments have to be compile-time
+constants.
 """ simdgroup_barrier
 
 @doc """
-    atomic_thread_fence(flags, order, scope=thread_scope_device)
+    atomic_thread_fence(flags, order, scope=Metal.thread_scope_device)
 
-Order memory accesses selected by `flags` for threads in `scope`, without an execution
-barrier. `flags`, `order`, and `scope` must be compile-time constants. Fences need Metal 3.2;
-before Metal 4.1, acquire and release fences are sequentially consistent.
+Order the current thread's accesses to the memory selected by `flags` (see
+[`MemoryFlags`](@ref)) with memory order `order` (see [`memory_order`](@ref)), with respect
+to the threads in `scope` (see [`thread_scope`](@ref)). Unlike a barrier, a fence does not
+wait for other threads. The arguments have to be compile-time constants.
 """ atomic_thread_fence

@@ -1,4 +1,5 @@
 export device, device!, global_queue, BatchedCommandQueue
+@public devices
 
 log_compiler()          = OSLog("org.juliagpu.metal", "Compiler")
 log_compiler(args...)   = log_compiler()(args...)
@@ -52,8 +53,11 @@ function device()
     get!(task_local_storage(), :MTLDevice) do
         dev = MTLDevice(1)
         if is_virtual(dev)
-            @warn """Metal.jl is running on a virtualized Apple GPU; this is supported on a
-                     best-effort basis, so you may run into issues.""" maxlog=1
+            # the precompilation workload creates a device too; only warn when it's used
+            if ccall(:jl_generating_output, Cint, ()) == 0
+                @warn """Metal.jl is running on a virtualized Apple GPU; this is supported on a
+                         best-effort basis, so you may run into issues.""" maxlog=1
+            end
         elseif !supports_family(dev, MTL.MTLGPUFamilyApple7) ||
                !supports_family(dev, MTL.MTLGPUFamilyMetal3)
             @error "Metal.jl is only supported on Metal 3-capable Apple Silicon (M-series) GPUs." maxlog=1

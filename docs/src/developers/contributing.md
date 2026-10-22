@@ -72,7 +72,7 @@ The only thing beyond this is exporting into the global namespace. That would be
 functions/structures/macros with clear and common use-cases (`MtlArray` or `@metal`).
 
 Additionally, you can override non-Metal.jl functions like `LinearAlgebra.mul!` seen
-[here](https://github.com/JuliaGPU/Metal.jl/blob/main/lib/mps/linalg.jl#L34). This is essentially (ab)using multiple dispatch to
+[here](https://github.com/JuliaGPU/Metal.jl/blob/main/src/linalg.jl). This is essentially (ab)using multiple dispatch to
 specialize for certain cases (usually for more performant execution).
 
 If your function is only available from within GPU kernels (like thread indexing intrinsics).

@@ -37,12 +37,33 @@ end
 """
     MtlArray{T,N,S} <: AbstractGPUArray{T,N}
 
-`N`-dimensional Metal array with storage mode `S` and elements of type `T`.
+An `N`-dimensional array of elements of type `T` in GPU memory with storage mode `S`, either
+[`Metal.SharedStorage`](@ref) or [`Metal.PrivateStorage`](@ref). The storage mode defaults
+to shared, which can be changed with the `default_storage` preference.
 
-`S` can be `Metal.SharedStorage` (default), `Metal.PrivateStorage`. The default
-storage mode can be changed by setting `default_storage` in LocalPreferences.toml.
+    MtlArray{T}(undef, dims...)
+    MtlArray{T,N,S}(undef, dims...)
+    MtlArray(A::AbstractArray)
+    MtlArray{T}(A::AbstractArray)
 
-See the Array Programming section of the Metal.jl docs for more details.
+Allocate an uninitialized array, or copy `A` to a new array, converting its elements to `T`
+when given. Unlike [`mtl`](@ref), `MtlArray(A)` keeps the element type of `A`. Element types
+have to be stored inline, and cannot contain `Float64`, `Int128` or `UInt128` values, which
+Metal doesn't support.
+
+```jldoctest
+julia> a = MtlArray([1f0, 2f0, 3f0])
+3-element MtlVector{Float32, Metal.SharedStorage}:
+ 1.0
+ 2.0
+ 3.0
+
+julia> Array(a .* 2)
+3-element Vector{Float32}:
+ 2.0
+ 4.0
+ 6.0
+```
 """
 mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
     data::DataRef{Managed}
@@ -157,32 +178,26 @@ is_memoryless(A::MtlArray) = storagemode(A) == Memoryless # COV_EXCL_LINE
 
 ## convenience constructors
 """
-    MtlVector{T,S} <: AbstractGPUVector{T}
+    MtlVector{T,S}
 
-One-dimensional array with elements of type T for use with Apple Metal-compatible GPUs. Alias
-for MtlArray{T,1,S}.
-
-See also `Vector`(@ref), and the Array Programming section of the Metal.jl docs for more details.
+One-dimensional [`MtlArray`](@ref) with elements of type `T` and storage mode `S`; an alias
+for `MtlArray{T,1,S}`.
 """
 const MtlVector{T,S} = MtlArray{T,1,S}
 
 """
-    MtlMatrix{T,S} <: AbstractGPUMatrix{T}
+    MtlMatrix{T,S}
 
-Two-dimensional array with elements of type T for use with Apple Metal-compatible GPUs. Alias
-for MtlArray{T,2,S}.
-
-See also `Matrix`(@ref), and the Array Programming section of the Metal.jl docs for more details.
+Two-dimensional [`MtlArray`](@ref) with elements of type `T` and storage mode `S`; an alias
+for `MtlArray{T,2,S}`.
 """
 const MtlMatrix{T,S} = MtlArray{T,2,S}
 
 """
     MtlVecOrMat{T,S}
 
-Union type of MtlVector{T,S} and MtlMatrix{T,S} which allows functions to accept either an
-MtlMatrix or an MtlVector.
-
-See also `VecOrMat`(@ref) for examples.
+The union of [`MtlVector{T,S}`](@ref MtlVector) and [`MtlMatrix{T,S}`](@ref MtlMatrix),
+like `VecOrMat` for `Array`s.
 """
 const MtlVecOrMat{T,S} = Union{MtlVector{T,S},MtlMatrix{T,S}}
 
@@ -197,7 +212,14 @@ const DefaultStorageMode = let str = @load_preference("default_storage", "shared
     end
 end
 
-@public allowscalar
+@public allowscalar, zeros, ones, fill
+"""
+    Metal.allowscalar(allow::Bool)
+
+Allow or disallow scalar indexing of private-storage `MtlArray`s, like
+`GPUArrays.allowscalar`. Arrays with shared storage, the default, can always be indexed
+from the CPU, so disallowing scalar indexing only affects private arrays.
+"""
 function allowscalar(allow::Bool)
     if !allow && DefaultStorageMode == SharedStorage
         @warn """Metal.jl uses unified memory by default, so scalar indexing will still be allowed on arrays that use it.
@@ -507,9 +529,10 @@ end
 """
     mtl(A; storage=$(DefaultStorageMode))
 
-`storage` can be `Metal.SharedStorage` or `Metal.PrivateStorage`.
+Copy `A` to the GPU, with storage mode `storage` ([`Metal.SharedStorage`](@ref) or
+[`Metal.PrivateStorage`](@ref)).
 
-Opinionated GPU array adaptor, which may alter the element type `T` of arrays:
+This is an opinionated GPU array adaptor, which may alter the element type `T` of arrays:
 * For `T<:AbstractFloat`, it makes a `MtlArray{Float32}` for performance and compatibility
   reasons (except for `Float16`).
 * For `T<:Complex{<:AbstractFloat}` it makes a `MtlArray{ComplexF32}`.
@@ -545,6 +568,30 @@ julia> MtlArray(1:3)
 @inline mtl(xs; storage=DefaultStorageMode) = adapt(MtlArrayAdaptor{storage}(), xs)
 
 ## utilities
+
+"""
+    Metal.zeros(T=Float32, dims...; storage)
+
+Create an [`MtlArray`](@ref) with element type `T` and storage mode `storage` (the default
+storage mode, unless given), filled with zeros.
+"""
+function zeros end
+
+"""
+    Metal.ones(T=Float32, dims...; storage)
+
+Create an [`MtlArray`](@ref) with element type `T` and storage mode `storage` (the default
+storage mode, unless given), filled with ones.
+"""
+function ones end
+
+"""
+    Metal.fill(x, dims...; storage)
+
+Create an [`MtlArray`](@ref) with storage mode `storage` (the default storage mode, unless
+given), filled with `x`.
+"""
+function fill end
 
 for (fname, felt) in ((:zeros, :zero), (:ones, :one))
     @eval begin
@@ -649,14 +696,29 @@ function Base.unsafe_wrap(t::Type{<:MtlArray}, ptr::MtlPtr, dim::Integer)
     return unsafe_wrap(t, ptr, (dim,))
 end
 
+# the element type, dimensionality and storage mode requested by an `unsafe_wrap` call,
+# falling back to defaults for parameters that were not specified
+wrap_eltype(::Type{<:MtlArray}, default) = default
+wrap_eltype(::Type{<:MtlArray{T}}, default) where {T} = T
+wrap_ndims(::Type{<:MtlArray}, default) = default
+wrap_ndims(::Type{<:MtlArray{<:Any,N}}, default) where {N} = N
+wrap_storage(::Type{<:MtlArray}) = SharedStorage
+wrap_storage(::Type{<:MtlArray{<:Any,<:Any,S}}) where {S} = S
+
 """
-    unsafe_wrap(MtlArray, a::Array; [storage/hazard/cache options...])
-    unsafe_wrap(MtlArray, ptr::Ptr{T}, dims; ...)
+    unsafe_wrap(MtlArray, a::Array, [dims]; [dev], [hazard_tracking], [cache_mode])
     unsafe_wrap(MtlArray{T,N}, a::Array, [dims]; ...)
+    unsafe_wrap(MtlArray, ptr::Ptr{T}, dims; ...)
 
 Wrap an `MtlArray` around host memory, without copying, so that it can be used on the GPU,
 e.g., in kernels or broadcasts. Apple silicon has unified memory, so the GPU operates
-directly on the original memory, and changes are visible from both sides.
+directly on the original memory, and changes are visible from both sides. The array has
+shared storage.
+
+The keyword arguments select the device (`dev`, defaulting to [`device()`](@ref device)) and
+are passed to the Metal buffer: `hazard_tracking` and `cache_mode`, which take
+[`MTLResourceOptions`](https://developer.apple.com/documentation/metal/mtlresourceoptions)
+values from `Metal.MTL`.
 
 When wrapping an `Array`, the returned `MtlArray` keeps it alive, until the GPU is done
 using it. When wrapping a pointer, the caller has to make sure the memory stays valid for
@@ -674,15 +736,6 @@ b .= sin.(b)        # executes on the GPU, updating `a`
 Metal.synchronize()
 ```
 """
-# the element type, dimensionality and storage mode requested by an `unsafe_wrap` call,
-# falling back to defaults for parameters that were not specified
-wrap_eltype(::Type{<:MtlArray}, default) = default
-wrap_eltype(::Type{<:MtlArray{T}}, default) where {T} = T
-wrap_ndims(::Type{<:MtlArray}, default) = default
-wrap_ndims(::Type{<:MtlArray{<:Any,N}}, default) where {N} = N
-wrap_storage(::Type{<:MtlArray}) = SharedStorage
-wrap_storage(::Type{<:MtlArray{<:Any,<:Any,S}}) where {S} = S
-
 function Base.unsafe_wrap(A::Type{<:MtlArray}, arr::Array, dims=size(arr); kwargs...)
     T = wrap_eltype(A, eltype(arr))
     dims = Dims(dims)

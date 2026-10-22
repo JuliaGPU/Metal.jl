@@ -1,10 +1,8 @@
 """
-# MPS
+    MPS
 
-`MPS` is where the Metal Performance Shaders API wrappers are defined.
-
-Not all functionality is currently implemented or documented. For further details,
-refer to the [official Apple documentation](https://developer.apple.com/documentation/metalperformanceshaders).
+Wrappers for Apple's [Metal Performance Shaders](https://developer.apple.com/documentation/metalperformanceshaders)
+framework, which follow Apple's API closely. Only part of the framework is wrapped.
 """
 module MPS
 
@@ -24,7 +22,12 @@ const MtlFloat = Union{Float32, Float16}
 const MPSShape = NSArray#{NSNumber}
 Base.convert(::Type{MPSShape}, tuple::Union{Vector{<:Integer},NTuple{N, <:Integer}}) where N = NSArray(NSNumber.(collect(tuple)))
 
-# Valid combination of input (A and B matrices) and output (C) types
+"""
+    MPS.MPS_VALID_MATMUL_TYPES
+
+The combinations of input element type (of `A` and `B`) and output element type (of `C`),
+as `(input, output)` tuples, that [`MPS.matmul!`](@ref) supports.
+"""
 const MPS_VALID_MATMUL_TYPES =
     [(Int8, Float16),
      (Int8, Float32),
@@ -33,6 +36,12 @@ const MPS_VALID_MATMUL_TYPES =
      (Float16, Float32),
      (Float32, Float32)]
 
+"""
+    MPS.MPS_VALID_MATVECMUL_TYPES
+
+The combinations of input element type (of `A` and `x`) and output element type (of `y`),
+as `(input, output)` tuples, that [`MPS.matvecmul!`](@ref) supports.
+"""
 const MPS_VALID_MATVECMUL_TYPES =
     [(Float16, Float16),
      (Float16, Float32),

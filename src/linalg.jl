@@ -20,6 +20,36 @@ end
 #   :scalar     - force the scalar shared-memory kernel (any eltype)
 #   :tensor   - force the Metal 4 tensor-ops kernel (Metal4 device, plain C=A*B, float)
 # The native kernels live in src/gemm.jl.
+@public matmul_alg
+
+"""
+    Metal.matmul_alg
+
+A `ScopedValue` that selects the algorithm `LinearAlgebra.mul!` (and `*`) uses for
+`MtlArray` matrix-matrix and matrix-vector products:
+
+- `:auto` (default): MPSGraph where it supports the operands, otherwise `:native`.
+- `:MPSGraph`: [`MPSGraphs.matmul!`](@ref) and [`MPSGraphs.matvecmul!`](@ref).
+- `:MPS`: [`MPS.matmul!`](@ref) and [`MPS.matvecmul!`](@ref).
+- `:native`: the best of Metal.jl's own kernels for the operands, of `:tensor`, `:simd` and
+  `:scalar`.
+- `:tensor`: a Metal 4 tensor-operations kernel, for plain `C = A*B` products of `Float16`,
+  `Float32` or `BFloat16` matrices; only matrix-matrix products.
+- `:simd`: a SIMD-group matrix kernel.
+- `:scalar`: a kernel without SIMD-group matrices, for any element type.
+- `:GPUArrays`: the generic GPUArrays.jl kernel.
+
+An algorithm that doesn't support the operands throws an error. Set it for a block of code
+with `with`, from `Base.ScopedValues` (on Julia 1.10, from the ScopedValues.jl package):
+
+```julia
+using LinearAlgebra, Base.ScopedValues
+A = Metal.rand(Float32, 64, 64); B = Metal.rand(Float32, 64, 64)
+C = with(Metal.matmul_alg => :MPS) do
+    A * B
+end
+```
+"""
 const matmul_alg = ScopedValue(:auto)
 matmul_alg_error(alg, inT, outT, vec) = error("Matrix-$(vec ? "Vector" : "Matrix") multiplication algorithm `:$alg` is not supported for input eltype $inT and output eltype $outT.")
 

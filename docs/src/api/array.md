@@ -1,37 +1,74 @@
-# Array programming
+# Arrays and memory
 
-The Metal array type, `MtlArray`, generally implements the Base array interface
-and all of its expected methods.
+See [Arrays](../usage/array.md) for array operations and
+[Memory](../usage/memory.md) for storage modes, memory sharing and allocation.
 
-However, there is the special function `mtl` for transferring an array over to the gpu. For compatibility reasons, it will automatically convert arrays of `Float64` to `Float32`.
+## Array types
 
 ```@docs
-mtl
 MtlArray
 MtlVector
 MtlMatrix
 MtlVecOrMat
+mtl
+Metal.zeros
+Metal.ones
+Metal.fill
+Metal.allowscalar
+```
+
+## Random numbers
+
+```@docs
+Metal.rand
+Metal.randn
+Metal.seed!
+Metal.default_rng
+Metal.mps_rng
+```
+
+## Linear algebra
+
+```@docs
+Metal.matmul_alg
 ```
 
 ## Storage modes
 
-The Metal API has various storage modes that dictate how a resource can be accessed. `MtlArray`s are `Metal.SharedStorage` by default, but they can also be `Metal.PrivateStorage`. For more information on storage modes, see the official [Metal documentation](https://developer.apple.com/documentation/metal/resource_fundamentals/setting_resource_storage_modes).
-
-Shared arrays reside in unified memory, so the CPU can access them directly: indexing them
-is fast, and is not subject to `allowscalar`. To make sure an operation executes on the GPU,
-use `Metal.PrivateStorage`, or set `default_storage = "private"` in your
-LocalPreferences.toml.
+The storage mode of an array decides whether the CPU can access its memory. See Apple's
+[Choosing a resource storage mode for Apple GPUs](https://developer.apple.com/documentation/metal/choosing-a-resource-storage-mode-for-apple-gpus).
 
 ```@docs
-Metal.PrivateStorage
 Metal.SharedStorage
+Metal.PrivateStorage
 Metal.ManagedStorage
+is_shared
+is_private
+is_managed
 ```
 
-There also exist the following convenience functions to check if an MtlArray is using a specific storage mode:
+## Sharing memory with the CPU
 
 ```@docs
-is_private
-is_shared
-is_managed
+Base.unsafe_wrap(::Type{<:MtlArray}, ::Array, ::Any)
+Base.unsafe_wrap(::Type{Array}, ::MtlArray, ::Any)
+Base.resize!(::MtlVector, ::Integer)
+```
+
+## Memory use
+
+```@docs
+total_memory
+free_memory
+Metal.@allocated
+Metal.@time
+```
+
+## Buffers
+
+Metal.jl's low-level buffer allocator, which `MtlArray` uses.
+
+```@docs
+alloc
+free
 ```

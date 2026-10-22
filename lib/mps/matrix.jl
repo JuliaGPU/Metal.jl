@@ -194,20 +194,15 @@ function encode!(cmdbuf::MTLCommandBufferLike, kernel::MPSMatrixFindTopKLike, in
 end
 
 """
-    MPS.topk!(A::MtlMatrix{T}, I::MtlMatrix{Int32}, V::MtlMatrix{T}, k)
-                                                     where {T<:MtlFloat}
+    MPS.topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) -> (I, V)
 
-Compute the top `k` values and their corresponding indices column-wise in a matrix `A`.
-Return the indices in `I` and the values in `V`.
+Find the `k` largest values in each column of `A`, with `T` `Float32` or `Float16`, using
+[`MPSMatrixFindTopK`](https://developer.apple.com/documentation/metalperformanceshaders/mpsmatrixfindtopk).
+Write their 1-based row indices to the first `k` rows of `I`, and the values to those of
+`V`, in descending order. `k` can be at most 16. This interface is experimental, and might
+change without deprecation.
 
-`k` cannot be greater than 16.
-
-Uses `MPSMatrixFindTopK`.
-
-See also: [`topk`](@ref).
-
-!!! warning
-    This interface is experimental, and might change without warning.
+See also [`MPS.topk`](@ref).
 """
 function topk!(A::MtlMatrix{T}, I::MtlMatrix{UInt32}, V::MtlMatrix{T}, k) where {T<:MtlFloat}
     size(I,1) >= k         || throw(ArgumentError("Matrix 'I' must be large enough for k rows"))
@@ -238,19 +233,25 @@ end
 end
 
 """
-    MPS.topk(A::MtlMatrix{T}, k) where {T<:MtlFloat}
+    MPS.topk(A::MtlMatrix{T}, k) -> (I, V)
 
-Compute the top `k` values and their corresponding indices column-wise in a matrix `A`.
-Return the indices in `I` and the values in `V`.
+Like [`MPS.topk!`](@ref), but return new `k`-row matrices of indices `I` and values `V`.
 
-`k` cannot be greater than 16.
+```julia
+julia> A = MtlArray(Float32[1 6; 4 5; 2 9]);
 
-Uses `MPSMatrixFindTopK`.
+julia> I, V = MPS.topk(A, 2);
 
-See also: [`topk!`](@ref).
+julia> Array(I)
+2×2 Matrix{UInt32}:
+ 0x00000002  0x00000003
+ 0x00000003  0x00000001
 
-!!! warning
-    This interface is experimental, and might change without warning.
+julia> Array(V)
+2×2 Matrix{Float32}:
+ 4.0  9.0
+ 2.0  6.0
+```
 """
 function topk(A::MtlMatrix{T,S}, k) where {T<:MtlFloat,S}
     s = (k,size(A,2))

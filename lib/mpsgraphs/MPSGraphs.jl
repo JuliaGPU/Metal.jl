@@ -1,10 +1,10 @@
 """
-# MPSGraphs
+    MPSGraphs
 
-`MPSGraphs` is where the Metal Performance Shaders Graph API wrappers are defined.
-
-Not all functionality is currently implemented or documented. For further details,
-refer to the [official Apple documentation](https://developer.apple.com/documentation/metalperformanceshadersgraph).
+Operations on `MtlArray`s implemented with Apple's
+[Metal Performance Shaders Graph](https://developer.apple.com/documentation/metalperformanceshadersgraph)
+framework, such as [`MPSGraphs.reduce!`](@ref) and [`MPSGraphs.matmul!`](@ref), and
+low-level wrappers of the framework itself, which follow Apple's API closely.
 """
 module MPSGraphs
 
@@ -19,8 +19,12 @@ using CEnum
 using GPUToolbox: @memoize
 using ObjectiveC, .Foundation, .Dispatch
 
-# Valid combination of input (A and B matrices) and output (C) types
-#   The commented type combinations work but are slower than with MPSMatrixMultiplicatiom
+"""
+    MPSGraphs.MPSGRAPH_VALID_MATMUL_TYPES
+
+The combinations of input element type (of `A` and `B`) and output element type (of `C`),
+as `(input, output)` tuples, that [`MPSGraphs.matmul!`](@ref) supports.
+"""
 const MPSGRAPH_VALID_MATMUL_TYPES =
     [
      (Int8, Float16),
@@ -38,6 +42,12 @@ const MPSGRAPH_VALID_MATMUL_TYPES =
      (ComplexF32, ComplexF32),
     ]
 
+"""
+    MPSGraphs.MPSGRAPH_VALID_MATVECMUL_TYPES
+
+The combinations of input element type (of `A` and `x`) and output element type (of `y`),
+as `(input, output)` tuples, that [`MPSGraphs.matvecmul!`](@ref) supports.
+"""
 const MPSGRAPH_VALID_MATVECMUL_TYPES = MPSGRAPH_VALID_MATMUL_TYPES
 
 # array-level operations, distinct from the functions of the same name in Base and MPS

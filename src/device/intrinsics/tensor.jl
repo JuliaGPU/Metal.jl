@@ -100,15 +100,14 @@ tensor_datatype(::Type{UInt32})   = Int8(8)
 """
     MtlInlineTensor{T, R, AS}
 
-Kernel-stack tensor view over an `MtlDeviceArray` or `MtlThreadGroupArray`, for the Metal 4
-`tensor_ops` primitives. `T` is the element type, `R` the rank, `AS` the address space of the
-backing data (`AS.Device` or `AS.ThreadGroup`). A thread-private descriptor is initialized at
-construction.
+A tensor view of an `MtlDeviceArray` or `MtlThreadGroupArray`, for the Metal 4 tensor
+operations (MSL's `tensor_inline`), which need a GPU in the Metal 4 family and macOS 26. `T`
+is the element type, `R` the rank and `AS` the address space of the array.
 
-Extents and strides follow Julia's column-major convention, matching the backing array: the
-first dimension is contiguous. `MtlInlineTensor(A)` views all of `A` (its `size`);
-`MtlInlineTensor(A, dims)` and `MtlInlineTensor(A, dims, strides)` set an explicit shape.
-Slice a tile with [`view`](@ref), using 1-based origins.
+Extents and strides follow Julia's column-major convention, matching the array: the first
+dimension is contiguous. `MtlInlineTensor(A)` views all of `A`, and `MtlInlineTensor(A, dims)`
+and `MtlInlineTensor(A, dims, strides)` set an explicit shape. `view(t, origin, dims)` slices
+a tile, with a 1-based `origin`.
 """
 struct MtlInlineTensor{T, R, AS}
     storage::TensorDescriptor
@@ -204,18 +203,27 @@ end
 
 ## matmul2d descriptor (mirrors `mpp::tensor_ops::matmul2d_descriptor`).
 
+"""
+    Matmul2DMode
+
+Whether a [`TensorOpsMatmul2D`](@ref) operation overwrites its destination
+(`matmul2d_multiply`, `C = A*B`) or adds to it (`matmul2d_multiply_accumulate`,
+`C += A*B`).
+"""
 @enum Matmul2DMode::Int32 begin
     matmul2d_multiply            = 0
     matmul2d_multiply_accumulate = 1
 end
+@public Matmul2DMode
 
 """
     matmul2d_descriptor(M, N, [K]; transpose_left=false, transpose_right=false,
                         relaxed_precision=false, mode=matmul2d_multiply)
 
-Configuration descriptor for a `tensor_ops::matmul2d` op computing the Julia column-major
-product `C[M, N] = A[M, K] * B[K, N]`. `K` defaults to `-1` (inferred from the inputs at
-runtime). `transpose_left`/`transpose_right` transpose `A`/`B`.
+Describe a matrix multiplication `C[M, N] = A[M, K] * B[K, N]` for [`TensorOpsMatmul2D`](@ref),
+like MSL's `matmul2d_descriptor`. `K` defaults to `-1`, meaning it is taken from the operands
+at run time. `transpose_left` and `transpose_right` transpose `A` and `B`; `mode` is a
+[`Matmul2DMode`](@ref).
 
 For an outer `K`-loop where each iteration accumulates a partial product into the
 destination, set `mode = matmul2d_multiply_accumulate` and zero the destination before the
@@ -277,11 +285,12 @@ tensorops_AS_prefix(::Val{AS.ThreadGroup}) = "tg"
 """
     TensorOpsMatmul2D{DESC, NSIMD}
 
-Configured `tensor_ops::matmul2d` op. `DESC` is the [`matmul2d_descriptor`](@ref) value and
-`NSIMD` the simdgroup count (`execution_simdgroups<N>` in MSL).
+A matrix multiplication with Metal 4 tensor operations (MSL's `tensor_ops::matmul2d`), on
+[`MtlInlineTensor`](@ref)s. `DESC` is a [`matmul2d_descriptor`](@ref), and `NSIMD` the number
+of SIMD-groups that execute the operation together (`execution_simdgroups<N>` in MSL).
 
-Construct with [`TensorOpsMatmul2D(desc, Val(N))`](@ref) and invoke it to compute the Julia
-column-major product `C = A*B` (or `C += A*B` in `matmul2d_multiply_accumulate` mode):
+Construct it with `TensorOpsMatmul2D(desc, Val(NSIMD))`, and call it to compute `C = A*B` (or
+`C += A*B` with `mode = matmul2d_multiply_accumulate`):
 
 ```julia
 op = TensorOpsMatmul2D(matmul2d_descriptor(64, 32), Val(4))

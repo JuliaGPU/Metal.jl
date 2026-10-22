@@ -1,10 +1,7 @@
 export free_memory, total_memory
 
-"""
-    working_set_size(dev=device())
+# Metal's recommended maximum working set size for `dev`, in bytes
 
-Return Metal's recommended maximum working set size for `dev`.
-"""
 function working_set_size(dev::MTLDevice=device())
     @memoize key=pointer(dev)::id{MTLDevice} begin
         Int(dev.recommendedMaxWorkingSetSize)
@@ -14,14 +11,19 @@ end
 """
     total_memory(dev=device())
 
-Return Metal's recommended maximum working set size for `dev`.
+Return the amount of memory, in bytes, that the GPU `dev` can use without affecting its
+performance: Metal's [`recommendedMaxWorkingSetSize`](https://developer.apple.com/documentation/metal/mtldevice/recommendedmaxworkingsetsize).
+Apple GPUs share system memory with the CPU, so this is a part of it, not dedicated memory.
+
+See also [`free_memory`](@ref).
 """
 total_memory(dev::MTLDevice=device()) = working_set_size(dev)
 
 """
     free_memory(dev=device())
 
-Return the remaining bytes in Metal's recommended working set for `dev`.
+Return the amount of memory, in bytes, that remains of [`total_memory`](@ref) after the
+allocations of this process on `dev`.
 """
 function free_memory(dev::MTLDevice=device())
     total = total_memory(dev)

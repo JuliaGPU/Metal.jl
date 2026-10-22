@@ -1,64 +1,66 @@
-# MacOS GPU programming in Julia
+# Metal.jl
 
-The Metal.jl package is the main entry point for GPU programming on MacOS in Julia. The package
-makes it possible to do so at various abstraction levels, from easy-to-use arrays down to
-hand-written kernels using low-level Metal APIs.
+Metal.jl lets you program the GPU of an Apple silicon Mac from Julia, using GPU arrays or
+kernels written in Julia. It compiles Julia code to Apple's intermediate representation (AIR)
+and hands it to the GPU driver through the [Metal](https://developer.apple.com/documentation/metal)
+framework, so you don't need Xcode or a Metal toolchain.
 
-If you have any questions, please feel free to use the `#gpu` channel on the [Julia
-slack](https://julialang.slack.com/), or the [GPU domain of the Julia
-Discourse](https://discourse.julialang.org/c/domain/gpu).
+Requirements:
 
-As this package is still under development, if you spot a bug, please file
-[an issue](https://github.com/JuliaGPU/Metal.jl/issues).
+- a Mac with Apple silicon (M1 or newer);
+- macOS 15 or newer;
+- Julia 1.10 or newer, the native Apple silicon (`aarch64`) build rather than the Intel one
+  running under Rosetta.
 
-
-## Quick Start
-
-Metal.jl ties into your system's existing Metal Shading Language compiler toolchain, so no additional
-installs are required (unless you want to [view profiled GPU operations](profiling.md))
+Install the package and check that it finds your GPU:
 
 ```julia
-# install the package
 using Pkg
 Pkg.add("Metal")
 
-# smoke test
 using Metal
 Metal.versioninfo()
 ```
 
-If you want to ensure everything works as expected, you can execute the test suite.
+[`Metal.versioninfo()`](@ref) reports your system, package versions and available GPUs. If it finds
+no devices, see [Troubleshooting](@ref troubleshooting).
+
+A first array operation:
 
 ```julia
-using Pkg
-Pkg.test("Metal")
+julia> a = MtlArray(Float32[1, 2, 3]);
+
+julia> a .+ 1f0
+3-element MtlVector{Float32, Metal.SharedStorage}:
+ 2.0
+ 3.0
+ 4.0
 ```
 
-The following resources may also be of interest (although are mainly focused on the CUDA GPU
- backend):
+For direct access to Apple's frameworks,
+`Metal.MTL` and `Metal.MPS` wrap [Metal](https://developer.apple.com/documentation/metal)
+and [Metal Performance Shaders](https://developer.apple.com/documentation/metalperformanceshaders).
+They follow Apple's API closely; consult Apple's documentation for their concepts.
 
-- Effectively using GPUs with Julia:
-  [slides](https://docs.google.com/presentation/d/1l-BuAtyKgoVYakJSijaSqaTL3friESDyTOnU2OLqGoA/)
-- How Julia is compiled to GPUs: [video](https://www.youtube.com/watch?v=Fz-ogmASMAE)
+## Where to go next
 
-## Contributing
+- [Introduction](tutorials/introduction.md): a tutorial from broadcasting to a parallel kernel.
+- [Arrays](@ref): constructing `MtlArray`s, supported element types and array operations.
+- [Memory](@ref) and [Tasks and synchronization](@ref): how GPU memory and asynchronous
+  execution work, and when you need to wait for the GPU.
+- [Kernel programming](usage/kernel.md): writing your own kernels with `@metal`.
+- [Profiling](@ref) and [Performance](development/performance.md): measuring and improving performance.
+- [Troubleshooting](@ref troubleshooting): common error messages and what they mean.
 
-If you want to help improve this package, look at [the contributing page](faq/contributing.md) for more details.
+## Getting help and contributing
 
-## Acknowledgements
+Ask questions in the [GPU domain of the Julia Discourse](https://discourse.julialang.org/c/domain/gpu)
+or the `#gpu` channel of the [Julia Slack](https://julialang.org/slack/). Report bugs and
+missing functionality on the [issue tracker](https://github.com/JuliaGPU/Metal.jl/issues),
+including the output of `Metal.versioninfo()`. To work on Metal.jl itself, see
+[Contributing](@ref).
 
-The Julia Metal stack has been a collaborative effort by many individuals. Significant
-contributions have been made by the following individuals:
-
-- Tim Besard (@maleadt) (lead developer)
-- Filippo Vicentini (@PhilipVinc)
-- Max Hawkins (@max-Hawkins)
-
-## Supporting and Citing
-
-Some of the software in this ecosystem was developed as part of academic research. If you
-would like to help support it, please star the repository as such metrics may help us secure
-funding in the future. If you use our software as part of your research, teaching, or other
-activities, we would be grateful if you could cite our work. The
+If you use Metal.jl in research, please cite it using the
 [CITATION.cff](https://github.com/JuliaGPU/Metal.jl/blob/main/CITATION.cff) file in the
-root of this repository lists the relevant papers.
+repository. Metal.jl is maintained by Tim Besard (@maleadt) and Christian Guinard
+(@christiangnrd).
