@@ -66,8 +66,8 @@ end
 # look through the pointer casts of typed-pointer modules
 function strip_casts(val::LLVM.Value)
     while val isa LLVM.ConstantExpr &&
-          LLVM.opcode(val) in (LLVM.API.LLVMBitCast, LLVM.API.LLVMAddrSpaceCast)
-        val = LLVM.operands(val)[1]
+          val.opcode in (LLVM.Opcode.BitCast, LLVM.Opcode.AddrSpaceCast)
+        val = val.operands[1]
     end
     return val
 end
@@ -329,7 +329,7 @@ function access_path(ptr::LLVM.Value, type::Union{Nothing,LLVM.LLVMType})
         base == ptr || return gv, nothing
         path = [0]
         current = LLVM.global_value_type(gv)
-    elseif base isa LLVM.ConstantExpr && LLVM.opcode(base) == LLVM.API.LLVMGetElementPtr
+    elseif base isa LLVM.ConstantExpr && base.opcode == LLVM.Opcode.GetElementPtr
         gv, indices... = LLVM.operands(base)
         gv isa LLVM.GlobalVariable || return nothing
         (base == ptr && LLVM.source_element_type(base) == LLVM.global_value_type(gv) &&
@@ -415,11 +415,11 @@ function debug_source_files(mod::LLVM.Module)
 end
 
 # Julia emits subprograms and locations even without `-g`, but then marks its compile unit
-# `NoDebug` (which LLVM's C API has no getter for)
+# `NoDebug`
 function emits_debug_info(mod::LLVM.Module)
     haskey(mod.metadata, "llvm.dbg.cu") || return false
-    return any(LLVM.operands(mod.metadata["llvm.dbg.cu"])) do cu
-        !occursin("emissionKind: NoDebug", string(cu))
+    return any(mod.metadata["llvm.dbg.cu"].operands) do cu
+        cu.emission_kind != LLVM.DebugEmissionKind.NoDebug
     end
 end
 
