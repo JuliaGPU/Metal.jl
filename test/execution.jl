@@ -1043,6 +1043,14 @@ end
     @test exc2.threadgroup == (1, 1, 1)
     @test !isempty(exc2.backtrace)
     @test any(frame -> occursin("throw_boundserror", frame[1]), exc2.backtrace)
+
+    # paths that don't fit the mailbox keep their end, with the file name
+    file = joinpath("/", "a"^150, "kernel.jl")
+    include_string(@__MODULE__, "long_path_oob(a) = (a[2] = 1f0; return)", file)
+    exc3 = throw_at(2, long_path_oob, Metal.zeros(Float32, 1))
+    frame = only(filter(frame -> frame[1] == "long_path_oob", exc3.backtrace))
+    @test startswith(frame[2], "…")
+    @test endswith(frame[2], "/kernel.jl")
 end
 
 @testset "launch params" begin

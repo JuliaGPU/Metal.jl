@@ -177,6 +177,33 @@ end
     return
 end
 
+# like `store_cstring!`, but if the string doesn't fit, keep its end, preceded by an
+# ellipsis: the end of a source path holds the file name.
+@noinline function store_cpath!(dest::Core.LLVMPtr{NTuple{N, UInt8}, AS},
+                                src::Ptr{Cchar}) where {N, AS}
+    len = 0
+    while unsafe_load(src + len) % UInt8 != 0x00
+        len += 1
+    end
+    base = reinterpret(Core.LLVMPtr{UInt8, AS}, dest)
+    i = 0
+    if len > N - 1
+        # U+2026, in UTF-8
+        unsafe_store!(base, 0xe2)
+        unsafe_store!(base + 1, 0x80)
+        unsafe_store!(base + 2, 0xa6)
+        i = 3
+    end
+    offset = len - min(len, N - 1 - i)
+    while offset < len
+        unsafe_store!(base + i, unsafe_load(src + offset) % UInt8)
+        i += 1
+        offset += 1
+    end
+    unsafe_store!(base + i, 0x00)
+    return
+end
+
 # record a compile-time exception name and reason in the mailbox, claiming it first. one
 # out-of-line copy serves every `@gputhrow` site of a given exception (see the macro),
 # keeping per-site cold code to a single call whose only argument is the mailbox pointer.
@@ -232,7 +259,7 @@ function report_exception_frame(idx, func, file, line)
     if lock_output!(info) && 1 <= idx <= EXCEPTION_MAX_FRAMES
         frame = frame_pointer(info, idx)
         store_cstring!(frame_field(frame, Val(:func)), func)
-        store_cstring!(frame_field(frame, Val(:file)), file)
+        store_cpath!(frame_field(frame, Val(:file)), file)
         unsafe_store!(frame_field(frame, Val(:line)), Int32(line))
         unsafe_store!(info_field(info, Val(:num_frames)), Int32(idx))
     end
