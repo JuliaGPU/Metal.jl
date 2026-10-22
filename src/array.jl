@@ -777,6 +777,8 @@ function wrap_host_memory(::Type{MtlArray{T,N,S}}, ptr::Ptr{T}, dims::Dims{N}, o
 end
 
 ## resizing
+GPUArrays.supports_resize(::MtlVector) = true
+
 
 """
     resize!(a::MtlVector, n::Integer)
