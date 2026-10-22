@@ -84,41 +84,33 @@ function MPS.encode!(commandBuffer::MPSCommandBuffer, executable::MPSGraphExecut
     return results
 end
 
-# Graphs are built and compiled once per configuration and device, and reused; doing so
-# dominates the run time of small operations. Executing a compiled graph also avoids the
-# per-call lookup that MPSGraph performs to find its own compiled version.
+# Graphs are built once per configuration and device, and reused; doing so dominates the
+# run time of small operations. They are encoded as graphs, which MPSGraph compiles and
+# caches itself. Compiling them to an MPSGraphExecutable would save a few µs of host time
+# per call, but encoding an executable keeps every output buffer it is given alive.
 
 """
     CachedGraph(graph, inputs, outputs; constants=[])
 
-Compile `graph` for the current device, given the placeholders it reads (`inputs`) and
-the tensors it produces (`outputs`), in the order in which [`run!`](@ref) binds arrays to
-them. `constants` pairs further placeholders with arrays that are bound on every run;
-unlike graph constants, which MPSGraph converts through Float64, they hold any value
-exactly.
+Cache `graph`, given the placeholders it reads (`inputs`) and the tensors it produces
+(`outputs`), in the order in which [`run!`](@ref) binds arrays to them. `constants` pairs
+further placeholders with arrays that are bound on every run; unlike graph constants,
+which MPSGraph converts through Float64, they hold any value exactly.
 """
 struct CachedGraph
-    executable::MPSGraphExecutable
-    # for each input of the executable, which it orders itself, the position in the
-    # inputs passed to `run!` followed by the constants
-    input_order::Vector{Int}
-    noutputs::Int
+    graph::MPSGraph
+    # the inputs passed to `run!`, followed by the constants
+    placeholders::Vector{MPSGraphTensor}
+    outputs::Vector{MPSGraphTensor}
     constants::Vector{MtlArray}
-    # concurrent encoding of one executable is not documented to be safe
+    # concurrent encoding of one graph is not documented to be safe
     lock::ReentrantLock
 end
 
 function CachedGraph(graph::MPSGraph, inputs::Vector{MPSGraphTensor},
                      outputs::Vector{MPSGraphTensor};
                      constants::Vector{<:Pair{MPSGraphTensor}}=Pair{MPSGraphTensor,MtlArray}[])
-    placeholders = [inputs; first.(constants)]
-    feeds = Dict(x => MPSGraphShapedType(x.shape, x.dataType) for x in placeholders)
-    executable = compile(graph, device(), NSDictionary(feeds), NSArray(outputs), nil,
-                         default_exec_desc().compilationDescriptor)
-    input_order = map(executable.feedTensors) do x
-        something(findfirst(y -> pointer(y) == pointer(x), placeholders))
-    end
-    return CachedGraph(executable, input_order, length(outputs), last.(constants),
+    return CachedGraph(graph, [inputs; first.(constants)], outputs, last.(constants),
                        ReentrantLock())
 end
 
@@ -144,19 +136,22 @@ Encode `graph` on the current task's queue, reading the arrays in `inputs` and w
 in `outputs`, and commit it without waiting for completion.
 """
 function run!(cached::CachedGraph, outputs::Tuple, inputs::Tuple)
-    ninputs = length(cached.input_order) - length(cached.constants)
-    length(inputs) == ninputs && length(outputs) == cached.noutputs ||
-        throw(ArgumentError("graph takes $ninputs inputs and $(cached.noutputs) outputs"))
+    ninputs = length(cached.placeholders) - length(cached.constants)
+    noutputs = length(cached.outputs)
+    length(inputs) == ninputs && length(outputs) == noutputs ||
+        throw(ArgumentError("graph takes $ninputs inputs and $noutputs outputs"))
     # MPS aborts the process on empty buffers; operations must handle empty arrays
     (any(isempty, inputs) || any(isempty, outputs)) &&
         throw(ArgumentError("cannot run a graph on empty arrays"))
-    all_inputs = (inputs..., cached.constants...)
-    input_data = NSArray([MPSGraphTensorData(all_inputs[i]) for i in cached.input_order])
-    output_data = NSArray([MPSGraphTensorData(arr) for arr in outputs])
+    feeds = Dict{MPSGraphTensor,MPSGraphTensorData}(
+        zip(cached.placeholders, map(MPSGraphTensorData, (inputs..., cached.constants...))))
+    results = Dict{MPSGraphTensor,MPSGraphTensorData}(
+        zip(cached.outputs, map(MPSGraphTensorData, outputs)))
 
     cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
     @lock cached.lock begin
-        encode!(cmdbuf, cached.executable, input_data, output_data)
+        encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
+                default_exec_desc())
     end
     commit!(cmdbuf)
     return
