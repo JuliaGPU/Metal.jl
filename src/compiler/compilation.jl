@@ -16,8 +16,8 @@ Cached compilation results for a Metal kernel job, managed by
 - `air`: AIR bitcode produced by the LLVM-downgrader from the post-irgen LLVM IR.
   The input to the Metal library wrapper. Session-portable; retained for diagnostics
   when the host-side Metal pipeline creation fails.
-- `metallib` + `entry` + `loggingEnabled`: library-wrapped AIR bytes and launch
-  metadata — the final session-portable artifacts. `metallib === nothing` identifies
+- `metallib` + `entry` + `loggingEnabled` + `device_rng`: library-wrapped AIR bytes and
+  launch metadata — the final session-portable artifacts. `metallib === nothing` identifies
   a job that has not been compiled yet (see `compile_or_lookup` in `execution.jl`).
 - `relocations`: the kernel's relocation manifest, or `nothing` when it carries none
   (the common case). Session-portable — its `JuliaValueRef`/`CGlobalRef` targets are
@@ -43,11 +43,12 @@ mutable struct MetalResults
     metallib::Union{Nothing, Vector{UInt8}}
     entry::Union{Nothing, String}
     loggingEnabled::Union{Nothing, Bool}
+    device_rng::Union{Nothing, Bool}
     relocations::Union{Nothing, GPUCompiler.Relocations}
     # host-side objects (session-local)
     pipelines::Vector{Tuple{MTLDevice, MTLComputePipelineState}}
     reloc_tables::Vector{Tuple{MTLDevice, MTLBuffer}}
-    MetalResults() = new(nothing, nothing, nothing, nothing, nothing,
+    MetalResults() = new(nothing, nothing, nothing, nothing, nothing, nothing,
                          Tuple{MTLDevice, MTLComputePipelineState}[],
                          Tuple{MTLDevice, MTLBuffer}[])
 end
@@ -157,6 +158,10 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
             call!(builder, llvm_ft, fptr)
             br!(builder, top_bb)
         end
+
+        # note the use of the device-side RNG, so that launches only seed it when needed.
+        # the optimizer can remove the RNG state, so this cannot be detected afterwards.
+        push!(entry.function_attributes, StringAttribute("julia.metal.rng", ""))
 
         # XXX: put some of the above behind GPUCompiler abstractions
         #      (e.g., a compile-time version of `deferred_codegen`)
@@ -560,7 +565,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
     Threads.atomic_add!(compilations, 1)
 
     # TODO: on 1.9, this actually creates a context. cache those.
-    ir, air, fun, entry, loggingEnabled, relocations = JuliaContext() do _
+    ir, air, fun, entry, loggingEnabled, device_rng, relocations = JuliaContext() do _
         @signpost_interval log=log_compiler() start="" stop="" "Generate LLVM IR" begin
             mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)
         end
@@ -569,6 +574,11 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
         @dispose mod=mod begin
             # Detect logging after optimization so dead logging calls do not enable log state.
             local loggingEnabled = haskey(mod.functions, "air.os_log")
+
+            # (dropping the marker, which isn't AIR, so it doesn't end up in the metallib)
+            local rng_attr = StringAttribute("julia.metal.rng", "")
+            local device_rng = rng_attr in collect(meta.entry.function_attributes)
+            device_rng && delete!(meta.entry.function_attributes, rng_attr)
 
             @signpost_interval log=log_compiler() start="" stop="" "Downgrade to AIR" begin
                 # generate AIR, having GPUCompiler lower the IR to AIR-compatible form and
@@ -603,7 +613,8 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
                          - $(air_file)""")
             end
 
-            string(mod), air, fun, meta.entry.name, loggingEnabled, meta.relocations
+            string(mod), air, fun, meta.entry.name, loggingEnabled, device_rng,
+            meta.relocations
         end
     end
 
@@ -633,7 +644,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
 
     # `nothing` marks a relocation-free kernel (the common case), keeping its `MetalResults`
     # and package-image footprint identical to before.
-    return (; air, metallib, entry, loggingEnabled,
+    return (; air, metallib, entry, loggingEnabled, device_rng,
               relocations = isempty(relocations) ? nothing : relocations)
 end
 
