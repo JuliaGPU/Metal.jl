@@ -146,3 +146,17 @@ end
         @test Array(a) == Array(b)
     end
 end
+
+# only kernels that use the device RNG draw its seed from the host RNG (#1101)
+@testset "host RNG" begin
+    function kernel(A)
+        A[thread_position_in_grid().x] = 1f0
+        return
+    end
+    a = Metal.zeros(Float32, n)
+    @metal threads=n kernel(a)
+
+    Random.seed!(1); x = rand()
+    Random.seed!(1); @metal threads=n kernel(a); y = rand()
+    @test x == y
+end

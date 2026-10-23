@@ -519,6 +519,8 @@ struct HostKernel{F,S,TT}
     source::S
     pipeline::MTLComputePipelineState
     loggingEnabled::Bool
+    # whether the kernel uses the device RNG, and thus needs a seed from the host RNG
+    device_rng::Bool
     device::MTLDevice
     maxthreads::Int
     # the threadgroup size launches have to use (`minthreads`), or all zeros
@@ -621,7 +623,7 @@ end
         reqthreads = minthreads === nothing ? MTLSize(0, 0, 0) : MTLSize(minthreads)
 
         # the fields of `HostKernel` following `f` and `source`
-        (pipeline[], res.loggingEnabled::Bool, dev,
+        (pipeline[], res.loggingEnabled::Bool, res.device_rng::Bool, dev,
          Int(pipeline[].maxTotalThreadsPerThreadgroup),
          reqthreads,
          Int(pipeline[].staticThreadgroupMemoryLength),
@@ -654,6 +656,7 @@ end
         res.metallib = artifacts.metallib
         res.entry = artifacts.entry
         res.loggingEnabled = artifacts.loggingEnabled
+        res.device_rng = artifacts.device_rng
         res.relocations = artifacts.relocations
     end
     return res
@@ -837,7 +840,10 @@ Base.@nospecializeinfer function launch(
     reloc = kernel.reloc_table
     reloc_ptr = reinterpret(Core.LLVMPtr{UInt64, AS.Device},
                             reloc === nothing ? UInt64(0) : UInt64(MTL.gpu_address(reloc)))
-    kernel_state = KernelState(Random.rand(UInt32), buf_ptr, exc_ptr, reloc_ptr)
+    # (drawing a seed for every launch would make the host RNG stream depend on how many
+    # kernels ran, breaking reproducibility of seeded host code)
+    seed = kernel.device_rng ? Random.rand(UInt32) : UInt32(0)
+    kernel_state = KernelState(seed, buf_ptr, exc_ptr, reloc_ptr)
 
     if kernel.loggingEnabled
         return launch_logging!(kernel, gs, ts, bq, args, kernel_state, buf, exc)
