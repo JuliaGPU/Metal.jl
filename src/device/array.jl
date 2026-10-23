@@ -217,6 +217,13 @@ function Base.reinterpret(::Type{T}, a::MtlDeviceArray{S,N,A}) where {T,S,N,A}
     err = GPUArrays._reinterpret_exception(T, a)
     err === nothing || throw(err)
 
+    # `T` may require a stronger alignment than `a` was checked for. this is not a bounds
+    # check: the alignment that element accesses assume depends on it.
+    if Base.datatype_alignment(T) > Base.datatype_alignment(S) && !isempty(a) &&
+       UInt(a.ptr) % Base.datatype_alignment(T) != 0
+        throw(ArgumentError("cannot reinterpret an array whose pointer is not aligned for the new element type"))
+    end
+
     if sizeof(T) == sizeof(S) # fast case
         return MtlDeviceArray{T,N,A}(size(a), reinterpret(LLVMPtr{T,A}, a.ptr))
     end
