@@ -218,7 +218,8 @@ end
     end
     synchronize()
 
-    for f in (Metal.try_launch, Metal.launch, Metal.encode_launch!, Metal.launch_logging!)
+    for f in (Metal.try_launch, Metal.launch, Metal.launch_logging!, Metal.submit_launch!,
+              Metal.encode_launch!)
         @test length(collect(Base.specializations(only(methods(f))))) <= 1
     end
 end
@@ -236,6 +237,20 @@ end
         # Metal 3 can only pass 4 KiB by value (the Metal 4 backend copies to a buffer)
         @test_throws "limited to 4096 bytes" @metal last_kernel(out, ntuple(Float32, 1025))
     end
+end
+
+
+@testset "GPU addresses as arguments" begin
+    # only buffers can be bound to pointer parameters
+    function store_kernel(p)
+        unsafe_store!(p, 42f0)
+        return
+    end
+    a = MtlArray(zeros(Float32, 1))
+    p = reinterpret(Core.LLVMPtr{Float32,1}, MTL.gpu_address(pointer(a).buffer))
+    @test_throws "Argument 1 should be an MtlArray, MtlPtr or MTLBuffer" @metal store_kernel(p)
+    @metal store_kernel(pointer(a))
+    @test Array(a) == [42f0]
 end
 
 
