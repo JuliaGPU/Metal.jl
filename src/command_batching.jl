@@ -84,7 +84,8 @@ while holding `submission_lock`:
   other tasks can flush it). The context supports
   `bind_buffer!(ctx, buf, offset, index)`, `bind_bytes!(ctx, ptr, length, index)` (which
   must copy the bytes before returning), `make_resident!(ctx, buf, usage)` for buffers
-  that are only reachable through a GPU address, `dispatch!(ctx, groups, threads)`, and
+  that are only reachable through a GPU address, `bind_threadgroup_memory!(ctx, length,
+  index)`, `dispatch!(ctx, groups, threads)`, and
   `MTL.push_debug_group!(ctx, label)`/`MTL.pop_debug_group!(ctx)`;
 - `blit_encoder(bq)`: return a context supporting `append_copy!` and `append_fillbuffer!`;
 - `encode_event_wait!(bq, event, value)`: make subsequent work wait for `event`;
@@ -569,10 +570,18 @@ end
 
 @inline bind_buffer!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, offset, index) =
     set_buffer!(cce, buf, offset, index)
-@inline bind_bytes!(cce::MTLComputeCommandEncoder, ptr::Ptr, len::Integer, index::Integer) =
+@inline function bind_bytes!(cce::MTLComputeCommandEncoder, ptr::Ptr, len::Integer,
+                             index::Integer)
+    # larger values abort the process (or only work by accident)
+    len > 4096 && throw_large_bytes(len)
     set_bytes!(cce, ptr, len, index)
+end
+@noinline throw_large_bytes(len) =
+    throw(ArgumentError("Kernel arguments passed by value are limited to 4096 bytes, got one of $len bytes; pass larger data in an array instead"))
 @inline make_resident!(cce::MTLComputeCommandEncoder, buf::MTLBuffer, usage) =
     MTL.use!(cce, buf, usage)
+@inline bind_threadgroup_memory!(cce::MTLComputeCommandEncoder, len::Integer, index::Integer) =
+    MTL.set_threadgroup_memory_length!(cce, len, index)
 @inline dispatch!(cce::MTLComputeCommandEncoder, groups::MTLSize, threads::MTLSize) =
     MTL.append_current_function!(cce, groups, threads)
 

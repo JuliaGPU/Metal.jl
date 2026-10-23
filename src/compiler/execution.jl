@@ -1,4 +1,4 @@
-export @metal
+export @metal, metalcall
 
 @public mtlconvert, mtlfunction, HostKernel
 
@@ -239,6 +239,210 @@ To convert the fields of your own types, don't add methods to this function, but
 which all JuliaGPU back-ends share.
 """
 mtlconvert(arg, cce=nothing, queue=nothing) = adapt(Adaptor(cce, queue), arg)
+
+
+## low-level kernel launch
+
+"""
+    metalcall(pipeline::MTLComputePipelineState, types, values...;
+              groups=1, threads=1, queue=nothing, submit=false,
+              threadgroup_memory=(), resources=())
+
+`ccall`-like interface for launching a compute pipeline, e.g., one created from a function
+in a precompiled Metal library, on the GPU. `types` is a tuple of types, or a tuple type,
+with an entry per parameter of the kernel, which determines how each of the `values` is
+passed:
+
+- pointer types (`Metal.MtlPtr`, `Core.LLVMPtr` or `Ptr`) are bound as a buffer (with an
+  offset), and should be passed an `MtlArray`, `MtlPtr` or `MTLBuffer`;
+- other types are passed by value, after converting the argument with [`mtlconvert`](@ref)
+  and `convert`; these must be bits types with the layout the kernel expects.
+
+The parameters are bound to consecutive buffer indices, starting at 0, skipping those of a
+type that holds no data: a singleton type like `Nothing`, or a type like `Type{Int}`.
+Nothing is checked against the kernel's signature: using types that don't match it is
+undefined behavior.
+
+The kernel is launched on `groups` threadgroups of `threads` threads each, both of which
+should be an integer or a tuple of up to three integers. The other keyword arguments are:
+
+- `queue`: the command queue to launch on, defaulting to the current task's;
+- `submit`: submit the work batched on the queue right away, instead of when Metal.jl
+  decides to;
+- `threadgroup_memory`: the length in bytes of the threadgroup memory for each of the
+  kernel's `[[threadgroup(i)]]` parameters, in order (a multiple of 16 bytes);
+- `resources`: buffers that the kernel accesses through GPU addresses it reads from its
+  arguments, e.g., from a struct or an argument buffer. These are made resident and kept
+  alive until the kernel has finished, which happens automatically for the buffers of
+  arrays in arguments converted by `mtlconvert`.
+
+For example, to launch a kernel written in the Metal Shading Language:
+
+```julia
+lib = MTL.MTLLibrary(device(), \"""
+    kernel void scale(device float *x [[buffer(0)]], constant float &a [[buffer(1)]],
+                      uint i [[thread_position_in_grid]]) {
+        x[i] *= a;
+    }
+    \""")
+pipeline = MTL.MTLComputePipelineState(device(), MTL.MTLFunction(lib, "scale"))
+
+x = Metal.ones(Float32, 256)
+metalcall(pipeline, Tuple{Metal.MtlPtr{Float32}, Float32}, x, 2; threads=256)
+```
+
+See also [`Metal.metalcall_tuple`](@ref), which takes the values as a tuple.
+"""
+metalcall(pipeline::MTLComputePipelineState, types::Union{Tuple,Type},
+          args::Vararg{Any,N}) where {N} =
+    metalcall_tuple(pipeline, types, args)
+# forward the values as a tuple, which a keyword-argument method would splat
+Core.kwcall(kwargs::NamedTuple, ::typeof(metalcall), pipeline::MTLComputePipelineState,
+            types::Union{Tuple,Type}, args::Vararg{Any,N}) where {N} =
+    metalcall_tuple(pipeline, types, args; kwargs...)
+
+"""
+    metalcall_tuple(pipeline, types, values::Tuple; kwargs...)
+
+The same as [`metalcall`](@ref), but taking the values as a tuple, which is faster for
+kernels with many arguments.
+"""
+metalcall_tuple(pipeline::MTLComputePipelineState, types::Tuple, args::Tuple; kwargs...) =
+    metalcall_tuple(pipeline, Tuple{types...}, args; kwargs...)
+function metalcall_tuple(pipeline::MTLComputePipelineState, types::Type{<:Tuple},
+                         args::Tuple; groups=1, threads=1, queue=nothing,
+                         submit::Bool=false, threadgroup_memory::Tuple=(),
+                         resources::Tuple=())
+    gs, ts = MTLSize(groups), MTLSize(threads)
+    while true
+        conflict = try_metalcall(pipeline, queue, gs, ts, types, args, threadgroup_memory,
+                                 resources, submit)
+        conflict === nothing && return
+        synchronize(conflict)
+    end
+end
+
+Base.@nospecializeinfer function try_metalcall(pipeline::MTLComputePipelineState,
+                                               @nospecialize(queue), gs::MTLSize,
+                                               ts::MTLSize, @nospecialize(types::Type),
+                                               @nospecialize(args::Tuple),
+                                               @nospecialize(threadgroup_memory::Tuple),
+                                               @nospecialize(resources::Tuple),
+                                               submit::Bool)
+    bq = queue === nothing ? global_queue(device()) :
+                             batched_queue(queue)::ConcreteBatchedQueue
+    pipeline.device == bq.queue.device ||
+        throw(ArgumentError("The pipeline belongs to a different device than the queue"))
+
+    reqthreads = macos_version() >= v"26" ? pipeline.requiredThreadsPerThreadgroup :
+                                            MTLSize(0, 0, 0)
+    tgmem = Int(pipeline.staticThreadgroupMemoryLength)
+    for len in threadgroup_memory
+        (len >= 0 && len % 16 == 0) ||
+            throw(ArgumentError("Threadgroup memory lengths must be non-negative multiples of 16 bytes, got $len"))
+        tgmem += len
+    end
+    check_launch(gs, ts, reqthreads, Int(pipeline.maxTotalThreadsPerThreadgroup), tgmem)
+
+    # (passed on `@nospecialize`d: a `Union{Nothing,NamedTuple}` reaching `record_operation!`
+    # crashes the optimizer of Julia 1.10, see JuliaLang/julia#53590)
+    op = MTL.profile_metadata[] === nothing ? nothing : pipeline_operation(pipeline, gs, ts)
+    conflict = Base.@lock submission_lock begin
+        encode_metalcall!(pipeline, gs, ts, bq, types, args, threadgroup_memory, resources,
+                          op)
+    end
+    conflict === nothing || return conflict
+
+    submit ? flush!(bq) : maybe_autoflush!(bq)
+    return
+end
+
+Base.@nospecializeinfer function pipeline_operation(pipeline::MTLComputePipelineState,
+                                                    gs::MTLSize, ts::MTLSize)
+    label = pipeline.label
+    (; kind = :kernel, name = label === nothing ? "metalcall" : String(label),
+       threadgroups = gs, threads = ts,
+       tgmem = Int(pipeline.staticThreadgroupMemoryLength),
+       maxthreads = Int(pipeline.maxTotalThreadsPerThreadgroup))
+end
+
+# encode a pipeline launch into the open batch of `bq`. returns the memory of an argument
+# that is still in use by another queue, if any, without encoding anything.
+Base.@nospecializeinfer function encode_metalcall!(
+        pipeline::MTLComputePipelineState, gs::MTLSize, ts::MTLSize, bq::BatchedCommandQueue,
+        @nospecialize(types::Type), @nospecialize(args::Tuple),
+        @nospecialize(threadgroup_memory::Tuple), @nospecialize(resources::Tuple),
+        @nospecialize(op))
+    try
+        cce = kernel_encoder!(bq, pipeline)
+        for resource in resources
+            declare_resource!(cce, bq, resource)
+        end
+        bind_arguments!(cce, bq, types, args)
+        for (i, len) in enumerate(threadgroup_memory)
+            bind_threadgroup_memory!(cce, len, i)
+        end
+        dispatch!(cce, pipeline, gs, ts)
+    catch err
+        end_encoder!(bq)
+        bq.nops == 0 && discard_open_batch!(bq)
+        err isa OwnershipConflict && return err.managed
+        rethrow()
+    end
+
+    record_operation!(bq, args, resources; op=op)
+    return nothing
+end
+
+declare_resource!(cce, bq, buf::MTLBuffer) = make_resident!(cce, buf, MTL.ReadWriteUsage)
+function declare_resource!(cce, bq, ptr::MtlPtr)
+    claim!(ptr, bq)
+    make_resident!(cce, ptr.buffer, MTL.ReadWriteUsage)
+end
+declare_resource!(cce, bq, xs::MtlArray) = declare_resource!(cce, bq, pointer(xs))
+declare_resource!(cce, bq, x) =
+    throw(ArgumentError("Resources should be MtlArray, MtlPtr or MTLBuffer objects, got a $(typeof(x))"))
+
+# Bind the values `args` to the parameters of a kernel with signature `TT`. Pointer-typed
+# parameters are bound as buffers, others are passed by value (see `metalcall`).
+@inline @generated function bind_arguments!(cce, bq, ::Type{TT}, args::Tuple) where {TT}
+    types = TT.parameters
+    if length(types) != fieldcount(args)
+        msg = "Kernel expects $(length(types)) arguments, got $(fieldcount(args))"
+        return :(throw(ArgumentError($msg)))
+    end
+
+    ex = quote end
+    idx = 1
+    for (i, (dt, typ)) in enumerate(zip(types, args.parameters))
+        (isghosttype(dt) || Core.Compiler.isconstType(dt)) && continue
+        if dt <: Union{Ptr,Core.LLVMPtr,MtlPtr}
+            # a GPU address can't be bound without the buffer it points into
+            if !(typ <: Union{MTLBuffer,MtlPtr,MtlArray})
+                msg = "Argument $i should be an MtlArray, MtlPtr or MTLBuffer to be bound to a pointer parameter, not a $typ"
+                return :(throw(ArgumentError($msg)))
+            end
+            push!(ex.args, :(bind_pointer!(cce, bq, args[$i], $idx)))
+        else
+            push!(ex.args, :(convert_argument!(cce, bq, $dt, args[$i], $idx)))
+        end
+        idx += 1
+    end
+    push!(ex.args, :(return nothing))
+
+    ex
+end
+
+@inline bind_pointer!(cce, bq, buf::MTLBuffer, idx::Integer) = bind_buffer!(cce, buf, 0, idx)
+@inline function bind_pointer!(cce, bq, ptr::MtlPtr, idx::Integer)
+    claim!(ptr, bq)
+    bind_buffer!(cce, ptr.buffer, ptr.offset, idx)
+end
+@inline bind_pointer!(cce, bq, xs::MtlArray, idx::Integer) =
+    bind_pointer!(cce, bq, pointer(xs), idx)
+
+@noinline convert_argument!(cce, bq, ::Type{T}, arg, idx::Integer) where {T} =
+    set_argument!(cce, convert(T, mtlconvert(arg, cce, bq)), idx)
 
 
 ## host-side kernel API
@@ -616,34 +820,8 @@ end
 Base.@nospecializeinfer function launch(
         @nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
         bq::BatchedCommandQueue, @nospecialize(args::Tuple), submit::Bool)
-    (gs.width>0 && gs.height>0 && gs.depth>0) ||
-        throw(ArgumentError("All group dimensions should be non-zero"))
-    (ts.width>0 && ts.height>0 && ts.depth>0) ||
-        throw(ArgumentError("All thread dimensions should be non-zero"))
-
-    # Metal only checks this in its debug layer; other sizes otherwise silently misbehave
-    reqthreads = kernel.reqthreads
-    if reqthreads.width > 0 && ts != reqthreads
-        throw(ArgumentError("Threads in group ($(Int(ts.width)), $(Int(ts.height)), $(Int(ts.depth))) should equal the kernel's minthreads ($(Int(reqthreads.width)), $(Int(reqthreads.height)), $(Int(reqthreads.depth)))"))
-    end
-
-    maxthreads = kernel.maxthreads
-    nthreads = ts.width * ts.height * ts.depth
-    nthreads > maxthreads &&
-        throw(ArgumentError("Number of threads in group ($nthreads) should not exceed $maxthreads"))
-
-    (gs.width * ts.width) > typemax(UInt32) &&
-        throw(ArgumentError("Total threads per grid in a dimension (groups.width($(gs.width)) * threads.width($(ts.width)) = $(gs.width * ts.width)) must not exceed $(typemax(UInt32))"))
-    (gs.height * ts.height) > typemax(UInt32) &&
-        throw(ArgumentError("Total threads per grid in a dimension (groups.height($(gs.height)) * threads.height($(ts.height)) = $(gs.height * ts.height)) must not exceed $(typemax(UInt32))"))
-    (gs.depth * ts.depth) > typemax(UInt32) &&
-        throw(ArgumentError("Total threads per grid in a dimension (groups.depth($(gs.depth)) * threads.depth($(ts.depth)) = $(gs.depth * ts.depth)) must not exceed $(typemax(UInt32))"))
-
+    check_launch(gs, ts, kernel.reqthreads, kernel.maxthreads, kernel.tgmem)
     dev = kernel.device
-    tgmem = kernel.tgmem
-
-    tgmem > 32768 &&
-        throw(ArgumentError("Total used threadgroupMemoryLength($tgmem) must be <= 32768 bytes."))
 
     buf, buf_addr = malloc_buffer_and_gpu_address(dev)
     buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, buf_addr)
@@ -664,6 +842,36 @@ Base.@nospecializeinfer function launch(
     conflict === nothing || return conflict
 
     submit ? flush!(bq) : maybe_autoflush!(bq)
+    return
+end
+
+# check a launch configuration against the pipeline's limits (`reqthreads` all zeros when
+# it doesn't require a threadgroup size), with `tgmem` the threadgroup memory it uses
+function check_launch(gs::MTLSize, ts::MTLSize, reqthreads::MTLSize, maxthreads::Int,
+                      tgmem::Int)
+    (gs.width>0 && gs.height>0 && gs.depth>0) ||
+        throw(ArgumentError("All group dimensions should be non-zero"))
+    (ts.width>0 && ts.height>0 && ts.depth>0) ||
+        throw(ArgumentError("All thread dimensions should be non-zero"))
+
+    # Metal only checks this in its debug layer; other sizes otherwise silently misbehave
+    if reqthreads.width > 0 && ts != reqthreads
+        throw(ArgumentError("Threads in group ($(Int(ts.width)), $(Int(ts.height)), $(Int(ts.depth))) should equal the kernel's minthreads ($(Int(reqthreads.width)), $(Int(reqthreads.height)), $(Int(reqthreads.depth)))"))
+    end
+
+    nthreads = ts.width * ts.height * ts.depth
+    nthreads > maxthreads &&
+        throw(ArgumentError("Number of threads in group ($nthreads) should not exceed $maxthreads"))
+
+    (gs.width * ts.width) > typemax(UInt32) &&
+        throw(ArgumentError("Total threads per grid in a dimension (groups.width($(gs.width)) * threads.width($(ts.width)) = $(gs.width * ts.width)) must not exceed $(typemax(UInt32))"))
+    (gs.height * ts.height) > typemax(UInt32) &&
+        throw(ArgumentError("Total threads per grid in a dimension (groups.height($(gs.height)) * threads.height($(ts.height)) = $(gs.height * ts.height)) must not exceed $(typemax(UInt32))"))
+    (gs.depth * ts.depth) > typemax(UInt32) &&
+        throw(ArgumentError("Total threads per grid in a dimension (groups.depth($(gs.depth)) * threads.depth($(ts.depth)) = $(gs.depth * ts.depth)) must not exceed $(typemax(UInt32))"))
+
+    tgmem > 32768 &&
+        throw(ArgumentError("Total used threadgroupMemoryLength($tgmem) must be <= 32768 bytes."))
     return
 end
 

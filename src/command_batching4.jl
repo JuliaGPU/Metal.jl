@@ -290,6 +290,9 @@ end
     return
 end
 
+@inline bind_threadgroup_memory!(be::Metal4Backend, len::Integer, index::Integer) =
+    MTL.set_threadgroup_memory_length!(be.encoder::MTL4ComputeCommandEncoder, len, index)
+
 @inline dispatch!(be::Metal4Backend, groups::MTLSize, threads::MTLSize) =
     MTL.dispatchThreadgroups!(be.encoder::MTL4ComputeCommandEncoder, groups, threads)
 MTL.push_debug_group!(be::Metal4Backend, label) =

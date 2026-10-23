@@ -21,7 +21,14 @@ julia> write("foo.metallib", Metal.MetalLib(lib; functions = lib.functions[1:1])
 ```
 
 To load a library on a device, pass its bytes to `MTL.MTLLibraryFromData`, or the path of a
-file to `MTL.MTLLibraryFromFile`.
+file to `MTL.MTLLibraryFromFile`. Its functions can then be launched with
+[`metalcall`](@ref):
+
+```julia
+lib = MTL.MTLLibraryFromFile(device(), "shaders.metallib")
+pipeline = MTL.MTLComputePipelineState(device(), MTL.MTLFunction(lib, "foo"))
+metalcall(pipeline, Tuple{Metal.MtlPtr{Float32}}, x; groups=4, threads=256)
+```
 
 ```@docs
 Metal.MetalLib
