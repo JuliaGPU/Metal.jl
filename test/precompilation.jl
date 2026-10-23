@@ -53,8 +53,11 @@ if GPUCompiler.supports_relocatable_ir() && LLVM.version() >= v"17"
 
         env = copy(ENV)
         # resolve Metal and PrecompileTools from the test environment, which (unlike Metal's
-        # own project) is instantiated whether or not Metal is checked out as a workspace
-        env["JULIA_LOAD_PATH"] = join([load_path, Base.load_path()...], Sys.iswindows() ? ';' : ':')
+        # own project) is instantiated whether or not Metal is checked out as a workspace.
+        # The workload directory goes last: preferences are only read from the workspace root
+        # of the first entry, and without them the child would rebuild Metal and its extensions
+        # into cache slots shared with the parent session's build.
+        env["JULIA_LOAD_PATH"] = join([Base.load_path()..., load_path], Sys.iswindows() ? ';' : ':')
         jl = Base.julia_cmd()
         # `julia_cmd` propagates `--code-coverage` from the parent (CI runs tests under
         # coverage), and a coverage-enabled session refuses precompiled code for the packages
