@@ -189,8 +189,21 @@ end
 function Adapt.adapt_storage(to::Adaptor, xs::MtlArray{T,N}) where {T,N}
     buf = pointer(xs)
     ptr = adapt(to, buf)
+    check_alignment(xs, ptr)
     MtlDeviceArray{T,N,AS.Device}(xs.dims, ptr)
 end
+
+# an `MtlArray` can point at memory that is not aligned for its element type, e.g., after
+# `reinterpret` of a view. that is fine for copies, but element accesses in kernels assume
+# the alignment of the element type.
+function check_alignment(a::MtlArray{T}, ptr) where {T}
+    align = Base.datatype_alignment(T)
+    if UInt(ptr) % align != 0 && !isempty(a)
+        alignment_error(T, ptr, align)
+    end
+end
+@noinline alignment_error(T, ptr, align) =
+    throw(ArgumentError("cannot use a $T array at $ptr in a kernel, which requires $align-byte alignment. Such arrays result from `reinterpret`ing a view that doesn't start at a multiple of the alignment; use `copy` to get an aligned array."))
 
 # CPU arrays would otherwise only be rejected by the compiler, with an error that dumps the
 # full argument type. they are not wrapped automatically: Metal.jl cannot synchronize host

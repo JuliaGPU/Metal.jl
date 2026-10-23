@@ -745,6 +745,13 @@ end
     v = view(a, 2:7)  # offset of 1 Int16 = 2 bytes
     r = reinterpret(Int32, v)  # Int32 = 4 bytes; 2 is not a multiple of 4
     @test Array(r) == reinterpret(Int32, @view Array(a)[2:7])
+
+    # kernels require aligned elements
+    @test_throws ArgumentError r .+ Int32(1)
+    @test Array(copy(r) .+ Int32(1)) == reinterpret(Int32, @view Array(a)[2:7]) .+ Int32(1)
+    # empty arrays have no elements to access
+    e = reinterpret(Int32, view(a, 2:1))
+    @test isempty(Metal.mtlconvert(e))
 end
 
 @testset "aliasing" begin

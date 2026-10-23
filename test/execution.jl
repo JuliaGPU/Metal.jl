@@ -1387,3 +1387,21 @@ end
         Metal.label_resources_default[] = default
     end
 end
+
+@testset "device-side reinterpret to a stronger alignment" begin
+    function kernel(y, a, offset)
+        ptr = reinterpret(Core.LLVMPtr{Int32,Metal.AS.Device}, pointer(a)) + offset
+        x = MtlDeviceArray{Int32,1,Metal.AS.Device}((2,), ptr)
+        b = reinterpret(Int64, x)
+        @inbounds y[1] = b[1]
+        return
+    end
+    a = MtlArray([1, 2])
+    y = Metal.zeros(Int, 1)
+    @metal kernel(y, a, 8)
+    @test Array(y)[] == 2
+    @test_throws Metal.KernelException begin
+        @metal kernel(y, a, 4)
+        synchronize()
+    end
+end
