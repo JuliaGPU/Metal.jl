@@ -135,23 +135,61 @@ Base.Int(ptr::MtlPtr) = Int(UInt(ptr))
 ## operations
 
 # CPU -> GPU
+#
+# unless `async` is set, the caller may reuse the host memory once this returns, so a blit
+# has to read from a copy of it, or finish before returning.
 function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T}, src::Ptr{T}, N::Integer;
                              queue=global_queue(dev), async::Bool=false) where T
     iszero(N) && return dst
-    storage_type = dst.buffer.storageMode
-    if storage_type == MTL.MTLStorageModePrivate
-        # stage through a shared buffer
-        nocopy = MTL.can_alloc_nocopy(src, N*sizeof(T))
-        tmp_buf = alloc(dev, N*sizeof(T), src; storage=SharedStorage, nocopy)
+    nbytes = N*sizeof(T)
+    large = nbytes >= 2^25
 
-        # copy to the private buffer
-        unsafe_copyto!(dev, dst, MtlPtr{T}(tmp_buf, 0), N;
-                       queue, async=(nocopy && async))
-        free(tmp_buf)
-    elseif storage_type == MTL.MTLStorageModeShared
-        unsafe_copyto!(convert(Ptr{T}, dst), src, N)
+    if dst.buffer.storageMode == MTL.MTLStorageModeShared
+        # writing from the CPU is always valid, as converting to a `Ptr` waits for queued
+        # work that uses the buffer. small uploads blit instead, to avoid that wait.
+        if large || !cpu_write_may_wait(dst)
+            unsafe_copyto!(convert(Ptr{T}, dst), src, N)
+            return dst
+        end
     end
+
+    # the staging buffer can wrap the host memory if the caller keeps it alive and
+    # unmodified, or if the blit finishes before returning. otherwise it holds a copy.
+    can_wrap = MTL.can_alloc_nocopy(src, nbytes)
+
+    # large uploads wait for the blit, so that queued ones don't keep copies alive. with
+    # nothing queued, waiting only costs the blit, which is cheaper than copying all but
+    # small sources.
+    bq = batched_queue(queue)
+    wait_for_blit = !async && (large || (can_wrap && nbytes >= 2^20 &&
+                                         !Base.@lock(submission_lock, has_queued_work(bq))))
+
+    nocopy = (async || wait_for_blit) && can_wrap
+    tmp_buf = alloc(dev, nbytes, src; storage=SharedStorage, nocopy)
+    blit_copy!(bq, dst, MtlPtr{T}(tmp_buf, 0), nbytes; async=!wait_for_blit)
+    free(tmp_buf)    # the batch keeps it alive until the blit has completed
     return dst
+end
+
+# whether writing to `ptr` from the CPU may have to wait for queued work. this only picks
+# between a memcpy and a blit, as converting to a `Ptr` waits when needed. the buffer stays
+# dirty after that work has completed, until something waits for it, so check its queue.
+function cpu_write_may_wait(ptr::MtlPtr)
+    managed = ptr.managed
+    managed === nothing && return false
+    (Base.@atomic :acquire managed.dirty) || return false
+    Base.@lock submission_lock begin
+        queue = managed.queue
+        queue !== nothing && has_queued_work(queue)
+    end
+end
+
+# call with `submission_lock` held. command buffers submitted outside of the batch (e.g.,
+# by MPS) only show up as the queue's last committed one.
+function has_queued_work(bq::BatchedCommandQueue)
+    (has_open_batch(bq) || !isempty(pending_commands(bq))) && return true
+    last = MTL.last_committed(bq.queue)
+    return last !== nothing && !MTL.is_completed(last)
 end
 
 # GPU -> CPU
@@ -197,14 +235,19 @@ function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T}, src::MtlPtr{T}, N::
         return dst
     end
 
-    bq = batched_queue(queue)
+    blit_copy!(batched_queue(queue), dst, src, nbytes; async)
+    return dst
+end
+
+function blit_copy!(bq::BatchedCommandQueue, dst::MtlPtr, src::MtlPtr, nbytes::Integer;
+                    async::Bool)
     while true
         conflict = encode_copy!(bq, dst, src, nbytes)
         conflict === nothing && break
         synchronize(conflict)
     end
     async ? maybe_autoflush!(bq) : synchronize(bq)
-    return dst
+    return
 end
 
 function encode_copy!(bq::BatchedCommandQueue, dst::MtlPtr, src::MtlPtr,

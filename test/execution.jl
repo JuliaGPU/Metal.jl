@@ -528,6 +528,7 @@ end
     @test Array(C) == fill(UInt8(3), 4)
 
     D = MtlArray(UInt8[0])
+    synchronize(queue)
     @metal threads=1 queue=queue write_kernel(D, UInt8(1))
     cmdbuf = MTL.MTLCommandBuffer(queue)
     if !Metal.command_batching() || Metal.profiling_command_buffers()
@@ -680,6 +681,7 @@ end
     @test queue.nops == 0
 
     A = MtlArray(Int32[0])
+    synchronize(queue)
     @metal threads=1 queue=queue failed_batch_increment_kernel(A)
     @test_throws ErrorException @metal threads=1 queue=queue failed_encode_kernel(EncodeFailure(2))
 

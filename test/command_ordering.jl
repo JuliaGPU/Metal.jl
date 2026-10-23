@@ -130,6 +130,22 @@ end
     @test all(==(5), Array(A))
 end
 
+@testset "uploads to memory in use" begin
+    # uploads don't wait for the queued work that uses their destination, so they must be
+    # ordered after it, and must not read the host memory after returning
+    for S in (Metal.PrivateStorage, Metal.SharedStorage), n in (ordering_n, 3)
+        A = MtlArray{Int32,1,S}(undef, n)
+        B = MtlArray{Int32,1,Metal.PrivateStorage}(undef, n)
+        h = fill(Int32(7), n)
+        @metal threads=256 groups=cld(n, 256) ordering_write_kernel(A, Int32(3), ordering_scratch, ordering_iterations)
+        copyto!(A, h)
+        h .= 0
+        @metal threads=256 groups=cld(n, 256) ordering_copy_kernel(B, A)
+        @test all(==(8), Array(B))
+        @test all(==(7), Array(A))
+    end
+end
+
 @testset "freeing memory in use" begin
     # buffers freed while the GPU uses them stay alive until it's done
     queue = global_queue(device())
