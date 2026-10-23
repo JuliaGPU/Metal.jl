@@ -3,6 +3,22 @@
 export MtlDeviceArray, MtlDeviceVector, MtlDeviceMatrix
 
 
+## element layout
+
+# the size of an array element, including padding. for isbits unions, this can be larger
+# than `sizeof`. generated on Julia 1.10, so that it folds to a constant in device code.
+@static if VERSION < v"1.11"
+    @generated aligned_sizeof(::Type{T}) where {T} = :($(Base.aligned_sizeof(T)))
+else
+    import Base: aligned_sizeof
+end
+
+# the alignment of an array element, which `Base.datatype_alignment` doesn't know for unions
+@generated function element_alignment(::Type{T}) where {T}
+    Base.isbitsunion(T) ? Base.uniontype_layout(T)[3] : Base.datatype_alignment(T)
+end
+
+
 ## construction
 
 """
@@ -17,11 +33,15 @@ kernel.
     MtlDeviceArray(dims, ptr)
     MtlDeviceArray{T}(dims, ptr)
     MtlDeviceArray{T,N}(dims, ptr)
-    MtlDeviceArray{T,N,A}(dims, ptr)
+    MtlDeviceArray{T,N,A}(dims, ptr, [maxsize])
 
 Wrap the device pointer `ptr::Core.LLVMPtr{T,A}` in an array of size `dims`, an integer or
 a tuple. `T` and `A` follow from the type of `ptr`, and `N` from the length of `dims`; when
 given, they have to match.
+
+Arrays of isbits unions (e.g. `Union{Int32,Nothing}`) keep one selector byte per element
+past their data, like `Array`: `maxsize` is the distance in bytes from `ptr` to those bytes,
+which defaults to the size of the data.
 """
 MtlDeviceArray
 
@@ -31,8 +51,12 @@ MtlDeviceArray
 struct MtlDeviceArray{T,N,A} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
     shape::Dims{N}
+    # distance from `ptr` to the selector bytes of an array of isbits unions
+    maxsize::Int
     # inner constructors, fully parameterized, exact types (ie. Int not <:Integer)
-    MtlDeviceArray{T,N,A}(shape::Dims{N}, ptr::Core.LLVMPtr{T,A}) where {T,A,N} = new(ptr,shape)
+    MtlDeviceArray{T,N,A}(shape::Dims{N}, ptr::Core.LLVMPtr{T,A},
+                          maxsize::Int=prod(shape) * aligned_sizeof(T)) where {T,A,N} =
+        new(ptr, shape, maxsize)
 end
 
 """
@@ -67,7 +91,7 @@ MtlDeviceVector{T,A}(len::Integer,               p::Core.LLVMPtr{T,A}) where {T,
 
 ## array interface
 
-Base.elsize(::Type{<:MtlDeviceArray{T}}) where {T} = sizeof(T)
+Base.elsize(::Type{<:MtlDeviceArray{T}}) where {T} = aligned_sizeof(T)
 
 Base.size(g::MtlDeviceArray) = g.shape
 Base.sizeof(x::MtlDeviceArray) = Base.elsize(x) * length(x)
@@ -84,23 +108,64 @@ end
 Base.unsafe_convert(::Type{Core.LLVMPtr{T,A}}, x::MtlDeviceArray{T,<:Any,A}) where {T,A} =
     x.ptr
 
+# the selector byte of element `i` of an array of isbits unions
+@inline typetagdata(x::MtlDeviceArray{<:Any,<:Any,A}, i::Integer) where {A} =
+    reinterpret(Core.LLVMPtr{UInt8,A}, x.ptr) + x.maxsize + (i - one(i))
+
 
 ## indexing intrinsics
 
-# NOTE: these intrinsics are now implemented using plain and simple pointer operations;
-#       when adding support for isbits union arrays we will need to implement that here.
-
 @inline function arrayref(A::MtlDeviceArray{T}, index::Integer) where {T}
     @boundscheck checkbounds(A, index)
-    align = Base.datatype_alignment(T)
-    unsafe_load(pointer(A), index, Val(align))
+    if Base.isbitsunion(T)
+        arrayref_union(A, index)
+    else
+        unsafe_load(pointer(A), index, Val(element_alignment(T)))
+    end
+end
+
+# load the element as the member of the union that its selector byte names
+@inline @generated function arrayref_union(A::MtlDeviceArray{T,<:Any,AS}, index::Integer) where {T,AS}
+    # lacking noreturn, the fallback returns T so that inference doesn't widen the result
+    ex = :(Base.llvmcall("unreachable", $T, Tuple{}))
+    for (sel, typ) in Iterators.reverse(enumerate(Base.uniontypes(T)))
+        ex = quote
+            if selector == $(UInt8(sel - 1))
+                unsafe_load(reinterpret(Core.LLVMPtr{$typ,AS}, ptr), 1, Val(align))
+            else
+                $ex
+            end
+        end
+    end
+
+    quote
+        selector = unsafe_load(typetagdata(A, index))
+        ptr = pointer(A, index)
+        align = element_alignment(T)
+        $ex
+    end
 end
 
 @inline function arrayset(A::MtlDeviceArray{T}, x::T, index::Integer) where {T}
     @boundscheck checkbounds(A, index)
-    align = Base.datatype_alignment(T)
-    unsafe_store!(pointer(A), x, index, Val(align))
+    if Base.isbitsunion(T)
+        arrayset_union(A, x, index)
+    else
+        unsafe_store!(pointer(A), x, index, Val(element_alignment(T)))
+    end
     return A
+end
+
+# store the element as its own type, and record that type in its selector byte
+@inline @generated function arrayset_union(A::MtlDeviceArray{T,<:Any,AS}, x::T, index::Integer) where {T,AS}
+    sel = findfirst(isequal(x), Base.uniontypes(T))
+
+    quote
+        unsafe_store!(typetagdata(A, index), $(UInt8(sel - 1)))
+        ptr = reinterpret(Core.LLVMPtr{$x,AS}, pointer(A, index))
+        unsafe_store!(ptr, x, 1, Val(element_alignment(T)))
+        return
+    end
 end
 
 # a load from memory that is not written for the duration of the kernel. Metal has no
@@ -128,8 +193,9 @@ end
 
 @inline function const_arrayref(A::MtlDeviceArray{T}, index::Integer) where {T}
     @boundscheck checkbounds(A, index)
-    align = Base.datatype_alignment(T)
-    unsafe_invariant_load(pointer(A), index, Val(align))
+    # loads of isbits unions are not marked invariant, for simplicity
+    Base.isbitsunion(T) && return arrayref_union(A, index)
+    unsafe_invariant_load(pointer(A), index, Val(element_alignment(T)))
 end
 
 
@@ -210,7 +276,7 @@ end
 # create a derived device array (reinterpreted or reshaped) that's still a MtlDeviceArray
 @inline function _derived_array(::Type{T}, N::Int, a::MtlDeviceArray{T,M,A},
                                 osize::Dims) where {T, M, A}
-    return MtlDeviceArray{T,N,A}(osize, a.ptr)
+    return MtlDeviceArray{T,N,A}(osize, a.ptr, a.maxsize)
 end
 
 function Base.reinterpret(::Type{T}, a::MtlDeviceArray{S,N,A}) where {T,S,N,A}
