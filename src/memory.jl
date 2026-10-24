@@ -140,8 +140,8 @@ Base.Int(ptr::MtlPtr) = Int(UInt(ptr))
 # has to read from a copy of it, or finish before returning.
 function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T}, src::Ptr{T}, N::Integer;
                              queue=global_queue(dev), async::Bool=false) where T
-    iszero(N) && return dst
-    nbytes = N*sizeof(T)
+    nbytes = N * aligned_sizeof(T)
+    iszero(nbytes) && return dst
     large = nbytes >= 2^25
 
     if dst.buffer.storageMode == MTL.MTLStorageModeShared
@@ -195,15 +195,16 @@ end
 # GPU -> CPU
 function Base.unsafe_copyto!(dev::MTLDevice, dst::Ptr{T}, src::MtlPtr{T}, N::Integer;
                              queue=global_queue(dev), async::Bool=false) where T
-    iszero(N) && return dst
+    nbytes = N * aligned_sizeof(T)
+    iszero(nbytes) && return dst
     storage_type = src.buffer.storageMode
     if storage_type == MTL.MTLStorageModePrivate
         # stage through a shared buffer
-        nocopy = MTL.can_alloc_nocopy(dst, N*sizeof(T))
+        nocopy = MTL.can_alloc_nocopy(dst, nbytes)
         tmp_buf = if nocopy
-            alloc(dev, N*sizeof(T), dst; storage=SharedStorage, nocopy)
+            alloc(dev, nbytes, dst; storage=SharedStorage, nocopy)
         else
-            alloc(dev, N*sizeof(T); storage=SharedStorage)
+            alloc(dev, nbytes; storage=SharedStorage)
         end
         unsafe_copyto!(dev, MtlPtr{T}(tmp_buf, 0), src, N;
                        queue, async=(nocopy && async))
@@ -225,8 +226,8 @@ end
 # https://github.com/pytorch/pytorch/pull/126104
 function Base.unsafe_copyto!(dev::MTLDevice, dst::MtlPtr{T}, src::MtlPtr{T}, N::Integer;
                              queue=global_queue(dev), async::Bool=false) where T
-    N > 0 || return dst
-    nbytes = N * sizeof(T)
+    nbytes = N * aligned_sizeof(T)
+    nbytes > 0 || return dst
 
     # For small copies of Shared memory arrays, CPU memcpy avoids GPU command buffer overhead.
     # Otherwise, use GPU blit for large copies (>32MiB) where it's faster than CPU memcpy.

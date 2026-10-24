@@ -28,7 +28,6 @@ end
 
 function check_eltype(T)
     Base.allocatedinline(T) || error("MtlArray only supports element types that are stored inline")
-    Base.isbitsunion(T) && error("MtlArray does not yet support isbits-union arrays")
     contains_eltype(T, Float64) && error("Metal does not support Float64 values, try using Float32 instead")
     contains_eltype(T, Int128) && error("Metal does not support Int128 values, try using Int64 instead")
     contains_eltype(T, UInt128) && error("Metal does not support UInt128 values, try using UInt64 instead")
@@ -68,14 +67,17 @@ julia> Array(a .* 2)
 mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
     data::DataRef{Managed}
 
-    maxsize::Int  # maximum data size in bytes; excluding any selector bytes
+    # size of the data in the buffer, in bytes, excluding any selector bytes. for arrays of
+    # isbits unions, this is where the array's selector bytes start (see `typetagdata`)
+    maxsize::Int
     offset::Int   # offset of the data in the buffer, in bytes
     dims::Dims{N}
 
     function MtlArray{T,N,S}(::UndefInitializer, dims::Dims{N}) where {T,N,S}
         check_eltype(T)
-        maxsize::Int = prod(dims) * sizeof(T)
+        maxsize::Int = prod(dims) * aligned_sizeof(T)
 
+        # arrays of isbits unions keep one selector byte per element past the data
         bufsize::Int = Base.isbitsunion(T) ? (maxsize + prod(dims)) : maxsize
 
         dev = device()
@@ -92,7 +94,7 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
     end
 
     function MtlArray{T,N,S}(data::DataRef{Managed}, dims::Dims{N};
-                             maxsize::Int=prod(dims) * sizeof(T), offset::Int=0) where {T,N,S}
+                             maxsize::Int=prod(dims) * aligned_sizeof(T), offset::Int=0) where {T,N,S}
         check_eltype(T)
         storagemode = convert(MTL.MTLStorageMode, S)
         if storagemode != data[].buffer.storageMode
@@ -102,7 +104,7 @@ mutable struct MtlArray{T,N,S} <: AbstractGPUArray{T,N}
         finalizer(unsafe_free!, obj)
     end
     function MtlArray{T,N}(data::DataRef{Managed}, dims::Dims{N};
-                           maxsize::Int=prod(dims) * sizeof(T), offset::Int=0) where {T,N}
+                           maxsize::Int=prod(dims) * aligned_sizeof(T), offset::Int=0) where {T,N}
         check_eltype(T)
         storagemode = data[].buffer.storageMode
         obj = if storagemode == MTL.MTLStorageModeShared
@@ -269,7 +271,7 @@ end
 
 ## array interface
 
-Base.elsize(::Type{<:MtlArray{T}}) where {T} = sizeof(T)
+Base.elsize(::Type{<:MtlArray{T}}) where {T} = aligned_sizeof(T)
 
 Base.size(x::MtlArray) = x.dims
 Base.sizeof(x::MtlArray) = Base.elsize(x) * length(x)
@@ -305,6 +307,25 @@ function Base.unsafe_convert(::Type{Ptr{S}}, x::MtlArray{T}) where {S,T}
 end
 
 
+## type tags of isbits-union arrays
+
+# Arrays of isbits unions (`Union{Int, Nothing}`, ...) store one selector byte per element
+# past the data, `maxsize` bytes into the buffer, like `Array` does. The selector is the
+# zero-based index of the element's type in `Base.uniontypes(T)`.
+
+@static if VERSION >= v"1.11.0-DEV.753"
+function typetagdata(a::Array, i=1)
+    # for memory of isbits unions, the reference holds the offset of the data in elements
+    ptr_or_offset = Int(a.ref.ptr_or_offset)
+    @ccall(jl_genericmemory_typetagdata(a.ref.mem::Any)::Ptr{UInt8}) + ptr_or_offset + i - 1
+end
+else
+typetagdata(a::Array, i=1) = ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), a) + i - 1
+end
+
+typetagdata(a::MtlArray, i=1) = MtlPtr{UInt8}(a.data[], a.maxsize + i - 1)
+
+
 ## indexing
 
 # arrays in shared memory can be accessed directly by the CPU. this is meant to be fast, as
@@ -312,6 +333,8 @@ end
 # only synchronize when the GPU may still be using the array.
 @inline function Base.getindex(x::MtlArray{T,N,SharedStorage}, I::Int) where {T,N}
     @boundscheck checkbounds(x, I)
+    # an isbits union can't be loaded through a pointer, so copy it with its selector byte
+    Base.isbitsunion(T) && return @inbounds copyto!(Vector{T}(undef, 1), 1, x, I, 1)[]
     managed = x.data[]
     maybe_synchronize(managed)
     unsafe_load(convert(Ptr{T}, managed.host_ptr + x.offset), I)
@@ -319,6 +342,10 @@ end
 
 @inline function Base.setindex!(x::MtlArray{T,N,SharedStorage}, v, I::Int) where {T,N}
     @boundscheck checkbounds(x, I)
+    if Base.isbitsunion(T)
+        @inbounds copyto!(x, I, T[v], 1, 1)
+        return x
+    end
     managed = x.data[]
     maybe_synchronize(managed)
     unsafe_store!(convert(Ptr{T}, managed.host_ptr + x.offset), v, I)
@@ -391,7 +418,7 @@ Base.collect(x::MtlArray{T,N}) where {T,N} = copyto!(Array{T,N}(undef, size(x)),
 # CPU -> GPU
 function Base.copyto!(dest::MtlArray{T}, doffs::Integer, src::Array{T}, soffs::Integer,
                       n::Integer) where T
-    (n == 0 || sizeof(T) == 0) && return dest
+    n == 0 && return dest
     @boundscheck checkbounds(dest, doffs)
     @boundscheck checkbounds(dest, doffs + n - 1)
     @boundscheck checkbounds(src, soffs)
@@ -406,7 +433,7 @@ Base.copyto!(dest::MtlArray{T}, src::Array{T}) where {T} =
 # GPU -> CPU
 function Base.copyto!(dest::Array{T}, doffs::Integer, src::MtlArray{T}, soffs::Integer,
                       n::Integer) where T
-    (n == 0 || sizeof(T) == 0) && return dest
+    n == 0 && return dest
     @boundscheck checkbounds(dest, doffs)
     @boundscheck checkbounds(dest, doffs + n - 1)
     @boundscheck checkbounds(src, soffs)
@@ -421,7 +448,7 @@ Base.copyto!(dest::Array{T}, src::MtlArray{T}) where {T} =
 # GPU -> GPU
 function Base.copyto!(dest::MtlArray{T}, doffs::Integer, src::MtlArray{T}, soffs::Integer,
                       n::Integer) where T
-    (n == 0 || sizeof(T) == 0) && return dest
+    n == 0 && return dest
     @boundscheck checkbounds(dest, doffs)
     @boundscheck checkbounds(dest, doffs + n - 1)
     @boundscheck checkbounds(src, soffs)
@@ -440,30 +467,33 @@ Base.copyto!(dest::MtlArray{T}, src::MtlArray{T}) where {T} =
 
 # CPU -> GPU
 function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::Array{T}, soffs, n) where T
-    GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
-    if Base.isbitsunion(T)
-        # copy selector bytes
-        error("Not implemented")
+    GC.@preserve src dest begin
+        unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
+        if Base.isbitsunion(T)
+            unsafe_copyto!(dev, typetagdata(dest, doffs), typetagdata(src, soffs), n)
+        end
     end
     return dest
 end
 
 # GPU -> CPU
 function Base.unsafe_copyto!(dev::MTLDevice, dest::Array{T}, doffs, src::MtlArray{T}, soffs, n) where T
-    GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
-    if Base.isbitsunion(T)
-        # copy selector bytes
-        error("Not implemented")
+    GC.@preserve src dest begin
+        unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
+        if Base.isbitsunion(T)
+            unsafe_copyto!(dev, typetagdata(dest, doffs), typetagdata(src, soffs), n)
+        end
     end
     return dest
 end
 
 # GPU -> GPU
 function Base.unsafe_copyto!(dev::MTLDevice, dest::MtlArray{T}, doffs, src::MtlArray{T}, soffs, n) where T
-    GC.@preserve src dest unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
-    if Base.isbitsunion(T)
-        # copy selector bytes
-        error("Not implemented")
+    GC.@preserve src dest begin
+        unsafe_copyto!(dev, pointer(dest, doffs), pointer(src, soffs), n)
+        if Base.isbitsunion(T)
+            unsafe_copyto!(dev, typetagdata(dest, doffs), typetagdata(src, soffs), n)
+        end
     end
     return dest
 end
@@ -605,8 +635,9 @@ fill(v::T, dims::Base.Dims{N}; storage=DefaultStorageMode) where {T,N} = fill!(M
 fill(v::T, dims...; storage=DefaultStorageMode) where T = fill!(MtlArray{T,length(dims),storage}(undef, dims), v)
 
 # optimized implementation of `fill!` for types that are directly supported by fillbuffer
-function Base.fill!(A::MtlArray{T}, val) where T <: Union{UInt8,Int8}
-    B = convert(T, val)
+# (but not their union, whose selector bytes need to be filled too)
+function Base.fill!(A::Union{MtlArray{UInt8},MtlArray{Int8}}, val)
+    B = convert(eltype(A), val)
     unsafe_fill!(device(A), pointer(A), B, length(A))
     A
 end
@@ -615,8 +646,12 @@ end
 ## derived arrays
 
 function GPUArrays.derive(::Type{T}, a::MtlArray{<:Any,<:Any,S}, dims::Dims{N}, offset::Int) where {T,N,S}
-    offset = a.offset + offset * sizeof(T)
-    MtlArray{T,N,S}(a.data, dims; a.maxsize, offset)
+    # the selector bytes are indexed by element, so advance them here: the byte offset
+    # can't tell how many elements of zero size (like unions of singletons) were skipped.
+    # union arrays only derive arrays of the same element type, as `reinterpret` rejects them
+    maxsize = Base.isbitsunion(T) ? a.maxsize + offset : a.maxsize
+    offset = a.offset + offset * aligned_sizeof(T)
+    MtlArray{T,N,S}(a.data, dims; maxsize, offset)
 end
 
 
@@ -685,6 +720,9 @@ end
 # buffer, so the original allocation must be kept alive for as long as it is used.
 function Base.unsafe_wrap(::Type{<:MtlArray}, ptr::MtlPtr{T},
                           dims::NTuple{N,<:Integer}) where {T,N}
+    # the selector bytes of such arrays aren't where the wrapped array would expect them
+    Base.isbitsunion(T) && throw(ArgumentError(
+        "unsafe_wrap(MtlArray, ...) does not support isbits-union element types like $T"))
     # use a non-owning `DataRef` (no finalizer) so we never free a buffer we
     # don't own; the original array remains responsible for the allocation.
     # share the original's managed state so that both are synchronized alike.
@@ -840,13 +878,9 @@ guaranteed to be initialized.
 """
 function Base.resize!(A::MtlVector{T}, n::Integer) where T
     # TODO: add additional space to allow for quicker resizing
-    maxsize = n * sizeof(T)
-    bufsize = if isbitstype(T)
-        maxsize
-    else
-        # type tag array past the data
-        maxsize + n
-    end
+    maxsize = n * aligned_sizeof(T)
+    # arrays of isbits unions keep one selector byte per element past the data
+    bufsize = Base.isbitsunion(T) ? maxsize + n : maxsize
 
     # replace the data with a new one. this 'unshares' the array.
     # as a result, we can safely support resizing unowned buffers.
@@ -855,6 +889,9 @@ function Base.resize!(A::MtlVector{T}, n::Integer) where T
     m = min(length(A), n)
     if m > 0
         unsafe_copyto!(device(A), MtlPtr{T}(managed), pointer(A), m)
+        if Base.isbitsunion(T)
+            unsafe_copyto!(device(A), MtlPtr{UInt8}(managed, maxsize), typetagdata(A), m)
+        end
     end
     new_data = DataRef(managed) do managed
         free(managed.buffer)

@@ -190,14 +190,15 @@ function Adapt.adapt_storage(to::Adaptor, xs::MtlArray{T,N}) where {T,N}
     buf = pointer(xs)
     ptr = adapt(to, buf)
     check_alignment(xs, ptr)
-    MtlDeviceArray{T,N,AS.Device}(xs.dims, ptr)
+    # the device array addresses its selector bytes relative to its first element
+    MtlDeviceArray{T,N,AS.Device}(xs.dims, ptr, xs.maxsize - xs.offset)
 end
 
 # an `MtlArray` can point at memory that is not aligned for its element type, e.g., after
 # `reinterpret` of a view. that is fine for copies, but element accesses in kernels assume
 # the alignment of the element type.
 function check_alignment(a::MtlArray{T}, ptr) where {T}
-    align = Base.datatype_alignment(T)
+    align = element_alignment(T)
     if UInt(ptr) % align != 0 && !isempty(a)
         alignment_error(T, ptr, align)
     end

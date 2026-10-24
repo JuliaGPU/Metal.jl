@@ -61,11 +61,11 @@ Adapt.adapt_storage(::MetalBackend, a::MtlArray) = a
 const ContiguousArray{T} =
     Union{Array{T}, MtlArray{T}, Base.FastContiguousSubArray{T, <:Any, <:Array}}
 
-# Metal's copies are ordered with respect to the other work on the task's queue, and copies
-# between host and device memory complete before returning, so a host view can be wrapped
-# in an `Array` for the duration of the copy
-dense(A::Union{Array, MtlArray}) = A
-dense(A::SubArray) = unsafe_wrap(Array, pointer(A), size(A))
+# the dense array that holds the elements of `A`, and the index of the first one. copying
+# from the parent of a view, rather than wrapping its memory in an `Array`, also copies the
+# selector bytes of isbits-union elements, which live elsewhere in the parent.
+dense(A::Union{Array, MtlArray}) = (A, 1)
+dense(A::SubArray) = (parent(A), Base.first_index(A))
 
 function KI.copyto!(::MetalBackend, dest::ContiguousArray{T}, src::ContiguousArray{T}) where T
     length(dest) == length(src) ||
@@ -74,7 +74,8 @@ function KI.copyto!(::MetalBackend, dest::ContiguousArray{T}, src::ContiguousArr
         error("Copy between different devices not implemented")
     end
     if dest isa MtlArray || src isa MtlArray
-        GC.@preserve dest src copyto!(dense(dest), dense(src))
+        (d, doffs), (s, soffs) = dense(dest), dense(src)
+        copyto!(d, doffs, s, soffs, length(src))
     else
         # host-to-host copies, including of element types a wrapped `Array` can't hold
         copyto!(dest, src)
