@@ -1,4 +1,5 @@
 using Documenter, Literate
+using DocumenterCodeBlocks: CodeBlocks
 using Metal
 using Metal: MPS, MPSGraphs, MTL
 
@@ -73,6 +74,9 @@ function main()
         sitename = "Metal.jl",
         authors = "Tim Besard and contributors",
         repo = Remotes.GitHub("JuliaGPU", "Metal.jl"),
+        plugins = [
+            CodeBlocks(; line_counter = :named),
+        ],
         format = Documenter.HTML(
             # Use clean URLs on CI
             prettyurls = ci,
