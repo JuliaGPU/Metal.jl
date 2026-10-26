@@ -1,0 +1,54 @@
+{
+  "dashboard": "https://juliagpu.org/perf/?pkg=metal",
+  "stat": "min",
+  "categories": [
+    {
+      "id": "performance",
+      "label": "Performance",
+      "description": "Array operations, kernels, launches and synchronization, with everything compiled.",
+      "floor": 0.03
+    },
+    {
+      "id": "latency",
+      "label": "Latency",
+      "description": "Time to precompile and import the package, and to compile a first kernel, each in a fresh Julia process.",
+      "floor": 0.05
+    },
+    {
+      "id": "applications",
+      "label": "Applications",
+      "description": "Larger applications and integration tests.",
+      "floor": 0.03
+    }
+  ],
+  "legacy": [
+    {
+      "stat": "median",
+      "until": "2026-07-17T07:53:31+02:00"
+    },
+    {
+      "stat": "min"
+    }
+  ],
+  "notes": [
+    {
+      "commit": "820038196",
+      "date": "2026-07-17T07:53:31+02:00",
+      "kind": "methodology",
+      "label": "Median → minimum",
+      "description": "The benchmarks report the minimum over their samples instead of the median, which is less sensitive to scheduler jitter. Earlier runs only recorded the median, these only the minimum; the dashboard shows them as separate metrics."
+    },
+    {
+      "commit": "e326d560a",
+      "date": "2026-10-26T14:21:33+01:00",
+      "kind": "methodology",
+      "label": "Launch evals pinned",
+      "description": "The launch benchmarks use a fixed number of evaluations per sample. With more than the 64 command buffers the queue keeps in flight, they had been measuring waits on the GPU.",
+      "benchmarks": [
+        "performance/kernel/launch",
+        "performance/kernel/metalcall"
+      ],
+      "rebase": true
+    }
+  ]
+}

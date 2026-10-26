@@ -37,9 +37,6 @@ GC.gc(true)
 GC.gc(true)
 GC.gc(true)
 
-# benchmark groups that aren't part of the suite
-addgroup!(SUITE, "integration")
-
 @info "Running main benchmarks"
 results = run(SUITE, verbose=true)
 
@@ -50,8 +47,11 @@ integration_results = BenchmarkGroup()
 integration_results["byval"] = include("byval.jl")
 integration_results["metaldevrt"] = include("metaldevrt.jl")
 
-results["latency"] = latency_results
-results["integration"] = integration_results
+# the first part of every name is its category in the benchmark history: everything
+# compiled (performance), fresh processes (latency), or larger codes (applications).
+# see perf/benchmark-config.json
+results = BenchmarkGroup("performance" => results, "latency" => latency_results,
+                         "applications" => integration_results)
 
 # write out the results
 # We report the minimum rather than the median: at the sub-microsecond scale of many
