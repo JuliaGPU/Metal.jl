@@ -578,7 +578,32 @@ The result is cached, so calling `mtlfunction` in a hot path is cheap. Code is r
 when `f` is redefined, or for different types or keyword arguments.
 """
 function mtlfunction(f::F, tt::TT=Tuple{}; source::S=f, kwargs...) where {F,TT,S}
-    HostKernel{F,S,tt}(f, source, link_kernel(methodinstance(F, tt); kwargs...)...)
+    # `MTLDevice` compares with `isEqual:`, so key on its (process-lifetime) handle instead.
+    # the key holds copies of arrays, like a vector `minthreads`, which the caller may mutate.
+    dev = pointer(device())
+    kw = values(kwargs)
+    options = map(v -> v isa AbstractArray ? copy(v) : v, kw)
+    l = GPUCompiler.cached_lookup(LinkedKernel, F, tt, (dev, options)) do
+        link_kernel(methodinstance(F, tt); kw...)
+    end
+    HostKernel{F,S,tt}(f, source, l.pipeline, l.loggingEnabled, l.device_rng, l.device,
+                       l.maxthreads, l.reqthreads, l.tgmem, l.exec_width,
+                       l.use_residency_sets, l.reloc_table)
+end
+
+# The fields of `HostKernel` following `f` and `source`, which only depend on the kernel's
+# type, the device and the compiler keywords, which is what `mtlfunction` caches.
+struct LinkedKernel
+    pipeline::MTLComputePipelineState
+    loggingEnabled::Bool
+    device_rng::Bool
+    device::MTLDevice
+    maxthreads::Int
+    reqthreads::MTLSize
+    tgmem::Int
+    exec_width::Int
+    use_residency_sets::Bool
+    reloc_table::Union{Nothing,MTLBuffer}
 end
 
 # Everything about creating a kernel object that doesn't depend on the kernel's type, kept
@@ -636,8 +661,7 @@ end
         minthreads = job.config.target.minthreads::Union{Nothing,NTuple{3,Int}}
         reqthreads = minthreads === nothing ? MTLSize(0, 0, 0) : MTLSize(minthreads)
 
-        # the fields of `HostKernel` following `f` and `source`
-        (pipeline[], res.loggingEnabled::Bool, res.device_rng::Bool, dev,
+        LinkedKernel(pipeline[], res.loggingEnabled::Bool, res.device_rng::Bool, dev,
          Int(pipeline[].maxTotalThreadsPerThreadgroup),
          reqthreads,
          Int(pipeline[].staticThreadgroupMemoryLength),
