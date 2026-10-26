@@ -2,11 +2,15 @@
 
 group = addgroup!(SUITE, "kernel")
 
-group["launch"] = @benchmarkable @metal identity(nothing)
+# These launches aren't synchronized, so with too many evaluations per sample the queue's
+# in-flight command buffer limit (64 by default) makes them wait on the GPU, and the result
+# depends on the number of evaluations `tune!` picks. Synchronizing in `setup` doesn't help:
+# launching onto an idle queue is slower, so that would measure something else.
+group["launch"] = @benchmarkable @metal(identity(nothing)) evals=10
 
 let lib = MTL.MTLLibrary(device(), "kernel void noop() {}")
     pipeline = MTL.MTLComputePipelineState(device(), MTL.MTLFunction(lib, "noop"))
-    group["metalcall"] = @benchmarkable metalcall($pipeline, Tuple{})
+    group["metalcall"] = @benchmarkable metalcall($pipeline, Tuple{}) evals=10
 end
 
 # group["occupancy"] = @benchmarkable begin
