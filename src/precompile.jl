@@ -2,7 +2,8 @@ using PrecompileTools: @setup_workload, @compile_workload
 
 function precompile_kernel(a)
     i = thread_position_in_grid().x
-    a[i] += 1f0
+    # Cache host code for compiling `sqrt` domain checks and `exp` via `llvm_math`.
+    a[i] = exp(sqrt(a[i]))
     return
 end
 
