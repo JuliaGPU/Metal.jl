@@ -20,7 +20,7 @@
 [codecov-url]: https://codecov.io/gh/JuliaGPU/Metal.jl
 
 [benchmark-img]: https://img.shields.io/badge/benchmarks-Chart-yellowgreen
-[benchmark-url]: https://metal.juliagpu.org/bench/
+[benchmark-url]: https://juliagpu.org/perf/?pkg=metal
 
 
 ## Requirements
