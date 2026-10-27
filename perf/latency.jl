@@ -25,11 +25,18 @@ function main()
     results["import"] = @benchmark run($import_cmd) evals=1 seconds=30
 
     # time to actually compile a kernel
-    ttfp_cmd =
+    compilation_cmd =
         `$base_cmd -e "using Metal
                        kernel() = return
                        Metal.code_native(devnull, kernel, Tuple{}; kernel=true)"`
-    results["ttfp"] = @benchmark run($ttfp_cmd) evals=1 seconds=60
+    results["compilation"] = @benchmark run($compilation_cmd) evals=1 seconds=60
+
+    # time to launch a first kernel, which the package image should contain compiled
+    launch_cmd =
+        `$base_cmd -e "using Metal
+                       MtlArray([1]) .+ 1
+                       synchronize()"`
+    results["launch"] = @benchmark run($launch_cmd) evals=1 seconds=30
 
     results
 end
