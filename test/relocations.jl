@@ -66,10 +66,10 @@ kernel_relocations(@nospecialize(f), @nospecialize(tt)) =
     @test Metal.mtlfunction(checked!, tt).reloc_table === nothing
 end
 
-# Some kernels DO carry relocations — the same Julia-level sources as on CUDA (type tags,
-# boxed values and constants). Metal has no post-load symbol patching, so GPUCompiler rewrites
-# each record into an indexed load from a table of words the loader hands over as run-time
-# data: a small buffer whose device address rides in the `KernelState`
+# Some kernels DO carry relocations — the same Julia-level sources as on CUDA (libjulia
+# globals, boxed values and constants). Metal has no post-load symbol patching, so
+# GPUCompiler rewrites each record into an indexed load from a table of words the loader
+# hands over as run-time data: a small buffer whose device address rides in the `KernelState`
 # (`Metal.reloc_table_buffer`). These tests cover each expressible source and the GPUCompiler
 # relocation patterns behind them, launched on-device for correctness.
 
@@ -80,8 +80,14 @@ struct RelocRGB
     b::Int32
 end
 
-const _reloc_type_tag = GPUCompiler.Runtime.type_tag
-reloc_typetag_kernel(out) = (@inbounds out[1] = _reloc_type_tag(Val(:float32)); return)
+# a word loaded from a libjulia global, as runtime code does. Julia lowers `cglobal` to a
+# lazily-bound pointer, which Metal can't compile, so declare the global directly.
+LLVM.Interop.@llvmgenerated builder function _reloc_cglobal_word()::UInt
+    T_word = LLVM.IntType(8*sizeof(UInt))
+    gv = LLVM.GlobalVariable(LLVM.Interop.current_module(builder), T_word, "jl_float32_type")
+    LLVM.load!(builder, T_word, gv)
+end
+reloc_cglobal_kernel(out) = (@inbounds out[1] = _reloc_cglobal_word(); return)
 
 @noinline _reloc_produce(cond::Bool, a::Int32) = cond ? RelocRGB(a, a, a) : RelocRGB(11, 22, 33)
 function reloc_isa_kernel(out, cond::Bool, a::Int32)
@@ -106,20 +112,20 @@ function reloc_sym_kernel(out, sym::Symbol)
 end
 
 @testset "relocation-carrying kernels" begin
-    # 1. CGlobalRef: a runtime type tag reads a libjulia global (`jl_float32_type`).
+    # 1. CGlobalRef: a word loaded from a libjulia global (`jl_float32_type`).
     # The cglobal collector only runs for non-`:bake` lowerings at the `:llvm` stage, so
     # under the LLVM < 17 `:bake` fallback these records are not observable here.
     tt = Tuple{MtlDeviceVector{UInt,1}}
     if LLVM.version() >= v"17"
-        tt_relocs = kernel_relocations(reloc_typetag_kernel, tt)
+        tt_relocs = kernel_relocations(reloc_cglobal_kernel, tt)
         @test !isempty(tt_relocs)
         @test any(rec -> rec.target isa GPUCompiler.CGlobalRef, tt_relocs.records)
     end
 
     out = Metal.zeros(UInt, 1)
-    @metal threads=1 reloc_typetag_kernel(out)
+    @metal threads=1 reloc_cglobal_kernel(out)
     synchronize()
-    # the word is resolved in this session, so it matches the host's current type-tag word
+    # the word is resolved in this session, so it matches the host's current word
     @test Array(out)[1] == UInt(unsafe_load(cglobal(:jl_float32_type, Ptr{UInt})))
 
     # This kernel doubles as the canary for a dangling or misindexed table: only the address
@@ -127,9 +133,9 @@ end
     # elsewhere. Here the expected word is known a priori, and the buffer must hold exactly
     # the resolved words in record order.
     if LLVM.version() >= v"17"
-        kernel = Metal.mtlfunction(reloc_typetag_kernel, tt)
+        kernel = Metal.mtlfunction(reloc_cglobal_kernel, tt)
         @test kernel.reloc_table isa MTL.MTLBuffer
-        relocs = Metal.compile_or_lookup(kernel_job(reloc_typetag_kernel, tt)).relocations
+        relocs = Metal.compile_or_lookup(kernel_job(reloc_cglobal_kernel, tt)).relocations
         words = GPUCompiler.resolved_relocation_table(relocs)
         ptr = convert(Ptr{UInt}, MTL.contents(kernel.reloc_table))
         @test [unsafe_load(ptr, i) for i in 1:length(words)] == words
@@ -213,7 +219,7 @@ end
     # byte-stability is a property of the `:table` lowering; on LLVM < 17 Metal bakes
     # session addresses instead, and the DataType-box kernel cannot compile at all
     if LLVM.version() >= v"17"
-        for (f, tt) in ((reloc_typetag_kernel, Tuple{MtlDeviceVector{UInt,1}}),
+        for (f, tt) in ((reloc_cglobal_kernel, Tuple{MtlDeviceVector{UInt,1}}),
                         (reloc_dt_kernel, Tuple{MtlDeviceVector{Int32,1}, Bool, Int32}))
             lib1 = kernel_metallib(f, tt)
             lib2 = kernel_metallib(f, tt)
@@ -227,7 +233,7 @@ end
 
 # `compile_to_metallib` returns the (session-portable) relocation manifest: `nothing` for a
 # relocation-free kernel, a populated `Relocations` for kernels that carry records through to
-# the metallib (type-tag `cglobal`, DataType box).
+# the metallib (`cglobal`, DataType box).
 @testset "relocation manifest" begin
     kernel_manifest(@nospecialize(f), @nospecialize(tt)) =
         Metal.compile_to_metallib(kernel_job(f, tt)).relocations
@@ -236,7 +242,7 @@ end
     # populated manifests are a `:table` property; `:bake` (LLVM < 17) resolves eagerly
     # and stores the relocation-free marker
     if LLVM.version() >= v"17"
-        for (f, tt) in ((reloc_typetag_kernel, Tuple{MtlDeviceVector{UInt,1}}),
+        for (f, tt) in ((reloc_cglobal_kernel, Tuple{MtlDeviceVector{UInt,1}}),
                         (reloc_dt_kernel, Tuple{MtlDeviceVector{Int32,1}, Bool, Int32}))
             relocs = kernel_manifest(f, tt)
             @test relocs isa GPUCompiler.Relocations
