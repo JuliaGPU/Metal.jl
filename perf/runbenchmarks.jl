@@ -53,16 +53,12 @@ integration_results["metaldevrt"] = include("metaldevrt.jl")
 results = BenchmarkGroup("performance" => results, "latency" => latency_results,
                          "applications" => integration_results)
 
-# write out the results
-# We report the minimum rather than the median: at the sub-microsecond scale of many
-# of these benchmarks, OS scheduler jitter dominates the median and produces 5-15%
-# trial-to-trial variance, while the minimum reflects the un-preempted code path
-# and is stable to <1% across trials. Real regressions still show up in the minimum.
-result_file = length(ARGS) >= 1 ? ARGS[1] : "benchmarkresults.json"
-BenchmarkTools.save(result_file, minimum(results))
-
 # every statistic of every benchmark, and the environment they were measured in, for the
 # benchmark history at https://juliagpu.org/perf/. times are in nanoseconds.
+# the history compares the minimum rather than the median (perf/benchmark-config.json): at
+# the sub-microsecond scale of many of these benchmarks, OS scheduler jitter dominates the
+# median and produces 5-15% trial-to-trial variance, while the minimum reflects the
+# un-preempted code path and is stable to <1% across trials.
 function export_results(file, results)
     benchmarks = Dict{String,Any}()
     for (keys, trial) in BenchmarkTools.leaves(results)
@@ -93,7 +89,7 @@ function export_results(file, results)
         JSON.print(io, Dict("version" => 2, "env" => env, "benchmarks" => benchmarks))
     end
 end
-export_results(joinpath(dirname(result_file), "benchmarks.json"), results)
+export_results(length(ARGS) >= 1 ? ARGS[1] : "benchmarks.json", results)
 
 # The suite keeps less than 100 MiB of arrays alive, so device memory that is still in use
 # after collecting garbage was leaked. Leaks put Metal.jl under memory pressure, making
