@@ -80,8 +80,14 @@ struct RelocRGB
     b::Int32
 end
 
-const _reloc_type_tag = GPUCompiler.Runtime.type_tag
-reloc_typetag_kernel(out) = (@inbounds out[1] = _reloc_type_tag(Val(:float32)); return)
+# a load from a libjulia global, which GPUCompiler relocates as a `CGlobalRef`
+reloc_typetag_kernel(out) = (@inbounds out[1] = Base.llvmcall(("""
+    @jl_float32_type = external global i64
+    define i64 @entry() #0 {
+        %tag = load i64, i64* @jl_float32_type
+        ret i64 %tag
+    }
+    attributes #0 = { alwaysinline }""", "entry"), UInt, Tuple{}); return)
 
 @noinline _reloc_produce(cond::Bool, a::Int32) = cond ? RelocRGB(a, a, a) : RelocRGB(11, 22, 33)
 function reloc_isa_kernel(out, cond::Bool, a::Int32)
@@ -106,7 +112,7 @@ function reloc_sym_kernel(out, sym::Symbol)
 end
 
 @testset "relocation-carrying kernels" begin
-    # 1. CGlobalRef: a runtime type tag reads a libjulia global (`jl_float32_type`).
+    # 1. CGlobalRef: a kernel reads a libjulia global (`jl_float32_type`).
     # The cglobal collector only runs for non-`:bake` lowerings at the `:llvm` stage, so
     # under the LLVM < 17 `:bake` fallback these records are not observable here.
     tt = Tuple{MtlDeviceVector{UInt,1}}
