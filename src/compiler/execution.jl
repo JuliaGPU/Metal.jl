@@ -451,23 +451,23 @@ declare_resource!(cce, bq, x) =
 @inline bind_arguments!(cce, bq, ::Type{TT}, ::Nothing, args::Tuple) where {TT} =
     bind_arguments!(cce, bq, TT, (), args)
 
-# Bind the values `head` and `args` (which the user passed, counting from 1 in errors) to
-# the parameters of a kernel with signature `TT`. Pointer-typed parameters are bound as
-# buffers, others are passed by value (see `metalcall`).
-@inline @generated function bind_arguments!(cce, bq, ::Type{TT}, head::Tuple,
-                                            args::Tuple) where {TT}
-    types = TT.parameters
+# Keep the generator body unspecialized and use vectors so it compiles once for all
+# signatures. Define it before the generator so it is visible in the generator's world.
+function bind_arguments_body(@nospecialize(TT), @nospecialize(head), @nospecialize(args))
+    types = collect(Any, TT.parameters)
     nhead = fieldcount(head)
-    if length(types) != nhead + fieldcount(args)
-        msg = "Kernel expects $(length(types) - nhead) arguments, got $(fieldcount(args))"
+    nargs = fieldcount(args)
+    if length(types) != nhead + nargs
+        msg = "Kernel expects $(length(types) - nhead) arguments, got $nargs"
         return :(throw(ArgumentError($msg)))
     end
-    vals = ((:(head[$i]) for i in 1:nhead)..., (:(args[$i]) for i in 1:fieldcount(args))...)
-    typs = (head.parameters..., args.parameters...)
+    vals = Any[Any[:(head[$i]) for i in 1:nhead]; Any[:(args[$i]) for i in 1:nargs]]
+    typs = append!(collect(Any, head.parameters), args.parameters)
 
     ex = quote end
     idx = 1
-    for (i, (dt, val, typ)) in enumerate(zip(types, vals, typs))
+    for i in eachindex(types)
+        dt, val, typ = types[i], vals[i], typs[i]
         (isghosttype(dt) || Core.Compiler.isconstType(dt)) && continue
         if dt <: Union{Ptr,Core.LLVMPtr,MtlPtr}
             # a GPU address can't be bound without the buffer it points into
@@ -484,6 +484,14 @@ declare_resource!(cce, bq, x) =
     push!(ex.args, :(return nothing))
 
     ex
+end
+
+# Bind the values `head` and `args` (which the user passed, counting from 1 in errors) to
+# the parameters of a kernel with signature `TT`. Pointer-typed parameters are bound as
+# buffers, others are passed by value (see `metalcall`).
+@inline @generated function bind_arguments!(cce, bq, ::Type{TT}, head::Tuple,
+                                            args::Tuple) where {TT}
+    bind_arguments_body(TT, head, args)
 end
 
 @inline bind_pointer!(cce, bq, buf::MTLBuffer, idx::Integer) = bind_buffer!(cce, buf, 0, idx)
