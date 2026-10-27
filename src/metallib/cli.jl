@@ -879,8 +879,7 @@ function dump(ctx::Context, args::Arguments)
                        modules = sort!(collect(values(modules)); by = m -> m.offset)))
 
     ext(tag) = Metal.decoded(layout.header_extension, tag)
-    for tag in ("HSRC", "HSRD")
-        section = ext(tag)
+    for section in (ext("HSRC"), ext("HSRD"))
         section === nothing && continue
         push!(sections, (; name = "EMBEDDED_SOURCE", section.offset, section.size,
                            groups = [dump_group(tg, "archive $(i-1)", bytes, raw;
@@ -1041,7 +1040,7 @@ function reflect(ctx::Context, args::Arguments)
     end
 
     if !("--runtime" in args.flags)
-        complete = true
+        complete = Ref(true)
         functions = map(funs) do f
             reflection = try
                 Metal.reflection(f)
@@ -1057,14 +1056,14 @@ function reflect(ctx::Context, args::Arguments)
                 if tags !== nothing && haskey(tags, "RBUZ")
                     diagnose!(ctx, "warning", "the reflection data of $(f.name) is " *
                               "compressed, which is not supported")
-                    complete = false
+                    complete[] = false
                 else
                     diagnose!(ctx, "note", "$(f.name) has no reflection data")
                 end
             end
             (; f.name, f.type, reflection)
         end
-        return complete ? (; file = input, functions) : (:partial, (; file = input, functions))
+        return complete[] ? (; file = input, functions) : (:partial, (; file = input, functions))
     end
 
     dev = Metal.device()

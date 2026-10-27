@@ -339,7 +339,7 @@ function scalar_value(schema::FBSchema, type::FBType, base::FBBaseType, value)
     type.index >= 0 || return convert(T, value)
     enum = schema.enums[type.index+1]
     if value isa Symbol
-        i = findfirst(v -> first(v) == String(value), enum.values)
+        i = findfirst(==(String(value)) ∘ first, enum.values)
         i === nothing && throw(ArgumentError("$(short_name(enum.name)) has no value $value"))
         value = last(enum.values[i])
     elseif value isa ReflectionEnum
@@ -389,14 +389,15 @@ function encode_table!(b::FBBuilder, schema::FBSchema, index, obj::ReflectionObj
         value === nothing && continue
         base = f.type.base
         if haskey(fb_scalar_types, base)
+            scalar = value
             if base in (FB_UTYPE, FB_UTYPE32)
                 # (the type of a union, which must match its value)
                 union = schema_fields[findfirst(g -> g.id == f.id + 1, schema_fields)]
                 member = getproperty(obj, union.name)
-                member isa ReflectionObject && (value = union_tag(schema, union, member))
+                member isa ReflectionObject && (scalar = union_tag(schema, union, member))
             end
             T = fb_scalar_types[base]
-            bytes = encode_scalar(schema, f.type, base, value)
+            bytes = encode_scalar(schema, f.type, base, scalar)
             push!(fields, FBInlineField(f.id, bytes, sizeof(T)))
         elseif base == FB_STRING
             push!(fields, FBOffsetField(f.id, b -> fb_string!(b, value)))

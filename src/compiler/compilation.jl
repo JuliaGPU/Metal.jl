@@ -486,7 +486,7 @@ end
             throw(ArgumentError("minthreads should be an integer or a tuple of up to three integers, got $(minthreads)"))
         end
         # normalize, so that equivalent sizes share a compiled kernel
-        minthreads = ntuple(i -> i <= length(minthreads) ? Int(minthreads[i]) : 1, 3)
+        minthreads = Int.((minthreads..., 1, 1)[1:3])
         if any(<(1), minthreads) || any(minthreads .> (limits.width, limits.height, limits.depth)) ||
            prod(minthreads) > maxtotal
             throw(ArgumentError("minthreads $(minthreads) is not a valid threadgroup size for this device (at most $(Int(limits.width))×$(Int(limits.height))×$(Int(limits.depth)) and $(maxtotal) threads in total)"))
