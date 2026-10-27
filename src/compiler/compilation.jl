@@ -715,7 +715,8 @@ end
 const MAX_KERNEL_LABEL = 256
 const MAX_KERNEL_LABEL_ARG = 96
 function kernel_label(mi::Core.MethodInstance)
-    ft, argtypes... = mi.specTypes.parameters
+    params = (mi.specTypes::DataType).parameters
+    ft = params[1]
     name = if !(ft <: Function)
         "(::$ft)"
     elseif (fn = function_name(ft)) !== nothing
@@ -726,11 +727,14 @@ function kernel_label(mi::Core.MethodInstance)
         meth isa Method ? "anonymous@$(basename(String(meth.file))):$(meth.line)" :
                           "anonymous"
     end
-    args = String["::" * sprint(show, t) for t in argtypes]
+    # `args` has to stay concretely typed (iterating the parameters directly, or rebinding
+    # `args`, makes it abstract): `sum` over an abstract array has edges to GPUArrays'
+    # methods, whose invalidation discards the precompiled compiler
+    args = String["::" * sprint(show, params[i]) for i in 2:length(params)]
     # `type_depth_limit` is internal (it limits the types in stack traces), so don't
     # rely on it being there
     if sum(length, args; init=0) > MAX_KERNEL_LABEL && isdefined(Base, :type_depth_limit)
-        args = map(args) do arg
+        map!(args, args) do arg
             length(arg) > MAX_KERNEL_LABEL_ARG ?
                 Base.type_depth_limit(arg, MAX_KERNEL_LABEL_ARG) : arg
         end

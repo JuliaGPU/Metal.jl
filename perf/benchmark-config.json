@@ -11,7 +11,7 @@
     {
       "id": "latency",
       "label": "Latency",
-      "description": "Time to precompile and import the package, and to compile a first kernel, each in a fresh Julia process.",
+      "description": "Time to precompile and import the package, to compile a first kernel, and to launch a precompiled one, each in a fresh Julia process.",
       "floor": 0.05
     },
     {
