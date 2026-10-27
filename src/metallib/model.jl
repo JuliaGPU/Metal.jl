@@ -913,17 +913,22 @@ function write_metallib(io::IOBuffer, lib::MetalLib)
     ## reflection list
 
     # functions that were read sharing a reflection entry share its tag group; keep sharing
-    # it unless their reflection data changed
-    reflection_entries = Dict{Tuple{UInt,UInt},Any}()
+    # it unless their reflection data changed. the entries are concretely typed: reductions
+    # over an abstract collection of them (`count` below) would have edges to GPUArrays'
+    # methods, whose invalidation discards the precompiled compiler.
+    entries_by_key = Dict{Tuple{UInt,UInt},
+                          @NamedTuple{functions::Vector{Int},
+                                      template::Union{Nothing,TagGroup},
+                                      data::Union{Nothing,Vector{UInt8}}}}()
     for (i, fun) in enumerate(lib.functions)
         template = fun.layout === nothing ? nothing : fun.layout.reflection_tags
         key = (objectid(template), objectid(fun.reflection_data))
-        entry = get!(reflection_entries, key) do
+        entry = get!(entries_by_key, key) do
             (; functions=Int[], template, data=fun.reflection_data)
         end
         push!(entry.functions, i)
     end
-    reflection_entries = sort!(collect(values(reflection_entries)); by=entry->entry.functions)
+    reflection_entries = sort!(collect(values(entries_by_key)); by=entry->entry.functions)
 
     # the padding of reflection buffers depends on where the list ends up in the file
     function build_reflection_list(list_offset)

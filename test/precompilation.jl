@@ -111,3 +111,25 @@ if GPUCompiler.supports_relocatable_ir() && LLVM.version() >= v"17"
         end
     end
 end
+
+# Loading Metal also loads package extensions that add methods (e.g. KernelAbstractions'
+# `MetalExt`). If those invalidate Metal's precompiled compiler, the first kernel launch of a
+# session recompiles it, which takes hundreds of milliseconds instead of a few.
+let
+    jl = Base.julia_cmd()
+    filter!(arg -> !startswith(arg, "--code-coverage"), jl.exec)
+    script = raw"""
+        using Metal
+        a = MtlArray([1])
+        Base.cumulative_compile_timing(true)
+        _, recompile = Base.cumulative_compile_time_ns()
+        a .+ 1
+        Metal.synchronize()
+        println("RECOMPILE=", Base.cumulative_compile_time_ns()[2] - recompile)
+        """
+    env = copy(ENV)
+    env["JULIA_LOAD_PATH"] = join(Base.load_path(), Sys.iswindows() ? ';' : ':')
+    out = read(setenv(`$jl -e $script`, env), String)
+    m = match(r"RECOMPILE=(\d+)", out)
+    @test m !== nothing && parse(Int, m.captures[1]) == 0
+end
