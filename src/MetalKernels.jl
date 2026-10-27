@@ -5,6 +5,7 @@ using ..Metal: @device_override, DefaultStorageMode, SharedStorage, metal_suppor
                mtlfunction, mtlconvert, try_launch, MTL, MTLSize,
                MTLSharedEvent, MTLCommandBuffer, encode_signal!, encode_wait!, commit!
 
+import KernelAbstractions as KA
 import KernelInterface as KI
 
 import Adapt
@@ -142,6 +143,21 @@ KI.sub_group_size(::MetalBackend)::Int = SIMD_WIDTH
 function KI.multiprocessor_count(::MetalBackend)::Int
     Metal.num_gpu_cores()
 end
+
+
+## KernelAbstractions
+
+Adapt.adapt_storage(::KA.CPU, a::MtlArray) = convert(Array, a)
+
+# `@Const` applies `constify` inside the kernel, where arguments have already been
+# converted to device arrays, so the rule has to be registered for `MtlDeviceArray`
+# rather than for `MtlArray`.
+#
+# this is defined here rather than in an extension: the reductions that Metal precompiles
+# launch AcceleratedKernels kernels with `@Const` arguments, so their precompiled
+# `KA.launch_kernel` methods reach this rule, and adding it when loading an extension
+# would invalidate them.
+Adapt.adapt_storage(::KA.ConstAdaptor, a::MtlDeviceArray) = Base.Experimental.Const(a)
 
 
 ## indexing

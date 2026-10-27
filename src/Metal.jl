@@ -19,6 +19,7 @@ using Preferences: @load_preference, load_preference
 using ExprTools: splitdef, combinedef
 using ObjectiveC, .CoreFoundation, .Foundation, .Dispatch, .OS
 import ObjectiveC: is_macos
+import KernelAbstractions
 import KernelInterface
 import UnsafeAtomics
 using BFloat16s: BFloat16
