@@ -454,7 +454,7 @@ declare_resource!(cce, bq, x) =
 # Keep the generator body unspecialized and use vectors so it compiles once for all
 # signatures. Define it before the generator so it is visible in the generator's world.
 function bind_arguments_body(@nospecialize(TT), @nospecialize(head), @nospecialize(args))
-    types = collect(Any, TT.parameters)
+    types = collect(Any, (TT::DataType).parameters)
     nhead = fieldcount(head)
     nargs = fieldcount(args)
     if length(types) != nhead + nargs
@@ -462,7 +462,7 @@ function bind_arguments_body(@nospecialize(TT), @nospecialize(head), @nospeciali
         return :(throw(ArgumentError($msg)))
     end
     vals = Any[Any[:(head[$i]) for i in 1:nhead]; Any[:(args[$i]) for i in 1:nargs]]
-    typs = append!(collect(Any, head.parameters), args.parameters)
+    typs = append!(collect(Any, (head::DataType).parameters), (args::DataType).parameters)
 
     ex = quote end
     idx = 1
