@@ -22,7 +22,7 @@ import ObjectiveC: is_macos
 import KernelAbstractions
 import KernelInterface
 import UnsafeAtomics
-using BFloat16s: BFloat16
+using BFloat16s: BFloat16s, BFloat16
 using ScopedValues
 
 using Reexport: @reexport

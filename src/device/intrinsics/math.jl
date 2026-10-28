@@ -327,6 +327,17 @@ end
     ccall("extern air.nextafter.f16", llvmcall, Float16, (Float16, Float16), x, y)
 end
 
+# Without LLVM `bfloat` arithmetic, BFloat16s converts from `Float32` by rounding the bits as
+# an integer: `isnan(x) ? 0x7fc0 : (bits + bias) >> 16`. Apple's back-end drops the shift of
+# that select when its result is used as 32 bits, e.g. when a shuffle or a `Complex{BFloat16}`
+# widens it, so use the hardware conversion that the `bfloat` path emits.
+if !BFloat16s.llvm_arithmetic
+    @device_override BFloat16(x::Float32) =
+        Base.llvmcall("""%b = fptrunc float %0 to bfloat
+                         %i = bitcast bfloat %b to i16
+                         ret i16 %i""", BFloat16, Tuple{Float32}, x)
+end
+
 @device_override Base.hypot(x::BFloat16, y::BFloat16) = BFloat16(hypot(Float32(x), Float32(y)))
 @device_override Base.hypot(x::Complex{BFloat16}, y::Complex{BFloat16}) = BFloat16(hypot(ComplexF32(x), ComplexF32(y)))
 
