@@ -25,13 +25,11 @@ end
         # relocation tables) is kept out of the image below and by `mtlfunction`.
         mtlfunction(identity, Tuple{Nothing})
 
-        # the rest needs a command queue, which can't be created when the `command_api`
-        # preference selects an API this system doesn't support (`__init__` reports that)
-        command_api_supported =
-            COMMAND_API === :metal3 || metal4_unsupported_reason(device()) === nothing
+        # the rest launches kernels
+        can_launch = can_precompile_launches()
 
         # exercise the integrated profiler
-        command_api_supported && @profile @metal identity(nothing)
+        can_launch && @profile @metal identity(nothing)
 
         # displaying results takes seconds to compile. each table's columns depend on the
         # data (e.g. a distribution column for repeated operations), so cover the variants
@@ -74,7 +72,7 @@ end
         # those shared methods leak into the package image and shadow the host versions,
         # crashing the host with unresolved `julia.air.*` intrinsics when it later
         # compiles the corresponding `Base` method.
-        @static if VERSION >= v"1.11"; if command_api_supported
+        @static if VERSION >= v"1.11"; if can_launch
             let a = MtlArray([1, 2, 3])
                 Array(a .+ 1)
             end
