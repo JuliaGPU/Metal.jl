@@ -470,7 +470,7 @@ function reflection(mod::LLVM.Module, entry::String)
         throw(ArgumentError("module does not contain a function named $entry"))
     fn = mod.functions[entry]
     nodes = Any[]
-    function add_node!(node=nothing)
+    function add_node!(node)
         push!(nodes, node)
         return ReflectionObject(:NodeId; id=length(nodes) - 1)
     end
@@ -481,7 +481,7 @@ function reflection(mod::LLVM.Module, entry::String)
     type = program_type(mod, fn)
     if type == METALLIB_COMPUTE_FUNCTION
         md = function_metadata(mod, "air.kernel", fn)
-        id = add_node!()
+        id = add_node!(nothing)
         fields[:kernel_functions] = [id]
         set_node!(id, kernel_function(mod, fn, md, add_node!, set_node!))
     elseif type == METALLIB_VISIBLE_FUNCTION
@@ -566,7 +566,7 @@ function kernel_function(mod, fn, md, add_node!, set_node!)
         index = md_int(md_operand(ops, 1, "argument", arg), "argument", arg)
         0 <= index < length(params) || malformed("argument", arg)
         kind = md_string(md_operand(ops, 2, "argument", arg), "argument", arg)
-        id = add_node!()
+        id = add_node!(nothing)
         properties = if kind == "air.buffer"
             buffer_properties(arg, struct_types, add_node!, set_node!)
         elseif haskey(builtin_argument_kinds, kind)
@@ -673,7 +673,7 @@ end
 # described once per module like Apple's linker does
 function struct_type_info(md, struct_types, add_node!, set_node!)
     haskey(struct_types, md) && return struct_types[md]
-    id = struct_types[md] = add_node!()
+    id = struct_types[md] = add_node!(nothing)
     ops = LLVM.operands(md)
     value(i) = md_operand(ops, i, "struct type", md)
     fields = ReflectionObject[]

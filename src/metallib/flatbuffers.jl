@@ -287,7 +287,7 @@ function fb_table!(b::FBBuilder, fields::Vector)
 
     vpos = get!(b.vtables, vtable) do
         fb_pad!(b, 2)
-        pos = length(b.buf)
+        local pos = length(b.buf)
         foreach(x -> fb_put!(b, x), vtable)
         pos
     end
