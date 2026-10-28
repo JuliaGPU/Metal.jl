@@ -1,9 +1,11 @@
 using PrecompileTools: @setup_workload, @compile_workload
 
-function precompile_kernel(a)
+function precompile_kernel(a, counter)
     i = thread_position_in_grid().x
-    # Cache host code for compiling `sqrt` domain checks and `exp` via `llvm_math`.
+    # Cache host code for compiling `sqrt` domain checks and `exp` via `llvm_math`,
     a[i] = exp(sqrt(a[i]))
+    # and atomics.
+    Metal.@atomic counter[1] += Int32(1)
     return
 end
 
@@ -12,6 +14,10 @@ end
     MTL.submit_hook[] = submit_command_buffer
 
     metallib_file = joinpath(dirname(@__DIR__), "test", "dummy.metallib")
+
+    # Metal doesn't depend on the REPL, but GPUCompiler does, so it is loaded
+    REPL = get(Base.loaded_modules,
+               Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"), nothing)
 
     @compile_workload begin
         # parsing and writing metal libraries
@@ -57,10 +63,18 @@ end
             end
         end
 
-        # exercise MtlArray creation and host↔device copy paths in both 1D and 2D
+        # exercise MtlArray creation and host↔device copy paths in both 1D and 2D, and
+        # displaying the arrays, which otherwise takes about 100 ms to compile
         for h in (Float32[0], Float32[0;;], [0])
             a = MtlArray(h)
             Array(a)
+            show(IOContext(IOBuffer(), :limit => true), MIME"text/plain"(), a)
+            # (the REPL displays to a terminal, which can't be created here)
+            if REPL !== nothing
+                io = isdefined(REPL, :LimitIO) ? IOContext{REPL.LimitIO{Base.TTY}} :
+                                                 IOContext{Base.TTY}
+                precompile(show, (io, MIME"text/plain", typeof(a)))
+            end
         end
 
         # exercise real computational kernels, not just the empty identity kernel.
@@ -78,13 +92,16 @@ end
             end
             # a kernel with bounds checks, which links the exception runtime
             let a = MtlArray(Float32[1, 2, 3])
-                @metal threads=3 precompile_kernel(a)
+                @metal threads=3 precompile_kernel(a, MtlArray(Int32[0]))
                 synchronize()
             end
             Array(rand(Float32, 3))
             Array(rand(Float32, 2, 2))
+            Metal.zeros(Float32, 3)
+            Metal.fill(1f0, 3)
             let a = MtlArray(Float32[1, 2, 3])
                 a .+ 1f0
+                a .* 2f0
                 sum(a)
                 sum(reshape(a, 3, 1); dims=1)   # a dimensioned reduction kernel
                 synchronize()
