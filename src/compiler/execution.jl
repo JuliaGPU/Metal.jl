@@ -642,12 +642,15 @@ end
                 break
             end
         end
+        # name the pipeline after the kernel's signature only when labelling resources:
+        # computing it compiles a lot of printing code on first use
+        label = label_resources() ? kernel_label(mi) : res.entry::String
         if !isassigned(pipeline)
             check_loadable(config.target)
             pipeline[] = link_pipeline(dev, res.air::Vector{UInt8},
                                      res.metallib::Vector{UInt8},
                                      res.entry::String, job.config.target.minthreads,
-                                     kernel_label(mi))
+                                     label)
             # Don't cache session-local pipeline handles while precompiling: the
             # results struct is serialized into the package image along with its
             # CodeInstance, and ObjectiveC handles would come back dangling.
@@ -667,7 +670,7 @@ end
                 end
             end
             if reloc_table === nothing
-                reloc_table = reloc_table_buffer(dev, relocations, kernel_label(mi))
+                reloc_table = reloc_table_buffer(dev, relocations, label)
                 if ccall(:jl_generating_output, Cint, ()) != 1
                     push!(res.reloc_tables, (dev, reloc_table))
                 end

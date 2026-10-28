@@ -109,8 +109,9 @@ Metal.jl add information to the objects it creates in that session, so that capt
 easier to read:
 
 - **Labels.** Buffers backing an `MtlArray` are labelled with the array's type and size, e.g.,
-  `MtlArray{Float32,1,Metal.SharedStorage}(dims=(4096,))`, and command buffers with where
-  they come from, e.g. `MTLCommandBuffer(batched queue)`.
+  `MtlArray{Float32,1,Metal.SharedStorage}(dims=(4096,))`, command buffers with where
+  they come from, e.g. `MTLCommandBuffer(batched queue)`, and kernels with their Julia
+  signature.
 - **Debug groups.** Every kernel launch is wrapped in a debug group named after the kernel.
   Metal.jl batches many kernel launches into one command buffer and compute encoder; the
   debug groups tell them apart.
@@ -119,15 +120,15 @@ easier to read:
   is first loaded, and makes its library a few tens of kilobytes larger. Kernels are not
   recompiled for it.
 
-Kernels are always labelled with their Julia signature, and Metal.jl's internal buffers
-with their purpose (e.g., `Metal.jl exception info`), with or without capture. The
-generated function itself is named after the Julia function (`gather_sin`), the same for
-every specialization of the kernel, unless `@metal name=...` names it.
+Metal.jl's internal buffers are always labelled with their purpose (e.g., `Metal.jl
+exception info`), with or without capture. The generated function itself is named after the
+Julia function (`gather_sin`), the same for every specialization of the kernel, unless
+`@metal name=...` names it; without capture, kernels are labelled with that name.
 
 Two preferences, set with Preferences.jl or in `LocalPreferences.toml`, override these
-defaults. `label_resources` controls the labels of arrays and command buffers and the debug
-groups; running Julia with `-g2` also enables them. `embed_sources` controls embedding the
-sources. For example, to embed sources even without capture enabled:
+defaults. `label_resources` controls the labels of arrays, command buffers and kernels, and
+the debug groups; running Julia with `-g2` also enables them. `embed_sources` controls
+embedding the sources. For example, to embed sources even without capture enabled:
 
 ```julia
 julia> using Preferences, Metal
@@ -333,7 +334,7 @@ bottom, among others:
     library*; and **Instantiate compute pipeline** when a compiled kernel is loaded onto the
     GPU, also for kernels compiled earlier (e.g., during precompilation).
   - *DynamicTracing*: a **Launch** interval for every kernel launch, with the kernel's
-    signature, `groups` and `threads`. It covers the CPU's work to submit the kernel, not
+    name (its signature when `label_resources` is enabled), `groups` and `threads`. It covers the CPU's work to submit the kernel, not
     the kernel's execution, which shows on the *GPU* track. And **Wait for GPU** when a task waits for the GPU to
     finish (`synchronize`, or copying an array to the CPU), but only if the GPU was not done
     yet.
@@ -345,11 +346,12 @@ bottom, among others:
   GPU code.
 
 Instruments names kernels after their Julia function, e.g., `gather_sin`, the same for
-every specialization of a kernel. Metal.jl's Launch signposts and the pipeline labels give
-the full Julia signature. Instruments records the whole system, so some tracks also show
-the GPU work of other processes. That includes the *Julia Signposts* track: it shows the
-signposts of every Julia process that uses Metal.jl during the recording, without telling
-them apart, so stop other such sessions (e.g., test runs) before recording. In a recording
+every specialization of a kernel. Metal.jl's Compile signposts give the full Julia
+signature, and so do its Launch signposts and the pipeline labels when `label_resources` is
+enabled. Instruments records the whole system, so some tracks also show the GPU work of
+other processes. That includes the *Julia Signposts* track: it shows the signposts of every
+Julia process that uses Metal.jl during the recording, without telling them apart, so stop
+other such sessions (e.g., test runs) before recording. In a recording
 of a script, the script's own intervals come last, after Julia has loaded Metal.jl.
 
 ### Adding your own signposts

@@ -33,7 +33,7 @@ set (except `command_api`).
 | `command_batching_bytes` | `67108864` (64 MiB) | Amount of copied data after which a batch is submitted, which bounds the memory held by queued work. A single copy can be larger. |
 | `command_batching_inflight` | `3` | Maximum number of submitted command buffers the GPU hasn't finished; submitting more waits. |
 | `command_api` | `"auto"` | Metal API to submit work with: `"metal3"`, `"metal4"` (macOS 26 or later, not on virtualized GPUs), or `"auto"`, which selects `"metal3"`. |
-| `label_resources` | see below | Name buffers and command buffers, and mark each kernel launch, for Xcode's frame capture. Defaults to `true` when Julia runs with `-g2` or with `METAL_CAPTURE_ENABLED=1`. See [Xcode and Instruments](xcode.md). |
+| `label_resources` | see below | Name buffers, command buffers and kernels, and mark each kernel launch, for Xcode's frame capture. Defaults to `true` when Julia runs with `-g2` or with `METAL_CAPTURE_ENABLED=1`. See [Xcode and Instruments](xcode.md). |
 | `embed_sources` | see below | Embed kernel sources in the compiled libraries, so that Xcode's frame capture can show them with per-line costs. Defaults to `true` with `METAL_CAPTURE_ENABLED=1`. |
 | `precompile` | `true` | Compile common operations when Metal.jl is precompiled. Disabling it shortens precompilation, e.g. when developing Metal.jl, at the cost of a slower first use. |
 

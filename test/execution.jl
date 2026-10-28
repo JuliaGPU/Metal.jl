@@ -129,33 +129,57 @@ end
         return
     end
     a = MtlArray(zeros(Float32, 1))
-    k = @metal launch=false labelled_kernel(a, 1f0)
-    # the pipeline is named after the Julia signature, not the mangled entry point
-    label = "labelled_kernel(::MtlDeviceVector{Float32, 1}, ::Float32)"
-    @test String(k.pipeline.label) == label
 
-    # (and with resource labelling, names the debug group around each dispatch)
-    k(a, 2f0)
-    @test Array(a) == [2f0]
-
-    # closures are named after the function they were defined as
-    function outer_function(a)
-        inner_kernel(x) = (a[1] = x; return)
-        return inner_kernel
+    # pipelines are only labelled when labelling resources, which this enables rather than
+    # running in a `-g2` process (see "resource labelling")
+    function with_labels(f, enabled)
+        default = Metal.label_resources_default[]
+        Metal.label_resources_default[] = enabled
+        try
+            f()
+        finally
+            Metal.label_resources_default[] = default
+        end
     end
-    k = @metal launch=false outer_function(a)(1f0)
-    @test String(k.pipeline.label) == "inner_kernel(::Float32)"
+    if Metal.LABEL_RESOURCES === nothing
+        with_labels(false) do
+            # (otherwise, after the generated function)
+            k = @metal launch=false labelled_kernel(a, 1)
+            @test String(k.pipeline.label) == "labelled_kernel"
+            k(a, 1)
+            @test Array(a) == [1f0]
+        end
+    end
 
-    # anonymous functions are named after where they were defined
-    k = @metal launch=false (x -> (a[1] = x; return))(1f0)
-    @test occursin(r"^anonymous@execution\.jl:\d+\(::Float32\)$", String(k.pipeline.label))
+    with_labels(true) do
+        k = @metal launch=false labelled_kernel(a, 1f0)
+        # the pipeline is named after the Julia signature, not the mangled entry point
+        label = "labelled_kernel(::MtlDeviceVector{Float32, 1}, ::Float32)"
+        @test String(k.pipeline.label) == label
 
-    # long signatures are abbreviated
-    long_kernel(a, x) = (a[1] = 1; return)
-    k = @metal launch=false long_kernel(a, ntuple(Val, 40))
-    label = String(k.pipeline.label)
-    @test length(label) <= Metal.MAX_KERNEL_LABEL
-    @test startswith(label, "long_kernel(::MtlDeviceVector{Float32, 1}, ::Tuple{")
+        # (and names the debug group around each dispatch)
+        k(a, 2f0)
+        @test Array(a) == [2f0]
+
+        # closures are named after the function they were defined as
+        function outer_function(a)
+            inner_kernel(x) = (a[1] = x; return)
+            return inner_kernel
+        end
+        k = @metal launch=false outer_function(a)(1f0)
+        @test String(k.pipeline.label) == "inner_kernel(::Float32)"
+
+        # anonymous functions are named after where they were defined
+        k = @metal launch=false (x -> (a[1] = x; return))(1f0)
+        @test occursin(r"^anonymous@execution\.jl:\d+\(::Float32\)$", String(k.pipeline.label))
+
+        # long signatures are abbreviated
+        long_kernel(a, x) = (a[1] = 1; return)
+        k = @metal launch=false long_kernel(a, ntuple(Val, 40))
+        label = String(k.pipeline.label)
+        @test length(label) <= Metal.MAX_KERNEL_LABEL
+        @test startswith(label, "long_kernel(::MtlDeviceVector{Float32, 1}, ::Tuple{")
+    end
 
     # the generated function is named after the Julia function, unless named explicitly
     entry(f, tt; kwargs...) = Metal.compile_to_metallib(Metal.GPUCompiler.CompilerJob(
