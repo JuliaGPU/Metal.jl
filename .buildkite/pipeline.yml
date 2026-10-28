@@ -1,9 +1,11 @@
 # Commit message tags select what to run: `[only X]` runs only the listed steps, `[skip X]`
 # skips them, where X is a comma-separated list of: `tests` (everything but benchmarks),
-# `julia` (released Julia versions), `nightly`, `special`, `validation`, `benchmarks`. Draft
-# pull requests only test the newest Julia release and nightly, unless steps are selected
-# explicitly. See also GPUCompiler.jl's CI, which uses the same tags. The documentation is
-# built by .github/workflows/Documentation.yml.
+# `julia` (released Julia versions), `nightly`, `special`, `validation`, `benchmarks`. To limit
+# the load on the Metal runners, pull requests only test the oldest and newest supported Julia
+# release; the other Julia versions (including nightly) are tested on branch builds, or when
+# selected explicitly with `[only X]`. Draft pull requests only test the newest Julia release.
+# See also GPUCompiler.jl's CI, which uses the same tags. The documentation is built by
+# .github/workflows/Documentation.yml.
 steps:
   - group: ":julia: Julia"
     key: "julia"
@@ -32,7 +34,7 @@ steps:
             julia:
               - "1.13"
 
-      # older releases
+      # the oldest release
       - <<: *julia
         if: |
           build.message !~ /\[skip [^\]]*(tests|julia)/ &&
@@ -42,13 +44,25 @@ steps:
           setup:
             julia:
               - "1.10"
+
+      # intermediate releases, not tested on pull requests
+      - <<: *julia
+        if: |
+          build.message !~ /\[skip [^\]]*(tests|julia)/ &&
+          (build.message =~ /\[only [^\]]*(tests|julia)/ ||
+           build.message !~ /\[only / && build.pull_request.id == null)
+        matrix:
+          setup:
+            julia:
               - "1.11"
               - "1.12"
 
+      # not tested on pull requests
       - <<: *julia
         if: |
           build.message !~ /\[skip [^\]]*(tests|nightly)/ &&
-          (build.message =~ /\[only [^\]]*(tests|nightly)/ || build.message !~ /\[only /)
+          (build.message =~ /\[only [^\]]*(tests|nightly)/ ||
+           build.message !~ /\[only / && build.pull_request.id == null)
         soft_fail: true
         matrix:
           setup:
