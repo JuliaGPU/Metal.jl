@@ -42,6 +42,19 @@ end
     # the result stays within the comparison tolerance regardless of order
     @test testf(sum, rand(BFloat16, 8))
     @test testf(prod, rand(BFloat16, 8))
+    @test testf(sum, rand(Complex{BFloat16}, 8))
+end
+
+@testset "conversion from Float32" begin
+    # including NaN, infinities, signed zeros, subnormals and ties to even
+    f = vcat(randn(Float32, 1024), reinterpret.(Float32, rand(UInt32, 1024)),
+             Float32[Inf, -Inf, 0, -0.0, floatmin(Float32), nextfloat(0f0), floatmax(Float32)],
+             reinterpret.(Float32, 0x3f808000 .+ (UInt32(0):UInt32(3)) .<< 16))
+    @test isequal(Array(BFloat16.(MtlArray(f))), BFloat16.(f))
+    @test all(isnan, Array(BFloat16.(MtlArray(Float32[NaN, -NaN]))))
+
+    # the bits of a converted value, used as 32 bits (as by the shuffles of a `BFloat16`)
+    @test testf(a -> map(x -> reinterpret(UInt16, x + x) % UInt32, a), rand(BFloat16, 16))
 end
 
 # only the native path emits `bfloat`; on the i16 fallback there is nothing bfloat-specific to check
