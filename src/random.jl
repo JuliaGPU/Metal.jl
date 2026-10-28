@@ -306,14 +306,16 @@ Like [`Metal.rand`](@ref), but with normally distributed random numbers.
 """
 function randn end
 
-rand(T::Type, dims::Dims; storage=DefaultStorageMode) =
+# (`::Type{T}` rather than `T::Type`, which Julia doesn't specialize on: the abstract
+#  `rand!` call that leaves in the package image is expensive to verify when loading)
+rand(::Type{T}, dims::Dims; storage=DefaultStorageMode) where {T} =
     Random.rand!(default_rng(), MtlArray{T,length(dims),storage}(undef, dims...))
-randn(T::Type, dims::Dims; storage=DefaultStorageMode) =
+randn(::Type{T}, dims::Dims; storage=DefaultStorageMode) where {T} =
     Random.randn!(default_rng(), MtlArray{T,length(dims),storage}(undef, dims...))
 
-rand(T::Type, dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
+rand(::Type{T}, dim1::Integer, dims::Integer...; storage=DefaultStorageMode) where {T} =
     Random.rand!(default_rng(), MtlArray{T,length(dims) + 1,storage}(undef, dim1, dims...))
-randn(T::Type, dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
+randn(::Type{T}, dim1::Integer, dims::Integer...; storage=DefaultStorageMode) where {T} =
     Random.randn!(default_rng(), MtlArray{T,length(dims) + 1,storage}(undef, dim1, dims...))
 
 # untyped out-of-place (defaults to Float32)
@@ -323,8 +325,8 @@ randn(dim1::Integer, dims::Integer...; storage=DefaultStorageMode) =
     Random.randn!(default_rng(), MtlArray{Float32,length(dims) + 1,storage}(undef, dim1, dims...))
 
 # scalars
-rand(T::Type=Float32; storage=SharedStorage) = rand(T, 1; storage)[1]
-randn(T::Type=Float32; storage=SharedStorage) = randn(T, 1; storage)[1]
+rand(::Type{T}=Float32; storage=SharedStorage) where {T} = rand(T, 1; storage)[1]
+randn(::Type{T}=Float32; storage=SharedStorage) where {T} = randn(T, 1; storage)[1]
 
 # seeding
 """
