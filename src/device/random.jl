@@ -41,12 +41,14 @@ end
 end
 
 # initialization function, called automatically at the start of each kernel because
-# there's no reliable way to detect uninitialized shared memory (see JuliaGPU/CUDA.jl#2008)
-function initialize_rng_state()
+# there's no reliable way to detect uninitialized shared memory (see JuliaGPU/CUDA.jl#2008).
+# it must return nothing, as the kernel calls it as a void function.
+@device_function function initialize_rng_state()
     simdgroupId = simdgroup_index_in_threadgroup()
 
     @inbounds global_random_keys()[simdgroupId] = kernel_state().random_seed
     @inbounds global_random_counters()[simdgroupId] = 0
+    return
 end
 
 # generators
