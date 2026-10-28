@@ -29,7 +29,7 @@ const AtomicIntType = Union{Int32,UInt32}
 # call when constructing the `Val`. The default orders are `Val`s, so they don't depend on the
 # functions being inlined. Loads cannot release and stores cannot acquire (LLVM rejects such
 # atomics, MSL doesn't check), so like Clang, they only get the part of an order they can have.
-@inline llvm_order(order::memory_order, kind::Symbol=:rmw) = llvm_order(Val(order), kind)
+@device_function @inline llvm_order(order::memory_order, kind::Symbol=:rmw) = llvm_order(Val(order), kind)
 @inline function llvm_order(::Val{order}, kind::Symbol=:rmw) where {order}
     @static_assert(order isa memory_order, "Invalid atomic memory ordering.")
     order === memory_order_relaxed ? UnsafeAtomics.monotonic :

@@ -215,7 +215,7 @@ end
     return
 end
 
-function signal_exception()
+@device_function function signal_exception()
     info = kernel_state().exception_info
     # raise the host-visible flag so the exception isn't silently swallowed. no claiming
     # here: at debug level >= 1 the reporting calls preceding this one (`report_exception`,
@@ -295,4 +295,4 @@ struct KernelState
     reloc_table::Core.LLVMPtr{UInt64, AS.Device}
 end
 
-@inline @generated kernel_state() = GPUCompiler.kernel_state_value(KernelState)
+@device_function @inline @generated kernel_state() = GPUCompiler.kernel_state_value(KernelState)
