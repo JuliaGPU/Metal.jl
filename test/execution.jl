@@ -207,20 +207,26 @@ end
 end
 
 @testset "launch code is shared between kernels" begin
-    # encoding and submitting a launch doesn't depend on the kernel's signature, so
-    # launching kernels with new signatures should not compile it again
+    # linking, encoding and submitting a launch doesn't depend on the kernel's signature,
+    # so launching kernels with new signatures should not compile it again
     function store_kernel(a, x)
         a[1] = x
         return
     end
+    nspecs(f) = length(collect(Base.specializations(only(methods(f)))))
+    # (linking is specialized on the compiler keywords, so other tests add some)
+    linker = Metal.KernelLinker(typeof(store_kernel), Tuple{}, (;))
+    @metal store_kernel(MtlArray(zeros(Int64, 1)), one(Int64))
+    nlinkers = nspecs(linker)
     for T in (Int32, Float32, Int16)
         @metal store_kernel(MtlArray(zeros(T, 1)), one(T))
     end
     synchronize()
 
-    for f in (Metal.try_launch, Metal.launch, Metal.launch_logging!, Metal.submit_launch!,
-              Metal.encode_launch!)
-        @test length(collect(Base.specializations(only(methods(f))))) <= 1
+    @test nspecs(linker) == nlinkers
+    for f in (Metal.launch_kernel, Metal.try_launch, Metal.launch, Metal.launch_logging!,
+              Metal.submit_launch!, Metal.encode_launch!)
+        @test nspecs(f) <= 1
     end
 end
 

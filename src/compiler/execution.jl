@@ -138,7 +138,7 @@ macro metal(ex...)
                 $kernel = $mtlfunction($kernel_f, $kernel_tt;
                                        source=$f_var, $(compiler_kwargs...))
                 if $launch
-                    $kernel($(var_exprs...); $(call_kwargs...))
+                    $launch_kernel($kernel, ($(var_exprs...),); $(call_kwargs...))
                 end
                 $kernel
             end
@@ -591,13 +591,22 @@ function mtlfunction(f::F, tt::TT=Tuple{}; source::S=f, kwargs...) where {F,TT,S
     dev = pointer(device())
     kw = values(kwargs)
     options = map(v -> v isa AbstractArray ? copy(v) : v, kw)
-    l = GPUCompiler.cached_lookup(LinkedKernel, F, tt, (dev, options)) do
-        link_kernel(methodinstance(F, tt); kw...)
-    end
+    l = GPUCompiler.cached_lookup(KernelLinker(F, tt, kw), LinkedKernel, F, tt,
+                                  (dev, options))
     HostKernel{F,S,tt}(f, source, l.pipeline, l.loggingEnabled, l.device_rng, l.device,
                        l.maxthreads, l.reqthreads, l.tgmem, l.exec_width,
                        l.use_residency_sets, l.reloc_table)
 end
+
+# What `mtlfunction` calls when the kernel isn't cached: a callable struct rather than a
+# closure, whose type would depend on the kernel's, compiling it (and the inlined
+# `methodinstance`) again for every kernel.
+struct KernelLinker{K}
+    ft::Type
+    tt::Type
+    kw::K
+end
+(l::KernelLinker)() = link_kernel(methodinstance(l.ft, l.tt); l.kw...)
 
 # The fields of `HostKernel` following `f` and `source`, which only depend on the kernel's
 # type, the device and the compiler keywords, which is what `mtlfunction` caches.
@@ -748,8 +757,13 @@ end
 Launch `kernel` with arguments `args`, which have to have the same types as the ones it was
 compiled for. The keyword arguments are the launch keywords of [`@metal`](@ref).
 """
-function (kernel::HostKernel)(args...; groups=1, threads=1, queue=nothing,
-                              submit::Bool=false)
+(kernel::HostKernel)(args...; kwargs...) = launch_kernel(kernel, args; kwargs...)
+
+# what calling a `HostKernel` does, compiled once for all kernels and arguments rather
+# than for the type of every kernel the user defines
+Base.@nospecializeinfer function launch_kernel(@nospecialize(kernel::HostKernel),
+                                               @nospecialize(args::Tuple); groups=1,
+                                               threads=1, queue=nothing, submit::Bool=false)
     gs, ts = MTLSize(groups), MTLSize(threads)
     while true
         conflict = try_launch(kernel, queue, gs, ts, args, submit)
