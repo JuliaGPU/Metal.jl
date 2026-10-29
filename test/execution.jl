@@ -129,33 +129,57 @@ end
         return
     end
     a = MtlArray(zeros(Float32, 1))
-    k = @metal launch=false labelled_kernel(a, 1f0)
-    # the pipeline is named after the Julia signature, not the mangled entry point
-    label = "labelled_kernel(::MtlDeviceVector{Float32, 1}, ::Float32)"
-    @test String(k.pipeline.label) == label
 
-    # (and with resource labelling, names the debug group around each dispatch)
-    k(a, 2f0)
-    @test Array(a) == [2f0]
-
-    # closures are named after the function they were defined as
-    function outer_function(a)
-        inner_kernel(x) = (a[1] = x; return)
-        return inner_kernel
+    # pipelines are only labelled when labelling resources, which this enables rather than
+    # running in a `-g2` process (see "resource labelling")
+    function with_labels(f, enabled)
+        default = Metal.label_resources_default[]
+        Metal.label_resources_default[] = enabled
+        try
+            f()
+        finally
+            Metal.label_resources_default[] = default
+        end
     end
-    k = @metal launch=false outer_function(a)(1f0)
-    @test String(k.pipeline.label) == "inner_kernel(::Float32)"
+    if Metal.LABEL_RESOURCES === nothing
+        with_labels(false) do
+            # (otherwise, after the generated function)
+            k = @metal launch=false labelled_kernel(a, 1)
+            @test String(k.pipeline.label) == "labelled_kernel"
+            k(a, 1)
+            @test Array(a) == [1f0]
+        end
+    end
 
-    # anonymous functions are named after where they were defined
-    k = @metal launch=false (x -> (a[1] = x; return))(1f0)
-    @test occursin(r"^anonymous@execution\.jl:\d+\(::Float32\)$", String(k.pipeline.label))
+    with_labels(true) do
+        k = @metal launch=false labelled_kernel(a, 1f0)
+        # the pipeline is named after the Julia signature, not the mangled entry point
+        label = "labelled_kernel(::MtlDeviceVector{Float32, 1}, ::Float32)"
+        @test String(k.pipeline.label) == label
 
-    # long signatures are abbreviated
-    long_kernel(a, x) = (a[1] = 1; return)
-    k = @metal launch=false long_kernel(a, ntuple(Val, 40))
-    label = String(k.pipeline.label)
-    @test length(label) <= Metal.MAX_KERNEL_LABEL
-    @test startswith(label, "long_kernel(::MtlDeviceVector{Float32, 1}, ::Tuple{")
+        # (and names the debug group around each dispatch)
+        k(a, 2f0)
+        @test Array(a) == [2f0]
+
+        # closures are named after the function they were defined as
+        function outer_function(a)
+            inner_kernel(x) = (a[1] = x; return)
+            return inner_kernel
+        end
+        k = @metal launch=false outer_function(a)(1f0)
+        @test String(k.pipeline.label) == "inner_kernel(::Float32)"
+
+        # anonymous functions are named after where they were defined
+        k = @metal launch=false (x -> (a[1] = x; return))(1f0)
+        @test occursin(r"^anonymous@execution\.jl:\d+\(::Float32\)$", String(k.pipeline.label))
+
+        # long signatures are abbreviated
+        long_kernel(a, x) = (a[1] = 1; return)
+        k = @metal launch=false long_kernel(a, ntuple(Val, 40))
+        label = String(k.pipeline.label)
+        @test length(label) <= Metal.MAX_KERNEL_LABEL
+        @test startswith(label, "long_kernel(::MtlDeviceVector{Float32, 1}, ::Tuple{")
+    end
 
     # the generated function is named after the Julia function, unless named explicitly
     entry(f, tt; kwargs...) = Metal.compile_to_metallib(Metal.GPUCompiler.CompilerJob(
@@ -207,20 +231,26 @@ end
 end
 
 @testset "launch code is shared between kernels" begin
-    # encoding and submitting a launch doesn't depend on the kernel's signature, so
-    # launching kernels with new signatures should not compile it again
+    # linking, encoding and submitting a launch doesn't depend on the kernel's signature,
+    # so launching kernels with new signatures should not compile it again
     function store_kernel(a, x)
         a[1] = x
         return
     end
+    nspecs(f) = length(collect(Base.specializations(only(methods(f)))))
+    # (linking is specialized on the compiler keywords, so other tests add some)
+    linker = Metal.KernelLinker(typeof(store_kernel), Tuple{}, (;))
+    @metal store_kernel(MtlArray(zeros(Int64, 1)), one(Int64))
+    nlinkers = nspecs(linker)
     for T in (Int32, Float32, Int16)
         @metal store_kernel(MtlArray(zeros(T, 1)), one(T))
     end
     synchronize()
 
-    for f in (Metal.try_launch, Metal.launch, Metal.launch_logging!, Metal.submit_launch!,
-              Metal.encode_launch!)
-        @test length(collect(Base.specializations(only(methods(f))))) <= 1
+    @test nspecs(linker) == nlinkers
+    for f in (Metal.launch_kernel, Metal.try_launch, Metal.launch, Metal.launch_logging!,
+              Metal.submit_launch!, Metal.encode_launch!)
+        @test nspecs(f) <= 1
     end
 end
 

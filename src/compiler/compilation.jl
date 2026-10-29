@@ -397,7 +397,7 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
         (as, asname) in (AS.Device => "global", AS.ThreadGroup => "local")
 
         # map of intrinsics to pointer operand indices and eltypes
-        intrinsics = Dict()
+        intrinsics = Dict{String,Tuple{Pair{Int,DataType}}}()
         ## simd
         intrinsics["simdgroup_matrix_8x8_load.v64$llvmtyp.p$as$llvmtyp"] = (1 => jltyp,)
         intrinsics["simdgroup_matrix_8x8_store.v64$llvmtyp.p$as$llvmtyp"] = (2 => jltyp,)
@@ -568,8 +568,12 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
     # TODO: on 1.9, this actually creates a context. cache those.
     ir, air, fun, entry, loggingEnabled, device_rng, relocations = JuliaContext() do _
         @signpost_interval log=log_compiler() start="" stop="" "Generate LLVM IR" begin
-            mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)
+            # (asserting the result types, which `invoke_frozen` hides, keeps the uses of
+            #  the results statically dispatched, so that they're precompiled)
+            mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)::Tuple{LLVM.Module,NamedTuple}
         end
+        local kernel_fn = meta.entry::LLVM.Function
+        local relocs = meta.relocations::GPUCompiler.Relocations
 
         # the IR belongs to us: lower and inspect it, then dispose of it
         @dispose mod=mod begin
@@ -578,8 +582,8 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
 
             # (dropping the marker, which isn't AIR, so it doesn't end up in the metallib)
             local rng_attr = StringAttribute("julia.metal.rng", "")
-            local device_rng = rng_attr in collect(meta.entry.function_attributes)
-            device_rng && delete!(meta.entry.function_attributes, rng_attr)
+            local device_rng = rng_attr in collect(kernel_fn.function_attributes)
+            device_rng && delete!(kernel_fn.function_attributes, rng_attr)
 
             @signpost_interval log=log_compiler() start="" stop="" "Downgrade to AIR" begin
                 # generate AIR, having GPUCompiler lower the IR to AIR-compatible form and
@@ -592,8 +596,8 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
                 # The 3-arg form would hand the lowering an empty table and strand the slots.
                 local air
                 air, _ = try
-                    invoke_frozen(GPUCompiler.emit_asm, job, mod, meta.relocations,
-                                  LLVM.CodeGenFileType.Object)
+                    invoke_frozen(GPUCompiler.emit_asm, job, mod, relocs,
+                                  LLVM.CodeGenFileType.Object)::Tuple{Vector{UInt8},Any}
                 catch err
                     # `emit_asm` has already lowered the module in-place, so stringifying it
                     # here shows exactly what the downgrader was fed
@@ -605,7 +609,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
 
             # describe the function while we still have its module
             local fun = try
-                MetalLibFunction(mod, meta.entry.name; air_module=air)
+                MetalLibFunction(mod, kernel_fn.name; air_module=air)
             catch err
                 ir_file, air_file = dump_artifacts(".ll" => string(mod), ".air" => air)
                 error("""Compilation to Metal library failed: $(sprint(showerror, err))
@@ -614,8 +618,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
                          - $(air_file)""")
             end
 
-            string(mod), air, fun, meta.entry.name, loggingEnabled, device_rng,
-            meta.relocations
+            string(mod), air, fun, kernel_fn.name, loggingEnabled, device_rng, relocs
         end
     end
 

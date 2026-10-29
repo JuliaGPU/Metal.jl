@@ -50,6 +50,11 @@ Since all M-series systems currently only externally show a single GPU, this fun
 effectively returns the only system GPU.
 """
 function device()
+    dev = get(task_local_storage(), :MTLDevice, nothing)
+    dev === nothing ? init_device!() : dev::MTLDevice
+end
+# (kept out of `device`, which is inlined into code specialized for every kernel)
+@noinline function init_device!()
     get!(task_local_storage(), :MTLDevice) do
         dev = MTLDevice(1)
         if is_virtual(dev)

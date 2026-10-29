@@ -120,11 +120,20 @@ include("deprecated.jl")
 
 # command-line tools
 include("metallib/cli.jl")
-should_precompile = is_macos(v"15") &&
-                      Sys.ARCH === :aarch64 &&
-                      @load_preference("precompile", true) &&
-                      !isempty(devices())
-if should_precompile
+# whether precompilation workloads can use the GPU, e.g., to compile kernels
+can_precompile() = is_macos(v"15") && Sys.ARCH === :aarch64 &&
+                   @load_preference("precompile", true) && !isempty(devices())
+
+# whether precompilation workloads can also launch kernels, which needs a command queue
+# that can't be created when the `command_api` preference selects an API this system
+# doesn't support (`__init__` reports that). also used by the workloads of downstream
+# packages, like AcceleratedKernels' Metal extension. (on Julia 1.10, workloads shouldn't
+# compile kernels that call into `Base`, see `precompile.jl`)
+can_precompile_launches() =
+    can_precompile() &&
+    (COMMAND_API === :metal3 || metal4_unsupported_reason(device()) === nothing)
+
+if can_precompile()
     include("precompile.jl")
 end
 
