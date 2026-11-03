@@ -1,0 +1,97 @@
+name: Bug report
+description: Report a bug or unexpected behaviour in Metal.jl.
+title: "[Bug]: "
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug in Metal.jl!
+
+        Before submitting, please search the existing issues
+        to check whether the problem has already been reported.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Before submitting
+      description: Please confirm the following.
+      options:
+        - label: I have searched the existing issues for a similar report.
+          required: true
+
+  - type: textarea
+    id: problem-description
+    attributes:
+      label: Problem description
+      description: |
+        Describe the unexpected behaviour and what you
+        expected to happen.
+      placeholder: |
+        What happened?
+
+        What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: |
+        Provide the steps to reproduce the issue and a minimal
+        Julia example, if possible. Include any necessary inputs
+        or configuration.
+      placeholder: |
+        1. Run the following code...
+        2. Observe the unexpected behaviour.
+
+        ```julia
+        using Metal
+
+        # Minimal reproducible example
+        ```
+    validations:
+      required: false
+
+  - type: textarea
+    id: versioninfo
+    attributes:
+      label: Metal.versioninfo() output
+      description: |
+        Run the following in the Julia REPL and paste the
+        complete output:
+
+        ```julia
+        using Metal
+        Metal.versioninfo()
+        ```
+
+        If Metal cannot be loaded or this command fails,
+        paste the complete error message and explain why
+        the version information could not be obtained.
+      placeholder: Paste the complete output or error here.
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error message and stack trace
+      description: |
+        Include the complete error message and stack trace,
+        if applicable. Avoid including only the final error line.
+      placeholder: Paste error messages and stack traces here.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional information
+      description: |
+        Include any other relevant details, logs, links,
+        screenshots or context that may help investigate
+        the issue.
+    validations:
+      required: false

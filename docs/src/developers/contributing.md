@@ -13,6 +13,39 @@ If you didn't come to this page with your own feature to add, look at the curren
 the [git repo](https://github.com/JuliaGPU/Metal.jl/issues) for bugs and requested
 functionality.
 
+## Reporting a Bug
+
+If you encounter a bug while using Metal.jl, first check
+the [existing issues](https://github.com/JuliaGPU/Metal.jl/issues)
+to see whether the problem has already been reported.
+
+If the issue hasn't been reported, open a new issue using the
+[bug report form](https://github.com/JuliaGPU/Metal.jl/issues/new/choose).
+
+When reporting a bug, please include:
+
+- A clear description of the unexpected behaviour and what
+  you expected to happen.
+- Steps to reproduce the issue and a minimal Julia example,
+  if possible.
+- The complete error message and stack trace, if applicable.
+- The complete output of `Metal.versioninfo()`.
+
+To obtain the environment information, run the following
+in the Julia REPL:
+
+```julia
+using Metal
+Metal.versioninfo()
+```
+
+This output helps maintainers understand the software and hardware
+environment in which the issue occurs.
+
+If `Metal.versioninfo()` fails or Metal.jl cannot be loaded,
+include the complete error message and explain why the
+environment information could not be obtained.
+
 
 ## I'm a beginner, can I help?
 
