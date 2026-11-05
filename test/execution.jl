@@ -1115,6 +1115,97 @@ end
     @test endswith(frame[2], "/kernel.jl")
 end
 
+@testset "loops with many exits" begin
+    # every bounds check is an exit of the loops around it. With enough of them, Apple's
+    # compiler used to hang, skip code, or report a spurious exception (#1127).
+    function loop_exits_body(y, w, e)
+        s = 0f0
+        for j in 1:2, i in 1:2
+            s += y[i, j, e] * w[i] * w[j]
+        end
+        return s
+    end
+    function loop_exits_body_x(x, y, w, e)
+        s = 0f0
+        for j in 1:2, i in 1:2
+            s += y[i, j, e] * w[i] * w[j] * x[1, i, j, e]
+        end
+        return s
+    end
+    w = (0.1f0, 0.4f0, 0.4f0, 0.1f0)
+
+    # K unrolled steps in a loop that doesn't run, followed by K more
+    function loop_exits_kernel(dst, x, y, w, n, ::Val{K}) where {K}
+        i = Int(thread_position_in_grid_1d())
+        dst[i] = -2f0
+        acc = 0f0
+        t = 0
+        while t < n
+            for s in 0:(K - 1)
+                acc += loop_exits_body_x(x, y, w, t + s * 256 + i)
+            end
+            t += K * 256
+        end
+        for s in 0:(K - 1)
+            acc += loop_exits_body_x(x, y, w, t + s * 256 + i)
+        end
+        dst[i] = acc
+        return
+    end
+    # K = 4 used to skip the final store, K = 8 to hang the compiler
+    @testset "K = $K" for K in (4, 6, 8)
+        x = Metal.ones(Float32, 1, 2, 2, 256 * K)
+        y = Metal.ones(Float32, 2, 2, 256 * K)
+        dst = Metal.zeros(Float32, 256)
+        @metal threads=256 loop_exits_kernel(dst, x, y, w, 0, Val(K))
+        @test all(≈(0.25f0 * K), Array(dst))
+    end
+
+    # a loop that does run, with a tail loop; used to throw a `KernelException`
+    function loop_exits_stepped(dst, y, w, n, ::Val{K}) where {K}
+        i = Int(thread_position_in_grid_1d())
+        acc = 0f0
+        t = 0
+        while t + K * 1024 <= n
+            for s in 0:(K - 1)
+                acc += loop_exits_body(y, w, t + s * 1024 + i)
+            end
+            t += K * 1024
+        end
+        while t + i <= n
+            acc += loop_exits_body(y, w, t + i)
+            t += 1024
+        end
+        dst[i] = acc
+        return
+    end
+    let n = 1024 * 32
+        y = Metal.ones(Float32, 2, 2, n)
+        dst = Metal.zeros(Float32, 1024)
+        @metal threads=256 groups=4 loop_exits_stepped(dst, y, w, n, Val(14))
+        @test all(≈(0.25f0 * 32), Array(dst))
+    end
+
+    # exceptions in such loops are still reported, and only the threads that throw skip
+    # the rest of the kernel
+    function loop_exits_throw(dst, y, stride)
+        i = Int(thread_position_in_grid_1d())
+        dst[i] = -2f0
+        acc = 0f0
+        for s in 0:7
+            acc += y[i + s * stride[i]]
+        end
+        dst[i] = acc
+        return
+    end
+    y = Metal.ones(Float32, 64)
+    dst = Metal.zeros(Float32, 32)
+    stride = MtlArray([i <= 16 ? 1 : 100 for i in 1:32])
+    @metal threads=32 loop_exits_throw(dst, y, stride)
+    @test_throws Metal.KernelException synchronize()
+    @test Array(dst) == [fill(8f0, 16); fill(-2f0, 16)]
+end
+
 @testset "launch params" begin
     vecA .= 0
     @metal threads=(2) tester(bufferA)
@@ -1351,6 +1442,94 @@ end
     # loaded as a pointer into thread memory, a Symbol used to lose its upper bits (#1017)
     syms = MtlArray([(:begin, :end), (:end, :begin)])
     @test Array(map(t -> t[1] === :begin, syms)) == [true, false]
+end
+
+@testset "odd-width integers" begin
+    # Metal's back-end cannot handle integers whose width is not a power of two: arithmetic
+    # and underaligned loads crash it, and naturally-aligned stores overwrite the bytes after
+    # the value (#1125). LLVM's SROA emits such integers, e.g. to copy an aggregate's padding.
+    data = UInt8.(1:32)
+    function access(op, T, offset, align)
+        q = "$T addrspace(1)*"
+        body = if op == :copy   # to the start of the buffer
+            """%v = load $T, $q %src, align $align
+               %dst = bitcast i8 addrspace(1)* %p to $q
+               store $T %v, $q %dst, align $align
+               ret i64 0"""
+        elseif op == :store
+            """store $T -1, $q %src, align $align
+               ret i64 0"""
+        elseif op == :arith
+            """%v = load $T, $q %src, align $align
+               %a = add $T %v, %v
+               %s = lshr $T %a, 4
+               %r = zext $T %s to i64
+               ret i64 %r"""
+        elseif op == :sdiv
+            """%v = load $T, $q %src, align $align
+               %a = add $T %v, %v
+               %d = sdiv $T %a, -7
+               %r = sext $T %d to i64
+               ret i64 %r"""
+        else
+            """%v = load $T, $q %src, align $align
+               %r = $op $T %v to i64
+               ret i64 %r"""
+        end
+        ir = """
+            define i64 @entry(i8 addrspace(1)* %p) #0 {
+              %gep = getelementptr i8, i8 addrspace(1)* %p, i64 $offset
+              %src = bitcast i8 addrspace(1)* %gep to $q
+              $body
+            }
+            attributes #0 = { alwaysinline }"""
+        kernel = @eval function (out, buf)
+            ptr = reinterpret(Core.LLVMPtr{UInt8,1}, pointer(buf))
+            out[] = Base.llvmcall(($ir, "entry"), UInt64, Tuple{Core.LLVMPtr{UInt8,1}}, ptr)
+            return
+        end
+        out = MtlArray([UInt64(0)])
+        buf = MtlArray(data)
+        Base.invokelatest(() -> @metal kernel(out, buf))
+        return Array(out)[], Array(buf)
+    end
+
+    @testset "$op $T at offset $offset, align $align" for op in (:zext, :sext, :arith, :sdiv),
+            (T, offset, align) in (("i12", 1, 1), ("i24", 5, 1), ("i24", 4, 4),
+                                   ("i40", 1, 1), ("i48", 2, 2), ("i56", 1, 1),
+                                   ("i56", 8, 8))
+        bits = parse(Int, T[2:end])
+        val = UInt64(0)
+        for (i, byte) in enumerate(data[offset+1:offset+cld(bits, 8)])
+            val |= UInt64(byte) << (8 * (i - 1))
+        end
+        mask = typemax(UInt64) >> (64 - bits)
+        val &= mask
+        if op == :sext && val >> (bits - 1) == 1
+            val |= ~mask
+        elseif op == :arith
+            val = ((2val) & mask) >> 4
+        elseif op == :sdiv
+            a = Int128((2val) & mask)
+            a >= Int128(1) << (bits - 1) && (a -= Int128(1) << bits)
+            val = reinterpret(UInt64, Int64(div(a, -7)))
+        end
+        @test access(op, T, offset, align) == (val, data)
+    end
+
+    @testset "$op $T at offset $offset, align $align" for op in (:store, :copy),
+            (T, offset, align) in (("i24", 5, 1), ("i24", 4, 4), ("i40", 8, 8),
+                                   ("i56", 9, 1), ("i56", 8, 8), ("i72", 8, 8),
+                                   ("i96", 4, 4))
+        nbytes = parse(Int, T[2:end]) ÷ 8
+        expected = copy(data)
+        if op == :store
+            expected[offset+1:offset+nbytes] .= 0xff
+        else
+            expected[1:nbytes] = data[offset+1:offset+nbytes]
+        end
+        @test access(op, T, offset, align) == (0, expected)
+    end
 end
 
 @testset "compilation cache" begin
