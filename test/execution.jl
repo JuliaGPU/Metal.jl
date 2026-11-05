@@ -1115,6 +1115,97 @@ end
     @test endswith(frame[2], "/kernel.jl")
 end
 
+@testset "loops with many exits" begin
+    # every bounds check is an exit of the loops around it. With enough of them, Apple's
+    # compiler used to hang, skip code, or report a spurious exception (#1127).
+    function loop_exits_body(y, w, e)
+        s = 0f0
+        for j in 1:2, i in 1:2
+            s += y[i, j, e] * w[i] * w[j]
+        end
+        return s
+    end
+    function loop_exits_body_x(x, y, w, e)
+        s = 0f0
+        for j in 1:2, i in 1:2
+            s += y[i, j, e] * w[i] * w[j] * x[1, i, j, e]
+        end
+        return s
+    end
+    w = (0.1f0, 0.4f0, 0.4f0, 0.1f0)
+
+    # K unrolled steps in a loop that doesn't run, followed by K more
+    function loop_exits_kernel(dst, x, y, w, n, ::Val{K}) where {K}
+        i = Int(thread_position_in_grid_1d())
+        dst[i] = -2f0
+        acc = 0f0
+        t = 0
+        while t < n
+            for s in 0:(K - 1)
+                acc += loop_exits_body_x(x, y, w, t + s * 256 + i)
+            end
+            t += K * 256
+        end
+        for s in 0:(K - 1)
+            acc += loop_exits_body_x(x, y, w, t + s * 256 + i)
+        end
+        dst[i] = acc
+        return
+    end
+    # K = 4 used to skip the final store, K = 8 to hang the compiler
+    @testset "K = $K" for K in (4, 6, 8)
+        x = Metal.ones(Float32, 1, 2, 2, 256 * K)
+        y = Metal.ones(Float32, 2, 2, 256 * K)
+        dst = Metal.zeros(Float32, 256)
+        @metal threads=256 loop_exits_kernel(dst, x, y, w, 0, Val(K))
+        @test all(≈(0.25f0 * K), Array(dst))
+    end
+
+    # a loop that does run, with a tail loop; used to throw a `KernelException`
+    function loop_exits_stepped(dst, y, w, n, ::Val{K}) where {K}
+        i = Int(thread_position_in_grid_1d())
+        acc = 0f0
+        t = 0
+        while t + K * 1024 <= n
+            for s in 0:(K - 1)
+                acc += loop_exits_body(y, w, t + s * 1024 + i)
+            end
+            t += K * 1024
+        end
+        while t + i <= n
+            acc += loop_exits_body(y, w, t + i)
+            t += 1024
+        end
+        dst[i] = acc
+        return
+    end
+    let n = 1024 * 32
+        y = Metal.ones(Float32, 2, 2, n)
+        dst = Metal.zeros(Float32, 1024)
+        @metal threads=256 groups=4 loop_exits_stepped(dst, y, w, n, Val(14))
+        @test all(≈(0.25f0 * 32), Array(dst))
+    end
+
+    # exceptions in such loops are still reported, and only the threads that throw skip
+    # the rest of the kernel
+    function loop_exits_throw(dst, y, stride)
+        i = Int(thread_position_in_grid_1d())
+        dst[i] = -2f0
+        acc = 0f0
+        for s in 0:7
+            acc += y[i + s * stride[i]]
+        end
+        dst[i] = acc
+        return
+    end
+    y = Metal.ones(Float32, 64)
+    dst = Metal.zeros(Float32, 32)
+    stride = MtlArray([i <= 16 ? 1 : 100 for i in 1:32])
+    @metal threads=32 loop_exits_throw(dst, y, stride)
+    @test_throws Metal.KernelException synchronize()
+    @test Array(dst) == [fill(8f0, 16); fill(-2f0, 16)]
+end
+
 @testset "launch params" begin
     vecA .= 0
     @metal threads=(2) tester(bufferA)
