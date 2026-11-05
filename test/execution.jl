@@ -1353,6 +1353,94 @@ end
     @test Array(map(t -> t[1] === :begin, syms)) == [true, false]
 end
 
+@testset "odd-width integers" begin
+    # Metal's back-end cannot handle integers whose width is not a power of two: arithmetic
+    # and underaligned loads crash it, and naturally-aligned stores overwrite the bytes after
+    # the value (#1125). LLVM's SROA emits such integers, e.g. to copy an aggregate's padding.
+    data = UInt8.(1:32)
+    function access(op, T, offset, align)
+        q = "$T addrspace(1)*"
+        body = if op == :copy   # to the start of the buffer
+            """%v = load $T, $q %src, align $align
+               %dst = bitcast i8 addrspace(1)* %p to $q
+               store $T %v, $q %dst, align $align
+               ret i64 0"""
+        elseif op == :store
+            """store $T -1, $q %src, align $align
+               ret i64 0"""
+        elseif op == :arith
+            """%v = load $T, $q %src, align $align
+               %a = add $T %v, %v
+               %s = lshr $T %a, 4
+               %r = zext $T %s to i64
+               ret i64 %r"""
+        elseif op == :sdiv
+            """%v = load $T, $q %src, align $align
+               %a = add $T %v, %v
+               %d = sdiv $T %a, -7
+               %r = sext $T %d to i64
+               ret i64 %r"""
+        else
+            """%v = load $T, $q %src, align $align
+               %r = $op $T %v to i64
+               ret i64 %r"""
+        end
+        ir = """
+            define i64 @entry(i8 addrspace(1)* %p) #0 {
+              %gep = getelementptr i8, i8 addrspace(1)* %p, i64 $offset
+              %src = bitcast i8 addrspace(1)* %gep to $q
+              $body
+            }
+            attributes #0 = { alwaysinline }"""
+        kernel = @eval function (out, buf)
+            ptr = reinterpret(Core.LLVMPtr{UInt8,1}, pointer(buf))
+            out[] = Base.llvmcall(($ir, "entry"), UInt64, Tuple{Core.LLVMPtr{UInt8,1}}, ptr)
+            return
+        end
+        out = MtlArray([UInt64(0)])
+        buf = MtlArray(data)
+        Base.invokelatest(() -> @metal kernel(out, buf))
+        return Array(out)[], Array(buf)
+    end
+
+    @testset "$op $T at offset $offset, align $align" for op in (:zext, :sext, :arith, :sdiv),
+            (T, offset, align) in (("i12", 1, 1), ("i24", 5, 1), ("i24", 4, 4),
+                                   ("i40", 1, 1), ("i48", 2, 2), ("i56", 1, 1),
+                                   ("i56", 8, 8))
+        bits = parse(Int, T[2:end])
+        val = UInt64(0)
+        for (i, byte) in enumerate(data[offset+1:offset+cld(bits, 8)])
+            val |= UInt64(byte) << (8 * (i - 1))
+        end
+        mask = typemax(UInt64) >> (64 - bits)
+        val &= mask
+        if op == :sext && val >> (bits - 1) == 1
+            val |= ~mask
+        elseif op == :arith
+            val = ((2val) & mask) >> 4
+        elseif op == :sdiv
+            a = Int128((2val) & mask)
+            a >= Int128(1) << (bits - 1) && (a -= Int128(1) << bits)
+            val = reinterpret(UInt64, Int64(div(a, -7)))
+        end
+        @test access(op, T, offset, align) == (val, data)
+    end
+
+    @testset "$op $T at offset $offset, align $align" for op in (:store, :copy),
+            (T, offset, align) in (("i24", 5, 1), ("i24", 4, 4), ("i40", 8, 8),
+                                   ("i56", 9, 1), ("i56", 8, 8), ("i72", 8, 8),
+                                   ("i96", 4, 4))
+        nbytes = parse(Int, T[2:end]) ÷ 8
+        expected = copy(data)
+        if op == :store
+            expected[offset+1:offset+nbytes] .= 0xff
+        else
+            expected[1:nbytes] = data[offset+1:offset+nbytes]
+        end
+        @test access(op, T, offset, align) == (0, expected)
+    end
+end
+
 @testset "compilation cache" begin
     mod = @eval module $(gensym())
         @noinline child() = return
