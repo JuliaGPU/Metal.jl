@@ -294,6 +294,8 @@ end
     x17 = MtlArray(rand(Float32, 2, ntuple(_ -> 1, 16)...))
     @test !MPSGraphs.supports(MPSGraphs.softmax!, similar(x17), x17; dims=1)
     @test !MPSGraphs.supports(MPSGraphs.softmax!, similar(x, Int32), x)
+    xu = MtlArray(Union{Float16, Float32}[1f0, Float16(2)])
+    @test !MPSGraphs.supports(MPSGraphs.softmax!, similar(xu), xu)
     @test_throws ArgumentError MPSGraphs.softmax!(similar(x), x; dims=5)
 end
 

@@ -118,6 +118,8 @@ end
             (-, similar(A, 1, 4), A, (;), ArgumentError),
             (+, MtlArray{ComplexF32}(undef, 1, 2), MtlArray(rand(ComplexF32, 3, 2)), (;), ArgumentError),
             (+, MtlArray{Bool}(undef, 1, 2), MtlArray(rand(Bool, 3, 2)), (;), ArgumentError),
+            (+, MtlArray{Union{Int32, Float32}}(undef, 1), MtlArray(Union{Int32, Float32}[Int32(1), 2f0]),
+             (;), ArgumentError),
             (+, similar(A, Float16, 1, 4), A, (;), ArgumentError),
             (+, similar(A, 1, 4), A, (; init=0), ArgumentError),
             # shapes

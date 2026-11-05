@@ -83,6 +83,8 @@ end
             (-, similar(A), A, (; dims=1), ArgumentError),
             (+, similar(A, ComplexF32), MtlArray(rand(ComplexF32, 3, 4)), (; dims=1), ArgumentError),
             (+, similar(A, Float16), A, (; dims=1), ArgumentError),
+            (+, MtlArray{Union{Int32, Float32}}(undef, 2), MtlArray(Union{Int32, Float32}[Int32(1), 2f0]),
+             (;), ArgumentError),
             (+, similar(A), A, (; dims=1, init=1), ArgumentError),
             (+, similar(A, 4, 3), A, (; dims=1), DimensionMismatch),
             # `dims` is required for matrices, and must be one of their dimensions

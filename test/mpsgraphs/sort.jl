@@ -31,6 +31,13 @@ end
     @test !MPSGraphs.supports(MPSGraphs.sort!, similar(A), A)
     @test_throws ArgumentError MPSGraphs.sort!(similar(A), A)
 
+    # MPSGraph tensors have a single concrete element type
+    A = MtlArray(Union{Int32, Float32}[Int32(2), 1f0])
+    @test !MPSGraphs.supports(MPSGraphs.sort!, similar(A), A)
+    @test !MPSGraphs.supports(MPSGraphs.sortperm!, similar(A, Int32), A)
+    @test !MPSGraphs.supports(MPSGraphs.sortperm!, MtlArray{Union{Int32, Int64}}(undef, 2),
+                              MtlArray(Float32[2, 1]))
+
     # `dims` is required for matrices
     A = MtlArray(rand(Float32, 3, 4))
     @test MPSGraphs.supports(MPSGraphs.sort!, similar(A), A; dims=2)

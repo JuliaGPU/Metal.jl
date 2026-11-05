@@ -153,7 +153,7 @@ function avgPooling2DGradientWithGradientTensor(graph::MPSGraph, gradient::MPSGr
                                                                  name:name::id{NSString}]::MPSGraphTensor
 end
 
-const MPSGRAPH_VALID_NN_TYPES = Union{Float16, Float32}
+const MPSGRAPH_VALID_NN_TYPES = (Float16, Float32)
 
 function reduction_shape(shape::Tuple, axis::Integer)
     mpsshape = collect(reverse(shape))
@@ -379,7 +379,7 @@ function unsupported_nn_arrays(arrays...; N=nothing)
     T = eltype(first(arrays))
     all(A -> eltype(A) == T, arrays) ||
         return ArgumentError("MPSGraph NN operations require arrays of the same element type, got $(join(map(eltype, arrays), ", "))")
-    T <: MPSGRAPH_VALID_NN_TYPES ||
+    T in MPSGRAPH_VALID_NN_TYPES ||
         return ArgumentError("MPSGraph NN operations support Float16 and Float32, got $T")
     N === nothing || all(A -> ndims(A) == N, arrays) ||
         return ArgumentError("MPSGraph 2D convolution and pooling require 4D arrays in WHCN layout")
