@@ -56,7 +56,10 @@ end
 const UniformTypes = [Float32,UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64]
 const UniformType = Union{[Type{T} for T in UniformTypes]...}
 const UniformArray = MtlArray{<:Union{Float32,UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64}}
-function Random.rand!(rng::RNG, A::MtlArray{T}) where {T<:Union{UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64}}
+# `MtlArray{<:Union{...}}` would also match arrays of isbits unions of these types, whose
+# selector bytes MPS doesn't fill
+const UniformIntegerArray = Union{[MtlArray{T} for T in UniformTypes if T <: Integer]...}
+function Random.rand!(rng::RNG, A::UniformIntegerArray)
     isempty(A) && return A
     _mpsmat_rand!(rng.uniformInteger, A, UInt32)
     return A
@@ -84,7 +87,8 @@ function Random.randn!(rng::RNG, A::MtlArray{Float32})
 end
 
 # CPU arrays
-function Random.rand!(rng::RNG, A::AbstractArray{T, N}) where {T <: Union{UniformTypes...}, N}
+function Random.rand!(rng::RNG, A::Union{[AbstractArray{T} for T in UniformTypes]...})
+    T, N = eltype(A), ndims(A)
     isempty(A) && return A
     if MTL.can_alloc_nocopy(pointer(A), sizeof(A))
         mtlA = unsafe_wrap(MtlArray{T, N}, A)

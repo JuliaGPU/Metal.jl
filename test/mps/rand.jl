@@ -101,6 +101,15 @@ end
 end
 
 # out-of-place
+# MPS can't fill the selector bytes of isbits unions of the supported types, and Base
+# doesn't generate those element types either
+@testset "isbits unions" begin
+    rng = Metal.MPS.RNG()
+    T = Union{Int32, UInt32}
+    @test_throws MethodError rand!(rng, MtlArray{T}(undef, 4))
+    @test_throws MethodError rand!(rng, Vector{T}(undef, 4))
+end
+
 @testset "out-of-place" begin
     @testset "$f with implicit type" for (f, T) in ((rand, Float32), (randn, Float32))
         rng = Metal.MPS.RNG()
