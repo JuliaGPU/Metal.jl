@@ -2,6 +2,7 @@
 # does (see `typetagdata` in src/array.jl).
 
 import KernelInterface as KI
+using ScopedValues
 using Metal.MetalKernels: MetalBackend
 
 # a struct with a union field is stored inline, with its own selector inside the element
@@ -288,6 +289,36 @@ end
     KI.copyto!(backend, view(host, 1:3), MtlArray(Union{Int, Nothing}[nothing, 2, nothing]))
     KI.synchronize(backend)
     @test host == [nothing, 2, nothing, 3]
+end
+
+# MPSGraph can't handle these, so Metal's sorting and scans should use their generic
+# implementations instead
+@testset "sorting" begin
+    a = Union{Int32, Float32}[Int32(1), 1f0, Int32(2), 2f0, Int32(1)]
+    for rev in (false, true)
+        r, s = Array(sort(MtlArray(a); rev)), sort(a; rev)
+        # `isequal(Int32(1), 1f0)`, so also compare the element types
+        @test isequal(r, s)
+        @test map(typeof, r) == map(typeof, s)
+    end
+
+    # without ties, so that an unstable sort has a single answer
+    b = Union{Int32, Float32}[Int32(3), 1.5f0, Int32(-2), 2.5f0]
+    @test Array(sortperm(MtlArray(b); alg=QuickSort)) == sortperm(b)
+    i = MtlArray{Int32}(undef, length(b))
+    @test Array(sortperm!(i, MtlArray(b); alg=QuickSort)) == sortperm(b)
+
+    # MPSGraph can't write indices of a union type either
+    c = Float32[3, 1, 2, 5]
+    i = MtlArray{Union{Int32, Int64}}(undef, length(c))
+    @test Array(sortperm!(i, MtlArray(c); alg=QuickSort)) == sortperm(c)
+end
+
+@testset "scans" begin
+    a = MtlArray(Union{Int32, Float32}[Int32(1), 2f0])
+    @with (Metal.scan_alg => :MPSGraph) begin
+        @test_throws "MPSGraph scan does not support" accumulate!(+, similar(a), a)
+    end
 end
 
 @testset "unsupported operations" begin

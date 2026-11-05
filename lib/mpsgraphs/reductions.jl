@@ -116,7 +116,7 @@ function unsupported(::typeof(reduce!), op, R, A; init=nothing)
     T = eltype(A)
     eltype(R) == T ||
         return ArgumentError("MPSGraph reductions require the output and input to have the same element type, got $(eltype(R)) and $T")
-    T <: Union{MPSGRAPH_VALID_REDUCTION_TYPES...} ||
+    T in MPSGRAPH_VALID_REDUCTION_TYPES ||
         return ArgumentError("MPSGraph reductions do not support element type $T")
     reduction_operation(op) === nothing &&
         return ArgumentError("MPSGraph reductions support +, *, max and min, got $op")

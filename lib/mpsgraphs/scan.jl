@@ -116,7 +116,7 @@ function unsupported(::typeof(accumulate!), op, B, A; dims=nothing, init=nothing
     T = eltype(A)
     eltype(B) == T ||
         return ArgumentError("MPSGraph scans require the output and input to have the same element type, got $(eltype(B)) and $T")
-    T <: Union{MPSGRAPH_VALID_SCAN_TYPES...} ||
+    T in MPSGRAPH_VALID_SCAN_TYPES ||
         return ArgumentError("MPSGraph scans do not support element type $T")
     scan_operation(T, op) === nothing &&
         return ArgumentError("MPSGraph scans support + and *, and max and min for integers, got $op for $T")

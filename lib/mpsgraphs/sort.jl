@@ -1,5 +1,5 @@
 const MPSGRAPH_VALID_SORT_TYPES = filter(T -> T <: Real, (MPS.jl_mps_to_typ |> values |> collect))
-const MPSGRAPH_SORTPERM_INDEX_TYPES = Union{Int32, Int64}
+const MPSGRAPH_SORTPERM_INDEX_TYPES = (Int32, Int64)
 
 function sortWithTensor(graph::MPSGraph, tensor::MPSGraphTensor, axis::Integer,
                         descending::Bool, name = "sort")
@@ -110,7 +110,7 @@ function unsupported(::typeof(sort!), B, A; dims=nothing, rev::Bool=false)
     T = eltype(A)
     eltype(B) == T ||
         return ArgumentError("MPSGraph sorting requires the output and input to have the same element type, got $(eltype(B)) and $T")
-    T <: Union{MPSGRAPH_VALID_SORT_TYPES...} ||
+    T in MPSGRAPH_VALID_SORT_TYPES ||
         return ArgumentError("MPSGraph sorting does not support element type $T")
     size(B) == size(A) ||
         return DimensionMismatch("output has dimensions $(size(B)), input has dimensions $(size(A))")
@@ -145,9 +145,9 @@ end
 function unsupported(::typeof(sortperm!), I, A; dims=nothing, rev::Bool=false)
     err = unsupported_arrays(I, A)
     err === nothing || return err
-    eltype(A) <: Union{MPSGRAPH_VALID_SORT_TYPES...} ||
+    eltype(A) in MPSGRAPH_VALID_SORT_TYPES ||
         return ArgumentError("MPSGraph sorting does not support element type $(eltype(A))")
-    eltype(I) <: MPSGRAPH_SORTPERM_INDEX_TYPES ||
+    eltype(I) in MPSGRAPH_SORTPERM_INDEX_TYPES ||
         return ArgumentError("MPSGraph sortperm requires Int32 or Int64 indices, got $(eltype(I))")
     size(I) == size(A) ||
         return DimensionMismatch("index output has dimensions $(size(I)), input has dimensions $(size(A))")
