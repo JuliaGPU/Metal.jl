@@ -42,6 +42,9 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 [extensions]
 SpecialFunctionsExt = "SpecialFunctions"
 
+[sources]
+GPUArrays = {url = "https://github.com/JuliaGPU/GPUArrays.jl", rev = "tb/sparse"}
+
 [compat]
 AbstractFFTs = "1"
 Adapt = "4.6.1"
