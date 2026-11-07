@@ -27,6 +27,12 @@ using .MPS: MPSNDArrayDescriptor, MPSDataType, lengthOfDimension, descriptor, re
 
     @test_throws ArgumentError MPSNDArrayDescriptor(Float32, ones(Int, 17))
 
+    # Convert integer dimensions and reject unsupported shapes without recursion.
+    @test MPSNDArrayDescriptor(T, (Int32(2), Int32(3))).numberOfDimensions == 2
+    @test MPSNDArrayDescriptor(T, Int32(2), UInt8(3), 4).numberOfDimensions == 3
+    @test_throws MethodError MPSNDArrayDescriptor(T, Int32[2, 3])
+    @test_throws MethodError MPSNDArrayDescriptor(T, (2.0, 3.0))
+
     @test desc1.preferPackedRows == false
 
     desc2.preferPackedRows = true

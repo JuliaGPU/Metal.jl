@@ -21,9 +21,10 @@ function MPSNDArrayDescriptor(dataType::DataType, shape::DenseVector{T}) where {
     end
     return obj
 end
-MPSNDArrayDescriptor(dataType::DataType, shape::Tuple) = MPSNDArrayDescriptor(dataType, collect(shape))
-
-MPSNDArrayDescriptor(dataType::DataType, dimensionSizes...) = @inline MPSNDArrayDescriptor(dataType, collect(dimensionSizes))
+MPSNDArrayDescriptor(dataType::DataType, shape::Tuple{Vararg{Integer}}) =
+    MPSNDArrayDescriptor(dataType, collect(Int, shape))
+MPSNDArrayDescriptor(dataType::DataType, dimensionSizes::Integer...) =
+    MPSNDArrayDescriptor(dataType, dimensionSizes)
 
 lengthOfDimension(desc::MPSNDArrayDescriptor, dim) = @objc [desc::id{MPSNDArrayDescriptor} lengthOfDimension:dim::UInt]::UInt
 
