@@ -67,6 +67,7 @@ steps:
         matrix:
           setup:
             julia:
+              - "1.14-nightly"
               - "nightly"
 
   # special tests
