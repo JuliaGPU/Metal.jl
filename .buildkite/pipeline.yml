@@ -192,6 +192,7 @@ steps:
       - "benchmarks.json"
     agents:
       queue: "metal"
+      cpu: "apple-m1"
     if: |
       build.message !~ /\[skip [^\]]*(benchmarks)/ &&
       (build.message =~ /\[only [^\]]*(benchmarks)/ ||
