@@ -25,6 +25,7 @@ steps:
                 - lib
         agents:
           queue: "metal"
+          cpu: "apple-m6"
         if: |
           build.message !~ /\[skip [^\]]*(tests|julia)/ &&
           (build.message =~ /\[only [^\]]*(tests|julia)/ || build.message !~ /\[only /)
@@ -81,6 +82,7 @@ steps:
               test_args: "--quickfail --all --verbose"
         agents:
           queue: "metal"
+          cpu: "apple-m6"
         if: |
           build.message !~ /\[skip [^\]]*(tests|special)/ &&
           (build.message =~ /\[only [^\]]*(tests|special)/ ||
@@ -104,6 +106,7 @@ steps:
           echo -e "[Metal]\nnonblocking_synchronization = false" >LocalPreferences.toml
         agents:
           queue: "metal"
+          cpu: "apple-m6"
         if: |
           build.message !~ /\[skip [^\]]*(tests|special|validation)/ &&
           (build.message =~ /\[only [^\]]*(tests|special|validation)/ ||
@@ -123,6 +126,7 @@ steps:
                 - lib
         agents:
           queue: "metal"
+          cpu: "apple-m6"
         if: |
           build.message !~ /\[skip [^\]]*(tests|special)/ &&
           (build.message =~ /\[only [^\]]*(tests|special)/ ||
@@ -140,6 +144,7 @@ steps:
           echo -e "[Metal]\ncommand_api = \"metal4\"\nnonblocking_synchronization = false" >LocalPreferences.toml
         agents:
           queue: "metal"
+          cpu: "apple-m6"
         if: |
           build.message !~ /\[skip [^\]]*(tests|special|validation)/ &&
           (build.message =~ /\[only [^\]]*(tests|special|validation)/ ||
@@ -192,6 +197,7 @@ steps:
       - "benchmarks.json"
     agents:
       queue: "metal"
+      cpu: "apple-m6"
     if: |
       build.message !~ /\[skip [^\]]*(benchmarks)/ &&
       (build.message =~ /\[only [^\]]*(benchmarks)/ ||
