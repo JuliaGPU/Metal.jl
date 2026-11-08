@@ -72,11 +72,12 @@ using LinearAlgebra, ScopedValues
         # :simd (simdgroup kernel, Float16/Float32 only)
         @test test_matmul(Float32, Float32; vec_b, alg=:simd)
         @test_throws "algorithm `:simd`" test_matmul(Int32, Int32; vec_b, alg=:simd)
-        # :tensor (Metal 4 tensor operations, matrix-matrix products only)
-        if !vec_b && Metal.tensor_matmul_capable()
+        # :tensor, also for matrix-vector products (a one-column GEMM)
+        if Metal.tensor_matmul_capable()
             @test test_matmul(Float32, Float32; vec_b, alg=:tensor)
+            @test test_matmul(Float16, Float32; vec_b, alg=:tensor)
         else
-            @test_throws Exception test_matmul(Float32, Float32; vec_b, alg=:tensor)
+            @test_throws "algorithm `:tensor`" test_matmul(Float32, Float32; vec_b, alg=:tensor)
         end
         end
     end
@@ -292,9 +293,10 @@ end
     @testset "$name" for (name, f) in products
         c, a, b = f(C, A, B, x, y)
         ref = 2 * Array(a) * Array(b) + c / 2
-        vec = c isa AbstractVector
+        algs = (:auto, :native, :simd, :GPUArrays)
+        Metal.tensor_matmul_capable() && (algs = (algs..., :tensor))
         # Float64 scalars must not reach the kernels
-        for alg in (:auto, :native, :simd, :GPUArrays), (α, β) in ((2f0, 0.5f0), (2, 0.5))
+        for alg in algs, (α, β) in ((2f0, 0.5f0), (2, 0.5))
             dc, da, db = f(copy(dC), dA, dB, dx, copy(dy))
             @with (Metal.matmul_alg => alg) mul!(dc, da, db, α, β)
             @test Array(dc) ≈ ref
@@ -302,7 +304,7 @@ end
         dc, da, db = f(copy(dC), dA, dB, dx, copy(dy))
         mul!(dc, da, db, 0, 0.5)
         @test Array(dc) ≈ c / 2
-        for alg in (vec ? (:MPS, :MPSGraph, :tensor) : (:MPS, :MPSGraph))
+        for alg in (:MPS, :MPSGraph)
             dc, da, db = f(copy(dC), dA, dB, dx, copy(dy))
             @test_throws "multiplication algorithm `:$alg` is not supported" @with (Metal.matmul_alg => alg) mul!(dc, da, db, 2f0, 0.5f0)
         end
@@ -328,7 +330,9 @@ end
         @test Array(c) ≈ Array(a) * Array(b)
     end
     c, a, b = view(copy(dC), 3, 1:24), view(dA, 3:26, 1:33), view(dB, 1:33, 7)
-    @test_throws "multiplication algorithm `:simd` is not supported" @with (Metal.matmul_alg => :simd) mul!(c, a, b)
+    for alg in (:simd, :tensor)
+        @test_throws "multiplication algorithm `:$alg` is not supported" @with (Metal.matmul_alg => alg) mul!(c, a, b)
+    end
 end
 
 @testset "unambiguous view products" begin
@@ -723,6 +727,16 @@ end
                     @test Array(C)[outside] == Pc[outside]
                 end
             end
+            # matrix-vector products
+            @testset "matvec $TA→$TC $tA $M×$K" for (TA, TC) in ((Float32, Float32), (Float16, Float32)),
+                                                    tA in ('N', 'T'), (M, K) in ((1000, 1000), (33, 65))
+                a = rand(TA, (tA == 'N' ? (M, K) : (K, M))...); x = rand(TA, K); y0 = rand(TC, M)
+                y = MtlArray(y0)
+                @with (Metal.matmul_alg => :tensor) mul!(y, tA == 'N' ? MtlArray(a) : transpose(MtlArray(a)), MtlArray(x), 2, 0.5)
+                opa = tA == 'N' ? Float32.(a) : transpose(Float32.(a))
+                @test isapprox(Array(y), 2 * opa * Float32.(x) + 0.5 * y0; rtol=1f-3)
+            end
+
             # a transposed view is read in place too
             let P = rand(Float32, 80, 80), b = rand(Float32, 33, 20)
                 C = MtlArray(zeros(Float32, 48, 20))
