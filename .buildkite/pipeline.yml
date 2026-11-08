@@ -67,6 +67,7 @@ steps:
         matrix:
           setup:
             julia:
+              - "1.14-nightly"
               - "nightly"
 
   # special tests
@@ -192,6 +193,7 @@ steps:
       - "benchmarks.json"
     agents:
       queue: "metal"
+      cpu: "apple-m1"
     if: |
       build.message !~ /\[skip [^\]]*(benchmarks)/ &&
       (build.message =~ /\[only [^\]]*(benchmarks)/ ||
