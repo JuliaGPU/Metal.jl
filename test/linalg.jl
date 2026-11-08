@@ -70,8 +70,9 @@ using LinearAlgebra, ScopedValues
         @test test_matmul(Int8,  Int32;   vec_b, alg=:scalar)
         # large values whose product overflows Int16 still accumulate into Int32
         @test test_matmul(Int16, Int32;   vec_b, alg=:scalar, range=-300:300)
-        # :tensor is matrix-only and needs tile-divisible dims; N=20 errors either way
-        @test_throws Exception test_matmul(Float32, Float32; vec_b, alg=:tensor)
+        # :tensor pads ragged dims and handles matrix-vector products as a one-column GEMM
+        @test test_matmul(Float32, Float32; vec_b, alg=:tensor)
+        @test test_matmul(Float16, Float32; vec_b, alg=:tensor)
         end
     end
 end
@@ -330,15 +331,14 @@ end
             @test check(T, dc, W(Ah, uplo) * bh)
         end
 
-        # forcing a specific kernel works too; the tensor kernel can't handle wrappers
+        # forcing a specific kernel works too
         A64 = MtlArray(rand(Float32, 64, 64)); B64 = MtlArray(rand(Float32, 64, 64))
         ref = Symmetric(Array(A64)) * Array(B64)
-        for alg in (:simd, :scalar)
+        for alg in (:simd, :scalar, :tensor)
             C64 = MtlArray(zeros(Float32, 64, 64))
             @with (Metal.matmul_alg => alg) mul!(C64, Symmetric(A64), B64)
             @test isapprox(Array(C64), ref; rtol=tol(Float32))
         end
-        @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Float32, 64, 64)), Symmetric(A64), B64))
     end
 
     # degenerate shapes
@@ -415,14 +415,38 @@ end
                 @test isapprox(Array(Ct), ref; rtol=ttol(T))
             end
 
-            # forcing `:tensor` on operands it can't handle errors (like an unsupported :MPS)
-            A = MtlArray(rand(Float32, 64, 64)); B = MtlArray(rand(Float32, 64, 64))
-            @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Float32, 64, 64)), transpose(A), B))  # transpose
-            @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Float32, 64, 64)), A, B, 2f0, 1f0))  # α/β
-            Aodd = MtlArray(rand(Float32, 65, 33)); Bodd = MtlArray(rand(Float32, 33, 47))
-            @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Float32, 65, 47)), Aodd, Bodd))      # not tile-divisible
+            # operands outside the tensor path's element types error when it is forced
             Ai = MtlArray(rand(Int32, 64, 64)); Bi = MtlArray(rand(Int32, 64, 64))
-            @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Int32, 64, 64)), Ai, Bi))            # unsupported eltype
+            @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Int32, 64, 64)), Ai, Bi))
+            @test !Metal.supports_tensor_matmul(MtlArray(zeros(Int32, 64, 64)), Ai, Bi, 'N', 'N', true, false)
+
+            # transposes, wrappers, α/β, ragged shapes and views are packed and computed
+            @testset "packed operands" begin
+                ttol(T) = T === Float32 ? 1.0f-3 : 1.0f-1
+                for T in (Float32, Float16), (tA, tB, M, N, K) in (('T', 'N', 65, 47, 33),
+                                                                   ('N', 'T', 64, 64, 64),
+                                                                   ('C', 'N', 40, 24, 9),
+                                                                   ('N', 'N', 1, 8, 5),
+                                                                   ('S', 'N', 33, 33, 33),
+                                                                   ('N', 'h', 20, 20, 20))
+                    α, β = T(2), T(3)
+                    sA = tA in "TC" ? (K, M) : tA in "SsHh" ? (M, M) : (M, K)
+                    sB = tB in "TC" ? (N, K) : tB in "SsHh" ? (K, K) : (K, N)
+                    A = MtlArray(rand(T, sA...)); B = MtlArray(rand(T, sB...)); C0 = rand(T, M, N)
+                    C = MtlArray(C0)
+                    Metal.gemm!(C, tA, tB, A, B, α, β; kernel=:tensor)
+                    opA = Dict('N' => identity, 'T' => transpose, 'C' => adjoint,
+                               'S' => X -> Symmetric(X, :U), 's' => X -> Symmetric(X, :L),
+                               'H' => X -> Hermitian(X, :U), 'h' => X -> Hermitian(X, :L))
+                    ref = α * (opA[tA](Array(A)) * opA[tB](Array(B))) + β * C0
+                    @test isapprox(Array(C), ref; rtol=ttol(T))
+                end
+                # a view as the destination and as an operand
+                Abig = MtlArray(rand(Float32, 80, 80)); Bbig = MtlArray(rand(Float32, 80, 80))
+                Cbig = MtlArray(zeros(Float32, 80, 80))
+                @with (Metal.matmul_alg => :tensor) mul!(view(Cbig, 3:50, 5:40), view(Abig, 3:50, 1:33), view(Bbig, 1:33, 5:40))
+                @test isapprox(Array(Cbig)[3:50, 5:40], Array(Abig)[3:50, 1:33] * Array(Bbig)[1:33, 5:40]; rtol=1f-3)
+            end
         else
             @test_skip Metal.tensor_matmul_capable()
         end

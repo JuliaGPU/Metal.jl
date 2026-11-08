@@ -4,8 +4,9 @@
 # algorithm `:simd`/`:scalar`/`:tensor` forces one, while `:native`/`:auto` pick among them:
 #
 #  * `gemm_tensor_kernel!` is the Metal 4 fast path. It drives `tensor_ops::matmul2d`
-#    over a tile decomposition. Only available on Metal4-capable devices and only for the
-#    plain `C = A*B` (no transpose, α=1, β=0) with tile-divisible, float-typed operands.
+#    over a tile decomposition. Only available on Metal4-capable devices, for the element type
+#    combinations in `GEMM_TENSOR_ELTYPES`. Other shapes, transposes, wrappers and α/β are
+#    handled by packing the operands into zero-padded dense copies (`gemm_tensor!`).
 #
 #  * `gemm_simd_kernel!` is the portable fast path for `Float16`/`Float32`. It stages tiles
 #    of `op(A)`/`op(B)` into threadgroup memory (bounds-checked, so any M/N/K and
@@ -305,11 +306,47 @@ function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceA
     return
 end
 
-# eltypes the tensor path handles (uniform in/out); these have `__tensorops` run helpers and
-# accumulate to a sensible precision in matmul2d.
-@inline gemm_tensor_eltype(::Type{T}, ::Type{T}, ::Type{T}) where {T <: Union{Float16, Float32, BFloat16}} = true
-@inline gemm_tensor_eltype(::Type, ::Type, ::Type) = false
+# Element types `matmul2d` runs as (A, B, C)
+const GEMM_TENSOR_ELTYPES = let s = Set{Tuple{DataType,DataType,DataType}}()
+    for (TA, TB, outs) in (
+            (Float16,  Float16,  (Float16, Float32)),
+            (Float16,  BFloat16, (Float16, BFloat16, Float32)),
+            (Float16,  Float32,  (Float32,)),
+            (Float16,  Int8,     (Float16, Float32)),
+            (Float16,  UInt8,    (Float16, Float32)),
+            (BFloat16, Float16,  (Float16, BFloat16, Float32)),
+            (BFloat16, BFloat16, (BFloat16, Float32)),
+            (BFloat16, Float32,  (Float32,)),
+            (BFloat16, Int8,     (BFloat16, Float32)),
+            (BFloat16, UInt8,    (BFloat16, Float32)),
+            (Float32,  Float16,  (Float32,)),
+            (Float32,  BFloat16, (Float32,)),
+            (Float32,  Float32,  (Float32,)),
+            (Float32,  Int8,     (Float32,)),
+            (Float32,  UInt8,    (Float32,)),
+            (Int8,     Float16,  (Float16, Float32)),
+            (Int8,     BFloat16, (BFloat16, Float32)),
+            (Int8,     Float32,  (Float32,)),
+            (Int8,     Int8,     (Int32,)),
+            (UInt8,    Float16,  (Float16, Float32)),
+            (UInt8,    BFloat16, (BFloat16, Float32)),
+            (UInt8,    Float32,  (Float32,)),
+            (UInt8,    UInt8,    (Int32,)))
+        for TC in outs
+            push!(s, (TA, TB, TC))
+        end
+    end
+    s
+end
 
+@inline function gemm_tensor_eltype(TA::Type, TB::Type, TC::Type)
+    typestuple = (TA, TB, TC)
+    typestuple in GEMM_TENSOR_ELTYPES || return false
+    # Support from the "MatMul2d data type supported" table in the MSL spec
+    BFloat16 in typestuple && macos_version() < v"26.1" && return false
+    UInt8 in typestuple && macos_version() < v"26.4" && return false
+    return true
+end
 # `tensor_ops` runs only when the device advertises the Metal 4 family; gating the launch on
 # it also keeps the `__tensorops_*` symbols out of modules compiled for devices where the
 # validator would reject them.
@@ -320,61 +357,123 @@ end
     end::Bool
 end
 
-# matmul2d needs each dimension covered by whole tiles. Pick the largest validated tile that
-# divides the dimension; 0 means "no usable tile" (dimension not a multiple of the smallest).
+# matmul2d works on whole tiles, so each dimension is padded with zeros up to a multiple of its
+# tile (zeros add nothing to the product, and the padding is dropped again on output). The tile
+# is the largest candidate of at least 16 that divides the dimension; otherwise the largest
+# candidate that wastes at most 1/8 of the dimension; otherwise the candidate that wastes least.
 const GEMM_TENSOR_MN_TILES = (64, 32, 16, 8)
 const GEMM_TENSOR_K_TILES  = (32, 16, 8)
 const GEMM_TENSOR_NSIMD    = 4
 
-@inline function gemm_tensor_tile(d::Integer, cands)
+function gemm_tensor_tile(d::Integer, cands)
     for t in cands
-        d % t == 0 && return t
+        t >= 16 && d % t == 0 && return t
     end
-    return 0
+    for t in cands
+        cld(d, t) * t * 8 <= d * 9 && return t
+    end
+    best = first(cands)
+    for t in cands
+        cld(d, t) * t < cld(d, best) * best && (best = t)
+    end
+    return best
 end
 
-# Whether `gemm_tensor!` can compute `C = α·op(A)·op(B) + β·C` for these operands: the kernel
-# only realizes the plain `C = A*B` (no transpose, α=1, β=0) for a Metal4 device and a
-# supported eltype, with dims that tile evenly.
-@inline supports_tensor_matmul(C, A, B, cA::Char, cB::Char, alpha::Number, beta::Number) = false
+# size of op(X) for a transpose/adjoint or wrapper char
+@inline gemm_op_size(X, t::Char) = (t === 'T' || t === 'C') ? reverse(size(X)) : size(X)
 
-function supports_tensor_matmul(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
-                                cA::Char, cB::Char, alpha::Number, beta::Number)
-    tensor_matmul_capable() || return false
-    gemm_tensor_eltype(eltype(A), eltype(B), eltype(C)) || return false
-    (cA === 'N' && cB === 'N') || return false
-    (isone(alpha) && iszero(beta)) || return false
-    M = size(A, 1); K = size(A, 2); N = size(B, 2)
-    gemm_tensor_tile(M, GEMM_TENSOR_MN_TILES) != 0 &&
-        gemm_tensor_tile(N, GEMM_TENSOR_MN_TILES) != 0 &&
-        gemm_tensor_tile(K, GEMM_TENSOR_K_TILES)  != 0
+const GEMM_TENSOR_PACK_TILE = 16
+
+# Copy `op(X)[1:rows, 1:cols]` into the top-left corner of `D`, gathering through `opelem` so
+# transposes and Symmetric/Hermitian wrappers are applied. The rest of `D` stays zero.
+function gemm_tensor_pack_kernel!(D, X, ::Val{TX}, rows::Int, cols::Int,
+                                  ::Val{TILE}) where {TX, TILE}
+    i = (Int(threadgroup_position_in_grid().x) - 1) * TILE + Int(thread_position_in_threadgroup().x)
+    j = (Int(threadgroup_position_in_grid().y) - 1) * TILE + Int(thread_position_in_threadgroup().y)
+    if i <= rows && j <= cols
+        @inbounds D[i, j] = opelem(X, Val(TX), i, j)
+    end
+    return
 end
+
+# a dense, zero-padded copy of op(X) with size `padded`
+function gemm_tensor_pack(X::MtlMatrixOperand, tX::Char, padded::Tuple{Int,Int})
+    T = eltype(X)
+    rows, cols = gemm_op_size(X, tX)
+    D = fill!(MtlMatrix{T}(undef, padded...), zero(T))
+    @metal threads = (GEMM_TENSOR_PACK_TILE, GEMM_TENSOR_PACK_TILE) groups =
+        (cld(rows, GEMM_TENSOR_PACK_TILE), cld(cols, GEMM_TENSOR_PACK_TILE)) gemm_tensor_pack_kernel!(
+        D, X, Val(tX), rows, cols, Val(GEMM_TENSOR_PACK_TILE))
+    return D
+end
+
+# Whether the tensor path can compute `C = α·op(A)·op(B) + β·C` for these operands: a Metal4
+# device and an element type combination in `GEMM_TENSOR_ELTYPES`. Shapes, transposes, wrappers,
+# views and α/β are all handled by `gemm_tensor!`.
+@inline supports_tensor_matmul(C, A, B, cA::Char, cB::Char, alpha::Number, beta::Number) =
+    tensor_matmul_capable() && gemm_tensor_eltype(eltype(A), eltype(B), eltype(C))
 
 """
     Metal.gemm_tensor!(C, A, B, α=true, β=false, cA='N', cB='N'; tile_m=0, tile_n=0, tile_k=0)
 
-Compute `C = A*B` via `tensor_ops::matmul2d` with a tile decomposition (Metal 4 only).
-Only the plain product is realized (`cA=cB='N'`, `α=1`, `β=0`); callers must check
-[`Metal.supports_tensor_matmul`](@ref) first. `tile_*=0` selects the largest validated tile
-that divides the corresponding dimension; pass explicit tiles to tune.
+Compute `C = α·op(A)·op(B) + β·C` via `tensor_ops::matmul2d` with a tile decomposition (Metal 4
+only). Operands that are not plain `'N'` matrices of tile-aligned size (transposes, wrappers,
+views, ragged shapes, or `α ≠ 1`) are packed into zero-padded dense copies first; see
+[`Metal.supports_tensor_matmul`](@ref) for which element types are accepted. `tile_*=0` selects
+a tile by the rule in `gemm_tensor_tile`; pass explicit tiles to tune.
 """
-function gemm_tensor!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
+function gemm_tensor!(C::MtlMatrixOperand, A::MtlMatrixOperand, B::MtlMatrixOperand,
                       alpha::Number = true, beta::Number = false,
                       cA::Char = 'N', cB::Char = 'N';
                       tile_m::Integer = 0, tile_n::Integer = 0, tile_k::Integer = 0)
-    M = size(A, 1); K = size(A, 2); N = size(B, 2)
+    M, N = size(C)
+    K = gemm_op_size(A, cA)[2]
     tile_m = tile_m == 0 ? gemm_tensor_tile(M, GEMM_TENSOR_MN_TILES) : tile_m
     tile_n = tile_n == 0 ? gemm_tensor_tile(N, GEMM_TENSOR_MN_TILES) : tile_n
     tile_k = tile_k == 0 ? gemm_tensor_tile(K, GEMM_TENSOR_K_TILES)  : tile_k
-    @assert tile_m > 0 && tile_n > 0 && tile_k > 0 """
-        no usable tensor-ops tile for $((M, N, K)); call `supports_tensor_matmul` first"""
+    Mp = cld(M, tile_m) * tile_m
+    Np = cld(N, tile_n) * tile_n
+    Kp = cld(K, tile_k) * tile_k
 
-    fill!(C, zero(eltype(C)))   # the kernel accumulates into C
-    groups = (M ÷ tile_m, N ÷ tile_n, 1)
+    # plain, tile-aligned operands are used in place; anything else is packed
+    Ad = (cA === 'N' && A isa MtlMatrix && size(A) == (Mp, Kp)) ? A :
+         gemm_tensor_pack(A, cA, (Mp, Kp))
+    Bd = (cB === 'N' && B isa MtlMatrix && size(B) == (Kp, Np)) ? B :
+         gemm_tensor_pack(B, cB, (Kp, Np))
+
+    # The kernel accumulates `A*B` into its destination. When C is a plain tile-aligned matrix
+    # and α = 1, the destination is C itself, pre-scaled by β (zeroed for β = 0, so C's old
+    # contents never leak). Otherwise it is a zeroed padded temporary, combined with C after.
+    direct = C isa MtlMatrix && (M, N) == (Mp, Np) && isone(alpha)
+    if direct
+        if iszero(beta)
+            fill!(C, zero(eltype(C)))
+        elseif !isone(beta)
+            C .*= beta
+        end
+        Cd = C
+    else
+        Cd = fill!(MtlMatrix{eltype(C)}(undef, Mp, Np), zero(eltype(C)))
+    end
+
+    groups = (Mp ÷ tile_m, Np ÷ tile_n, 1)
     nsimd = GEMM_TENSOR_NSIMD
     @metal threads = nsimd * 32 groups = groups gemm_tensor_kernel!(
-        C, A, B, UInt32(M), UInt32(N), UInt32(K),
+        Cd, Ad, Bd, UInt32(Mp), UInt32(Np), UInt32(Kp),
         Val(Int32(tile_m)), Val(Int32(tile_n)), Val(Int32(tile_k)), Val(Int32(nsimd)))
+
+    if !direct
+        # convert α and β to the element type first: a `Bool` scalar times a `BFloat16` array
+        # does not compile for the GPU (see `bscale`)
+        Cv = view(Cd, 1:M, 1:N)
+        α = convert(eltype(C), alpha)
+        β = convert(eltype(C), beta)
+        if iszero(β)
+            C .= α .* Cv
+        else
+            C .= α .* Cv .+ β .* C
+        end
+    end
     return C
 end
 
@@ -453,9 +552,9 @@ applying a Symmetric/Hermitian view of the operand (upper/lowercase selects the 
 triangle). Backs the `:native`/`:auto` matmul paths (`kernel=:auto`, picking
 the best of the tensor/simd/scalar kernels) and the `:simd`/`:scalar`/`:tensor` paths, which set
 `kernel` to force a specific kernel. Forcing a kernel that cannot handle the operands is the
-caller's responsibility (see `supports_simd_matmul`/`supports_tensor_matmul`); the tensor
-kernel never handles wrapper chars (it requires plain `'N'`/`'N'` operands), while the simd
-and scalar kernels gather elementwise through `opelem` and handle all of them.
+caller's responsibility (see `supports_simd_matmul`/`supports_tensor_matmul`). The tensor kernel
+packs operands that are not plain tile-aligned matrices through `opelem`, so it handles all of
+them for its element types.
 """
 function gemm!(C::MtlMatrixOperand, tA::Char, tB::Char,
                A::MtlMatrixOperand, B::MtlMatrixOperand,
