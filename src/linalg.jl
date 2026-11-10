@@ -385,6 +385,10 @@ function LinearAlgebra.transpose!(B::MtlMatrix{T},
     return B
 end
 
+# MPSMatrixCopy gives wrong results for complex elements
+LinearAlgebra.transpose!(B::MtlMatrix{T}, A::MtlMatrix{T}) where {T<:Complex} =
+    invoke(transpose!, Tuple{GPUArrays.AnyGPUArray, GPUArrays.AnyGPUArray}, B, A)
+
 function Base.:\(A::MtlMatrix{T}, B::MtlVecOrMat{T}) where {T<:MPSSolveFloat}
     if size(A, 1) == size(A, 2)
         return MPS.solve_lu(A, B)
