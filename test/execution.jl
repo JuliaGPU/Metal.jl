@@ -1,3 +1,5 @@
+import GPUToolbox
+
 dummy() = return
 
 @testset "@metal" begin
@@ -1097,6 +1099,29 @@ end
     @test isempty(excn.name)
     excn2 = throw_at(2, nonquirk, Metal.zeros(Int32, 1), MtlArray(Int32[0]))
     @test excn2.name == "exception"
+
+    # GPUToolbox's shared overrides throw through `Overlays.device_throw`, which reports
+    # like a quirk
+    shared_throw(a) = (GPUToolbox.Overlays.device_throw(ArgumentError, Val(Symbol("shared reason"))); return)
+    excs = throw_at(1, shared_throw, Metal.zeros(Float32, 1))
+    @test excs.name == "ArgumentError"
+    @test excs.reason == "shared reason"
+
+    # ... such as the `Rational` errors whose messages Julia 1.10 and 1.11 format at run time
+    rational_den(a, d) = (a[1] = Rational(1, d[1]); return)
+    rational_neg(a, n) = (a[1] = -(n[1] // 1); return)
+    exct = throw_at(1, rational_den, MtlArray([0//1]), MtlArray([typemin(Int)]))
+    @test exct isa Metal.KernelException
+    if isdefined(Base, :__throw_rational_argerror_typemin)
+        @test exct.name == "ArgumentError"
+        @test exct.reason == "invalid rational: denominator can't be typemin"
+    end
+    exct = throw_at(1, rational_neg, MtlArray([0//1]), MtlArray([typemin(Int)]))
+    @test exct isa Metal.KernelException
+    if VERSION < v"1.12-"
+        @test exct.name == "OverflowError"
+        @test exct.reason == "rational numerator is typemin"
+    end
 
     # -g2: adds the faulting position and the device stack trace
     exc2 = throw_at(2, bounds_oob, Metal.zeros(Float32, 1))
