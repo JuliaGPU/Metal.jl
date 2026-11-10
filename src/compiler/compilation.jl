@@ -59,9 +59,11 @@ GPUCompiler.method_table(::MetalCompilerJob) = method_table
 
 # Metal supports neither double precision nor 128-bit integers, so also use GPUToolbox's
 # overrides that keep single-precision math out of Float64, and 64-bit integer math (e.g.
-# `Rational` comparisons) out of Int128.
+# `Rational` comparisons) out of Int128. Base's exceptions with messages formatted at run
+# time don't compile, so also use the overrides that throw them with a constant message.
 GPUCompiler.method_tables(::MetalCompilerJob) =
-    (method_table, GPUToolbox.Overlays.float64_overrides, GPUToolbox.Overlays.int128_overrides)
+    (method_table, GPUToolbox.Overlays.float64_overrides, GPUToolbox.Overlays.int128_overrides,
+     GPUToolbox.Overlays.throw_overrides)
 
 GPUCompiler.kernel_state_type(job::MetalCompilerJob) = KernelState
 
