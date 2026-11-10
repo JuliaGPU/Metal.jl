@@ -1080,6 +1080,19 @@ end
     @test Array(map(x -> x * 3 // 2, MtlArray(T[1, 4]))) == T[1, 4] .* 3 .// 2
 end
 
+# Apple's macOS 26 back-end gets the overflow flag of signed 16 to 64-bit additions and
+# subtractions wrong (e.g. `0 + -1` overflows), which GPUCompiler expands instead
+@testset "addition and subtraction with overflow $T" for T in (Int8, Int16, Int32, Int64, UInt32, UInt64)
+    edge = T[0, 1, 2, typemax(T), typemin(T), typemax(T) ÷ 2, typemax(T) ÷ 2 + 1]
+    T <: Signed && append!(edge, T[-1, -2, typemin(T) + 1])
+    x, y = vec([x for x in edge, y in edge]), vec([y for x in edge, y in edge])
+    for op in (Base.Checked.add_with_overflow, Base.Checked.sub_with_overflow)
+        @test Array(op.(MtlArray(x), MtlArray(y))) == op.(x, y)
+    end
+
+    T == Int64 && @test Array(map(q -> q - 1//2, MtlArray([1//3, 2//1]))) == [-1//6, 3//2]
+end
+
 # Base compares rationals using the 128-bit products of their numerators and denominators,
 # which GPUToolbox computes in 64-bit words instead (#550)
 @testset "rational comparisons" begin
