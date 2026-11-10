@@ -352,6 +352,8 @@ function solve_triangular(A::MtlMatrix{T}, B::MtlVecOrMat{T};
 
     n, nrhs = check_square_rhs(A, B)
     check_rhs_out(B, out)
+    # MPS aborts on empty matrices
+    (n == 0 || nrhs == 0) && return out
 
     dev = device()
     queue = global_queue(dev)
@@ -390,6 +392,7 @@ function solve_triangular_right(A::MtlMatrix{T}, B::MtlMatrix{T};
                                 alpha=one(T), out::MtlMatrix{T}=B) where {T<:MPSSolveFloat}
     n, nrhs = check_square_rdiv(A, B)
     check_rhs_out(B, out)
+    (n == 0 || nrhs == 0) && return out
 
     dev = device()
     queue = global_queue(dev)
