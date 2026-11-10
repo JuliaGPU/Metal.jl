@@ -101,6 +101,7 @@ function main()
                 "usage/kernel_advanced.md",
                 "usage/numerical.md",
                 "usage/kernelabstractions.md",
+                "usage/sparse.md",
             ],
             "Development" => Any[
                 "development/performance.md",
@@ -117,6 +118,7 @@ function main()
                 "api/mps.md",
                 "api/mpsgraphs.md",
                 "api/libraries.md",
+                "api/sparse.md",
             ],
             "Developers" => Any[
                 "developers/contributing.md",
