@@ -50,6 +50,9 @@ when given. Unlike [`mtl`](@ref), `MtlArray(A)` keeps the element type of `A`. E
 have to be stored inline, and cannot contain `Float64`, `Int128` or `UInt128` values, which
 Metal doesn't support.
 
+If `A` is an `MtlArray`, or a wrapper of one such as a view or a transpose, it is copied on
+the GPU, and the new array uses the storage mode of `A` unless `S` is given.
+
 ```jldoctest
 julia> a = MtlArray([1f0, 2f0, 3f0])
 3-element MtlVector{Float32, Metal.SharedStorage}:
@@ -353,6 +356,15 @@ end
 end
 
 
+## derived types
+
+# wrapped arrays: can be used in kernels
+const WrappedMtlArray{T,N} = Union{MtlArray{T,N},WrappedArray{T,N,MtlArray,MtlArray{T,N}}}
+const WrappedMtlVector{T} = WrappedMtlArray{T,1}
+const WrappedMtlMatrix{T} = WrappedMtlArray{T,2}
+const WrappedMtlVecOrMat{T} = Union{WrappedMtlVector{T},WrappedMtlMatrix{T}}
+
+
 ## interop with other arrays
 
 @inline function MtlArray{T,N}(xs::AbstractArray{T,N}) where {T,N}
@@ -377,13 +389,27 @@ MtlArray(A::AbstractArray{T,N}) where {T,N} = MtlArray{T,N}(A)
 # copy xs to match Array behavior with same storage mode
 MtlArray{T,N,S}(xs::MtlArray{T,N,S}) where {T,N,S} = copy(xs)
 
-## derived types
-
-# wrapped arrays: can be used in kernels
-const WrappedMtlArray{T,N} = Union{MtlArray{T,N},WrappedArray{T,N,MtlArray,MtlArray{T,N}}}
-const WrappedMtlVector{T} = WrappedMtlArray{T,1}
-const WrappedMtlMatrix{T} = WrappedMtlArray{T,2}
-const WrappedMtlVecOrMat{T} = Union{WrappedMtlVector{T},WrappedMtlMatrix{T}}
+# (wrapped) GPU arrays are copied or converted on the GPU, without going through the CPU.
+# an unspecified storage mode is taken from the source array.
+@inline function MtlArray{T,N,S}(xs::MtlArray{T,N}) where {T,N,S}
+    A = MtlArray{T,N,S}(undef, size(xs))
+    @inline copyto!(A, xs)
+    return A
+end
+@inline function MtlArray{T,N,S}(xs::WrappedMtlArray{T,N}) where {T,N,S}
+    A = MtlArray{T,N,S}(undef, size(xs))
+    @inline map!(identity, A, xs)
+    return A
+end
+@inline function MtlArray{T,N,S}(xs::WrappedMtlArray{OT,N}) where {T,N,S,OT}
+    A = MtlArray{T,N,S}(undef, size(xs))
+    @inline map!(T, A, xs)
+    return A
+end
+@inline MtlArray{T,N}(xs::WrappedMtlArray{T,N}) where {T,N} =
+    MtlArray{T,N,storagemode(Adapt.unwrap_type(typeof(xs)))}(xs)
+@inline MtlArray{T,N}(xs::WrappedMtlArray{OT,N}) where {T,N,OT} =
+    MtlArray{T,N,storagemode(Adapt.unwrap_type(typeof(xs)))}(xs)
 
 
 ## conversions

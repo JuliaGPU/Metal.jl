@@ -1,3 +1,4 @@
+using LinearAlgebra
 using ScopedValues
 
 STORAGEMODES = [Metal.SharedStorage, Metal.PrivateStorage]
@@ -385,6 +386,101 @@ end
     d = mtl([1]; storage=Metal.SharedStorage)
     e = c .+ d
     @test Metal.storagemode(e) == Metal.SharedStorage
+end
+
+@testset "construction from GPU arrays" begin
+    # constructing from a (wrapped) MtlArray happens on the GPU: it yields a new array, and
+    # the storage mode is taken from the source unless one is requested
+    h = Float32.(reshape(1:36, 6, 6))
+    wrappers = (
+        ("MtlArray",            identity),
+        ("transpose",           transpose),
+        ("adjoint",             adjoint),
+        ("view",                a -> view(a, 2:5, :)),
+        ("contiguous view",     a -> view(a, :, 2:5)),
+        ("step view",           a -> view(a, 1:2:5, :)),
+        ("reshape",             a -> reshape(a, 4, 9)),
+        ("reshape of view",     a -> reshape(view(a, 2:5, :), 6, 4)),
+        ("reinterpret",         a -> reinterpret(Float32, a)),
+        ("PermutedDimsArray",   a -> PermutedDimsArray(a, (2, 1))),
+        ("UpperTriangular",     UpperTriangular),
+        ("LowerTriangular",     LowerTriangular),
+        ("UnitUpperTriangular", UnitUpperTriangular),
+        ("UnitLowerTriangular", UnitLowerTriangular),
+        ("Symmetric",           Symmetric),
+        ("Hermitian",           Hermitian),
+    )
+
+    @testset "$S source" for S in STORAGEMODES
+        a = MtlArray{Float32, 2, S}(h)
+        @testset "$name" for (name, f) in wrappers
+            w = f(a)
+            expected = collect(f(h))
+
+            # unspecified storage mode: preserved from the source
+            @testset "$ctor" for ctor in (MtlArray, MtlArray{Float32}, MtlArray{Float32, 2}, MtlMatrix)
+                x = ctor(w)
+                @test x isa MtlArray{Float32, 2, S}
+                @test Array(x) == expected
+                @test pointer(x) != pointer(a)
+            end
+
+            # specified storage mode: always honored
+            @testset "to $S2" for S2 in STORAGEMODES
+                x = MtlArray{Float32, 2, S2}(w)
+                @test x isa MtlArray{Float32, 2, S2}
+                @test Array(x) == expected
+                @test pointer(x) != pointer(a)
+
+                y = MtlMatrix{Float32, S2}(w)
+                @test y isa MtlArray{Float32, 2, S2}
+                @test Array(y) == expected
+            end
+
+            # element type conversion
+            x = MtlArray{Int32}(w)
+            @test x isa MtlArray{Int32, 2, S}
+            @test Array(x) == Int32.(expected)
+            @testset "converting to $S2" for S2 in STORAGEMODES
+                x = MtlArray{Int32, 2, S2}(w)
+                @test x isa MtlArray{Int32, 2, S2}
+                @test Array(x) == Int32.(expected)
+            end
+        end
+
+        # the source is left untouched, and does not alias the result
+        b = MtlArray(transpose(a))
+        fill!(b, 0)
+        @test Array(a) == h
+        c = MtlArray(a)
+        fill!(c, 0)
+        @test Array(a) == h
+
+        # vectors
+        v = view(a, 3, :)
+        @test MtlArray(v) isa MtlArray{Float32, 1, S}
+        @test Array(MtlArray(v)) == h[3, :]
+        @test Array(MtlVector{Int32}(v)) == Int32.(h[3, :])
+
+        # empty arrays
+        e = MtlArray{Float32, 2, S}(undef, 0, 3)
+        @test MtlArray(transpose(e)) isa MtlArray{Float32, 2, S}
+        @test size(MtlArray(transpose(e))) == (3, 0)
+        @test size(MtlArray{Int32}(view(e, :, 2:3))) == (0, 2)
+    end
+
+    @testset "$T" for T in (Bool, Int8, Int16, Int32, Int64, UInt8, UInt64, Float16, ComplexF32)
+        hT = rand(T, 5, 7)
+        aT = MtlArray(hT)
+        @test Array(MtlArray(transpose(aT))) == transpose(hT)
+        @test Array(MtlArray(adjoint(aT))) == adjoint(hT)
+        @test Array(MtlArray(view(aT, 2:4, 1:2:7))) == hT[2:4, 1:2:7]
+        @test Array(MtlArray(PermutedDimsArray(aT, (2, 1)))) == permutedims(hT)
+    end
+
+    # the number of dimensions has to match
+    @test_throws MethodError MtlVector(transpose(MtlArray(h)))
+    @test_throws MethodError MtlArray{Float32, 3}(MtlArray(h))
 end
 
 @testset "resizing" begin
