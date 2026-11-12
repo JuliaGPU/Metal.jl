@@ -46,3 +46,11 @@ for T in Ts, dim in ((16,16), (10,500), (500,10), (256,512))
         @test Array(dstMat) == Array(srcMat) broken=copy_is_broken(T)
     end
 end
+
+# MPS aborts the process on empty copies
+@testset "empty" begin
+    dev = device()
+    @test_throws ArgumentError MPS.MPSMatrixCopy(dev, 0, 16, false, false)
+    @test_throws ArgumentError MPS.MPSMatrixCopy(dev, 16, 0, false, false)
+    @test_throws ArgumentError MPS.MPSMatrixCopy(dev, 0, 0, false, true)
+end
