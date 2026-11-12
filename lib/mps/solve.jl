@@ -352,7 +352,6 @@ function solve_triangular(A::MtlMatrix{T}, B::MtlVecOrMat{T};
 
     n, nrhs = check_square_rhs(A, B)
     check_rhs_out(B, out)
-    # MPS aborts on empty matrices
     (n == 0 || nrhs == 0) && return out
 
     dev = device()
