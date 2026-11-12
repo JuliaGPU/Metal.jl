@@ -303,9 +303,21 @@ end
 
 function commit!(f::Base.Callable, cmdbuf::MTLCommandBufferLike)
     enqueue!(cmdbuf)
-    ret = f(cmdbuf)
+    ret = encode_enqueued(f, cmdbuf)
     commit!(cmdbuf)
     return ret
+end
+
+# call `f` to encode into an enqueued command buffer. Metal holds back everything that is
+# committed to a queue after an enqueued command buffer until that buffer is committed
+# too, so also commit it when `f` throws.
+function encode_enqueued(f, cmdbuf::MTLCommandBufferLike)
+    try
+        return f(cmdbuf)
+    catch
+        cmdbuf.status == MTLCommandBufferStatusEnqueued && commit!(cmdbuf)
+        rethrow()
+    end
 end
 
 function use_residency_set!(cmdbuf::MTLCommandBufferLike, resset::MTLResidencySet)
