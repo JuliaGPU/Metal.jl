@@ -592,6 +592,16 @@ end
         @test Array(Yt) ≈ BR / transpose(cT) rtol=1f-4
     end
 
+    @testset "empty $(triangle)" for triangle in (UpperTriangular, UnitLowerTriangular)
+        E, e, W = MtlMatrix{T}(undef, 0, 0), MtlVector{T}(undef, 0), MtlMatrix{T}(undef, 0, 3)
+        @test size(triangle(E) \ e) == (0,)
+        @test size(triangle(E) \ W) == (0, 3)
+        @test size(transpose(triangle(E)) \ W) == (0, 3)
+        @test size(copy(W') / triangle(E)) == (3, 0)
+        @test size(copy(W') / transpose(triangle(E))) == (3, 0)
+        @test size(triangle(dA) \ MtlMatrix{T}(undef, n, 0)) == (n, 0)
+    end
+
     dsing = MtlMatrix(T[1 2; 2 4])
     bsing = MtlVector(T[1, 2])
     @test_throws SingularException dsing \ bsing
