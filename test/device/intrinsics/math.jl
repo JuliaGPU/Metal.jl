@@ -1093,6 +1093,15 @@ end
     T == Int64 && @test Array(map(q -> q - 1//2, MtlArray([1//3, 2//1]))) == [-1//6, 3//2]
 end
 
+# Julia 1.10 formats the messages of errors that `Rational` arithmetic can throw, which
+# crashed LLVM; GPUToolbox's `throw_overrides` throw them with a constant message instead
+@testset "rational arithmetic" begin
+    qs = [1//3, -5//7, 3//2, 7//-4, 0//1, 2^40//3]
+    f(q) = muladd(q, 2//3, -q)
+    @test Array(map(f, MtlArray(qs))) == f.(qs)
+    @test Array(map(-, MtlArray(qs))) == -qs
+end
+
 # Base compares rationals using the 128-bit products of their numerators and denominators,
 # which GPUToolbox computes in 64-bit words instead (#550)
 @testset "rational comparisons" begin
