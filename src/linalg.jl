@@ -367,6 +367,9 @@ function LinearAlgebra.transpose!(B::MtlMatrix{T},
     axes(B, 2) == axes(A, 1) && axes(B, 1) == axes(A, 2) || throw(DimensionMismatch("transpose"))
 
     isempty(B) && return B
+    # MPSMatrixCopy gives wrong results for 8-byte elements
+    sizeof(T) >= 8 &&
+        return invoke(transpose!, Tuple{GPUArrays.AnyGPUArray, GPUArrays.AnyGPUArray}, B, A)
 
     M, N = size(A)
     dev = device()
