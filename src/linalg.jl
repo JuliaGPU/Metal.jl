@@ -18,7 +18,7 @@ end
 #   :native   - best of Metal.jl's own kernels (tensor → simd → scalar), picked per operands
 #   :simd     - force the simdgroup_matrix kernel (Float16/Float32)
 #   :scalar     - force the scalar shared-memory kernel (any eltype)
-#   :tensor   - force the Metal 4 tensor-ops kernel (Metal4 device, plain C=A*B, float)
+#   :tensor   - force the Metal 4 tensor-ops kernel (Metal4 device, see `supports_tensor_matmul`)
 # The native kernels live in src/gemm.jl.
 @public matmul_alg
 
@@ -33,8 +33,10 @@ A `ScopedValue` that selects the algorithm `LinearAlgebra.mul!` (and `*`) uses f
 - `:MPS`: [`MPS.matmul!`](@ref) and [`MPS.matvecmul!`](@ref).
 - `:native`: the best of Metal.jl's own kernels for the operands, of `:tensor`, `:simd` and
   `:scalar`.
-- `:tensor`: a Metal 4 tensor-operations kernel, for plain `C = A*B` products of `Float16`,
-  `Float32` or `BFloat16` matrices; only matrix-matrix products.
+- `:tensor`: a Metal 4 tensor-operations kernel, on Metal 4 devices, for `Float16`, `BFloat16`,
+  `Float32`, `Int8` and `UInt8` inputs with the output types the device supports for them (see
+  `Metal.GEMM_TENSOR_ELTYPES`). Any shape, transpose, symmetric/hermitian wrapper, view and α/β
+  is handled; matrix-vector products are included.
 - `:simd`: a SIMD-group matrix kernel.
 - `:scalar`: a kernel without SIMD-group matrices, for any element type.
 - `:GPUArrays`: the generic GPUArrays.jl kernel.
@@ -61,7 +63,7 @@ matmul_alg_error(alg, inT, outT, vec) = error("Matrix-$(vec ? "Vector" : "Matrix
 @inline gemm_char(t) = Char(t)
 
 matmul_alg_invalid(alg, vec) =
-    error(":$alg is not a valid $(vec ? "matvecmul" : "matmul") algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`, `:native`, `:simd`, `:scalar`$(vec ? "" : ", `:tensor`")")
+    error(":$alg is not a valid $(vec ? "matvecmul" : "matmul") algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`, `:native`, `:simd`, `:scalar`, `:tensor`")
 
 # shared native-kernel path: a forced :simd/:tensor kernel must support the operands
 # (the scalar kernel handles anything); :native/:auto let gemm! pick the kernel
@@ -203,13 +205,14 @@ function LinearAlgebra.mul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::Mtl
     if alg === :MPSGraph || (alg === :auto && mpsgraph_supported)
         mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C), true)
         MPSGraphs.matvecmul!(C, A, B, alpha, beta; tA)
-    elseif alg === :native || alg === :auto || alg === :simd || alg === :scalar
-        # matrix-vector products go through the native gemv; `:simd`/`:scalar` force the
-        # kernel. The tensor kernel is matrix-only, so `:tensor` isn't handled here and
-        # falls through to the unsupported-algorithm error below.
+    elseif alg === :native || alg === :auto || alg === :simd || alg === :scalar || alg === :tensor
+        # matrix-vector products go through the native gemv (a GEMM with one column); the
+        # kernel-forcing algorithms pass through to it
         cA = gemm_char(tA)
-        kernel = (alg === :simd || alg === :scalar) ? alg : :auto
+        kernel = (alg === :native || alg === :auto) ? :auto : alg
         alg === :simd && (supports_simd_matmul(C, A, B, cA, 'N', alpha, beta) ||
+            matmul_alg_error(alg, eltype(A), eltype(C), true))
+        alg === :tensor && (supports_tensor_matmul(C, A, B, cA, 'N', alpha, beta) ||
             matmul_alg_error(alg, eltype(A), eltype(C), true))
         gemv!(C, cA, A, B, alpha, beta; kernel)
     elseif alg === :MPS
