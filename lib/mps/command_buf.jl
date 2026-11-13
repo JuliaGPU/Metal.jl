@@ -27,7 +27,7 @@ MTL.commit!(cmdbuf::MPSCommandBuffer) = @inline MTL.commit!(cmdbuf.commandBuffer
 
 function MTL.commit!(f::Base.Callable, cmdbuf::MPSCommandBuffer)
     enqueue!(cmdbuf)
-    ret = f(cmdbuf)
+    ret = MTL.encode_enqueued(f, cmdbuf)
     commit!(cmdbuf)
     return ret
 end
@@ -46,7 +46,7 @@ end
 
 function commitAndContinue!(f::Base.Callable, cmdbuf::MPSCommandBuffer)
     enqueue!(cmdbuf)
-    ret = f(cmdbuf)
+    ret = MTL.encode_enqueued(f, cmdbuf)
     commitAndContinue!(cmdbuf)
     return ret
 end
