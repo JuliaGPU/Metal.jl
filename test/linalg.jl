@@ -405,7 +405,9 @@ end
 
         if Metal.tensor_matmul_capable()
             ttol(T) = T === Float32 ? 1.0f-3 : 1.0f-1
-            @testset "$T $M×$N×$K" for T in (Float32, Float16, BFloat16),
+            # BFloat16 tensor operands need macOS 26.1
+            ttypes = Metal.macos_version() >= v"26.1" ? (Float32, Float16, BFloat16) : (Float32, Float16)
+            @testset "$T $M×$N×$K" for T in ttypes,
                                        (M, N, K) in ((64, 64, 32), (128, 256, 64), (512, 512, 128))
                 A = MtlArray(rand(T, M, K)); B = MtlArray(rand(T, K, N))
                 ref = Array(A) * Array(B)

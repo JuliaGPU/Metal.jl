@@ -307,7 +307,9 @@ end
 
 # eltypes the tensor path handles (uniform in/out); these have `__tensorops` run helpers and
 # accumulate to a sensible precision in matmul2d.
-@inline gemm_tensor_eltype(::Type{T}, ::Type{T}, ::Type{T}) where {T <: Union{Float16, Float32, BFloat16}} = true
+@inline gemm_tensor_eltype(::Type{T}, ::Type{T}, ::Type{T}) where {T <: Union{Float16, Float32}} = true
+# the MSL spec lists `bfloat` as a matmul2d data type from macOS 26.1
+@inline gemm_tensor_eltype(::Type{BFloat16}, ::Type{BFloat16}, ::Type{BFloat16}) = macos_version() >= v"26.1"
 @inline gemm_tensor_eltype(::Type, ::Type, ::Type) = false
 
 # `tensor_ops` runs only when the device advertises the Metal 4 family; gating the launch on

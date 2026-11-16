@@ -34,7 +34,8 @@ A `ScopedValue` that selects the algorithm `LinearAlgebra.mul!` (and `*`) uses f
 - `:native`: the best of Metal.jl's own kernels for the operands, of `:tensor`, `:simd` and
   `:scalar`.
 - `:tensor`: a Metal 4 tensor-operations kernel, for plain `C = A*B` products of `Float16`,
-  `Float32` or `BFloat16` matrices; only matrix-matrix products.
+  `Float32` or `BFloat16` matrices; only matrix-matrix products. `BFloat16` needs macOS
+  26.1.
 - `:simd`: a SIMD-group matrix kernel.
 - `:scalar`: a kernel without SIMD-group matrices, for any element type.
 - `:GPUArrays`: the generic GPUArrays.jl kernel.
