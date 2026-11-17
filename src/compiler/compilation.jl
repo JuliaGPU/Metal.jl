@@ -19,6 +19,8 @@ Cached compilation results for a Metal kernel job, managed by
 - `metallib` + `entry` + `loggingEnabled` + `device_rng`: library-wrapped AIR bytes and
   launch metadata — the final session-portable artifacts. `metallib === nothing` identifies
   a job that has not been compiled yet (see `compile_or_lookup` in `execution.jl`).
+- `exception_sites`: the kernel's throw sites, which the exceptions it reports refer to (see
+  `GPUCompiler.uses_exception_sites`). Session-portable.
 - `relocations`: the kernel's relocation manifest, or `nothing` when it carries none
   (the common case). Session-portable — its `JuliaValueRef`/`CGlobalRef` targets are
   serializable and resolved per-session by the loader — so a relocation-carrying kernel
@@ -45,15 +47,18 @@ mutable struct MetalResults
     loggingEnabled::Union{Nothing, Bool}
     device_rng::Union{Nothing, Bool}
     relocations::Union{Nothing, GPUCompiler.Relocations}
+    exception_sites::Vector{GPUCompiler.ExceptionSite}
     # host-side objects (session-local)
     pipelines::Vector{Tuple{MTLDevice, MTLComputePipelineState}}
     reloc_tables::Vector{Tuple{MTLDevice, MTLBuffer}}
     MetalResults() = new(nothing, nothing, nothing, nothing, nothing, nothing,
+                         GPUCompiler.ExceptionSite[],
                          Tuple{MTLDevice, MTLComputePipelineState}[],
                          Tuple{MTLDevice, MTLBuffer}[])
 end
 
 GPUCompiler.runtime_module(::MetalCompilerJob) = Metal
+GPUCompiler.uses_exception_sites(::MetalCompilerJob) = true
 
 GPUCompiler.method_table(::MetalCompilerJob) = method_table
 
@@ -568,7 +573,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
     Threads.atomic_add!(compilations, 1)
 
     # TODO: on 1.9, this actually creates a context. cache those.
-    ir, air, fun, entry, loggingEnabled, device_rng, relocations = JuliaContext() do _
+    ir, air, fun, entry, loggingEnabled, device_rng, relocations, exception_sites = JuliaContext() do _
         @signpost_interval log=log_compiler() start="" stop="" "Generate LLVM IR" begin
             # (asserting the result types, which `invoke_frozen` hides, keeps the uses of
             #  the results statically dispatched, so that they're precompiled)
@@ -576,6 +581,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
         end
         local kernel_fn = meta.entry::LLVM.Function
         local relocs = meta.relocations::GPUCompiler.Relocations
+        local sites = meta.exception_sites::Vector{GPUCompiler.ExceptionSite}
 
         # the IR belongs to us: lower and inspect it, then dispose of it
         @dispose mod=mod begin
@@ -620,7 +626,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
                          - $(air_file)""")
             end
 
-            string(mod), air, fun, kernel_fn.name, loggingEnabled, device_rng, relocs
+            string(mod), air, fun, kernel_fn.name, loggingEnabled, device_rng, relocs, sites
         end
     end
 
@@ -650,7 +656,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
 
     # `nothing` marks a relocation-free kernel (the common case), keeping its `MetalResults`
     # and package-image footprint identical to before.
-    return (; air, metallib, entry, loggingEnabled, device_rng,
+    return (; air, metallib, entry, loggingEnabled, device_rng, exception_sites,
               relocations = isempty(relocations) ? nothing : relocations)
 end
 

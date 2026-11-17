@@ -78,10 +78,10 @@ groups = cld(length(a), threads)
 kernel(a; threads, groups)
 ```
 
-**"KernelException: A BoundsError was thrown on device …"** (or another exception
-name): the kernel threw an exception. It is reported when you next synchronize, not where you
+**"KernelException: A BoundsError was thrown by thread … on device …"** (or another
+exception name): the kernel threw an exception. It is reported when you next synchronize, not where you
 launched the kernel (see [Errors](@ref gpu-errors)). Launch with `@metal debug_level=2` or start Julia
-with `-g2` to see which thread threw it and where; see [Errors and debug levels](@ref).
+with `-g2` to see where it was thrown; see [Errors and debug levels](@ref).
 
 **"CommandBufferError: Metal command buffer failed"**: Metal reports that executing a
 command buffer failed. The `NSError` line that follows gives Metal's reason, such as a kernel

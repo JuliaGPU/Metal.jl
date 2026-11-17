@@ -38,6 +38,7 @@ if GPUCompiler.supports_relocatable_ir() && LLVM.version() >= v"17"
             @inbounds out[1] = x isa RGB ? x.r : Int32(-2)
             return
         end
+        checked_kernel(a, i) = (a[i] = 1f0; return)
         @compile_workload begin
             let a = MtlArray(Float32[1, 2, 3])
                 a .+ 1f0
@@ -45,6 +46,10 @@ if GPUCompiler.supports_relocatable_ir() && LLVM.version() >= v"17"
             end
             let out = Metal.zeros(Int32, 1)
                 @metal threads=1 reloc_kernel(out, false, Int32(7))
+                Metal.synchronize()
+            end
+            let a = Metal.zeros(Float32, 1)
+                @metal threads=1 checked_kernel(a, 1)
                 Metal.synchronize()
             end
         end
@@ -73,7 +78,7 @@ if GPUCompiler.supports_relocatable_ir() && LLVM.version() >= v"17"
         # its relocation table resolved in this session.
         proc_b = raw"""
         using MetalPersistWorkload, Metal
-        using .MetalPersistWorkload: reloc_kernel
+        using .MetalPersistWorkload: reloc_kernel, checked_kernel
         c0 = Metal.compilations[]
         a = MtlArray(Float32[1, 2, 3])
         b = a .+ 1f0
@@ -81,7 +86,11 @@ if GPUCompiler.supports_relocatable_ir() && LLVM.version() >= v"17"
         out = Metal.zeros(Int32, 1)
         @metal threads=1 reloc_kernel(out, false, Int32(7))
         Metal.synchronize()
-        println("RESULT=", Array(b) == Float32[2, 3, 4] && Array(out)[1] == 11)
+        # its throw sites come with it
+        @metal threads=1 checked_kernel(Metal.zeros(Float32, 1), 2)
+        exc = try Metal.synchronize(); nothing; catch err; err; end
+        println("RESULT=", Array(b) == Float32[2, 3, 4] && Array(out)[1] == 11 &&
+                           exc isa Metal.KernelException && exc.name == "BoundsError")
         println("COMPILATIONS=", Metal.compilations[] - c0)
         """
         out = read(setenv(`$jl -e $proc_b`, env), String)

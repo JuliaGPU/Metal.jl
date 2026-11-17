@@ -133,5 +133,9 @@ end
     empty!(MTL.last_committed_per_queue)
     empty!(MTL.submission_state_per_queue)
     empty!(device_exception_info)
+    Base.@lock exception_tables_lock begin
+        empty!(exception_tables)
+        empty!(exception_table_ids)
+    end
     Base.@lock MPSGraphs.graph_cache_lock empty!(MPSGraphs.graph_cache)
 end
