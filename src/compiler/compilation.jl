@@ -418,6 +418,40 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
         end
     end
 
+    # same for the tensor functions, whose pointers are to Apple's types. matmul2d does not
+    # compile without them as of macOS 27.3; the intrinsics only need them for Apple's verifier.
+    let T_i8 = LLVM.Int8Type(), T_i32 = LLVM.Int32Type()
+        named(name) = something(get(LLVM.types(context()), name, nothing),
+                                LLVM.StructType(name))
+        T_tensor = named("struct._tensor_t")    # opaque
+        T_descriptor = named("struct.mpp::tensor_ops::matmul2d_descriptor")
+        LLVM.isopaque(T_descriptor) &&
+            LLVM.elements!(T_descriptor,
+                           LLVMType[T_i32, T_i32, T_i32, T_i8, T_i8, T_i8, T_i32])
+
+        for f in mod.functions
+            # the element type of the pointer parameter at a (1-based) position
+            eltyp = if startswith(f.name, "__tensorops_impl_matmul2d_op_run_")
+                i -> i == 1 ? T_descriptor : T_i8
+            elseif startswith(f.name, "air.init_strided_private_tensor.")
+                i -> i == 1 ? T_tensor : T_i8
+            elseif startswith(f.name, "air.slice_private_tensor_private_tensor.")
+                i -> i <= 2 ? T_tensor : T_i8
+            elseif startswith(f.name, "air.get_extent_private_tensor.")
+                i -> T_tensor
+            else
+                continue
+            end
+            mds = Metadata[]
+            for (i, param) in enumerate(f.function_type.parameters)
+                param isa LLVM.PointerType || continue
+                push!(mds, ConstantInt(Int32(i-1)))
+                push!(mds, UndefValue(eltyp(i)))
+            end
+            f.metadata["arg_eltypes"] = MDNode(mds)
+        end
+    end
+
     # name the kernel readably (see `kernel_symbol`). this has to happen after GPUCompiler
     # has looked up the entry point by its original name, i.e., not before optimization.
     if job.config.kernel && job.config.name === nothing

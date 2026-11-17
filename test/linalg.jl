@@ -372,8 +372,11 @@ end
         air(macos) = sprint() do io
             Metal.code_air(io, Metal.gemm_tensor_kernel!, tt; kernel=true, macos)
         end
-        # Typed-pointer LLVM versions may use either i8 or {} as the pointee type.
-        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 (?:signext )?0, (?:(?:i8|\{\}) addrspace\(1\)\*|ptr addrspace\(1\)) null, i32 0, i8 (?:signext )?-1\)\n",
+        # Typed-pointer LLVM versions may use either i8 or {} as the pointee type. The null
+        # pointer is passed through a cast to the type the intrinsic is declared with.
+        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 (?:signext )?0, (?:(?:i8|\{\}) addrspace\(1\)\*|ptr addrspace\(1\)) (?:null|%\d+), i32 0, i8 (?:signext )?-1\)\n",
+                       air(v"27"))
+        @test occursin(r"= bitcast (?:\{\} addrspace\(1\)\*|ptr addrspace\(1\)) null to ",
                        air(v"27"))
         # the thread count is one the GPU compiler resolves when it compiles for the device
         @test occursin("call i32 @air.get_simdgroup_size.i32()", air(v"27"))
@@ -389,7 +392,7 @@ end
         tg_air(macos) = sprint() do io
             Metal.code_air(io, tg_tensor, Tuple{MtlDeviceVector{Int32, 1}}; kernel=true, macos)
         end
-        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.local\(.*, i8 (?:signext )?0, (?:(?:i8|\{\}) addrspace\(3\)\*|ptr addrspace\(3\)) null, i32 0, i8 (?:signext )?-1\)\n",
+        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.local\(.*, i8 (?:signext )?0, (?:(?:i8|\{\}) addrspace\(3\)\*|ptr addrspace\(3\)) (?:null|%\d+), i32 0, i8 (?:signext )?-1\)\n",
                        tg_air(v"27"))
         @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.local\(.*, i8 (?:signext )?0\)\n",
                        tg_air(v"26"))
