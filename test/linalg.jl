@@ -686,7 +686,7 @@ end
     # Issue #656
     @test isempty(transpose!(B, A))
 
-    @testset "$T" for T in (Float32, ComplexF32, Int64)
+    @testset "$T" for T in (Float32, ComplexF32, Int64, Complex{Int16})
         A = rand(T, 5, 3)
         @test Array(transpose!(Metal.zeros(T, 3, 5), MtlMatrix(A))) == transpose(A)
         @test Array(copy(transpose(MtlMatrix(A)))) == transpose(A)

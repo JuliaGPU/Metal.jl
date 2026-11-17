@@ -362,32 +362,6 @@ function LinearAlgebra.lu!(A::MtlMatrix{T};
     return LinearAlgebra.LU(A, p, info)
 end
 
-function LinearAlgebra.transpose!(B::MtlMatrix{T},
-                                                   A::MtlMatrix{T}) where {T}
-    axes(B, 2) == axes(A, 1) && axes(B, 1) == axes(A, 2) || throw(DimensionMismatch("transpose"))
-
-    isempty(B) && return B
-    # MPSMatrixCopy gives wrong results for 8-byte elements
-    sizeof(T) >= 8 &&
-        return invoke(transpose!, Tuple{GPUArrays.AnyGPUArray, GPUArrays.AnyGPUArray}, B, A)
-
-    M, N = size(A)
-    dev = device()
-    queue = global_queue(dev)
-    cmdbuf = MTLCommandBuffer(queue)
-
-    mps_a = MPSMatrix(A)
-    mps_b = MPSMatrix(B)
-
-    descriptor = MPSMatrixCopyDescriptor(mps_a, mps_b)
-    kernel = MPSMatrixCopy(dev, N, M, false, true)
-    encode!(cmdbuf, kernel, descriptor)
-
-    commit!(cmdbuf)
-
-    return B
-end
-
 function Base.:\(A::MtlMatrix{T}, B::MtlVecOrMat{T}) where {T<:MPSSolveFloat}
     if size(A, 1) == size(A, 2)
         return MPS.solve_lu(A, B)
