@@ -418,12 +418,15 @@ Base.@nospecializeinfer function encode_launch!(
         rethrow()
     end
 
-    # The command buffer retains explicitly encoded buffers, but that doesn't keep other
-    # resources alive for which we've encoded the GPU address ourselves.
+    # A Metal 3 command buffer retains explicitly encoded buffers, but that doesn't keep
+    # other resources alive for which we've encoded the GPU address ourselves. Metal 4
+    # command buffers retain nothing, not even the pipeline, so the batch has to keep it
+    # alive too: it isn't always cached (e.g., while precompiling, see `link_kernel`), and
+    # releasing it before the batch completes can hang the GPU (macOS 27).
     if isempty(resources)
-        record_operation!(bq, source, args; op=op)
+        record_operation!(bq, source, args, pipeline; op=op)
     else
-        record_operation!(bq, source, args, resources; op=op)
+        record_operation!(bq, source, args, resources, pipeline; op=op)
     end
     return nothing
 end
