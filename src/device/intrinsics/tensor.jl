@@ -16,6 +16,41 @@ const TensorDescriptor = NTuple{TENSOR_DESCRIPTOR_SIZE, UInt8}
 const TensorDescriptorStorage = Base.RefValue{TensorDescriptor}
 
 
+## Declarations
+
+# What the pointer parameters of the tensor functions point to, in order, as Apple's front
+# end declares them: `:tensor` (the opaque `%struct._tensor_t`), `:matmul2d_descriptor` or
+# `:i8`. Our pointers are untyped, so `finish_ir!` passes these on to the AIR downgrader,
+# after it has rewritten the calls for the targeted AIR version. The matmul2d entry points
+# are linked against Apple's library when the pipeline is created, which reportedly fails
+# on macOS 27.3 if the types differ; the `air.*` intrinsics need them for Apple's verifier.
+const TENSOR_POINTEES = [
+    # (name, number of parameters) => pointees
+    (r"^air\.init_strided_private_tensor\.i32\.(global|local)$", 9) =>
+        (:tensor, :i8, :i8, :i8, :i8),
+    # (AIR 2.8, without the scales operands)
+    (r"^air\.init_strided_private_tensor\.i32\.(global|local)$", 6) =>
+        (:tensor, :i8, :i8, :i8),
+    (r"^air\.slice_private_tensor_private_tensor\.s\.i32$", 5) =>
+        (:tensor, :tensor, :i8, :i8),
+    (r"^air\.get_extent_private_tensor\.i32$", 4) => (:tensor,),
+    (r"^air\.get_extent_private_tensor\.i32$", 3) => (:tensor,),
+    (r"^__tensorops_impl_matmul2d_op_run(_(dv|tg)_[a-z0-9]+){3}$", 8) =>
+        (:matmul2d_descriptor, :i8, :i8, :i8),
+]
+
+function tensor_pointees(fn::String, nparams::Int)
+    known = false
+    for ((re, n), pointees) in TENSOR_POINTEES
+        occursin(re, fn) || continue
+        n == nparams && return pointees
+        known = true
+    end
+    known && error("unexpected declaration of $fn with $nparams parameters")
+    return nothing
+end
+
+
 ## Tensor descriptor primitives (`air.*` intrinsics).
 
 # These thin `air.*` wrappers must inline. The constructors and `view` below hand them

@@ -423,6 +423,38 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
         end
     end
 
+    # same for the tensor functions, whose pointers are to Apple's types
+    let T_i8 = LLVM.Int8Type(), T_i32 = LLVM.Int32Type()
+        function named(name)
+            T = get(LLVM.types(context()), name, nothing)
+            return T === nothing ? LLVM.StructType(name) : T
+        end
+        pointee(kind) = if kind === :i8
+            T_i8
+        elseif kind === :tensor
+            named("struct._tensor_t")   # opaque
+        elseif kind === :matmul2d_descriptor
+            T = named("struct.mpp::tensor_ops::matmul2d_descriptor")
+            LLVM.isopaque(T) &&
+                LLVM.elements!(T, LLVMType[T_i32, T_i32, T_i32, T_i8, T_i8, T_i8, T_i32])
+            T
+        end
+
+        for f in mod.functions
+            params = f.function_type.parameters
+            kinds = tensor_pointees(f.name, length(params))
+            kinds === nothing && continue
+            ptrs = findall(T -> T isa LLVM.PointerType, params)
+            @assert length(ptrs) == length(kinds)
+            mds = Metadata[]
+            for (i, kind) in zip(ptrs, kinds)
+                push!(mds, ConstantInt(Int32(i-1)))
+                push!(mds, UndefValue(pointee(kind)))
+            end
+            f.metadata["arg_eltypes"] = MDNode(mds)
+        end
+    end
+
     # name the kernel readably (see `kernel_symbol`). this has to happen after GPUCompiler
     # has looked up the entry point by its original name, i.e., not before optimization.
     if job.config.kernel && job.config.name === nothing

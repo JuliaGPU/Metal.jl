@@ -370,13 +370,20 @@ end
         tt = Tuple{Mat, Mat, Mat, UInt32, UInt32, UInt32,
                    Val{Int32(64)}, Val{Int32(64)}, Val{Int32(32)}, Val{Int32(4)}}
         air(macos) = sprint() do io
-            Metal.code_air(io, Metal.gemm_tensor_kernel!, tt; kernel=true, macos)
+            Metal.code_air(io, Metal.gemm_tensor_kernel!, tt; kernel=true, macos,
+                           dump_module=true)
         end
-        # Typed-pointer LLVM versions may use either i8 or {} as the pointee type.
-        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 (?:signext )?0, (?:(?:i8|\{\}) addrspace\(1\)\*|ptr addrspace\(1\)) null, i32 0, i8 (?:signext )?-1\)\n",
+        # Typed-pointer LLVM versions may use either i8 or {} as the pointee type. The null
+        # pointer is passed through a cast to the type the intrinsic is declared with.
+        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 (?:signext )?0, (?:(?:i8|\{\}) addrspace\(1\)\*|ptr addrspace\(1\)) (?:null|%\d+), i32 0, i8 (?:signext )?-1\)\n",
                        air(v"27"))
         # the thread count is one the GPU compiler resolves when it compiles for the device
         @test occursin("call i32 @air.get_simdgroup_size.i32()", air(v"27"))
+        # the declarations carry the pointee types Apple's front end uses, for the downgrader
+        @test occursin("!{i32 0, %struct._tensor_t undef, i32 2, i8 undef, i32 3, i8 undef, i32 4, i8 undef, i32 6, i8 undef}",
+                       air(v"27"))
+        @test occursin("!{i32 0, %\"struct.mpp::tensor_ops::matmul2d_descriptor\" undef, i32 1, i8 undef, i32 3, i8 undef, i32 5, i8 undef}",
+                       air(v"27"))
         @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 (?:signext )?0\)\n",
                        air(v"26"))
         ## the views over threadgroup memory take a threadgroup pointer
@@ -389,7 +396,7 @@ end
         tg_air(macos) = sprint() do io
             Metal.code_air(io, tg_tensor, Tuple{MtlDeviceVector{Int32, 1}}; kernel=true, macos)
         end
-        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.local\(.*, i8 (?:signext )?0, (?:(?:i8|\{\}) addrspace\(3\)\*|ptr addrspace\(3\)) null, i32 0, i8 (?:signext )?-1\)\n",
+        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.local\(.*, i8 (?:signext )?0, (?:(?:i8|\{\}) addrspace\(3\)\*|ptr addrspace\(3\)) (?:null|%\d+), i32 0, i8 (?:signext )?-1\)\n",
                        tg_air(v"27"))
         @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.local\(.*, i8 (?:signext )?0\)\n",
                        tg_air(v"26"))
