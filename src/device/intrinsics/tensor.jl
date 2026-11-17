@@ -318,7 +318,8 @@ TensorOpsMatmul2D(desc::matmul2d_descriptor, ::Val{NSIMD}) where {NSIMD} =
           "_$(tensorops_AS_prefix(Val(AA)))_$(tensorops_suffix(TA))" *
           "_$(tensorops_AS_prefix(Val(AC)))_$(tensorops_suffix(TC))"
     quote
-        threads = Int32(NSIMD) * (threads_per_simdgroup() % Int32)
+        # matmul2d needs its thread count as a constant, so not `threads_per_simdgroup()`
+        threads = Int32(NSIMD) * simdgroup_size()
         ccall($"extern $sym", llvmcall, Cvoid,
               (Ref{matmul2d_descriptor},
                Ref{TensorDescriptor}, Int32,

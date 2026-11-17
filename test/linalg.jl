@@ -375,6 +375,8 @@ end
         # Typed-pointer LLVM versions may use either i8 or {} as the pointee type.
         @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 (?:signext )?0, (?:(?:i8|\{\}) addrspace\(1\)\*|ptr addrspace\(1\)) null, i32 0, i8 (?:signext )?-1\)\n",
                        air(v"27"))
+        # the thread count is one the GPU compiler resolves when it compiles for the device
+        @test occursin("call i32 @air.get_simdgroup_size.i32()", air(v"27"))
         @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 (?:signext )?0\)\n",
                        air(v"26"))
         ## the views over threadgroup memory take a threadgroup pointer

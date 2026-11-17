@@ -195,6 +195,14 @@ end
 end
 
 
+## SIMD-group size
+
+# Like `threads_per_simdgroup()`, but compiled in as a constant rather than a kernel input.
+# The Metal frontend emits this in `execution_simdgroups<N>`.
+@device_function @inline simdgroup_size() =
+    ccall("extern air.get_simdgroup_size.i32", llvmcall, Int32, ())
+
+
 ## SIMD Shuffle Up/Down
 
 simd_shuffle_map = ((Float32, "f32"),
