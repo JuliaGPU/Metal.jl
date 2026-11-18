@@ -671,6 +671,21 @@ end
     CompilerConfig(target, params; kernel, name, always_inline, debug_level, opt_level)
 end
 
+# find one of Apple's Metal tools, in METAL_TOOLCHAIN or with `xcrun`
+function apple_tool(name)
+    dir = get(ENV, "METAL_TOOLCHAIN", nothing)
+    if dir !== nothing
+        path = joinpath(dir, name)
+        return isfile(path) ? path : nothing
+    end
+    Sys.isapple() || return nothing
+    out = IOBuffer()
+    success(pipeline(ignorestatus(`xcrun --find $name`); stdout=out, stderr=devnull)) ||
+        return nothing
+    path = strip(String(take!(out)))
+    return isfile(path) ? path : nothing
+end
+
 # Persist compilation artifacts so they can be retrieved off-machine (e.g. from CI).
 # Writes the files (their paths go in the error message) and, on a CI runner, makes
 # them retrievable:
