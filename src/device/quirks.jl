@@ -1,10 +1,10 @@
 # GPUToolbox's shared overrides (e.g. `throw_overrides`) throw through this function, with
 # the exception type and message as constants; report them like `@gputhrow` does
-@device_override @noinline function GPUToolbox.Overlays.device_throw(::Type{E}, ::Val{reason}) where {E<:Exception, reason}
-    if kernel_debug_level() >= 1
-        record_exception!(kernel_state().exception_info, Val(nameof(E)), Val(reason))
+@device_override @generated function GPUToolbox.Overlays.device_throw(::Type{E}, ::Val{reason}) where {E<:Exception, reason}
+    quote
+        $(Expr(:meta, :noinline))
+        @gputhrow $(String(nameof(E))) $(String(reason))
     end
-    throw(nothing)
 end
 
 # math.jl

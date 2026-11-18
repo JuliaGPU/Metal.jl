@@ -218,7 +218,7 @@ julia> function kernel(a)
        end;
 
 julia> @metal kernel(Metal.zeros(Float32, 1)); synchronize()
-ERROR: KernelException: A BoundsError was thrown on device Apple M1: Out-of-bounds array access
+ERROR: KernelException: A BoundsError was thrown by thread 1×1×1 in threadgroup 1×1×1 on device Apple M1: Out-of-bounds array access
 For more details, run Julia with `-g2`, or launch the kernel with `@metal debug_level=2`
 ```
 
@@ -227,24 +227,24 @@ session (the `-g` flag) and can be set per launch with `@metal debug_level=...`:
 
 | Level | Reported |
 |---|---|
-| 0 | that an exception was thrown: `KernelException: An exception was thrown on device Apple M1` |
+| 0 | that an exception was thrown, and by which thread: `KernelException: An exception was thrown by thread 1×1×1 in threadgroup 1×1×1 on device Apple M1` |
 | 1 (default) | also the type and reason, for exceptions that Julia's runtime throws (bounds, domain, overflow and inexact errors, ...) |
-| 2 | also the faulting thread and threadgroup, and a stack trace |
+| 2 | also a stack trace |
 
 At level 2 (paths shortened):
 
 ```
 ERROR: KernelException: A BoundsError was thrown by thread 1×1×1 in threadgroup 1×1×1 on device Apple M1: Out-of-bounds array access
 Stacktrace:
- [1] macro expansion at Metal/src/device/utils.jl:17
- [2] throw_boundserror at Metal/src/device/quirks.jl:52
- [3] checkbounds at ./abstractarray.jl:702
- [4] arrayset at Metal/src/device/array.jl:86
- [5] setindex! at Metal/src/device/array.jl:128
- [6] kernel at ./none:3
+ [1] throw_boundserror at Metal/src/device/quirks.jl:61
+ [2] checkbounds at ./abstractarray.jl:702
+ [3] arrayset at Metal/src/device/array.jl:150
+ [4] setindex! at Metal/src/device/array.jl:208
+ [5] kernel at ./none:2
 ```
 
-Recording the position and stack trace adds overhead even when no exception is thrown.
+The kernel only records which of its throw sites threw, so the debug level barely affects
+how fast kernels run, only what is known about their exceptions.
 
 
 ## Compilation and caches

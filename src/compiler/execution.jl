@@ -48,7 +48,7 @@ process, the kernel has to check bounds itself, e.g., `i <= length(a) || return`
   `@fastmath` semantics to all floating-point code in the kernel, and compile it with
   Metal's fast-math mode.
 - `debug_level` (default: Julia's `-g` level): how much information is kept to report
-  device-side exceptions; `2` adds the position of the faulting thread and a backtrace.
+  device-side exceptions; `2` adds a backtrace.
 - `opt_level` (default `2`): the optimization level, from `0` to `3`, independent of the
   host session's `-O` level.
 - `always_inline` (default `false`): inline every function called by the kernel.
@@ -557,6 +557,8 @@ struct HostKernel{F,S,TT}
     # keeps the storage alive; `launch` passes its address in the `KernelState` and declares
     # it resident, since only the address (not the buffer) is encoded.
     reloc_table::Union{Nothing,MTLBuffer}
+    # the table of the kernel's throw sites, see `exception_table_id`
+    exception_table::UInt32
 end
 
 const mtlfunction_lock = ReentrantLock()
@@ -598,7 +600,7 @@ function mtlfunction(f::F, tt::TT=Tuple{}; source::S=f, kwargs...) where {F,TT,S
                                   (dev, options))
     HostKernel{F,S,tt}(f, source, l.pipeline, l.loggingEnabled, l.device_rng, l.device,
                        l.maxthreads, l.reqthreads, l.tgmem, l.exec_width,
-                       l.use_residency_sets, l.reloc_table)
+                       l.use_residency_sets, l.reloc_table, l.exception_table)
 end
 
 # What `mtlfunction` calls when the kernel isn't cached: a callable struct rather than a
@@ -624,6 +626,7 @@ struct LinkedKernel
     exec_width::Int
     use_residency_sets::Bool
     reloc_table::Union{Nothing,MTLBuffer}
+    exception_table::UInt32
 end
 
 # Everything about creating a kernel object that doesn't depend on the kernel's type, kept
@@ -690,7 +693,8 @@ end
          Int(pipeline[].staticThreadgroupMemoryLength),
          Int(pipeline[].threadExecutionWidth),
          can_use_residency_sets(dev),
-         reloc_table)
+         reloc_table,
+         exception_table_id(res.exception_sites))
     end
 end
 
@@ -719,6 +723,7 @@ end
         res.loggingEnabled = artifacts.loggingEnabled
         res.device_rng = artifacts.device_rng
         res.relocations = artifacts.relocations
+        res.exception_sites = artifacts.exception_sites
     end
     return res
 end
@@ -909,7 +914,7 @@ Base.@nospecializeinfer function launch(
     # (drawing a seed for every launch would make the host RNG stream depend on how many
     # kernels ran, breaking reproducibility of seeded host code)
     seed = kernel.device_rng ? Random.rand(UInt32) : UInt32(0)
-    kernel_state = KernelState(seed, buf_ptr, exc_ptr, reloc_ptr)
+    kernel_state = KernelState(seed, kernel.exception_table, buf_ptr, exc_ptr, reloc_ptr)
 
     if kernel.loggingEnabled
         return launch_logging!(kernel, gs, ts, bq, args, kernel_state, buf, exc)

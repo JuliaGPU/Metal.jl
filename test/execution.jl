@@ -1034,16 +1034,14 @@ end
     @metal threads=1 throwing_kernel(a)
     @test_throws Metal.KernelException synchronize()
 
-    # the faulting lane's position is recorded at debug level >= 2 (the recording machinery
-    # slows down every kernel that can throw, even when nothing ever does; see
-    # `claim_output!`)
+    # the position of the thread that threw is recorded
     function throw_at_three(a)
-        if thread_position_in_threadgroup().x == 3
+        if thread_position_in_threadgroup().x == 3 && threadgroup_position_in_grid().x == 2
             a[2] = 1f0  # out-of-bounds store on a length-1 array
         end
         return
     end
-    @metal threads=4 debug_level=2 throw_at_three(a)
+    @metal threads=4 groups=2 throw_at_three(a)
     exc = try
         synchronize()
         nothing
@@ -1052,7 +1050,7 @@ end
     end
     @test exc isa Metal.KernelException
     @test exc.thread == (3, 1, 1)
-    @test exc.threadgroup == (1, 1, 1)
+    @test exc.threadgroup == (2, 1, 1)
     @test exc.name == "BoundsError"
     @test exc.reason == "Out-of-bounds array access"
 
@@ -1074,31 +1072,28 @@ end
         try; synchronize(); nothing; catch err; err; end
     end
 
-    # -g0: only that an exception occurred; everything else stays at its sentinel
+    # -g0: only that an exception occurred, and where
     exc0 = throw_at(0, bounds_oob, Metal.zeros(Float32, 1))
     @test exc0 isa Metal.KernelException
     @test isempty(exc0.name)
     @test isempty(exc0.reason)
-    @test exc0.thread == (0, 0, 0)
+    @test exc0.thread == (1, 1, 1)
+    @test exc0.threadgroup == (1, 1, 1)
     @test isempty(exc0.backtrace)
 
-    # -g1: the faulting type and reason for quirk throws; no position (the recording
-    # machinery slows down every kernel that can throw, even when nothing ever does;
-    # see `claim_output!`)
+    # -g1: also the type and reason
     exc1 = throw_at(1, bounds_oob, Metal.zeros(Float32, 1))
     @test exc1.name == "BoundsError"
     @test exc1.reason == "Out-of-bounds array access"
-    @test exc1.thread == (0, 0, 0)
+    @test exc1.thread == (1, 1, 1)
     @test isempty(exc1.backtrace)
+    @test occursin("A BoundsError was thrown by thread 1×1×1 in threadgroup 1×1×1",
+                   sprint(showerror, exc1))
 
-    # a non-quirk throw records the compiler-deduced type name (here `jl_throw`'s generic
-    # "exception") only at debug level >= 2: copying that runtime string takes a byte loop
-    # on the unhappy path, which is similarly penalized (see `report_exception`)
+    # a throw that isn't overridden is reported with the name the compiler gives it
     excn = throw_at(1, nonquirk, Metal.zeros(Int32, 1), MtlArray(Int32[0]))
     @test excn isa Metal.KernelException
-    @test isempty(excn.name)
-    excn2 = throw_at(2, nonquirk, Metal.zeros(Int32, 1), MtlArray(Int32[0]))
-    @test excn2.name == "exception"
+    @test excn.name == "exception"
 
     # GPUToolbox's shared overrides throw through `Overlays.device_throw`, which reports
     # like a quirk
@@ -1123,21 +1118,22 @@ end
         @test exct.reason == "rational numerator is typemin"
     end
 
-    # -g2: adds the faulting position and the device stack trace
+    # -g2: adds a device stack trace, which reaches the kernel
     exc2 = throw_at(2, bounds_oob, Metal.zeros(Float32, 1))
     @test exc2.name == "BoundsError"
+    @test exc2.reason == "Out-of-bounds array access"
     @test exc2.thread == (1, 1, 1)
     @test exc2.threadgroup == (1, 1, 1)
-    @test !isempty(exc2.backtrace)
-    @test any(frame -> occursin("throw_boundserror", frame[1]), exc2.backtrace)
+    @test endswith(first(exc2.backtrace)[1], "throw_boundserror")
+    @test last(exc2.backtrace)[1] == "bounds_oob"
+    @test occursin("Stacktrace:", sprint(showerror, exc2))
 
-    # paths that don't fit the mailbox keep their end, with the file name
+    # the device only records the throw site, so long paths are reported in full
     file = joinpath("/", "a"^150, "kernel.jl")
     include_string(@__MODULE__, "long_path_oob(a) = (a[2] = 1f0; return)", file)
     exc3 = throw_at(2, long_path_oob, Metal.zeros(Float32, 1))
     frame = only(filter(frame -> frame[1] == "long_path_oob", exc3.backtrace))
-    @test startswith(frame[2], "…")
-    @test endswith(frame[2], "/kernel.jl")
+    @test frame[2] == file
 end
 
 @testset "loops with many exits" begin

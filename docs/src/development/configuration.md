@@ -64,5 +64,5 @@ for the validation layers.
 
 ## Julia options
 
-Starting Julia with `-g2` makes kernels record where an exception was thrown, at a cost in
-performance (see [Errors and debug levels](@ref)), and enables `label_resources` by default.
+Starting Julia with `-g2` adds a device stack trace to the exceptions that kernels throw
+(see [Errors and debug levels](@ref)), and enables `label_resources` by default.
