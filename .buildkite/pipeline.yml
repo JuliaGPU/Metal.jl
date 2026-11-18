@@ -143,6 +143,10 @@ steps:
               version: "1.13"
           - JuliaCI/julia-test#v1:
               test_args: "--jobs=1 --quickfail --verbose --validate"
+        env:
+          # check other GPUs than the API validation job (which checks macOS 26), at a
+          # similar cost
+          JULIA_METAL_BACKEND_CHECK: "g17g@27,g18g@27"
         commands: |
           echo -e "[Metal]\ncommand_api = \"metal4\"\nnonblocking_synchronization = false" >LocalPreferences.toml
         agents:
