@@ -675,15 +675,67 @@ end
 function apple_tool(name)
     dir = get(ENV, "METAL_TOOLCHAIN", nothing)
     if dir !== nothing
-        path = joinpath(dir, name)
+        path = abspath(joinpath(dir, name))
         return isfile(path) ? path : nothing
     end
     Sys.isapple() || return nothing
     out = IOBuffer()
     success(pipeline(ignorestatus(`xcrun --find $name`); stdout=out, stderr=devnull)) ||
         return nothing
-    path = strip(String(take!(out)))
+    path = String(strip(String(take!(out))))
     return isfile(path) ? path : nothing
+end
+
+# With `JULIA_METAL_VERIFY_AIR`, every compiled kernel's AIR is checked with Apple's
+# verifier, which catches IR that Apple's front-end never emits (unknown or mistyped `air.*`
+# functions, malformed metadata) before the back-end miscompiles or crashes on it. Being
+# asked to verify without a verifier is an error, so that CI cannot silently stop checking.
+verify_air() = parse(Bool, get(ENV, "JULIA_METAL_VERIFY_AIR", "false"))
+
+# Apple's AIR verifier, or `nothing` if it can't be found
+function air_verifier()
+    haskey(ENV, "METAL_TOOLCHAIN") && return apple_tool("metal-opt")
+    # (`xcrun` takes tens of milliseconds)
+    @memoize begin
+        apple_tool("metal-opt")
+    end::Union{Nothing,String}
+end
+
+# the version of Apple's AIR verifier at `tool`, e.g. "Apple LLVM version 32023.921.6"
+function air_verifier_version(tool::String)
+    out = IOBuffer()
+    try
+        run(pipeline(`$tool --version`; stdout=out, stderr=devnull))
+        line = readline(seekstart(out))
+        isempty(line) || return strip(line)
+    catch
+    end
+    return "unknown version"
+end
+
+# the verifier's complaints about the AIR bitcode `air`, or `nothing` if it accepts it
+function air_verifier_errors(air::Vector{UInt8})
+    tool = air_verifier()
+    tool === nothing &&
+        error("""JULIA_METAL_VERIFY_AIR is set, but Apple's metal-opt was not found.
+                 Install the Metal toolchain (`xcodebuild -downloadComponent MetalToolchain`),
+                 or set METAL_TOOLCHAIN to the directory that contains metal-opt.""")
+    msg = mktemp() do path, io
+        write(io, air)
+        close(io)
+        out = IOBuffer()
+        cmd = `$tool -air-verify --air-verification-level=full -o /dev/null $path`
+        try
+            proc = run(pipeline(ignorestatus(cmd); stdout=out, stderr=out))
+            success(proc) && return nothing
+            msg = replace(strip(String(take!(out))), path => "the kernel's AIR")
+            isempty(msg) ? "metal-opt failed with exit code $(proc.exitcode)" : msg
+        catch err
+            "Failed to run metal-opt: $(sprint(showerror, err))"
+        end
+    end
+    msg === nothing && return nothing
+    return "$msg\n(verifier: $tool, $(air_verifier_version(tool)))"
 end
 
 # Persist compilation artifacts so they can be retrieved off-machine (e.g. from CI).
@@ -811,6 +863,27 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
                      If you think this is a bug, please file an issue and attach the following files:
                      - $(ir_file)
                      - $(air_file)""")
+        end
+    end
+
+    if verify_air()
+        msg = @signpost_interval log=log_compiler() start="" stop="" "Verify AIR" begin
+            air_verifier_errors(air)
+        end
+        if msg !== nothing
+            target = job.config.target
+            # an older toolchain doesn't know newer AIR versions, and says so in its terms
+            occursin("unrecognized architecture", msg) &&
+                (msg *= "\nThe Metal toolchain is too old for AIR $(target.air); " *
+                        "verify with a release toolchain for macOS $(target.macos) or newer.")
+            ir_file, air_file, metallib_file =
+                dump_artifacts(".ll" => ir, ".air" => air, ".metallib" => metallib)
+            error("""Apple's AIR verifier rejected the kernel:
+                     $msg
+                     If you think this is a bug, please file an issue and attach the following files:
+                     - $(ir_file)
+                     - $(air_file)
+                     - $(metallib_file)""")
         end
     end
 

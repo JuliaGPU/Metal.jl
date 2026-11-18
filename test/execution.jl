@@ -125,6 +125,51 @@ end
     @test Metal.compiler_crash_report(time(); dir="/nonexistent", timeout=0) === nothing
 end
 
+@testset "AIR verification" begin
+    # a call to an AIR function that doesn't exist
+    unknown_air_function(a) = (a[1] = ccall("extern air.unknown.f32", llvmcall, Float32, ()); nothing)
+    a = MtlArray{Float32}(undef, 1)
+
+    # asking for verification without a verifier fails instead of skipping it
+    withenv("JULIA_METAL_VERIFY_AIR" => "true", "METAL_TOOLCHAIN" => mktempdir()) do
+        @test_throws "metal-opt was not found" @metal launch=false unknown_air_function(a)
+    end
+
+    # the error of a rejected kernel names the verifier and points to the dumped artifacts
+    function verifier_error(env...)
+        dir = mktempdir()
+        msg = withenv("JULIA_METAL_VERIFY_AIR" => "true", "JULIA_METAL_DUMP_DIR" => dir,
+                      "BUILDKITE" => nothing, env...) do
+            try
+                @metal launch=false unknown_air_function(a)
+                ""
+            catch err
+                sprint(showerror, err)
+            end
+        end
+        files = readdir(dir; join=true)
+        @test sort(map(f -> splitext(f)[2], files)) == [".air", ".ll", ".metallib"]
+        @test all(f -> occursin(f, msg), files)
+        return msg
+    end
+
+    # a verifier that can't be run counts as a rejection
+    let dir = mktempdir()
+        touch(joinpath(dir, "metal-opt"))   # not executable
+        msg = verifier_error("METAL_TOOLCHAIN" => dir)
+        @test occursin("Failed to run metal-opt", msg)
+        @test occursin("(verifier: $(joinpath(dir, "metal-opt")), unknown version)", msg)
+    end
+
+    if Metal.verify_air()
+        tool = Metal.air_verifier()
+        msg = verifier_error()
+        @test occursin("invalid AIR function air.unknown.f32", msg)
+        @test occursin("(verifier: $tool, $(Metal.air_verifier_version(tool)))", msg)
+        @test Metal.air_verifier_version(tool) != "unknown version"
+    end
+end
+
 @testset "kernel labels" begin
     function labelled_kernel(a, x)
         a[1] = x
@@ -441,12 +486,15 @@ end
         end
         # targets newer than the host can be compiled, but loading them fails with a
         # clear error. the newest macOS shares its versions with whatever comes next, so
-        # test with an AIR version the host doesn't support.
+        # test with an AIR version the host doesn't support (which Apple's verifier doesn't
+        # know either).
         let air = VersionNumber(2, Metal.air_support().minor + 1)
             @test !isempty(sprint(io->Metal.code_llvm(io, dummy, Tuple{}; air)))
             # (not `@test_throws`, which passes on Apple's error: `NSError` isn't an `Exception`)
             err = try
-                @metal launch=false air=air dummy()
+                withenv("JULIA_METAL_VERIFY_AIR" => nothing) do
+                    @metal launch=false air=air dummy()
+                end
             catch err
                 err
             end

@@ -52,9 +52,10 @@ $ METAL_CAPTURE_ENABLED=1 julia --project
 | `JULIA_METAL_COMMAND_BATCHING_OPS`, `JULIA_METAL_COMMAND_BATCHING_BYTES`, `JULIA_METAL_COMMAND_BATCHING_INFLIGHT` | Override the corresponding preferences for one run, e.g. for benchmarking. |
 | `METAL_CAPTURE_ENABLED=1` | Apple's switch that allows GPU frame capture, required by `Metal.@capture` and Xcode. Also enables `label_resources` and `embed_sources` by default. See [Xcode and Instruments](xcode.md). |
 | `JULIA_METAL_DUMP_DIR` | Write the LLVM IR, AIR and Metal library of every compiled kernel to this directory. Without it, artifacts are only written when compilation fails, to a temporary directory. Debugging only. |
+| `JULIA_METAL_VERIFY_AIR=1` | Check the AIR of every kernel compiled from then on with Apple's verifier (`metal-opt`, found in `METAL_TOOLCHAIN` or with `xcrun`), and fail the compilation if it is rejected or the verifier can't be found. The verifier must come from a release toolchain at least as new as the macOS the kernel targets. Debugging only. |
 | `MTL_DEBUG_LAYER=1` | Apple's API validation layer: checks Metal API usage, at a cost in performance. Debugging only. |
 | `MTL_SHADER_VALIDATION=1` | Apple's shader validation: checks memory accesses of kernels on the GPU, at a large cost in performance. Debugging only. |
-| `METAL_TOOLCHAIN` | Directory with Apple's Metal tools, for `metallib validate --apple` (see [Hacking](../developers/hacking.md)). Debugging only. |
+| `METAL_TOOLCHAIN` | Directory with Apple's Metal tools, for `JULIA_METAL_VERIFY_AIR` and `metallib validate --apple` (see [Hacking](../developers/hacking.md)). Debugging only. |
 
 `Metal.versioninfo()` lists the environment variables that start with `JULIA_METAL`, `METAL`
 or `MTL`. See Apple's documentation on [validating Metal API
