@@ -744,6 +744,218 @@ function air_verifier_errors(air::Vector{UInt8})
     return "$msg\n(verifier: $tool, $(apple_tool_version(tool)))"
 end
 
+# With `JULIA_METAL_BACKEND_CHECK`, every compiled kernel is also compiled with Apple's
+# offline GPU back end (`applegpu-nt`) for a list of GPUs and macOS versions, which catches
+# back-end crashes on hardware or systems we can't test on. Each target is `arch[@macos]`,
+# e.g. `g17g@26` for an M5 running macOS 26, or `g17g` for an M5 running the host's macOS.
+# Each kernel is compiled again for each target, the way it would be on that machine,
+# because the IR depends on the GPU family (GPUCompiler works around a macOS 26 back-end bug
+# on Apple10 GPUs only) and on the deployment target, which is lowered to the target's macOS
+# when that is older. Host code still picks kernels by the host device's capabilities, so
+# kernels another GPU would get instead aren't checked. Like with `JULIA_METAL_VERIFY_AIR`,
+# a missing toolchain is an error. Only fresh compilations are checked, not kernels loaded
+# from a cache.
+
+struct BackendTarget
+    arch::String            # e.g. "applegpu_g17g"
+    macos::VersionNumber    # the macOS whose back end to use
+end
+
+Base.show(io::IO, t::BackendTarget) = print(io, t.arch, "@", t.macos.major, ".", t.macos.minor)
+
+function backend_targets()
+    targets = BackendTarget[]
+    list = strip(get(ENV, "JULIA_METAL_BACKEND_CHECK", ""))
+    isempty(list) && return targets
+    for spec in split(list, ',')
+        spec = strip(spec)
+        m = match(r"^(?:applegpu_)?(g\d+[a-z])(?:@(\d+(?:\.\d+)?))?$", spec)
+        m === nothing &&
+            error("Invalid JULIA_METAL_BACKEND_CHECK target '$spec'; expected a GPU like g17g, optionally with a macOS version like g17g@26.")
+        macos = normalize_macos(m[2] === nothing ? macos_version() : VersionNumber(m[2]))
+        push!(targets, BackendTarget("applegpu_" * m[1], VersionNumber(macos.major, macos.minor)))
+    end
+    return unique!(targets)
+end
+
+# Apple's offline back end, and the tool that knows the GPU families of its architectures
+function backend_tools()
+    haskey(ENV, "METAL_TOOLCHAIN") && return find_backend_tools()
+    # (`xcrun` takes tens of milliseconds)
+    @memoize begin
+        find_backend_tools()
+    end::Tuple{String,String}
+end
+function find_backend_tools()
+    tools = map(("applegpu-nt", "metal-config")) do name
+        tool = apple_tool(name)
+        tool === nothing &&
+            error("""JULIA_METAL_BACKEND_CHECK is set, but Apple's $name was not found.
+                     Install the Metal toolchain (`xcodebuild -downloadComponent MetalToolchain`),
+                     or set METAL_TOOLCHAIN to the directory that contains $name.""")
+        tool
+    end
+    return (tools[1], tools[2])
+end
+
+# the architectures the back end supports on `macos`, with the highest Apple GPU family
+# each one belongs to (the toolchain's equivalent of `MTL.highest_apple_family`)
+function backend_families(tools::Tuple{String,String}, macos::VersionNumber)
+    @memoize key=(tools, macos)::Tuple{Tuple{String,String},VersionNumber} begin
+        compiler, config = tools
+        version = "$(macos.major).$(macos.minor)"
+        available = split(readchomp(`$compiler -available-archs macos $version`))
+        members = asyncmap(1:11) do n
+            proc, out = run_tool(`$config --native-archs-supported macos $version --gpu-family=apple$n`)
+            success(proc) && return split(out)
+            # older toolchains don't know the newest families
+            occursin("Cannot find option named 'apple$n'", out) && return SubString{String}[]
+            error("Failed to query the architectures of Apple GPU family $n on macOS $version:\n$(strip(out))")
+        end
+        families = Dict{String,Int}()
+        for (family, archs) in enumerate(members), arch in archs
+            arch in available && (families[arch] = family)
+        end
+        (Set{String}(available), families)
+    end::Tuple{Set{String},Dict{String,Int}}
+end
+
+# the Apple GPU family of target `t`, if the back end supports it
+function backend_family(tools::Tuple{String,String}, t::BackendTarget)
+    available, families = backend_families(tools, t.macos)
+    t.arch in available ||
+        error("""Apple's back end ($(first(tools))) does not support $(t.arch) on macOS $(t.macos.major).$(t.macos.minor).
+                 Supported are: $(join(sort!(collect(available)), ", ")).""")
+    haskey(families, t.arch) ||
+        error("Apple's toolchain does not know the GPU family of $(t.arch).")
+    return families[t.arch]
+end
+
+# the configuration `config` compiles with on a GPU of Apple family `family` running `macos`
+function backend_config(config::CompilerConfig, family::Int, macos::VersionNumber)
+    target = config.target
+    versions = (; target.macos, target.air, target.metal)
+    if macos < target.macos
+        # a system can't load kernels for newer systems, so lower the deployment target and
+        # the versions it supports, keeping any that were lower already
+        macos = check_macos(macos)
+        versions = (; macos, air=min(target.air, air_support(macos)),
+                    metal=min(target.metal, metal_target(macos)))
+    end
+    fields = NamedTuple{fieldnames(MetalCompilerTarget)}(
+        map(f -> getfield(target, f), fieldnames(MetalCompilerTarget)))
+    target = MetalCompilerTarget(; merge(fields, versions, (; apple_family=family))...)
+    return CompilerConfig(config; target, params=MetalCompilerParams(family))
+end
+
+# the descriptor that makes `applegpu-nt` compile the pipeline of function `entry`
+pipeline_script(entry::String) =
+    """{"pipelines":{"compute_pipelines":[{"compute_function":"$(escape_string(entry))"}]}}"""
+
+# compile `job`, of which `art` are the artifacts, for each of the back-end targets, and
+# check those with Apple's back end
+function check_backend(@nospecialize(job::CompilerJob), art, targets::Vector{BackendTarget})
+    tools = backend_tools()
+    compiler = first(tools)
+
+    # determine the configuration of each target, and which ones share it
+    configs = Dict{MetalCompilerTarget,Tuple{CompilerConfig,Vector{BackendTarget}}}()
+    for t in targets
+        config = backend_config(job.config, backend_family(tools, t), t.macos)
+        push!(last(get!(() -> (config, BackendTarget[]), configs, config.target)), t)
+    end
+
+    # compile each configuration that differs from the job's
+    compiled = map(collect(values(configs))) do (config, ts)
+        target = config.target
+        target === job.config.target && return (; config, ts, art)
+        derived = try
+            emit_metallib(CompilerJob(job.source, config, job.world))
+        catch err
+            error("""Compiling the kernel for the back-end check of $(join(ts, ", ")) (Apple$(target.apple_family), macOS $(target.macos), AIR $(target.air), Metal $(target.metal)) failed:
+                     $(sprint(showerror, err))""")
+        end
+        (; config, ts, art=derived)
+    end
+
+    failures = String[]
+    mktempdir() do dir
+        # run the back end for every target at once. the output goes to files: on Julia
+        # 1.10, waiting for a process doesn't wait for its output to be copied to a buffer.
+        checks = []
+        try
+            for (i, (; ts, art)) in enumerate(compiled)
+                lib, json = joinpath(dir, "kernel$i.metallib"), joinpath(dir, "kernel$i.mtlp-json")
+                write(lib, art.metallib)
+                write(json, pipeline_script(art.entry))
+                for t in ts
+                    version = "$(t.macos.major).$(t.macos.minor)"
+                    n = length(checks) + 1
+                    bin, log = joinpath(dir, "check$n.bin"), joinpath(dir, "check$n.log")
+                    cmd = `$compiler -arch $(t.arch) -platform_version macos $version $version -N $json -o $bin $lib`
+                    proc = open(log, "w") do io
+                        run(pipeline(ignorestatus(cmd); stdout=io, stderr=io); wait=false)
+                    end
+                    push!(checks, (; i, t, proc, log))
+                end
+            end
+            foreach(c -> wait(c.proc), checks)
+        finally
+            # don't leave processes behind, or have them write to a removed directory
+            for (; proc) in checks
+                process_running(proc) && kill(proc, Base.SIGKILL)
+            end
+            foreach(c -> wait(c.proc), checks)
+        end
+
+        dumps = Dict{Int,Vector{String}}()
+        for (; i, t, proc, log) in checks
+            success(proc) && continue
+            (; config, art) = compiled[i]
+            msg = strip(read(log, String))
+            aborted = proc.termsignal == 6  # SIGABRT, from LLVM's fatal error handler
+            # the offline back end can't encode floating-point `os_log` arguments, which
+            # the one in the OS can
+            if aborted && art.loggingEnabled &&
+               any(==("LLVM ERROR: Failed to encode."), eachline(IOBuffer(msg)))
+                @debug "Skipping the back-end check of $(art.entry) for $t, which can't encode its logging calls"
+                continue
+            end
+
+            ll_file, air_file, metallib_file, json_file = get!(dumps, i) do
+                dump_artifacts(".ll" => art.ir, ".air" => art.air, ".metallib" => art.metallib,
+                               ".mtlp-json" => pipeline_script(art.entry))
+            end
+            target = config.target
+            version = "$(t.macos.major).$(t.macos.minor)"
+            status = if aborted
+                "it crashed"
+            elseif proc.termsignal != 0
+                "it was killed by signal $(proc.termsignal)"
+            else
+                "exit code $(proc.exitcode)"
+            end
+            command = join(Base.shell_escape_posixly.([compiler, "-arch", t.arch, "-platform_version",
+                                               "macos", version, version, "-N", json_file,
+                                               "-o", splitext(metallib_file)[1] * ".bin",
+                                               metallib_file]), " ")
+            push!(failures, """
+                Apple's back end failed to compile the kernel for $(t.arch) (Apple$(target.apple_family)) on macOS $version, with the kernel compiled for macOS $(target.macos), AIR $(target.air) and Metal $(target.metal):
+                $msg
+                ($status; back end: $compiler, $(apple_tool_version(compiler)))
+                To reproduce, run:
+                  $command
+                If you think this is a bug, please file an issue and attach the following files:
+                - $ll_file
+                - $air_file
+                - $metallib_file
+                - $json_file""")
+        end
+    end
+    isempty(failures) || error(join(failures, "\n\n"))
+    return
+end
+
 # Persist compilation artifacts so they can be retrieved off-machine (e.g. from CI).
 # Writes the files (their paths go in the error message) and, on a CI runner, makes
 # them retrievable:
@@ -794,7 +1006,28 @@ end
 const compilations = Threads.Atomic{Int}(0)
 function compile_to_metallib(@nospecialize(job::CompilerJob))
     Threads.atomic_add!(compilations, 1)
+    art = emit_metallib(job)
 
+    # when `JULIA_METAL_DUMP_DIR` is set, dump every compiled kernel's artifacts
+    if haskey(ENV, "JULIA_METAL_DUMP_DIR")
+        dump_artifacts(".ll" => art.ir, ".air" => art.air, ".metallib" => art.metallib)
+    end
+
+    targets = backend_targets()
+    if !isempty(targets)
+        @signpost_interval log=log_compiler() start="" stop="" "Check back end" begin
+            check_backend(job, art, targets)
+        end
+    end
+
+    # `nothing` marks a relocation-free kernel (the common case), keeping its `MetalResults`
+    # and package-image footprint identical to before.
+    return (; art.air, art.metallib, art.entry, art.loggingEnabled, art.device_rng,
+              art.exception_sites, relocations = isempty(art.relocations) ? nothing : art.relocations)
+end
+
+# the artifacts of compiling `job`, including its LLVM IR
+function emit_metallib(@nospecialize(job::CompilerJob))
     # TODO: on 1.9, this actually creates a context. cache those.
     ir, air, fun, entry, loggingEnabled, device_rng, relocations, exception_sites = JuliaContext() do _
         @signpost_interval log=log_compiler() start="" stop="" "Generate LLVM IR" begin
@@ -893,15 +1126,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
         end
     end
 
-    # when `JULIA_METAL_DUMP_DIR` is set, dump every compiled kernel's artifacts
-    if haskey(ENV, "JULIA_METAL_DUMP_DIR")
-        dump_artifacts(".ll" => ir, ".air" => air, ".metallib" => metallib)
-    end
-
-    # `nothing` marks a relocation-free kernel (the common case), keeping its `MetalResults`
-    # and package-image footprint identical to before.
-    return (; air, metallib, entry, loggingEnabled, device_rng, exception_sites,
-              relocations = isempty(relocations) ? nothing : relocations)
+    return (; ir, air, metallib, entry, loggingEnabled, device_rng, exception_sites, relocations)
 end
 
 # Materialize this session's relocation words for `relocations` in a device buffer, whose GPU
