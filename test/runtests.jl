@@ -23,7 +23,7 @@ end
 if Metal.verify_air()
     tool = Metal.air_verifier()
     tool === nothing && error("JULIA_METAL_VERIFY_AIR is set, but Apple's metal-opt was not found")
-    @info "Verifying the AIR of every kernel with $tool ($(Metal.air_verifier_version(tool)))"
+    @info "Verifying the AIR of every kernel with $tool ($(Metal.apple_tool_version(tool)))"
 end
 
 # register custom tests that do not correspond to files in the test directory

@@ -694,6 +694,17 @@ function run_tool(cmd::Cmd)
     return proc, output
 end
 
+# the version of the Apple tool at `tool`, e.g. "Apple LLVM version 32023.921.6"
+function apple_tool_version(tool::String)
+    try
+        out = read(pipeline(`$tool --version`; stderr=devnull), String)
+        line = readline(IOBuffer(out))
+        isempty(line) || return strip(line)
+    catch
+    end
+    return "unknown version"
+end
+
 # With `JULIA_METAL_VERIFY_AIR`, every compiled kernel's AIR is checked with Apple's
 # verifier, which catches IR that Apple's front-end never emits (unknown or mistyped `air.*`
 # functions, malformed metadata) before the back-end miscompiles or crashes on it. Being
@@ -707,17 +718,6 @@ function air_verifier()
     @memoize begin
         apple_tool("metal-opt")
     end::Union{Nothing,String}
-end
-
-# the version of Apple's AIR verifier at `tool`, e.g. "Apple LLVM version 32023.921.6"
-function air_verifier_version(tool::String)
-    try
-        out = read(pipeline(`$tool --version`; stderr=devnull), String)
-        line = readline(IOBuffer(out))
-        isempty(line) || return strip(line)
-    catch
-    end
-    return "unknown version"
 end
 
 # the verifier's complaints about the AIR bitcode `air`, or `nothing` if it accepts it
@@ -741,7 +741,7 @@ function air_verifier_errors(air::Vector{UInt8})
         end
     end
     msg === nothing && return nothing
-    return "$msg\n(verifier: $tool, $(air_verifier_version(tool)))"
+    return "$msg\n(verifier: $tool, $(apple_tool_version(tool)))"
 end
 
 # Persist compilation artifacts so they can be retrieved off-machine (e.g. from CI).

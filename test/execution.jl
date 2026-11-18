@@ -165,8 +165,8 @@ end
         tool = Metal.air_verifier()
         msg = verifier_error()
         @test occursin("invalid AIR function air.unknown.f32", msg)
-        @test occursin("(verifier: $tool, $(Metal.air_verifier_version(tool)))", msg)
-        @test Metal.air_verifier_version(tool) != "unknown version"
+        @test occursin("(verifier: $tool, $(Metal.apple_tool_version(tool)))", msg)
+        @test Metal.apple_tool_version(tool) != "unknown version"
     end
 end
 
