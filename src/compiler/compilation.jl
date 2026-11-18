@@ -561,6 +561,15 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
                 push!(mds, UndefValue(pointee(kind)))
             end
             f.metadata["arg_eltypes"] = MDNode(mds)
+
+            # Julia sign-extends narrow integer arguments, which Apple's front end declares
+            # without extension attribute
+            for i in eachindex(params)
+                delete!(f.parameter_attributes[i], :signext)
+                for call in f.users
+                    delete!(call.argument_attributes[i], :signext)
+                end
+            end
         end
     end
 

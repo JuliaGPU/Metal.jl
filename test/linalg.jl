@@ -375,7 +375,7 @@ end
         end
         # Typed-pointer LLVM versions may use either i8 or {} as the pointee type. The null
         # pointer is passed through a cast to the type the intrinsic is declared with.
-        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 (?:signext )?0, (?:(?:i8|\{\}) addrspace\(1\)\*|ptr addrspace\(1\)) (?:null|%\d+), i32 0, i8 (?:signext )?-1\)\n",
+        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 0, (?:(?:i8|\{\}) addrspace\(1\)\*|ptr addrspace\(1\)) (?:null|%\d+), i32 0, i8 -1\)\n",
                        air(v"27"))
         # the thread count is one the GPU compiler resolves when it compiles for the device
         @test occursin("call i32 @air.get_simdgroup_size.i32()", air(v"27"))
@@ -399,7 +399,9 @@ end
         @test occursin(r"define linkonce_odr hidden i64 @metal\.tensor_descriptor_size\.r2\(\)[^\n]*\{\n[^\n]*\n\s+%\d+ = call i16 @air\.get_descriptor_size_tensor\(i16 2, i16 4\)",
                        air(v"27"))
         @test occursin(r"attributes #\d+ = \{ \"deferred-static-alloca-size\" \}", air(v"27"))
-        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 (?:signext )?0\)\n",
+        # narrow integers are passed without extension attribute
+        @test !occursin("signext", air(v"27"))
+        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 0\)\n",
                        air(v"26"))
         ## the views over threadgroup memory take a threadgroup pointer
         function tg_tensor(out)
@@ -411,13 +413,13 @@ end
         tg_air(macos) = sprint() do io
             Metal.code_air(io, tg_tensor, Tuple{MtlDeviceVector{Int32, 1}}; kernel=true, macos)
         end
-        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.local\(.*, i8 (?:signext )?0, (?:(?:i8|\{\}) addrspace\(3\)\*|ptr addrspace\(3\)) (?:null|%\d+), i32 0, i8 (?:signext )?-1\)\n",
+        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.local\(.*, i8 0, (?:(?:i8|\{\}) addrspace\(3\)\*|ptr addrspace\(3\)) (?:null|%\d+), i32 0, i8 -1\)\n",
                        tg_air(v"27"))
-        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.local\(.*, i8 (?:signext )?0\)\n",
+        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.local\(.*, i8 0\)\n",
                        tg_air(v"26"))
-        @test occursin(r"call i32 @air\.get_extent_private_tensor\.i32\(.*, i16 (?:signext )?1, i16 (?:signext )?0\)\n",
+        @test occursin(r"call i32 @air\.get_extent_private_tensor\.i32\(.*, i16 1, i16 0\)\n",
                        tg_air(v"27"))
-        @test occursin(r"call i32 @air\.get_extent_private_tensor\.i32\(.*, i16 (?:signext )?1\)\n",
+        @test occursin(r"call i32 @air\.get_extent_private_tensor\.i32\(.*, i16 1\)\n",
                        tg_air(v"26"))
         ## tensors live on the stack, so they cannot escape the kernel
         @noinline tensor_extent(t) = Metal.get_extent_private_tensor(t.storage, Int16(2), Int16(0))
