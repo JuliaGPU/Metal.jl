@@ -368,6 +368,14 @@ cmdbuf = MTLCommandBuffer(cmdq)
 end
 @test cmdbuf.status >= MTL.MTLCommandBufferStatusCommitted
 
+# ...which requires encoders to be ended when they fail
+cmdbuf = MTLCommandBuffer(cmdq)
+@test_throws ErrorException commit!(cmdbuf) do buf
+    MTLBlitCommandEncoder(buf) do enc
+        error("failed to encode")
+    end
+end
+@test cmdbuf.status >= MTL.MTLCommandBufferStatusCommitted
 
 desc = MTLCommandBufferDescriptor()
 

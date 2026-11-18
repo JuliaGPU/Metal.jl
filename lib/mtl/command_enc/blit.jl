@@ -9,8 +9,11 @@ end
 ## encode in the Command Encoder
 function MTLBlitCommandEncoder(f::Base.Callable, cmdbuf::MTLCommandBuffer)
     encoder = MTLBlitCommandEncoder(cmdbuf)
-    f(encoder)
-    close(encoder)
+    try
+        f(encoder)
+    finally
+        close(encoder)
+    end
     return encoder
 end
 
