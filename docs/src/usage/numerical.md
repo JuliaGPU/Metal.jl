@@ -62,7 +62,7 @@ true
 | `:MPSGraph` | [`MPSGraphs.matmul!`](@ref) |
 | `:MPS` | [`MPS.matmul!`](@ref); `Float32`, `Float16`, and `Int8`/`Int16` inputs (`MPS.MPS_VALID_MATMUL_TYPES`) |
 | `:native` | Metal.jl's kernels: `:tensor` if possible, then `:simd`, then `:scalar` |
-| `:tensor` | Metal 4 tensor operations; only `C = A * B` without transposes or scaling, all `Float32`, `Float16` or `BFloat16`, with dimensions that are multiples of 8, on GPUs of the Metal 4 family with macOS 26 or later |
+| `:tensor` | Metal 4 tensor operations; only `C = A * B` without transposes or scaling, all `Float32`, `Float16` or `BFloat16` (`BFloat16` needs macOS 26.1), with dimensions that are multiples of 8, on GPUs of the Metal 4 family with macOS 26 or later |
 | `:simd` | SIMD-group matrix kernel; `Float32`, `Float16` and `BFloat16` |
 | `:scalar` | threadgroup-tiled kernel for any element type |
 | `:GPUArrays` | the generic GPUArrays.jl kernel |
