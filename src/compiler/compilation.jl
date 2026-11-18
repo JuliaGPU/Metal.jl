@@ -338,6 +338,82 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
         end
     end
     ## tensor
+    # allocate the storage of the tensor descriptors (see `TensorDescriptor`) like Apple's
+    # front end: with a size computed by an argument-less function that has the
+    # "deferred-static-alloca-size" attribute, which the back end evaluates. each
+    # descriptor is created by an `init` or `slice` call, which also gives its rank.
+    let storage = Dict{LLVM.AllocaInst,Int}(), allocas = LLVM.AllocaInst[]
+        for (fn, rank_operand) in ("air.init_strided_private_tensor.i32.global" => 2,
+                                   "air.init_strided_private_tensor.i32.local" => 2,
+                                   "air.slice_private_tensor_private_tensor.s.i32" => 3)
+            f = get(mod.functions, fn, nothing)
+            f === nothing && continue
+            for call in f.users
+                call::LLVM.CallInst
+                args = collect(call.arguments)
+                dst = strip_pointer_casts(args[1])
+                # (Julia allocates the storage of an `MtlInlineTensor` on the heap when it
+                # cannot prove it doesn't escape)
+                dst isa LLVM.AllocaInst ||
+                    error("""An MtlInlineTensor escaped the kernel's stack. Keep tensors \
+                             within code that is inlined into the kernel, don't choose \
+                             between them at run time, and don't carry them across loop \
+                             iterations.""")
+                # (finish_ir! runs once for every entry point in the module)
+                dst.operands[1] isa ConstantInt || continue
+                rank = convert(Int, args[rank_operand]::ConstantInt)
+                haskey(storage, dst) || push!(allocas, dst)
+                @assert get!(storage, dst, rank) == rank
+            end
+        end
+
+        T_i16 = LLVM.Int16Type()
+        T_i64 = LLVM.Int64Type()
+        size_ft = LLVM.FunctionType(T_i16, [T_i16, T_i16])
+        helper_ft = LLVM.FunctionType(T_i64)
+        function helper(rank)
+            name = "metal.tensor_descriptor_size.r$rank"
+            haskey(mod.functions, name) && return mod.functions[name]
+            size_f = get(mod.functions, "air.get_descriptor_size_tensor", nothing)
+            if size_f === nothing
+                size_f = LLVM.Function(mod, "air.get_descriptor_size_tensor", size_ft)
+            end
+            # the rank has to be a constant here: the back end fails to evaluate a helper
+            # that takes it as an argument
+            f = LLVM.Function(mod, name, helper_ft)
+            f.linkage = LLVM.Linkage.LinkOnceODR
+            f.visibility = LLVM.Visibility.Hidden
+            push!(f.function_attributes, StringAttribute("deferred-static-alloca-size", ""))
+            @dispose builder=IRBuilder() begin
+                position!(builder, LLVM.at_end(BasicBlock(f, "entry")))
+                # (4 is the size of the `i32` indices)
+                sz = call!(builder, size_ft, size_f,
+                           [ConstantInt(T_i16, rank), ConstantInt(T_i16, 4)])
+                ret!(builder, zext!(builder, sz, T_i64))
+            end
+            return f
+        end
+
+        sizes = Dict{Tuple{LLVM.Function,Int},LLVM.Value}()
+        for old in allocas
+            fun, rank = old.parent.parent, storage[old]
+            @dispose builder=IRBuilder() begin
+                sz = get!(sizes, (fun, rank)) do
+                    position!(builder, LLVM.at_begin(first(fun.blocks)))
+                    call!(builder, helper_ft, helper(rank))
+                end
+                position!(builder, LLVM.before(old))
+                new = array_alloca!(builder, LLVM.Int8Type(), sz)
+                new.alignment = 8
+                # (with typed pointers, Julia's storage may have another type)
+                if new.value_type != old.value_type
+                    new = bitcast!(builder, new, old.value_type)
+                end
+                replace_uses!(old, new)
+                erase!(old)
+            end
+        end
+    end
     if job.config.target.air < v"2.9"
         # AIR 2.9 appended operands to these, which the front-end always emits; drop them
         for (fn, nparams) in ("air.init_strided_private_tensor.i32.global" => 6,

@@ -390,6 +390,15 @@ end
                        air(v"27"))
         @test occursin("!{i32 0, %\"struct.mpp::tensor_ops::matmul2d_descriptor\" undef, i32 1, i8 undef, i32 8, i8 undef, i32 15, i8 undef}",
                        air(v"27"))
+        # the descriptors are allocated with a size the back end computes, like Apple's
+        # front end does it
+        let ir = air(v"27"), m = match(r"(%\d+) = call i64 @metal\.tensor_descriptor_size\.r2\(\)", ir)
+            # (three tensors and three views)
+            @test m !== nothing && count("alloca i8, i64 $(m[1]), align 8", ir) == 6
+        end
+        @test occursin(r"define linkonce_odr hidden i64 @metal\.tensor_descriptor_size\.r2\(\)[^\n]*\{\n[^\n]*\n\s+%\d+ = call i16 @air\.get_descriptor_size_tensor\(i16 2, i16 4\)",
+                       air(v"27"))
+        @test occursin(r"attributes #\d+ = \{ \"deferred-static-alloca-size\" \}", air(v"27"))
         @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 (?:signext )?0\)\n",
                        air(v"26"))
         ## the views over threadgroup memory take a threadgroup pointer
@@ -410,11 +419,40 @@ end
                        tg_air(v"27"))
         @test occursin(r"call i32 @air\.get_extent_private_tensor\.i32\(.*, i16 (?:signext )?1\)\n",
                        tg_air(v"26"))
+        ## tensors live on the stack, so they cannot escape the kernel
+        @noinline tensor_extent(t) = Metal.get_extent_private_tensor(t.storage, Int16(2), Int16(0))
+        function escaping_tensor(out, A)
+            out[1] = tensor_extent(Metal.MtlInlineTensor(A))
+            return
+        end
+        @test_throws "escaped the kernel's stack" Metal.code_air(devnull, escaping_tensor,
+            Tuple{MtlDeviceVector{Int32, 1}, MtlDeviceMatrix{Float32, 1}}; kernel=true)
+        ## the size of a descriptor depends on its rank
+        function ranked_tensors(out, A)
+            t1 = Metal.MtlInlineTensor(A, (256,))
+            t3 = Metal.MtlInlineTensor(A, (4, 8, 8))
+            out[1] = Metal.get_extent_private_tensor(t1.storage, Int16(1), Int16(0)) +
+                     Metal.get_extent_private_tensor(t3.storage, Int16(3), Int16(2))
+            return
+        end
+        let ir = sprint() do io
+                Metal.code_air(io, ranked_tensors,
+                               Tuple{MtlDeviceVector{Int32, 1}, MtlDeviceMatrix{Float32, 1}};
+                               kernel=true)
+            end
+            for rank in (1, 3)
+                m = match(Regex("(%\\d+) = call i64 @metal\\.tensor_descriptor_size\\.r$rank\\(\\)"), ir)
+                @test m !== nothing && count("alloca i8, i64 $(m[1]), align 8", ir) == 1
+            end
+        end
         if Metal.tensor_matmul_capable()
             @testset "macOS $macos" for macos in filter(<=(Metal.macos_version()), [v"26", v"27"])
                 out = MtlArray(zeros(Int32, 1))
                 @metal macos=macos tg_tensor(out)
                 @test Array(out) == [4]
+
+                @metal macos=macos ranked_tensors(out, MtlArray(zeros(Float32, 16, 16)))
+                @test Array(out) == [256 + 8]
             end
         end
 
