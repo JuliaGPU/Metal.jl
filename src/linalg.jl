@@ -266,6 +266,8 @@ LinearAlgebra.ipiv2perm(v::MtlVector{<:Any, CPUStorage}, maxi::Integer) =
 function LinearAlgebra.lu(A::MtlMatrix{T};
                                            check::Bool = true) where {T <: MPSSolveFloat}
     M, N = size(A)
+    # MPS aborts on empty matrices
+    (M == 0 || N == 0) && return LinearAlgebra.LU(similar(A), similar(A, UInt32, 0), 0)
     dev = device()
     queue = global_queue(dev)
 
@@ -324,6 +326,8 @@ function LinearAlgebra.lu!(A::MtlMatrix{T};
                                             check::Bool = true,
                                             allowsingular::Bool = false) where {T <: MPSSolveFloat}
     M, N = size(A)
+    # MPS aborts on empty matrices
+    (M == 0 || N == 0) && return LinearAlgebra.LU(A, similar(A, UInt32, 0), 0)
     dev = device()
     queue = global_queue(dev)
 

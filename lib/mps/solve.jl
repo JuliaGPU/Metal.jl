@@ -149,6 +149,11 @@ end
 function solve_lu(A::MtlMatrix{T}, B::MtlVecOrMat{T};
                                    check::Bool=true) where {T<:MPSSolveFloat}
     n, nrhs = check_square_rhs(A, B)
+    # MPS aborts on empty matrices, which leaves only `A` to check
+    if n == 0 || nrhs == 0
+        lu(A; check)
+        return similar(B)
+    end
     dev = device()
     queue = global_queue(dev)
 
@@ -199,6 +204,7 @@ function solve_lu(F::LinearAlgebra.LU{T,<:MtlMatrix{T}},
         throw(DimensionMismatch("factorization has $n rows, but right hand side has $(size(B, 1)) rows"))
     check_rhs_out(B, out)
     nrhs = rhs_count(B)
+    (n == 0 || nrhs == 0) && return out
 
     dev = device()
     queue = global_queue(dev)
@@ -237,13 +243,16 @@ end
 function decompose_cholesky!(A::MtlMatrix{T};
                                               uplo::Union{Symbol,AbstractChar}='U') where {T<:MPSSolveFloat}
     n = LinearAlgebra.checksquare(A)
+    lower = mps_cholesky_lower(uplo)
+    # MPS aborts on empty matrices
+    n == 0 && return A, convert(LinearAlgebra.BlasInt, 0)
     dev = device()
     queue = global_queue(dev)
     status = status_buffer()
 
     cmdbuf = MPSCommandBuffer(queue)
     mps_a = MPSMatrix(A)
-    encode!(cmdbuf, MPSMatrixDecompositionCholesky(dev, mps_cholesky_lower(uplo), n),
+    encode!(cmdbuf, MPSMatrixDecompositionCholesky(dev, lower, n),
             mps_a, mps_a, status)
     commit!(cmdbuf)
     synchronize(cmdbuf)
@@ -265,6 +274,7 @@ function solve_cholesky(C::LinearAlgebra.Cholesky{T,<:MtlMatrix{T}},
         throw(DimensionMismatch("factorization has $n rows, but right hand side has $(size(B, 1)) rows"))
     check_rhs_out(B, out)
     nrhs = rhs_count(B)
+    (n == 0 || nrhs == 0) && return out
 
     dev = device()
     queue = global_queue(dev)
@@ -299,6 +309,12 @@ function solve_cholesky(A::MtlMatrix{T}, B::MtlVecOrMat{T};
                                          uplo::Union{Symbol,AbstractChar}='U',
                                          check::Bool=true) where {T<:MPSSolveFloat}
     n, nrhs = check_square_rhs(A, B)
+    # MPS aborts on empty matrices, which leaves only `A` to check
+    if n == 0 || nrhs == 0
+        _, info = decompose_cholesky(A; uplo)
+        check && checkpositivedefinite(info)
+        return similar(B)
+    end
     dev = device()
     queue = global_queue(dev)
 

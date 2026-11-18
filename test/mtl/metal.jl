@@ -361,6 +361,21 @@ end()
 @test scheduled[] == true
 @test completed[] == true
 
+# an enqueued command buffer holds up its queue, so it's also committed when encoding fails
+cmdbuf = MTLCommandBuffer(cmdq)
+@test_throws ErrorException commit!(cmdbuf) do buf
+    error("failed to encode")
+end
+@test cmdbuf.status >= MTL.MTLCommandBufferStatusCommitted
+
+# ...which requires encoders to be ended when they fail
+cmdbuf = MTLCommandBuffer(cmdq)
+@test_throws ErrorException commit!(cmdbuf) do buf
+    MTLBlitCommandEncoder(buf) do enc
+        error("failed to encode")
+    end
+end
+@test cmdbuf.status >= MTL.MTLCommandBufferStatusCommitted
 
 desc = MTLCommandBufferDescriptor()
 
