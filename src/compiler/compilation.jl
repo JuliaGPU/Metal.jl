@@ -507,29 +507,29 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
 
     # pointer type information for typed intrinsics
     # (this is consumed by the LLVM IR downgrader)
+    # map of intrinsics to pointer operand indices and eltypes
+    intrinsics = Dict{String,Vector{Pair{Int,DataType}}}()
+    ## simd
     for (jltyp, llvmtyp) in (Int32 => :i32, Int64 => :i64,
                              Float16 => :f16, Float32 => :f32,
                              BFloat16 => :bf16),
         (as, asname) in (AS.Device => "global", AS.ThreadGroup => "local")
-
-        # map of intrinsics to pointer operand indices and eltypes
-        intrinsics = Dict{String,Tuple{Pair{Int,DataType}}}()
-        ## simd
-        intrinsics["simdgroup_matrix_8x8_load.v64$llvmtyp.p$as$llvmtyp"] = (1 => jltyp,)
-        intrinsics["simdgroup_matrix_8x8_store.v64$llvmtyp.p$as$llvmtyp"] = (2 => jltyp,)
-
-        # apply metadata to the function declarations
-        for (intr, args) in intrinsics
-            fn = "air.$intr"
-            f = get(mod.functions, fn, nothing)
-            f === nothing && continue
-            mds = []
-            for (idx, typ) in args
-                push!(mds, ConstantInt(Int32(idx-1)))
-                push!(mds, null(convert(LLVMType, typ)))
-            end
-            f.metadata["arg_eltypes"] = MDNode(mds)
+        intrinsics["simdgroup_matrix_8x8_load.v64$llvmtyp.p$as$llvmtyp"] = [1 => jltyp]
+        intrinsics["simdgroup_matrix_8x8_store.v64$llvmtyp.p$as$llvmtyp"] = [2 => jltyp]
+    end
+    ## logging: the subsystem, category, format string and argument buffer
+    intrinsics["os_log"] = [1 => Int8, 2 => Int8, 4 => Int8, 5 => Int8]
+    # apply metadata to the function declarations
+    for (intr, args) in intrinsics
+        fn = "air.$intr"
+        f = get(mod.functions, fn, nothing)
+        f === nothing && continue
+        mds = []
+        for (idx, typ) in args
+            push!(mds, ConstantInt(Int32(idx-1)))
+            push!(mds, null(convert(LLVMType, typ)))
         end
+        f.metadata["arg_eltypes"] = MDNode(mds)
     end
 
     # same for the tensor functions, whose pointers are to Apple's types
