@@ -1218,9 +1218,9 @@ function validate(ctx::Context, args::Arguments)
             mktemp() do tmp, io
                 write(io, data)
                 close(io)
-                out, err = IOBuffer(), IOBuffer()
-                ok = success(pipeline(ignorestatus(`$tool $tmp`); stdout=out, stderr=err))
-                msg = strip(String(take!(out)) * String(take!(err)))
+                proc, out = Metal.run_tool(`$tool $tmp`)
+                ok = success(proc)
+                msg = strip(out)
                 ok || diagnose!(ctx, "error", "metal-validate rejected the library" *
                                 (isempty(msg) ? "" : ": " * replace(msg, tmp => path)))
                 push!(checked, "apple")

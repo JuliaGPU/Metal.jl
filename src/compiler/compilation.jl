@@ -679,11 +679,19 @@ function apple_tool(name)
         return isfile(path) ? path : nothing
     end
     Sys.isapple() || return nothing
-    out = IOBuffer()
-    success(pipeline(ignorestatus(`xcrun --find $name`); stdout=out, stderr=devnull)) ||
-        return nothing
-    path = String(strip(String(take!(out))))
-    return isfile(path) ? path : nothing
+    path = strip(read(pipeline(ignorestatus(`xcrun --find $name`); stderr=devnull), String))
+    return isfile(path) ? String(path) : nothing
+end
+
+# run `cmd`, returning its process and its output and errors. (on Julia 1.10, waiting for a
+# process doesn't wait for its output to be copied into an `IOBuffer`, so read a pipe)
+function run_tool(cmd::Cmd)
+    out = Pipe()
+    proc = run(pipeline(ignorestatus(cmd); stdout=out, stderr=out); wait=false)
+    close(out.in)
+    output = read(out, String)
+    wait(proc)
+    return proc, output
 end
 
 # With `JULIA_METAL_VERIFY_AIR`, every compiled kernel's AIR is checked with Apple's
@@ -703,10 +711,9 @@ end
 
 # the version of Apple's AIR verifier at `tool`, e.g. "Apple LLVM version 32023.921.6"
 function air_verifier_version(tool::String)
-    out = IOBuffer()
     try
-        run(pipeline(`$tool --version`; stdout=out, stderr=devnull))
-        line = readline(seekstart(out))
+        out = read(pipeline(`$tool --version`; stderr=devnull), String)
+        line = readline(IOBuffer(out))
         isempty(line) || return strip(line)
     catch
     end
@@ -723,12 +730,11 @@ function air_verifier_errors(air::Vector{UInt8})
     msg = mktemp() do path, io
         write(io, air)
         close(io)
-        out = IOBuffer()
         cmd = `$tool -air-verify --air-verification-level=full -o /dev/null $path`
         try
-            proc = run(pipeline(ignorestatus(cmd); stdout=out, stderr=out))
+            proc, out = run_tool(cmd)
             success(proc) && return nothing
-            msg = replace(strip(String(take!(out))), path => "the kernel's AIR")
+            msg = replace(strip(out), path => "the kernel's AIR")
             isempty(msg) ? "metal-opt failed with exit code $(proc.exitcode)" : msg
         catch err
             "Failed to run metal-opt: $(sprint(showerror, err))"
