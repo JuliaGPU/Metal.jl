@@ -364,6 +364,39 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
             erase!(f)
         end
     end
+    if job.config.target.macos < v"27"
+        # macOS 27 added matmul2d entry points that take the data type and block sizes of
+        # quantization scales and the static extents of each operand. the original ones
+        # pass on the defaults: no scales and dynamic extents.
+        for f in collect(mod.functions)
+            m = match(MATMUL2D_RUN_V2, f.name)
+            m === nothing && continue
+            new_ft = f.function_type
+            v1_operands = [1, 2, 3, 9, 10, 16, 17, 20]
+            v2_defaults = (4 => 0, 5 => 0, 6 => 0, 7 => -1, 8 => -1,
+                           11 => 0, 12 => 0, 13 => 0, 14 => -1, 15 => -1,
+                           18 => -1, 19 => -1)
+            old_ft = LLVM.FunctionType(new_ft.return_type, new_ft.parameters[v1_operands])
+            old_f = LLVM.Function(mod, m.captures[1], old_ft)
+            old_f.section = f.section
+            append!(old_f.function_attributes, f.function_attributes)
+            for call in collect(f.users)
+                call::LLVM.CallInst
+                args = collect(call.arguments)
+                for (i, default) in v2_defaults
+                    arg = args[i]
+                    arg isa ConstantInt && convert(Int, arg) == default ||
+                        error("matmul2d with quantization scales or static extents requires macOS 27")
+                end
+                @dispose builder=IRBuilder() begin
+                    position!(builder, LLVM.before(call))
+                    call!(builder, old_ft, old_f, args[v1_operands])
+                    erase!(call)
+                end
+            end
+            erase!(f)
+        end
+    end
     ## barriers
     # AIR 2.9 added a memory order operand between the memory flags and the scope, which
     # before MSL 4.1 has to be sequentially consistent

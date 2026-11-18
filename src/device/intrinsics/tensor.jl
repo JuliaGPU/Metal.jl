@@ -24,6 +24,7 @@ const TensorDescriptorStorage = Base.RefValue{TensorDescriptor}
 # after it has rewritten the calls for the targeted AIR version. The matmul2d entry points
 # are linked against Apple's library when the pipeline is created, which reportedly fails
 # on macOS 27.3 if the types differ; the `air.*` intrinsics need them for Apple's verifier.
+const MATMUL2D_RUN_V2 = r"^(__tensorops_impl_matmul2d_op_run(?:_(?:dv|tg)_[a-z0-9]+){3})_v2$"
 const TENSOR_POINTEES = [
     # (name, number of parameters) => pointees
     (r"^air\.init_strided_private_tensor\.i32\.(global|local)$", 9) =>
@@ -35,6 +36,9 @@ const TENSOR_POINTEES = [
         (:tensor, :tensor, :i8, :i8),
     (r"^air\.get_extent_private_tensor\.i32$", 4) => (:tensor,),
     (r"^air\.get_extent_private_tensor\.i32$", 3) => (:tensor,),
+    (MATMUL2D_RUN_V2, 20) =>
+        (:matmul2d_descriptor, :i8, :i8, :i8),
+    # (before macOS 27)
     (r"^__tensorops_impl_matmul2d_op_run(_(dv|tg)_[a-z0-9]+){3}$", 8) =>
         (:matmul2d_descriptor, :i8, :i8, :i8),
 ]
@@ -348,23 +352,26 @@ TensorOpsMatmul2D(desc::matmul2d_descriptor, ::Val{NSIMD}) where {NSIMD} =
     apple = matmul2d_descriptor(DESC.n, DESC.m, DESC.k,
                                 DESC.transpose_right, DESC.transpose_left,
                                 DESC.relaxed_precision, DESC.matmul_mode)
+    # the entry point of macOS 27, which takes per operand the data type and block sizes of
+    # quantization scales (here none) and the static extents (here dynamic, -1). `finish_ir!`
+    # calls the original one instead when targeting older versions.
     sym = "__tensorops_impl_matmul2d_op_run" *
           "_$(tensorops_AS_prefix(Val(AB)))_$(tensorops_suffix(TB))" *
           "_$(tensorops_AS_prefix(Val(AA)))_$(tensorops_suffix(TA))" *
-          "_$(tensorops_AS_prefix(Val(AC)))_$(tensorops_suffix(TC))"
+          "_$(tensorops_AS_prefix(Val(AC)))_$(tensorops_suffix(TC))_v2"
     quote
         # matmul2d needs its thread count as a constant, so not `threads_per_simdgroup()`
         threads = Int32(NSIMD) * simdgroup_size()
         ccall($"extern $sym", llvmcall, Cvoid,
               (Ref{matmul2d_descriptor},
-               Ref{TensorDescriptor}, Int32,
-               Ref{TensorDescriptor}, Int32,
-               Ref{TensorDescriptor}, Int32,
+               Ref{TensorDescriptor}, Int32, Int32, Int32, Int32, Int32, Int32,
+               Ref{TensorDescriptor}, Int32, Int32, Int32, Int32, Int32, Int32,
+               Ref{TensorDescriptor}, Int32, Int32, Int32,
                Int32),
               $(QuoteNode(apple)),
-              B.storage, $TENSOR_DESC_INLINE,
-              A.storage, $TENSOR_DESC_INLINE,
-              C.storage, $TENSOR_DESC_INLINE,
+              B.storage, $TENSOR_DESC_INLINE, Int32(0), Int32(0), Int32(0), Int32(-1), Int32(-1),
+              A.storage, $TENSOR_DESC_INLINE, Int32(0), Int32(0), Int32(0), Int32(-1), Int32(-1),
+              C.storage, $TENSOR_DESC_INLINE, Int32(-1), Int32(-1),
               threads)
         return nothing
     end
