@@ -847,6 +847,11 @@ end
     @test files[air_path] == art.air
     @test occursin("-x ir", text("metal-options.txt"))
     @test occursin(air_path, text("metal-options.txt"))
+    # with the deployment target, or the rebuild targets the toolchain's newest macOS
+    let v = cfg.target.macos
+        @test occursin("-mmacosx-version-min=$(v.major).$(v.minor).$(v.patch)",
+                       text("metal-options.txt"))
+    end
     @test isabspath(chomp(text("metal-working-dir.txt")))
 
     # with the Julia files the debug info refers to
@@ -871,6 +876,20 @@ end
             write(path, bytes)
             @test success(`$source_tool --extract=raw -o $(joinpath(dir, "src")) $path`)
             @test read(joinpath(dir, "src", "0", relpath(air_path, "/"))) == art.air
+
+            # Xcode's recipe rebuilds the AIR for the library's deployment target
+            metal = metal_tool("metal")
+            if metal === nothing
+                @test_skip "Apple's metal not available"
+            else
+                xcode = joinpath(dir, "xcode")
+                @test success(`$source_tool -f --extract=apple-gputools -o $xcode $path`)
+                options = Base.shell_split(read(joinpath(xcode, "0", "metal-options.txt"), String))
+                out = IOBuffer()
+                cmd = Cmd(`$metal $options`; dir=joinpath(xcode, "0"))
+                @test success(pipeline(cmd; stdout=out, stderr=out))
+                @test !occursin("overriding the module target triple", String(take!(out)))
+            end
         end
     end
 end
