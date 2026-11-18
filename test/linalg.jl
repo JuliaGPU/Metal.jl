@@ -474,6 +474,16 @@ using Metal: storagemode
     @test storagemode(lua.factors) == storagemode(lua.ipiv) == storagemode(A)
     lua = lu!(A)
     @test storagemode(lua.factors) == storagemode(lua.ipiv) == storagemode(A)
+
+    @testset "empty $(M)×$(N)" for (M, N) in ((0, 0), (0, 3), (3, 0))
+        A = MtlMatrix{Float32}(undef, M, N)
+        for lua in (lu(A), lu!(A))
+            @test size(lua.factors) == (M, N)
+            @test isempty(lua.ipiv)
+            @test lua.ipiv isa MtlVector{UInt32}
+            @test issuccess(lua)
+        end
+    end
 end
 
 @testset "linear solve" begin
@@ -600,6 +610,23 @@ end
         @test size(copy(W') / triangle(E)) == (3, 0)
         @test size(copy(W') / transpose(triangle(E))) == (3, 0)
         @test size(triangle(dA) \ MtlMatrix{T}(undef, n, 0)) == (n, 0)
+    end
+
+    @testset "empty LU and Cholesky" begin
+        E, W, Z = MtlMatrix{T}(undef, 0, 0), MtlMatrix{T}(undef, 0, 3), MtlMatrix{T}(undef, n, 0)
+        @test size(E \ W) == (0, 3)
+        @test size(lu(E) \ W) == (0, 3)
+        @test size(cholesky(E) \ W) == (0, 3)
+        @test size(Metal.MPS.solve_cholesky(E, W)) == (0, 3)
+        @test size(dA \ Z) == (n, 0)
+        @test size(F \ Z) == (n, 0)
+        @test size(C \ Z) == (n, 0)
+        @test size(Metal.MPS.solve_cholesky(dSPD, Z)) == (n, 0)
+        # without right hand sides, the coefficient matrix is still checked
+        @test_throws SingularException MtlMatrix(T[1 2; 2 4]) \ MtlMatrix{T}(undef, 2, 0)
+        @test_throws PosDefException Metal.MPS.solve_cholesky(MtlMatrix(T[1 2; 2 1]),
+                                                              MtlMatrix{T}(undef, 2, 0))
+        @test_throws ArgumentError Metal.MPS.solve_cholesky(E, W; uplo='X')
     end
 
     dsing = MtlMatrix(T[1 2; 2 4])
