@@ -370,12 +370,38 @@ end
         tt = Tuple{Mat, Mat, Mat, UInt32, UInt32, UInt32,
                    Val{Int32(64)}, Val{Int32(64)}, Val{Int32(32)}, Val{Int32(4)}}
         air(macos) = sprint() do io
-            Metal.code_air(io, Metal.gemm_tensor_kernel!, tt; kernel=true, macos)
+            Metal.code_air(io, Metal.gemm_tensor_kernel!, tt; kernel=true, macos,
+                           dump_module=true)
         end
-        # Typed-pointer LLVM versions may use either i8 or {} as the pointee type.
-        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 (?:signext )?0, (?:(?:i8|\{\}) addrspace\(1\)\*|ptr addrspace\(1\)) null, i32 0, i8 (?:signext )?-1\)\n",
+        # Typed-pointer LLVM versions may use either i8 or {} as the pointee type. The null
+        # pointer is passed through a cast to the type the intrinsic is declared with.
+        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 0, (?:(?:i8|\{\}) addrspace\(1\)\*|ptr addrspace\(1\)) (?:null|%\d+), i32 0, i8 -1\)\n",
                        air(v"27"))
-        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 (?:signext )?0\)\n",
+        # the thread count is one the GPU compiler resolves when it compiles for the device
+        @test occursin("call i32 @air.get_simdgroup_size.i32()", air(v"27"))
+        # matmul2d is called through the entry point of the targeted macOS version, with
+        # neither quantization scales nor static extents
+        @test occursin(r"call void @__tensorops_impl_matmul2d_op_run_dv_f32_dv_f32_dv_f32_v2\([^,]+, [^,]+, i32 2, i32 0, i32 0, i32 0, i32 -1, i32 -1, [^,]+, i32 2, i32 0, i32 0, i32 0, i32 -1, i32 -1, [^,]+, i32 2, i32 -1, i32 -1, i32 %\d+\)",
+                       air(v"27"))
+        @test occursin(r"call void @__tensorops_impl_matmul2d_op_run_dv_f32_dv_f32_dv_f32\([^,]+, [^,]+, i32 2, [^,]+, i32 2, [^,]+, i32 2, i32 %\d+\)",
+                       air(v"26"))
+        # the declarations carry the pointee types Apple's front end uses, for the downgrader
+        @test occursin("!{i32 0, %struct._tensor_t undef, i32 2, i8 undef, i32 3, i8 undef, i32 4, i8 undef, i32 6, i8 undef}",
+                       air(v"27"))
+        @test occursin("!{i32 0, %\"struct.mpp::tensor_ops::matmul2d_descriptor\" undef, i32 1, i8 undef, i32 8, i8 undef, i32 15, i8 undef}",
+                       air(v"27"))
+        # the descriptors are allocated with a size the back end computes, like Apple's
+        # front end does it
+        let ir = air(v"27"), m = match(r"(%\d+) = call i64 @metal\.tensor_descriptor_size\.r2\(\)", ir)
+            # (three tensors and three views)
+            @test m !== nothing && count("alloca i8, i64 $(m[1]), align 8", ir) == 6
+        end
+        @test occursin(r"define linkonce_odr hidden i64 @metal\.tensor_descriptor_size\.r2\(\)[^\n]*\{\n[^\n]*\n\s+%\d+ = call i16 @air\.get_descriptor_size_tensor\(i16 2, i16 4\)",
+                       air(v"27"))
+        @test occursin(r"attributes #\d+ = \{ \"deferred-static-alloca-size\" \}", air(v"27"))
+        # narrow integers are passed without extension attribute
+        @test !occursin("signext", air(v"27"))
+        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 0\)\n",
                        air(v"26"))
         ## the views over threadgroup memory take a threadgroup pointer
         function tg_tensor(out)
@@ -387,19 +413,48 @@ end
         tg_air(macos) = sprint() do io
             Metal.code_air(io, tg_tensor, Tuple{MtlDeviceVector{Int32, 1}}; kernel=true, macos)
         end
-        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.local\(.*, i8 (?:signext )?0, (?:(?:i8|\{\}) addrspace\(3\)\*|ptr addrspace\(3\)) null, i32 0, i8 (?:signext )?-1\)\n",
+        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.local\(.*, i8 0, (?:(?:i8|\{\}) addrspace\(3\)\*|ptr addrspace\(3\)) (?:null|%\d+), i32 0, i8 -1\)\n",
                        tg_air(v"27"))
-        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.local\(.*, i8 (?:signext )?0\)\n",
+        @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.local\(.*, i8 0\)\n",
                        tg_air(v"26"))
-        @test occursin(r"call i32 @air\.get_extent_private_tensor\.i32\(.*, i16 (?:signext )?1, i16 (?:signext )?0\)\n",
+        @test occursin(r"call i32 @air\.get_extent_private_tensor\.i32\(.*, i16 1, i16 0\)\n",
                        tg_air(v"27"))
-        @test occursin(r"call i32 @air\.get_extent_private_tensor\.i32\(.*, i16 (?:signext )?1\)\n",
+        @test occursin(r"call i32 @air\.get_extent_private_tensor\.i32\(.*, i16 1\)\n",
                        tg_air(v"26"))
+        ## tensors live on the stack, so they cannot escape the kernel
+        @noinline tensor_extent(t) = Metal.get_extent_private_tensor(t.storage, Int16(2), Int16(0))
+        function escaping_tensor(out, A)
+            out[1] = tensor_extent(Metal.MtlInlineTensor(A))
+            return
+        end
+        @test_throws "escaped the kernel's stack" Metal.code_air(devnull, escaping_tensor,
+            Tuple{MtlDeviceVector{Int32, 1}, MtlDeviceMatrix{Float32, 1}}; kernel=true)
+        ## the size of a descriptor depends on its rank
+        function ranked_tensors(out, A)
+            t1 = Metal.MtlInlineTensor(A, (256,))
+            t3 = Metal.MtlInlineTensor(A, (4, 8, 8))
+            out[1] = Metal.get_extent_private_tensor(t1.storage, Int16(1), Int16(0)) +
+                     Metal.get_extent_private_tensor(t3.storage, Int16(3), Int16(2))
+            return
+        end
+        let ir = sprint() do io
+                Metal.code_air(io, ranked_tensors,
+                               Tuple{MtlDeviceVector{Int32, 1}, MtlDeviceMatrix{Float32, 1}};
+                               kernel=true)
+            end
+            for rank in (1, 3)
+                m = match(Regex("(%\\d+) = call i64 @metal\\.tensor_descriptor_size\\.r$rank\\(\\)"), ir)
+                @test m !== nothing && count("alloca i8, i64 $(m[1]), align 8", ir) == 1
+            end
+        end
         if Metal.tensor_matmul_capable()
             @testset "macOS $macos" for macos in filter(<=(Metal.macos_version()), [v"26", v"27"])
                 out = MtlArray(zeros(Int32, 1))
                 @metal macos=macos tg_tensor(out)
                 @test Array(out) == [4]
+
+                @metal macos=macos ranked_tensors(out, MtlArray(zeros(Float32, 16, 16)))
+                @test Array(out) == [256 + 8]
             end
         end
 

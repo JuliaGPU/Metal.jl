@@ -338,6 +338,82 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
         end
     end
     ## tensor
+    # allocate the storage of the tensor descriptors (see `TensorDescriptor`) like Apple's
+    # front end: with a size computed by an argument-less function that has the
+    # "deferred-static-alloca-size" attribute, which the back end evaluates. each
+    # descriptor is created by an `init` or `slice` call, which also gives its rank.
+    let storage = Dict{LLVM.AllocaInst,Int}(), allocas = LLVM.AllocaInst[]
+        for (fn, rank_operand) in ("air.init_strided_private_tensor.i32.global" => 2,
+                                   "air.init_strided_private_tensor.i32.local" => 2,
+                                   "air.slice_private_tensor_private_tensor.s.i32" => 3)
+            f = get(mod.functions, fn, nothing)
+            f === nothing && continue
+            for call in f.users
+                call::LLVM.CallInst
+                args = collect(call.arguments)
+                dst = strip_pointer_casts(args[1])
+                # (Julia allocates the storage of an `MtlInlineTensor` on the heap when it
+                # cannot prove it doesn't escape)
+                dst isa LLVM.AllocaInst ||
+                    error("""An MtlInlineTensor escaped the kernel's stack. Keep tensors \
+                             within code that is inlined into the kernel, don't choose \
+                             between them at run time, and don't carry them across loop \
+                             iterations.""")
+                # (finish_ir! runs once for every entry point in the module)
+                dst.operands[1] isa ConstantInt || continue
+                rank = convert(Int, args[rank_operand]::ConstantInt)
+                haskey(storage, dst) || push!(allocas, dst)
+                @assert get!(storage, dst, rank) == rank
+            end
+        end
+
+        T_i16 = LLVM.Int16Type()
+        T_i64 = LLVM.Int64Type()
+        size_ft = LLVM.FunctionType(T_i16, [T_i16, T_i16])
+        helper_ft = LLVM.FunctionType(T_i64)
+        function helper(rank)
+            name = "metal.tensor_descriptor_size.r$rank"
+            haskey(mod.functions, name) && return mod.functions[name]
+            size_f = get(mod.functions, "air.get_descriptor_size_tensor", nothing)
+            if size_f === nothing
+                size_f = LLVM.Function(mod, "air.get_descriptor_size_tensor", size_ft)
+            end
+            # the rank has to be a constant here: the back end fails to evaluate a helper
+            # that takes it as an argument
+            f = LLVM.Function(mod, name, helper_ft)
+            f.linkage = LLVM.Linkage.LinkOnceODR
+            f.visibility = LLVM.Visibility.Hidden
+            push!(f.function_attributes, StringAttribute("deferred-static-alloca-size", ""))
+            @dispose builder=IRBuilder() begin
+                position!(builder, LLVM.at_end(BasicBlock(f, "entry")))
+                # (4 is the size of the `i32` indices)
+                sz = call!(builder, size_ft, size_f,
+                           [ConstantInt(T_i16, rank), ConstantInt(T_i16, 4)])
+                ret!(builder, zext!(builder, sz, T_i64))
+            end
+            return f
+        end
+
+        sizes = Dict{Tuple{LLVM.Function,Int},LLVM.Value}()
+        for old in allocas
+            fun, rank = old.parent.parent, storage[old]
+            @dispose builder=IRBuilder() begin
+                sz = get!(sizes, (fun, rank)) do
+                    position!(builder, LLVM.at_begin(first(fun.blocks)))
+                    call!(builder, helper_ft, helper(rank))
+                end
+                position!(builder, LLVM.before(old))
+                new = array_alloca!(builder, LLVM.Int8Type(), sz)
+                new.alignment = 8
+                # (with typed pointers, Julia's storage may have another type)
+                if new.value_type != old.value_type
+                    new = bitcast!(builder, new, old.value_type)
+                end
+                replace_uses!(old, new)
+                erase!(old)
+            end
+        end
+    end
     if job.config.target.air < v"2.9"
         # AIR 2.9 appended operands to these, which the front-end always emits; drop them
         for (fn, nparams) in ("air.init_strided_private_tensor.i32.global" => 6,
@@ -358,6 +434,39 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
                     new_call = call!(builder, old_ft, old_f,
                                      collect(call.arguments)[1:nparams])
                     replace_uses!(call, new_call)
+                    erase!(call)
+                end
+            end
+            erase!(f)
+        end
+    end
+    if job.config.target.macos < v"27"
+        # macOS 27 added matmul2d entry points that take the data type and block sizes of
+        # quantization scales and the static extents of each operand. the original ones
+        # pass on the defaults: no scales and dynamic extents.
+        for f in collect(mod.functions)
+            m = match(MATMUL2D_RUN_V2, f.name)
+            m === nothing && continue
+            new_ft = f.function_type
+            v1_operands = [1, 2, 3, 9, 10, 16, 17, 20]
+            v2_defaults = (4 => 0, 5 => 0, 6 => 0, 7 => -1, 8 => -1,
+                           11 => 0, 12 => 0, 13 => 0, 14 => -1, 15 => -1,
+                           18 => -1, 19 => -1)
+            old_ft = LLVM.FunctionType(new_ft.return_type, new_ft.parameters[v1_operands])
+            old_f = LLVM.Function(mod, m.captures[1], old_ft)
+            old_f.section = f.section
+            append!(old_f.function_attributes, f.function_attributes)
+            for call in collect(f.users)
+                call::LLVM.CallInst
+                args = collect(call.arguments)
+                for (i, default) in v2_defaults
+                    arg = args[i]
+                    arg isa ConstantInt && convert(Int, arg) == default ||
+                        error("matmul2d with quantization scales or static extents requires macOS 27")
+                end
+                @dispose builder=IRBuilder() begin
+                    position!(builder, LLVM.before(call))
+                    call!(builder, old_ft, old_f, args[v1_operands])
                     erase!(call)
                 end
             end
@@ -420,6 +529,47 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
                 push!(mds, null(convert(LLVMType, typ)))
             end
             f.metadata["arg_eltypes"] = MDNode(mds)
+        end
+    end
+
+    # same for the tensor functions, whose pointers are to Apple's types
+    let T_i8 = LLVM.Int8Type(), T_i32 = LLVM.Int32Type()
+        function named(name)
+            T = get(LLVM.types(context()), name, nothing)
+            return T === nothing ? LLVM.StructType(name) : T
+        end
+        pointee(kind) = if kind === :i8
+            T_i8
+        elseif kind === :tensor
+            named("struct._tensor_t")   # opaque
+        elseif kind === :matmul2d_descriptor
+            T = named("struct.mpp::tensor_ops::matmul2d_descriptor")
+            LLVM.isopaque(T) &&
+                LLVM.elements!(T, LLVMType[T_i32, T_i32, T_i32, T_i8, T_i8, T_i8, T_i32])
+            T
+        end
+
+        for f in mod.functions
+            params = f.function_type.parameters
+            kinds = tensor_pointees(f.name, length(params))
+            kinds === nothing && continue
+            ptrs = findall(T -> T isa LLVM.PointerType, params)
+            @assert length(ptrs) == length(kinds)
+            mds = Metadata[]
+            for (i, kind) in zip(ptrs, kinds)
+                push!(mds, ConstantInt(Int32(i-1)))
+                push!(mds, UndefValue(pointee(kind)))
+            end
+            f.metadata["arg_eltypes"] = MDNode(mds)
+
+            # Julia sign-extends narrow integer arguments, which Apple's front end declares
+            # without extension attribute
+            for i in eachindex(params)
+                delete!(f.parameter_attributes[i], :signext)
+                for call in f.users
+                    delete!(call.argument_attributes[i], :signext)
+                end
+            end
         end
     end
 
