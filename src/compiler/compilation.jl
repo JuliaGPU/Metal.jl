@@ -414,6 +414,109 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
             end
         end
     end
+    # allocate the storage of cooperative tensors (see `CooperativeStorage`) the same way.
+    # its size depends on the operation, the element types and the number of threads. the
+    # call to `COOPERATIVE_STORAGE` that follows each allocation gives the first two and the
+    # number of SIMD-groups as constants; the back end knows how many threads those are.
+    let marker = get(mod.functions, COOPERATIVE_STORAGE, nothing)
+        if marker !== nothing
+            # (macOS 26.0 and 26.1 have cooperative destinations, through entry points of
+            # their own, `cooperative_destination_*`, which are not implemented here)
+            job.config.target.macos >= v"26.2" ||
+                error("Metal.jl only supports cooperative tensors when targeting macOS 26.2 or later")
+            T_i8 = LLVM.Int8Type(); T_i32 = LLVM.Int32Type(); T_i64 = LLVM.Int64Type()
+            # (the operand index and the descriptor, then the three element types)
+            T_what = LLVMType[T_i32, T_i32, T_i32, T_i32, T_i8, T_i8, T_i8, T_i32,
+                              T_i32, T_i32, T_i32]
+            size_ft = LLVM.FunctionType(T_i64, [T_what..., T_i32])
+            helper_ft = LLVM.FunctionType(T_i64)
+            width_ft = LLVM.FunctionType(T_i32)
+            function helper(what::Vector{Int}, nsimd::Int)
+                name = "metal.cooperative_tensor_size." * join(what, '.') * ".$nsimd"
+                name = replace(name, '-' => 'n')
+                haskey(mod.functions, name) && return mod.functions[name]
+                size_fn = COOPERATIVE_TENSOR * "data_size"
+                size_f = get(mod.functions, size_fn, nothing)
+                if size_f === nothing
+                    size_f = LLVM.Function(mod, size_fn, size_ft)
+                    size_f.section = "air.externally_defined"
+                    push!(size_f.function_attributes, EnumAttribute(:convergent))
+                end
+                width_f = get(mod.functions, "air.get_simdgroup_size.i32", nothing)
+                if width_f === nothing
+                    width_f = LLVM.Function(mod, "air.get_simdgroup_size.i32", width_ft)
+                end
+                f = LLVM.Function(mod, name, helper_ft)
+                f.linkage = LLVM.Linkage.LinkOnceODR
+                f.visibility = LLVM.Visibility.Hidden
+                push!(f.function_attributes, StringAttribute("deferred-static-alloca-size", ""))
+                @dispose builder=IRBuilder() begin
+                    position!(builder, LLVM.at_end(BasicBlock(f, "entry")))
+                    threads = LLVM.mul!(builder, ConstantInt(T_i32, nsimd),
+                                   call!(builder, width_ft, width_f))
+                    args = Value[ConstantInt(T, x) for (T, x) in zip(T_what, what)]
+                    ret!(builder, call!(builder, size_ft, size_f, [args..., threads]))
+                end
+                return f
+            end
+
+            sizes = Dict{Tuple{LLVM.Function,LLVM.Function},LLVM.Value}()
+            for call in collect(marker.users)
+                call::LLVM.CallInst
+                args = collect(call.arguments)
+                old = strip_pointer_casts(args[1])
+                old isa LLVM.AllocaInst ||
+                    error("""An MtlCooperativeTensor escaped the kernel's stack. Keep \
+                             cooperative tensors within code that is inlined into the kernel.""")
+                all(arg -> arg isa ConstantInt, args[2:end]) ||
+                    error("a cooperative tensor needs an operation and element types that are constants")
+                what = Int[convert(Int, arg) for arg in args[2:12]]
+                nsimd = convert(Int, args[13])
+                # (the size of an element in bits, which the data types have in their low byte)
+                alignment = max(1, (what[end] & 0xff) ÷ 8)
+                fun = old.parent.parent
+                @dispose builder=IRBuilder() begin
+                    size_helper = helper(what, nsimd)
+                    sz = get!(sizes, (fun, size_helper)) do
+                        position!(builder, LLVM.at_begin(first(fun.blocks)))
+                        call!(builder, helper_ft, size_helper)
+                    end
+                    position!(builder, LLVM.before(old))
+                    new = array_alloca!(builder, T_i8, sz)
+                    new.alignment = alignment
+                    if new.value_type != old.value_type
+                        new = bitcast!(builder, new, old.value_type)
+                    end
+                    replace_uses!(old, new)
+                end
+                erase!(call)
+                erase!(old)
+            end
+            @assert isempty(marker.users)
+            erase!(marker)
+        end
+    end
+    # Apple's front end declares this one as returning an `i1`, which Julia cannot say
+    let f = get(mod.functions, COOPERATIVE_TENSOR * "is_valid_element", nothing)
+        if f !== nothing && f.function_type.return_type != LLVM.Int1Type()
+            old_ft = f.function_type
+            new_ft = LLVM.FunctionType(LLVM.Int1Type(), old_ft.parameters)
+            f.name = ""
+            new_f = LLVM.Function(mod, COOPERATIVE_TENSOR * "is_valid_element", new_ft)
+            new_f.section = f.section
+            append!(new_f.function_attributes, f.function_attributes)
+            for call in collect(f.users)
+                call::LLVM.CallInst
+                @dispose builder=IRBuilder() begin
+                    position!(builder, LLVM.before(call))
+                    valid = call!(builder, new_ft, new_f, collect(call.arguments))
+                    replace_uses!(call, zext!(builder, valid, old_ft.return_type))
+                    erase!(call)
+                end
+            end
+            erase!(f)
+        end
+    end
     if job.config.target.air < v"2.9"
         # AIR 2.9 appended operands to these, which the front-end always emits; drop them
         for (fn, nparams) in ("air.init_strided_private_tensor.i32.global" => 6,
@@ -447,9 +550,12 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
         # what the tensors say, to save bounds checks, so they can be dropped.
         for f in collect(mod.functions)
             m = match(MATMUL2D_RUN_V2, f.name)
+            # (a cooperative destination is a pointer only, without type and extents)
+            cooperative = m === nothing
+            cooperative && (m = match(MATMUL2D_RUN_COOPERATIVE_V2, f.name))
             m === nothing && continue
             new_ft = f.function_type
-            v1_operands = [1, 2, 3, 9, 10, 16, 17, 20]
+            v1_operands = cooperative ? [1, 2, 3, 9, 10, 16, 17] : [1, 2, 3, 9, 10, 16, 17, 20]
             v2_scales = (4 => 0, 5 => 0, 6 => 0, 11 => 0, 12 => 0, 13 => 0)
             old_ft = LLVM.FunctionType(new_ft.return_type, new_ft.parameters[v1_operands])
             old_f = LLVM.Function(mod, m.captures[1], old_ft)

@@ -1,4 +1,4 @@
-export MtlInlineTensor, matmul2d_descriptor, TensorOpsMatmul2D,
+export MtlInlineTensor, MtlCooperativeTensor, matmul2d_descriptor, TensorOpsMatmul2D,
        matmul2d_multiply, matmul2d_multiply_accumulate
 
 using Core: LLVMPtr
@@ -25,6 +25,10 @@ const TensorDescriptorStorage = Base.RefValue{TensorDescriptor}
 # are linked against Apple's library when the pipeline is created, which reportedly fails
 # on macOS 27.3 if the types differ; the `air.*` intrinsics need them for Apple's verifier.
 const MATMUL2D_RUN_V2 = r"^(__tensorops_impl_matmul2d_op_run(?:_(?:dv|tg)_[a-z0-9]+){3})_v2$"
+# (into a cooperative tensor, which has no address space)
+const MATMUL2D_RUN_COOPERATIVE_V2 =
+    r"^(__tensorops_impl_matmul2d_op_run_cooperative(?:_(?:dv|tg)_[a-z0-9]+){2}_[a-z0-9]+)_v2$"
+const COOPERATIVE_TENSOR = "__tensorops_impl_matmul2d_op_cooperative_tensor_"
 const TENSOR_POINTEES = [
     # (name, number of parameters) => pointees
     (r"^air\.init_strided_private_tensor\.i32\.(global|local)$", 9) =>
@@ -41,6 +45,19 @@ const TENSOR_POINTEES = [
     # (before macOS 27)
     (r"^__tensorops_impl_matmul2d_op_run(_(dv|tg)_[a-z0-9]+){3}$", 8) =>
         (:matmul2d_descriptor, :i8, :i8, :i8),
+    (MATMUL2D_RUN_COOPERATIVE_V2, 17) =>
+        (:matmul2d_descriptor, :i8, :i8, :i8),
+    # (before macOS 27)
+    (r"^__tensorops_impl_matmul2d_op_run_cooperative(_(dv|tg)_[a-z0-9]+){2}_[a-z0-9]+$", 7) =>
+        (:matmul2d_descriptor, :i8, :i8, :i8),
+    # the storage of a cooperative tensor, and the tensor it is loaded from or stored to
+    (Regex("^$(COOPERATIVE_TENSOR)init\$"), 13) => (:i8,),
+    (Regex("^$(COOPERATIVE_TENSOR)data_size\$"), 12) => (),
+    (Regex("^$(COOPERATIVE_TENSOR)num_elements\$"), 12) => (:i8,),
+    (Regex("^$(COOPERATIVE_TENSOR)is_valid_element\$"), 14) => (:i8,),
+    (Regex("^$(COOPERATIVE_TENSOR)get_element_pointer\$"), 13) => (:i8,),
+    (Regex("^$(COOPERATIVE_TENSOR)load_(dv|tg)_[a-z0-9]+\$"), 16) => (:i8, :i8),
+    (Regex("^$(COOPERATIVE_TENSOR)store_(dv|tg)_[a-z0-9]+\$"), 15) => (:i8, :i8),
 ]
 
 function tensor_pointees(fn::String, nparams::Int)
@@ -436,6 +453,205 @@ TensorOpsMatmul2D(desc::matmul2d_descriptor, ::Val{NSIMD}) where {NSIMD} =
               A.storage, $TENSOR_DESC_INLINE, Int32(0), Int32(0), Int32(0), $(EA[1]), $(EA[2]),
               C.storage, $TENSOR_DESC_INLINE, $(EC[1]), $(EC[2]),
               threads)
+        return nothing
+    end
+end
+
+
+## cooperative tensors (MSL's `cooperative_tensor`).
+
+# The storage of a cooperative tensor is thread-local memory of a size only the back end
+# knows, like a tensor descriptor: `finish_ir!` allocates it, from the call to
+# `COOPERATIVE_STORAGE` that says what it is for.
+primitive type CooperativeStorage 8 end
+const CooperativeTensorStorage = Base.RefValue{CooperativeStorage}
+const COOPERATIVE_STORAGE = "__tensorops_metaljl_cooperative_storage"
+
+# `__tensor_ops_datatype`, which names the element types to the cooperative tensor functions
+tensorops_datatype(::Type{Float32})  = Int32(0x10000020)
+tensorops_datatype(::Type{Float16})  = Int32(0x10000010)
+tensorops_datatype(::Type{BFloat16}) = reinterpret(Int32, 0x90000010)
+tensorops_datatype(::Type{Int8})     = Int32(0x20000008)
+tensorops_datatype(::Type{UInt8})    = Int32(0x00000008)
+tensorops_datatype(::Type{Int32})    = Int32(0x20000020)
+
+"""
+    MtlCooperativeTensor{T}(op::TensorOpsMatmul2D, A::MtlInlineTensor, B::MtlInlineTensor)
+
+A destination for `op(A, B, C)` in thread-local memory (MSL's `cooperative_tensor`), with
+element type `T`. Its elements are divided over the threads that execute `op`, in a way
+that is up to the implementation, so that a product can be worked on where it was computed,
+without a round trip through threadgroup or device memory. Apple calls this postfix fusion.
+
+Metal.jl only implements the cooperative tensors of macOS 26.2 and later, so a kernel that
+uses one has to target at least that. macOS 26.0 and 26.1 have them too, through other entry
+points, which are not supported here.
+
+Each thread sees its own share of the elements: `length(t)` slots, of which those with
+`isassigned(t, i)` hold an element, read and written with `t[i]`. Two cooperative tensors
+made for the same `op` and operands hold the same elements at the same indices, also when
+their element types differ. `copyto!(t, src)` loads a tensor from memory and
+`copyto!(dst, t)` stores one, which is faster than doing so element by element; both have to
+be called by all threads that execute `op`, like `op` itself.
+
+```julia
+# C = α * A*B + β * C
+op  = TensorOpsMatmul2D(matmul2d_descriptor(32, 32), Val(1))
+acc = MtlCooperativeTensor{Float32}(op, A, B)
+op(A, B, acc)
+old = MtlCooperativeTensor{Float32}(op, A, B)
+copyto!(old, C)
+for i in 1:length(acc)
+    isassigned(acc, i) && (acc[i] = α * acc[i] + β * old[i])
+end
+copyto!(C, acc)
+```
+
+Like an [`MtlInlineTensor`](@ref), a cooperative tensor lives on the stack of the kernel.
+"""
+struct MtlCooperativeTensor{T, DESC, NSIMD, TA, TB}
+    storage::CooperativeTensorStorage
+end
+
+Base.eltype(::Type{<:MtlCooperativeTensor{T}}) where {T} = T
+Base.eltype(::MtlCooperativeTensor{T}) where {T} = T
+
+# The operands the cooperative tensor functions start with: which operand of the operation
+# the tensor is (2: the destination), and the descriptor as the operation gets it (with the
+# operands swapped, see the call of `TensorOpsMatmul2D`).
+const COOPERATIVE_PREFIX = (Int32, Int32, Int32, Int32, Int8, Int8, Int8, Int32)
+cooperative_prefix(DESC::matmul2d_descriptor) =
+    (Int32(2), DESC.n, DESC.m, DESC.k, DESC.transpose_right, DESC.transpose_left,
+     DESC.relaxed_precision, Int32(DESC.matmul_mode))
+# the element types of the operation's operands, in its order
+cooperative_datatypes(T, TA, TB) =
+    (tensorops_datatype(TB), tensorops_datatype(TA), tensorops_datatype(T))
+
+@device_function @inline @generated function MtlCooperativeTensor{T}(
+        ::TensorOpsMatmul2D{DESC, NSIMD},
+        ::MtlInlineTensor{TA, 2}, ::MtlInlineTensor{TB, 2}) where {T, DESC, NSIMD, TA, TB}
+    prefix = cooperative_prefix(DESC)
+    types = cooperative_datatypes(T, TA, TB)
+    quote
+        storage = Ref{CooperativeStorage}()
+        ccall($"extern $COOPERATIVE_STORAGE", llvmcall, Cvoid,
+              (Ref{CooperativeStorage}, $(COOPERATIVE_PREFIX...), Int32, Int32, Int32, Int32),
+              storage, $(prefix...), $(types...), $(Int32(NSIMD)))
+        ccall($"extern $(COOPERATIVE_TENSOR)init", llvmcall, Cvoid,
+              ($(COOPERATIVE_PREFIX...), Ref{CooperativeStorage}, Int32, Int32, Int32, Int32),
+              $(prefix...), storage, $(types...), $(Int32(NSIMD)) * simdgroup_size())
+        return MtlCooperativeTensor{$T, $DESC, $(Int32(NSIMD)), $TA, $TB}(storage)
+    end
+end
+
+# the number of slots this thread has
+@device_function @inline @generated function Base.length(
+        t::MtlCooperativeTensor{T, DESC, NSIMD, TA, TB}) where {T, DESC, NSIMD, TA, TB}
+    prefix = cooperative_prefix(DESC)
+    left, right, _ = cooperative_datatypes(T, TA, TB)
+    quote
+        n = ccall($"extern $(COOPERATIVE_TENSOR)num_elements", llvmcall, UInt16,
+                  ($(COOPERATIVE_PREFIX...), Ref{CooperativeStorage}, Int32, Int32, Int32),
+                  $(prefix...), t.storage, $left, $right, $(Int32(NSIMD)) * simdgroup_size())
+        return n % Int32
+    end
+end
+
+# whether slot `i` of this thread holds an element
+@device_function @inline @generated function Base.isassigned(
+        t::MtlCooperativeTensor{T, DESC, NSIMD, TA, TB}, i::Integer) where {T, DESC, NSIMD, TA, TB}
+    prefix = cooperative_prefix(DESC)
+    types = cooperative_datatypes(T, TA, TB)
+    quote
+        ccall($"extern $(COOPERATIVE_TENSOR)is_valid_element", llvmcall, Bool,
+              ($(COOPERATIVE_PREFIX...), Ref{CooperativeStorage}, UInt16, Int32, Int32, Int32, Int32),
+              $(prefix...), t.storage, (i - 1) % UInt16, $(types...),
+              $(Int32(NSIMD)) * simdgroup_size())
+    end
+end
+
+# A pointer to slot `index` (0-based) of this thread. Slot 0xffff is what the operation
+# takes as its destination.
+@device_function @inline @generated function cooperative_pointer(
+        t::MtlCooperativeTensor{T, DESC, NSIMD, TA, TB}, index::UInt16) where {T, DESC, NSIMD, TA, TB}
+    prefix = cooperative_prefix(DESC)
+    types = cooperative_datatypes(T, TA, TB)
+    quote
+        ccall($"extern $(COOPERATIVE_TENSOR)get_element_pointer", llvmcall,
+              LLVMPtr{$T, AS.Generic},
+              ($(COOPERATIVE_PREFIX...), Ref{CooperativeStorage}, UInt16, Int32, Int32, Int32),
+              $(prefix...), t.storage, index, $(types...))
+    end
+end
+
+@device_function @inline Base.getindex(t::MtlCooperativeTensor{T}, i::Integer) where {T} =
+    unsafe_load(cooperative_pointer(t, (i - 1) % UInt16), 1, Val(element_alignment(T)))
+@device_function @inline function Base.setindex!(t::MtlCooperativeTensor{T}, x, i::Integer) where {T}
+    unsafe_store!(cooperative_pointer(t, (i - 1) % UInt16), convert(T, x), 1,
+                  Val(element_alignment(T)))
+    return t
+end
+
+# load from and store to a tensor in memory, of the same element type
+@device_function @inline @generated function Base.copyto!(
+        t::MtlCooperativeTensor{T, DESC, NSIMD, TA, TB},
+        src::MtlInlineTensor{T, 2, A}) where {T, DESC, NSIMD, TA, TB, A}
+    prefix = cooperative_prefix(DESC)
+    types = cooperative_datatypes(T, TA, TB)
+    sym = "$(COOPERATIVE_TENSOR)load_$(tensorops_AS_prefix(Val(A)))_$(tensorops_suffix(T))"
+    quote
+        ccall($"extern $sym", llvmcall, Cvoid,
+              ($(COOPERATIVE_PREFIX...), Ref{CooperativeStorage}, Ref{TensorDescriptor},
+               Int32, Int32, Int32, Int32, Int32, Int32),
+              $(prefix...), t.storage, src.storage, $TENSOR_DESC_INLINE, Int32(2), $(types...),
+              $(Int32(NSIMD)) * simdgroup_size())
+        return t
+    end
+end
+
+@device_function @inline @generated function Base.copyto!(
+        dst::MtlInlineTensor{T, 2, A},
+        t::MtlCooperativeTensor{T, DESC, NSIMD, TA, TB}) where {T, DESC, NSIMD, TA, TB, A}
+    prefix = cooperative_prefix(DESC)
+    types = cooperative_datatypes(T, TA, TB)
+    sym = "$(COOPERATIVE_TENSOR)store_$(tensorops_AS_prefix(Val(A)))_$(tensorops_suffix(T))"
+    quote
+        ccall($"extern $sym", llvmcall, Cvoid,
+              ($(COOPERATIVE_PREFIX...), Ref{CooperativeStorage}, Ref{TensorDescriptor},
+               Int32, Int32, Int32, Int32, Int32),
+              $(prefix...), t.storage, dst.storage, $TENSOR_DESC_INLINE, $(types...),
+              $(Int32(NSIMD)) * simdgroup_size())
+        return dst
+    end
+end
+
+# matmul2d into a cooperative tensor made for this operation and these element types
+@device_function @inline @generated function (::TensorOpsMatmul2D{DESC, NSIMD})(
+        A::MtlInlineTensor{TA, 2, AA, EA},
+        B::MtlInlineTensor{TB, 2, AB, EB},
+        C::MtlCooperativeTensor{TC, DESC, NSIMD, TA, TB}) where {DESC, NSIMD, TA, TB, TC, AA, AB,
+                                                                 EA, EB}
+    apple = matmul2d_descriptor(DESC.n, DESC.m, DESC.k,
+                                DESC.transpose_right, DESC.transpose_left,
+                                DESC.relaxed_precision, DESC.matmul_mode)
+    sym = "__tensorops_impl_matmul2d_op_run_cooperative" *
+          "_$(tensorops_AS_prefix(Val(AB)))_$(tensorops_suffix(TB))" *
+          "_$(tensorops_AS_prefix(Val(AA)))_$(tensorops_suffix(TA))" *
+          "_$(tensorops_suffix(TC))_v2"
+    static(E) = E === nothing ? (Int32(-1), Int32(-1)) : E
+    EA, EB = static(EA), static(EB)
+    quote
+        ccall($"extern $sym", llvmcall, Cvoid,
+              (Ref{matmul2d_descriptor},
+               Ref{TensorDescriptor}, Int32, Int32, Int32, Int32, Int32, Int32,
+               Ref{TensorDescriptor}, Int32, Int32, Int32, Int32, Int32, Int32,
+               LLVMPtr{$TC, AS.Generic},
+               Int32),
+              $(QuoteNode(apple)),
+              B.storage, $TENSOR_DESC_INLINE, Int32(0), Int32(0), Int32(0), $(EB[1]), $(EB[2]),
+              A.storage, $TENSOR_DESC_INLINE, Int32(0), Int32(0), Int32(0), $(EA[1]), $(EA[2]),
+              cooperative_pointer(C, 0xffff),
+              Int32(NSIMD) * simdgroup_size())
         return nothing
     end
 end
