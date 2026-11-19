@@ -140,8 +140,14 @@ is the element type, `R` the rank and `AS` the address space of the array.
 
 Extents and strides follow Julia's column-major convention, matching the array: the first
 dimension is contiguous. `MtlInlineTensor(A)` views all of `A`, and `MtlInlineTensor(A, dims)`
-and `MtlInlineTensor(A, dims, strides)` set an explicit shape. `view(t, origin, dims)` slices
-a tile, with a 1-based `origin`.
+and `MtlInlineTensor(A, dims, strides)` set an explicit shape (with `strides = (1, ld)` for a
+matrix whose columns are `ld` elements apart).
+
+`view(t, origin, dims)` slices a tile, with a 1-based `origin`, and `view(t, origin)` slices
+everything from `origin` on. `view(t, origin, Val(dims))` slices a tile of a size known at
+compile time (MSL's `slice<dims...>`), which lets operations skip their bounds checks; a `-1`
+in `dims` leaves that dimension dynamic, taking everything from `origin` on. The static size
+is the type parameter `E`, with `-1` for each dynamic dimension, or `nothing` without any.
 
 Like MSL's `tensor_inline`, an `MtlInlineTensor` lives on the stack of the kernel, and
 compilation fails if Julia cannot keep it there. Only use tensors in code that is inlined
@@ -149,7 +155,7 @@ into the kernel, don't choose between tensors at run time (e.g. with `ifelse`), 
 carry a tensor from one loop iteration to the next. Taking views inside a loop of a tensor
 created before it is fine.
 """
-struct MtlInlineTensor{T, R, AS}
+struct MtlInlineTensor{T, R, AS, E}
     storage::TensorDescriptorStorage
 end
 
@@ -173,7 +179,7 @@ end
     init_strided_tensor_device!(storage, Int16(R),
                                 reinterpret(LLVMPtr{UInt8, AS.Device}, pointer(data)),
                                 e, packed_strides(e), tensor_datatype(T))
-    return MtlInlineTensor{T, R, AS.Device}(storage)
+    return MtlInlineTensor{T, R, AS.Device, nothing}(storage)
 end
 
 @device_function @inline function MtlInlineTensor{T, R, AS.ThreadGroup}(
@@ -184,7 +190,7 @@ end
     init_strided_tensor_threadgroup!(storage, Int16(R),
                                      reinterpret(LLVMPtr{UInt8, AS.ThreadGroup}, pointer(data)),
                                      e, packed_strides(e), tensor_datatype(T))
-    return MtlInlineTensor{T, R, AS.ThreadGroup}(storage)
+    return MtlInlineTensor{T, R, AS.ThreadGroup, nothing}(storage)
 end
 
 # Explicit-stride variants:
@@ -197,7 +203,7 @@ end
                                 reinterpret(LLVMPtr{UInt8, AS.Device}, pointer(data)),
                                 unsafe_trunc.(Int32, extents),
                                 unsafe_trunc.(Int32, strides), tensor_datatype(T))
-    return MtlInlineTensor{T, R, AS.Device}(storage)
+    return MtlInlineTensor{T, R, AS.Device, nothing}(storage)
 end
 
 @device_function @inline function MtlInlineTensor{T, R, AS.ThreadGroup}(
@@ -209,7 +215,7 @@ end
                                      reinterpret(LLVMPtr{UInt8, AS.ThreadGroup}, pointer(data)),
                                      unsafe_trunc.(Int32, extents),
                                      unsafe_trunc.(Int32, strides), tensor_datatype(T))
-    return MtlInlineTensor{T, R, AS.ThreadGroup}(storage)
+    return MtlInlineTensor{T, R, AS.ThreadGroup, nothing}(storage)
 end
 
 # Convenience: infer rank and address space from the inputs.
@@ -237,7 +243,48 @@ Base.eltype(::MtlInlineTensor{T}) where {T} = T
     storage = Ref{TensorDescriptor}()
     slice_private_tensor!(storage, t.storage, Int16(R),
                           Int32.(origin) .- Int32(1), Int32.(extents))
-    return MtlInlineTensor{T, R, A}(storage)
+    return MtlInlineTensor{T, R, A, nothing}(storage)
+end
+
+# what is left of each dimension from a 0-based origin on
+@inline remaining_extents(t::MtlInlineTensor{<:Any, R}, origin0::NTuple{R, Int32}) where {R} =
+    ntuple(Val(R)) do d
+        get_extent_private_tensor(t.storage, Int16(R), Int16(d - 1)) - origin0[d]
+    end
+
+# Everything from `origin` on.
+@device_function @inline function Base.view(
+        t::MtlInlineTensor{T, R, A},
+        origin::NTuple{R, <:Integer}) where {T, R, A}
+    origin0 = Int32.(origin) .- Int32(1)
+    storage = Ref{TensorDescriptor}()
+    slice_private_tensor!(storage, t.storage, Int16(R), origin0, remaining_extents(t, origin0))
+    return MtlInlineTensor{T, R, A, nothing}(storage)
+end
+
+# A tile of static size; `-1` keeps a dimension dynamic. (Generated, so that the static
+# extents in the type are a literal.)
+@device_function @inline @generated function Base.view(
+        t::MtlInlineTensor{T, R, A},
+        origin::NTuple{R, <:Integer},
+        ::Val{E}) where {T, R, A, E}
+    E isa NTuple{R, Integer} ||
+        return :(throw(ArgumentError("static extents are one integer per dimension")))
+    static = Int32[E...]
+    extents = Expr(:tuple)
+    for d in 1:R
+        static[d] == -1 || static[d] > 0 ||
+            return :(throw(ArgumentError("static extents are positive sizes, or -1 for a dynamic one")))
+        push!(extents.args, static[d] == -1 ?
+            :(get_extent_private_tensor(t.storage, $(Int16(R)), $(Int16(d - 1))) - origin0[$d]) :
+            static[d])
+    end
+    quote
+        origin0 = Int32.(origin) .- Int32(1)
+        storage = Ref{TensorDescriptor}()
+        slice_private_tensor!(storage, t.storage, $(Int16(R)), origin0, $extents)
+        return MtlInlineTensor{$T, $R, $A, $(Tuple(static))}(storage)
+    end
 end
 
 
@@ -284,6 +331,10 @@ end
 
 Limitation: the loop trip count needs to be kept dynamic (not a compile-time constant) to
 avoid crashing Apple's back-end.
+
+Such a loop sends the partial products through the memory of the destination on every
+iteration. Where nothing has to happen between the slices, leave `K` dynamic and call the
+operation once over all of it, which measured almost twice as fast for large matrices.
 """
 struct matmul2d_descriptor
     m::Int32
@@ -336,6 +387,14 @@ Construct it with `TensorOpsMatmul2D(desc, Val(NSIMD))`, and call it to compute 
 op = TensorOpsMatmul2D(matmul2d_descriptor(64, 32), Val(4))
 op(A, B, C)            # C[64, 32] = A[64, K] * B[K, 32]
 ```
+
+All threads of those SIMD-groups have to make the call. With `NSIMD = 1` each SIMD-group
+computes a tile of its own, so a threadgroup can hold any number of them.
+
+The operands may be smaller than the descriptor's tile, as at the edge of a matrix: the
+operation then only reads and writes what is there. Operands of full size are best passed as
+views of static size (`view(t, origin, Val(dims))`), which avoids those bounds checks; this
+takes effect from macOS 27 on.
 """
 struct TensorOpsMatmul2D{DESC, NSIMD} end
 
@@ -343,9 +402,10 @@ TensorOpsMatmul2D(desc::matmul2d_descriptor, ::Val{NSIMD}) where {NSIMD} =
     TensorOpsMatmul2D{desc, Int32(NSIMD)}()
 
 @device_function @inline @generated function (::TensorOpsMatmul2D{DESC, NSIMD})(
-        A::MtlInlineTensor{TA, 2, AA},
-        B::MtlInlineTensor{TB, 2, AB},
-        C::MtlInlineTensor{TC, 2, AC}) where {DESC, NSIMD, TA, TB, TC, AA, AB, AC}
+        A::MtlInlineTensor{TA, 2, AA, EA},
+        B::MtlInlineTensor{TB, 2, AB, EB},
+        C::MtlInlineTensor{TC, 2, AC, EC}) where {DESC, NSIMD, TA, TB, TC, AA, AB, AC,
+                                                  EA, EB, EC}
     # matmul2d produces its (row-major) output as the transpose of the Julia column-major
     # one, so `C = A*B` follows from running it with the operands swapped (its left = B, its
     # right = A) and the descriptor's m/n (and transpose flags) swapped to match. DESC is a
@@ -354,12 +414,14 @@ TensorOpsMatmul2D(desc::matmul2d_descriptor, ::Val{NSIMD}) where {NSIMD} =
                                 DESC.transpose_right, DESC.transpose_left,
                                 DESC.relaxed_precision, DESC.matmul_mode)
     # the entry point of macOS 27, which takes per operand the data type and block sizes of
-    # quantization scales (here none) and the static extents (here dynamic, -1). `finish_ir!`
-    # calls the original one instead when targeting older versions.
+    # quantization scales (here none) and the static extents (-1 where dynamic). `finish_ir!`
+    # calls the original one instead when targeting older versions, which takes neither.
     sym = "__tensorops_impl_matmul2d_op_run" *
           "_$(tensorops_AS_prefix(Val(AB)))_$(tensorops_suffix(TB))" *
           "_$(tensorops_AS_prefix(Val(AA)))_$(tensorops_suffix(TA))" *
           "_$(tensorops_AS_prefix(Val(AC)))_$(tensorops_suffix(TC))_v2"
+    static(E) = E === nothing ? (Int32(-1), Int32(-1)) : E
+    EA, EB, EC = static(EA), static(EB), static(EC)
     quote
         # matmul2d needs its thread count as a constant, so not `threads_per_simdgroup()`
         threads = Int32(NSIMD) * simdgroup_size()
@@ -370,9 +432,9 @@ TensorOpsMatmul2D(desc::matmul2d_descriptor, ::Val{NSIMD}) where {NSIMD} =
                Ref{TensorDescriptor}, Int32, Int32, Int32,
                Int32),
               $(QuoteNode(apple)),
-              B.storage, $TENSOR_DESC_INLINE, Int32(0), Int32(0), Int32(0), Int32(-1), Int32(-1),
-              A.storage, $TENSOR_DESC_INLINE, Int32(0), Int32(0), Int32(0), Int32(-1), Int32(-1),
-              C.storage, $TENSOR_DESC_INLINE, Int32(-1), Int32(-1),
+              B.storage, $TENSOR_DESC_INLINE, Int32(0), Int32(0), Int32(0), $(EB[1]), $(EB[2]),
+              A.storage, $TENSOR_DESC_INLINE, Int32(0), Int32(0), Int32(0), $(EA[1]), $(EA[2]),
+              C.storage, $TENSOR_DESC_INLINE, $(EC[1]), $(EC[2]),
               threads)
         return nothing
     end
