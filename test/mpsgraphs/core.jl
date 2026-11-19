@@ -18,13 +18,20 @@ shtyp = MPSGraphShapedType(mpsh, Float32)
 @testset "cached graphs release their arrays" begin
     # MPSGraphExecutable keeps every output buffer it is encoded with alive
     A = MtlArray(rand(Float32, 1024, 1024))
-    f() = MPSGraphs.accumulate!(+, similar(A), A; dims=2)
+    # the device's allocated size does not reliably drop when buffers are freed, but can
+    # stay at the peak of what was alive at once. outputs are only released when the GC
+    # finalizes them (and the objects MPS wraps them in), so collect after every few runs
+    # to bound that peak; otherwise a late GC during the measured runs looks like a leak.
     # with the Metal 4 command API, collected buffers are only released on the next
-    # allocation or device synchronization
+    # allocation or device synchronization.
     allocated() = (GC.gc(true); device_synchronize(); Int(dev.currentAllocatedSize))
-    # MPSGraph grows internal pools for the first few hundred runs
-    foreach(_ -> f(), 1:200)
+    batches(n) = foreach(1:n) do _
+        foreach(_ -> MPSGraphs.accumulate!(+, similar(A), A; dims=2), 1:10)
+        allocated()
+    end
+    # also lets MPSGraph grow its internal pools
+    batches(10)
     before = allocated()
-    foreach(_ -> f(), 1:100)
+    batches(10)
     @test allocated() - before < 25 * sizeof(A)
 end
