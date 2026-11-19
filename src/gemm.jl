@@ -411,12 +411,13 @@ end
 # contraction depth BK = 8·KB. BM×BN = (8·TM·WM)×(8·TN·WN) output per threadgroup.
 # WM=WN=2 (128 threads, 4 simdgroups): matches MLX/m5-gemm; gives 4× more concurrent
 # threadgroups per core vs WM=WN=4. TM=TN=4 gives 16 MACs per simdgroup per K-step
-# (vs 4 for TM=TN=2), maximizing arithmetic intensity. KB=2 halves barrier count.
+# (vs 4 for TM=TN=2), maximizing arithmetic intensity. KB=1: a deeper KB=2 tile halves the
+# barrier count, but runs 3× slower on M1 and 20% slower on M3 Pro.
 const GEMM_SIMD_WM = 2
 const GEMM_SIMD_WN = 2
 const GEMM_SIMD_TM = 4
 const GEMM_SIMD_TN = 4
-const GEMM_SIMD_KB = 2
+const GEMM_SIMD_KB = 1
 
 # the unrolled tile staging (`load_tile`) gives every thread the same number of elements
 let nthreads = GEMM_SIMD_WM * GEMM_SIMD_WN * 32, BK = 8 * GEMM_SIMD_KB
