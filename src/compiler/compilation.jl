@@ -369,82 +369,9 @@ function GPUCompiler.finish_ir!(@nospecialize(job::AnyMetalJob),
         end
     end
     ## tensor
-    # allocate the storage of the tensor descriptors (see `TensorDescriptor`) like Apple's
-    # front end: with a size computed by an argument-less function that has the
-    # "deferred-static-alloca-size" attribute, which the back end evaluates. each
-    # descriptor is created by an `init` or `slice` call, which also gives its rank.
-    let storage = Dict{LLVM.AllocaInst,Int}(), allocas = LLVM.AllocaInst[]
-        for (fn, rank_operand) in ("air.init_strided_private_tensor.i32.global" => 2,
-                                   "air.init_strided_private_tensor.i32.local" => 2,
-                                   "air.slice_private_tensor_private_tensor.s.i32" => 3)
-            f = get(mod.functions, fn, nothing)
-            f === nothing && continue
-            for call in f.users
-                call::LLVM.CallInst
-                args = collect(call.arguments)
-                dst = strip_pointer_casts(args[1])
-                # (Julia allocates the storage of an `MtlInlineTensor` on the heap when it
-                # cannot prove it doesn't escape)
-                dst isa LLVM.AllocaInst ||
-                    error("""An MtlInlineTensor escaped the kernel's stack. Keep tensors \
-                             within code that is inlined into the kernel, don't choose \
-                             between them at run time, and don't carry them across loop \
-                             iterations.""")
-                # (finish_ir! runs once for every entry point in the module)
-                dst.operands[1] isa ConstantInt || continue
-                rank = convert(Int, args[rank_operand]::ConstantInt)
-                haskey(storage, dst) || push!(allocas, dst)
-                @assert get!(storage, dst, rank) == rank
-            end
-        end
-
-        T_i16 = LLVM.Int16Type()
-        T_i64 = LLVM.Int64Type()
-        size_ft = LLVM.FunctionType(T_i16, [T_i16, T_i16])
-        helper_ft = LLVM.FunctionType(T_i64)
-        function helper(rank)
-            name = "metal.tensor_descriptor_size.r$rank"
-            haskey(mod.functions, name) && return mod.functions[name]
-            size_f = get(mod.functions, "air.get_descriptor_size_tensor", nothing)
-            if size_f === nothing
-                size_f = LLVM.Function(mod, "air.get_descriptor_size_tensor", size_ft)
-            end
-            # the rank has to be a constant here: the back end fails to evaluate a helper
-            # that takes it as an argument
-            f = LLVM.Function(mod, name, helper_ft)
-            f.linkage = LLVM.Linkage.LinkOnceODR
-            f.visibility = LLVM.Visibility.Hidden
-            push!(f.function_attributes, StringAttribute("deferred-static-alloca-size", ""))
-            @dispose builder=IRBuilder() begin
-                position!(builder, LLVM.at_end(BasicBlock(f, "entry")))
-                # (4 is the size of the `i32` indices)
-                sz = call!(builder, size_ft, size_f,
-                           [ConstantInt(T_i16, rank), ConstantInt(T_i16, 4)])
-                ret!(builder, zext!(builder, sz, T_i64))
-            end
-            return f
-        end
-
-        sizes = Dict{Tuple{LLVM.Function,Int},LLVM.Value}()
-        for old in allocas
-            fun, rank = old.parent.parent, storage[old]
-            @dispose builder=IRBuilder() begin
-                sz = get!(sizes, (fun, rank)) do
-                    position!(builder, LLVM.at_begin(first(fun.blocks)))
-                    call!(builder, helper_ft, helper(rank))
-                end
-                position!(builder, LLVM.before(old))
-                new = array_alloca!(builder, LLVM.Int8Type(), sz)
-                new.alignment = 8
-                # (with typed pointers, Julia's storage may have another type)
-                if new.value_type != old.value_type
-                    new = bitcast!(builder, new, old.value_type)
-                end
-                replace_uses!(old, new)
-                erase!(old)
-            end
-        end
-    end
+    allocate_tensor_descriptors!(mod)
+    allocate_cooperative_storage!(mod)
+    legalize_cooperative_tensors!(mod, job.config.target.macos)
     if job.config.target.air < v"2.9"
         # AIR 2.9 appended operands to these, which the front-end always emits; drop them
         for (fn, nparams) in ("air.init_strided_private_tensor.i32.global" => 6,
@@ -478,9 +405,12 @@ function GPUCompiler.finish_ir!(@nospecialize(job::AnyMetalJob),
         # what the tensors say, to save bounds checks, so they can be dropped.
         for f in collect(mod.functions)
             m = match(MATMUL2D_RUN_V2, f.name)
+            # (a cooperative destination is a pointer only, without type and extents)
+            cooperative = m === nothing
+            cooperative && (m = match(MATMUL2D_RUN_COOPERATIVE_V2, f.name))
             m === nothing && continue
             new_ft = f.function_type
-            v1_operands = [1, 2, 3, 9, 10, 16, 17, 20]
+            v1_operands = cooperative ? [1, 2, 3, 9, 10, 16, 17] : [1, 2, 3, 9, 10, 16, 17, 20]
             v2_scales = (4 => 0, 5 => 0, 6 => 0, 11 => 0, 12 => 0, 13 => 0)
             old_ft = LLVM.FunctionType(new_ft.return_type, new_ft.parameters[v1_operands])
             old_f = LLVM.Function(mod, m.captures[1], old_ft)
@@ -610,6 +540,233 @@ function GPUCompiler.finish_ir!(@nospecialize(job::AnyMetalJob),
     end
 
     return entry
+end
+
+# allocate the storage of the tensor descriptors (see `TensorDescriptor`) like Apple's
+# front end: with a size computed by an argument-less function that has the
+# "deferred-static-alloca-size" attribute, which the back end evaluates. each
+# descriptor is created by an `init` or `slice` call, which also gives its rank.
+function allocate_tensor_descriptors!(mod::LLVM.Module)
+    let storage = Dict{LLVM.AllocaInst,Int}(), allocas = LLVM.AllocaInst[]
+        for (fn, rank_operand) in ("air.init_strided_private_tensor.i32.global" => 2,
+                                   "air.init_strided_private_tensor.i32.local" => 2,
+                                   "air.slice_private_tensor_private_tensor.s.i32" => 3)
+            f = get(mod.functions, fn, nothing)
+            f === nothing && continue
+            for call in f.users
+                call::LLVM.CallInst
+                args = collect(call.arguments)
+                dst = strip_pointer_casts(args[1])
+                # (Julia allocates the storage of an `MtlInlineTensor` on the heap when it
+                # cannot prove it doesn't escape)
+                dst isa LLVM.AllocaInst ||
+                    error("""An MtlInlineTensor escaped the kernel's stack. Keep tensors \
+                             within code that is inlined into the kernel, don't choose \
+                             between them at run time, and don't carry them across loop \
+                             iterations.""")
+                # (finish_ir! runs once for every entry point in the module)
+                dst.operands[1] isa ConstantInt || continue
+                rank = convert(Int, args[rank_operand]::ConstantInt)
+                haskey(storage, dst) || push!(allocas, dst)
+                @assert get!(storage, dst, rank) == rank
+            end
+        end
+
+        T_i16 = LLVM.Int16Type()
+        T_i64 = LLVM.Int64Type()
+        size_ft = LLVM.FunctionType(T_i16, [T_i16, T_i16])
+        helper_ft = LLVM.FunctionType(T_i64)
+        function helper(rank)
+            name = "metal.tensor_descriptor_size.r$rank"
+            haskey(mod.functions, name) && return mod.functions[name]
+            size_f = get(mod.functions, "air.get_descriptor_size_tensor", nothing)
+            if size_f === nothing
+                size_f = LLVM.Function(mod, "air.get_descriptor_size_tensor", size_ft)
+            end
+            # the rank has to be a constant here: the back end fails to evaluate a helper
+            # that takes it as an argument
+            f = LLVM.Function(mod, name, helper_ft)
+            f.linkage = LLVM.Linkage.LinkOnceODR
+            f.visibility = LLVM.Visibility.Hidden
+            push!(f.function_attributes, StringAttribute("deferred-static-alloca-size", ""))
+            @dispose builder=IRBuilder() begin
+                position!(builder, LLVM.at_end(BasicBlock(f, "entry")))
+                # (4 is the size of the `i32` indices)
+                sz = call!(builder, size_ft, size_f,
+                           [ConstantInt(T_i16, rank), ConstantInt(T_i16, 4)])
+                ret!(builder, zext!(builder, sz, T_i64))
+            end
+            return f
+        end
+
+        sizes = Dict{Tuple{LLVM.Function,Int},LLVM.Value}()
+        for old in allocas
+            fun, rank = old.parent.parent, storage[old]
+            @dispose builder=IRBuilder() begin
+                sz = get!(sizes, (fun, rank)) do
+                    position!(builder, LLVM.at_begin(first(fun.blocks)))
+                    call!(builder, helper_ft, helper(rank))
+                end
+                position!(builder, LLVM.before(old))
+                new = array_alloca!(builder, LLVM.Int8Type(), sz)
+                new.alignment = 8
+                # (with typed pointers, Julia's storage may have another type)
+                if new.value_type != old.value_type
+                    new = bitcast!(builder, new, old.value_type)
+                end
+                replace_uses!(old, new)
+                erase!(old)
+            end
+        end
+    end
+end
+
+# allocate the storage of cooperative tensors (see `CooperativeStorage`) the same way.
+# its size depends on the operation, the element types and the number of threads. the
+# call to `COOPERATIVE_STORAGE` that follows each allocation gives the first two and the
+# number of SIMD-groups as constants; the back end knows how many threads those are.
+function allocate_cooperative_storage!(mod::LLVM.Module)
+    let marker = get(mod.functions, COOPERATIVE_STORAGE, nothing)
+        if marker !== nothing
+            T_i8 = LLVM.Int8Type(); T_i32 = LLVM.Int32Type(); T_i64 = LLVM.Int64Type()
+            # (the operand index and the descriptor, then the three element types)
+            T_what = LLVMType[T_i32, T_i32, T_i32, T_i32, T_i8, T_i8, T_i8, T_i32,
+                              T_i32, T_i32, T_i32]
+            size_ft = LLVM.FunctionType(T_i64, [T_what..., T_i32])
+            helper_ft = LLVM.FunctionType(T_i64)
+            width_ft = LLVM.FunctionType(T_i32)
+            function helper(what::Vector{Int}, nsimd::Int)
+                name = "metal.cooperative_tensor_size." * join(what, '.') * ".$nsimd"
+                name = replace(name, '-' => 'n')
+                haskey(mod.functions, name) && return mod.functions[name]
+                size_fn = COOPERATIVE_TENSOR * "data_size"
+                size_f = get(mod.functions, size_fn, nothing)
+                if size_f === nothing
+                    size_f = LLVM.Function(mod, size_fn, size_ft)
+                    size_f.section = "air.externally_defined"
+                    push!(size_f.function_attributes, EnumAttribute(:convergent))
+                end
+                width_f = get(mod.functions, "air.get_simdgroup_size.i32", nothing)
+                if width_f === nothing
+                    width_f = LLVM.Function(mod, "air.get_simdgroup_size.i32", width_ft)
+                end
+                f = LLVM.Function(mod, name, helper_ft)
+                f.linkage = LLVM.Linkage.LinkOnceODR
+                f.visibility = LLVM.Visibility.Hidden
+                push!(f.function_attributes, StringAttribute("deferred-static-alloca-size", ""))
+                @dispose builder=IRBuilder() begin
+                    position!(builder, LLVM.at_end(BasicBlock(f, "entry")))
+                    threads = LLVM.mul!(builder, ConstantInt(T_i32, nsimd),
+                                   call!(builder, width_ft, width_f))
+                    args = Value[ConstantInt(T, x) for (T, x) in zip(T_what, what)]
+                    ret!(builder, call!(builder, size_ft, size_f, [args..., threads]))
+                end
+                return f
+            end
+
+            sizes = Dict{Tuple{LLVM.Function,LLVM.Function},LLVM.Value}()
+            for call in collect(marker.users)
+                call::LLVM.CallInst
+                args = collect(call.arguments)
+                old = strip_pointer_casts(args[1])
+                old isa LLVM.AllocaInst ||
+                    error("""An MtlCooperativeTensor escaped the kernel's stack. Keep \
+                             cooperative tensors within code that is inlined into the kernel.""")
+                all(arg -> arg isa ConstantInt, args[2:end]) ||
+                    error("a cooperative tensor needs an operation and element types that are constants")
+                what = Int[convert(Int, arg) for arg in args[2:12]]
+                nsimd = convert(Int, args[13])
+                # (the size of an element in bits, which the data types have in their low byte)
+                alignment = max(1, (what[end] & 0xff) ÷ 8)
+                fun = old.parent.parent
+                @dispose builder=IRBuilder() begin
+                    size_helper = helper(what, nsimd)
+                    sz = get!(sizes, (fun, size_helper)) do
+                        position!(builder, LLVM.at_begin(first(fun.blocks)))
+                        call!(builder, helper_ft, size_helper)
+                    end
+                    position!(builder, LLVM.before(old))
+                    new = array_alloca!(builder, T_i8, sz)
+                    new.alignment = alignment
+                    if new.value_type != old.value_type
+                        new = bitcast!(builder, new, old.value_type)
+                    end
+                    replace_uses!(old, new)
+                end
+                erase!(call)
+                erase!(old)
+            end
+            @assert isempty(marker.users)
+            erase!(marker)
+        end
+    end
+end
+
+# declare and call the cooperative tensor functions as Apple's front end does for the
+# targeted macOS version
+function legalize_cooperative_tensors!(mod::LLVM.Module, macos::VersionNumber)
+    # Apple's front end declares this one as returning an `i1`, which Julia cannot say
+    let f = get(mod.functions, COOPERATIVE_TENSOR * "is_valid_element", nothing)
+        if f !== nothing && f.function_type.return_type != LLVM.Int1Type()
+            old_ft = f.function_type
+            new_ft = LLVM.FunctionType(LLVM.Int1Type(), old_ft.parameters)
+            f.name = ""
+            new_f = LLVM.Function(mod, COOPERATIVE_TENSOR * "is_valid_element", new_ft)
+            new_f.section = f.section
+            append!(new_f.function_attributes, f.function_attributes)
+            for call in collect(f.users)
+                call::LLVM.CallInst
+                @dispose builder=IRBuilder() begin
+                    position!(builder, LLVM.before(call))
+                    valid = call!(builder, new_ft, new_f, collect(call.arguments))
+                    replace_uses!(call, zext!(builder, valid, old_ft.return_type))
+                    erase!(call)
+                end
+            end
+            erase!(f)
+        end
+    end
+    if macos < v"26.2"
+        # before macOS 26.2, the cooperative tensor functions only handle the destination
+        # of an operation, so they don't take the operand index; loading and storing also
+        # don't take the element type of the destination.
+        for f in collect(mod.functions)
+            startswith(f.name, COOPERATIVE_TENSOR) || continue
+            op = chopprefix(f.name, COOPERATIVE_TENSOR)
+            name = op == "data_size" ? "__tensorops_impl_matmul2d_op_cooperative_destination_data_size" :
+                   COOPERATIVE_DESTINATION * op
+            new_ft = f.function_type
+            nparams = length(new_ft.parameters)
+            dropped = startswith(op, "load_") || startswith(op, "store_") ? [1, nparams - 1] : [1]
+            kept = setdiff(1:nparams, dropped)
+            old_ft = LLVM.FunctionType(new_ft.return_type, new_ft.parameters[kept])
+            old_f = LLVM.Function(mod, name, old_ft)
+            old_f.section = f.section
+            append!(old_f.function_attributes, f.function_attributes)
+            for call in collect(f.users)
+                call::LLVM.CallInst
+                args = collect(call.arguments)
+                @assert args[1] isa ConstantInt && convert(Int, args[1]) == 2
+                @dispose builder=IRBuilder() begin
+                    position!(builder, LLVM.before(call))
+                    new_call = call!(builder, old_ft, old_f, args[kept])
+                    replace_uses!(call, new_call)
+                    erase!(call)
+                end
+            end
+            erase!(f)
+        end
+    end
+    # Apple's front end zero-extends what these return, at the declaration and the calls
+    for prefix in (COOPERATIVE_TENSOR, COOPERATIVE_DESTINATION),
+        name in ("num_elements", "is_valid_element")
+        f = get(mod.functions, prefix * name, nothing)
+        f === nothing && continue
+        push!(LLVM.return_attributes(f), EnumAttribute("zeroext"))
+        for call in f.users
+            push!(LLVM.return_attributes(call::LLVM.CallInst), EnumAttribute("zeroext"))
+        end
+    end
 end
 
 
