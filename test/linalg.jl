@@ -467,12 +467,12 @@ end
     end
 
     # Metal 4 tensor-ops path (`:tensor`): only fires on a capable device (macOS 26+ /
-    # Metal4 family), for the plain C = A·B (N/N, α=1, β=0) of a supported eltype.
+    # Metal4 family), for C = α·A·B + β·C of plain matrices of a supported eltype.
     @testset "tensor-ops path" begin
         # the tensor intrinsics take the operands of the targeted AIR version
         Mat = MtlDeviceMatrix{Float32, 1}
         tt = Tuple{Mat, Mat, Mat, Int32, Int32, Int32,
-                   Val{Int32(32)}, Val{Int32(16)}, Val{Int32(2)}, Val{Int32(2)}}
+                   Val{Int32(32)}, Val{Int32(16)}, Val{Int32(2)}, Val{Int32(2)}, Val{:overwrite}}
         air(macos) = sprint() do io
             Metal.code_air(io, Metal.gemm_tensor_kernel!, tt; kernel=true, macos,
                            dump_module=true)
@@ -646,9 +646,63 @@ end
             # forcing `:tensor` on operands it can't handle errors (like an unsupported :MPS)
             A = MtlArray(rand(Float32, 64, 64)); B = MtlArray(rand(Float32, 64, 64))
             @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Float32, 64, 64)), transpose(A), B))  # transpose
-            @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Float32, 64, 64)), A, B, 2f0, 1f0))  # α/β
             Ai = MtlArray(rand(Int32, 64, 64)); Bi = MtlArray(rand(Int32, 64, 64))
             @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Int32, 64, 64)), Ai, Bi))            # unsupported eltype
+
+            # α and β of another number type than the operands: with α = 1, a Float32 C is
+            # scaled by β and accumulated into; a narrower C, or any other α, goes through
+            # a temporary
+            @testset "scaling $T $M×$N×$K α=$α β=$β" for T in ttypes,
+                                                        (M, N, K) in ((64, 64, 32), (65, 47, 33)),
+                                                        (α, β) in ((true, 0.5), (true, 2), (0.5, false), (2, 0.5))
+                # small integers, so the result is exact in every eltype
+                a = T.(rand(-1:1, M, K)); b = T.(rand(-1:1, K, N)); c0 = T.(rand(-1:1, M, N))
+                C = MtlArray(c0)
+                @with (Metal.matmul_alg => :tensor) mul!(C, MtlArray(a), MtlArray(b), α, β)
+                ref = α * (Float32.(a) * Float32.(b)) + β * Float32.(c0)
+                @test Float32.(Array(C)) == ref
+            end
+            # β = 0 ignores C's contents, also through the temporary
+            let a = rand(Float32, 64, 32), b = rand(Float32, 32, 64)
+                C = MtlArray(fill(NaN32, 64, 64))
+                @with (Metal.matmul_alg => :tensor) mul!(C, MtlArray(a), MtlArray(b), 2, false)
+                @test isapprox(Array(C), 2 * a * b; rtol=1f-4)
+            end
+            @testset "integer scaling" begin
+                a = rand(Int8(-5):Int8(5), 64, 32); b = rand(Int8(-5):Int8(5), 32, 64)
+                c0 = rand(Int32(-5):Int32(5), 64, 64)
+                C = MtlArray(c0)
+                @with (Metal.matmul_alg => :tensor) mul!(C, MtlArray(a), MtlArray(b), 2, 3)
+                @test Array(C) == 2 * (Int32.(a) * Int32.(b)) + 3 * c0
+                # a fractional α is applied by the scalar kernel, before the result is
+                # converted to Int32 (0.5·96 is exact); forcing the tensor kernel errors
+                a = fill(Int8(2), 16, 16); b = fill(Int8(3), 16, 16)
+                @test !Metal.supports_tensor_matmul(C, MtlArray(a), MtlArray(b), 'N', 'N', 0.5f0, false)
+                C = MtlArray(zeros(Int32, 16, 16))
+                @with (Metal.matmul_alg => :native) mul!(C, MtlArray(a), MtlArray(b), 0.5f0, false)
+                @test all(==(48), Array(C))
+                @test_throws "algorithm `:tensor`" (@with (Metal.matmul_alg => :tensor) mul!(C, MtlArray(a), MtlArray(b), 0.5f0, false))
+                # so is a β that Int32 can't represent
+                C = MtlArray(zeros(Int32, 16, 16))
+                @with (Metal.matmul_alg => :native) mul!(C, MtlArray(a), MtlArray(b), true, Int64(1) << 31)
+                @test all(==(96), Array(C))
+                @test !Metal.supports_tensor_matmul(C, MtlArray(a), MtlArray(b), 'N', 'N', true, BFloat16(2^31))
+                @test Metal.supports_tensor_matmul(C, MtlArray(a), MtlArray(b), 'N', 'N', true, 2 + 0im)
+            end
+            # the unscaled product, or β itself, overflows Float16 while the result fits
+            @testset "Float16 intermediate overflow" begin
+                A = MtlArray(fill(Float16(100), 64, 64)); C = MtlArray(zeros(Float16, 64, 64))
+                @with (Metal.matmul_alg => :tensor) mul!(C, A, A, 1f-3, false)
+                @test all(x -> isapprox(x, 640; rtol=1f-2), Array(C))
+                A = MtlArray(zeros(Float16, 64, 64)); C = MtlArray(fill(Float16(0.001), 64, 64))
+                @with (Metal.matmul_alg => :tensor) mul!(C, A, A, true, 1f5)
+                @test all(x -> isapprox(x, 100; rtol=1f-2), Array(C))
+                # β·C overflows, but cancels against the product
+                A = MtlArray(fill(Float16(-250), 16, 16)); B = MtlArray(fill(Float16(20), 16, 16))
+                C = MtlArray(fill(Float16(40000), 16, 16))
+                @with (Metal.matmul_alg => :tensor) mul!(C, A, B, true, 2)
+                @test all(iszero, Array(C))
+            end
         else
             @test_skip Metal.tensor_matmul_capable()
         end

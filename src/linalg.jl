@@ -18,7 +18,7 @@ end
 #   :native   - best of Metal.jl's own kernels (tensor → simd → scalar), picked per operands
 #   :simd     - force the simdgroup_matrix kernel (Float16/Float32)
 #   :scalar     - force the scalar shared-memory kernel (any eltype)
-#   :tensor   - force the Metal 4 tensor-ops kernel (Metal4 device, plain C=A*B)
+#   :tensor   - force the Metal 4 tensor-ops kernel (Metal4 device, plain C=α*A*B+β*C)
 # The native kernels live in src/gemm.jl.
 @public matmul_alg
 
@@ -33,7 +33,7 @@ A `ScopedValue` that selects the algorithm `LinearAlgebra.mul!` (and `*`) uses f
 - `:MPS`: [`MPS.matmul!`](@ref) and [`MPS.matvecmul!`](@ref).
 - `:native`: the best of Metal.jl's own kernels for the operands, of `:tensor`, `:simd` and
   `:scalar`.
-- `:tensor`: a Metal 4 tensor-operations kernel, for plain `C = A*B` products of `Float16`,
+- `:tensor`: a Metal 4 tensor-operations kernel, for plain `C = α*A*B + β*C` of `Float16`,
   `BFloat16`, `Float32`, `Int8` and `UInt8` inputs with the output types `matmul2d` supports
   for them, as listed in the [Metal Shading Language
   specification](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf);
