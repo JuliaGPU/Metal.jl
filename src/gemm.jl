@@ -109,9 +109,11 @@ end
 # epilogue, kept top-level so the unrolled ntuple doesn't capture the reassigned acc.
 # DIRECT=true, EDGE=false: every fragment is fully in-bounds -> direct stores, no scratch.
 # DIRECT=true, EDGE=true: boundary fragments are staged through a small per-simdgroup 8x8
-# scratch and written elementwise with bounds checks.
+# scratch and written elementwise with bounds checks; fragments entirely outside C are
+# skipped (`gr`/`gc` are uniform across the simdgroup, so its barrier stays uniform too).
 # DIRECT=false (view destinations and eltypes `simdgroup_store` can't assemble, see
-# `gemm_simd!`): every fragment takes the scratch path, which accesses C elementwise.
+# `gemm_simd!`): every fragment that overlaps C takes the scratch path, which accesses C
+# elementwise.
 @inline function epilogue!(C::AbstractArray{R}, scratch, acc, bm0, sm0, bn0, sn0, M, N,
                             alpha, beta, lane, sc0, ::Val{TM}, ::Val{TN},
                             ::Val{EDGE}, ::Val{SIMPLE}, ::Val{DIRECT}) where {R, TM, TN, EDGE, SIMPLE, DIRECT}
@@ -120,7 +122,7 @@ end
         gr = bm0 + sm0 + ti * 8; gc = bn0 + sn0 + tj * 8
         if DIRECT && (!EDGE || (gr + 8 <= M && gc + 8 <= N))
             store_frag!(C, acc[idx], gr, gc, alpha, beta, Val(SIMPLE))
-        else
+        elseif gr < M && gc < N
             simdgroup_store(acc[idx], scratch, (1, sc0 + 1))
             simdgroup_barrier(MemoryFlagThreadGroup)
             e = lane
@@ -134,6 +136,28 @@ end
             end
         end
         nothing
+    end
+    return
+end
+
+# Cooperative staging of an R×C tile of op(X) at 0-based origin (r0, c0), zero-padded
+# outside the R0×C0 operand. Thread t0 of NT handles elements t0, t0+NT, ..., row-fastest
+# so that consecutive threads read consecutive elements of a column. The trip count is a
+# compile-time constant, so the loads are unrolled and all issued before the stores: a
+# runtime-bounded loop interleaving each load with its store makes every thread wait out
+# the full memory latency once per element, which dominated the kernel's run time.
+@inline function tile_elem(X, ::Val{TX}, t0, r0, c0, R0, C0,
+                           ::Val{R}, ::Val{NT}, j) where {TX, R, NT}
+    i = t0 + (j - 1) * NT
+    gr = r0 + i % R; gc = c0 + i ÷ R
+    (gr < R0 && gc < C0) ? Float32(opelem(X, Val(TX), gr + 1, gc + 1)) : 0.0f0
+end
+@inline load_tile(X, tx, t0, r0, c0, R0, C0, ::Val{R}, ::Val{C}, ::Val{NT}) where {R, C, NT} =
+    ntuple(j -> tile_elem(X, tx, t0, r0, c0, R0, C0, Val(R), Val(NT), j), Val(R * C ÷ NT))
+@inline function store_tile!(Xs, v, t0, ::Val{R}, ::Val{NT}) where {R, NT}
+    for j in 1:length(v)
+        i = t0 + (j - 1) * NT
+        @inbounds Xs[i % R + 1, i ÷ R + 1] = v[j]
     end
     return
 end
@@ -177,24 +201,10 @@ function gemm_simd_kernel!(C, A, B, alpha::Float32, beta::Float32,
     kt0 = 0
     while kt0 < K
         # cooperatively stage op(A) tile (BM×BK) and op(B) tile (BK×BN)
-        i = t0
-        nelA = BM * BK
-        while i < nelA
-            m = i % BM; k = i ÷ BM
-            gr = bm0 + m; gc = kt0 + k
-            v = (gr < M && gc < K) ? Float32(opelem(A, Val(TA), gr + 1, gc + 1)) : 0.0f0
-            @inbounds As[m + 1, k + 1] = v
-            i += nthreads
-        end
-        i = t0
-        nelB = BK * BN
-        while i < nelB
-            k = i % BK; n = i ÷ BK
-            gr = kt0 + k; gc = bn0 + n
-            v = (gr < K && gc < N) ? Float32(opelem(B, Val(TB), gr + 1, gc + 1)) : 0.0f0
-            @inbounds Bs[k + 1, n + 1] = v
-            i += nthreads
-        end
+        va = load_tile(A, Val(TA), t0, bm0, kt0, M, K, Val(BM), Val(BK), Val(nthreads))
+        vb = load_tile(B, Val(TB), t0, kt0, bn0, K, N, Val(BK), Val(BN), Val(nthreads))
+        store_tile!(As, va, t0, Val(BM), Val(nthreads))
+        store_tile!(Bs, vb, t0, Val(BK), Val(nthreads))
         threadgroup_barrier(MemoryFlagThreadGroup)
 
         # contract: load TM A-fragments and TN B-fragments, reuse across TM×TN MACs
@@ -439,12 +449,19 @@ end
 # contraction depth BK = 8·KB. BM×BN = (8·TM·WM)×(8·TN·WN) output per threadgroup.
 # WM=WN=2 (128 threads, 4 simdgroups): matches MLX/m5-gemm; gives 4× more concurrent
 # threadgroups per core vs WM=WN=4. TM=TN=4 gives 16 MACs per simdgroup per K-step
-# (vs 4 for TM=TN=2), maximizing arithmetic intensity. KB=2 halves barrier count.
+# (vs 4 for TM=TN=2), maximizing arithmetic intensity. KB=1: a deeper KB=2 tile halves the
+# barrier count, but runs 3× slower on M1 and 20% slower on M3 Pro.
 const GEMM_SIMD_WM = 2
 const GEMM_SIMD_WN = 2
 const GEMM_SIMD_TM = 4
 const GEMM_SIMD_TN = 4
-const GEMM_SIMD_KB = 2
+const GEMM_SIMD_KB = 1
+
+# the unrolled tile staging (`load_tile`) gives every thread the same number of elements
+let nthreads = GEMM_SIMD_WM * GEMM_SIMD_WN * 32, BK = 8 * GEMM_SIMD_KB
+    @assert (8 * GEMM_SIMD_TM * GEMM_SIMD_WM * BK) % nthreads == 0
+    @assert (8 * GEMM_SIMD_TN * GEMM_SIMD_WN * BK) % nthreads == 0
+end
 
 function gemm_simd!(C, A, B, alpha, beta, cA::Char, cB::Char)
     M = size(C, 1); N = size(C, 2)
