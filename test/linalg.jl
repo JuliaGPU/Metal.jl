@@ -472,7 +472,8 @@ end
         # the tensor intrinsics take the operands of the targeted AIR version
         Mat = MtlDeviceMatrix{Float32, 1}
         tt = Tuple{Mat, Mat, Mat, Int32, Int32, Int32,
-                   Val{Int32(32)}, Val{Int32(16)}, Val{Int32(2)}, Val{Int32(2)}, Val{:overwrite}}
+                   Val{Int32(32)}, Val{Int32(16)}, Val{Int32(2)}, Val{Int32(2)}, Val{:overwrite},
+                   Val{false}, Val{false}}
         air(macos) = sprint() do io
             Metal.code_air(io, Metal.gemm_tensor_kernel!, tt; kernel=true, macos,
                            dump_module=true)
@@ -620,6 +621,20 @@ end
                 @test maximum(abs.(Float64.(Array(C)) .- ref) ./ ref) <= eps(Float16)
             end
 
+            # transposed and adjoint matrices are read in place: matmul2d applies the transpose
+            @testset "transposed $T $tA$tB $M×$N×$K" for T in ttypes,
+                                                        (tA, tB) in (('T', 'N'), ('N', 'T'), ('C', 'T'), ('T', 'T')),
+                                                        (M, N, K) in ((128, 64, 32), (65, 47, 33))
+                a = rand(T, (tA == 'N' ? (M, K) : (K, M))...)
+                b = rand(T, (tB == 'N' ? (K, N) : (N, K))...)
+                A = MtlArray(a); B = MtlArray(b); C = MtlArray(zeros(T, M, N))
+                @test Metal.supports_tensor_matmul(C, A, B, tA, tB, true, false)
+                Metal.gemm!(C, tA, tB, A, B, true, false; kernel=:tensor)
+                opa = tA == 'N' ? Float32.(a) : transpose(Float32.(a))
+                opb = tB == 'N' ? Float32.(b) : transpose(Float32.(b))
+                @test isapprox(Float32.(Array(C)), opa * opb; rtol=ttol(T))
+            end
+
             # shapes that select each of the tile sizes, with partial tiles at the edges of C
             # and simdgroups that lie outside of it
             @testset "ragged $T $M×$N×$K" for T in (Float32, Float16),
@@ -644,8 +659,6 @@ end
                 MtlArray(zeros(Float32, 8, 8)), MtlArray(zeros(Float32, 8, 8)); tile_m=8, tile_n=8)
 
             # forcing `:tensor` on operands it can't handle errors (like an unsupported :MPS)
-            A = MtlArray(rand(Float32, 64, 64)); B = MtlArray(rand(Float32, 64, 64))
-            @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Float32, 64, 64)), transpose(A), B))  # transpose
             Ai = MtlArray(rand(Int32, 64, 64)); Bi = MtlArray(rand(Int32, 64, 64))
             @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Int32, 64, 64)), Ai, Bi))            # unsupported eltype
 

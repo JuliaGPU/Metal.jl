@@ -62,7 +62,7 @@ true
 | `:MPSGraph` | [`MPSGraphs.matmul!`](@ref) |
 | `:MPS` | [`MPS.matmul!`](@ref); `Float32`, `Float16`, and `Int8`/`Int16` inputs (`MPS.MPS_VALID_MATMUL_TYPES`) |
 | `:native` | Metal.jl's kernels: `:tensor` if possible, then `:simd`, then `:scalar` |
-| `:tensor` | Metal 4 tensor operations; only `C = α * A * B + β * C` without transposes, on GPUs of the Metal 4 family with macOS 26 or later; `Float16`, `BFloat16`, `Float32`, `Int8` and `UInt8` inputs with the output types the hardware supports (e.g. `Float16`/`Float32` for `Float16` inputs, `Int32` for `Int8`/`UInt8` inputs). `BFloat16` needs macOS 26.1 and `UInt8` needs macOS 26.4 |
+| `:tensor` | Metal 4 tensor operations; only `C = α * A * B + β * C` where `A` and `B` may be transposed, on GPUs of the Metal 4 family with macOS 26 or later; `Float16`, `BFloat16`, `Float32`, `Int8` and `UInt8` inputs with the output types the hardware supports (e.g. `Float16`/`Float32` for `Float16` inputs, `Int32` for `Int8`/`UInt8` inputs). `BFloat16` needs macOS 26.1 and `UInt8` needs macOS 26.4 |
 | `:simd` | SIMD-group matrix kernel; `Float32`, `Float16` and `BFloat16` |
 | `:scalar` | threadgroup-tiled kernel for any element type |
 | `:GPUArrays` | the generic GPUArrays.jl kernel |
