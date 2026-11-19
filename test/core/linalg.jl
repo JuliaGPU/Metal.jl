@@ -72,8 +72,12 @@ using LinearAlgebra, ScopedValues
         # :simd (simdgroup kernel, Float16/Float32 only)
         @test test_matmul(Float32, Float32; vec_b, alg=:simd)
         @test_throws "algorithm `:simd`" test_matmul(Int32, Int32; vec_b, alg=:simd)
-        # :tensor is matrix-only and needs tile-divisible dims; N=20 errors either way
-        @test_throws Exception test_matmul(Float32, Float32; vec_b, alg=:tensor)
+        # :tensor (Metal 4 tensor operations, matrix-matrix products only)
+        if !vec_b && Metal.tensor_matmul_capable()
+            @test test_matmul(Float32, Float32; vec_b, alg=:tensor)
+        else
+            @test_throws Exception test_matmul(Float32, Float32; vec_b, alg=:tensor)
+        end
         end
     end
 end
@@ -469,47 +473,47 @@ end
     end
 
     # Metal 4 tensor-ops path (`:tensor`): only fires on a capable device (macOS 26+ /
-    # Metal4 family), for the plain C = A·B (N/N, α=1, β=0) with tile-divisible dims and a
-    # supported eltype.
+    # Metal4 family), for the plain C = A·B (N/N, α=1, β=0) of a supported eltype.
     @testset "tensor-ops path" begin
         # the tensor intrinsics take the operands of the targeted AIR version
         Mat = MtlDeviceMatrix{Float32, 1}
-        tt = Tuple{Mat, Mat, Mat, UInt32, UInt32, UInt32,
-                   Val{Int32(64)}, Val{Int32(64)}, Val{Int32(32)}, Val{Int32(4)}}
+        tt = Tuple{Mat, Mat, Mat, Int32, Int32, Int32,
+                   Val{Int32(32)}, Val{Int32(16)}}
         air(macos) = sprint() do io
             Metal.code_air(io, Metal.gemm_tensor_kernel!, tt; kernel=true, macos,
                            dump_module=true)
         end
+        air27, air26 = air(v"27"), air(v"26")
         # Typed-pointer LLVM versions may use either i8 or {} as the pointee type. The null
         # pointer is passed through a cast to the type the intrinsic is declared with.
         @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 0, (?:(?:i8|\{\}) addrspace\(1\)\*|ptr addrspace\(1\)) (?:null|%\d+), i32 0, i8 -1\)\n",
-                       air(v"27"))
+                       air27)
         # the thread count is one the GPU compiler resolves when it compiles for the device
-        @test occursin("call i32 @air.get_simdgroup_size.i32()", air(v"27"))
+        @test occursin("call i32 @air.get_simdgroup_size.i32()", air27)
         # matmul2d is called through the entry point of the targeted macOS version, with
         # neither quantization scales nor static extents
         @test occursin(r"call void @__tensorops_impl_matmul2d_op_run_dv_f32_dv_f32_dv_f32_v2\([^,]+, [^,]+, i32 2, i32 0, i32 0, i32 0, i32 -1, i32 -1, [^,]+, i32 2, i32 0, i32 0, i32 0, i32 -1, i32 -1, [^,]+, i32 2, i32 -1, i32 -1, i32 %\d+\)",
-                       air(v"27"))
+                       air27)
         @test occursin(r"call void @__tensorops_impl_matmul2d_op_run_dv_f32_dv_f32_dv_f32\([^,]+, [^,]+, i32 2, [^,]+, i32 2, [^,]+, i32 2, i32 %\d+\)",
-                       air(v"26"))
+                       air26)
         # the declarations carry the pointee types Apple's front end uses, for the downgrader
         @test occursin("!{i32 0, %struct._tensor_t undef, i32 2, i8 undef, i32 3, i8 undef, i32 4, i8 undef, i32 6, i8 undef}",
-                       air(v"27"))
+                       air27)
         @test occursin("!{i32 0, %\"struct.mpp::tensor_ops::matmul2d_descriptor\" undef, i32 1, i8 undef, i32 8, i8 undef, i32 15, i8 undef}",
-                       air(v"27"))
+                       air27)
         # the descriptors are allocated with a size the back end computes, like Apple's
         # front end does it
-        let ir = air(v"27"), m = match(r"(%\d+) = call i64 @metal\.tensor_descriptor_size\.r2\(\)", ir)
+        let ir = air27, m = match(r"(%\d+) = call i64 @metal\.tensor_descriptor_size\.r2\(\)", ir)
             # (three tensors and three views)
             @test m !== nothing && count("alloca i8, i64 $(m[1]), align 8", ir) == 6
         end
         @test occursin(r"define linkonce_odr hidden i64 @metal\.tensor_descriptor_size\.r2\(\)[^\n]*\{\n[^\n]*\n\s+%\d+ = call i16 @air\.get_descriptor_size_tensor\(i16 2, i16 4\)",
-                       air(v"27"))
-        @test occursin(r"attributes #\d+ = \{ \"deferred-static-alloca-size\" \}", air(v"27"))
+                       air27)
+        @test occursin(r"attributes #\d+ = \{ \"deferred-static-alloca-size\" \}", air27)
         # narrow integers are passed without extension attribute
-        @test !occursin("signext", air(v"27"))
+        @test !occursin("signext", air27)
         @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 0\)\n",
-                       air(v"26"))
+                       air26)
         ## the views over threadgroup memory take a threadgroup pointer
         function tg_tensor(out)
             buf = MtlThreadGroupArray(Float32, (8, 4))
@@ -569,8 +573,12 @@ end
             ttol(T) = T === Float32 ? 1.0f-3 : 1.0f-1
             # BFloat16 tensor operands need macOS 26.1
             ttypes = Metal.macos_version() >= v"26.1" ? (Float32, Float16, BFloat16) : (Float32, Float16)
+            # edge tiles are partial when a dimension isn't a multiple of the tile, and K needs
+            # no particular multiple
             @testset "$T $M×$N×$K" for T in ttypes,
-                                       (M, N, K) in ((64, 64, 32), (128, 256, 64), (512, 512, 128))
+                                       (M, N, K) in ((64, 64, 32), (128, 256, 64), (512, 512, 128),
+                                                     (65, 47, 33), (24, 24, 24), (1, 8, 5),
+                                                     (17, 1, 65), (100, 300, 7))
                 A = MtlArray(rand(T, M, K)); B = MtlArray(rand(T, K, N))
                 ref = Array(A) * Array(B)
                 @test Metal.supports_tensor_matmul(MtlArray(zeros(T, M, N)), A, B, 'N', 'N', true, false)
@@ -597,12 +605,55 @@ end
                 end
             end
 
+            # partial edge tiles read and write nothing outside the matrices: C is followed by
+            # memory that must stay untouched, and A by NaNs that must not reach C
+            let (M, N, K) = (65, 47, 33)
+                a = rand(Float32, M, K); b = rand(Float32, K, N)
+                # (guards as large as four 32×32 tiles)
+                Abuf = MtlArray(fill(NaN32, M * K + 4096)); copyto!(Abuf, 1, MtlArray(vec(a)), 1, M * K)
+                Cbuf = MtlArray(fill(-7f0, M * N + 4096))
+                A = unsafe_wrap(MtlArray, pointer(Abuf), (M, K))
+                C = unsafe_wrap(MtlArray, pointer(Cbuf), (M, N))
+                @with (Metal.matmul_alg => :tensor) mul!(C, A, MtlArray(b))
+                @test isapprox(Array(C), a * b; rtol=1f-4)
+                @test all(==(-7f0), Array(Cbuf)[M*N+1:end])
+            end
+
+            # a narrow destination is rounded once, not once per slice of the contraction
+            let a = rand(Float16, 256, 4096), b = rand(Float16, 4096, 256)
+                C = MtlArray(zeros(Float16, 256, 256))
+                @with (Metal.matmul_alg => :tensor) mul!(C, MtlArray(a), MtlArray(b))
+                ref = Float64.(a) * Float64.(b)
+                @test maximum(abs.(Float64.(Array(C)) .- ref) ./ ref) <= eps(Float16)
+            end
+
+            # shapes that select each of the tile sizes, with partial tiles at the edges of C
+            # and simdgroups that lie outside of it
+            @testset "ragged $T $M×$N×$K" for T in (Float32, Float16),
+                                              (M, N, K) in ((5, 7, 3), (33, 65, 17), (100, 70, 33),
+                                                            (530, 520, 40), (1, 1, 1), (70, 1, 9),
+                                                            (1, 70, 9), (2100, 2050, 3))
+                a = rand(T, M, K); b = rand(T, K, N)
+                # (β = 0 overwrites whatever C held)
+                C = MtlArray(fill(T(7), M, N))
+                @with (Metal.matmul_alg => :tensor) mul!(C, MtlArray(a), MtlArray(b))
+                @test isapprox(Float32.(Array(C)), Float32.(a) * Float32.(b); rtol=ttol(T))
+            end
+
+            # the tile of a simdgroup can be chosen, as long as matmul2d supports it
+            @testset "tiles $tile_m×$tile_n" for (tile_m, tile_n) in ((32, 32), (16, 8), (32, 8), (8, 16))
+                a = rand(Float32, 100, 20); b = rand(Float32, 20, 90)
+                C = MtlArray(zeros(Float32, 100, 90))
+                Metal.gemm_tensor!(C, MtlArray(a), MtlArray(b); tile_m, tile_n)
+                @test isapprox(Array(C), a * b; rtol=1f-3)
+            end
+            @test_throws ArgumentError Metal.gemm_tensor!(MtlArray(zeros(Float32, 8, 8)),
+                MtlArray(zeros(Float32, 8, 8)), MtlArray(zeros(Float32, 8, 8)); tile_m=8, tile_n=8)
+
             # forcing `:tensor` on operands it can't handle errors (like an unsupported :MPS)
             A = MtlArray(rand(Float32, 64, 64)); B = MtlArray(rand(Float32, 64, 64))
             @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Float32, 64, 64)), transpose(A), B))  # transpose
             @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Float32, 64, 64)), A, B, 2f0, 1f0))  # α/β
-            Aodd = MtlArray(rand(Float32, 65, 33)); Bodd = MtlArray(rand(Float32, 33, 47))
-            @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Float32, 65, 47)), Aodd, Bodd))      # not tile-divisible
             Ai = MtlArray(rand(Int32, 64, 64)); Bi = MtlArray(rand(Int32, 64, 64))
             @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Int32, 64, 64)), Ai, Bi))            # unsupported eltype
         else
