@@ -1279,10 +1279,16 @@ function embed_sources(metallib::Vector{UInt8}, air::Vector{UInt8})
            bytes2hex(sha256(air))[1:16]
     air_path = joinpath(tempdir(), "metal.jl", name * ".air")
 
+    # the deployment target, without which the rebuild targets the toolchain's newest macOS
+    platform = let v = lib.platform_version
+        "$(v.major).$(v.minor).$(v.patch)"
+    end
+
     working_directory = try pwd() catch; "/" end
     options = join(["metal", "--driver-mode=metal", "-x", "ir", "-gline-tables-only",
-                    "-frecord-sources=yes", Base.shell_escape(air_path),
-                    "-o", Base.shell_escape(name * ".metallib")], " ")
+                    "-mmacosx-version-min=$platform", "-frecord-sources=yes",
+                    Base.shell_escape(air_path), "-o", Base.shell_escape(name * ".metallib")],
+                   " ")
     files = Pair{String,Vector{UInt8}}[
         "metal-options.txt" => codeunits(options),
         "metal-working-dir.txt" => codeunits(working_directory * "\n"),
@@ -1302,9 +1308,6 @@ function embed_sources(metallib::Vector{UInt8}, air::Vector{UInt8})
 
     # the command that would link the AIR file into this library
     arch = "air64_v$(fun.air_version.major)$(fun.air_version.minor)"
-    platform = let v = lib.platform_version
-        "$(v.major).$(v.minor).$(v.patch)"
-    end
     link_options = join(["air-lld", "-arch", arch, "-platform_version", "macos", platform,
                          platform, "-o", Base.shell_escape(name * ".metallib"),
                          Base.shell_escape(air_path), "-embed_sources"], " ")
