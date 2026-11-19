@@ -269,6 +269,73 @@ end
     @test Array(dC) ≈ [i in 2:5 ? C[i, j] / 2 : C[i, j] for i in 1:8, j in 1:6]
 end
 
+@testset "5-arg mul! of strided views" begin
+    # views that aren't valid BLAS operands (stepped rows, reversed columns, wrapped or
+    # vector views) must reach Metal's methods too, so the algorithm selection applies
+    C, A, B = rand(Float32, 30, 60), rand(Float32, 70, 50), rand(Float32, 40, 90)
+    x, y = rand(Float32, 80), rand(Float32, 80)
+    products = [
+        "stepped rows"     => (C, A, B, x, y) -> (view(C, 2:25, 2:2:52), view(A, 3:2:50, 1:33), view(B, 1:33, 5:3:80)),
+        "reversed columns" => (C, A, B, x, y) -> (view(C, 2:25, 31:-1:2), view(A, 3:26, 33:-1:1), view(B, 1:33, 5:34)),
+        "adjoint"          => (C, A, B, x, y) -> (view(C, 2:25, 2:31), view(A, 1:2:65, 1:24)', view(B, 1:33, 5:34)),
+        "symmetric"        => (C, A, B, x, y) -> (view(C, 2:21, 2:31), Symmetric(view(A, 3:2:41, 1:20)), view(B, 1:20, 5:34)),
+        "matvec"           => (C, A, B, x, y) -> (view(y, 1:2:48), view(A, 3:2:50, 1:33), view(x, 2:2:66)),
+        "matvec columns"   => (C, A, B, x, y) -> (view(C, 1:24, 3), view(A, 3:26, 1:33), view(A, 2:2:66, 40)),
+    ]
+    dC, dA, dB, dx, dy = MtlArray.((C, A, B, x, y))
+    @testset "$name" for (name, f) in products
+        c, a, b = f(C, A, B, x, y)
+        ref = 2 * Array(a) * Array(b) + c / 2
+        vec = c isa AbstractVector
+        # Float64 scalars must not reach the kernels
+        for alg in (:auto, :native, :simd, :scalar, :GPUArrays), (α, β) in ((2f0, 0.5f0), (2, 0.5))
+            dc, da, db = f(copy(dC), dA, dB, dx, copy(dy))
+            @with (Metal.matmul_alg => alg) mul!(dc, da, db, α, β)
+            @test Array(dc) ≈ ref
+        end
+        dc, da, db = f(copy(dC), dA, dB, dx, copy(dy))
+        mul!(dc, da, db, 0, 0.5)
+        @test Array(dc) ≈ c / 2
+        for alg in (vec ? (:MPS, :MPSGraph, :tensor) : (:MPS, :MPSGraph))
+            dc, da, db = f(copy(dC), dA, dB, dx, copy(dy))
+            @test_throws "multiplication algorithm `:$alg` is not supported" @with (Metal.matmul_alg => alg) mul!(dc, da, db, 2f0, 0.5f0)
+        end
+    end
+
+    # an empty inner dimension only scales the destination (on the GPU: private storage
+    # can't be indexed from the host)
+    P = MtlArray{Float32,2,Metal.PrivateStorage}(C)
+    mul!(view(P, 1:2:29, :), Metal.zeros(Float32, 15, 0), Metal.zeros(Float32, 0, 60), 1f0, 0.5f0)
+    @test Array(P) ≈ [isodd(i) ? C[i, j] / 2 : C[i, j] for i in 1:30, j in 1:60]
+    for alg in (:auto, :MPS, :GPUArrays)
+        p = MtlArray{Float32,1,Metal.PrivateStorage}(y)
+        @with (Metal.matmul_alg => alg) mul!(view(p, 1:2:79), Metal.zeros(Float32, 40, 0), Metal.zeros(Float32, 0), Inf32, 0.5f0)
+        @test Array(p) ≈ [isodd(i) ? y[i] / 2 : y[i] for i in 1:80]
+    end
+    @test_throws DimensionMismatch mul!(view(copy(dy), 1:2:79), dA, view(dx, 1:2:79))
+
+    # a row of a matrix has no column view for the native kernels
+    c, a, b = view(dC, 3, 1:24), view(dA, 3:26, 1:33), view(dB, 1:33, 7)
+    @with (Metal.matmul_alg => :auto) mul!(c, a, b)
+    @test Array(c) ≈ Array(a) * Array(b)
+    @test_throws "multiplication algorithm `:scalar` is not supported" @with (Metal.matmul_alg => :scalar) mul!(c, a, b)
+end
+
+@testset "unambiguous view products" begin
+    # the methods intercepting products with views must be more specific than GPUArrays' and
+    # LinearAlgebra's in every argument
+    ambiguous = []
+    for name in (:mul!, :_mul!)
+        isdefined(LinearAlgebra, name) || continue
+        ms = collect(methods(getfield(LinearAlgebra, name)))
+        for m in ms, n in ms
+            m.module === Metal && m !== n && Base.isambiguous(m, n) &&
+                push!(ambiguous, "$(m.file):$(m.line) and $(n.file):$(n.line)")
+        end
+    end
+    @test isempty(ambiguous)
+end
+
 @testset "native GEMM" begin
     op(M, t) = t == 'N' ? M : t == 'C' ? adjoint(M) : transpose(M)
     mk(T, sz) = T <: Integer ? rand(T(1):T(4), sz...) : rand(T, sz...)
