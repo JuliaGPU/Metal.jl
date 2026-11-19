@@ -235,6 +235,32 @@ end
     end
 end
 
+@testset "Float64 α and β" begin
+    # Metal has no Float64, so the scalars must be converted before they reach a kernel
+    A, B, C, x = rand(Float32, 20, 30), rand(Float32, 30, 10), rand(Float32, 20, 10), rand(Float32, 30)
+    dA, dB, dC, dx = MtlArray.((A, B, C, x))
+    for alg in (:auto, :native, :simd, :scalar, :GPUArrays)
+        dc = copy(dC)
+        @with (Metal.matmul_alg => alg) mul!(dc, dA, dB, 2, 0.5)
+        @test Array(dc) ≈ 2 * A * B + C / 2
+
+        dc = copy(dC)
+        @with (Metal.matmul_alg => alg) mul!(view(dc, :, 2:9), dA, view(dB, :, 2:9), 2, 0.5)
+        @test Array(dc)[:, 2:9] ≈ 2 * A * B[:, 2:9] + C[:, 2:9] / 2
+
+        dy = dC[:, 1]
+        @with (Metal.matmul_alg => alg) mul!(dy, dA, dx, 2, 0.5)
+        @test Array(dy) ≈ 2 * A * x + C[:, 1] / 2
+    end
+
+    # only β applies
+    for alg in (:native, :GPUArrays)
+        dc = copy(dC)
+        @with (Metal.matmul_alg => alg) mul!(dc, dA, dB, 0, 0.5)
+        @test Array(dc) ≈ C / 2
+    end
+end
+
 @testset "native GEMM" begin
     op(M, t) = t == 'N' ? M : t == 'C' ? adjoint(M) : transpose(M)
     mk(T, sz) = T <: Integer ? rand(T(1):T(4), sz...) : rand(T, sz...)

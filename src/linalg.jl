@@ -79,11 +79,17 @@ matmul_alg_invalid(alg, vec) =
     gemm!(C, cA, cB, A, B, alpha, beta; kernel)
 end
 
+# GPUArrays' generic kernel, which needs α and β converted like the native kernels do
+generic_matmul!(C, tA, tB, A, B, alpha, beta) =
+    GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB),
+                                 device_scalar(alpha), device_scalar(beta))
+
 # a product with an empty dimension is finished before any backend is chosen: MPS asserts on
 # zero-sized buffers, and the result does not depend on A or B anyway. C is either empty (M or
 # N == 0), or only β applies (K == 0).
 function empty_matmul!(C, beta)
     isempty(C) && return C
+    beta = device_scalar(beta)
     iszero(beta) ? fill!(C, zero(eltype(C))) : rmul!(C, beta)
 end
 
@@ -123,7 +129,7 @@ function LinearAlgebra.mul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix,
         (ntc && supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), false)
         MPS.matmul!(C, A, B, alpha, beta; tA, tB)
     elseif alg === :GPUArrays
-        GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
+        generic_matmul!(C, tA, tB, A, B, alpha, beta)
     else
         matmul_alg_invalid(alg, false)
     end
@@ -154,7 +160,7 @@ function LinearAlgebra.mul!(C::MtlMatrixOperand, tA, tB,
     if alg === :native || alg === :auto || alg === :simd || alg === :scalar || alg === :tensor
         native_matmul!(C, tA, tB, A, B, alpha, beta, alg)
     elseif alg === :GPUArrays
-        GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
+        generic_matmul!(C, tA, tB, A, B, alpha, beta)
     elseif alg === :MPS || alg === :MPSGraph
         matmul_alg_error(alg, eltype(A), eltype(C), false)
     else
@@ -217,7 +223,7 @@ function LinearAlgebra.mul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::Mtl
         (ntc && supports_mps_matmul(A, B, C, MPS_VALID_MATVECMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), true)
         MPS.matvecmul!(C, A, B, alpha, beta; tA)
     elseif alg === :GPUArrays
-        GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)
+        generic_matmul!(C, tA, 'N', A, B, alpha, beta)
     else
         matmul_alg_invalid(alg, true)
     end
