@@ -108,9 +108,11 @@ end
 # epilogue, kept top-level so the unrolled ntuple doesn't capture the reassigned acc.
 # DIRECT=true, EDGE=false: every fragment is fully in-bounds -> direct stores, no scratch.
 # DIRECT=true, EDGE=true: boundary fragments are staged through a small per-simdgroup 8x8
-# scratch and written elementwise with bounds checks.
+# scratch and written elementwise with bounds checks; fragments entirely outside C are
+# skipped (`gr`/`gc` are uniform across the simdgroup, so its barrier stays uniform too).
 # DIRECT=false (view destinations and eltypes `simdgroup_store` can't assemble, see
-# `gemm_simd!`): every fragment takes the scratch path, which accesses C elementwise.
+# `gemm_simd!`): every fragment that overlaps C takes the scratch path, which accesses C
+# elementwise.
 @inline function epilogue!(C::AbstractArray{R}, scratch, acc, bm0, sm0, bn0, sn0, M, N,
                             alpha, beta, lane, sc0, ::Val{TM}, ::Val{TN},
                             ::Val{EDGE}, ::Val{SIMPLE}, ::Val{DIRECT}) where {R, TM, TN, EDGE, SIMPLE, DIRECT}
@@ -119,7 +121,7 @@ end
         gr = bm0 + sm0 + ti * 8; gc = bn0 + sn0 + tj * 8
         if DIRECT && (!EDGE || (gr + 8 <= M && gc + 8 <= N))
             store_frag!(C, acc[idx], gr, gc, alpha, beta, Val(SIMPLE))
-        else
+        elseif gr < M && gc < N
             simdgroup_store(acc[idx], scratch, (1, sc0 + 1))
             simdgroup_barrier(MemoryFlagThreadGroup)
             e = lane
