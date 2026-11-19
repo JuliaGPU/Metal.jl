@@ -261,6 +261,14 @@ end
     end
 end
 
+@testset "empty product into a view" begin
+    # only β applies, on the GPU (private storage can't be indexed from the host)
+    C = rand(Float32, 8, 6)
+    dC = MtlArray{Float32,2,Metal.PrivateStorage}(C)
+    mul!(view(dC, 2:5, :), Metal.zeros(Float32, 4, 0), transpose(Metal.zeros(Float32, 6, 0)), 1f0, 0.5f0)
+    @test Array(dC) ≈ [i in 2:5 ? C[i, j] / 2 : C[i, j] for i in 1:8, j in 1:6]
+end
+
 @testset "native GEMM" begin
     op(M, t) = t == 'N' ? M : t == 'C' ? adjoint(M) : transpose(M)
     mk(T, sz) = T <: Integer ? rand(T(1):T(4), sz...) : rand(T, sz...)

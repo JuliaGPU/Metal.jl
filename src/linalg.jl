@@ -90,7 +90,8 @@ generic_matmul!(C, tA, tB, A, B, alpha, beta) =
 function empty_matmul!(C, beta)
     isempty(C) && return C
     beta = device_scalar(beta)
-    iszero(beta) ? fill!(C, zero(eltype(C))) : rmul!(C, beta)
+    # broadcast rather than `rmul!`, which doesn't take views of GPU arrays
+    iszero(beta) ? fill!(C, zero(eltype(C))) : (C .*= beta)
 end
 
 function LinearAlgebra.mul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix,
