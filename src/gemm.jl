@@ -5,7 +5,8 @@
 #
 #  * `gemm_tensor_kernel!` is the Metal 4 fast path. It drives `tensor_ops::matmul2d`
 #    over a tile decomposition. Only available on Metal4-capable devices and only for the
-#    plain `C = A*B` (no transpose, α=1, β=0) with tile-divisible, float-typed operands.
+#    plain `C = A*B` (no transpose, α=1, β=0) with tile-divisible operands of the element
+#    type combinations in `GEMM_TENSOR_ELTYPES`.
 #
 #  * `gemm_simd_kernel!` is the portable fast path for `Float16`/`Float32`. It stages tiles
 #    of `op(A)`/`op(B)` into threadgroup memory (bounds-checked, so any M/N/K and
@@ -305,12 +306,47 @@ function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceA
     return
 end
 
-# eltypes the tensor path handles (uniform in/out); these have `__tensorops` run helpers and
-# accumulate to a sensible precision in matmul2d.
-@inline gemm_tensor_eltype(::Type{T}, ::Type{T}, ::Type{T}) where {T <: Union{Float16, Float32}} = true
-# the MSL spec lists `bfloat` as a matmul2d data type from macOS 26.1
-@inline gemm_tensor_eltype(::Type{BFloat16}, ::Type{BFloat16}, ::Type{BFloat16}) = macos_version() >= v"26.1"
-@inline gemm_tensor_eltype(::Type, ::Type, ::Type) = false
+# Element types `matmul2d` runs as (A, B, C)
+const GEMM_TENSOR_ELTYPES = let s = Set{Tuple{DataType,DataType,DataType}}()
+    for (TA, TB, outs) in (
+            (Float16,  Float16,  (Float16, Float32)),
+            (Float16,  BFloat16, (Float16, BFloat16, Float32)),
+            (Float16,  Float32,  (Float32,)),
+            (Float16,  Int8,     (Float16, Float32)),
+            (Float16,  UInt8,    (Float16, Float32)),
+            (BFloat16, Float16,  (Float16, BFloat16, Float32)),
+            (BFloat16, BFloat16, (BFloat16, Float32)),
+            (BFloat16, Float32,  (Float32,)),
+            (BFloat16, Int8,     (BFloat16, Float32)),
+            (BFloat16, UInt8,    (BFloat16, Float32)),
+            (Float32,  Float16,  (Float32,)),
+            (Float32,  BFloat16, (Float32,)),
+            (Float32,  Float32,  (Float32,)),
+            (Float32,  Int8,     (Float32,)),
+            (Float32,  UInt8,    (Float32,)),
+            (Int8,     Float16,  (Float16, Float32)),
+            (Int8,     BFloat16, (BFloat16, Float32)),
+            (Int8,     Float32,  (Float32,)),
+            (Int8,     Int8,     (Int32,)),
+            (UInt8,    Float16,  (Float16, Float32)),
+            (UInt8,    BFloat16, (BFloat16, Float32)),
+            (UInt8,    Float32,  (Float32,)),
+            (UInt8,    UInt8,    (Int32,)))
+        for TC in outs
+            push!(s, (TA, TB, TC))
+        end
+    end
+    s
+end
+
+@inline function gemm_tensor_eltype(TA::Type, TB::Type, TC::Type)
+    typestuple = (TA, TB, TC)
+    typestuple in GEMM_TENSOR_ELTYPES || return false
+    # Support from the "MatMul2d data type supported" table in the MSL spec
+    BFloat16 in typestuple && macos_version() < v"26.1" && return false
+    UInt8 in typestuple && macos_version() < v"26.4" && return false
+    return true
+end
 
 # `tensor_ops` runs only when the device advertises the Metal 4 family; gating the launch on
 # it also keeps the `__tensorops_*` symbols out of modules compiled for devices where the

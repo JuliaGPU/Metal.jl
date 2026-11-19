@@ -472,6 +472,24 @@ end
                 @test isapprox(Array(Ct), ref; rtol=ttol(T))
             end
 
+            # every element type combination in `GEMM_TENSOR_ELTYPES` gives the right product, or
+            # is rejected when macOS is too old for it (BFloat16: 26.1, UInt8: 26.4)
+            tgen(T, dims...) = T <: Integer ? rand(T <: Unsigned ? (T(0):T(10)) : (T(-5):T(5)), dims...) : rand(T, dims...)
+            @testset "$TA × $TB → $TC" for (TA, TB, TC) in sort!(collect(Metal.GEMM_TENSOR_ELTYPES); by=string)
+                a = tgen(TA, 64, 32); b = tgen(TB, 32, 64)
+                A = MtlArray(a); B = MtlArray(b); C = MtlArray(zeros(TC, 64, 64))
+                needs = max(BFloat16 in (TA, TB, TC) ? v"26.1" : v"26", UInt8 in (TA, TB) ? v"26.4" : v"26")
+                if Metal.macos_version() >= needs
+                    @test Metal.supports_tensor_matmul(C, A, B, 'N', 'N', true, false)
+                    @with (Metal.matmul_alg => :tensor) mul!(C, A, B)
+                    # integer products are exact
+                    @test isapprox(Float64.(Array(C)), Float64.(a) * Float64.(b); rtol=TC <: Integer ? 0 : ttol(TC))
+                else
+                    @test !Metal.supports_tensor_matmul(C, A, B, 'N', 'N', true, false)
+                    @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(C, A, B))
+                end
+            end
+
             # forcing `:tensor` on operands it can't handle errors (like an unsupported :MPS)
             A = MtlArray(rand(Float32, 64, 64)); B = MtlArray(rand(Float32, 64, 64))
             @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Float32, 64, 64)), transpose(A), B))  # transpose
