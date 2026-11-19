@@ -10,6 +10,8 @@ if validate
     ENV["MTL_SHADER_VALIDATION"]  = "1"
     # check every kernel with Apple's AIR verifier
     ENV["JULIA_METAL_VERIFY_AIR"] = "true"
+    # and with Apple's offline back end, for GPUs and macOS versions we don't test on
+    get!(ENV, "JULIA_METAL_BACKEND_CHECK", "g15g@26,g17g@26")
 end
 
 using Metal
@@ -23,7 +25,17 @@ end
 if Metal.verify_air()
     tool = Metal.air_verifier()
     tool === nothing && error("JULIA_METAL_VERIFY_AIR is set, but Apple's metal-opt was not found")
-    @info "Verifying the AIR of every kernel with $tool ($(Metal.air_verifier_version(tool)))"
+    @info "Verifying the AIR of every kernel with $tool ($(Metal.apple_tool_version(tool)))"
+end
+
+let targets = Metal.backend_targets()
+    if !isempty(targets)
+        # (resolving the targets fails early if the back end is missing or doesn't know them)
+        tools = Metal.backend_tools()
+        families = map(t -> "Apple$(Metal.backend_family(tools, t))", targets)
+        @info "Checking every kernel with $(first(tools)) ($(Metal.apple_tool_version(first(tools)))) for " *
+              join(("$t ($f)" for (t, f) in zip(targets, families)), ", ")
+    end
 end
 
 # register custom tests that do not correspond to files in the test directory
