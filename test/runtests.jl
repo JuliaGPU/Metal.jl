@@ -8,6 +8,8 @@ const validate = args.custom["validate"] !== nothing
 if validate
     ENV["MTL_DEBUG_LAYER"] = "1"
     ENV["MTL_SHADER_VALIDATION"]  = "1"
+    # check every kernel with Apple's AIR verifier
+    ENV["JULIA_METAL_VERIFY_AIR"] = "true"
 end
 
 using Metal
@@ -16,6 +18,12 @@ if !Metal.functional()
     @warn """Metal.jl is not functional on this system, so there is nothing to test; skipping.
              (If you believe this system should be supported, please file an issue.)"""
     Sys.exit()
+end
+
+if Metal.verify_air()
+    tool = Metal.air_verifier()
+    tool === nothing && error("JULIA_METAL_VERIFY_AIR is set, but Apple's metal-opt was not found")
+    @info "Verifying the AIR of every kernel with $tool ($(Metal.air_verifier_version(tool)))"
 end
 
 # register custom tests that do not correspond to files in the test directory

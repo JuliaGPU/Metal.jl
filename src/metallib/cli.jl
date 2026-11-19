@@ -1209,7 +1209,7 @@ function validate(ctx::Context, args::Arguments)
     end
 
     if "--apple" in args.flags
-        tool = apple_tool("metal-validate")
+        tool = Metal.apple_tool("metal-validate")
         if tool === nothing
             diagnose!(ctx, "warning", "Apple's metal-validate was not found, so the library " *
                       "was not checked with it; set METAL_TOOLCHAIN to the directory that " *
@@ -1218,9 +1218,9 @@ function validate(ctx::Context, args::Arguments)
             mktemp() do tmp, io
                 write(io, data)
                 close(io)
-                out, err = IOBuffer(), IOBuffer()
-                ok = success(pipeline(ignorestatus(`$tool $tmp`); stdout=out, stderr=err))
-                msg = strip(String(take!(out)) * String(take!(err)))
+                proc, out = Metal.run_tool(`$tool $tmp`)
+                ok = success(proc)
+                msg = strip(out)
                 ok || diagnose!(ctx, "error", "metal-validate rejected the library" *
                                 (isempty(msg) ? "" : ": " * replace(msg, tmp => path)))
                 push!(checked, "apple")
@@ -1234,21 +1234,6 @@ function validate(ctx::Context, args::Arguments)
     # (when not everything that was asked for could be checked)
     complete = isempty(unchecked_modules) && !("--apple" in args.flags && !("apple" in checked))
     return complete ? result : (:partial, result)
-end
-
-# find one of Apple's Metal tools, in METAL_TOOLCHAIN or with `xcrun`
-function apple_tool(name)
-    dir = get(ENV, "METAL_TOOLCHAIN", nothing)
-    if dir !== nothing
-        path = joinpath(dir, name)
-        return isfile(path) ? path : nothing
-    end
-    Sys.isapple() || return nothing
-    out = IOBuffer()
-    success(pipeline(ignorestatus(`xcrun --find $name`); stdout=out, stderr=devnull)) ||
-        return nothing
-    path = strip(String(take!(out)))
-    return isfile(path) ? path : nothing
 end
 
 function validate_text(io::IO, r)

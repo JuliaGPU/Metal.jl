@@ -78,6 +78,23 @@
 @on_device threads_per_grid_i16()
 @on_device threads_per_threadgroup_i16()
 
+# arguments are only passed when their values are used. without a stage-in region, the grid's
+# origin and size are zero (the origin being returned 1-based).
+let a = MtlArray(zeros(UInt32, 4))
+    function kernel(a)
+        a[1] = grid_origin().x
+        a[2] = grid_size().x
+        a[3] = thread_execution_width()
+        a[4] = threads_per_simdgroup()
+        return
+    end
+    Metal.@sync @metal kernel(a)
+    origin, size, width, simdgroup = Array(a)
+    @test origin == 1
+    @test size == 0
+    @test width == simdgroup > 0
+end
+
 global const CPU_ONLY_ERR = "This function is not intended for use on the CPU"
 
 @test_throws CPU_ONLY_ERR dispatch_quadgroups_per_threadgroup()
