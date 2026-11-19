@@ -57,6 +57,12 @@ end
     end
 end
 
+# Metal has no Float64, so the kernels take double-precision α and β in single precision,
+# as `mtl` converts Float64 values (and as the simd kernel computes anyway)
+device_scalar(x::Float64) = Float32(x)
+device_scalar(x::ComplexF64) = ComplexF32(x)
+device_scalar(x) = x
+
 ## fast path: simdgroup_matrix tiled kernel (Float16/Float32, F32 accumulate)
 
 # A simdgroup matrix is an `NTuple{64, VecElement}` distributed across the lanes, so a
@@ -517,6 +523,7 @@ function gemm!(C::MtlMatrixOperand, tA::Char, tB::Char,
                alpha::Number, beta::Number; kernel::Symbol = :auto)
     M = size(C, 1); N = size(C, 2)
     K = (tA === 'T' || tA === 'C') ? size(A, 1) : size(A, 2)
+    alpha, beta = device_scalar(alpha), device_scalar(beta)
 
     # nothing to compute
     (M == 0 || N == 0) && return C

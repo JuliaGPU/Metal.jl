@@ -1,5 +1,5 @@
 using LinearAlgebra
-using LinearAlgebra: MulAddMul, wrap
+using LinearAlgebra: MulAddMul, wrap, wrapper_char, _unwrap
 using .MPS
 using .MPS: MPS_VALID_MATMUL_TYPES, MPS_VALID_MATVECMUL_TYPES, MPSSolveFloat, lu_info
 
@@ -81,12 +81,19 @@ matmul_alg_invalid(alg, vec) =
     gemm!(C, cA, cB, A, B, alpha, beta; kernel)
 end
 
+# GPUArrays' generic kernel, which needs α and β converted like the native kernels do
+generic_matmul!(C, tA, tB, A, B, alpha, beta) =
+    GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB),
+                                 device_scalar(alpha), device_scalar(beta))
+
 # a product with an empty dimension is finished before any backend is chosen: MPS asserts on
 # zero-sized buffers, and the result does not depend on A or B anyway. C is either empty (M or
 # N == 0), or only β applies (K == 0).
 function empty_matmul!(C, beta)
     isempty(C) && return C
-    iszero(beta) ? fill!(C, zero(eltype(C))) : rmul!(C, beta)
+    beta = device_scalar(beta)
+    # broadcast rather than `rmul!`, which doesn't take views of GPU arrays
+    iszero(beta) ? fill!(C, zero(eltype(C))) : (C .*= beta)
 end
 
 function LinearAlgebra.mul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix,
@@ -125,7 +132,7 @@ function LinearAlgebra.mul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix,
         (ntc && supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), false)
         MPS.matmul!(C, A, B, alpha, beta; tA, tB)
     elseif alg === :GPUArrays
-        GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
+        generic_matmul!(C, tA, tB, A, B, alpha, beta)
     else
         matmul_alg_invalid(alg, false)
     end
@@ -156,7 +163,7 @@ function LinearAlgebra.mul!(C::MtlMatrixOperand, tA, tB,
     if alg === :native || alg === :auto || alg === :simd || alg === :scalar || alg === :tensor
         native_matmul!(C, tA, tB, A, B, alpha, beta, alg)
     elseif alg === :GPUArrays
-        GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
+        generic_matmul!(C, tA, tB, A, B, alpha, beta)
     elseif alg === :MPS || alg === :MPSGraph
         matmul_alg_error(alg, eltype(A), eltype(C), false)
     else
@@ -219,9 +226,95 @@ function LinearAlgebra.mul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::Mtl
         (ntc && supports_mps_matmul(A, B, C, MPS_VALID_MATVECMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), true)
         MPS.matvecmul!(C, A, B, alpha, beta; tA)
     elseif alg === :GPUArrays
-        GPUArrays.generic_matmatmul!(C, wrap(A, tA), B, alpha, beta)
+        generic_matmul!(C, tA, 'N', A, B, alpha, beta)
     else
         matmul_alg_invalid(alg, true)
+    end
+end
+
+## products with views
+
+# GPUArrays intercepts products involving a strided view before LinearAlgebra's BLAS dispatch,
+# and sends those that aren't valid BLAS operands (stepped rows, reversed columns, Symmetric or
+# Hermitian views, products with a vector) to its generic kernel. The native kernels take any
+# range view, so intercept products of Metal operands first to keep `matmul_alg` in effect.
+
+const MtlVectorRangeView{T} =
+    SubArray{T,1,<:MtlArray{T},<:Tuple{Vararg{Union{Base.RangeIndex,Base.ReshapedUnitRange}}}}
+const MtlVectorOperand{T} = Union{MtlVector{T},MtlVectorRangeView{T}}
+const MtlWrappedMatrixOperand{T} = Union{
+    MtlMatrixOperand{T},
+    Adjoint{T,<:MtlMatrixOperand{T}},
+    Transpose{T,<:MtlMatrixOperand{T}},
+    Symmetric{T,<:MtlMatrixOperand{T}},
+    Hermitian{T,<:MtlMatrixOperand{T}},
+}
+
+has_view(As...) = any(A -> _unwrap(A) isa SubArray, As)
+
+# the vector as an n×1 matrix operand over the same memory, or `nothing` if it has no
+# such range view (e.g. a row of a matrix)
+as_column(v::MtlVector) = reshape(v, :, 1)
+as_column(v::SubArray{<:Any,1,<:MtlArray,<:Tuple{AbstractRange}}) =
+    view(reshape(parent(v), :, 1), only(parentindices(v)), 1:1)
+function as_column(v::SubArray{<:Any,1,<:MtlMatrix,<:Tuple{AbstractRange,Integer}})
+    i, j = parentindices(v)
+    view(parent(v), i, j:j)
+end
+as_column(v) = nothing
+
+# matrix-vector products with a view, as a GEMM with single-column operands; dense ones take
+# the `mul!` method above
+function view_matvecmul!(C, tA, A, B, alpha, beta)
+    mA, nA = LinearAlgebra.lapack_size(tA, A)
+    nA == length(B) ||
+        throw(DimensionMismatch("A has dimensions ($mA,$nA) but B is a vector of length ($(length(B)))"))
+    length(C) == mA || throw(DimensionMismatch("C has length ($(length(C))), should have ($mA)"))
+    (mA == 0 || nA == 0) && return empty_matmul!(C, beta)
+
+    alg = matmul_alg[]
+    if alg === :native || alg === :auto || alg === :simd || alg === :scalar
+        Cm, Bm = as_column(C), as_column(B)
+        if Cm !== nothing && Bm !== nothing
+            LinearAlgebra.mul!(Cm, tA, 'N', A, Bm, alpha, beta)
+        elseif alg === :auto
+            generic_matmul!(C, tA, 'N', A, B, alpha, beta)
+        else
+            matmul_alg_error(alg, eltype(A), eltype(C), true)
+        end
+    elseif alg === :GPUArrays
+        generic_matmul!(C, tA, 'N', A, B, alpha, beta)
+    elseif alg === :MPS || alg === :MPSGraph || alg === :tensor
+        matmul_alg_error(alg, eltype(A), eltype(C), true)
+    else
+        matmul_alg_invalid(alg, true)
+    end
+    return C
+end
+
+# GPUArrays intercepts the 5-argument `mul!` on Julia 1.10, and `_mul!` (where LinearAlgebra
+# unwraps the operands) on later versions; products without views keep LinearAlgebra's
+# implementation, as they do there
+const intercepted_mul! = VERSION < v"1.11" ? LinearAlgebra.mul! : LinearAlgebra._mul!
+
+@eval begin
+    @inline function LinearAlgebra.$(nameof(intercepted_mul!))(
+            C::MtlMatrixOperand, A::MtlWrappedMatrixOperand, B::MtlWrappedMatrixOperand,
+            alpha::Number, beta::Number)
+        has_view(C, A, B) || return invoke(intercepted_mul!,
+            Tuple{AbstractMatrix,AbstractVecOrMat,AbstractVecOrMat,Number,Number},
+            C, A, B, alpha, beta)
+        LinearAlgebra.mul!(C, wrapper_char(A), wrapper_char(B), _unwrap(A), _unwrap(B),
+                           alpha, beta)
+    end
+
+    @inline function LinearAlgebra.$(nameof(intercepted_mul!))(
+            C::MtlVectorOperand, A::MtlWrappedMatrixOperand, B::MtlVectorOperand,
+            alpha::Number, beta::Number)
+        has_view(C, A, B) || return invoke(intercepted_mul!,
+            Tuple{AbstractVector,AbstractVecOrMat,AbstractVector,Number,Number},
+            C, A, B, alpha, beta)
+        view_matvecmul!(C, wrapper_char(A), _unwrap(A), B, alpha, beta)
     end
 end
 
