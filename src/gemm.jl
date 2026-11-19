@@ -4,9 +4,11 @@
 # algorithm `:simd`/`:scalar`/`:tensor` forces one, while `:native`/`:auto` pick among them:
 #
 #  * `gemm_tensor_kernel!` is the Metal 4 fast path. It drives `tensor_ops::matmul2d`
-#    over a tile decomposition. Only available on Metal4-capable devices and only for
-#    plain or transposed matrices of the element type combinations in
-#    `GEMM_TENSOR_ELTYPES`. α and β are applied around the kernel (`gemm_tensor!`).
+#    over a tile decomposition. Only available on Metal4-capable devices, for the element
+#    type combinations in `GEMM_TENSOR_ELTYPES`. Matrices, and views with contiguous columns
+#    in increasing order, are read in place, also transposed ones; Symmetric/Hermitian
+#    wrappers and other views are packed into dense copies, and α and β are applied around
+#    the kernel (`gemm_tensor!`).
 #
 #  * `gemm_simd_kernel!` is the portable fast path for `Float16`/`Float32`. It stages tiles
 #    of `op(A)`/`op(B)` into threadgroup memory (bounds-checked, so any M/N/K and
@@ -298,11 +300,15 @@ end
 # are sliced to the extents that remain: matmul2d bounds-checks partial tiles against the
 # extents of the tensors, so no dimension needs to be a multiple of the tile.
 #
+# The operands start at the first element of their matrix, with column strides `ldc`, `lda` and
+# `ldb`, so views are read in place. `TRA`/`TRB` say that `A`/`B` is stored transposed, as
+# `(K, M)`/`(N, K)`; matmul2d then transposes it itself, so a transposed operand needs no copy.
+#
 # `MODE` is what happens to the product: `:overwrite` writes it to C, and `:accumulate` adds it
-# to what C holds. `TRA`/`TRB` say that `A`/`B` is stored transposed, as `(K, M)`/`(N, K)`;
-# matmul2d then transposes it itself, so a transposed operand needs no copy.
+# to what C holds.
 function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceArray,
                              M::Int32, N::Int32, K::Int32,
+                             ldc::Int32, lda::Int32, ldb::Int32,
                              ::Val{SM}, ::Val{SN}, ::Val{WM}, ::Val{WN}, ::Val{MODE},
                              ::Val{TRA}, ::Val{TRB}) where {SM, SN, WM, WN, MODE, TRA, TRB}
     tgid  = threadgroup_position_in_grid_3d()
@@ -314,9 +320,9 @@ function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceA
     tm = min(Int32(SM), M - m_off)
     tn = min(Int32(SN), N - n_off)
 
-    tA = TRA ? MtlInlineTensor(A, (K, M)) : MtlInlineTensor(A, (M, K))
-    tB = TRB ? MtlInlineTensor(B, (N, K)) : MtlInlineTensor(B, (K, N))
-    tC = MtlInlineTensor(C, (M, N))
+    tA = MtlInlineTensor(A, TRA ? (K, M) : (M, K), (Int32(1), lda))
+    tB = MtlInlineTensor(B, TRB ? (N, K) : (K, N), (Int32(1), ldb))
+    tC = MtlInlineTensor(C, (M, N), (Int32(1), ldc))
 
     mA = TRA ? view(tA, (Int32(1), m_off + Int32(1)), (K, tm)) :
                view(tA, (m_off + Int32(1), Int32(1)), (tm, K))
@@ -401,6 +407,46 @@ function gemm_tensor_tiles(M::Integer, N::Integer)
     return (tm, tn)
 end
 
+# A matrix with contiguous, non-overlapping columns in increasing order, as an array starting
+# at its first element and its column stride, so a tensor can be laid over it in place.
+# `nothing` for other layouts, and for spans that tensor indices (`Int32`) can't address.
+tensor_layout(X::MtlMatrix) = (X, size(X, 1))
+function tensor_layout(X::MtlMatrixRangeView{T}) where {T}
+    stride(X, 1) == 1 || return nothing
+    ld = size(X, 2) == 1 ? size(X, 1) : stride(X, 2)
+    ld >= size(X, 1) || return nothing
+    len = (size(X, 2) - 1) * ld + size(X, 1)
+    len <= typemax(Int32) || return nothing
+    return (GPUArrays.derive(T, parent(X), (len,), Base.first_index(X) - 1), ld)
+end
+
+# Fill `D` with `op(X)`, gathered through `opelem` so transposes and Symmetric/Hermitian
+# wrappers are applied.
+function gemm_tensor_pack_kernel!(D, X, ::Val{TX}) where {TX}
+    i, j = Tuple(thread_position_in_grid())
+    if i <= size(D, 1) && j <= size(D, 2)
+        @inbounds D[i, j] = opelem(X, Val(TX), i, j)
+    end
+    return
+end
+
+function gemm_tensor_pack(X, tX::Char, dims::Dims{2})
+    D = MtlMatrix{eltype(X)}(undef, dims)
+    @metal threads = (16, 16) groups = cld.(dims, 16) gemm_tensor_pack_kernel!(D, X, Val(tX))
+    return D
+end
+
+# An operand as the kernel reads it: the array, its column stride, and whether it is stored
+# transposed. Operands that can't be read in place are packed into a dense copy of op(X).
+function tensor_operand(X::MtlMatrixOperand, tX::Char, dims::Dims{2})
+    layout = tX in ('N', 'T', 'C') ? tensor_layout(X) : nothing
+    if layout === nothing
+        D = gemm_tensor_pack(X, tX, dims)
+        return D, size(D, 1), false
+    end
+    return layout..., tX !== 'N'
+end
+
 # whether the scalar `x` converts to the integer `T` exactly, as `gemm_tensor!` converts it
 function tensor_scalar(::Type{T}, x::Number) where {T <: Integer}
     try
@@ -412,35 +458,37 @@ function tensor_scalar(::Type{T}, x::Number) where {T <: Integer}
     end
 end
 
-# Whether `gemm_tensor!` can compute `C = α·op(A)·op(B) + β·C` for these operands: plain or
-# transposed matrices, on a Metal4 device, of a supported eltype. Every supported eltype is
-# real, so an adjoint is a transpose. `gemm_tensor!` applies α and β around the kernel,
-# except for an integer C with α or β that its eltype can't represent (e.g. fractional ones):
-# the scalar kernel scales before converting to C's eltype, so `0.5·6` gives 3, and a result
-# that isn't an integer throws, as on the CPU.
-@inline supports_tensor_matmul(C, A, B, cA::Char, cB::Char, alpha::Number, beta::Number) = false
-
-function supports_tensor_matmul(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
-                                cA::Char, cB::Char, alpha::Number, beta::Number)
+# Whether `gemm_tensor!` can compute `C = α·op(A)·op(B) + β·C` for these operands: a Metal4
+# device and an element type combination in `GEMM_TENSOR_ELTYPES`. Every supported eltype is
+# real, so an adjoint is a transpose. Shapes, transposes, wrappers, views and α/β are all
+# handled by `gemm_tensor!`, except for:
+# - an integer C with α or β that its eltype can't represent (e.g. fractional ones). The
+#   scalar kernel scales before converting to C's eltype, so `0.5·6` gives 3, and a result
+#   that isn't an integer throws, as on the CPU;
+# - matrices that tensor indices (`Int32`) can't address.
+@inline function supports_tensor_matmul(C, A, B, cA::Char, cB::Char,
+                                        alpha::Number, beta::Number)
     tensor_matmul_capable() || return false
     gemm_tensor_eltype(eltype(A), eltype(B), eltype(C)) || return false
     eltype(C) <: Integer && !(tensor_scalar(eltype(C), alpha) && tensor_scalar(eltype(C), beta)) &&
         return false
-    return cA in ('N', 'T', 'C') && cB in ('N', 'T', 'C')
+    K = (cA === 'T' || cA === 'C') ? size(A, 1) : size(A, 2)
+    return all(<=(typemax(Int32)), (length(C), size(C, 1) * K, K * size(C, 2)))
 end
 
 """
     Metal.gemm_tensor!(C, A, B, α=true, β=false, cA='N', cB='N'; tile_m=0, tile_n=0)
 
 Compute `C = α·op(A)·op(B) + β·C` via `tensor_ops::matmul2d`, one simdgroup per
-`tile_m × tile_n` tile of `C` (Metal 4 only). Only plain or transposed operands are realized
-(`cA`, `cB` ∈ `'N'`, `'T'`, `'C'`); callers must check [`Metal.supports_tensor_matmul`](@ref)
-first. The product goes through a temporary when `α ≠ 1`, or when a `Float16`/`BFloat16` `C`
-is scaled by `β ≠ 0, 1`. `tile_*=0` selects the tiles by the rule in `gemm_tensor_tiles`; pass
-explicit ones to tune. Tiles must be multiples of 8, and at least one of them a multiple of
-16.
+`tile_m × tile_n` tile of `C` (Metal 4 only). The operands must be nonempty and conform;
+callers must check [`Metal.supports_tensor_matmul`](@ref) first. Matrices, and views with contiguous columns in
+increasing order, are read in place, also when transposed; other operands are packed into
+dense copies first. The product goes through a temporary when `α ≠ 1`, when `C` can't be
+written in place, or when a `Float16`/`BFloat16` `C` is scaled by `β ≠ 0, 1`.
+`tile_*=0` selects the tiles by the rule in `gemm_tensor_tiles`; pass explicit ones to tune. Tiles
+must be multiples of 8, and at least one of them a multiple of 16.
 """
-function gemm_tensor!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
+function gemm_tensor!(C::MtlMatrixOperand, A::MtlMatrixOperand, B::MtlMatrixOperand,
                       alpha::Number = true, beta::Number = false,
                       cA::Char = 'N', cB::Char = 'N';
                       tile_m::Integer = 0, tile_n::Integer = 0)
@@ -453,11 +501,14 @@ function gemm_tensor!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
         (tile_m % 16 == 0 || tile_n % 16 == 0) ||
         throw(ArgumentError("matmul2d tiles must be multiples of 8, one of them of 16; got $tile_m×$tile_n"))
 
+    Ad, lda, trA = tensor_operand(A, cA, (M, K))
+    Bd, ldb, trB = tensor_operand(B, cB, (K, N))
+
     # matmul2d can't scale, so α and β are applied around it. With α = 1 the product goes
-    # straight into C, added to the β-scaled C unless β = 0. Otherwise it goes into a
-    # temporary that is combined with C after. So does it for a narrow C (`Float16`,
-    # `BFloat16`) with β ≠ 0, 1: storing β·C would round it to C's precision, or overflow,
-    # before the product is added.
+    # straight into C, added to the β-scaled C unless β = 0. Otherwise, or when C can't be
+    # laid out as a tensor, it goes into a temporary that is combined with C after. So does
+    # it for a narrow C (`Float16`, `BFloat16`) with β ≠ 0, 1: storing β·C would round it to
+    # C's precision, or overflow, before the product is added.
     #
     # Scaling is done in `Tt`, `Float32` for a float destination, and converted on the store
     # into C, like the simd kernel does. α, β and the unscaled product can be out of range for
@@ -468,7 +519,10 @@ function gemm_tensor!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
     Tt = eltype(C) <: Integer ? eltype(C) : Float32
     α = convert(Tt, alpha)
     β = convert(Tt, beta)
-    mode = if isone(alpha) && (iszero(beta) || isone(beta))
+    layout = tensor_layout(C)
+    mode = if layout === nothing
+        nothing
+    elseif isone(alpha) && (iszero(beta) || isone(beta))
         iszero(beta) ? :overwrite : :accumulate
     elseif isone(alpha) && eltype(C) === Tt
         C .= β .* Tt.(C)
@@ -477,15 +531,15 @@ function gemm_tensor!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
         nothing
     end
     direct = mode !== nothing
-    Cd = direct ? C : MtlMatrix{Tt}(undef, M, N)
+    Cd, ldc = direct ? layout : (MtlMatrix{Tt}(undef, M, N), M)
     direct || (mode = :overwrite)
 
     wm, wn = GEMM_TENSOR_WM, GEMM_TENSOR_WN
     groups = (cld(M, tile_m * wm), cld(N, tile_n * wn))
     @metal threads = wm * wn * 32 groups = groups gemm_tensor_kernel!(
-        Cd, A, B, Int32(M), Int32(N), Int32(K),
+        Cd, Ad, Bd, Int32(M), Int32(N), Int32(K), Int32(ldc), Int32(lda), Int32(ldb),
         Val(Int32(tile_m)), Val(Int32(tile_n)), Val(Int32(wm)), Val(Int32(wn)), Val(mode),
-        Val(cA === 'T' || cA === 'C'), Val(cB === 'T' || cB === 'C'))
+        Val(trA), Val(trB))
 
     if !direct
         if iszero(β)
@@ -496,7 +550,6 @@ function gemm_tensor!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
     end
     return C
 end
-
 
 ## host entry points
 
@@ -579,9 +632,9 @@ applying a Symmetric/Hermitian view of the operand (upper/lowercase selects the 
 triangle). Backs the `:native`/`:auto` matmul paths (`kernel=:auto`, picking
 the best of the tensor/simd/scalar kernels) and the `:simd`/`:scalar`/`:tensor` paths, which set
 `kernel` to force a specific kernel. Forcing a kernel that cannot handle the operands is the
-caller's responsibility (see `supports_simd_matmul`/`supports_tensor_matmul`); the tensor
-kernel never handles wrapper chars (it requires plain `'N'`/`'N'` operands), while the simd
-and scalar kernels gather elementwise through `opelem` and handle all of them.
+caller's responsibility (see `supports_simd_matmul`/`supports_tensor_matmul`). All kernels
+handle every operand char: the simd and scalar kernels gather elementwise through `opelem`,
+and the tensor kernel packs the operands it can't read in place through it.
 """
 function gemm!(C::MtlMatrixOperand, tA::Char, tB::Char,
                A::MtlMatrixOperand, B::MtlMatrixOperand,
