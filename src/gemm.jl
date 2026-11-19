@@ -4,9 +4,9 @@
 # algorithm `:simd`/`:tensor` forces one, while `:native`/`:auto` pick among them:
 #
 #  * `gemm_tensor_kernel!` is the Metal 4 fast path. It drives `tensor_ops::matmul2d`
-#    over a tile decomposition. Only available on Metal4-capable devices and only for the
-#    plain `C = A*B` (no transpose, α=1, β=0) of the element type combinations in
-#    `GEMM_TENSOR_ELTYPES`.
+#    over a tile decomposition. Only available on Metal4-capable devices and only for
+#    plain matrices (no transpose) of the element type combinations in
+#    `GEMM_TENSOR_ELTYPES`. α and β are applied around the kernel (`gemm_tensor!`).
 #
 #  * `gemm_simd_kernel!` is the portable fast path for `Float16`/`Float32`. It stages tiles
 #    of `op(A)`/`op(B)` into threadgroup memory (bounds-checked, so any M/N/K and
@@ -242,9 +242,12 @@ end
 # each element of C once, rounding a narrow destination only once. Tiles at the edges of C
 # are sliced to the extents that remain: matmul2d bounds-checks partial tiles against the
 # extents of the tensors, so no dimension needs to be a multiple of the tile.
+#
+# `MODE` is what happens to the product: `:overwrite` writes it to C, and `:accumulate` adds it
+# to what C holds.
 function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceArray,
                              M::Int32, N::Int32, K::Int32,
-                             ::Val{SM}, ::Val{SN}) where {SM, SN}
+                             ::Val{SM}, ::Val{SN}, ::Val{MODE}) where {SM, SN, MODE}
     wm, wn = Int32(GEMM_TENSOR_WM), Int32(GEMM_TENSOR_WN)
     tgid  = threadgroup_position_in_grid_3d()
     sgid  = unsafe_trunc(Int32, simdgroup_index_in_threadgroup()) - Int32(1)
@@ -263,7 +266,8 @@ function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceA
     mB = view(tB, (Int32(1), n_off + Int32(1)), (K, tn))
     mC = view(tC, (m_off + Int32(1), n_off + Int32(1)), (tm, tn))
 
-    op = TensorOpsMatmul2D{matmul2d_descriptor(SM, SN), Int32(1)}()
+    mode = MODE === :accumulate ? matmul2d_multiply_accumulate : matmul2d_multiply
+    op = TensorOpsMatmul2D{matmul2d_descriptor(SM, SN; mode), Int32(1)}()
     op(mA, mB, mC)
     return
 end
@@ -337,27 +341,42 @@ function gemm_tensor_tiles(M::Integer, N::Integer)
     return (tm, tn)
 end
 
-# Whether `gemm_tensor!` can compute `C = α·op(A)·op(B) + β·C` for these operands: the kernel
-# only realizes the plain `C = A*B` (no transpose, α=1, β=0) of matrices, for a Metal4 device
-# and a supported eltype.
+# whether the scalar `x` converts to the integer `T` exactly, as `gemm_tensor!` converts it
+function tensor_scalar(::Type{T}, x::Number) where {T <: Integer}
+    try
+        convert(T, x)
+        return true
+    catch err
+        err isa InexactError || rethrow()
+        return false
+    end
+end
+
+# Whether `gemm_tensor!` can compute `C = α·op(A)·op(B) + β·C` for these operands: plain
+# matrices (no transpose), on a Metal4 device, of a supported eltype. `gemm_tensor!` applies
+# α and β around the kernel, except for an integer C with α or β that its eltype can't
+# represent (e.g. fractional ones): the generic kernel scales before converting to C's
+# eltype, so `0.5·6` gives 3, and a result that isn't an integer throws, as on the CPU.
 @inline supports_tensor_matmul(C, A, B, cA::Char, cB::Char, alpha::Number, beta::Number) = false
 
 function supports_tensor_matmul(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
                                 cA::Char, cB::Char, alpha::Number, beta::Number)
     tensor_matmul_capable() || return false
     gemm_tensor_eltype(eltype(A), eltype(B), eltype(C)) || return false
-    (cA === 'N' && cB === 'N') || return false
-    return isone(alpha) && iszero(beta)
+    eltype(C) <: Integer && !(tensor_scalar(eltype(C), alpha) && tensor_scalar(eltype(C), beta)) &&
+        return false
+    return cA === 'N' && cB === 'N'
 end
 
 """
     Metal.gemm_tensor!(C, A, B, α=true, β=false, cA='N', cB='N'; tile_m=0, tile_n=0)
 
-Compute `C = A*B` via `tensor_ops::matmul2d`, one simdgroup per `tile_m × tile_n` tile of
-`C` (Metal 4 only). Only the plain product is realized (`cA=cB='N'`, `α=1`, `β=0`); callers
-must check [`Metal.supports_tensor_matmul`](@ref) first. `tile_*=0` selects the tiles by the
-rule in `gemm_tensor_tiles`; pass explicit ones to tune. Tiles must be multiples of 8, and
-at least one of them a multiple of 16.
+Compute `C = α·A·B + β·C` via `tensor_ops::matmul2d`, one simdgroup per `tile_m × tile_n`
+tile of `C` (Metal 4 only). Only plain operands are realized (`cA=cB='N'`); callers must check
+[`Metal.supports_tensor_matmul`](@ref) first. The product goes through a temporary when
+`α ≠ 1`, or when a `Float16`/`BFloat16` `C` is scaled by `β ≠ 0, 1`. `tile_*=0` selects the
+tiles by the rule in `gemm_tensor_tiles`; pass explicit ones to tune. Tiles must be multiples
+of 8, and at least one of them a multiple of 16.
 """
 function gemm_tensor!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
                       alpha::Number = true, beta::Number = false,
@@ -371,11 +390,46 @@ function gemm_tensor!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
         (tile_m % 16 == 0 || tile_n % 16 == 0) ||
         throw(ArgumentError("matmul2d tiles must be multiples of 8, one of them of 16; got $tile_m×$tile_n"))
 
+    # matmul2d can't scale, so α and β are applied around it. With α = 1 the product goes
+    # straight into C, added to the β-scaled C unless β = 0. Otherwise it goes into a
+    # temporary that is combined with C after. So does it for a narrow C (`Float16`,
+    # `BFloat16`) with β ≠ 0, 1: storing β·C would round it to C's precision, or overflow,
+    # before the product is added.
+    #
+    # Scaling is done in `Tt`, `Float32` for a float destination, and converted on the store
+    # into C, like the simd kernel does. α, β and the unscaled product can be out of range for
+    # `Float16` while the result is not. Converting the scalars on the host also keeps
+    # `Float64` values and `Bool * BFloat16` out of the broadcasts, which
+    # can't compile them. `matmul2d` produces `Float32` for every input combination that has
+    # a float output, so the temporary has that type too.
+    Tt = eltype(C) <: Integer ? eltype(C) : Float32
+    α = convert(Tt, alpha)
+    β = convert(Tt, beta)
+    mode = if isone(alpha) && (iszero(beta) || isone(beta))
+        iszero(beta) ? :overwrite : :accumulate
+    elseif isone(alpha) && eltype(C) === Tt
+        C .= β .* Tt.(C)
+        :accumulate
+    else
+        nothing
+    end
+    direct = mode !== nothing
+    Cd = direct ? C : MtlMatrix{Tt}(undef, M, N)
+    direct || (mode = :overwrite)
+
     wm, wn = GEMM_TENSOR_WM, GEMM_TENSOR_WN
     groups = (cld(M, tile_m * wm), cld(N, tile_n * wn))
     @metal threads = wm * wn * 32 groups = groups gemm_tensor_kernel!(
-        C, A, B, Int32(M), Int32(N), Int32(K),
-        Val(Int32(tile_m)), Val(Int32(tile_n)))
+        Cd, A, B, Int32(M), Int32(N), Int32(K),
+        Val(Int32(tile_m)), Val(Int32(tile_n)), Val(mode))
+
+    if !direct
+        if iszero(β)
+            C .= α .* Cd
+        else
+            C .= α .* Cd .+ β .* Tt.(C)
+        end
+    end
     return C
 end
 
