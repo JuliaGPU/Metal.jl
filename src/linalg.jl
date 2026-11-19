@@ -22,11 +22,14 @@ A `ScopedValue` that selects the algorithm `LinearAlgebra.mul!` (and `*`) uses f
 - `:MPS`: [`MPS.matmul!`](@ref) and [`MPS.matvecmul!`](@ref).
 - `:native`: the best of Metal.jl's own kernels for the operands, of `:tensor` and `:simd`,
   or `:GPUArrays` for operands that neither supports.
-- `:tensor`: a Metal 4 tensor-operations kernel, for `C = α*A*B + β*C` where `A` and `B` may
-  be transposed or adjoint, of `Float16`, `BFloat16`, `Float32`, `Int8` and `UInt8` inputs
-  with the output types `matmul2d` supports for them, as listed in the [Metal Shading Language
-  specification](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf);
-  only matrix-matrix products. `BFloat16` needs macOS 26.1 and `UInt8` needs macOS 26.4.
+- `:tensor`: a Metal 4 tensor-operations kernel, on Metal 4 devices, for `Float16`,
+  `BFloat16`, `Float32`, `Int8` and `UInt8` inputs with the output types `matmul2d` supports
+  for them, as listed in the [Metal Shading Language
+  specification](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf).
+  Any shape, transpose, Symmetric/Hermitian wrapper, view and α/β is handled, except α or
+  β that an integer output type can't represent exactly (e.g. fractional ones); only
+  matrix-matrix products. Views with stepped rows or reversed columns are copied to a
+  dense matrix first. `BFloat16` needs macOS 26.1 and `UInt8` needs macOS 26.4.
 - `:simd`: a SIMD-group matrix kernel.
 - `:GPUArrays`: the generic GPUArrays.jl kernel, for any element type.
 

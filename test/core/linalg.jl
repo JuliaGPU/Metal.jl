@@ -441,15 +441,15 @@ end
             @test check(T, dc, W(Ah, uplo) * bh)
         end
 
-        # forcing a specific kernel works too; the tensor kernel can't handle wrappers
+        # forcing a specific kernel works too
         A64 = MtlArray(rand(Float32, 64, 64)); B64 = MtlArray(rand(Float32, 64, 64))
         ref = Symmetric(Array(A64)) * Array(B64)
-        for alg in (:simd, :GPUArrays)
+        algs = Metal.tensor_matmul_capable() ? (:simd, :GPUArrays, :tensor) : (:simd, :GPUArrays)
+        for alg in algs
             C64 = MtlArray(zeros(Float32, 64, 64))
             @with (Metal.matmul_alg => alg) mul!(C64, Symmetric(A64), B64)
             @test isapprox(Array(C64), ref; rtol=tol(Float32))
         end
-        @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Float32, 64, 64)), Symmetric(A64), B64))
     end
 
     # degenerate shapes
@@ -473,11 +473,12 @@ end
     end
 
     # Metal 4 tensor-ops path (`:tensor`): only fires on a capable device (macOS 26+ /
-    # Metal4 family), for C = α·A·B + β·C of plain matrices of a supported eltype.
+    # Metal4 family), for C = α·op(A)·op(B) + β·C of matrices and views of a supported eltype.
     @testset "tensor-ops path" begin
         # the tensor intrinsics take the operands of the targeted AIR version
         Mat = MtlDeviceMatrix{Float32, 1}
         tt = Tuple{Mat, Mat, Mat, Int32, Int32, Int32,
+                   Int32, Int32, Int32,
                    Val{Int32(32)}, Val{Int32(16)}, Val{:overwrite},
                    Val{false}, Val{false}}
         air(macos) = sprint() do io
@@ -665,9 +666,69 @@ end
             @test_throws ArgumentError Metal.gemm_tensor!(MtlArray(zeros(Float32, 8, 8)),
                 MtlArray(zeros(Float32, 8, 8)), MtlArray(zeros(Float32, 8, 8)); tile_m=8, tile_n=8)
 
-            # forcing `:tensor` on operands it can't handle errors (like an unsupported :MPS)
+            # operands outside the tensor path's element types error when it is forced
             Ai = MtlArray(rand(Int32, 64, 64)); Bi = MtlArray(rand(Int32, 64, 64))
-            @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Int32, 64, 64)), Ai, Bi))            # unsupported eltype
+            @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(MtlArray(zeros(Int32, 64, 64)), Ai, Bi))
+            @test !Metal.supports_tensor_matmul(MtlArray(zeros(Int32, 64, 64)), Ai, Bi, 'N', 'N', true, false)
+
+            # Symmetric/Hermitian wrappers are packed, combined with transposes, α/β and
+            # ragged shapes
+            @testset "wrapped $T $tA$tB $M×$N×$K" for T in (Float32, Float16),
+                                                      (tA, tB, M, N, K) in (('T', 'N', 65, 47, 33),
+                                                                            ('C', 'N', 40, 24, 9),
+                                                                            ('S', 'N', 33, 33, 33),
+                                                                            ('s', 'T', 20, 30, 20),
+                                                                            ('N', 'h', 20, 20, 20),
+                                                                            ('H', 'S', 16, 16, 16))
+                α, β = T(2), T(3)
+                sA = tA in "TC" ? (K, M) : tA in "SsHh" ? (M, M) : (M, K)
+                sB = tB in "TC" ? (N, K) : tB in "SsHh" ? (K, K) : (K, N)
+                A = MtlArray(rand(T, sA...)); B = MtlArray(rand(T, sB...)); C0 = rand(T, M, N)
+                C = MtlArray(C0)
+                Metal.gemm!(C, tA, tB, A, B, α, β; kernel=:tensor)
+                opA = Dict('N' => identity, 'T' => transpose, 'C' => adjoint,
+                           'S' => X -> Symmetric(X, :U), 's' => X -> Symmetric(X, :L),
+                           'H' => X -> Hermitian(X, :U), 'h' => X -> Hermitian(X, :L))
+                ref = α * (opA[tA](Float32.(Array(A))) * opA[tB](Float32.(Array(B)))) + β * Float32.(C0)
+                @test isapprox(Float32.(Array(C)), ref; rtol=ttol(T))
+            end
+
+            # views are read and written in place when their columns are contiguous and in
+            # increasing order, and packed otherwise; neighbouring elements of the parents are
+            # neither read nor written
+            @testset "views $TA×$TB→$TC" for (TA, TB, TC) in ((Float32, Float32, Float32),
+                                                              (Float16, Float16, Float16),
+                                                              (Float16, Int8, Float32),
+                                                              (BFloat16, BFloat16, BFloat16))
+                BFloat16 in (TA, TB, TC) && Metal.macos_version() < v"26.1" && continue
+                Pa = tgen(TA, 80, 80); Pb = tgen(TB, 80, 80); Pc = rand(TC, 80, 80)
+                for (ia, ja, ib, jb, ic, jc) in ((3:50, 1:33, 1:33, 5:40, 3:50, 5:40),      # in place
+                                                 (3:2:50, 1:33, 1:33, 5:3:80, 2:25, 2:2:52),  # strided
+                                                 (3:50, 33:-1:1, 1:33, 40:-1:5, 3:50, 5:40),  # reversed
+                                                 (1:16, 1:16, 1:16, 7:(1 << 30):7, 1:16, 9:9)) # one column
+                    poison(T) = T <: AbstractFloat ? T(NaN) : typemax(T)
+                    pa = copy(Pa); pa[setdiff(1:80, ia), :] .= poison(TA)
+                    pb = copy(Pb); pb[:, setdiff(1:80, jb)] .= poison(TB)
+                    A = MtlArray(pa); B = MtlArray(pb); C = MtlArray(Pc)
+                    @with (Metal.matmul_alg => :tensor) mul!(view(C, ic, jc), view(A, ia, ja), view(B, ib, jb), 2, 0.5)
+                    ref = 2 * Float32.(Pa[ia, ja]) * Float32.(Pb[ib, jb]) + 0.5 * Float32.(Pc[ic, jc])
+                    @test isapprox(Float32.(Array(C)[ic, jc]), ref; rtol=ttol(TC))
+                    outside = trues(80, 80); outside[ic, jc] .= false
+                    @test Array(C)[outside] == Pc[outside]
+                    # α = 1 writes the product into C directly
+                    C = MtlArray(Pc)
+                    @with (Metal.matmul_alg => :tensor) mul!(view(C, ic, jc), view(A, ia, ja), view(B, ib, jb))
+                    ref = Float32.(Pa[ia, ja]) * Float32.(Pb[ib, jb])
+                    @test isapprox(Float32.(Array(C)[ic, jc]), ref; rtol=ttol(TC))
+                    @test Array(C)[outside] == Pc[outside]
+                end
+            end
+            # a transposed view is read in place too
+            let P = rand(Float32, 80, 80), b = rand(Float32, 33, 20)
+                C = MtlArray(zeros(Float32, 48, 20))
+                @with (Metal.matmul_alg => :tensor) mul!(C, transpose(view(MtlArray(P), 1:33, 3:50)), MtlArray(b))
+                @test isapprox(Array(C), transpose(P[1:33, 3:50]) * b; rtol=1f-4)
+            end
 
             # α and β of another number type than the operands: with α = 1, a Float32 C is
             # scaled by β and accumulated into; a narrower C, or any other α, goes through
