@@ -5,8 +5,8 @@
 #
 #  * `gemm_tensor_kernel!` is the Metal 4 fast path. It drives `tensor_ops::matmul2d`
 #    over a tile decomposition. Only available on Metal4-capable devices and only for the
-#    plain `C = A*B` (no transpose, α=1, β=0) with tile-divisible operands of the element
-#    type combinations in `GEMM_TENSOR_ELTYPES`.
+#    plain `C = A*B` (no transpose, α=1, β=0) of the element type combinations in
+#    `GEMM_TENSOR_ELTYPES`.
 #
 #  * `gemm_simd_kernel!` is the portable fast path for `Float16`/`Float32`. It stages tiles
 #    of `op(A)`/`op(B)` into threadgroup memory (bounds-checked, so any M/N/K and
@@ -288,37 +288,37 @@ end
 
 ## tensor path: Metal 4 `tensor_ops::matmul2d` (macOS 26+, Metal4-capable devices)
 
-# Tile-decomposed matmul on top of `tensor_ops::matmul2d`. Specialized on the tile shape
-# (TM, TN, TK) and simdgroup count (NSIMD) so the matmul descriptor and execution width are
-# compile-time constants. The K-loop trip count is kept dynamic (a runtime `K`, not a `Val`)
-# to avoid crashing Apple's back-end (see the note in `device/intrinsics/tensor.jl`).
+# Tiled matmul on top of `tensor_ops::matmul2d`, laid out as Apple's Metal Performance
+# Primitives programming guide recommends. A threadgroup holds WM×WN simdgroups, and each
+# simdgroup computes an SM×SN tile of `C` of its own, specialized on the tile shape so the
+# matmul descriptor is a compile-time constant.
 #
-# One threadgroup computes one `C[TM, TN]` output tile, accumulating `A[TM,:] * B[:,TN]` over
-# the K dimension in TK-wide slices.
+# The descriptor leaves K dynamic, so matmul2d loops over the contraction itself and writes
+# each element of C once, rounding a narrow destination only once. Tiles at the edges of C
+# are sliced to the extents that remain: matmul2d bounds-checks partial tiles against the
+# extents of the tensors, so no dimension needs to be a multiple of the tile.
 function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceArray,
-                             M::UInt32, N::UInt32, K::UInt32,
-                             ::Val{TM}, ::Val{TN}, ::Val{TK},
-                             ::Val{NSIMD}) where {TM, TN, TK, NSIMD}
+                             M::Int32, N::Int32, K::Int32,
+                             ::Val{SM}, ::Val{SN}, ::Val{WM}, ::Val{WN}) where {SM, SN, WM, WN}
     tgid  = threadgroup_position_in_grid_3d()
-    m_off = (unsafe_trunc(Int32, tgid.x) - Int32(1)) * Int32(TM)
-    n_off = (unsafe_trunc(Int32, tgid.y) - Int32(1)) * Int32(TN)
+    sgid  = unsafe_trunc(Int32, simdgroup_index_in_threadgroup()) - Int32(1)
+    m_off = (unsafe_trunc(Int32, tgid.x) - Int32(1)) * Int32(SM * WM) + rem(sgid, Int32(WM)) * Int32(SM)
+    n_off = (unsafe_trunc(Int32, tgid.y) - Int32(1)) * Int32(SN * WN) + div(sgid, Int32(WM)) * Int32(SN)
+    # (of a threadgroup at the edge, some simdgroups can lie outside of `C`)
+    (m_off >= M || n_off >= N) && return
+    tm = min(Int32(SM), M - m_off)
+    tn = min(Int32(SN), N - n_off)
 
     tA = MtlInlineTensor(A, (M, K))
     tB = MtlInlineTensor(B, (K, N))
     tC = MtlInlineTensor(C, (M, N))
 
-    mC = view(tC, (m_off + Int32(1), n_off + Int32(1)), (Int32(TM), Int32(TN)))
+    mA = view(tA, (m_off + Int32(1), Int32(1)), (tm, K))
+    mB = view(tB, (Int32(1), n_off + Int32(1)), (K, tn))
+    mC = view(tC, (m_off + Int32(1), n_off + Int32(1)), (tm, tn))
 
-    op = TensorOpsMatmul2D{matmul2d_descriptor(TM, TN, TK;
-                                               mode = matmul2d_multiply_accumulate),
-                           Int32(NSIMD)}()
-    nslices = unsafe_trunc(Int32, K ÷ UInt32(TK))
-    for s in Int32(0):(nslices - Int32(1))
-        k_off = s * Int32(TK)
-        mA = view(tA, (m_off + Int32(1), k_off + Int32(1)), (Int32(TM), Int32(TK)))
-        mB = view(tB, (k_off + Int32(1), n_off + Int32(1)), (Int32(TK), Int32(TN)))
-        op(mA, mB, mC)
-    end
+    op = TensorOpsMatmul2D{matmul2d_descriptor(SM, SN), Int32(1)}()
+    op(mA, mB, mC)
     return
 end
 
@@ -374,22 +374,26 @@ end
     end::Bool
 end
 
-# matmul2d needs each dimension covered by whole tiles. Pick the largest validated tile that
-# divides the dimension; 0 means "no usable tile" (dimension not a multiple of the smallest).
-const GEMM_TENSOR_MN_TILES = (64, 32, 16, 8)
-const GEMM_TENSOR_K_TILES  = (32, 16, 8)
-const GEMM_TENSOR_NSIMD    = 4
+# The size of the tile of `C` that one simdgroup computes. Apple's guide recommends 32×32 with
+# 2×2 simdgroups per threadgroup, which is also the fastest here for large products. Smaller
+# and thin ones are faster with tiles of 16, which occupy more of the GPU, and the rows grow
+# to 32 before the columns do. A product of a few columns, like a matrix-vector one, is a
+# little faster still with tiles of 8 columns. The thresholds were measured on an M2 Max with
+# `Float32` and `Float16`; tiles of 64 are slower. matmul2d requires tiles that are multiples
+# of 8, at least one of them a multiple of 16.
+const GEMM_TENSOR_WM = 2
+const GEMM_TENSOR_WN = 2
 
-@inline function gemm_tensor_tile(d::Integer, cands)
-    for t in cands
-        d % t == 0 && return t
-    end
-    return 0
+function gemm_tensor_tiles(M::Integer, N::Integer)
+    area = M * N
+    tm = (area >= 512 * 512 && M >= 64) ? 32 : 16
+    tn = (area >= 2048 * 2048 && N >= 64) ? 32 : N <= 8 ? 8 : 16
+    return (tm, tn)
 end
 
 # Whether `gemm_tensor!` can compute `C = α·op(A)·op(B) + β·C` for these operands: the kernel
-# only realizes the plain `C = A*B` (no transpose, α=1, β=0) for a Metal4 device and a
-# supported eltype, with dims that tile evenly.
+# only realizes the plain `C = A*B` (no transpose, α=1, β=0) of matrices, for a Metal4 device
+# and a supported eltype.
 @inline supports_tensor_matmul(C, A, B, cA::Char, cB::Char, alpha::Number, beta::Number) = false
 
 function supports_tensor_matmul(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
@@ -397,38 +401,35 @@ function supports_tensor_matmul(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
     tensor_matmul_capable() || return false
     gemm_tensor_eltype(eltype(A), eltype(B), eltype(C)) || return false
     (cA === 'N' && cB === 'N') || return false
-    (isone(alpha) && iszero(beta)) || return false
-    M = size(A, 1); K = size(A, 2); N = size(B, 2)
-    gemm_tensor_tile(M, GEMM_TENSOR_MN_TILES) != 0 &&
-        gemm_tensor_tile(N, GEMM_TENSOR_MN_TILES) != 0 &&
-        gemm_tensor_tile(K, GEMM_TENSOR_K_TILES)  != 0
+    return isone(alpha) && iszero(beta)
 end
 
 """
-    Metal.gemm_tensor!(C, A, B, α=true, β=false, cA='N', cB='N'; tile_m=0, tile_n=0, tile_k=0)
+    Metal.gemm_tensor!(C, A, B, α=true, β=false, cA='N', cB='N'; tile_m=0, tile_n=0)
 
-Compute `C = A*B` via `tensor_ops::matmul2d` with a tile decomposition (Metal 4 only).
-Only the plain product is realized (`cA=cB='N'`, `α=1`, `β=0`); callers must check
-[`Metal.supports_tensor_matmul`](@ref) first. `tile_*=0` selects the largest validated tile
-that divides the corresponding dimension; pass explicit tiles to tune.
+Compute `C = A*B` via `tensor_ops::matmul2d`, one simdgroup per `tile_m × tile_n` tile of
+`C` (Metal 4 only). Only the plain product is realized (`cA=cB='N'`, `α=1`, `β=0`); callers
+must check [`Metal.supports_tensor_matmul`](@ref) first. `tile_*=0` selects the tiles by the
+rule in `gemm_tensor_tiles`; pass explicit ones to tune. Tiles must be multiples of 8, and
+at least one of them a multiple of 16.
 """
 function gemm_tensor!(C::MtlMatrix, A::MtlMatrix, B::MtlMatrix,
                       alpha::Number = true, beta::Number = false,
                       cA::Char = 'N', cB::Char = 'N';
-                      tile_m::Integer = 0, tile_n::Integer = 0, tile_k::Integer = 0)
+                      tile_m::Integer = 0, tile_n::Integer = 0)
     M = size(A, 1); K = size(A, 2); N = size(B, 2)
-    tile_m = tile_m == 0 ? gemm_tensor_tile(M, GEMM_TENSOR_MN_TILES) : tile_m
-    tile_n = tile_n == 0 ? gemm_tensor_tile(N, GEMM_TENSOR_MN_TILES) : tile_n
-    tile_k = tile_k == 0 ? gemm_tensor_tile(K, GEMM_TENSOR_K_TILES)  : tile_k
-    @assert tile_m > 0 && tile_n > 0 && tile_k > 0 """
-        no usable tensor-ops tile for $((M, N, K)); call `supports_tensor_matmul` first"""
+    auto_m, auto_n = gemm_tensor_tiles(M, N)
+    tile_m = tile_m == 0 ? auto_m : tile_m
+    tile_n = tile_n == 0 ? auto_n : tile_n
+    tile_m > 0 && tile_n > 0 && tile_m % 8 == 0 && tile_n % 8 == 0 &&
+        (tile_m % 16 == 0 || tile_n % 16 == 0) ||
+        throw(ArgumentError("matmul2d tiles must be multiples of 8, one of them of 16; got $tile_m×$tile_n"))
 
-    fill!(C, zero(eltype(C)))   # the kernel accumulates into C
-    groups = (M ÷ tile_m, N ÷ tile_n, 1)
-    nsimd = GEMM_TENSOR_NSIMD
-    @metal threads = nsimd * 32 groups = groups gemm_tensor_kernel!(
-        C, A, B, UInt32(M), UInt32(N), UInt32(K),
-        Val(Int32(tile_m)), Val(Int32(tile_n)), Val(Int32(tile_k)), Val(Int32(nsimd)))
+    wm, wn = GEMM_TENSOR_WM, GEMM_TENSOR_WN
+    groups = (cld(M, tile_m * wm), cld(N, tile_n * wn))
+    @metal threads = wm * wn * 32 groups = groups gemm_tensor_kernel!(
+        C, A, B, Int32(M), Int32(N), Int32(K),
+        Val(Int32(tile_m)), Val(Int32(tile_n)), Val(Int32(wm)), Val(Int32(wn)))
     return C
 end
 
