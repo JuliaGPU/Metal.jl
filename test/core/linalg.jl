@@ -564,6 +564,32 @@ end
                 @test m !== nothing && count("alloca i8, i64 $(m[1]), align 8", ir) == 1
             end
         end
+        ## views of static size pass their extents on to matmul2d, the others pass none
+        function static_views(C, A, B)
+            tA = Metal.MtlInlineTensor(A); tB = Metal.MtlInlineTensor(B); tC = Metal.MtlInlineTensor(C)
+            matmul = Metal.TensorOpsMatmul2D(Metal.matmul2d_descriptor(16, 16), Val(1))
+            one = Int32(1)
+            # a tile of 16 rows of static size (with K dynamic), and what is left below it
+            matmul(view(tA, (one, one), Val((16, :))), view(tB, (one, one), Val((:, 16))),
+               view(tC, (one, one), Val((16, 16))))
+            matmul(view(tA, (Int32(17), one)), view(tB, (one, one), Val((:, 16))),
+               view(tC, (Int32(17), one)))
+            return
+        end
+        static_air(macos) = sprint() do io
+            Metal.code_air(io, static_views, Tuple{Mat, Mat, Mat}; kernel=true, macos,
+                           dump_module=true)
+        end
+        static27, static26 = static_air(v"27"), static_air(v"26")
+        # (the extents of B, A and C)
+        @test occursin(r"call void @__tensorops_impl_matmul2d_op_run_dv_f32_dv_f32_dv_f32_v2\([^,]+, [^,]+, i32 2, i32 0, i32 0, i32 0, i32 -1, i32 16, [^,]+, i32 2, i32 0, i32 0, i32 0, i32 16, i32 -1, [^,]+, i32 2, i32 16, i32 16, i32 %\d+\)",
+                       static27)
+        @test occursin(r"call void @__tensorops_impl_matmul2d_op_run_dv_f32_dv_f32_dv_f32_v2\([^,]+, [^,]+, i32 2, i32 0, i32 0, i32 0, i32 -1, i32 16, [^,]+, i32 2, i32 0, i32 0, i32 0, i32 -1, i32 -1, [^,]+, i32 2, i32 -1, i32 -1, i32 %\d+\)",
+                       static27)
+        # (the original entry point takes no static extents, which are only a hint)
+        @test count(r"call void @__tensorops_impl_matmul2d_op_run_dv_f32_dv_f32_dv_f32\([^,]+, [^,]+, i32 2, [^,]+, i32 2, [^,]+, i32 2, i32 %\d+\)",
+                    static26) == 2
+        @test !occursin("matmul2d_op_run_dv_f32_dv_f32_dv_f32_v2", static26)
         if Metal.tensor_matmul_capable()
             @testset "macOS $macos" for macos in filter(<=(Metal.macos_version()), [v"26", v"27"])
                 out = MtlArray(zeros(Int32, 1))
@@ -572,6 +598,12 @@ end
 
                 @metal macos=macos ranked_tensors(out, MtlArray(zeros(Float32, 16, 16)))
                 @test Array(out) == [256 + 8]
+
+                # a tile of static size and what is left below it make up the whole product
+                a = rand(Float32, 24, 20); b = rand(Float32, 20, 16)
+                C = MtlArray(fill(7f0, 24, 16))
+                @metal macos=macos threads=32 static_views(C, MtlArray(a), MtlArray(b))
+                @test isapprox(Array(C), a * b; rtol=1f-4)
             end
         end
 
