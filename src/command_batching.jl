@@ -387,6 +387,41 @@ function batched_queue(queue::MTLCommandQueue)
     end::ConcreteBatchedQueue
 end
 
+"""
+    global_queue!(bq::BatchedCommandQueue)
+    global_queue!(f, bq::BatchedCommandQueue)
+
+Make `bq` the queue of the current task for `bq`'s device, i.e., what
+[`global_queue`](@ref) returns: kernel launches without a `queue` argument, array
+operations like `copyto!` and `fill!`, and MPS then use it. The second form does so only
+while `f` runs.
+
+For code that owns a queue and wants the work of the libraries it calls batched and
+ordered with its own, e.g. because it encodes command buffers with resources it made
+resident on that queue. Work that the task submitted to another queue before is ordered
+against `bq` like work on any two queues: through the arrays that both use.
+"""
+function global_queue!(bq::BatchedCommandQueue)
+    tls = task_local_storage()
+    tls[(:BatchedCommandQueue, bq.device)] = bq
+    tls[batched_queue_key(bq.queue)] = bq
+    return bq
+end
+
+function global_queue!(f, bq::BatchedCommandQueue)
+    keys = ((:BatchedCommandQueue, bq.device), batched_queue_key(bq.queue))
+    tls = task_local_storage()
+    previous = map(key -> get(tls, key, nothing), keys)
+    global_queue!(bq)
+    try
+        return f()
+    finally
+        for (key, value) in zip(keys, previous)
+            value === nothing ? delete!(tls, key) : (tls[key] = value)
+        end
+    end
+end
+
 raw_queue(bq::BatchedCommandQueue) = bq.queue
 raw_queue(queue::MTLCommandQueue) = queue
 
