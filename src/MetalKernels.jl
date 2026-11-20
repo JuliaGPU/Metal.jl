@@ -249,6 +249,19 @@ end
     threadgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
 end
 
+# `KI.LOCAL_MEM_FENCE` and `KI.GLOBAL_MEM_FENCE` don't have the bits of Metal's flags: local
+# memory is Metal's threadgroup memory, and global memory its device memory. The barriers need
+# constant flags, which holds as long as the `KI.MemFenceFlags` are constant.
+@inline function memory_flags(flags::KI.MemFenceFlags)
+    bits = flags.bits
+    ifelse(iszero(bits & KI.LOCAL_MEM_FENCE.bits), UInt32(0), UInt32(Metal.MemoryFlagThreadGroup)) |
+    ifelse(iszero(bits & KI.GLOBAL_MEM_FENCE.bits), UInt32(0), UInt32(Metal.MemoryFlagDevice))
+end
+
+@device_override @inline function KI.barrier(flags::KI.MemFenceFlags)
+    threadgroup_barrier(memory_flags(flags))
+end
+
 @device_override @inline function KI.sub_group_barrier()
     simdgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
 end
