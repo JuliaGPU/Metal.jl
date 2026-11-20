@@ -555,6 +555,70 @@ end
                 @test m !== nothing && count("alloca i8, i64 $(m[1]), align 8", ir) == 1
             end
         end
+        ## views of static size pass their extents on to matmul2d, the others pass none
+        function static_views(C, A, B)
+            tA = Metal.MtlInlineTensor(A); tB = Metal.MtlInlineTensor(B); tC = Metal.MtlInlineTensor(C)
+            matmul = Metal.TensorOpsMatmul2D(Metal.matmul2d_descriptor(16, 16), Val(1))
+            one = Int32(1)
+            # a tile of 16 rows of static size (with K dynamic), and what is left below it
+            matmul(view(tA, (one, one), Val((16, -1))), view(tB, (one, one), Val((-1, 16))),
+               view(tC, (one, one), Val((16, 16))))
+            matmul(view(tA, (Int32(17), one)), view(tB, (one, one), Val((-1, 16))),
+               view(tC, (Int32(17), one)))
+            return
+        end
+        static_air(macos) = sprint() do io
+            Metal.code_air(io, static_views, Tuple{Mat, Mat, Mat}; kernel=true, macos,
+                           dump_module=true)
+        end
+        # (the extents of B, A and C)
+        @test occursin(r"call void @__tensorops_impl_matmul2d_op_run_dv_f32_dv_f32_dv_f32_v2\([^,]+, [^,]+, i32 2, i32 0, i32 0, i32 0, i32 -1, i32 16, [^,]+, i32 2, i32 0, i32 0, i32 0, i32 16, i32 -1, [^,]+, i32 2, i32 16, i32 16, i32 %\d+\)",
+                       static_air(v"27"))
+        @test occursin(r"call void @__tensorops_impl_matmul2d_op_run_dv_f32_dv_f32_dv_f32_v2\([^,]+, [^,]+, i32 2, i32 0, i32 0, i32 0, i32 -1, i32 16, [^,]+, i32 2, i32 0, i32 0, i32 0, i32 -1, i32 -1, [^,]+, i32 2, i32 -1, i32 -1, i32 %\d+\)",
+                       static_air(v"27"))
+        # (the original entry point takes no static extents, which are only a hint)
+        @test count(r"call void @__tensorops_impl_matmul2d_op_run_dv_f32_dv_f32_dv_f32\([^,]+, [^,]+, i32 2, [^,]+, i32 2, [^,]+, i32 2, i32 %\d+\)",
+                    static_air(v"26")) == 2
+        @test !occursin("matmul2d_op_run_dv_f32_dv_f32_dv_f32_v2", static_air(v"26"))
+        ## a cooperative tensor keeps a product in thread-local memory, in storage that the
+        ## back end sizes like that of a tensor descriptor
+        function cooperative_axpy(C, A, B)
+            tA = Metal.MtlInlineTensor(A); tB = Metal.MtlInlineTensor(B); tC = Metal.MtlInlineTensor(C)
+            matmul = Metal.TensorOpsMatmul2D(Metal.matmul2d_descriptor(16, 16), Val(1))
+            acc = Metal.MtlCooperativeTensor{Float32}(matmul, tA, tB)
+            matmul(tA, tB, acc)
+            old = Metal.MtlCooperativeTensor{Float32}(matmul, tA, tB)
+            copyto!(old, tC)
+            # (each thread has its own share of the elements)
+            i = Int32(1)
+            while i <= length(acc)
+                isassigned(acc, i) && (acc[i] = 2f0 * acc[i] + old[i])
+                i += Int32(1)
+            end
+            copyto!(tC, acc)
+            return
+        end
+        cooperative_air(macos) = sprint() do io
+            Metal.code_air(io, cooperative_axpy, Tuple{Mat, Mat, Mat}; kernel=true, macos,
+                           dump_module=true)
+        end
+        let ir = cooperative_air(v"27")
+            # (the product and the old contents of C)
+            m = match(r"(%\d+) = call i64 @metal\.cooperative_tensor_size\.[n\d.]+\(\)", ir)
+            @test m !== nothing && count("alloca i8, i64 $(m[1]), align 4", ir) == 2
+            @test occursin(r"define linkonce_odr hidden i64 @metal\.cooperative_tensor_size\.[n\d.]+\(\)[^\n]*\{\n[^\n]*\n\s+%\d+ = call i32 @air\.get_simdgroup_size\.i32\(\)\n\s+%\d+ = call i64 @__tensorops_impl_matmul2d_op_cooperative_tensor_data_size\(i32 2, i32 16, i32 16, i32 -1, i8 0, i8 0, i8 0, i32 0, i32 268435488, i32 268435488, i32 268435488, i32 %\d+\)",
+                           ir)
+            @test !occursin("__tensorops_metaljl", ir)
+            # `is_valid_element` returns an `i1`, as Apple's front end declares it
+            @test occursin(r"declare [^\n]*\bi1 @__tensorops_impl_matmul2d_op_cooperative_tensor_is_valid_element\(", ir)
+            @test occursin(r"call void @__tensorops_impl_matmul2d_op_run_cooperative_dv_f32_dv_f32_f32_v2\([^,]+, [^,]+, i32 2, i32 0, i32 0, i32 0, i32 -1, i32 -1, [^,]+, i32 2, i32 0, i32 0, i32 0, i32 -1, i32 -1, [^,]+, i32 %\d+\)",
+                           ir)
+        end
+        @test occursin(r"call void @__tensorops_impl_matmul2d_op_run_cooperative_dv_f32_dv_f32_f32\([^,]+, [^,]+, i32 2, [^,]+, i32 2, [^,]+, i32 %\d+\)",
+                       cooperative_air(v"26.2"))
+        # (macOS 26.0 and 26.1 have cooperative destinations through other entry points,
+        # which Metal.jl does not implement)
+        @test_throws "only supports cooperative tensors when targeting macOS 26.2 or later" cooperative_air(v"26")
         if Metal.tensor_matmul_capable()
             @testset "macOS $macos" for macos in filter(<=(Metal.macos_version()), [v"26", v"27"])
                 out = MtlArray(zeros(Int32, 1))
@@ -563,6 +627,20 @@ end
 
                 @metal macos=macos ranked_tensors(out, MtlArray(zeros(Float32, 16, 16)))
                 @test Array(out) == [256 + 8]
+
+                # a tile of static size and what is left below it make up the whole product
+                a = rand(Float32, 24, 20); b = rand(Float32, 20, 16)
+                C = MtlArray(fill(7f0, 24, 16))
+                @metal macos=macos threads=32 static_views(C, MtlArray(a), MtlArray(b))
+                @test isapprox(Array(C), a * b; rtol=1f-4)
+            end
+        end
+        if Metal.tensor_matmul_capable() && Metal.macos_version() >= v"26.2"
+            @testset "cooperative tensors, macOS $macos" for macos in filter(<=(Metal.macos_version()), [v"26.2", v"27"])
+                a = rand(Float32, 16, 20); b = rand(Float32, 20, 16); c0 = rand(Float32, 16, 16)
+                C = MtlArray(c0)
+                @metal macos=macos threads=32 cooperative_axpy(C, MtlArray(a), MtlArray(b))
+                @test isapprox(Array(C), 2 * a * b + c0; rtol=1f-4)
             end
         end
 

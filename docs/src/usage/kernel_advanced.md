@@ -170,7 +170,9 @@ matrix, e.g. `simdgroup_load(MtlSimdgroupMatrix{Float32,8,8}, a, (9, 1))` loads
 `zero(MtlSimdgroupMatrix{Float32,8,8})`.
 
 On macOS 26 and later, Metal 4's tensor operations are available as `MtlInlineTensor` and
-`TensorOpsMatmul2D`. This interface is experimental.
+`TensorOpsMatmul2D`. A product can also be computed into an `MtlCooperativeTensor`, which
+keeps it in thread-local memory to be worked on before it is stored; Metal.jl supports those
+when targeting macOS 26.2 or later. This interface is experimental.
 
 
 ## Threadgroup size hints
