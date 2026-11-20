@@ -139,6 +139,11 @@ end
         words = GPUCompiler.resolved_relocation_table(relocs)
         ptr = convert(Ptr{UInt}, MTL.contents(kernel.reloc_table))
         @test [unsafe_load(ptr, i) for i in 1:length(words)] == words
+
+        # launches encoded elsewhere get it through the kernel state, and make it resident
+        @test reinterpret(UInt64, Metal.KernelState(kernel).reloc_table) ==
+              UInt64(MTL.gpu_address(kernel.reloc_table))
+        @test kernel.reloc_table in Metal.kernel_resources(kernel)
     end
 
     # 2. JuliaValueRef: this kernel references a heap object through a whole-word slot (a

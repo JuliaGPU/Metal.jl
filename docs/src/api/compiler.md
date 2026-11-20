@@ -19,6 +19,15 @@ metalcall
 Metal.metalcall_tuple
 ```
 
+A kernel compiled by Metal.jl can also be launched in a way Metal.jl doesn't manage, e.g.,
+from an indirect command buffer that is encoded once and executed many times. Such a launch
+has to provide the kernel's state and the buffers it points to:
+
+```@docs
+Metal.KernelState
+Metal.kernel_resources
+```
+
 ## Inspecting generated code
 
 The `@device_code_*` macros evaluate an expression and show the code of every kernel it
