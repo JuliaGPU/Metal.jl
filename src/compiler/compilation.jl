@@ -1033,7 +1033,21 @@ end
 # Returns the per-phase artifacts as a NamedTuple so the caller can hand them
 # onto the cached `MetalResults`. All byte/string fields are session-portable.
 const compilations = Threads.Atomic{Int}(0)
-function compile_to_metallib(@nospecialize(job::CompilerJob))
+
+"""
+    compile_to_metallib(job::GPUCompiler.CompilerJob)
+
+Compile the kernel of `job`, whose parameters subtype [`AbstractMetalCompilerParams`](@ref),
+and return an object whose `metallib` field holds the bytes of the resulting Metal library.
+Its other fields are internal.
+
+Metal.jl compiles its own jobs in the world it was initialized in, so that methods defined
+later don't invalidate its compiler. Other jobs are compiled in the current world, so that
+the methods of GPUCompiler's interface a package defines for them apply.
+"""
+function compile_to_metallib(@nospecialize(job::AnyMetalJob))
+    job.config.kernel ||
+        throw(ArgumentError("only kernels can be compiled to a Metal library"))
     Threads.atomic_add!(compilations, 1)
     art = emit_metallib(job)
 
@@ -1058,13 +1072,21 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
               art.exception_sites, relocations = isempty(art.relocations) ? nothing : art.relocations)
 end
 
+# the world to run the compiler in (see `compile_to_metallib`)
+compiler_world(::MetalCompilerJob) = initialization_world[]
+compiler_world(@nospecialize(job::AnyMetalJob)) = Base.get_world_counter()
+
 # lower the IR that GPUCompiler generated for `job` to AIR, and describe its kernel.
 # the IR is only valid while GPUCompiler's `compile` callback runs, so this returns plain data.
-function lower_to_air(@nospecialize(job::CompilerJob), mod::LLVM.Module,
+function lower_to_air(@nospecialize(job::AnyMetalJob), world::UInt, mod::LLVM.Module,
                       @nospecialize(meta::NamedTuple))
     kernel_fn = meta.entry::LLVM.Function
     relocs = meta.relocations::GPUCompiler.Relocations
-    sites = meta.exception_sites::Vector{GPUCompiler.ExceptionSite}
+    sites = if Base.invoke_in_world(world, GPUCompiler.uses_exception_sites, job)::Bool
+        meta.exception_sites::Vector{GPUCompiler.ExceptionSite}
+    else
+        GPUCompiler.ExceptionSite[]
+    end
 
     # Detect logging after optimization so dead logging calls do not enable log state.
     loggingEnabled = haskey(mod.functions, "air.os_log")
@@ -1085,8 +1107,8 @@ function lower_to_air(@nospecialize(job::CompilerJob), mod::LLVM.Module,
         # The 3-arg form would hand the lowering an empty table and strand the slots.
         local air
         air, _ = try
-            invoke_frozen(GPUCompiler.emit_asm, job, mod, relocs,
-                          LLVM.CodeGenFileType.Object)::Tuple{Vector{UInt8},Any}
+            Base.invoke_in_world(world, GPUCompiler.emit_asm, job, mod, relocs,
+                                 LLVM.CodeGenFileType.Object)::Tuple{Vector{UInt8},Any}
         catch err
             # `emit_asm` has already lowered the module in-place, so stringifying it
             # here shows exactly what the downgrader was fed
@@ -1111,14 +1133,16 @@ function lower_to_air(@nospecialize(job::CompilerJob), mod::LLVM.Module,
 end
 
 # the artifacts of compiling `job`, including its LLVM IR
-function emit_metallib(@nospecialize(job::CompilerJob))
-    lower(mod, meta) = lower_to_air(job, mod, meta)
+function emit_metallib(@nospecialize(job::AnyMetalJob))
+    # (once, so that methods defined concurrently don't apply to only part of the compilation)
+    world = compiler_world(job)
+    lower(mod, meta) = lower_to_air(job, world, mod, meta)
     # (the AIR downgrade happens within the callback, so its interval nests in this one)
     ir, air, fun, entry, loggingEnabled, device_rng, relocations, exception_sites =
         @signpost_interval log=log_compiler() start="" stop="" "Generate LLVM IR" begin
-            # (asserting the result types, which `invoke_frozen` hides, keeps the uses of
+            # (asserting the result types, which `invoke_in_world` hides, keeps the uses of
             #  the results statically dispatched, so that they're precompiled)
-            invoke_frozen(GPUCompiler.compile, lower, :llvm, job)::Tuple{
+            Base.invoke_in_world(world, GPUCompiler.compile, lower, :llvm, job)::Tuple{
                 String, Vector{UInt8}, MetalLibFunction, String, Bool, Bool,
                 GPUCompiler.Relocations, Vector{GPUCompiler.ExceptionSite}}
         end

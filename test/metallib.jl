@@ -1329,6 +1329,20 @@ function custom_llvm(f, params; kwargs...)
     end
 end
 
+# overriding a method of the interface for a job, invoking Metal.jl's
+const ParentMetalJob =
+    Metal.GPUCompiler.CompilerJob{Metal.GPUCompiler.MetalCompilerTarget,
+                                  <:Metal.AbstractMetalCompilerParams}
+const custom_finished = Ref(0)
+function Metal.GPUCompiler.finish_ir!(
+        job::Metal.GPUCompiler.CompilerJob{Metal.GPUCompiler.MetalCompilerTarget,CustomParams},
+        mod::LLVM.Module, entry::LLVM.Function)
+    entry = invoke(Metal.GPUCompiler.finish_ir!,
+                   Tuple{ParentMetalJob, LLVM.Module, LLVM.Function}, job, mod, entry)
+    custom_finished[] += 1
+    return entry
+end
+
 function custom_barrier()
     threadgroup_barrier()
     return
@@ -1371,4 +1385,15 @@ end
         @test contains(ir, "@custom_throw(")
     end
     @test_throws "needs the kernel state" custom_llvm(custom_rand, StatelessParams())
+
+    # they are compiled with the methods defined for them, also after Metal.jl initialized
+    finished = custom_finished[]
+    art = Metal.compile_to_metallib(custom_job(custom_barrier, CustomParams()))
+    @test custom_finished[] == finished + 1
+    @test only(read(IOBuffer(art.metallib), MetalLib).functions).type ==
+          Metal.METALLIB_COMPUTE_FUNCTION
+    @test_throws ArgumentError Metal.compile_to_metallib(
+        custom_job(custom_barrier, CustomParams(); kernel=false))
+    art = Metal.compile_to_metallib(custom_job(custom_throw, StatelessParams()))
+    @test isempty(art.exception_sites)
 end
