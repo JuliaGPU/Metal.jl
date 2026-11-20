@@ -1340,3 +1340,13 @@ end
         end
     end
 end
+
+@static if VERSION >= v"1.11"
+    @testset "public API for packages extending device code" begin
+        for name in (:method_table, Symbol("@device_override"), Symbol("@device_function"),
+                     :AS, :legalize_intrinsics!, :compiler_config, :KernelState,
+                     :kernel_resources)
+            @test Base.ispublic(Metal, name)
+        end
+    end
+end
