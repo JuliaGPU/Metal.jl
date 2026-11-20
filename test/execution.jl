@@ -714,6 +714,41 @@ end
     @test Array(D) == UInt8[3]
 end
 
+@testset "pipelines for indirect command buffers" begin
+    function indirect_kernel(A)
+        A[1] = Int32(1)
+        return
+    end
+    A = MtlArray(Int32[0])
+    tt = Tuple{Core.Typeof(Metal.mtlconvert(A))}
+    direct = Metal.mtlfunction(indirect_kernel, tt)
+    indirect = Metal.mtlfunction(indirect_kernel, tt; indirect=true)
+    @test !direct.pipeline.supportIndirectCommandBuffers
+    @test indirect.pipeline.supportIndirectCommandBuffers
+    # both are cached, and share the compiled code
+    @test Metal.mtlfunction(indirect_kernel, tt).pipeline === direct.pipeline
+    @test Metal.mtlfunction(indirect_kernel, tt; indirect=true).pipeline === indirect.pipeline
+    # and launch like any other
+    indirect(A)
+    @test Array(A) == Int32[1]
+end
+
+@testset "kernel state of launches encoded elsewhere" begin
+    function state_kernel(A)
+        A[1] = Int32(42)
+        return
+    end
+    A = MtlArray(Int32[0])
+    kernel = @metal launch=false state_kernel(A)
+    state = Metal.KernelState(kernel; seed=UInt32(7))
+    @test state.random_seed == 7
+    resources = Metal.kernel_resources(kernel)
+    @test length(resources) == 2    # no relocation table
+    @test reinterpret(UInt64, state.malloc_buf) == UInt64(MTL.gpu_address(resources[1]))
+    @test reinterpret(UInt64, state.exception_info) == UInt64(MTL.gpu_address(resources[2]))
+    @test reinterpret(UInt64, state.reloc_table) == 0
+end
+
 function inject_command_buffer_error!(queue, info)
     key = pointer(queue)
     Base.@lock MTL.last_committed_lock begin
@@ -1612,6 +1647,18 @@ end
     B = MtlArray(rand(Float32, 8, 8))
     @metal threads=size(A) const_copy_2d(A, B)
     @test Array(A) == Array(B)
+
+    # loading through a pointer into a read-only array
+    function const_pointer_copy(A, B)
+        i = thread_position_in_grid().x
+        C = Base.Experimental.Const(B)
+        @inbounds A[i] = unsafe_load(pointer(C, i)) + unsafe_load(pointer(C))
+        return
+    end
+    A = Metal.zeros(Float32, 64)
+    B = MtlArray(rand(Float32, 64))
+    @metal threads=length(A) const_pointer_copy(A, B)
+    @test Array(A) == Array(B) .+ Array(B)[1]
 end
 
 @testset "Symbols in device memory" begin

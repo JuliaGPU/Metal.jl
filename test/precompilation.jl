@@ -142,3 +142,14 @@ let
     m = match(r"RECOMPILE=(\d+)", out)
     @test m !== nothing && parse(Int, m.captures[1]) == 0
 end
+
+# a kernel that reaches an overlay overlapping another is dropped from a package image when
+# it is loaded (see `Bool` in device/quirks.jl), so no overlay may overlap another
+if isdefined(Base, :StaticData) && isdefined(Base.StaticData, :METHOD_SIG_LATEST_ONLY)
+    @testset "overlays do not overlap" begin
+        overlapping = filter(Base.MethodList(Metal.method_table).ms) do m
+            iszero((@atomic m.dispatch_status) & Base.StaticData.METHOD_SIG_LATEST_ONLY)
+        end
+        @test isempty(overlapping)
+    end
+end

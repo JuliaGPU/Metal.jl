@@ -1305,3 +1305,62 @@ end
         end
     end
 end
+
+# a compiler job with parameters of its own, like that of a package that compiles other
+# kinds of functions (e.g. render pipeline stages) calling Metal.jl's device functions
+struct CustomParams <: Metal.GPUCompiler.AbstractCompilerParams end
+const CustomJob = Metal.GPUCompiler.CompilerJob{Metal.GPUCompiler.MetalCompilerTarget,CustomParams}
+Metal.GPUCompiler.runtime_module(::CustomJob) = Metal
+Metal.GPUCompiler.method_table(::CustomJob) = Metal.method_table
+const custom_finished = Ref(0)
+function Metal.GPUCompiler.finish_ir!(job::CustomJob, mod::LLVM.Module, entry::LLVM.Function)
+    entry = invoke(Metal.GPUCompiler.finish_ir!,
+                   Tuple{Metal.GPUCompiler.CompilerJob{Metal.GPUCompiler.MetalCompilerTarget},
+                         LLVM.Module, LLVM.Function},
+                   job, mod, entry)
+    Metal.legalize_intrinsics!(job, mod)
+    custom_finished[] += 1
+    return entry
+end
+
+function custom_barrier()
+    threadgroup_barrier()
+    return
+end
+
+@testset "legalizing intrinsics for a job with other parameters" begin
+    # AIR 2.9 added an operand to barriers, which the versions of macOS 15 don't take
+    for (macos, nargs) in ((v"15", 2), (Metal.compiler_config(device()).target.macos, 3))
+        cfg = Metal.compiler_config(device(); kernel=false, name=nothing, macos)
+        cfg = Metal.GPUCompiler.CompilerConfig(cfg; params=CustomParams())
+        src = Metal.methodinstance(typeof(custom_barrier), Tuple{}, Base.get_world_counter())
+        job = Metal.GPUCompiler.CompilerJob(src, cfg, Base.get_world_counter())
+        Metal.GPUCompiler.JuliaContext() do ctx
+            mod, _ = Metal.GPUCompiler.compile(:llvm, job)
+            barrier = mod.functions["air.wg.barrier"]
+            @test length(LLVM.parameters(barrier)) == nargs
+        end
+    end
+
+    # compiling it to a library uses the methods defined for its parameters, also when
+    # they are defined after Metal.jl was initialized
+    cfg = Metal.compiler_config(device(); kernel=true, name=nothing)
+    cfg = Metal.GPUCompiler.CompilerConfig(cfg; params=CustomParams())
+    src = Metal.methodinstance(typeof(custom_barrier), Tuple{}, Base.get_world_counter())
+    job = Metal.GPUCompiler.CompilerJob(src, cfg, Base.get_world_counter())
+    finished = custom_finished[]
+    art = Metal.compile_to_metallib(job)
+    @test custom_finished[] == finished + 1
+    fun = only(read(IOBuffer(art.metallib), MetalLib).functions)
+    @test fun.type == Metal.METALLIB_COMPUTE_FUNCTION
+end
+
+@static if VERSION >= v"1.11"
+    @testset "public API for packages extending device code" begin
+        for name in (:method_table, Symbol("@device_override"), Symbol("@device_function"),
+                     :AS, :legalize_intrinsics!, :compiler_config, :compile_to_metallib,
+                     :KernelState, :kernel_resources)
+            @test Base.ispublic(Metal, name)
+        end
+    end
+end
