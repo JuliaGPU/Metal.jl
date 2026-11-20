@@ -1778,6 +1778,18 @@ end
     B = MtlArray(rand(Float32, 8, 8))
     @metal threads=size(A) const_copy_2d(A, B)
     @test Array(A) == Array(B)
+
+    # loading through a pointer into a read-only array
+    function const_pointer_copy(A, B)
+        i = thread_position_in_grid().x
+        C = Base.Experimental.Const(B)
+        @inbounds A[i] = unsafe_load(pointer(C, i)) + unsafe_load(pointer(C))
+        return
+    end
+    A = Metal.zeros(Float32, 64)
+    B = MtlArray(rand(Float32, 64))
+    @metal threads=length(A) const_pointer_copy(A, B)
+    @test Array(A) == Array(B) .+ Array(B)[1]
 end
 
 @testset "Symbols in device memory" begin
