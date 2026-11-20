@@ -1026,6 +1026,16 @@ end
 # Returns the per-phase artifacts as a NamedTuple so the caller can hand them
 # onto the cached `MetalResults`. All byte/string fields are session-portable.
 const compilations = Threads.Atomic{Int}(0)
+
+@public compile_to_metallib
+
+"""
+    compile_to_metallib(job::CompilerJob{MetalCompilerTarget})
+
+Compile `job` to a Metal library, returning it along with the AIR and the entry point's
+name and launch metadata. `job` may have parameters other than Metal.jl's, e.g. those of a
+package compiling render pipeline stages, whose GPUCompiler interface methods then apply.
+"""
 function compile_to_metallib(@nospecialize(job::CompilerJob))
     Threads.atomic_add!(compilations, 1)
     art = emit_metallib(job)
@@ -1048,6 +1058,13 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
               art.exception_sites, relocations = isempty(art.relocations) ? nothing : art.relocations)
 end
 
+# Metal.jl's own jobs are compiled in the world of `__init__`, which methods defined later
+# don't invalidate. a job with other parameters is compiled in the current one, so that the
+# GPUCompiler interface methods its package defines for them apply.
+invoke_compiler(::MetalCompilerJob, f, args...) = invoke_frozen(f, args...)
+invoke_compiler(@nospecialize(job::CompilerJob), f, args...) =
+    Base.invoke_in_world(Base.get_world_counter(), f, args...)
+
 # the artifacts of compiling `job`, including its LLVM IR
 function emit_metallib(@nospecialize(job::CompilerJob))
     # TODO: on 1.9, this actually creates a context. cache those.
@@ -1055,11 +1072,13 @@ function emit_metallib(@nospecialize(job::CompilerJob))
         @signpost_interval log=log_compiler() start="" stop="" "Generate LLVM IR" begin
             # (asserting the result types, which `invoke_frozen` hides, keeps the uses of
             #  the results statically dispatched, so that they're precompiled)
-            mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)::Tuple{LLVM.Module,NamedTuple}
+            mod, meta = invoke_compiler(job, GPUCompiler.compile, :llvm, job)::Tuple{LLVM.Module,NamedTuple}
         end
         local kernel_fn = meta.entry::LLVM.Function
         local relocs = meta.relocations::GPUCompiler.Relocations
-        local sites = meta.exception_sites::Vector{GPUCompiler.ExceptionSite}
+        # (only jobs that use exception sites, like Metal.jl's, report them)
+        local sites = haskey(meta, :exception_sites) ?
+            meta.exception_sites::Vector{GPUCompiler.ExceptionSite} : GPUCompiler.ExceptionSite[]
 
         # the IR belongs to us: lower and inspect it, then dispose of it
         @dispose mod=mod begin
@@ -1082,8 +1101,8 @@ function emit_metallib(@nospecialize(job::CompilerJob))
                 # The 3-arg form would hand the lowering an empty table and strand the slots.
                 local air
                 air, _ = try
-                    invoke_frozen(GPUCompiler.emit_asm, job, mod, relocs,
-                                  LLVM.CodeGenFileType.Object)::Tuple{Vector{UInt8},Any}
+                    invoke_compiler(job, GPUCompiler.emit_asm, job, mod, relocs,
+                                    LLVM.CodeGenFileType.Object)::Tuple{Vector{UInt8},Any}
                 catch err
                     # `emit_asm` has already lowered the module in-place, so stringifying it
                     # here shows exactly what the downgrader was fed
