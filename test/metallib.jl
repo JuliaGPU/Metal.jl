@@ -1305,3 +1305,38 @@ end
         end
     end
 end
+
+# a compiler job with parameters of its own, like that of a package that compiles other
+# kinds of functions (e.g. render pipeline stages) calling Metal.jl's device functions
+struct CustomParams <: Metal.GPUCompiler.AbstractCompilerParams end
+const CustomJob = Metal.GPUCompiler.CompilerJob{Metal.GPUCompiler.MetalCompilerTarget,CustomParams}
+Metal.GPUCompiler.runtime_module(::CustomJob) = Metal
+Metal.GPUCompiler.method_table(::CustomJob) = Metal.method_table
+function Metal.GPUCompiler.finish_ir!(job::CustomJob, mod::LLVM.Module, entry::LLVM.Function)
+    entry = invoke(Metal.GPUCompiler.finish_ir!,
+                   Tuple{Metal.GPUCompiler.CompilerJob{Metal.GPUCompiler.MetalCompilerTarget},
+                         LLVM.Module, LLVM.Function},
+                   job, mod, entry)
+    Metal.legalize_intrinsics!(job, mod)
+    return entry
+end
+
+function custom_barrier()
+    threadgroup_barrier()
+    return
+end
+
+@testset "legalizing intrinsics for a job with other parameters" begin
+    # AIR 2.9 added an operand to barriers, which the versions of macOS 15 don't take
+    for (macos, nargs) in ((v"15", 2), (Metal.compiler_config(device()).target.macos, 3))
+        cfg = Metal.compiler_config(device(); kernel=false, name=nothing, macos)
+        cfg = Metal.GPUCompiler.CompilerConfig(cfg; params=CustomParams())
+        src = Metal.methodinstance(typeof(custom_barrier), Tuple{}, Base.get_world_counter())
+        job = Metal.GPUCompiler.CompilerJob(src, cfg, Base.get_world_counter())
+        Metal.GPUCompiler.JuliaContext() do ctx
+            mod, _ = Metal.GPUCompiler.compile(:llvm, job)
+            barrier = mod.functions["air.wg.barrier"]
+            @test length(LLVM.parameters(barrier)) == nargs
+        end
+    end
+end

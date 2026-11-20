@@ -252,6 +252,30 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
                    Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module, LLVM.Function},
                    job, mod, entry)
 
+    legalize_intrinsics!(job, mod)
+
+    # name the kernel readably (see `kernel_symbol`). this has to happen after GPUCompiler
+    # has looked up the entry point by its original name, i.e., not before optimization.
+    if job.config.kernel && job.config.name === nothing
+        LLVM.name!(entry, kernel_symbol(job.source))
+    end
+
+    return entry
+end
+
+@public legalize_intrinsics!, compiler_config
+
+"""
+    legalize_intrinsics!(job::CompilerJob{MetalCompilerTarget}, mod::LLVM.Module)
+
+Rewrite the intrinsics that Metal.jl's device functions emit for the AIR and Metal versions
+that `job` targets, allocate the storage of tensor descriptors, and annotate the pointer
+operands of typed intrinsics for the LLVM downgrader. Metal.jl's `GPUCompiler.finish_ir!`
+does this; a compiler job with other parameters that calls Metal.jl's device functions,
+e.g. for render pipeline stages, has to do so in its `finish_ir!` too, after GPUCompiler's.
+"""
+function legalize_intrinsics!(@nospecialize(job::CompilerJob{MetalCompilerTarget}),
+                              mod::LLVM.Module)
     # device code emits intrinsics in their newest form; rewrite them for older AIR versions.
     # this lives here, next to the emitters, so that the two change together. GPUCompiler
     # only legalizes the intrinsics it emits itself (atomics and fences).
@@ -577,13 +601,7 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
         end
     end
 
-    # name the kernel readably (see `kernel_symbol`). this has to happen after GPUCompiler
-    # has looked up the entry point by its original name, i.e., not before optimization.
-    if job.config.kernel && job.config.name === nothing
-        LLVM.name!(entry, kernel_symbol(job.source))
-    end
-
-    return entry
+    return
 end
 
 
