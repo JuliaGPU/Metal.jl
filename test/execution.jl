@@ -1,4 +1,5 @@
 import GPUToolbox
+using Metal.MTL: MTLIndirectCommandBufferDescriptor
 
 dummy() = return
 
@@ -771,6 +772,89 @@ end
         synchronize(bq)
         @test Array(A) == Int32[1]
     end
+end
+
+@testset "pipelines for indirect command buffers" begin
+    function indirect_kernel(A)
+        A[1] = Int32(1)
+        return
+    end
+    A = MtlArray(Int32[0])
+    tt = Tuple{Core.Typeof(Metal.mtlconvert(A))}
+    compilations = Metal.compilations[]
+    direct = Metal.mtlfunction(indirect_kernel, tt)
+    indirect = Metal.mtlfunction(indirect_kernel, tt; indirect=true)
+    @test Metal.compilations[] == compilations + 1
+    @test !direct.pipeline.supportIndirectCommandBuffers
+    @test indirect.pipeline.supportIndirectCommandBuffers
+    # both are cached, and share the compiled code
+    @test Metal.mtlfunction(indirect_kernel, tt).pipeline === direct.pipeline
+    @test Metal.mtlfunction(indirect_kernel, tt; indirect=true).pipeline === indirect.pipeline
+    # and launch like any other
+    indirect(A)
+    @test Array(A) == Int32[1]
+end
+
+@testset "launching from an indirect command buffer" begin
+    dev = device()
+    function increment_kernel(A, x)
+        i = thread_position_in_grid().x
+        @inbounds A[i] += x
+        return
+    end
+    function throwing_kernel(A, x)
+        A[length(A) + 1] = x
+        return
+    end
+    # indirect commands can't set bytes, so every argument is passed in a buffer
+    function bytes_buffer(x)
+        buf = MTL.MTLBuffer(dev, sizeof(x); storage=Metal.SharedStorage)
+        unsafe_store!(convert(Ptr{typeof(x)}, MTL.contents(buf)), x)
+        return buf
+    end
+    function execute_indirectly(f, A, x; replays=1)
+        kernel = Metal.mtlfunction(f, Tuple{Core.Typeof(Metal.mtlconvert(A)), Int32};
+                                   indirect=true)
+        desc = @objc [MTLIndirectCommandBufferDescriptor new]::MTLIndirectCommandBufferDescriptor
+        desc.commandTypes = MTL.MTLIndirectCommandTypeConcurrentDispatch
+        desc.inheritPipelineState = false
+        desc.inheritBuffers = false
+        desc.maxKernelBufferBindCount = 3
+        icb = @objc [dev::id{MTL.MTLDevice} newIndirectCommandBufferWithDescriptor:desc::id{MTL.MTLIndirectCommandBufferDescriptor}
+                     maxCommandCount:1::NSUInteger options:0::NSUInteger]::MTL.MTLIndirectCommandBuffer
+        cmd = @objc [icb::id{MTL.MTLIndirectCommandBuffer} indirectComputeCommandAtIndex:0::NSUInteger]::id{MTL.MTLIndirectComputeCommand}
+        @objc [cmd::id{MTL.MTLIndirectComputeCommand} setComputePipelineState:kernel.pipeline::id{MTL.MTLComputePipelineState}]::Nothing
+        args = map(bytes_buffer, (Metal.KernelState(kernel), Metal.mtlconvert(A), x))
+        for (i, buf) in enumerate(args)
+            @objc [cmd::id{MTL.MTLIndirectComputeCommand} setKernelBuffer:buf::id{MTL.MTLBuffer}
+                   offset:0::NSUInteger atIndex:(i-1)::NSUInteger]::Nothing
+        end
+        @objc [cmd::id{MTL.MTLIndirectComputeCommand} concurrentDispatchThreadgroups:MTL.MTLSize(1)::MTL.MTLSize
+               threadsPerThreadgroup:MTL.MTLSize(length(A))::MTL.MTLSize]::Nothing
+
+        Metal.synchronize()
+        cmdbuf = MTL.MTLCommandBuffer(MTL.MTLCommandQueue(dev))
+        cce = MTL.MTLComputeCommandEncoder(cmdbuf)
+        for buf in (Metal.kernel_resources(kernel)..., args..., pointer(A).buffer)
+            MTL.use!(cce, buf, MTL.ReadWriteUsage)
+        end
+        for _ in 1:replays
+            @objc [cce::id{MTL.MTLComputeCommandEncoder} executeCommandsInBuffer:icb::id{MTL.MTLIndirectCommandBuffer}
+                   withRange:NSRange(0, 1)::NSRange]::Nothing
+        end
+        MTL.endEncoding!(cce)
+        MTL.commit!(cmdbuf)
+        MTL.wait_completed(cmdbuf)
+        return
+    end
+
+    A = MtlArray(zeros(Int32, 32))
+    execute_indirectly(increment_kernel, A, Int32(3); replays=2)
+    @test Array(A) == fill(Int32(6), 32)
+
+    # exceptions are reported by the next synchronization
+    execute_indirectly(throwing_kernel, A, Int32(1))
+    @test_throws "BoundsError" synchronize()
 end
 
 @testset "kernel state of launches encoded elsewhere" begin
