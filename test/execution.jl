@@ -714,6 +714,22 @@ end
     @test Array(D) == UInt8[3]
 end
 
+@testset "kernel state of launches encoded elsewhere" begin
+    function state_kernel(A)
+        A[1] = Int32(42)
+        return
+    end
+    A = MtlArray(Int32[0])
+    kernel = @metal launch=false state_kernel(A)
+    state = Metal.KernelState(kernel; seed=UInt32(7))
+    @test state.random_seed == 7
+    resources = Metal.kernel_resources(kernel)
+    @test length(resources) == 2    # no relocation table
+    @test reinterpret(UInt64, state.malloc_buf) == UInt64(MTL.gpu_address(resources[1]))
+    @test reinterpret(UInt64, state.exception_info) == UInt64(MTL.gpu_address(resources[2]))
+    @test reinterpret(UInt64, state.reloc_table) == 0
+end
+
 function inject_command_buffer_error!(queue, info)
     key = pointer(queue)
     Base.@lock MTL.last_committed_lock begin

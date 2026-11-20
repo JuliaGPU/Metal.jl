@@ -1,6 +1,6 @@
 export @metal, metalcall
 
-@public mtlconvert, mtlfunction, HostKernel
+@public mtlconvert, mtlfunction, HostKernel, KernelState, kernel_resources
 
 
 ## high-level @metal interface
@@ -905,19 +905,12 @@ Base.@nospecializeinfer function launch(
     dev = kernel.device
 
     buf, buf_addr = malloc_buffer_and_gpu_address(dev)
-    buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, buf_addr)
     exc, exc_addr = exception_info_buffer_and_gpu_address(dev)
-    exc_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, exc_addr)
     reloc = kernel.reloc_table
-    reloc_ptr = reinterpret(Core.LLVMPtr{UInt64, AS.Device},
-                            reloc === nothing ? UInt64(0) : UInt64(MTL.gpu_address(reloc)))
-    # (drawing a seed for every launch would make the host RNG stream depend on how many
-    # kernels ran, breaking reproducibility of seeded host code)
-    seed = kernel.device_rng ? Random.rand(UInt32) : UInt32(0)
-    kernel_state = KernelState(seed, kernel.exception_table, buf_ptr, exc_ptr, reloc_ptr)
+    state = make_kernel_state(kernel, buf_addr, exc_addr, launch_seed(kernel))
 
     if kernel.loggingEnabled
-        return launch_logging!(kernel, gs, ts, bq, args, kernel_state, buf, exc)
+        return launch_logging!(kernel, gs, ts, bq, args, state, buf, exc)
     end
 
     # The kernel state holds GPU addresses to per-device scratch buffers (malloc bump
@@ -932,8 +925,54 @@ Base.@nospecializeinfer function launch(
     end
 
     op = MTL.profile_metadata[] === nothing ? nothing : kernel_operation(kernel, gs, ts)
-    submit_launch!(kernel.pipeline, gs, ts, bq, kernel, kernel_state, kernel.source, args, (),
+    submit_launch!(kernel.pipeline, gs, ts, bq, kernel, state, kernel.source, args, (),
                    resources, op, submit)
+end
+
+# (drawing a seed for every launch would make the host RNG stream depend on how many
+# kernels ran, breaking reproducibility of seeded host code)
+launch_seed(kernel::HostKernel) = kernel.device_rng ? Random.rand(UInt32) : UInt32(0)
+
+function make_kernel_state(kernel::HostKernel, buf_addr::UInt64, exc_addr::UInt64,
+                           seed::UInt32)
+    reloc = kernel.reloc_table
+    reloc_addr = reloc === nothing ? UInt64(0) : UInt64(MTL.gpu_address(reloc))
+    KernelState(seed, kernel.exception_table,
+                reinterpret(Core.LLVMPtr{UInt8, AS.Device}, buf_addr),
+                reinterpret(Core.LLVMPtr{UInt8, AS.Device}, exc_addr),
+                reinterpret(Core.LLVMPtr{UInt64, AS.Device}, reloc_addr))
+end
+
+"""
+    KernelState(kernel::HostKernel; seed)
+
+The state that `kernel` takes as its first argument when launched. It holds the addresses
+of buffers the kernel may use, which are listed by [`kernel_resources`](@ref).
+
+Launching a kernel creates its state. This is for encoding a launch elsewhere, e.g. into
+an indirect command buffer that executes it later or several times. The state is only
+valid on `kernel.device`, and `seed` seeds the device-side RNG, which a kernel only uses if
+`kernel.device_rng` is set; it defaults to a random number then.
+"""
+function KernelState(kernel::HostKernel; seed::UInt32=launch_seed(kernel))
+    _, buf_addr = malloc_buffer_and_gpu_address(kernel.device)
+    _, exc_addr = exception_info_buffer_and_gpu_address(kernel.device)
+    make_kernel_state(kernel, buf_addr, exc_addr, seed)
+end
+
+"""
+    kernel_resources(kernel::HostKernel)::Tuple{Vararg{MTLBuffer}}
+
+Return the buffers that the [`KernelState`](@ref) of `kernel` points to: the device's
+scratch buffers and the kernel's relocation table, if it has one. They are only reached by
+address, so a launch that is encoded outside of Metal.jl has to make them resident, e.g.
+by adding them to a residency set or with `useResource`.
+"""
+function kernel_resources(kernel::HostKernel)
+    buf, _ = malloc_buffer_and_gpu_address(kernel.device)
+    exc, _ = exception_info_buffer_and_gpu_address(kernel.device)
+    reloc = kernel.reloc_table
+    return reloc === nothing ? (buf, exc) : (buf, exc, reloc)
 end
 
 # check a launch configuration against the pipeline's limits (`reqthreads` all zeros when
