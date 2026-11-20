@@ -100,7 +100,7 @@ function synchronize(queue = global_queue(device()))
         cleanups = pending_commands(bq)
         isempty(cleanups) ? nothing : cleanups[end]
     end
-    orphans = flush_orphaned_queues!()
+    orphans, orphan_submissions = flush_orphaned_queues!()
     maybe_collect(bq.queue.device; will_block=true)
 
     # flush any pending log handlers from logging-enabled kernels on this queue
@@ -120,7 +120,8 @@ function synchronize(queue = global_queue(device()))
         finish_synchronization!(bq, committed, nothing, submissions)
     else
         finish_synchronization!(bq, committed, orphans,
-                                wait_orphaned_queues!(orphans, submissions))
+                                wait_orphaned_queues!(orphans, orphan_submissions,
+                                                      submissions))
     end
     return
 end
@@ -151,21 +152,27 @@ function synchronize_queue(bq::BatchedCommandQueue)
     return
 end
 
-# commit the open batches of queues whose owning task has finished. their owner will
-# not touch them again, so we can, but other tasks synchronizing may do so concurrently.
+# commit the open batches of queues whose owning task has finished, and take what was
+# submitted to them. their owner will not touch them again, so we can, but other tasks
+# synchronizing may do so concurrently.
 function flush_orphaned_queues!()
     orphans = orphaned_batched_queues()
-    orphans === nothing && return nothing
-    foreach(commit_batch!, orphans)
-    return orphans
+    orphans === nothing && return nothing, nothing
+    taken = Base.@lock submission_lock begin
+        # another task may have taken ownership since (see `global_queue!`). what it
+        # submits after that is its own to wait for and report.
+        filter!(bq -> istaskdone(bq.owner), orphans)
+        foreach(commit_batch!, orphans)
+        map(take_submissions!, orphans)
+    end
+    return isempty(orphans) ? (nothing, nothing) : (orphans, taken)
 end
 
-function wait_orphaned_queues!(orphans, submissions)
+function wait_orphaned_queues!(orphans, taken, submissions)
     states = MTL.QueueSubmissionState[]
     submissions === nothing || push!(states, submissions)
-    for bq in orphans
+    for (bq, (last, state)) in zip(orphans, taken)
         drain_logging_cmdbufs!(bq.queue)
-        last, state = take_submissions!(bq)
         last === nothing || wait_completed!(last)
         wait_submissions!(state)
         state === nothing || push!(states, state)

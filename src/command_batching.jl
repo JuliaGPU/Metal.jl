@@ -262,7 +262,8 @@ as selected by the `command_api` preference.
 The open batch is committed ("flushed") when any of the following happens:
 
   * [`synchronize`](@ref) is called on the queue (or on one of its command buffers);
-  * a command buffer derived from the queue is enqueued or committed;
+  * a command buffer derived from the queue is enqueued or committed by a task whose queue
+    it is (see [`global_queue!`](@ref));
   * command batching is disabled with the `command_batching = false` preference;
   * the batch reaches `command_batching_ops()` operations or
     `command_batching_bytes()` of blit traffic;
@@ -278,9 +279,10 @@ one. Obtain the current task's batched queue with [`global_queue`](@ref).
 
 `BatchedCommandQueue`s are task-local, but are only mutated while holding a global lock,
 so that other tasks can flush them too. Sharing a raw `MTLCommandQueue` across tasks is
-unsupported. Once the owning task has finished, any task's [`synchronize`](@ref) flushes
-and waits for the work it left behind, so results of a task are visible after `wait`ing
-for it. [`device_synchronize`](@ref) flushes the batches of all tasks, which supports
+unsupported. A queue is owned by the task that constructed it, or that last made it its
+queue with [`global_queue!`](@ref). Once the owning task has finished, any task's
+[`synchronize`](@ref) flushes and waits for the work it left behind, so results of a task
+are visible after `wait`ing for it. [`device_synchronize`](@ref) flushes the batches of all tasks, which supports
 `@async` work and the REPL synchronization hook.
 """
 mutable struct BatchedCommandQueue{B<:CommandBackend}
@@ -385,6 +387,51 @@ function batched_queue(queue::MTLCommandQueue)
     get!(task_local_storage(), batched_queue_key(queue)) do
         BatchedCommandQueue(queue)
     end::ConcreteBatchedQueue
+end
+
+"""
+    global_queue!(bq::BatchedCommandQueue)
+    global_queue!(f, bq::BatchedCommandQueue)
+
+Make `bq` the queue of the current task for `bq`'s device, i.e., what
+[`global_queue`](@ref) returns: kernel launches without a `queue` argument, array
+operations like `copyto!` and `fill!`, and MPS then use it. The second form does so only
+while `f` runs.
+
+This is for code that owns a queue, e.g. because it encodes its own command buffers with
+resources it made resident on that queue, and wants the work of the libraries it calls
+batched and ordered with its own. While `bq` is the task's queue, command buffers that the
+task commits to the underlying `MTLCommandQueue`, and synchronizing that queue, commit
+`bq`'s open batch first; ones committed to it otherwise aren't ordered against `bq`'s
+work. Work that the task submitted to another queue before is ordered against `bq` like
+work on any two queues: through the arrays that both use.
+
+The task becomes the owner of `bq`, also after `f` returns: `bq` is not adopted by other
+tasks synchronizing until this task has finished, and its errors are reported when this
+task synchronizes it.
+"""
+function global_queue!(bq::BatchedCommandQueue)
+    tls = task_local_storage()
+    tls[(:BatchedCommandQueue, bq.device)] = bq
+    tls[batched_queue_key(bq.queue)] = bq
+    # under the lock that orphaned queues are committed with, so that a task synchronizing
+    # doesn't adopt the queue after it got a new owner
+    Base.@lock submission_lock bq.owner = current_task()
+    return bq
+end
+
+function global_queue!(f, bq::BatchedCommandQueue)
+    keys = ((:BatchedCommandQueue, bq.device), batched_queue_key(bq.queue))
+    tls = task_local_storage()
+    previous = map(key -> get(tls, key, nothing), keys)
+    global_queue!(bq)
+    try
+        return f()
+    finally
+        for (key, value) in zip(keys, previous)
+            value === nothing ? delete!(tls, key) : (tls[key] = value)
+        end
+    end
 end
 
 raw_queue(bq::BatchedCommandQueue) = bq.queue

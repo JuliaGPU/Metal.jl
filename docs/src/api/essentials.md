@@ -37,6 +37,7 @@ device!
 Metal.devices
 MTL.MTLDevice
 global_queue
+global_queue!
 BatchedCommandQueue
 ```
 
