@@ -428,7 +428,7 @@ end
 # since the previous submission.
 function submit_command_buffer(f, cmdbuf, commit::Bool)
     queue = cmdbuf.commandQueue
-    bq = get(task_local_storage(), batched_queue_key(queue), nothing)
+    bq = submission_batch(queue)
     bq === nothing || flush!(bq)
     # the work encoded since a command buffer was enqueued executes after it
     ordered = bq !== nothing && (!commit || cmdbuf.status == MTL.MTLCommandBufferStatusNotEnqueued)
@@ -456,6 +456,23 @@ function submit_command_buffer(f, cmdbuf, commit::Bool)
         # another queue started using the buffer since it was passed to Metal
         synchronize(conflict)
     end
+end
+
+# the batch that a command buffer committed to `queue` has to follow: the current task's,
+# or else one with work open or in flight on `queue` that isn't in task-local storage,
+# like a `BatchedCommandQueue(queue)` that was constructed explicitly and launched on with
+# `@metal queue=bq`.
+function submission_batch(queue::MTLCommandQueue)
+    bq = get(task_local_storage(), batched_queue_key(queue), nothing)
+    bq === nothing || return bq
+    has_active_batched_queues() || return nothing
+    key = pointer(queue)
+    Base.@lock batched_queues_lock begin
+        for other in keys(batched_queues)
+            pointer(other.queue) == key && return other
+        end
+    end
+    return nothing
 end
 
 # buffers that were passed to Metal by the current task, and will be used by the next
