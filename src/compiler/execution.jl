@@ -582,6 +582,8 @@ The compiler keywords of [`@metal`](@ref) are supported, and:
   testing.
 - `gpufamily`: the Apple GPU family (`MTL.MTLGPUFamilyApple<n>`) that the generated code may
   rely on (see [`apple_family`](@ref)). Defaults to the highest family the device supports.
+- `indirect`: whether the commands of an `MTLIndirectCommandBuffer` can use the kernel's
+  pipeline (`supportIndirectCommandBuffers`), which they need to. Defaults to `false`.
 - `source`: the callable before [`mtlconvert`](@ref) turned it into `f`, which is converted
   again at every launch (so it should convert to an object of the same type as `f`).
   Defaults to `f`, but should be set when `f` captures GPU arrays, so that their buffers are
@@ -631,7 +633,8 @@ end
 
 # Everything about creating a kernel object that doesn't depend on the kernel's type, kept
 # out of `mtlfunction`, which is compiled for every kernel.
-@noinline function link_kernel(mi::Core.MethodInstance; name=nothing, kwargs...)
+@noinline function link_kernel(mi::Core.MethodInstance; name=nothing, indirect::Bool=false,
+                               kwargs...)
     Base.@lock mtlfunction_lock begin
         dev = device()
         config = compiler_config(dev; name, kwargs...)::MetalCompilerConfig
@@ -641,8 +644,9 @@ end
 
         # Resolve the MTLComputePipelineState for the active device. Linear scan
         # over the session-local cache; almost always n=1, one `===` compare.
+        pipelines = indirect ? res.indirect_pipelines : res.pipelines
         pipeline = Ref{MTLComputePipelineState}()
-        @inbounds for (cached_dev, cached_pipeline) in res.pipelines
+        @inbounds for (cached_dev, cached_pipeline) in pipelines
             if cached_dev === dev
                 pipeline[] = cached_pipeline
                 break
@@ -656,12 +660,12 @@ end
             pipeline[] = link_pipeline(dev, res.air::Vector{UInt8},
                                      res.metallib::Vector{UInt8},
                                      res.entry::String, job.config.target.minthreads,
-                                     label)
+                                     label; indirect)
             # Don't cache session-local pipeline handles while precompiling: the
             # results struct is serialized into the package image along with its
             # CodeInstance, and ObjectiveC handles would come back dangling.
             if ccall(:jl_generating_output, Cint, ()) != 1
-                push!(res.pipelines, (dev, pipeline[]))
+                push!(pipelines, (dev, pipeline[]))
             end
         end
 

@@ -29,6 +29,8 @@ Cached compilation results for a Metal kernel job, managed by
 - `pipelines`: session-local cache of `(MTLDevice, MTLComputePipelineState)` pairs
   resulting from the host-side link of `metallib` onto a device. Never populated
   during precompilation, so package images only carry the portable fields.
+- `indirect_pipelines`: the same for pipelines that indirect command buffers can use,
+  which are linked from the same `metallib` (see `mtlfunction`'s `indirect` keyword).
 - `reloc_tables`: session-local cache of the per-device relocation-word buffers, keyed
   the same way and populated under the same rule.
 
@@ -50,9 +52,11 @@ mutable struct MetalResults
     exception_sites::Vector{GPUCompiler.ExceptionSite}
     # host-side objects (session-local)
     pipelines::Vector{Tuple{MTLDevice, MTLComputePipelineState}}
+    indirect_pipelines::Vector{Tuple{MTLDevice, MTLComputePipelineState}}
     reloc_tables::Vector{Tuple{MTLDevice, MTLBuffer}}
     MetalResults() = new(nothing, nothing, nothing, nothing, nothing, nothing,
                          GPUCompiler.ExceptionSite[],
+                         Tuple{MTLDevice, MTLComputePipelineState}[],
                          Tuple{MTLDevice, MTLComputePipelineState}[],
                          Tuple{MTLDevice, MTLBuffer}[])
 end
@@ -1323,11 +1327,12 @@ function embed_sources(metallib::Vector{UInt8}, air::Vector{UInt8})
 end
 
 # link the metallib into a session-local pipeline state on the given device. `label`
-# names the library, function and pipeline in Metal's developer tools.
+# names the library, function and pipeline in Metal's developer tools. `indirect` makes a
+# pipeline that the commands of an indirect command buffer can use: they refuse others.
 function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
                                         metallib::Vector{UInt8}, entry::String,
                                         minthreads::Union{Nothing,NTuple{3,Int}},
-                                        label::String=entry)
+                                        label::String=entry; indirect::Bool=false)
     if embed_sources()
         metallib = try
             embed_sources(metallib, air)
@@ -1348,6 +1353,7 @@ function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
         if minthreads !== nothing
             desc.requiredThreadsPerThreadgroup = MTLSize(minthreads)
         end
+        desc.supportIndirectCommandBuffers = indirect
         desc.label = label
         started = time()
         try

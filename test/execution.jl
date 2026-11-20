@@ -714,6 +714,25 @@ end
     @test Array(D) == UInt8[3]
 end
 
+@testset "pipelines for indirect command buffers" begin
+    function indirect_kernel(A)
+        A[1] = Int32(1)
+        return
+    end
+    A = MtlArray(Int32[0])
+    tt = Tuple{Core.Typeof(Metal.mtlconvert(A))}
+    direct = Metal.mtlfunction(indirect_kernel, tt)
+    indirect = Metal.mtlfunction(indirect_kernel, tt; indirect=true)
+    @test !direct.pipeline.supportIndirectCommandBuffers
+    @test indirect.pipeline.supportIndirectCommandBuffers
+    # both are cached, and share the compiled code
+    @test Metal.mtlfunction(indirect_kernel, tt).pipeline === direct.pipeline
+    @test Metal.mtlfunction(indirect_kernel, tt; indirect=true).pipeline === indirect.pipeline
+    # and launch like any other
+    indirect(A)
+    @test Array(A) == Int32[1]
+end
+
 @testset "kernel state of launches encoded elsewhere" begin
     function state_kernel(A)
         A[1] = Int32(42)
