@@ -728,14 +728,19 @@ end
     for _ in 1:n
         @metal threads=1 queue=bq policy_increment_kernel(A)
     end
-    batching && @test bq.nops == n
+    if batching
+        @test bq.nops == n
+        @test MTL.committed(bq.queue) == 0
+    end
     synchronize(bq)
     @test Array(A) == Int32[n]
+    batching && @test MTL.committed(bq.queue) == 1
     bq.autoflush = true
     for _ in 1:n
         @metal threads=1 queue=bq policy_increment_kernel(A)
     end
     @test bq.nops < n
+    batching && @test MTL.committed(bq.queue) == 2
     synchronize(bq)
     @test Array(A) == Int32[2n]
 
@@ -847,6 +852,7 @@ end
         submitted = mpsbuf.commandBuffer
         MPS.commitAndContinue!(mpsbuf)
         @test MTL.last_committed(queue) == submitted
+        @test MTL.committed(queue) == 1
 
         MTL.commit!(mpsbuf)
         @test synchronize(queue) === nothing

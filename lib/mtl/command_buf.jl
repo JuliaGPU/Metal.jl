@@ -131,6 +131,9 @@ const last_committed_per_queue = Dict{id{MTLCommandQueue},Submission}()
 
 const submission_state_per_queue = Dict{id{MTLCommandQueue},QueueSubmissionState}()
 
+# how many command buffers (or Metal 4 submissions) were committed to each queue
+const committed_per_queue = Dict{id{MTLCommandQueue},Int}()
+
 function command_buffer_error_info(cmdbuf::MTLCommandBufferLike)
     err = cmdbuf.error
     err === nothing && return CommandBufferErrorInfo(
@@ -189,6 +192,7 @@ function record_committed!(cmdbuf::Submission, key::id{MTLCommandQueue})
         prune_completed_submissions!(state)
         push!(state.pending, cmdbuf)
         last_committed_per_queue[key] = cmdbuf
+        committed_per_queue[key] = get(committed_per_queue, key, 0) + 1
     end
     return
 end
@@ -273,6 +277,19 @@ function last_committed(queue::MTLCommandQueue)
     key = pointer(queue)
     @lock last_committed_lock begin
         get(last_committed_per_queue, key, nothing)
+    end
+end
+
+"""
+    committed(queue::MTLCommandQueue)::Int
+
+Return how many command buffers (or Metal 4 submissions) were committed to `queue`,
+including those that Metal.jl committed for the batches of a `BatchedCommandQueue`.
+"""
+function committed(queue::MTLCommandQueue)
+    key = pointer(queue)
+    @lock last_committed_lock begin
+        get(committed_per_queue, key, 0)
     end
 end
 
