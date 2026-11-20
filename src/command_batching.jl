@@ -265,16 +265,18 @@ The open batch is committed ("flushed") when any of the following happens:
   * a command buffer derived from the queue is enqueued or committed;
   * command batching is disabled with the `command_batching = false` preference;
   * the batch reaches `command_batching_ops()` operations or
-    `command_batching_bytes()` of blit traffic;
+    `command_batching_bytes()` of blit traffic, unless the queue was constructed with
+    `autoflush=false` or its `autoflush` field was set to `false` since;
   * a GPU profiler is attached, in which case batching is disabled (each operation
     gets its own command buffer) so per-operation GPU timing is preserved;
   * an immediate submission is requested via `@metal ... submit=true`, or
     `Metal.flush!` is called explicitly.
 
 Program order is preserved across flushes: command buffers execute in commit order
-and dispatches within an encoder run serially. At most `command_batching_inflight()`
-command buffers are kept in flight; further submissions block until the GPU drains
-one. Obtain the current task's batched queue with [`global_queue`](@ref).
+and dispatches within an encoder run serially. At most `inflight` command buffers are
+kept in flight, `command_batching_inflight()` unless the queue was constructed with
+another `inflight` or its `inflight` field was set since; further submissions block until
+the GPU drains one. Obtain the current task's batched queue with [`global_queue`](@ref).
 
 `BatchedCommandQueue`s are task-local, but are only mutated while holding a global lock,
 so that other tasks can flush them too. Sharing a raw `MTLCommandQueue` across tasks is
@@ -294,6 +296,10 @@ mutable struct BatchedCommandQueue{B<:CommandBackend}
     nops::Int
     nbytes::Int
     pending_ops::Vector{Any}
+    # the policy of this queue, which code that owns it may change (e.g., to commit a
+    # frame as a single command buffer)
+    inflight::Int
+    autoflush::Bool
 end
 
 const Metal3Queue = BatchedCommandQueue{Metal3Backend}
@@ -304,7 +310,10 @@ const Metal4Queue = BatchedCommandQueue{Metal4Backend}
 # the abstract `BatchedCommandQueue`, to keep dispatch on them static.
 const ConcreteBatchedQueue = COMMAND_API === :metal4 ? Metal4Queue : Metal3Queue
 
-function BatchedCommandQueue(queue::MTLCommandQueue)
+function BatchedCommandQueue(queue::MTLCommandQueue;
+                             inflight::Integer=command_batching_inflight(),
+                             autoflush::Bool=true)
+    inflight > 0 || throw(ArgumentError("inflight must be positive, got $inflight"))
     dev = queue.device
     backend = @static if COMMAND_API === :metal4
         Metal4Backend(queue, dev)
@@ -312,7 +321,8 @@ function BatchedCommandQueue(queue::MTLCommandQueue)
         can_use_residency_sets(dev) && install_queue_residency!(queue, dev)
         Metal3Backend()
     end
-    BatchedCommandQueue(queue, dev, current_task(), backend, Any[], 0, 0, Any[])
+    BatchedCommandQueue(queue, dev, current_task(), backend, Any[], 0, 0, Any[],
+                        Int(inflight), autoflush)
 end
 
 # Properties that aren't our own fields (e.g. `label`) forward to the wrapped
@@ -767,12 +777,12 @@ function pending_cleanup_count(bq::BatchedCommandQueue)
     return length(pending_commands(bq))
 end
 
-# wait until fewer than `command_batching_inflight()` command buffers are in flight
+# wait until fewer than `bq.inflight` command buffers are in flight
 function limit_inflight!(bq::BatchedCommandQueue)
     while true
         token = Base.@lock submission_lock begin
             drain_cleanups!(bq)
-            pending_cleanup_count(bq) < command_batching_inflight() && return
+            pending_cleanup_count(bq) < bq.inflight && return
             first(pending_commands(bq)).token
         end
         wait_completed!(token)
@@ -828,8 +838,8 @@ end
 function maybe_autoflush!(bq::BatchedCommandQueue)
     if !command_batching() ||
        profiling_command_buffers() ||
-       bq.nops >= command_batching_ops() ||
-       bq.nbytes >= command_batching_bytes()
+       (bq.autoflush && (bq.nops >= command_batching_ops() ||
+                         bq.nbytes >= command_batching_bytes()))
         flush!(bq)
     end
     return

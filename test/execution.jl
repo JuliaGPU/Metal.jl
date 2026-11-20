@@ -714,6 +714,42 @@ end
     @test Array(D) == UInt8[3]
 end
 
+@testset "batching policy of a queue" begin
+    function policy_increment_kernel(A)
+        A[1] = A[1] + Int32(1)
+        return
+    end
+    A = MtlArray(Int32[0])
+    batching = Metal.command_batching() && !Metal.profiling_command_buffers()
+    n = Metal.command_batching_ops() + 1
+
+    # without autoflush, the batch is committed by its owner only
+    bq = BatchedCommandQueue(MTL.MTLCommandQueue(device()); autoflush=false)
+    for _ in 1:n
+        @metal threads=1 queue=bq policy_increment_kernel(A)
+    end
+    batching && @test bq.nops == n
+    synchronize(bq)
+    @test Array(A) == Int32[n]
+    bq.autoflush = true
+    for _ in 1:n
+        @metal threads=1 queue=bq policy_increment_kernel(A)
+    end
+    @test bq.nops < n
+    synchronize(bq)
+    @test Array(A) == Int32[2n]
+
+    # with one command buffer in flight, submitting waits for the previous one
+    bq = BatchedCommandQueue(MTL.MTLCommandQueue(device()); inflight=1)
+    for _ in 1:4
+        @metal threads=1 queue=bq submit=true policy_increment_kernel(A)
+        @test Metal.pending_cleanup_count(bq) == 0
+    end
+    synchronize(bq)
+    @test Array(A) == Int32[2n + 4]
+    @test_throws ArgumentError BatchedCommandQueue(MTL.MTLCommandQueue(device()); inflight=0)
+end
+
 function inject_command_buffer_error!(queue, info)
     key = pointer(queue)
     Base.@lock MTL.last_committed_lock begin
