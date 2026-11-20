@@ -473,7 +473,7 @@ end
     @testset "tensor-ops path" begin
         # the tensor intrinsics take the operands of the targeted AIR version
         Mat = MtlDeviceMatrix{Float32, 1}
-        tt = Tuple{Mat, Mat, Mat, Int32, Int32, Int32,
+        tt = Tuple{Mat, Mat, Mat, Float32, Float32, Int32, Int32, Int32,
                    Int32, Int32, Int32,
                    Val{Int32(32)}, Val{Int32(16)}, Val{Int32(2)}, Val{Int32(2)}, Val{:overwrite},
                    Val{false}, Val{false}}
@@ -511,6 +511,23 @@ end
         @test !occursin("signext", air(v"27"))
         @test occursin(r"call void @air\.init_strided_private_tensor\.i32\.global\(.*, i8 0\)\n",
                        air(v"26"))
+        ## the kernel scales in cooperative tensors
+        let tt = Tuple{Mat, Mat, Mat, Float32, Float32, Int32, Int32, Int32, Int32, Int32, Int32,
+                       Val{Int32(32)}, Val{Int32(16)}, Val{Int32(2)}, Val{Int32(2)},
+                       Val{:scale_add}, Val{false}, Val{false}}
+            scaled(macos) = sprint() do io
+                Metal.code_air(io, Metal.gemm_tensor_kernel!, tt; kernel=true, macos,
+                               dump_module=true)
+            end
+            ir = scaled(v"27")
+            # (the product and the old contents of C)
+            m = match(r"(%\d+) = call i64 @metal\.cooperative_tensor_size\.[n\d.]+\(\)", ir)
+            @test m !== nothing && count("alloca i8, i64 $(m[1]), align 4", ir) == 2
+            @test occursin(r"call void @__tensorops_impl_matmul2d_op_run_cooperative_dv_f32_dv_f32_f32_v2\([^,]+, [^,]+, i32 2, i32 0, i32 0, i32 0, i32 -1, i32 -1, [^,]+, i32 2, i32 0, i32 0, i32 0, i32 -1, i32 -1, [^,]+, i32 %\d+\)",
+                           ir)
+            @test occursin(r"call void @__tensorops_impl_matmul2d_op_run_cooperative_dv_f32_dv_f32_f32\([^,]+, [^,]+, i32 2, [^,]+, i32 2, [^,]+, i32 %\d+\)",
+                           scaled(v"26.2"))
+        end
         ## the views over threadgroup memory take a threadgroup pointer
         function tg_tensor(out)
             buf = MtlThreadGroupArray(Float32, (8, 4))
@@ -813,9 +830,7 @@ end
                 @test isapprox(Array(C), transpose(P[1:33, 3:50]) * b; rtol=1f-4)
             end
 
-            # α and β of another number type than the operands: with α = 1, a Float32 C is
-            # scaled by β and accumulated into; a narrower C, or any other α, goes through
-            # a temporary
+            # α and β of another number type than the operands
             @testset "scaling $T $M×$N×$K α=$α β=$β" for T in ttypes,
                                                         (M, N, K) in ((64, 64, 32), (65, 47, 33)),
                                                         (α, β) in ((true, 0.5), (true, 2), (0.5, false), (2, 0.5))
@@ -831,6 +846,24 @@ end
                 C = MtlArray(fill(NaN32, 64, 64))
                 @with (Metal.matmul_alg => :tensor) mul!(C, MtlArray(a), MtlArray(b), 2, false)
                 @test isapprox(Array(C), 2 * a * b; rtol=1f-4)
+            end
+            # α and β are applied by the kernel that computes the product (`fuse`, which
+            # Metal.jl supports from macOS 26.2 on). Without that, α = 1 accumulates into the
+            # β-scaled C, and a `Float16` or `BFloat16` C with β ≠ 0, 1, or any other α, goes
+            # through a temporary. The shapes have partial tiles at the edges.
+            @testset "scaling $TA→$TC $M×$N×$K α=$α β=$β fuse=$fuse" for
+                    (TA, TC) in ((Float32, Float32), (Float16, Float16), (Float16, Float32),
+                                 (Int8, Int32), (BFloat16, BFloat16)),
+                    (M, N, K) in ((100, 70, 33), (530, 520, 9)),
+                    (α, β) in ((1, 0), (1, 1), (1, 3), (2, 0), (2, 3)),
+                    fuse in (true, false)
+                BFloat16 in (TA, TC) && Metal.macos_version() < v"26.1" && continue
+                fuse && Metal.macos_version() < v"26.2" && continue
+                a = tgen(TA, M, K); b = tgen(TA, K, N); c0 = tgen(TC, M, N)
+                C = MtlArray(c0)
+                Metal.gemm_tensor!(C, MtlArray(a), MtlArray(b), α, β; fuse)
+                ref = α * (Float64.(a) * Float64.(b)) + β * Float64.(c0)
+                @test isapprox(Float64.(Array(C)), ref; rtol=TC <: Integer ? 0 : ttol(TC))
             end
             @testset "integer scaling" begin
                 a = rand(Int8(-5):Int8(5), 64, 32); b = rand(Int8(-5):Int8(5), 32, 64)
