@@ -142,3 +142,16 @@ let
     m = match(r"RECOMPILE=(\d+)", out)
     @test m !== nothing && parse(Int, m.captures[1]) == 0
 end
+
+# a kernel that reaches an overlay shadowed by another one is dropped from a package image
+# when it is loaded (see `Bool` in device/quirks.jl). Julia records the methods of a table
+# that shadow a method as its `interferences`.
+if hasfield(Method, :interferences)
+    @testset "overlays do not shadow one another" begin
+        shadowed = filter(Base.MethodList(Metal.method_table).ms) do m
+            I = m.interferences
+            any(i -> isassigned(I, i), eachindex(I))
+        end
+        @test isempty(shadowed)
+    end
+end
