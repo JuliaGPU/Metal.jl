@@ -130,6 +130,53 @@ end
     @test all(==(5), Array(A))
 end
 
+@testset "command buffers after the batch of a constructed queue" begin
+    # the batch of a `BatchedCommandQueue` constructed by the caller isn't in task-local
+    # storage. the command buffer uses the array's buffer without passing the array to
+    # Metal, as a library that manages its own buffers does, so that nothing else orders it.
+    bq = BatchedCommandQueue(MTL.MTLCommandQueue(device()))
+    A = MtlArray{Int32,1,Metal.PrivateStorage}(undef, ordering_n)
+    buf = A.data[].buffer
+    for iter in 1:3
+        @metal threads=256 groups=cld(ordering_n, 256) queue=bq ordering_write_kernel(A, Int32(iter), ordering_scratch, ordering_iterations)
+        cmdbuf = MTL.MTLCommandBuffer(bq)
+        MTL.MTLBlitCommandEncoder(cmdbuf) do enc
+            MTL.append_fillbuffer!(enc, buf, 0x00, sizeof(A), A.offset)
+        end
+        MTL.commit!(cmdbuf)
+        synchronize(bq)
+        @test all(iszero, Array(A))
+    end
+end
+
+@testset "global_queue!" begin
+    dev = device()
+    own = global_queue(dev)
+    synchronize(own)
+    bq = BatchedCommandQueue(MTL.MTLCommandQueue(dev))
+    A = MtlArray{Int32,1,Metal.PrivateStorage}(undef, ordering_n)
+    global_queue!(bq) do
+        @test global_queue(dev) === bq
+        @test Metal.batched_queue(bq.queue) === bq
+        # array operations and launches without a queue argument go to its batch
+        fill!(A, Int32(1))
+        @metal threads=256 groups=cld(ordering_n, 256) ordering_write_kernel(A, Int32(2), ordering_scratch, ordering_iterations)
+        @test Metal.has_open_batch(bq)
+        @test !Metal.has_open_batch(own)
+    end
+    @test global_queue(dev) === own
+    synchronize(bq)
+    @test all(==(2), Array(A))
+
+    # the task keeps it until it sets another
+    task = @async begin
+        global_queue!(bq)
+        global_queue(dev)
+    end
+    @test fetch(task) === bq
+    @test global_queue(dev) === own
+end
+
 @testset "uploads to memory in use" begin
     # uploads don't wait for the queued work that uses their destination, so they must be
     # ordered after it, and must not read the host memory after returning
