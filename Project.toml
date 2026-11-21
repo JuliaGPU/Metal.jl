@@ -38,6 +38,10 @@ UnsafeAtomics = "013be700-e6cd-48c3-b4a1-df204f14c38f"
 [weakdeps]
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
+[sources]
+KernelAbstractions = {rev = "ccr-c54f0813-yayzye", url = "https://github.com/JuliaGPU/KernelAbstractions.jl"}
+KernelInterface = {rev = "ccr-c54f0813-yayzye", subdir = "lib/KernelInterface", url = "https://github.com/JuliaGPU/KernelAbstractions.jl"}
+
 [extensions]
 SpecialFunctionsExt = "SpecialFunctions"
 
