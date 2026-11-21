@@ -60,6 +60,19 @@ Launch this example with 256 threads per threadgroup. If you change that size, k
 power of two and update the allocation of `shared` to match. All threads execute every
 barrier, including threads that do not add values.
 
+When the size is only known at launch, e.g. because it depends on the threadgroup size,
+use [`MtlDynamicThreadGroupArray`](@ref) instead. Every threadgroup has one block of
+dynamic threadgroup memory, whose size in bytes is the `threadgroup_memory` keyword of the
+launch, and which the kernel divides into arrays by byte offset:
+
+```julia
+shared = MtlDynamicThreadGroupArray(Float32, threads_per_threadgroup().x)
+```
+
+```julia
+@metal threads groups threadgroup_memory=threads*sizeof(Float32) partial_sums!(out, x)
+```
+
 
 ## [SIMD-group functions](@id simdgroup-functions)
 

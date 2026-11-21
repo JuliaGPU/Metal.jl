@@ -90,6 +90,64 @@ end
     @test_throws ArgumentError kernel(A; ndrange=4, stream=nothing)
 end
 
+function ki_dynamic_localmem_size_kernel(out)
+    @inbounds out[1] = KI.dynamic_localmemory_size()
+    return
+end
+
+function ki_dynamic_localmem_kernel(out, n)
+    i = KI.get_local_id().x
+    x = KI.dynamic_localmemory(Int32, n)
+    s = KI.localmemory(Int32, 100)
+    if i <= n
+        x[i] = 1
+    end
+    s[i] = 2
+    KI.barrier()
+    out[1] = KI.dynamic_localmemory_size() + (n > 0 ? x[1] : Int32(0)) + s[1]
+    return
+end
+
+@testset "dynamic local memory" begin
+    backend = MetalBackend()
+    out = Metal.zeros(Int, 1)
+
+    # it is the dynamic threadgroup memory. kernels see the size that was asked for, while
+    # Metal allocates multiples of 16 bytes.
+    kernel = KI.@launch backend launch=false ki_dynamic_localmem_size_kernel(out)
+    kernel(out; localmem=24)
+    @test Array(out) == [24]
+    kernel(out; localmem=5)
+    @test Array(out) == [5]
+    kernel(out; localmem=n -> 8n, workgroupsize=5)
+    @test Array(out) == [40]
+    kernel(out; threadgroup_memory=16)
+    @test Array(out) == [16]
+    @test_throws ArgumentError kernel(out; localmem=24, threadgroup_memory=16)
+    @test_throws ArgumentError kernel(out; threadgroup_memory=-16)
+
+    # only kernels that use the block have a parameter for it
+    @test !kernel.kern.dynamic_tgmem
+    @test KI.max_dynamic_localmemory(kernel) == device().maxThreadgroupMemoryLength
+
+    # the limit is the threadgroup memory of the device that the kernel doesn't allocate
+    # statically, in multiples of 16 bytes
+    kernel = KI.@launch backend launch=false ki_dynamic_localmem_kernel(out, 0)
+    @test kernel.kern.dynamic_tgmem
+    @test kernel.kern.tgmem >= 400
+    limit = KI.max_dynamic_localmemory(kernel)
+    @test limit == Metal.max_dynamic_threadgroup_memory(kernel.kern)
+    @test limit <= device().maxThreadgroupMemoryLength - kernel.kern.tgmem
+    @test limit % 16 == 0
+    # a kernel using the block can be launched without asking for any
+    kernel(out, 0)
+    @test Array(out) == [2]
+    kernel(out, 1; localmem=limit)
+    @test Array(out) == [limit + 3]
+    @test_throws ArgumentError kernel(out, 1; localmem=limit + 1)
+    @test_throws ArgumentError kernel(out, 1; threadgroup_memory=limit + 1)
+end
+
 @testset "limits" begin
     backend = MetalBackend()
     dims = KI.max_work_group_dims(backend)

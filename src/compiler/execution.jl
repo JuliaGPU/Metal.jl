@@ -1,13 +1,13 @@
 export @metal, metalcall
 
-@public mtlconvert, mtlfunction, HostKernel
+@public mtlconvert, mtlfunction, HostKernel, max_dynamic_threadgroup_memory
 
 
 ## high-level @metal interface
 
 const MACRO_KWARGS = [:launch]
 const COMPILER_KWARGS = [:kernel, :name, :fastmath, :always_inline, :debug_level, :opt_level, :macos, :air, :metal, :gpufamily, :minthreads, :maxthreads]
-const LAUNCH_KWARGS = [:groups, :threads, :queue, :submit]
+const LAUNCH_KWARGS = [:groups, :threads, :queue, :submit, :threadgroup_memory]
 
 """
     @metal [kwargs...] f(args...)
@@ -36,6 +36,11 @@ process, the kernel has to check bounds itself, e.g., `i <= length(a) || return`
 - `queue`: the command queue to submit to, instead of the task's [`global_queue`](@ref).
 - `submit` (default `false`): submit the queue's pending work right after this launch,
   instead of when the batch is full or the queue is synchronized.
+- `threadgroup_memory` (default `0`): the size in bytes of the block of dynamic threadgroup
+  memory that every threadgroup gets, for kernels using
+  [`MtlDynamicThreadGroupArray`](@ref). Together with the threadgroup memory the kernel
+  allocates statically, it cannot exceed the device's limit of 32 KiB: see
+  [`Metal.max_dynamic_threadgroup_memory`](@ref).
 - `launch` (default `true`): when `false`, only compile the kernel and return it as a
   [`HostKernel`](@ref), to be launched later by calling it with arguments and launch
   keywords. This is not allowed together with other launch keywords.
@@ -356,7 +361,8 @@ Base.@nospecializeinfer function try_metalcall(pipeline::MTLComputePipelineState
             throw(ArgumentError("Threadgroup memory lengths must be non-negative multiples of 16 bytes, got $len"))
         tgmem += len
     end
-    check_launch(gs, ts, reqthreads, Int(pipeline.maxTotalThreadsPerThreadgroup), tgmem)
+    check_launch(gs, ts, reqthreads, Int(pipeline.maxTotalThreadsPerThreadgroup), tgmem,
+                 MTL.max_threadgroup_memory(pipeline.device))
 
     # (passed on `@nospecialize`d: a `Union{Nothing,NamedTuple}` reaching `record_operation!`
     # crashes the optimizer of Julia 1.10, see JuliaLang/julia#53590)
@@ -527,6 +533,8 @@ by calling it (see below). Its fields describe the compute pipeline Metal create
   Threadgroup sizes that are a multiple of it use the GPU best.
 - `tgmem`: the amount of threadgroup memory, in bytes, that the kernel allocates
   statically (with [`MtlThreadGroupArray`](@ref)).
+- `dynamic_tgmem`: whether the kernel uses dynamic threadgroup memory (with
+  [`MtlDynamicThreadGroupArray`](@ref)), which launches size with `threadgroup_memory`.
 - `pipeline`: the [`MTLComputePipelineState`](https://developer.apple.com/documentation/metal/mtlcomputepipelinestate),
   for other properties.
 
@@ -551,6 +559,9 @@ struct HostKernel{F,S,TT}
     # the threadgroup size launches have to use (`minthreads`), or all zeros
     reqthreads::MTLSize
     tgmem::Int
+    # whether the kernel has a parameter for dynamic threadgroup memory, which every launch
+    # has to set the length of
+    dynamic_tgmem::Bool
     exec_width::Int
     use_residency_sets::Bool
     # this session's relocation words, or `nothing` for a relocation-free kernel. The buffer
@@ -597,7 +608,7 @@ function mtlfunction(f::F, tt::TT=Tuple{}; source::S=f, kwargs...) where {F,TT,S
     l = GPUCompiler.cached_lookup(KernelLinker(F, tt, kw), LinkedKernel, F, tt,
                                   (dev, options))
     HostKernel{F,S,tt}(f, source, l.pipeline, l.loggingEnabled, l.device_rng, l.device,
-                       l.maxthreads, l.reqthreads, l.tgmem, l.exec_width,
+                       l.maxthreads, l.reqthreads, l.tgmem, l.dynamic_tgmem, l.exec_width,
                        l.use_residency_sets, l.reloc_table)
 end
 
@@ -621,6 +632,7 @@ struct LinkedKernel
     maxthreads::Int
     reqthreads::MTLSize
     tgmem::Int
+    dynamic_tgmem::Bool
     exec_width::Int
     use_residency_sets::Bool
     reloc_table::Union{Nothing,MTLBuffer}
@@ -688,6 +700,7 @@ end
          Int(pipeline[].maxTotalThreadsPerThreadgroup),
          reqthreads,
          Int(pipeline[].staticThreadgroupMemoryLength),
+         res.dynamic_tgmem::Bool,
          Int(pipeline[].threadExecutionWidth),
          can_use_residency_sets(dev),
          reloc_table)
@@ -718,6 +731,7 @@ end
         res.entry = artifacts.entry
         res.loggingEnabled = artifacts.loggingEnabled
         res.device_rng = artifacts.device_rng
+        res.dynamic_tgmem = artifacts.dynamic_tgmem
         res.relocations = artifacts.relocations
     end
     return res
@@ -758,7 +772,7 @@ end
 
 """
     (kernel::HostKernel)(args...; threads=1, groups=1, queue=global_queue(device()),
-                         submit=false)
+                         submit=false, threadgroup_memory=0)
 
 Launch `kernel` with arguments `args`, which have to have the same types as the ones it was
 compiled for. The keyword arguments are the launch keywords of [`@metal`](@ref).
@@ -769,10 +783,12 @@ compiled for. The keyword arguments are the launch keywords of [`@metal`](@ref).
 # than for the type of every kernel the user defines
 Base.@nospecializeinfer function launch_kernel(@nospecialize(kernel::HostKernel),
                                                @nospecialize(args::Tuple); groups=1,
-                                               threads=1, queue=nothing, submit::Bool=false)
+                                               threads=1, queue=nothing, submit::Bool=false,
+                                               threadgroup_memory::Integer=0)
     gs, ts = MTLSize(groups), MTLSize(threads)
+    tgmem = requested_threadgroup_memory(threadgroup_memory)
     while true
-        conflict = try_launch(kernel, queue, gs, ts, args, submit)
+        conflict = try_launch(kernel, queue, gs, ts, args, submit, tgmem)
         conflict === nothing && return
         synchronize(conflict)
     end
@@ -780,10 +796,40 @@ end
 
 Base.@nospecializeinfer function try_launch(@nospecialize(kernel::HostKernel), @nospecialize(queue),
                                             gs::MTLSize, ts::MTLSize,
-                                            @nospecialize(args::Tuple), submit::Bool)
+                                            @nospecialize(args::Tuple), submit::Bool,
+                                            tgmem::Int)
     @signpost_interval log=log_tracing() start=launch_message(kernel, gs, ts) stop="" "Launch" begin
-        launch_with_queue(kernel, queue, gs, ts, args, submit)
+        launch_with_queue(kernel, queue, gs, ts, args, submit, tgmem)
     end
+end
+
+# the bytes of dynamic threadgroup memory a launch asks for with `threadgroup_memory`
+function requested_threadgroup_memory(bytes::Integer)
+    0 <= bytes <= typemax(Int) ||
+        throw(ArgumentError("threadgroup_memory should be a non-negative number of bytes, got $bytes"))
+    return Int(bytes)
+end
+
+# What a launch asking for `bytes` of dynamic threadgroup memory sets the length of the
+# kernel's parameter for it to. Metal only takes multiples of 16 bytes, and a parameter
+# needs a length even if the launch doesn't ask for any memory. Kernels without the
+# parameter get nothing: they can only query the requested size.
+function dynamic_threadgroup_memory_allocation(@nospecialize(kernel::HostKernel), bytes::Int)
+    kernel.dynamic_tgmem || return 0
+    return max(cld(bytes, DYNAMIC_TGMEM_ALIGNMENT), 1) * DYNAMIC_TGMEM_ALIGNMENT
+end
+
+"""
+    Metal.max_dynamic_threadgroup_memory(kernel::HostKernel)::Int
+
+The largest `threadgroup_memory`, in bytes, that `kernel` can be launched with: the
+threadgroup memory of the device (`dev.maxThreadgroupMemoryLength`) that the kernel doesn't
+allocate statically (`kernel.tgmem`), rounded down to the 16 bytes Metal allocates
+threadgroup memory by.
+"""
+function max_dynamic_threadgroup_memory(@nospecialize(kernel::HostKernel))
+    available = MTL.max_threadgroup_memory(kernel.device) - kernel.tgmem
+    return max(fld(available, DYNAMIC_TGMEM_ALIGNMENT), 0) * DYNAMIC_TGMEM_ALIGNMENT
 end
 
 # the pipeline is labelled with the kernel's Julia signature by `link_pipeline`
@@ -804,23 +850,24 @@ size_string(sz::MTLSize) =
 
 Base.@nospecializeinfer @inline function launch_with_queue(
         @nospecialize(kernel::HostKernel), ::Nothing, gs::MTLSize, ts::MTLSize,
-        @nospecialize(args::Tuple), submit::Bool)
-    launch(kernel, gs, ts, global_queue(device()), args, submit)
+        @nospecialize(args::Tuple), submit::Bool, tgmem::Int)
+    launch(kernel, gs, ts, global_queue(device()), args, submit, tgmem)
 end
 
 Base.@nospecializeinfer @inline function launch_with_queue(
         @nospecialize(kernel::HostKernel), queue, gs::MTLSize, ts::MTLSize,
-        @nospecialize(args::Tuple), submit::Bool)
+        @nospecialize(args::Tuple), submit::Bool, tgmem::Int)
     # (asserting the queue type keeps inference from specializing the launch path on an
     #  abstract queue type)
-    launch(kernel, gs, ts, batched_queue(queue)::ConcreteBatchedQueue, args, submit)
+    launch(kernel, gs, ts, batched_queue(queue)::ConcreteBatchedQueue, args, submit, tgmem)
 end
 
 Base.@nospecializeinfer function kernel_operation(@nospecialize(kernel::HostKernel),
-                                                  gs::MTLSize, ts::MTLSize)
+                                                  gs::MTLSize, ts::MTLSize,
+                                                  dynamic_tgmem::Int)
     (; kind = :kernel, name = string(nameof(kernel.f)),
        threadgroups = gs, threads = ts,
-       tgmem = kernel.tgmem, maxthreads = kernel.maxthreads)
+       tgmem = kernel.tgmem + dynamic_tgmem, maxthreads = kernel.maxthreads)
 end
 
 # logging needs a command buffer of its own, with a log state, so it bypasses the batch.
@@ -828,7 +875,8 @@ end
 # critical, so it doesn't need a Metal 4 implementation of its own.
 Base.@nospecializeinfer function launch_logging!(
         @nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
-        bq::BatchedCommandQueue, @nospecialize(args::Tuple), kernel_state, buf, exc)
+        bq::BatchedCommandQueue, @nospecialize(args::Tuple), kernel_state, buf, exc,
+        dynamic_tgmem::Int)
     flush!(bq)
     queue = bq.queue
 
@@ -859,7 +907,8 @@ Base.@nospecializeinfer function launch_logging!(
     cmdbuf = MTLCommandBuffer(queue, cmdbuf_descriptor)
     @label! cmdbuf "MTLCommandBuffer($(nameof(kernel.f)))"
     let md = MTL.profile_metadata[]
-        md === nothing || MTL.note_operation!(md, cmdbuf, kernel_operation(kernel, gs, ts))
+        md === nothing ||
+            MTL.note_operation!(md, cmdbuf, kernel_operation(kernel, gs, ts, dynamic_tgmem))
     end
 
     Base.@lock submission_lock begin
@@ -875,6 +924,7 @@ Base.@nospecializeinfer function launch_logging!(
                 reloc === nothing || MTL.use!(cce, reloc, MTL.ReadUsage)
             end
             bind_arguments!(cce, bq, kernel, kernel_state, args)
+            dynamic_tgmem == 0 || bind_threadgroup_memory!(cce, dynamic_tgmem, 1)
             dispatch!(cce, kernel.pipeline, gs, ts)
         catch err
             err isa OwnershipConflict && return err.managed
@@ -895,9 +945,13 @@ end
 
 Base.@nospecializeinfer function launch(
         @nospecialize(kernel::HostKernel), gs::MTLSize, ts::MTLSize,
-        bq::BatchedCommandQueue, @nospecialize(args::Tuple), submit::Bool)
-    check_launch(gs, ts, kernel.reqthreads, kernel.maxthreads, kernel.tgmem)
+        bq::BatchedCommandQueue, @nospecialize(args::Tuple), submit::Bool, tgmem::Int)
     dev = kernel.device
+    # the dynamic threadgroup memory: `tgmem` bytes were asked for, which is what the
+    # kernel checks bounds against, and `dynamic_tgmem` bytes are allocated
+    dynamic_tgmem = dynamic_threadgroup_memory_allocation(kernel, tgmem)
+    check_launch(gs, ts, kernel.reqthreads, kernel.maxthreads,
+                 kernel.tgmem + max(tgmem, dynamic_tgmem), MTL.max_threadgroup_memory(dev))
 
     buf, buf_addr = malloc_buffer_and_gpu_address(dev)
     buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, buf_addr)
@@ -909,10 +963,11 @@ Base.@nospecializeinfer function launch(
     # (drawing a seed for every launch would make the host RNG stream depend on how many
     # kernels ran, breaking reproducibility of seeded host code)
     seed = kernel.device_rng ? Random.rand(UInt32) : UInt32(0)
-    kernel_state = KernelState(seed, buf_ptr, exc_ptr, reloc_ptr)
+    kernel_state = KernelState(seed, tgmem % UInt32, buf_ptr, exc_ptr, reloc_ptr)
 
     if kernel.loggingEnabled
-        return launch_logging!(kernel, gs, ts, bq, args, kernel_state, buf, exc)
+        return launch_logging!(kernel, gs, ts, bq, args, kernel_state, buf, exc,
+                               dynamic_tgmem)
     end
 
     # The kernel state holds GPU addresses to per-device scratch buffers (malloc bump
@@ -926,15 +981,19 @@ Base.@nospecializeinfer function launch(
         reloc === nothing ? (buf, exc) : (buf, exc, reloc)
     end
 
-    op = MTL.profile_metadata[] === nothing ? nothing : kernel_operation(kernel, gs, ts)
-    submit_launch!(kernel.pipeline, gs, ts, bq, kernel, kernel_state, kernel.source, args, (),
-                   resources, op, submit)
+    op = MTL.profile_metadata[] === nothing ? nothing :
+         kernel_operation(kernel, gs, ts, dynamic_tgmem)
+    # the parameter for dynamic threadgroup memory is the kernel's only threadgroup buffer
+    threadgroup_memory = dynamic_tgmem == 0 ? () : (dynamic_tgmem,)
+    submit_launch!(kernel.pipeline, gs, ts, bq, kernel, kernel_state, kernel.source, args,
+                   threadgroup_memory, resources, op, submit)
 end
 
 # check a launch configuration against the pipeline's limits (`reqthreads` all zeros when
-# it doesn't require a threadgroup size), with `tgmem` the threadgroup memory it uses
+# it doesn't require a threadgroup size), with `tgmem` the threadgroup memory it uses,
+# statically and dynamically, and `maxtgmem` what the device provides
 function check_launch(gs::MTLSize, ts::MTLSize, reqthreads::MTLSize, maxthreads::Int,
-                      tgmem::Int)
+                      tgmem::Int, maxtgmem::Int)
     (gs.width>0 && gs.height>0 && gs.depth>0) ||
         throw(ArgumentError("All group dimensions should be non-zero"))
     (ts.width>0 && ts.height>0 && ts.depth>0) ||
@@ -956,8 +1015,8 @@ function check_launch(gs::MTLSize, ts::MTLSize, reqthreads::MTLSize, maxthreads:
     (gs.depth * ts.depth) > typemax(UInt32) &&
         throw(ArgumentError("Total threads per grid in a dimension (groups.depth($(gs.depth)) * threads.depth($(ts.depth)) = $(gs.depth * ts.depth)) must not exceed $(typemax(UInt32))"))
 
-    tgmem > 32768 &&
-        throw(ArgumentError("Total used threadgroupMemoryLength($tgmem) must be <= 32768 bytes."))
+    tgmem > maxtgmem &&
+        throw(ArgumentError("Total used threadgroupMemoryLength($tgmem) must be <= $maxtgmem bytes."))
     return
 end
 

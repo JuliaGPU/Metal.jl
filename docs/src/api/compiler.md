@@ -7,6 +7,7 @@ See [Kernel programming](../usage/kernel.md) for compiling, launching and inspec
 ```@docs
 @metal
 Metal.HostKernel
+Metal.max_dynamic_threadgroup_memory
 Metal.mtlfunction
 Metal.mtlconvert
 ```

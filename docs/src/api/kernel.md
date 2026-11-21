@@ -81,6 +81,8 @@ Metal.Const
 
 ```@docs
 MtlThreadGroupArray
+MtlDynamicThreadGroupArray
+dynamic_threadgroup_memory_length
 ```
 
 ## Synchronization

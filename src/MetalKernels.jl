@@ -37,6 +37,7 @@ KI.versioninfo(io::IO, ::MetalBackend) = Metal.versioninfo(io)
 KI.supports_float64(::MetalBackend) = false
 KI.supports_atomics(::MetalBackend) = metal_support() >= v"4.1"
 KI.supports_unified(::MetalBackend) = true
+KI.supports_dynamic_localmemory(::MetalBackend) = true
 KI.supports_subgroups(::MetalBackend) = true
 # Metal doesn't specify how SIMD-groups are formed, but Apple GPUs form them from consecutive
 # linear thread indices, and KernelInterface's testsuite checks that. SIMD-groups of a
@@ -108,9 +109,12 @@ function KI.kernel_function(backend::MetalBackend, f::F, tt::TT=Tuple{}; name=no
 end
 
 # passes the arguments on as a tuple, like calling the `HostKernel` does. like it, waits for
-# the queue of another task that still uses an argument's buffer, and launches again
+# the queue of another task that still uses an argument's buffer, and launches again.
+# `localmem` is only passed by launches that ask for dynamic local memory, which is Metal's
+# dynamic threadgroup memory: the same as `threadgroup_memory`.
 function KI.launch(obj::KI.Kernel{MetalBackend}, groups::Dims{3}, items::Dims{3},
-                   args::Tuple; queue=nothing, submit::Bool=false, kwargs...)
+                   args::Tuple; queue=nothing, submit::Bool=false, localmem::Int=0,
+                   threadgroup_memory::Union{Nothing,Integer}=nothing, kwargs...)
     if !isempty(kwargs)
         # KernelInterface has validated the launch geometry
         if haskey(kwargs, :threads) || haskey(kwargs, :groups)
@@ -118,9 +122,16 @@ function KI.launch(obj::KI.Kernel{MetalBackend}, groups::Dims{3}, items::Dims{3}
         end
         throw(ArgumentError("Unsupported keyword argument `$(first(keys(kwargs)))`"))
     end
+    tgmem = if threadgroup_memory === nothing
+        localmem
+    elseif localmem != 0
+        throw(ArgumentError("KernelInterface kernels take either `localmem` or `threadgroup_memory`, not both"))
+    else
+        Metal.requested_threadgroup_memory(threadgroup_memory)
+    end
     gs, ts = MTLSize(groups), MTLSize(items)
     while true
-        conflict = try_launch(obj.kern, queue, gs, ts, args, submit)
+        conflict = try_launch(obj.kern, queue, gs, ts, args, submit, tgmem)
         conflict === nothing && return
         synchronize(conflict)
     end
@@ -129,6 +140,10 @@ end
 # the pipeline's `maxTotalThreadsPerThreadgroup`. KernelInterface's default
 # `launch_configuration` launches workgroups of that size, as Metal always has.
 KI.max_work_group_size(kernel::KI.Kernel{MetalBackend})::Int = kernel.kern.maxthreads
+# the device's threadgroup memory that the kernel doesn't allocate statically. Metal has no
+# launch configuration of its own, and the fallback's doesn't depend on `localmem`.
+KI.max_dynamic_localmemory(kernel::KI.Kernel{MetalBackend})::Int =
+    Metal.max_dynamic_threadgroup_memory(kernel.kern)
 function KI.max_work_group_size(::MetalBackend)::Int
     MTL.max_threadgroup_threads(device())
 end
@@ -213,6 +228,16 @@ end
     MtlDeviceArray(Dims, ptr)
 end
 
+# the block of a work-group is the dynamic threadgroup memory of the threadgroup
+@device_override Base.@propagate_inbounds function KI.dynamic_localmemory(
+        ::Type{T}, dims::Dims{N}, offset::Int) where {T, N}
+    KI.check_dynamic_localmemory(T, dims, offset)
+    @inbounds MtlDynamicThreadGroupArray(T, dims, offset)
+end
+
+# what the launch asked for, which can be less than the multiple of 16 bytes it allocated
+@device_override @inline KI.dynamic_localmemory_size() =
+    Metal.dynamic_threadgroup_memory_length()
 
 ## events
 

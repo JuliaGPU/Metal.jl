@@ -272,6 +272,11 @@ end
 struct KernelState
     random_seed::UInt32
 
+    # the bytes of dynamic threadgroup memory the launch asked for (see
+    # `MtlDynamicThreadGroupArray`), which can be less than what it allocated. this takes
+    # the place of the padding after the seed, so it doesn't change the layout of the rest.
+    dynamic_tgmem::UInt32
+
     # bump allocator buffer
     #
     # the first 4 bytes are an atomically-incremented counter; allocations

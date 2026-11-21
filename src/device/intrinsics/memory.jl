@@ -1,4 +1,4 @@
-export MtlThreadGroupArray
+export MtlThreadGroupArray, MtlDynamicThreadGroupArray, dynamic_threadgroup_memory_length
 
 """
     MtlThreadGroupArray(T, dims)
@@ -53,3 +53,91 @@ end
     ptr = gep!(builder, gv_typ, gv, [ConstantInt(0), ConstantInt(0)])
     bitcast!(builder, ptr, T_ptr)
 end
+
+
+## dynamic threadgroup memory
+
+# Threadgroup memory whose size is chosen by the launch is a parameter of the kernel, like
+# MSL's `threadgroup T *ptr [[threadgroup(0)]]`, for which the launch sets a length. This
+# intrinsic stands for that parameter: kernels that still call it after optimization get
+# the parameter, and the argument metadata describing it, from
+# `add_dynamic_threadgroup_memory!`. The requested length travels in the kernel state.
+
+const DYNAMIC_TGMEM_INTRINSIC = "julia.metal.dynamic_threadgroup_memory"
+const DYNAMIC_TGMEM_ARGUMENT = "dynamic_threadgroup_memory"
+
+# Metal only takes threadgroup memory lengths that are a multiple of this many bytes, which
+# is also how the block is aligned
+const DYNAMIC_TGMEM_ALIGNMENT = 16
+
+@device_function @inline dynamic_threadgroup_memory() =
+    ccall("extern julia.metal.dynamic_threadgroup_memory", llvmcall,
+          Core.LLVMPtr{UInt8,AS.ThreadGroup}, ())
+
+"""
+    dynamic_threadgroup_memory_length()::Int
+
+The size in bytes of the threadgroup's block of dynamic threadgroup memory, i.e., what the
+kernel was launched with as `threadgroup_memory` (0 by default). See
+[`MtlDynamicThreadGroupArray`](@ref).
+"""
+@device_function @inline dynamic_threadgroup_memory_length() =
+    kernel_state().dynamic_tgmem % Int
+
+"""
+    MtlDynamicThreadGroupArray(T, dims, offset=0)
+
+An array of element type `T` and size `dims` in the dynamic threadgroup memory of the
+threadgroup, starting `offset` bytes into it, as an [`MtlDeviceArray`](@ref). Unlike with
+[`MtlThreadGroupArray`](@ref), the size doesn't have to be a compile-time constant.
+
+Every threadgroup gets a single block of dynamic threadgroup memory, shared by its threads,
+whose size in bytes is set by the `threadgroup_memory` keyword of the launch (see
+[`@metal`](@ref)) and returned by [`dynamic_threadgroup_memory_length`](@ref). Every call
+returns an array in that same block, so calls whose byte ranges overlap return arrays that
+alias; give the arrays a kernel needs different offsets. The block is separate from the
+memory of `MtlThreadGroupArray`s, but counts towards the same limit of 32 KiB per kernel.
+
+The memory is uninitialized, and aligned to 16 bytes. `T` has to be an `isbits` type, and
+`offset` a multiple of its alignment. An array that doesn't fit in the block throws a
+`BoundsError`, unless bounds checking is disabled with `@inbounds`.
+
+```julia
+function reverse_kernel(a)
+    i = thread_position_in_threadgroup().x
+    n = threads_per_threadgroup().x
+    tmp = MtlDynamicThreadGroupArray(Float32, n)
+    tmp[i] = a[i]
+    threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+    a[i] = tmp[n + 1 - i]
+    return
+end
+
+@metal threads=64 threadgroup_memory=64*sizeof(Float32) reverse_kernel(a)
+```
+"""
+Base.@propagate_inbounds function MtlDynamicThreadGroupArray(::Type{T}, dims::Dims{N},
+                                                             offset::Integer=0) where {T,N}
+    isbitstype(T) ||
+        error("Dynamic threadgroup memory only supports `isbits` element types")
+    @boundscheck begin
+        # (written with a division, so that a huge array can't overflow the comparison)
+        len, invalid = 1, false
+        for d in dims
+            len, overflow = Base.mul_with_overflow(len, d)
+            invalid |= overflow | (d < 0)
+        end
+        available = dynamic_threadgroup_memory_length() - offset
+        if invalid | (offset < 0) | (available < 0) | (len > available ÷ max(sizeof(T), 1))
+            throw(BoundsError())
+        end
+    end
+    ptr = reinterpret(Core.LLVMPtr{T,AS.ThreadGroup}, dynamic_threadgroup_memory() + offset)
+    MtlDeviceArray{T,N,AS.ThreadGroup}(dims, ptr)
+end
+Base.@propagate_inbounds MtlDynamicThreadGroupArray(::Type{T}, dims::Tuple{Vararg{Integer}},
+                                                    offset::Integer=0) where {T} =
+    MtlDynamicThreadGroupArray(T, map(Int, dims), offset)
+Base.@propagate_inbounds MtlDynamicThreadGroupArray(::Type{T}, len::Integer,
+                                                    offset::Integer=0) where {T} =
+    MtlDynamicThreadGroupArray(T, (Int(len),), offset)

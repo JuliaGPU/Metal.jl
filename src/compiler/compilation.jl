@@ -16,8 +16,8 @@ Cached compilation results for a Metal kernel job, managed by
 - `air`: AIR bitcode produced by the LLVM-downgrader from the post-irgen LLVM IR.
   The input to the Metal library wrapper. Session-portable; retained for diagnostics
   when the host-side Metal pipeline creation fails.
-- `metallib` + `entry` + `loggingEnabled` + `device_rng`: library-wrapped AIR bytes and
-  launch metadata — the final session-portable artifacts. `metallib === nothing` identifies
+- `metallib` + `entry` + `loggingEnabled` + `device_rng` + `dynamic_tgmem`: library-wrapped
+  AIR bytes and launch metadata — the final session-portable artifacts. `metallib === nothing` identifies
   a job that has not been compiled yet (see `compile_or_lookup` in `execution.jl`).
 - `relocations`: the kernel's relocation manifest, or `nothing` when it carries none
   (the common case). Session-portable — its `JuliaValueRef`/`CGlobalRef` targets are
@@ -44,11 +44,12 @@ mutable struct MetalResults
     entry::Union{Nothing, String}
     loggingEnabled::Union{Nothing, Bool}
     device_rng::Union{Nothing, Bool}
+    dynamic_tgmem::Union{Nothing, Bool}
     relocations::Union{Nothing, GPUCompiler.Relocations}
     # host-side objects (session-local)
     pipelines::Vector{Tuple{MTLDevice, MTLComputePipelineState}}
     reloc_tables::Vector{Tuple{MTLDevice, MTLBuffer}}
-    MetalResults() = new(nothing, nothing, nothing, nothing, nothing, nothing,
+    MetalResults() = new(nothing, nothing, nothing, nothing, nothing, nothing, nothing,
                          Tuple{MTLDevice, MTLComputePipelineState}[],
                          Tuple{MTLDevice, MTLBuffer}[])
 end
@@ -115,6 +116,21 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
         if isdeclaration(f) && startswith(f.name, "__tensorops_impl_")
             f.section = "air.externally_defined"
             push!(f.function_attributes, EnumAttribute(:convergent))
+        end
+    end
+
+    # the dynamic threadgroup memory only becomes a kernel parameter after optimization (see
+    # `add_dynamic_threadgroup_memory!`). until then, tell the optimizer that the intrinsic
+    # standing for it always returns the same pointer.
+    let intr = get(mod.functions, DYNAMIC_TGMEM_INTRINSIC, nothing)
+        if intr !== nothing
+            attrs = intr.function_attributes
+            for attr in (:nounwind, :willreturn, :speculatable)
+                push!(attrs, EnumAttribute(attr))
+            end
+            # (`readnone` became `memory(none)` in LLVM 16)
+            push!(attrs, LLVM.version() >= v"16" ? EnumAttribute(:memory, 0) :
+                                                   EnumAttribute(:readnone))
         end
     end
 
@@ -242,6 +258,11 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
     entry = invoke(GPUCompiler.finish_ir!,
                    Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module, LLVM.Function},
                    job, mod, entry)
+
+    # kernels that use dynamic threadgroup memory get a parameter for it
+    if job.config.kernel
+        entry = add_dynamic_threadgroup_memory!(job, mod, entry)
+    end
 
     # device code emits intrinsics in their newest form; rewrite them for older AIR versions.
     # this lives here, next to the emitters, so that the two change together. GPUCompiler
@@ -427,6 +448,84 @@ function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
     return entry
 end
 
+# Dynamic threadgroup memory (see `MtlDynamicThreadGroupArray`) is a kernel parameter in the
+# threadgroup address space, as for MSL's `threadgroup T *ptr [[threadgroup(0)]]`, whose
+# length the launch sets with `setThreadgroupMemoryLength:atIndex:`. Add that parameter to
+# kernels that call the intrinsic standing for it, and to the functions between the kernel
+# and those calls, and describe it in the kernel's argument metadata the way Apple's
+# front-end does:
+#
+#     !{i32 <parameter>, !"air.buffer", !"air.location_index", i32 0, i32 1,
+#       !"air.read_write", !"air.address_space", i32 3, !"air.arg_type_size", i32 16,
+#       !"air.arg_type_align_size", i32 16, !"air.arg_type_name", !"float4",
+#       !"air.arg_name", !"dynamic_threadgroup_memory"}
+#
+# This happens after GPUCompiler has generated the argument metadata, which describes every
+# parameter following the kernel's arguments as a built-in input like the thread position,
+# and so cannot describe a buffer there. As that is after optimization, only kernels that
+# really use the memory get the parameter.
+function add_dynamic_threadgroup_memory!(@nospecialize(job::MetalCompilerJob),
+                                         mod::LLVM.Module, entry::LLVM.Function)
+    intr = get(mod.functions, DYNAMIC_TGMEM_INTRINSIC, nothing)
+    intr === nothing && return entry
+    if isempty(intr.uses)
+        erase!(intr)
+        return entry
+    end
+
+    # the parameter is added last (and the intrinsic erased)
+    index = length(entry.parameters)
+    entry = GPUCompiler.add_input_arguments!(job, mod, entry, Dict(
+        DYNAMIC_TGMEM_INTRINSIC => (; name=DYNAMIC_TGMEM_ARGUMENT,
+                                      typ=Core.LLVMPtr{UInt8,AS.ThreadGroup})))
+    param = entry.parameters[index + 1]
+    @assert param.name == DYNAMIC_TGMEM_ARGUMENT
+
+    # the block is described as an array of `float4`, a type that is aligned like the
+    # memory is. kernels access it as whatever type they ask for.
+    md = Metadata[
+        Metadata(ConstantInt(Int32(index))),
+        MDString("air.buffer"),
+        # the index to set the length at, and the number of (array) entries
+        MDString("air.location_index"),
+        Metadata(ConstantInt(Int32(0))),
+        Metadata(ConstantInt(Int32(1))),
+        MDString("air.read_write"),
+        MDString("air.address_space"),
+        Metadata(ConstantInt(Int32(AS.ThreadGroup))),
+        MDString("air.arg_type_size"),
+        Metadata(ConstantInt(Int32(DYNAMIC_TGMEM_ALIGNMENT))),
+        MDString("air.arg_type_align_size"),
+        Metadata(ConstantInt(Int32(DYNAMIC_TGMEM_ALIGNMENT))),
+        MDString("air.arg_type_name"),
+        MDString("float4"),
+        MDString("air.arg_name"),
+        MDString(DYNAMIC_TGMEM_ARGUMENT),
+    ]
+
+    # `!air.kernel = !{!{ptr @kernel, !{return values...}, !{arguments...}, ...}}`
+    found = false
+    for kernel_md in LLVM.operands(mod.metadata["air.kernel"])
+        ops = LLVM.operands(kernel_md)
+        (length(ops) >= 3 && ops[1] isa LLVM.ValueAsMetadata && LLVM.Value(ops[1]) == entry) ||
+            continue
+        ops[3] = MDNode(Metadata[LLVM.operands(ops[3])..., MDNode(md)])
+        found = true
+    end
+    found || error("Could not find the argument metadata of kernel $(entry.name)")
+
+    return entry
+end
+
+# whether the kernel `f` has the parameter that `add_dynamic_threadgroup_memory!` adds: the
+# only one that points to threadgroup memory, which the host has no pointers to
+function has_dynamic_threadgroup_memory(f::LLVM.Function)
+    any(f.parameters) do param
+        T = param.value_type
+        T isa LLVM.PointerType && T.addrspace == AS.ThreadGroup
+    end
+end
+
 
 ## compiler implementation (configure, compile, and link)
 
@@ -568,7 +667,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
     Threads.atomic_add!(compilations, 1)
 
     # TODO: on 1.9, this actually creates a context. cache those.
-    ir, air, fun, entry, loggingEnabled, device_rng, relocations = JuliaContext() do _
+    ir, air, fun, entry, loggingEnabled, device_rng, dynamic_tgmem, relocations = JuliaContext() do _
         @signpost_interval log=log_compiler() start="" stop="" "Generate LLVM IR" begin
             # (asserting the result types, which `invoke_frozen` hides, keeps the uses of
             #  the results statically dispatched, so that they're precompiled)
@@ -586,6 +685,9 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
             local rng_attr = StringAttribute("julia.metal.rng", "")
             local device_rng = rng_attr in collect(kernel_fn.function_attributes)
             device_rng && delete!(kernel_fn.function_attributes, rng_attr)
+
+            # launches have to size the dynamic threadgroup memory of kernels that use it
+            local dynamic_tgmem = has_dynamic_threadgroup_memory(kernel_fn)
 
             @signpost_interval log=log_compiler() start="" stop="" "Downgrade to AIR" begin
                 # generate AIR, having GPUCompiler lower the IR to AIR-compatible form and
@@ -620,7 +722,8 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
                          - $(air_file)""")
             end
 
-            string(mod), air, fun, kernel_fn.name, loggingEnabled, device_rng, relocs
+            string(mod), air, fun, kernel_fn.name, loggingEnabled, device_rng,
+                dynamic_tgmem, relocs
         end
     end
 
@@ -650,7 +753,7 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
 
     # `nothing` marks a relocation-free kernel (the common case), keeping its `MetalResults`
     # and package-image footprint identical to before.
-    return (; air, metallib, entry, loggingEnabled, device_rng,
+    return (; air, metallib, entry, loggingEnabled, device_rng, dynamic_tgmem,
               relocations = isempty(relocations) ? nothing : relocations)
 end
 

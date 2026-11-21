@@ -78,8 +78,9 @@ end
 
     @test_throws "multiples of 16 bytes" metalcall(reverse_kernel, Tuple{Metal.MtlPtr{Float32}}, x;
                                                    threads=32, threadgroup_memory=(100,))
-    @test_throws "must be <= 32768 bytes" metalcall(reverse_kernel, Tuple{Metal.MtlPtr{Float32}}, x;
-                                                    threads=32, threadgroup_memory=(65536,))
+    limit = Int(dev.maxThreadgroupMemoryLength)
+    @test_throws "must be <= $limit bytes" metalcall(reverse_kernel, Tuple{Metal.MtlPtr{Float32}}, x;
+                                                     threads=32, threadgroup_memory=(limit + 16,))
 end
 
 @testset "errors" begin

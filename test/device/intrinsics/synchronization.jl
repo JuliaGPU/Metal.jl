@@ -296,6 +296,174 @@ end
 
 end # static
 
+
+@testset "dynamic" begin
+
+@testset "constructors" begin
+    @on_device threadgroup_memory=16 MtlDynamicThreadGroupArray(Float32, 1)
+    @on_device threadgroup_memory=16 MtlDynamicThreadGroupArray(Float32, (1,2))
+    @on_device threadgroup_memory=32 MtlDynamicThreadGroupArray(Tuple{Float32, Float32}, (1,2), 16)
+    @on_device threadgroup_memory=32 MtlDynamicThreadGroupArray(Tuple{RGB{Float32}, UInt32}, 1, 16)
+    # empty arrays need no memory
+    @on_device MtlDynamicThreadGroupArray(Float32, 0)
+end
+
+# reverse the values of every threadgroup through an array sized by the launch, with a
+# second array behind it and static threadgroup memory next to it to catch aliasing
+function dynamic_kernel(d::MtlDeviceArray{T}, len) where {T}
+    t = thread_position_in_threadgroup().x
+    n = threads_per_threadgroup().x
+    i = thread_position_in_grid().x
+    tr = n - t + 1
+
+    s = MtlDynamicThreadGroupArray(T, n)
+    s2 = MtlDynamicThreadGroupArray(T, n, n * sizeof(T))
+    s3 = MtlThreadGroupArray(T, 64)
+
+    s[t] = d[i]
+    s2[t] = 2 * d[i]
+    s3[t] = 3 * d[i]
+    threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+    d[i] = s[tr]
+    len[i] = dynamic_threadgroup_memory_length()
+
+    return
+end
+
+@testset "$typ" for typ in [Int32, Int64, Float32]
+    @testset "$threads threads" for threads in (1, 7, 64)
+        groups = 3
+        a = rand(typ, threads * groups)
+        d_a = MtlArray(a)
+        len = Metal.zeros(Int, length(a))
+        bytes = 2 * threads * sizeof(typ)
+
+        @metal threads groups threadgroup_memory=bytes dynamic_kernel(d_a, len)
+        @test Array(d_a) == vcat((reverse(a[(g*threads+1):((g+1)*threads)]) for g in 0:groups-1)...)
+        # the kernel sees the size that was asked for, not the multiple of 16 bytes
+        # that was allocated
+        @test all(==(bytes), Array(len))
+    end
+end
+
+@testset "launch" begin
+    function length_kernel(len)
+        len[1] = dynamic_threadgroup_memory_length()
+        return
+    end
+    function first_kernel(len, n)
+        t = thread_position_in_threadgroup().x
+        s = MtlDynamicThreadGroupArray(Int32, n)
+        if t <= n
+            s[t] = 42
+        end
+        threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+        len[1] = dynamic_threadgroup_memory_length() + (n > 0 ? s[1] : Int32(0))
+        return
+    end
+
+    len = Metal.zeros(Int, 1)
+
+    # a kernel that only asks for the size has no memory to set the length of
+    kernel = @metal launch=false length_kernel(len)
+    @test !kernel.dynamic_tgmem
+    @test kernel.tgmem == 0
+    kernel(len)
+    @test Array(len) == [0]
+    kernel(len; threadgroup_memory=24)
+    @test Array(len) == [24]
+
+    # a kernel that uses the memory can be launched without asking for any: the length
+    # still has to be set
+    kernel = @metal launch=false first_kernel(len, 0)
+    @test kernel.dynamic_tgmem
+    kernel(len, 0)
+    @test Array(len) == [0]
+    kernel(len, 1; threadgroup_memory=5)
+    @test Array(len) == [47]
+
+    # the limit is the threadgroup memory of the device
+    limit = Metal.max_dynamic_threadgroup_memory(kernel)
+    @test limit == device().maxThreadgroupMemoryLength - kernel.tgmem
+    kernel(len, 1; threadgroup_memory=limit)
+    @test Array(len) == [limit + 42]
+    @test_throws "threadgroupMemoryLength" kernel(len, 1; threadgroup_memory=limit + 1)
+    @test_throws ArgumentError kernel(len, 1; threadgroup_memory=-1)
+
+    # which static threadgroup memory counts towards
+    function static_kernel(len)
+        t = thread_position_in_threadgroup().x
+        s = MtlThreadGroupArray(Int32, 100)
+        d = MtlDynamicThreadGroupArray(Int32, 1)
+        s[t] = 1
+        d[t] = 2
+        threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+        len[1] = dynamic_threadgroup_memory_length() + s[1] + d[1]
+        return
+    end
+    kernel = @metal launch=false static_kernel(len)
+    @test kernel.tgmem >= 400
+    @test Metal.max_dynamic_threadgroup_memory(kernel) <= limit - 400
+    @test Metal.max_dynamic_threadgroup_memory(kernel) % 16 == 0
+    kernel(len; threadgroup_memory=Metal.max_dynamic_threadgroup_memory(kernel))
+    @test Array(len) == [Metal.max_dynamic_threadgroup_memory(kernel) + 3]
+    @test_throws "threadgroupMemoryLength" kernel(len; threadgroup_memory=limit)
+end
+
+@testset "bounds" begin
+    function bounds_kernel(len, n)
+        s = MtlDynamicThreadGroupArray(Int32, n)
+        len[1] = length(s)
+        return
+    end
+
+    len = Metal.zeros(Int, 1)
+    @metal threadgroup_memory=16 bounds_kernel(len, 4)
+    @test Array(len) == [4]
+
+    # arrays have to fit in what the launch asked for
+    exc = try
+        @metal threadgroup_memory=15 bounds_kernel(len, 4)
+        synchronize()
+        nothing
+    catch err
+        err
+    end
+    @test exc isa Metal.KernelException
+end
+
+@testset "code generation" begin
+    function codegen_kernel(a)
+        s = MtlDynamicThreadGroupArray(Float32, 4)
+        @inbounds s[1] = 1
+        @inbounds a[1] = s[1]
+        return
+    end
+    tt = Tuple{MtlDeviceVector{Float32,1}}
+
+    # the memory is a kernel parameter in the threadgroup address space, described like
+    # MSL's `threadgroup float4 *ptr [[threadgroup(0)]]`
+    air = sprint(io->Metal.code_air(io, codegen_kernel, tt; kernel=true, dump_module=true))
+    @test occursin(r"addrspace\(3\)\*? %dynamic_threadgroup_memory", air)
+    @test occursin("!\"air.buffer\", !\"air.location_index\", i32 0, i32 1, " *
+                   "!\"air.read_write\", !\"air.address_space\", i32 3, " *
+                   "!\"air.arg_type_size\", i32 16, !\"air.arg_type_align_size\", i32 16, " *
+                   "!\"air.arg_type_name\", !\"float4\", " *
+                   "!\"air.arg_name\", !\"dynamic_threadgroup_memory\"", air)
+    @test !occursin("julia.metal.dynamic_threadgroup_memory", air)
+
+    # kernels that don't use it are unchanged
+    function plain_kernel(a)
+        @inbounds a[1] = 1
+        return
+    end
+    air = sprint(io->Metal.code_air(io, plain_kernel, tt; kernel=true, dump_module=true))
+    @test !occursin("dynamic_threadgroup_memory", air)
+    @test !occursin("\"air.address_space\", i32 3", air)
+end
+
+end # dynamic
+
 end # threadgroup memory
 
 end # memory
