@@ -9,17 +9,6 @@ using .MPS: MPS_VALID_MATMUL_TYPES, MPS_VALID_MATVECMUL_TYPES, MPSSolveFloat, lu
         (eltype(A), eltype(C)) in valid_types
 end
 
-
-# Supported values:
-#   :auto     - best available: vendor (MPSGraph/MPS) where supported, else a native kernel
-#   :MPS      - MetalPerformanceShaders
-#   :MPSGraph - MetalPerformanceShadersGraph
-#   :GPUArrays- the generic GPUArrays kernel
-#   :native   - best of Metal.jl's own kernels (tensor → simd → scalar), picked per operands
-#   :simd     - force the simdgroup_matrix kernel (Float16/Float32)
-#   :scalar     - force the scalar shared-memory kernel (any eltype)
-#   :tensor   - force the Metal 4 tensor-ops kernel (Metal4 device, plain C=A*B)
-# The native kernels live in src/gemm.jl.
 @public matmul_alg
 
 """
@@ -31,16 +20,15 @@ A `ScopedValue` that selects the algorithm `LinearAlgebra.mul!` (and `*`) uses f
 - `:auto` (default): MPSGraph where it supports the operands, otherwise `:native`.
 - `:MPSGraph`: [`MPSGraphs.matmul!`](@ref) and [`MPSGraphs.matvecmul!`](@ref).
 - `:MPS`: [`MPS.matmul!`](@ref) and [`MPS.matvecmul!`](@ref).
-- `:native`: the best of Metal.jl's own kernels for the operands, of `:tensor`, `:simd` and
-  `:scalar`.
+- `:native`: the best of Metal.jl's own kernels for the operands, of `:tensor` and `:simd`,
+  or `:GPUArrays` for operands that neither supports.
 - `:tensor`: a Metal 4 tensor-operations kernel, for plain `C = A*B` products of `Float16`,
   `BFloat16`, `Float32`, `Int8` and `UInt8` inputs with the output types `matmul2d` supports
   for them, as listed in the [Metal Shading Language
   specification](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf);
   only matrix-matrix products. `BFloat16` needs macOS 26.1 and `UInt8` needs macOS 26.4.
 - `:simd`: a SIMD-group matrix kernel.
-- `:scalar`: a kernel without SIMD-group matrices, for any element type.
-- `:GPUArrays`: the generic GPUArrays.jl kernel.
+- `:GPUArrays`: the generic GPUArrays.jl kernel, for any element type.
 
 An algorithm that doesn't support the operands throws an error. Set it for a block of code
 with `with`, from `Base.ScopedValues` (on Julia 1.10, from the ScopedValues.jl package):
@@ -55,6 +43,14 @@ end
 """
 const matmul_alg = ScopedValue(:auto)
 matmul_alg_error(alg, inT, outT, vec) = error("Matrix-$(vec ? "Vector" : "Matrix") multiplication algorithm `:$alg` is not supported for input eltype $inT and output eltype $outT.")
+matmul_alg_invalid(alg, vec) =
+    error(":$alg is not a valid $(vec ? "matvecmul" : "matmul") algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`, `:native`, `:simd`$(vec ? "" : ", `:tensor`")")
+
+# `:scalar` selected a kernel that GPUArrays' generic one has replaced
+function selected_matmul_alg()
+    alg = matmul_alg[]
+    return alg === :scalar ? :GPUArrays : alg
+end
 
 # LinearAlgebra's wrapper_char only ever produces 'N'/'T'/'C' or the Symmetric/Hermitian
 # wrapper chars 'S'/'s'/'H'/'h', all of which the native GEMM kernels handle (the MPS
@@ -63,11 +59,8 @@ matmul_alg_error(alg, inT, outT, vec) = error("Matrix-$(vec ? "Vector" : "Matrix
 @inline is_ntc(t) = (t == 'N') || (t == 'T') || (t == 'C')
 @inline gemm_char(t) = Char(t)
 
-matmul_alg_invalid(alg, vec) =
-    error(":$alg is not a valid $(vec ? "matvecmul" : "matmul") algorithm. Options are: `:auto`, `:MPS`, `:MPSGraph`, `:GPUArrays`, `:native`, `:simd`, `:scalar`$(vec ? "" : ", `:tensor`")")
-
-# shared native-kernel path: a forced :simd/:tensor kernel must support the operands
-# (the scalar kernel handles anything); :native/:auto let gemm! pick the kernel
+# shared native-kernel path: a forced :simd/:tensor kernel must support the operands;
+# :native/:auto let gemm! pick the kernel, or GPUArrays' generic one if neither does
 @inline function native_matmul!(C, tA, tB, A, B, alpha, beta, alg)
     cA = gemm_char(tA); cB = gemm_char(tB)
     if alg === :simd
@@ -81,7 +74,7 @@ matmul_alg_invalid(alg, vec) =
     gemm!(C, cA, cB, A, B, alpha, beta; kernel)
 end
 
-# GPUArrays' generic kernel, which needs α and β converted like the native kernels do
+# GPUArrays' generic kernels, which need α and β converted like the native kernels do
 generic_matmul!(C, tA, tB, A, B, alpha, beta) =
     GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB),
                                  device_scalar(alpha), device_scalar(beta))
@@ -116,7 +109,7 @@ function LinearAlgebra.mul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix,
         return empty_matmul!(C, beta)
     end
 
-    alg = matmul_alg[]
+    alg = selected_matmul_alg()
     # the MPS path only handles plain transpose/adjoint operands; only probe MPSGraph
     # support when a branch below can actually use it
     ntc = is_ntc(tA) && is_ntc(tB)
@@ -126,7 +119,7 @@ function LinearAlgebra.mul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix,
     if alg === :MPSGraph || (alg === :auto && mpsgraph_supported)
         mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C), false)
         MPSGraphs.matmul!(C, A, B, alpha, beta; tA, tB)
-    elseif alg === :native || alg === :auto || alg === :simd || alg === :scalar || alg === :tensor
+    elseif alg === :native || alg === :auto || alg === :simd || alg === :tensor
         native_matmul!(C, tA, tB, A, B, alpha, beta, alg)
     elseif alg === :MPS
         (ntc && supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), false)
@@ -159,8 +152,8 @@ function LinearAlgebra.mul!(C::MtlMatrixOperand, tA, tB,
         return empty_matmul!(C, beta)
     end
 
-    alg = matmul_alg[]
-    if alg === :native || alg === :auto || alg === :simd || alg === :scalar || alg === :tensor
+    alg = selected_matmul_alg()
+    if alg === :native || alg === :auto || alg === :simd || alg === :tensor
         native_matmul!(C, tA, tB, A, B, alpha, beta, alg)
     elseif alg === :GPUArrays
         generic_matmul!(C, tA, tB, A, B, alpha, beta)
@@ -203,7 +196,7 @@ function LinearAlgebra.mul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::Mtl
         return empty_matmul!(C, beta)
     end
 
-    alg = matmul_alg[]
+    alg = selected_matmul_alg()
     # the MPS path only handles plain transpose/adjoint operands; only probe MPSGraph
     # support when a branch below can actually use it
     ntc = is_ntc(tA)
@@ -213,12 +206,12 @@ function LinearAlgebra.mul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::Mtl
     if alg === :MPSGraph || (alg === :auto && mpsgraph_supported)
         mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C), true)
         MPSGraphs.matvecmul!(C, A, B, alpha, beta; tA)
-    elseif alg === :native || alg === :auto || alg === :simd || alg === :scalar
-        # matrix-vector products go through the native gemv; `:simd`/`:scalar` force the
-        # kernel. The tensor kernel is matrix-only, so `:tensor` isn't handled here and
-        # falls through to the unsupported-algorithm error below.
+    elseif alg === :native || alg === :auto || alg === :simd
+        # matrix-vector products go through the native gemv; `:simd` forces the kernel.
+        # The tensor kernel is matrix-only, so `:tensor` isn't handled here and falls
+        # through to the unsupported-algorithm error below.
         cA = gemm_char(tA)
-        kernel = (alg === :simd || alg === :scalar) ? alg : :auto
+        kernel = alg === :simd ? :simd : :auto
         alg === :simd && (supports_simd_matmul(C, A, B, cA, 'N', alpha, beta) ||
             matmul_alg_error(alg, eltype(A), eltype(C), true))
         gemv!(C, cA, A, B, alpha, beta; kernel)
@@ -272,12 +265,13 @@ function view_matvecmul!(C, tA, A, B, alpha, beta)
     length(C) == mA || throw(DimensionMismatch("C has length ($(length(C))), should have ($mA)"))
     (mA == 0 || nA == 0) && return empty_matmul!(C, beta)
 
-    alg = matmul_alg[]
-    if alg === :native || alg === :auto || alg === :simd || alg === :scalar
+    alg = selected_matmul_alg()
+    if alg === :native || alg === :auto || alg === :simd
         Cm, Bm = as_column(C), as_column(B)
         if Cm !== nothing && Bm !== nothing
             LinearAlgebra.mul!(Cm, tA, 'N', A, Bm, alpha, beta)
-        elseif alg === :auto
+        elseif alg !== :simd
+            # there is no column view for the simd kernel to take
             generic_matmul!(C, tA, 'N', A, B, alpha, beta)
         else
             matmul_alg_error(alg, eltype(A), eltype(C), true)
