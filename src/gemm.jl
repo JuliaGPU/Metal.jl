@@ -1,7 +1,7 @@
 # Native Julia GEMM for Metal.
 #
-# Three device kernels back the native matmul paths (see `src/linalg.jl`); the matmul
-# algorithm `:simd`/`:scalar`/`:tensor` forces one, while `:native`/`:auto` pick among them:
+# Two device kernels back the native matmul paths (see `src/linalg.jl`); the matmul
+# algorithm `:simd`/`:tensor` forces one, while `:native`/`:auto` pick among them:
 #
 #  * `gemm_tensor_kernel!` is the Metal 4 fast path. It drives `tensor_ops::matmul2d`
 #    over a tile decomposition. Only available on Metal4-capable devices and only for the
@@ -13,9 +13,9 @@
 #    any buffer offset are handled) and contracts them with the `simdgroup_matrix`
 #    8x8 tensor primitives, accumulating in `Float32`.
 #
-#  * `gemm_scalar_kernel!` is the correctness fallback for every other eltype
-#    (complex, bfloat16, integers). A classic scalar shared-memory tiled kernel that works
-#    for any eltype supporting `+`/`*`, any transpose, and any offset.
+# Operands that neither kernel supports (complex, integers, mixed eltypes) go to GPUArrays'
+# generic kernels, which work for any eltype supporting `+`/`*`, any transpose, and any
+# offset.
 #
 # All honor the LinearAlgebra contract `C = α·op(A)·op(B) + β·C` with the
 # operand char in {'N','T','C'} (transpose/adjoint) or {'S','s','H','h'} (the
@@ -231,61 +231,6 @@ function gemm_simd_kernel!(C, A, B, alpha::Float32, beta::Float32,
     return
 end
 
-## scalar path: per-element shared-memory tiled kernel (any eltype / transpose / offset)
-
-# α/β scaling for the scalar kernel. LinearAlgebra passes `Bool` α/β (`MulAddMul`'s
-# strong-zero flags), and `Bool * AbstractFloat` lowers through `copysign` — which the
-# Metal backend cannot compile for `BFloat16` — so handle `Bool` with a select instead.
-# (The false cases never execute: α = 0 returns early in `gemm!` and β = 0 takes the
-# `iszero` branch below; they just have to compile.)
-@inline bscale(a, x) = a * x
-@inline bscale(a::Bool, x) = a ? x : zero(x)
-
-function gemm_scalar_kernel!(C, A, B, alpha, beta,
-                              M, N, K, ::Val{TA}, ::Val{TB}, ::Val{TILE}) where {TA, TB, TILE}
-    TAT = eltype(A); TBT = eltype(B); R = eltype(C)
-
-    # accumulate in a wide enough type so narrow-integer (Int8/Int16) inputs don't
-    # overflow.
-    Tacc = promote_type(R, typeof(zero(TAT) * zero(TBT) + zero(TAT) * zero(TBT)))
-
-    li = Int(thread_position_in_threadgroup().x)
-    lj = Int(thread_position_in_threadgroup().y)
-    gi = (Int(threadgroup_position_in_grid().x) - 1) * TILE + li
-    gj = (Int(threadgroup_position_in_grid().y) - 1) * TILE + lj
-
-    As = MtlThreadGroupArray(TAT, (TILE, TILE))
-    Bs = MtlThreadGroupArray(TBT, (TILE, TILE))
-
-    acc = zero(Tacc)
-    nkt = cld(K, TILE)
-    kt = 0
-    while kt < nkt
-        k0 = kt * TILE
-        ac = k0 + lj
-        @inbounds As[li, lj] = (gi <= M && ac <= K) ? opelem(A, Val(TA), gi, ac) : zero(TAT)
-        ar = k0 + li
-        @inbounds Bs[li, lj] = (ar <= K && gj <= N) ? opelem(B, Val(TB), ar, gj) : zero(TBT)
-        threadgroup_barrier(MemoryFlagThreadGroup)
-        @inbounds for kk in 1:TILE
-            acc = muladd(As[li, kk], Bs[kk, lj], acc)
-        end
-        threadgroup_barrier(MemoryFlagThreadGroup)
-        kt += 1
-    end
-
-    if gi <= M && gj <= N
-        # `setindex!` converts to `R` for us; an explicit `R(...)` would additionally
-        # demand a constructor, which element types like `SVector` don't provide
-        if iszero(beta)
-            @inbounds C[gi, gj] = bscale(alpha, acc)
-        else
-            @inbounds C[gi, gj] = bscale(alpha, acc) + bscale(beta, C[gi, gj])
-        end
-    end
-    return
-end
-
 ## tensor path: Metal 4 `tensor_ops::matmul2d` (macOS 26+, Metal4-capable devices)
 
 # Tile-decomposed matmul on top of `tensor_ops::matmul2d`. Specialized on the tile shape
@@ -445,8 +390,7 @@ end
 
 # Operand-support predicate for the simdgroup kernel, mirroring `supports_mps_matmul` /
 # `supports_mpsgraph_matmul` / `supports_tensor_matmul`: it handles any transpose/α/β/shape/
-# offset, so it only needs a float eltype. The scalar kernel is the universal fallback and
-# handles any eltype, so it needs no such predicate (it is the kernel `:native` falls back to).
+# offset, so it only needs a float eltype.
 @inline supports_simd_matmul(C, A, B, cA::Char, cB::Char, alpha::Number, beta::Number) =
     gemm_simd_eltype(eltype(A), eltype(B), eltype(C))
 
@@ -491,19 +435,6 @@ function gemm_simd!(C, A, B, alpha, beta, cA::Char, cB::Char)
     return C
 end
 
-const GEMM_SCALAR_TILE = 16
-
-function gemm_scalar!(C, A, B, alpha, beta, cA::Char, cB::Char)
-    M = size(C, 1); N = size(C, 2)
-    K = (cA === 'T' || cA === 'C') ? size(A, 1) : size(A, 2)
-    TILE = GEMM_SCALAR_TILE
-    threads = (TILE, TILE)
-    groups = (cld(M, TILE), cld(N, TILE))
-    @metal threads=threads groups=groups gemm_scalar_kernel!(
-        C, A, B, alpha, beta, Int(M), Int(N), Int(K), Val(cA), Val(cB), Val(TILE))
-    return C
-end
-
 """
     Metal.gemm!(C, tA, tB, A, B, α, β; kernel=:auto)
 
@@ -511,12 +442,13 @@ Native GEMM computing `C = α·op_tA(A)·op_tB(B) + β·C` for `MtlMatrix` opera
 range-based `view`s of them (including the destination).
 `tA`/`tB ∈ {'N','T','C'}`, or one of the LinearAlgebra wrapper chars `{'S','s','H','h'}`
 applying a Symmetric/Hermitian view of the operand (upper/lowercase selects the stored
-triangle). Backs the `:native`/`:auto` matmul paths (`kernel=:auto`, picking
-the best of the tensor/simd/scalar kernels) and the `:simd`/`:scalar`/`:tensor` paths, which set
-`kernel` to force a specific kernel. Forcing a kernel that cannot handle the operands is the
-caller's responsibility (see `supports_simd_matmul`/`supports_tensor_matmul`); the tensor
-kernel never handles wrapper chars (it requires plain `'N'`/`'N'` operands), while the simd
-and scalar kernels gather elementwise through `opelem` and handle all of them.
+triangle). Backs the `:native`/`:auto` matmul paths (`kernel=:auto`, picking the tensor
+or the simd kernel, or GPUArrays' generic kernels for operands that neither supports) and
+the `:simd`/`:tensor` paths, which set `kernel` to force a specific kernel. Forcing a
+kernel that cannot handle the operands is the caller's responsibility (see
+`supports_simd_matmul`/`supports_tensor_matmul`); the tensor kernel never handles wrapper
+chars (it requires plain `'N'`/`'N'` operands), while the simd kernel gathers elementwise
+through `opelem` and handles all of them, as do the generic kernels.
 """
 function gemm!(C::MtlMatrixOperand, tA::Char, tB::Char,
                A::MtlMatrixOperand, B::MtlMatrixOperand,
@@ -540,8 +472,8 @@ function gemm!(C::MtlMatrixOperand, tA::Char, tB::Char,
     end
 
     # `:auto` picks the Metal 4 tensor-ops fast path when the device and operands allow it,
-    # then the portable simdgroup kernel for floats, then the scalar fallback; an
-    # explicit `kernel` forces one of them.
+    # then the portable simdgroup kernel for floats, then GPUArrays' generic kernels; an
+    # explicit `kernel` forces one of the first two.
     if kernel === :tensor
         supports_tensor_matmul(C, A, B, tA, tB, alpha, beta) ||
             error("tensor-ops GEMM is not supported for these operands")
@@ -550,8 +482,10 @@ function gemm!(C::MtlMatrixOperand, tA::Char, tB::Char,
         gemm_tensor!(C, A, B, alpha, beta, tA, tB)
     elseif kernel === :simd || (kernel === :auto && supports_simd_matmul(C, A, B, tA, tB, alpha, beta))
         gemm_simd!(C, A, B, alpha, beta, tA, tB)
+    elseif kernel === :auto
+        generic_matmul!(C, tA, tB, A, B, alpha, beta)
     else
-        gemm_scalar!(C, A, B, alpha, beta, tA, tB)
+        throw(ArgumentError("unknown GEMM kernel `:$kernel`"))
     end
     return C
 end
