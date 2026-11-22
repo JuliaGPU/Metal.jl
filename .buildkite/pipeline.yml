@@ -36,9 +36,6 @@ steps:
 
       # the oldest release
       - <<: *julia
-        agents: # remove once julia 1.10 has a release that supports M6 cpu
-          queue: "metal"
-          cpu: "apple-m1"
         if: |
           build.message !~ /\[skip [^\]]*(tests|julia)/ &&
           (build.message =~ /\[only [^\]]*(tests|julia)/ ||
