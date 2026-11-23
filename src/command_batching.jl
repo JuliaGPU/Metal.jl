@@ -85,7 +85,7 @@ while holding `submission_lock`:
   `bind_buffer!(ctx, buf, offset, index)`, `bind_bytes!(ctx, ptr, length, index)` (which
   must copy the bytes before returning), `make_resident!(ctx, buf, usage)` for buffers
   that are only reachable through a GPU address, `bind_threadgroup_memory!(ctx, length,
-  index)`, `dispatch!(ctx, groups, threads)`, and
+  index)`, `dispatch!(ctx, groups, threads)`, and, if `has_debug_groups(ctx)`,
   `MTL.push_debug_group!(ctx, label)`/`MTL.pop_debug_group!(ctx)`;
 - `blit_encoder(bq)`: return a context supporting `append_copy!` and `append_fillbuffer!`;
 - `encode_event_wait!(bq, event, value)`: make subsequent work wait for `event`;
@@ -650,6 +650,8 @@ end
     MTL.set_threadgroup_memory_length!(cce, len, index)
 @inline dispatch!(cce::MTLComputeCommandEncoder, groups::MTLSize, threads::MTLSize) =
     MTL.append_current_function!(cce, groups, threads)
+has_debug_groups(cce::MTLComputeCommandEncoder) =
+    MTL.responds_to(cce, "pushDebugGroup:") && MTL.responds_to(cce, "popDebugGroup")
 
 function encode_event_wait!(bq::Metal3Queue, event, value)
     end_encoder!(bq)

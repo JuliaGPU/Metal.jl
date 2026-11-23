@@ -48,6 +48,16 @@ Return the `i`-th GPU of [`devices()`](@ref devices).
 """
 MTLDevice(i::Integer) = devices()[i]
 
+"""
+    responds_to(obj, selector::String)
+
+Whether `obj` implements `selector`. Sending a message an object doesn't implement raises an
+Objective-C exception, which aborts Julia, so use this before calling into API that a Metal
+implementation may lack.
+"""
+responds_to(obj, selector::String) =
+    @objc [obj::id{Object} respondsToSelector:Selector(selector)::Ptr{Cvoid}]::Bool
+
 function threadgroup_limits(dev::MTLDevice)
     @memoize key=pointer(dev)::id{MTLDevice} begin
         (Int(dev.maxThreadsPerThreadgroup.width), Int(dev.maxThreadgroupMemoryLength))
