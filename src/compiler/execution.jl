@@ -521,7 +521,8 @@ by calling it (see below). Its fields describe the compute pipeline Metal create
 
 - `maxthreads`: the maximum number of threads per threadgroup this kernel can be launched
   with ([`maxTotalThreadsPerThreadgroup`](https://developer.apple.com/documentation/metal/mtlcomputepipelinestate/maxtotalthreadsperthreadgroup)),
-  which can be lower than the device's limit of 1024 for kernels that use many registers.
+  which can be lower than the device's limit of 1024 for kernels that use many registers,
+  or that use the device RNG on GPUs with narrow SIMD-groups.
 - `exec_width`: the thread execution width, i.e., the number of threads in a SIMD-group
   ([`threadExecutionWidth`](https://developer.apple.com/documentation/metal/mtlcomputepipelinestate/threadexecutionwidth)).
   Threadgroup sizes that are a multiple of it use the GPU best.
@@ -722,12 +723,20 @@ end
             end
         end
 
+        # the device RNG keeps state per SIMD-group, for a limited number of them
+        maxthreads = Int(pipeline[].maxTotalThreadsPerThreadgroup)
+        if res.device_rng::Bool
+            maxthreads = min(maxthreads, max_simdgroups_per_threadgroup * width)
+        end
+
         # normalized by `compiler_config`; asserted to keep `link_kernel` inferable
         minthreads = job.config.target.minthreads::Union{Nothing,NTuple{3,Int}}
         reqthreads = minthreads === nothing ? MTLSize(0, 0, 0) : MTLSize(minthreads)
+        minthreads === nothing || prod(minthreads) <= maxthreads ||
+            error("Kernel $label requires $(prod(minthreads)) threads per threadgroup, but can be launched with at most $maxthreads")
 
         LinkedKernel(pipeline[], res.loggingEnabled::Bool, res.device_rng::Bool, dev,
-         Int(pipeline[].maxTotalThreadsPerThreadgroup),
+         maxthreads,
          reqthreads,
          Int(pipeline[].staticThreadgroupMemoryLength),
          width,

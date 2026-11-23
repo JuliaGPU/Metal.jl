@@ -6,8 +6,8 @@ import RandomNumbers
 
 # global state
 
-# 16 is the lower bound for `threads_per_simdgroup()`, 1024 is the upper bound
-# for `threads_per_threadgroup()`, so we can have 64 simdgroups per threadgroup
+# enough for 1024 threads per threadgroup in SIMD-groups of 16 or more threads, as on Apple
+# GPUs. `link_kernel` limits the threadgroup size of kernels that use the RNG to fit.
 const max_simdgroups_per_threadgroup = 64
 
 @llvmgenerated builder function emit_global_random_values(::Val{name}

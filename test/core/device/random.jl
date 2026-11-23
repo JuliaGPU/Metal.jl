@@ -160,3 +160,21 @@ end
     Random.seed!(1); @metal threads=n kernel(a); y = rand()
     @test x == y
 end
+
+# the RNG keeps state for a limited number of SIMD-groups per threadgroup
+@testset "threadgroup size" begin
+    function kernel(A)
+        A[thread_position_in_grid().x] = rand(Float32)
+        return
+    end
+    a = Metal.zeros(Float32, 1024)
+    k = @metal launch=false kernel(a)
+    limit = Int(k.pipeline.maxTotalThreadsPerThreadgroup)
+    maxthreads = min(limit, Metal.max_simdgroups_per_threadgroup * k.exec_width)
+    @test k.maxthreads == maxthreads
+    k(a; threads=maxthreads)
+    synchronize()
+    if k.maxthreads == maxthreads && maxthreads < limit
+        @test_throws ArgumentError k(a; threads=maxthreads + 1)
+    end
+end
