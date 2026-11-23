@@ -20,7 +20,16 @@ abstract type AbstractMetalCompilerParams <: AbstractCompilerParams end
 
 @public AbstractMetalCompilerParams, compile_to_metallib, compiler_config
 
-struct MetalCompilerParams <: AbstractMetalCompilerParams end
+struct MetalCompilerParams <: AbstractMetalCompilerParams
+    # SIMD-group width (see `simd_width`), or 0 for the probe that determines it.
+    simd_width::Int
+end
+
+# The SIMD-group width that jobs are compiled for. Jobs with other parameters are compiled
+# for 32-wide SIMD-groups, the width of Apple GPUs.
+compiled_simd_width(::AbstractMetalCompilerParams) = 32
+compiled_simd_width(params::MetalCompilerParams) = params.simd_width
+
 const MetalCompilerConfig = CompilerConfig{MetalCompilerTarget, MetalCompilerParams}
 const MetalCompilerJob = CompilerJob{MetalCompilerTarget, MetalCompilerParams}
 const AnyMetalJob = CompilerJob{MetalCompilerTarget, <:AbstractMetalCompilerParams}
@@ -89,12 +98,14 @@ GPUCompiler.uses_exception_sites(job::AnyMetalJob) = has_kernel_state(job)
 
 GPUCompiler.method_table(::AnyMetalJob) = method_table
 
-# Metal supports neither double precision nor 128-bit integers, so also use GPUToolbox's
-# overrides that keep single-precision math out of Float64, and 64-bit integer math (e.g.
-# `Rational` comparisons) out of Int128. Base's exceptions with messages formatted at run
-# time don't compile, so also use the overrides that throw them with a constant message.
-GPUCompiler.method_tables(::AnyMetalJob) =
-    (method_table, GPUToolbox.Overlays.float64_overrides, GPUToolbox.Overlays.int128_overrides,
+# The table of the SIMD-group width defines `simd_width()`. Metal supports neither double
+# precision nor 128-bit integers, so also use GPUToolbox's overrides that keep
+# single-precision math out of Float64, and 64-bit integer math (e.g. `Rational`
+# comparisons) out of Int128. Base's exceptions with messages formatted at run time don't
+# compile, so also use the overrides that throw them with a constant message.
+GPUCompiler.method_tables(job::AnyMetalJob) =
+    (simd_width_tables[compiled_simd_width(job.config.params)], method_table,
+     GPUToolbox.Overlays.float64_overrides, GPUToolbox.Overlays.int128_overrides,
      GPUToolbox.Overlays.throw_overrides)
 
 # Keep relocations symbolic. Most kernels are relocation-free, so their metallib is
@@ -636,11 +647,12 @@ function compiler_config(dev; kwargs...)
     h = hash(dev, hash(values(kwargs)))
     return Base.@lock compiler_configs_lock begin
         get!(_compiler_configs, h) do
-            _compiler_config(dev; kwargs...)
+            _compiler_config(dev, simd_width(dev); kwargs...)
         end
     end
 end
-@noinline function _compiler_config(dev; kernel=true, name=nothing, always_inline=false,
+@noinline function _compiler_config(dev, simd_width::Int; kernel=true, name=nothing,
+                                         always_inline=false,
                                          debug_level=Base.JLOptions().debug_level,
                                          opt_level=2,
                                          macos=nothing, air=nothing, metal=nothing,
@@ -710,7 +722,7 @@ end
     # create GPUCompiler objects
     target = MetalCompilerTarget(; macos, air, metal, apple_family, minthreads, maxthreads,
                                    kwargs...)
-    params = MetalCompilerParams()
+    params = MetalCompilerParams(simd_width)
     CompilerConfig(target, params; kernel, name, always_inline, debug_level, opt_level)
 end
 
@@ -888,7 +900,9 @@ function backend_config(config::CompilerConfig, family::Int, macos::VersionNumbe
     fields = NamedTuple{fieldnames(MetalCompilerTarget)}(
         map(f -> getfield(target, f), fieldnames(MetalCompilerTarget)))
     target = MetalCompilerTarget(; merge(fields, versions, (; apple_family=family))...)
-    return CompilerConfig(config; target)
+    # (Apple GPUs are 32 wide)
+    params = config.params isa MetalCompilerParams ? MetalCompilerParams(32) : config.params
+    return CompilerConfig(config; target, params)
 end
 
 # the descriptor that makes `applegpu-nt` compile the pipeline of function `entry`
@@ -911,7 +925,8 @@ function check_backend(@nospecialize(job::CompilerJob), art, targets::Vector{Bac
     # compile each configuration that differs from the job's
     compiled = map(collect(values(configs))) do (config, ts)
         target = config.target
-        target === job.config.target && return (; config, ts, art)
+        target === job.config.target && config.params === job.config.params &&
+            return (; config, ts, art)
         derived = try
             emit_metallib(CompilerJob(job.source, config, job.world))
         catch err

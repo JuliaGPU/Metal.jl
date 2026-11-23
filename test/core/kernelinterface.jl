@@ -2,6 +2,7 @@ import KernelInterface
 import KernelInterface as KI
 using Metal.MetalKernels
 import Adapt
+import GPUCompiler
 
 include(joinpath(dirname(pathof(KernelInterface)), "..", "test", "testsuite.jl"))
 
@@ -20,11 +21,29 @@ function ki_subgroup_kernel(num, sizes, id, lane)
     return
 end
 
+# the SIMD-group width kernels are compiled for
+const W = KI.sub_group_size(MetalBackend())
+
+function ki_max_sub_group_size!(A)
+    @inbounds A[KI.get_global_id().x] = KI.get_max_sub_group_size()
+    return
+end
+
+@testset "SIMD-group width" begin
+    # Apple GPUs are 32 wide
+    Metal.is_supported(device()) && @test W == 32
+    A = Metal.zeros(Int, 1)
+    kernel = KI.@launch MetalBackend() launch=false ki_max_sub_group_size!(A)
+    @test kernel.kern.exec_width == W
+    kernel(A; ndrange=1)
+    @test Array(A) == [W]
+end
+
 # KernelInterface leaves the formation of sub-groups unspecified; Metal forms SIMD-groups
 # from consecutive linear thread indices, which `get_sub_group_size` relies on
 @testset "partial sub-groups" begin
-    # a 33x2 threadgroup is made up of 3 SIMD-groups, the last one only partially filled
-    workgroupsize = (33, 2)
+    # a (W+1)x2 threadgroup is made up of 3 SIMD-groups, the last one only partially filled
+    workgroupsize = (W + 1, 2)
     n = prod(workgroupsize)
     num = MtlArray{UInt32}(undef, n)
     sizes = MtlArray{UInt32}(undef, n)
@@ -32,9 +51,27 @@ end
     lane = MtlArray{UInt32}(undef, n)
     KI.@launch MetalBackend() workgroupsize=workgroupsize ki_subgroup_kernel(num, sizes, id, lane)
     @test all(==(3), Array(num))
-    @test Array(sizes) == [i < 64 ? 32 : 2 for i in 0:n-1]
-    @test Array(id) == [div(i, 32) + 1 for i in 0:n-1]
-    @test Array(lane) == [rem(i, 32) + 1 for i in 0:n-1]
+    @test Array(sizes) == [i < 2W ? W : 2 for i in 0:n-1]
+    @test Array(id) == [div(i, W) + 1 for i in 0:n-1]
+    @test Array(lane) == [rem(i, W) + 1 for i in 0:n-1]
+end
+
+function ki_shfl_width!(A)
+    i = KI.get_global_id().x
+    @inbounds A[i] = KI.shfl(A[i], A[i]) + KI.get_max_sub_group_size(Int32)
+    return
+end
+
+# code is specialized for the width it is compiled for, also when compiling the same kernel
+# for several widths
+@testset "code for a SIMD-group width of $width" for width in (8, 32, 16, W)
+    config = Metal._compiler_config(device(), width)
+    src = Metal.methodinstance(typeof(ki_shfl_width!), Tuple{MtlDeviceVector{Int32,1}})
+    job = GPUCompiler.CompilerJob(src, config)
+    ir = sprint(io -> GPUCompiler.code_llvm(io, job; dump_module=false))
+    # the lane is wrapped to the width, and the width added
+    @test occursin(Regex("and i16 %\\S+, $(width - 1)\\b"), ir)
+    @test occursin(Regex("add i32 %\\S+, $(width)\\b"), ir)
 end
 
 @testset "copyto!" begin
