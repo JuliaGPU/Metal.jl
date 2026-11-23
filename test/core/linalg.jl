@@ -2,9 +2,11 @@ using Test, Metal
 
 using LinearAlgebra, ScopedValues
 
-# MPS and MPSGraph are optional: tests that force an algorithm the device lacks are skipped
+# MPS, MPSGraph and SIMD-group matrices are optional: tests that force an algorithm the
+# device lacks are skipped
 supported(alg) = alg === :MPS ? MPS.is_supported(Metal.device()) :
-                 alg === :MPSGraph ? MPSGraphs.is_supported(Metal.device()) : true
+                 alg === :MPSGraph ? MPSGraphs.is_supported(Metal.device()) :
+                 alg === :simd ? Metal.simd_matmul_capable() : true
 # in loops over algorithms: records the skip of an unsupported one
 skipped(alg) = supported(alg) ? false : (@test_skip "matmul_alg = :$alg"; true)
 
@@ -79,7 +81,7 @@ skipped(alg) = supported(alg) ? false : (@test_skip "matmul_alg = :$alg"; true)
         @test test_matmul(Int8,  Int32; vec_b, alg=:native)
 
         # :simd (simdgroup kernel, Float16/Float32 only)
-        @test test_matmul(Float32, Float32; vec_b, alg=:simd)
+        @test test_matmul(Float32, Float32; vec_b, alg=:simd) skip=!supported(:simd)
         @test_throws "algorithm `:simd`" test_matmul(Int32, Int32; vec_b, alg=:simd)
         # :tensor is matrix-only and needs tile-divisible dims; N=20 errors either way
         @test_throws Exception test_matmul(Float32, Float32; vec_b, alg=:tensor)
@@ -185,6 +187,7 @@ end
 
         # Call the storage-level `mul!` directly so these exercise the native kernels and honor `matmul_alg`
         for alg in (:auto, :simd, :GPUArrays)
+            skipped(alg) && continue
             C = MtlArray(zeros(T, 2, 5))
             @with (Metal.matmul_alg => alg) LinearAlgebra.mul!(C, 'N', 'N', av, db, true, false)
             @test Array(C) ≈ view(a, 2:3, :) * b
@@ -213,6 +216,7 @@ end
         @test Array(asv * dxs) ≈ view(as, 1:2:8, :) * xs
 
         for alg in (:auto, :simd, :GPUArrays)
+            skipped(alg) && continue
             C = MtlArray(zeros(T, 4, 5))
             @with (Metal.matmul_alg => alg) LinearAlgebra.mul!(C, 'N', 'N', asv, bsv, true, false)
             @test Array(C) ≈ view(as, 1:2:8, :) * view(bs, :, 1:2:10)
@@ -224,6 +228,7 @@ end
 
         # strided destination
         for alg in (:auto, :simd, :GPUArrays)
+            skipped(alg) && continue
             cs = rand(T, 8, 5)
             dcs = MtlArray(cs)
             mul!(view(cs, 1:2:8, :), view(as, 1:2:8, :), view(bs, :, 1:2:10), 2.0f0, 1.0f0)
@@ -238,6 +243,7 @@ end
         da2 = MtlArray(a2)
         db2 = MtlArray(b2)
         for alg in (:auto, :simd, :GPUArrays)
+            skipped(alg) && continue
             c2 = rand(T, 4, 5)
             dc2 = MtlArray(c2)
             mul!(view(c2, 1:2, :), a2, b2)
@@ -252,6 +258,7 @@ end
     A, B, C, x = rand(Float32, 20, 30), rand(Float32, 30, 10), rand(Float32, 20, 10), rand(Float32, 30)
     dA, dB, dC, dx = MtlArray.((A, B, C, x))
     for alg in (:auto, :native, :simd, :GPUArrays)
+        skipped(alg) && continue
         dc = copy(dC)
         @with (Metal.matmul_alg => alg) mul!(dc, dA, dB, 2, 0.5)
         @test Array(dc) ≈ 2 * A * B + C / 2
@@ -301,6 +308,7 @@ end
         vec = c isa AbstractVector
         # Float64 scalars must not reach the kernels
         for alg in (:auto, :native, :simd, :GPUArrays), (α, β) in ((2f0, 0.5f0), (2, 0.5))
+            skipped(alg) && continue
             dc, da, db = f(copy(dC), dA, dB, dx, copy(dy))
             @with (Metal.matmul_alg => alg) mul!(dc, da, db, α, β)
             @test Array(dc) ≈ ref
@@ -375,8 +383,8 @@ end
     @testset "$T $tA$tB α=$α β=$β" for T in (Float32, Float16, BFloat16),
                                         (tA, tB) in (("N","N"), ("N","T"), ("T","N"), ("T","T")),
                                         (α, β) in ((T(1), T(0)), (T(2), T(0)), (T(1), T(1)), (T(2), T(3)))
-        @test nativetest(T, 64, 48, 32, only(tA), only(tB), α, β; alg=:simd)   # aligned
-        @test nativetest(T, 65, 47, 33, only(tA), only(tB), α, β; alg=:simd)   # ragged
+        @test nativetest(T, 64, 48, 32, only(tA), only(tB), α, β; alg=:simd) skip=!supported(:simd)  # aligned
+        @test nativetest(T, 65, 47, 33, only(tA), only(tB), α, β; alg=:simd) skip=!supported(:simd)  # ragged
     end
 
     # generic fallback of `:native` (ComplexF32, Int32): includes conjugate transpose
@@ -390,6 +398,7 @@ end
     # offset views (dense MtlMatrix with offset≠0): the case MPSGraph falls back on
     @testset "offset views" begin
         for (T, alg) in ((Float32, :simd), (ComplexF32, :native))
+            skipped(alg) && continue
             P = MtlArray(mk(T, (40, 60))); Q = MtlArray(mk(T, (32, 50)))
             A = view(P, :, 3:34)      # 40×32, offset≠0, dense
             B = view(Q, :, 2:41)      # 32×40, offset≠0, dense
@@ -451,6 +460,7 @@ end
         A64 = MtlArray(rand(Float32, 64, 64)); B64 = MtlArray(rand(Float32, 64, 64))
         ref = Symmetric(Array(A64)) * Array(B64)
         for alg in (:simd, :GPUArrays)
+            skipped(alg) && continue
             C64 = MtlArray(zeros(Float32, 64, 64))
             @with (Metal.matmul_alg => alg) mul!(C64, Symmetric(A64), B64)
             @test isapprox(Array(C64), ref; rtol=tol(Float32))
