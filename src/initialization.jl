@@ -79,8 +79,9 @@ function __init__()
     end
 
     try
+        load_framework("Metal")
         load_framework("CoreGraphics")
-        load_framework("MetalPerformanceShadersGraph")
+        load_mpsgraph()
         opts = MTL.MTLCompileOptions()
         ver = @objc [opts::id{MTL.MTLCompileOptions} languageVersion]::MTL.MTLLanguageVersion
         @debug "Successfully loaded Metal; default language version $(describe_language_version(ver))."
@@ -109,6 +110,16 @@ function __init__()
     atexit(abandon_open_batches)
 
     initialization_world[] = Base.get_world_counter()
+end
+
+# MPSGraph, and MPS which it loads, are optional (see `MPSGraphs.is_supported`)
+function load_mpsgraph()
+    try
+        load_framework("MetalPerformanceShadersGraph")
+    catch err
+        @debug "Failed to load MetalPerformanceShadersGraph" exception=(err, catch_backtrace())
+    end
+    return
 end
 
 # an open batch holds a live command encoder; releasing it from a finalizer

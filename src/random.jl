@@ -332,10 +332,11 @@ randn(::Type{T}=Float32; storage=SharedStorage) where {T} = randn(T, 1; storage)
 """
     Metal.seed!([seed])
 
-Seed the random number generators of the current task, [`Metal.default_rng`](@ref) and
-[`Metal.mps_rng`](@ref), with `seed`, or with a random seed.
+Seed the random number generators of the current task, [`Metal.default_rng`](@ref) and,
+where MPS supports the device, [`Metal.mps_rng`](@ref), with `seed`, or with a random seed.
 """
 function seed!(seed=Base.rand(UInt64))
     Random.seed!(default_rng(), seed)
+    MPS.is_supported(device()) || return
     Random.seed!(mps_rng(), seed)
 end

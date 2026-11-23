@@ -5,6 +5,7 @@ graph = MPSGraph()
 @test graph isa MPSGraph
 
 dev = device()
+@test MPSGraphs.is_supported(dev)
 graphdev = MPSGraphDevice(dev)
 @test graphdev isa MPSGraphDevice
 @test graphdev.type == MPSGraphs.MPSGraphDeviceTypeMetal
