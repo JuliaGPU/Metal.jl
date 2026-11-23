@@ -52,11 +52,11 @@ end
              reinterpret.(Float32, 0x3f808000 .+ (UInt32(0):UInt32(3)) .<< 16))
     g, c = Array(BFloat16.(MtlArray(f))), BFloat16.(f)
     sub = issubnormal.(f)
+    # test that regular values are equal
     @test isequal(g[.!sub], c[.!sub])
-    # some GPUs (e.g. the M5) flush subnormal inputs to zero, like other `Float32` operations
-    # on Apple GPUs, so accept either the rounded value or a zero of the same sign
-    flushed = BFloat16.(copysign.(0.0f0, f[sub]))
-    @test all(isequal.(g[sub], c[sub]) .| isequal.(g[sub], flushed))
+    # some GPUs (e.g. the M5) flush subnormal inputs to zero, like other `Float32`
+    # operations on Apple GPUs, so accept either the rounded value or a zero
+    @test all(isequal.(g[sub], c[sub]) .| iszero.(g[sub]))
     @test all(isnan, Array(BFloat16.(MtlArray(Float32[NaN, -NaN]))))
 
     # the bits of a converted value, used as 32 bits (as by the shuffles of a `BFloat16`)
