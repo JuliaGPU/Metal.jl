@@ -36,6 +36,7 @@ set (except `command_api`).
 | `label_resources` | see below | Name buffers, command buffers and kernels, and mark each kernel launch, for Xcode's frame capture. Defaults to `true` when Julia runs with `-g2` or with `METAL_CAPTURE_ENABLED=1`. See [Xcode and Instruments](xcode.md). |
 | `embed_sources` | see below | Embed kernel sources in the compiled libraries, so that Xcode's frame capture can show them with per-line costs. Defaults to `true` with `METAL_CAPTURE_ENABLED=1`. |
 | `precompile` | `true` | Compile common operations when Metal.jl is precompiled. Disabling it shortens precompilation, e.g. when developing Metal.jl, at the cost of a slower first use. |
+| `allow_unsupported_devices` | `false` | Use Metal.jl on GPUs it doesn't support, and on other architectures than Apple Silicon's, e.g. with another Metal implementation such as [Darling](https://www.darlinghq.org)'s. Metal.jl does without optional features the implementation lacks (MPS, residency sets, GPU logging); other gaps can cause errors or wrong results. Metal.jl warns when it first uses such a GPU. |
 
 The `command_api` preference is mainly for testing the Metal 4 implementation.
 

@@ -65,6 +65,7 @@ function versioninfo(io::IO=stdout; verbose=false)
         "command_batching_inflight" => load_preference(Metal, "command_batching_inflight"),
         "command_api" => load_preference(Metal, "command_api"),
         "precompile" => load_preference(Metal, "precompile"),
+        "allow_unsupported_devices" => load_preference(Metal, "allow_unsupported_devices"),
     ]
     if any(x->!isnothing(x[2]), prefs)
         println(io, "Preferences:")

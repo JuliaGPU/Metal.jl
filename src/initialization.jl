@@ -21,7 +21,7 @@ end
 function check_functional()
     initialized[] || return false
     try
-        is_supported(device())
+        device_support(device()) !== :unsupported
     catch
         false
     end
@@ -45,6 +45,25 @@ function is_supported(dev)
                           supports_family(dev, MTL.MTLGPUFamilyMetal3)
 end
 
+# Use Metal.jl on other architectures than Apple Silicon's, and with GPUs it doesn't support,
+# e.g. with Metal implementations other than Apple's. Everything Metal.jl needs beyond the
+# basics is probed for, but correct results are not guaranteed.
+const ALLOW_UNSUPPORTED_DEVICES = @load_preference("allow_unsupported_devices", false)
+ALLOW_UNSUPPORTED_DEVICES isa Bool ||
+    error("the `allow_unsupported_devices` preference must be a Bool, got $(repr(ALLOW_UNSUPPORTED_DEVICES))")
+
+# How Metal.jl supports a device: `:supported`; `:virtual` for paravirtualized GPUs, on a
+# best-effort basis; `:allowed` when only the `allow_unsupported_devices` preference admits
+# the device or architecture; or `:unsupported`.
+function device_support(; virtual::Bool, supported::Bool, arch::Symbol, allow::Bool)
+    allow && (arch !== :aarch64 || !supported) && return :allowed
+    virtual && return :virtual
+    return supported ? :supported : :unsupported
+end
+device_support(dev::MTLDevice) =
+    device_support(; virtual=is_virtual(dev), supported=is_supported(dev), arch=Sys.ARCH,
+                   allow=ALLOW_UNSUPPORTED_DEVICES)
+
 # the default language version depends on the SDK Julia was linked against, so it can be
 # newer than the versions we know about. it's only informational: don't throw on it.
 function describe_language_version(ver::MTL.MTLLanguageVersion)
@@ -66,7 +85,7 @@ function __init__()
     precompiling = ccall(:jl_generating_output, Cint, ()) != 0
     precompiling && return
 
-    if !Sys.isapple() || Sys.ARCH != :aarch64
+    if !Sys.isapple() || (Sys.ARCH != :aarch64 && !ALLOW_UNSUPPORTED_DEVICES)
         @error "Metal.jl is only supported on Apple Silicon"
         return
     end

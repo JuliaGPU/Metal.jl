@@ -63,6 +63,23 @@ end
 
 end
 
+@testset "device support" begin
+
+support(; virtual=false, supported=true, arch=:aarch64, allow=false) =
+    Metal.device_support(; virtual, supported, arch, allow)
+@test support() === :supported
+@test support(; virtual=true) === :virtual
+@test support(; supported=false) === :unsupported
+# the preference only matters where the device or the architecture isn't supported
+@test support(; allow=true) === :supported
+@test support(; virtual=true, allow=true) === :virtual
+@test support(; supported=false, allow=true) === :allowed
+@test support(; arch=:x86_64, allow=true) === :allowed
+# without it, the architecture is checked before the device (by `__init__`)
+@test support(; arch=:x86_64) === :supported
+
+end
+
 @testset "storage_type" begin
     @test convert(MTL.MTLStorageMode, Metal.SharedStorage) == MTL.MTLStorageModeShared
     @test convert(MTL.MTLStorageMode, Metal.ManagedStorage) == MTL.MTLStorageModeManaged
