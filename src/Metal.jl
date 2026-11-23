@@ -120,8 +120,9 @@ include("deprecated.jl")
 
 # command-line tools
 include("metallib/cli.jl")
-# whether precompilation workloads can use the GPU, e.g., to compile kernels
-can_precompile() = is_macos(v"15") && Sys.ARCH === :aarch64 &&
+# whether precompilation workloads can use the GPU, e.g., to compile kernels. on other
+# architectures than Apple Silicon's only when allowed: Intel Macs' GPUs aren't supported.
+can_precompile() = is_macos(v"15") && (Sys.ARCH === :aarch64 || ALLOW_UNSUPPORTED_DEVICES) &&
                    @load_preference("precompile", true) && !isempty(devices())
 
 # whether precompilation workloads can also launch kernels, which needs a command queue
