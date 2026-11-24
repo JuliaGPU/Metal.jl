@@ -1,5 +1,9 @@
 using Metal: metal_support
 
+# the SIMD-group width kernels are compiled for: 32 on Apple GPUs, but other Metal
+# implementations can have other widths (`threadExecutionWidth`)
+const W = Metal.simd_width(device())
+
 @testset "shuffle functions" begin
     shuffle_test_types = [Float32, Float16,
                           Int32, UInt32, Int16, UInt16,
@@ -13,7 +17,7 @@ using Metal: metal_support
             return
         end
 
-        threadsPerSimdgroup = 32
+        threadsPerSimdgroup = W
 
         @testset "$T" for T in shuffle_test_types
             a = rand(T, threadsPerSimdgroup)
@@ -33,7 +37,7 @@ using Metal: metal_support
             return
         end
 
-        threadsPerSimdgroup = 32
+        threadsPerSimdgroup = W
 
         # tests that each pair of values a get swapped using sub_group_shuffle_xor
         @testset "T" for T in shuffle_test_types
@@ -45,43 +49,45 @@ using Metal: metal_support
         end
     end
 
-    @testset "$f" for (f,res_idx) in [(simd_shuffle_down, 1), (simd_shuffle_up, 32)]
+    @testset "$f" for (f,res_idx) in [(simd_shuffle_down, 1), (simd_shuffle_up, W)]
         function kernel(a::MtlDeviceVector{T}, b::MtlDeviceVector{T}) where T
             idx = thread_position_in_grid().x
             idx_in_simd = thread_index_in_simdgroup()
             simd_idx = simdgroup_index_in_threadgroup()
 
-            temp = MtlThreadGroupArray(T, 32)
+            temp = MtlThreadGroupArray(T, W)
             temp[idx] = a[idx]
             simdgroup_barrier(Metal.MemoryFlagThreadGroup)
 
             if simd_idx == 1
                 value = temp[idx_in_simd]
 
-                value = value + f(value, 16)
-                value = value + f(value,  8)
-                value = value + f(value,  4)
-                value = value + f(value,  2)
-                value = value + f(value,  1)
+                # a tree reduction over the SIMD-group
+                offset = W ÷ 2
+                while offset > 0
+                    value = value + f(value, offset)
+                    offset ÷= 2
+                end
 
                 b[idx] = value
             end
             return
         end
         @testset "$typ" for typ in shuffle_test_types
-            dev_a = Metal.zeros(typ, 32; storage=Metal.SharedStorage)
-            dev_b = Metal.zeros(typ, 32; storage=Metal.SharedStorage)
+            dev_a = Metal.zeros(typ, W; storage=Metal.SharedStorage)
+            dev_b = Metal.zeros(typ, W; storage=Metal.SharedStorage)
             synchronize()
-            a = unsafe_wrap(Array{typ}, dev_a, 32)
-            b = unsafe_wrap(Array{typ}, dev_b, 32)
+            a = unsafe_wrap(Array{typ}, dev_a, W)
+            b = unsafe_wrap(Array{typ}, dev_b, W)
 
             rand!(a, (1:4))
-            Metal.@sync @metal threads=32 kernel(dev_a, dev_b)
-            @test sum(a) ≈ b[res_idx]
+            Metal.@sync @metal threads=W kernel(dev_a, dev_b)
+            # (`reduce` rather than `sum`, which widens small integers that the kernel wraps)
+            @test reduce(+, a) ≈ b[res_idx]
         end
     end
     @testset "$f" for (f,nshift) in [(simd_shuffle_and_fill_down, -4), (simd_shuffle_and_fill_up, 2)]
-        function kernel_mod(data::MtlDeviceVector{T}, filling_data::MtlDeviceVector{T}, modulo) where T
+        function kernel_mod(data::MtlDeviceVector{T}, filling_data::MtlDeviceVector{T}, delta, modulo) where T
             idx = thread_position_in_grid().x
             idx_in_simd = thread_index_in_simdgroup() #simd_lane_id
             simd_idx = simdgroup_index_in_threadgroup() #simd_group_id
@@ -96,7 +102,7 @@ using Metal: metal_support
                 dat_value = temp_data[idx_in_simd]
                 dat_fil_value = temp_filling_data[idx_in_simd]
 
-                value = f(dat_value, dat_fil_value, abs(nshift), modulo)
+                value = f(dat_value, dat_fil_value, delta, modulo)
 
                 data[idx] = value
             end
@@ -104,20 +110,23 @@ using Metal: metal_support
         end
 
         @testset "$typ" for typ in shuffle_test_types
-            N = 16
+            # one SIMD-group
+            N = min(16, W)
             midN = N ÷ 2
+            # less than both moduli, so that no shift is the identity
+            shift = sign(nshift) * min(abs(nshift), midN - 1)
 
             data = Array{typ}(1:N)
             mtldata = MtlArray(data)
             mtlfilling = MtlArray(data)
 
-            Metal.@sync @metal threads=N kernel_mod(mtldata, mtlfilling, N)
-            @test Array(mtldata) == circshift(data, nshift)
+            Metal.@sync @metal threads=N kernel_mod(mtldata, mtlfilling, abs(shift), N)
+            @test Array(mtldata) == circshift(data, shift)
 
             mtlfilling2 = MtlArray(data)
 
-            Metal.@sync @metal threads=N kernel_mod(mtlfilling2, mtlfilling, midN)
-            @test Array(mtlfilling2) == [circshift(data[1:midN], nshift); circshift(data[midN+1:end], nshift)]
+            Metal.@sync @metal threads=N kernel_mod(mtlfilling2, mtlfilling, abs(shift), midN)
+            @test Array(mtlfilling2) == [circshift(data[1:midN], shift); circshift(data[midN+1:end], shift)]
         end
     end
 
@@ -216,9 +225,9 @@ using Metal: metal_support
             return
         end
 
-        threads_per_simdgroup = 32
+        threads_per_simdgroup = W
 
-        @testset "threshold=$threshold" for threshold in [0, 1, 8, 16, 31, 32]
+        @testset "threshold=$threshold" for threshold in [0, 1, W ÷ 4, W ÷ 2, W - 1, W]
             output = MtlArray(zeros(UInt64, threads_per_simdgroup))
             Metal.@sync @metal threads = threads_per_simdgroup ballot_kernel(output, UInt32(threshold))
 
@@ -247,15 +256,15 @@ using Metal: metal_support
             return
         end
 
-        threads_per_simdgroup = 32
+        threads_per_simdgroup = W
 
         # simd_vote_all returns true only when all bits in the ballot mask are set
-        @testset "threshold=$threshold" for threshold in [0, 16, 31, 32, 33]
+        @testset "threshold=$threshold" for threshold in [0, W ÷ 2, W - 1, W, W + 1]
             output = MtlArray(zeros(UInt8, threads_per_simdgroup))
             Metal.@sync @metal threads = threads_per_simdgroup all_kernel(output, UInt32(threshold))
 
             result = Array(output)
-            # All bits set means threshold ≥ 32 (all 32 lanes voted true)
+            # All bits set means threshold ≥ W (all lanes voted true)
             expected = threshold ≥ threads_per_simdgroup
 
             @test all(result .== expected)
@@ -278,10 +287,10 @@ using Metal: metal_support
             return
         end
 
-        threads_per_simdgroup = 32
+        threads_per_simdgroup = W
 
         # simd_vote_any returns true when any bit in the ballot mask is set
-        @testset "threshold=$threshold" for threshold in [0, 1, 16, 32]
+        @testset "threshold=$threshold" for threshold in [0, 1, W ÷ 2, W]
             output = MtlArray(zeros(UInt8, threads_per_simdgroup))
             Metal.@sync @metal threads = threads_per_simdgroup any_kernel(output, UInt32(threshold))
 
