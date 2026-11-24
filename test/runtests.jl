@@ -100,17 +100,22 @@ if filter_tests!(testsuite, args)
         end
     end
 
-    if Metal.DefaultStorageMode != Metal.PrivateStorage
-        # GPUArrays' scalar indexing tests assume that indexing is not supported
-        delete!(testsuite, "gpuarrays/indexing scalar")
-    end
-
     # for some reason, the environment shenanigans done by the scripts only work when
     # invoked from the Metal.jl CI, and not from GPUArrays.jl' reverse CI
     if get(ENV, "BUILDKITE_PIPELINE_NAME", "") != "Metal.jl"
         delete!(testsuite, "tools/scripts")
     end
 
+    # the stress tests are too heavy for CI
+    if parse(Bool, get(ENV, "CI", "false"))
+        filter!(((name, _),) -> !startswith(name, "stress/"), testsuite)
+    end
+end
+
+# filter out tests the system cannot run. unlike the above, this also applies to tests
+# that were selected explicitly (e.g. `runtests.jl core`), but not to `--list`, which
+# shows every available test.
+if args.list === nothing
     # the Metal 4 command API needs macOS 26 and a device that supports it (virtual
     # GPUs, like the ones on hosted CI runners, don't)
     if Metal.macos_version() < v"26" ||
@@ -118,14 +123,19 @@ if filter_tests!(testsuite, args)
         delete!(testsuite, "core/mtl/metal4")
     end
 
-    # only run large copy test on machines with >12GiB memory
-    if parse(Bool, get(ENV, "CI", "false")) || Sys.total_memory() < 12 * 2^30
-        delete!(testsuite, "stress/largecopy")
+    if Metal.DefaultStorageMode != Metal.PrivateStorage
+        # GPUArrays' scalar indexing tests assume that indexing is not supported
+        delete!(testsuite, "gpuarrays/indexing scalar")
     end
 
-    # only run large broadcast test on machines with >12GiB memory
-    if parse(Bool, get(ENV, "CI", "false")) || Sys.total_memory() < 12 * 2^30
-        delete!(testsuite, "stress/largebroadcast")
+    # the stress tests need a machine with more than 12GiB of memory. (they only get here
+    # when requested, so say why they don't run)
+    if Sys.total_memory() < 12 * 2^30
+        stress = sort(filter(startswith("stress/"), collect(keys(testsuite))))
+        if !isempty(stress)
+            @warn "Skipping $(join(stress, ", ")): these tests need more than 12GiB of memory"
+            foreach(name -> delete!(testsuite, name), stress)
+        end
     end
 end
 
