@@ -90,6 +90,25 @@ end
     @test_throws ArgumentError kernel(A; ndrange=4, stream=nothing)
 end
 
+function ki_fenced_barriers(::Core.LLVMPtr{Int32,Metal.AS.Device}, ::Val{flags}) where {flags}
+    KI.barrier(flags)
+    return
+end
+
+# KernelInterface's flags don't have the bits of Metal's: local memory is threadgroup
+# memory, and global memory is device memory
+@testset "memory fence flags" begin
+    @testset "$(flags.bits)" for (flags, mtl) in (
+            KI.LOCAL_MEM_FENCE => Metal.MemoryFlagThreadGroup,
+            KI.GLOBAL_MEM_FENCE => Metal.MemoryFlagDevice,
+            KI.LOCAL_MEM_FENCE | KI.GLOBAL_MEM_FENCE =>
+                Metal.MemoryFlagThreadGroup | Metal.MemoryFlagDevice)
+        tt = Tuple{Core.LLVMPtr{Int32,Metal.AS.Device}, Val{flags}}
+        ir = sprint(io -> Metal.code_air(io, ki_fenced_barriers, tt))
+        @test occursin("@air.wg.barrier(i32 $(UInt32(mtl)),", ir)
+    end
+end
+
 @testset "limits" begin
     backend = MetalBackend()
     dims = KI.max_work_group_dims(backend)
