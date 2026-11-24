@@ -614,10 +614,14 @@ end
     @test Array(a) == fill(Float32(foldl((x, _) -> 2(x + 1), 1:10; init=0)), n)
 
     # MPS operations register the arrays they use
-    A, B = Metal.rand(Float32, 64, 64), Metal.rand(Float32, 64, 64)
-    C = similar(A)
-    wait(@async MPS.matmul!(C, A, B))
-    @test Array(C) ≈ Array(A) * Array(B)
+    if MPS.is_supported(device())
+        A, B = Metal.rand(Float32, 64, 64), Metal.rand(Float32, 64, 64)
+        C = similar(A)
+        wait(@async MPS.matmul!(C, A, B))
+        @test Array(C) ≈ Array(A) * Array(B)
+    else
+        @test_skip "MPS.matmul!"
+    end
 end
 
 # a gate that keeps a command buffer from completing until it is opened. this keeps the

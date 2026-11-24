@@ -224,34 +224,39 @@ end
         @test device_synchronize() === nothing
     end
 
-    @testset "MPS intermediate submissions" begin
-        queue = MTL.MTLCommandQueue(device())
-        mpsbuf = MPS.MPSCommandBuffer(queue)
-        submitted = mpsbuf.commandBuffer
-        MPS.commitAndContinue!(mpsbuf)
-        @test MTL.last_committed(queue) == submitted
+    # MPS is optional
+    if MPS.is_supported(device())
+        @testset "MPS intermediate submissions" begin
+            queue = MTL.MTLCommandQueue(device())
+            mpsbuf = MPS.MPSCommandBuffer(queue)
+            submitted = mpsbuf.commandBuffer
+            MPS.commitAndContinue!(mpsbuf)
+            @test MTL.last_committed(queue) == submitted
 
-        MTL.commit!(mpsbuf)
-        @test synchronize(queue) === nothing
-    end
-
-    @testset "MPS encoding failures" begin
-        # an enqueued command buffer holds up its queue until it's committed
-        queue = MTL.MTLCommandQueue(device())
-        mpsbuf = MPS.MPSCommandBuffer(queue)
-        submitted = mpsbuf.commandBuffer
-        @test_throws ErrorException MPS.commitAndContinue!(mpsbuf) do cbuf
-            error("failed to encode")
+            MTL.commit!(mpsbuf)
+            @test synchronize(queue) === nothing
         end
-        @test submitted.status >= MTL.MTLCommandBufferStatusCommitted
 
-        mpsbuf = MPS.MPSCommandBuffer(queue)
-        submitted = mpsbuf.commandBuffer
-        @test_throws ErrorException MTL.commit!(mpsbuf) do cbuf
-            error("failed to encode")
+        @testset "MPS encoding failures" begin
+            # an enqueued command buffer holds up its queue until it's committed
+            queue = MTL.MTLCommandQueue(device())
+            mpsbuf = MPS.MPSCommandBuffer(queue)
+            submitted = mpsbuf.commandBuffer
+            @test_throws ErrorException MPS.commitAndContinue!(mpsbuf) do cbuf
+                error("failed to encode")
+            end
+            @test submitted.status >= MTL.MTLCommandBufferStatusCommitted
+
+            mpsbuf = MPS.MPSCommandBuffer(queue)
+            submitted = mpsbuf.commandBuffer
+            @test_throws ErrorException MTL.commit!(mpsbuf) do cbuf
+                error("failed to encode")
+            end
+            @test submitted.status >= MTL.MTLCommandBufferStatusCommitted
+            @test synchronize(queue) === nothing
         end
-        @test submitted.status >= MTL.MTLCommandBufferStatusCommitted
-        @test synchronize(queue) === nothing
+    else
+        @test_skip "MPS command buffers"
     end
 end
 
