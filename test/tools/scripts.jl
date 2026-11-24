@@ -1,16 +1,16 @@
 using LLVM, LLVM.IR
 
 mktempdir() do dir
-    metallib_as = joinpath(dirname(@__DIR__), "bin", "metallib-as")
-    metallib_dis = joinpath(dirname(@__DIR__), "bin", "metallib-dis")
-    metallib_load = joinpath(dirname(@__DIR__), "bin", "metallib-load")
+    metallib_as = joinpath(@__DIR__, "..", "..", "bin", "metallib-as")
+    metallib_dis = joinpath(@__DIR__, "..", "..", "bin", "metallib-dis")
+    metallib_load = joinpath(@__DIR__, "..", "..", "bin", "metallib-load")
 
     # make sure we can load the dummy metallib
-    dummy = joinpath(@__DIR__, "dummy.metallib")
+    dummy = joinpath(@__DIR__, "..", "dummy.metallib")
     @test success(`$metallib_load $dummy`)
 
     # only kernels can be instantiated as a compute pipeline
-    visible = joinpath(@__DIR__, "metallib", "visible.13.metallib")
+    visible = joinpath(@__DIR__, "..", "metallib", "visible.13.metallib")
     @test success(`$metallib_load $visible`)
 
     # disassemble to bitcode
@@ -34,7 +34,7 @@ mktempdir() do dir
     @test success(`$metallib_load $dir/dummy.metallib`)
 
     # the function type comes from the module
-    visible = joinpath(@__DIR__, "metallib", "visible.26.metallib")
+    visible = joinpath(@__DIR__, "..", "metallib", "visible.26.metallib")
     run(`$metallib_dis -o $dir/twice.bc $visible twice`)
     run(`$metallib_as -f -o $dir/twice.metallib $dir/twice.bc`)
     fun = only(read(joinpath(dir, "twice.metallib"), Metal.MetalLib).functions)
@@ -61,7 +61,7 @@ function metallib(args...; input=IOBuffer())
 end
 
 
-metallib_dir = joinpath(@__DIR__, "metallib")
+metallib_dir = joinpath(@__DIR__, "..", "metallib")
 
 @testset "metallib CLI" begin
     @testset "help" begin

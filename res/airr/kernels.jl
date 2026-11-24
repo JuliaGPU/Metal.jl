@@ -1,4 +1,4 @@
-# compile a Metal.jl kernel to AIR, for the reflection tests in test/metallib.jl
+# compile a Metal.jl kernel to AIR, for the reflection tests in test/tools/metallib.jl
 #
 # Usage: julia --project=test res/airr/kernels.jl NAME OUTPUT
 #

@@ -158,7 +158,7 @@ steps:
       #     - JuliaCI/julia#v1:
       #         version: "1.13"
       #     - JuliaCI/julia-test#v1:
-      #         test_args: "--quickfail --verbose large"
+      #         test_args: "--quickfail --verbose stress"
       #     - JuliaCI/julia-coverage#v1:
       #         codecov: true
       #         dirs:

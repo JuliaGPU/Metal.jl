@@ -91,13 +91,26 @@ associated tests to ensure correctness and edge cases. Look to existing examples
 new Julia file in this folder will be ran as its own testset. If you feel your tests don't
 fit in any existing place, you'll probably want to create a new file with an appropriate name.
 
+Tests live where the feature they test lives:
+
+- `test/core/`: using Metal.jl as a Julia GPU backend, i.e. the Metal API wrappers
+  (`core/mtl/`), compiling and launching kernels, device functionality (`core/device/`),
+  memory and command queues, and the Julia interfaces Metal.jl implements (arrays, linear
+  algebra, FFTs, KernelAbstractions.jl);
+- `test/libraries/`: the behavior of the MPS and MPSGraph APIs themselves;
+- `test/tools/`: developer tooling, like profiling, frame capture and the metallib tools;
+- `test/stress/`: tests that need a lot of memory, which only run when selected explicitly or
+  with `--all` (and only on machines with enough of it).
+
 ## Running a Subset of the Existing Tests
 
 Sometimes you won't want to run the entire testsuite. You may just want to run the tests
-for your new functionality. To do that, you can either pass the name of the testset to the
-`test/runtests.jl` script: `julia --project=test test/runtests.jl metal` or you can isolate test
-files by running them alone after running the `test/setup.jl` script:
-`julia --project=test -L test/setup.jl test/metal.jl`
+for your new functionality. To do that, pass the names of the tests to the `test/runtests.jl`
+script. Names are matched by prefix, so you can select a single file or a whole directory:
+`julia --project=test test/runtests.jl core/array` runs only the array tests, while
+`julia --project=test test/runtests.jl core` runs all core tests. To select a single directory
+whose name is also the prefix of another, end it with a slash (`libraries/mps/`). Use `--list`
+to see all available tests, and `--help` for the other options.
 
 ## Thank You and Good Luck
 

@@ -91,11 +91,12 @@ end
 
 # filter out certain tests depending on the exact testing conditions
 if filter_tests!(testsuite, args)
-    # The GPUArrays test suite is large and slow, so it's opt-in
+    # The GPUArrays test suite is large and slow, and the stress tests need lots of memory,
+    # so they're opt-in
     if args.custom["all"] === nothing
         filter!(testsuite) do (name, _)
             !startswith(name, "gpuarrays/") &&
-                !startswith(name, "large")
+                !startswith(name, "stress/")
         end
     end
 
@@ -107,30 +108,30 @@ if filter_tests!(testsuite, args)
     # for some reason, the environment shenanigans done by the scripts only work when
     # invoked from the Metal.jl CI, and not from GPUArrays.jl' reverse CI
     if get(ENV, "BUILDKITE_PIPELINE_NAME", "") != "Metal.jl"
-        delete!(testsuite, "scripts")
+        delete!(testsuite, "tools/scripts")
     end
 
     # the Metal 4 command API needs macOS 26 and a device that supports it (virtual
     # GPUs, like the ones on hosted CI runners, don't)
     if Metal.macos_version() < v"26" ||
        !MTL.supports_family(Metal.device(), MTL.MTLGPUFamilyMetal4)
-        delete!(testsuite, "mtl/metal4")
+        delete!(testsuite, "core/mtl/metal4")
     end
 
     # only run large copy test on machines with >12GiB memory
     if parse(Bool, get(ENV, "CI", "false")) || Sys.total_memory() < 12 * 2^30
-        delete!(testsuite, "largecopy")
+        delete!(testsuite, "stress/largecopy")
     end
 
     # only run large broadcast test on machines with >12GiB memory
     if parse(Bool, get(ENV, "CI", "false")) || Sys.total_memory() < 12 * 2^30
-        delete!(testsuite, "largebroadcast")
+        delete!(testsuite, "stress/largebroadcast")
     end
 end
 
 # workers to run tests on
 function test_worker(name, init_worker_code)
-    if name == "capturing"
+    if name == "tools/capturing"
         return addworker(; env=["METAL_CAPTURE_ENABLED"=>"1"], init_worker_code)
     end
 
@@ -274,4 +275,4 @@ end
 
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
 
-runtests(Metal, args; testsuite, init_code, init_worker_code, test_worker, serial=["largecopy", "largebroadcast"], history_key=validate ? "validation" : nothing)
+runtests(Metal, args; testsuite, init_code, init_worker_code, test_worker, serial=["stress/largecopy", "stress/largebroadcast"], history_key=validate ? "validation" : nothing)
