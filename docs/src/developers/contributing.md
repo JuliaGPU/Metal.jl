@@ -98,7 +98,8 @@ Tests live where the feature they test lives:
   memory and command queues, and the Julia interfaces Metal.jl implements (arrays, linear
   algebra, FFTs, KernelAbstractions.jl);
 - `test/libraries/`: the behavior of the MPS and MPSGraph APIs themselves;
-- `test/tools/`: developer tooling, like profiling, frame capture and the metallib tools;
+- `test/tools/`: developer tooling, like reflection, compiler diagnostics, profiling, frame
+  capture and the metallib tools;
 - `test/stress/`: tests that need a lot of memory, which only run when selected explicitly or
   with `--all` (and only on machines with enough of it).
 

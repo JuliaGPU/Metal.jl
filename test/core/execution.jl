@@ -93,171 +93,6 @@ end
     end
 end
 
-@testset "compiler crash reports" begin
-    # the shape of a real report: a JSON header line, then a pretty-printed JSON body
-    report(pid, reasons) = """
-        {"app_name":"MTLCompilerService","bug_type":"309"}
-        {
-          "pid" : 1234,
-          "responsiblePid" : $pid,
-          "responsibleProc" : "julia",
-          "termination" : {"code":1,"namespace":"METAL","reasons":[$(join(map(repr, reasons), ","))]},
-          "threads" : [{"frames":[{"symbol":"abort_with_reason"}]}]
-        }
-        """
-    reasons = ["unable to legalize instruction: %7:_(s16) = 191 %0:_, %6:_", "Context:",
-               "%0:_(s16) = 90 %2:_(p64) :: (load (s16) from `i16 addrspace(64)*`)",
-               "(in function: agc.main)"]
-
-    mktempdir() do dir
-        write(joinpath(dir, "MTLCompilerService-stale.ips"), report(42, ["stale"]))
-        sleep(0.01)
-        started = time()
-        write(joinpath(dir, "MTLCompilerService-other.ips"), report(43, ["other process"]))
-        write(joinpath(dir, "ReportCrash-unrelated.ips"), report(42, ["unrelated"]))
-        @test Metal.compiler_crash_report(started; dir, pid=42, timeout=0) === nothing
-
-        path = joinpath(dir, "MTLCompilerService-ours.ips")
-        write(path, report(42, reasons))
-        @test Metal.compiler_crash_report(started; dir, pid=42, timeout=0) == (path, reasons)
-    end
-
-    @test Metal.crash_reasons(report(42, String[]), 42) === nothing
-    @test Metal.compiler_crash_report(time(); dir="/nonexistent", timeout=0) === nothing
-end
-
-@testset "AIR verification" begin
-    # a call to an AIR function that doesn't exist
-    unknown_air_function(a) = (a[1] = ccall("extern air.unknown.f32", llvmcall, Float32, ()); nothing)
-    a = MtlArray{Float32}(undef, 1)
-
-    # asking for verification without a verifier fails instead of skipping it
-    withenv("JULIA_METAL_VERIFY_AIR" => "true", "METAL_TOOLCHAIN" => mktempdir()) do
-        @test_throws "metal-opt was not found" @metal launch=false unknown_air_function(a)
-    end
-
-    # the error of a rejected kernel names the verifier and points to the dumped artifacts
-    function verifier_error(env...)
-        dir = mktempdir()
-        msg = withenv("JULIA_METAL_VERIFY_AIR" => "true", "JULIA_METAL_DUMP_DIR" => dir,
-                      "BUILDKITE" => nothing, env...) do
-            try
-                @metal launch=false unknown_air_function(a)
-                ""
-            catch err
-                sprint(showerror, err)
-            end
-        end
-        files = readdir(dir; join=true)
-        @test sort(map(f -> splitext(f)[2], files)) == [".air", ".ll", ".metallib"]
-        @test all(f -> occursin(f, msg), files)
-        return msg
-    end
-
-    # a verifier that can't be run counts as a rejection
-    let dir = mktempdir()
-        touch(joinpath(dir, "metal-opt"))   # not executable
-        msg = verifier_error("METAL_TOOLCHAIN" => dir)
-        @test occursin("Failed to run metal-opt", msg)
-        @test occursin("(verifier: $(joinpath(dir, "metal-opt")), unknown version)", msg)
-    end
-
-    if Metal.verify_air()
-        tool = Metal.air_verifier()
-        msg = verifier_error()
-        @test occursin("invalid AIR function air.unknown.f32", msg)
-        @test occursin("(verifier: $tool, $(Metal.apple_tool_version(tool)))", msg)
-        @test Metal.apple_tool_version(tool) != "unknown version"
-    end
-end
-
-@testset "back-end check" begin
-    a = MtlArray{Float32}(undef, 1)
-    # (kernels loaded from the cache aren't checked, so every test compiles a new one)
-    check(f, targets, env...) = withenv("JULIA_METAL_BACKEND_CHECK" => targets, env...) do
-        @metal launch=false f(a)
-    end
-
-    @test_throws "Invalid JULIA_METAL_BACKEND_CHECK target 'g17g@x'" check(a -> nothing, "g17g@x")
-    @test_throws "Invalid JULIA_METAL_BACKEND_CHECK target 'M5'" check(a -> nothing, "g13g, M5")
-    @test_throws "Invalid JULIA_METAL_BACKEND_CHECK target ''" check(a -> nothing, "g13g,")
-
-    # asking for a check without the back end fails instead of skipping it
-    @test_throws "applegpu-nt was not found" check(a -> nothing, "g17g",
-        "METAL_TOOLCHAIN" => mktempdir(), "JULIA_METAL_VERIFY_AIR" => nothing)
-
-    # targets are compiled for as they would be on that system
-    let cfg = Metal.compiler_config(device(); macos=v"27", fastmath=true)
-        target = Metal.backend_config(cfg, 10, v"26").target
-        @test (target.macos, target.air, target.metal) == (v"26", v"2.8", v"4.0")
-        @test target.apple_family == 10 && target.fastmath
-        # a newer system loads the kernel as it is
-        target = Metal.backend_config(cfg, 11, v"28").target
-        @test (target.macos, target.air, target.metal) == (v"27", v"2.9", v"4.1")
-    end
-    # (keeping versions that were lower already)
-    let cfg = Metal.compiler_config(device(); macos=v"27", metal=v"3.2")
-        target = Metal.backend_config(cfg, 10, v"26").target
-        @test (target.macos, target.air, target.metal) == (v"26", v"2.8", v"3.2")
-    end
-
-    # (with the release toolchain for macOS 27, which `--validate` requires anyway)
-    supported(target) = try
-        Metal.backend_family(Metal.backend_tools(), only(withenv(Metal.backend_targets,
-                                                                 "JULIA_METAL_BACKEND_CHECK" => target)))
-        true
-    catch
-        false
-    end
-    if !all(supported, ("g13g@26", "g17g@26", "g17g@27"))
-        @test_skip "Apple's back end for macOS 26 and 27 not available"
-    else
-        @test_throws "does not support applegpu_g18g on macOS 26.0" check(a -> nothing, "g18g@26")
-
-        # an M5 running macOS 26 crashes on a float atomic add after a device fence, which
-        # GPUCompiler avoids on Apple10 GPUs only: the kernel has to be compiled for one
-        fenced_add(a) = (Metal.atomic_thread_fence(Metal.MemoryFlagDevice, Metal.memory_order_seq_cst);
-                         Metal.atomic_fetch_add_explicit(pointer(a), 1f0); nothing)
-        @test check(fenced_add, "g17g@26") isa Metal.HostKernel
-        # ... which the back end would otherwise reject
-        function raw_fenced_add(a)
-            ccall("extern air.atomic.fence", llvmcall, Cvoid, (Int32, Int32, Int32), 1, 5, 2)
-            ccall("extern air.atomic.global.add.f32", llvmcall, Float32,
-                  (Core.LLVMPtr{Float32,1}, Float32, Int32, Int32, Bool), pointer(a), 1f0, 0, 2, true)
-            return
-        end
-        dir = joinpath(mktempdir(), "with space")
-        # (the verifier rejects the untyped pointer of the raw call)
-        msg = try
-            check(raw_fenced_add, "g13g@26,g17g@26", "JULIA_METAL_VERIFY_AIR" => nothing,
-                  "JULIA_METAL_DUMP_DIR" => dir, "BUILDKITE" => nothing)
-            ""
-        catch err
-            sprint(showerror, err)
-        end
-        @test occursin("for applegpu_g17g (Apple10) on macOS 26.0", msg)
-        @test occursin("LLVM ERROR: cannot select", msg)
-        @test !occursin("applegpu_g13g", msg)
-        # with the files and the command to reproduce it
-        files = filter(f -> occursin(f, msg), readdir(dir; join=true))
-        @test sort(map(f -> splitext(f)[2], files)) == [".air", ".ll", ".metallib", ".mtlp-json"]
-        command = only(filter(contains("-platform_version"), split(msg, '\n')))
-        proc, out = Metal.run_tool(Cmd(Base.shell_split(command)))
-        @test !success(proc)
-        @test occursin("LLVM ERROR: cannot select", out)
-
-        # kernels are compiled for the target's GPU family, which can be lower than the host's
-        min64(a) = (Metal.atomic_min_explicit(pointer(a), UInt64(42)); nothing)
-        withenv("JULIA_METAL_BACKEND_CHECK" => "g13g") do
-            @test_throws r"back-end check of applegpu_g13g.*\n.*64-bit atomic min/max requires Apple8"s @metal launch=false gpufamily=MTL.MTLGPUFamilyApple8 min64(MtlArray{UInt64}(undef, 1))
-        end
-
-        # the offline back end can't encode floating-point log arguments, so those
-        # kernels aren't checked (when this fails, Apple has fixed that)
-        @test_logs (:debug, r"Skipping the back-end check") min_level=Base.CoreLogging.Debug match_mode=:any check(a -> (@mtlprintf("%f\n", a[1]); nothing), "g17g@27")
-    end
-end
-
 @testset "kernel labels" begin
     function labelled_kernel(a, x)
         a[1] = x
@@ -419,206 +254,137 @@ end
 end
 
 
-@testset "reflection" begin
-    Metal.code_lowered(dummy, Tuple{})
-    Metal.code_typed(dummy, Tuple{})
-    Metal.code_warntype(devnull, dummy, Tuple{})
-    Metal.code_llvm(devnull, dummy, Tuple{})
-    Metal.code_air(devnull, dummy, Tuple{})
+@testset "optimization level" begin
+    # forwarded to the GPUCompiler `CompilerConfig`
+    @test Metal.compiler_config(device(); opt_level=1).opt_level == 1
+    # and accepted by the `@metal` macro
+    @metal opt_level=1 dummy()
+    # and it actually changes the optimization the pipeline performs: a
+    # fixed-trip-count loop is left as-is at -O0 but cleaned up at -O2
+    function sum_kernel(x)
+        acc = zero(Float32)
+        for i in 1:8
+            acc += unsafe_load(x, i)
+        end
+        unsafe_store!(x, acc, 1)
+        return
+    end
+    tt = Tuple{Core.LLVMPtr{Float32,1}}
+    ir_O0 = sprint(io->Metal.code_llvm(io, sum_kernel, tt; opt_level=0))
+    ir_O2 = sprint(io->Metal.code_llvm(io, sum_kernel, tt; opt_level=2))
+    @test ir_O0 != ir_O2
+end
 
-    @device_code_lowered @metal dummy()
-    @device_code_typed @metal dummy()
-    @device_code_warntype io=devnull @metal dummy()
-    @device_code_llvm io=devnull @metal dummy()
-    @device_code_air io=devnull @metal dummy()
+@testset "compiler targets" begin
+    @test_throws ArgumentError Metal.compiler_config(
+        device(); gpufamily=MTL.MTLGPUFamilyMetal3)
+    @test Metal.compiler_config(
+        device(); gpufamily=MTL.MTLGPUFamilyApple7).target.apple_family == 7
+    # newer than any device we test on, but code can still be generated for it
+    @test Metal.compiler_config(
+        device(); gpufamily=MTL.MTLGPUFamilyApple11).target.apple_family == 11
+    @test !isempty(sprint(io->Metal.code_llvm(io, dummy, Tuple{};
+                                              gpufamily=MTL.MTLGPUFamilyApple11)))
 
-    mktempdir() do dir
-        @device_code dir=dir @metal dummy()
+    @test occursin("""!{!"Metal", i32 3, i32 2, i32 1}""",
+                   sprint(io->Metal.code_llvm(io, dummy, Tuple{}; metal=v"3.2.1",
+                                                  dump_module=true, kernel=true)))
+
+    @test occursin("!{i32 3, i32 2, i32 1}",
+                   sprint(io->Metal.code_llvm(io, dummy, Tuple{}; air=v"3.2.1",
+                                                  dump_module=true, kernel=true)))
+
+    @test occursin("""!"SDK Version", [3 x i32] [i32 15, i32 2, i32 1]}""",
+                   sprint(io->Metal.code_llvm(io, dummy, Tuple{}; macos=v"15.2.1",
+                                                  dump_module=true, kernel=true)))
+
+    # compatibility versions are normalized to marketing versions
+    @test occursin("""!"SDK Version", [3 x i32] [i32 26, i32 2, i32 1]}""",
+                   sprint(io->Metal.code_llvm(io, dummy, Tuple{}; macos=v"16.2.1",
+                                                  dump_module=true, kernel=true)))
+
+    # targeting macOS < 15, or the AIR versions that come with it, is not supported
+    @test_throws "Metal.jl requires macOS 15" begin
+        Metal.code_llvm(devnull, dummy, Tuple{}; macos=v"14")
+    end
+    @test_throws "Metal.jl requires macOS 15" begin
+        Metal.code_llvm(devnull, dummy, Tuple{}; macos=v"14", metal=v"3.2")
+    end
+    @test_throws "Metal.jl requires AIR 2.7" begin
+        Metal.code_llvm(devnull, dummy, Tuple{}; air=v"2.6")
     end
 
-    @test_throws ErrorException @device_code_lowered nothing
-
-    # make sure kernel name aliases are preserved in the generated code
-    @test occursin("dummy", sprint(io->(@device_code_llvm io=io optimize=false @metal dummy())))
-    @test occursin("dummy", sprint(io->(@device_code_llvm io=io @metal dummy())))
-
-    # `code_llvm` shows the IR as generated by Julia, with generic LLVM intrinsics;
-    # `code_air` shows it lowered to AIR (downgraded and disassembled again)
-    let
-        sqrt_kernel(x) = (unsafe_store!(x, sqrt(unsafe_load(x))); return)
-        llvm = sprint(io->Metal.code_llvm(io, sqrt_kernel, Tuple{Core.LLVMPtr{Float32,1}}))
-        @test occursin("llvm.sqrt.f32", llvm)
-        @test !occursin("air.sqrt.f32", llvm)
-
-        air = sprint(io->Metal.code_air(io, sqrt_kernel, Tuple{Core.LLVMPtr{Float32,1}}))
-        @test occursin("air.sqrt.f32", air)
-        @test !occursin("llvm.sqrt.f32", air)
-
-        # the AIR module contains kernel-related metadata
-        air_mod = sprint(io->Metal.code_air(io, sqrt_kernel, Tuple{Core.LLVMPtr{Float32,1}};
-                                            kernel=true, dump_module=true))
-        @test occursin("air.kernel", air_mod)
-        @test occursin("air.version", air_mod)
+    # The offline compiler raises AIR to the floor required by the selected MSL
+    # language version, even when the deployment target supports an older AIR.
+    @test Metal.compiler_config(device(); macos=v"15", metal=v"4.0").target.air == v"2.8"
+    @test Metal.compiler_config(device(); macos=v"15", metal=v"4.1").target.air == v"2.9"
+    @test_throws "Metal 4.1.0 requires AIR 2.9.0" begin
+        Metal.code_llvm(devnull, dummy, Tuple{}; metal=v"4.1", air=v"2.8")
     end
 
-    # make sure invalid kernels can be partially reflected upon
-    let
-        invalid_kernel() = throw()
-        @test_throws Metal.InvalidIRError @metal invalid_kernel()
-        @test_throws Metal.InvalidIRError @grab_output @device_code_warntype @metal invalid_kernel()
-        out, err = @grab_output begin
-            try
-                @device_code_warntype @metal invalid_kernel()
-            catch
+    # like the offline compiler, everything follows one effective deployment target:
+    # a language version that needs a newer macOS raises the target, including the
+    # metallib's file format and platform version.
+    function compiled_library(; kwargs...)
+        cfg = Metal.compiler_config(device(); kernel=true, kwargs...)
+        src = Metal.methodinstance(typeof(dummy), Tuple{}, Base.get_world_counter())
+        job = Metal.CompilerJob(src, cfg, Base.get_world_counter())
+        lib = read(IOBuffer(Metal.compile_to_metallib(job).metallib), Metal.MetalLib)
+        return cfg.target, lib
+    end
+    let (target, lib) = compiled_library(; macos=v"15", metal=v"4.1")
+        @test target.macos == v"27"
+        @test target.air == v"2.9"
+        @test lib.file_version == v"1.2.9"
+        @test lib.platform_version == v"27"
+    end
+    let (target, lib) = compiled_library(; macos=v"15", metal=v"4.0")
+        @test target.macos == v"26"
+        @test target.air == v"2.8"
+        @test lib.file_version == v"1.2.9"
+        @test lib.platform_version == v"26"
+    end
+    # targets newer than the host can be compiled, but loading them fails with a
+    # clear error. the newest macOS shares its versions with whatever comes next, so
+    # test with an AIR version the host doesn't support (which Apple's verifier doesn't
+    # know either).
+    let air = VersionNumber(2, Metal.air_support().minor + 1)
+        @test !isempty(sprint(io->Metal.code_llvm(io, dummy, Tuple{}; air)))
+        # (not `@test_throws`, which passes on Apple's error: `NSError` isn't an `Exception`)
+        err = try
+            withenv("JULIA_METAL_VERIFY_AIR" => nothing,
+                    "JULIA_METAL_BACKEND_CHECK" => nothing) do
+                @metal launch=false air=air dummy()
             end
+        catch err
+            err
         end
-        @test occursin("Body::Union{}", err)
+        @test err isa ErrorException
+        @test occursin("which this system (macOS $(Metal.macos_version())) cannot load",
+                       sprint(showerror, err))
     end
-
-    # set name of kernel
-    @test occursin("mykernel", sprint(io->(@device_code_llvm io=io begin
-        @metal name="mykernel" dummy()
-    end)))
-
-    # set the optimization level
-    let
-        # forwarded to the GPUCompiler `CompilerConfig`
-        @test Metal.compiler_config(device(); opt_level=1).opt_level == 1
-        # and accepted by the `@metal` macro
-        @metal opt_level=1 dummy()
-        # and it actually changes the optimization the pipeline performs: a
-        # fixed-trip-count loop is left as-is at -O0 but cleaned up at -O2
-        function sum_kernel(x)
-            acc = zero(Float32)
-            for i in 1:8
-                acc += unsafe_load(x, i)
-            end
-            unsafe_store!(x, acc, 1)
-            return
-        end
-        tt = Tuple{Core.LLVMPtr{Float32,1}}
-        ir_O0 = sprint(io->Metal.code_llvm(io, sum_kernel, tt; opt_level=0))
-        ir_O2 = sprint(io->Metal.code_llvm(io, sum_kernel, tt; opt_level=2))
-        @test ir_O0 != ir_O2
+    let host = Metal.macos_version(), target = Metal.compiler_config(device()).target
+        # what the host compiles for by default, or for an older or newer macOS that
+        # uses the same versions, can be loaded
+        @test Metal.check_loadable(target) === nothing
+        @test Metal.check_loadable((; macos=v"15", air=v"2.7", metal=v"3.2")) === nothing
+        @test Metal.check_loadable((; target.air, target.metal,
+                                      macos=VersionNumber(host.major + 1))) === nothing
+        @test Metal.check_loadable((; target.macos,
+                                      air=VersionNumber(target.air.major, target.air.minor, 1),
+                                      metal=VersionNumber(target.metal.major, target.metal.minor, 1))) === nothing
+        # unsupported AIR or MSL versions can't be
+        @test_throws ErrorException Metal.check_loadable(
+            (; target.macos, target.metal, air=VersionNumber(2, Metal.air_support().minor + 1)))
+        @test_throws ErrorException Metal.check_loadable(
+            (; target.macos, target.air, metal=VersionNumber(4, Metal.metal_support().minor + 1)))
     end
-
-    # set macOS, AIR, and Metal versions
-    let
-        @test_throws ArgumentError Metal.compiler_config(
-            device(); gpufamily=MTL.MTLGPUFamilyMetal3)
-        @test Metal.compiler_config(
-            device(); gpufamily=MTL.MTLGPUFamilyApple7).target.apple_family == 7
-        # newer than any device we test on, but code can still be generated for it
-        @test Metal.compiler_config(
-            device(); gpufamily=MTL.MTLGPUFamilyApple11).target.apple_family == 11
-        @test !isempty(sprint(io->Metal.code_llvm(io, dummy, Tuple{};
-                                                  gpufamily=MTL.MTLGPUFamilyApple11)))
-
-        @test occursin("""!{!"Metal", i32 3, i32 2, i32 1}""",
-                       sprint(io->Metal.code_llvm(io, dummy, Tuple{}; metal=v"3.2.1",
-                                                      dump_module=true, kernel=true)))
-
-        @test occursin("!{i32 3, i32 2, i32 1}",
-                       sprint(io->Metal.code_llvm(io, dummy, Tuple{}; air=v"3.2.1",
-                                                      dump_module=true, kernel=true)))
-
-        @test occursin("""!"SDK Version", [3 x i32] [i32 15, i32 2, i32 1]}""",
-                       sprint(io->Metal.code_llvm(io, dummy, Tuple{}; macos=v"15.2.1",
-                                                      dump_module=true, kernel=true)))
-
-        # compatibility versions are normalized to marketing versions
-        @test occursin("""!"SDK Version", [3 x i32] [i32 26, i32 2, i32 1]}""",
-                       sprint(io->Metal.code_llvm(io, dummy, Tuple{}; macos=v"16.2.1",
-                                                      dump_module=true, kernel=true)))
-
-        # targeting macOS < 15, or the AIR versions that come with it, is not supported
-        @test_throws "Metal.jl requires macOS 15" begin
-            Metal.code_llvm(devnull, dummy, Tuple{}; macos=v"14")
-        end
-        @test_throws "Metal.jl requires macOS 15" begin
-            Metal.code_llvm(devnull, dummy, Tuple{}; macos=v"14", metal=v"3.2")
-        end
-        @test_throws "Metal.jl requires AIR 2.7" begin
-            Metal.code_llvm(devnull, dummy, Tuple{}; air=v"2.6")
-        end
-
-        # The offline compiler raises AIR to the floor required by the selected MSL
-        # language version, even when the deployment target supports an older AIR.
-        @test Metal.compiler_config(device(); macos=v"15", metal=v"4.0").target.air == v"2.8"
-        @test Metal.compiler_config(device(); macos=v"15", metal=v"4.1").target.air == v"2.9"
-        @test_throws "Metal 4.1.0 requires AIR 2.9.0" begin
-            Metal.code_llvm(devnull, dummy, Tuple{}; metal=v"4.1", air=v"2.8")
-        end
-
-        # like the offline compiler, everything follows one effective deployment target:
-        # a language version that needs a newer macOS raises the target, including the
-        # metallib's file format and platform version.
-        function compiled_library(; kwargs...)
-            cfg = Metal.compiler_config(device(); kernel=true, kwargs...)
-            src = Metal.methodinstance(typeof(dummy), Tuple{}, Base.get_world_counter())
-            job = Metal.CompilerJob(src, cfg, Base.get_world_counter())
-            lib = read(IOBuffer(Metal.compile_to_metallib(job).metallib), Metal.MetalLib)
-            return cfg.target, lib
-        end
-        let (target, lib) = compiled_library(; macos=v"15", metal=v"4.1")
-            @test target.macos == v"27"
-            @test target.air == v"2.9"
-            @test lib.file_version == v"1.2.9"
-            @test lib.platform_version == v"27"
-        end
-        let (target, lib) = compiled_library(; macos=v"15", metal=v"4.0")
-            @test target.macos == v"26"
-            @test target.air == v"2.8"
-            @test lib.file_version == v"1.2.9"
-            @test lib.platform_version == v"26"
-        end
-        # targets newer than the host can be compiled, but loading them fails with a
-        # clear error. the newest macOS shares its versions with whatever comes next, so
-        # test with an AIR version the host doesn't support (which Apple's verifier doesn't
-        # know either).
-        let air = VersionNumber(2, Metal.air_support().minor + 1)
-            @test !isempty(sprint(io->Metal.code_llvm(io, dummy, Tuple{}; air)))
-            # (not `@test_throws`, which passes on Apple's error: `NSError` isn't an `Exception`)
-            err = try
-                withenv("JULIA_METAL_VERIFY_AIR" => nothing,
-                        "JULIA_METAL_BACKEND_CHECK" => nothing) do
-                    @metal launch=false air=air dummy()
-                end
-            catch err
-                err
-            end
-            @test err isa ErrorException
-            @test occursin("which this system (macOS $(Metal.macos_version())) cannot load",
-                           sprint(showerror, err))
-        end
-        let host = Metal.macos_version(), target = Metal.compiler_config(device()).target
-            # what the host compiles for by default, or for an older or newer macOS that
-            # uses the same versions, can be loaded
-            @test Metal.check_loadable(target) === nothing
-            @test Metal.check_loadable((; macos=v"15", air=v"2.7", metal=v"3.2")) === nothing
-            @test Metal.check_loadable((; target.air, target.metal,
-                                          macos=VersionNumber(host.major + 1))) === nothing
-            @test Metal.check_loadable((; target.macos,
-                                          air=VersionNumber(target.air.major, target.air.minor, 1),
-                                          metal=VersionNumber(target.metal.major, target.metal.minor, 1))) === nothing
-            # unsupported AIR or MSL versions can't be
-            @test_throws ErrorException Metal.check_loadable(
-                (; target.macos, target.metal, air=VersionNumber(2, Metal.air_support().minor + 1)))
-            @test_throws ErrorException Metal.check_loadable(
-                (; target.macos, target.air, metal=VersionNumber(4, Metal.metal_support().minor + 1)))
-        end
-        let (target, lib) = compiled_library(; macos=v"15", metal=v"3.2")
-            @test target.macos == v"15"
-            @test target.air == v"2.7"
-            @test lib.file_version == v"1.2.8"
-            @test lib.platform_version == v"15"
-        end
+    let (target, lib) = compiled_library(; macos=v"15", metal=v"3.2")
+        @test target.macos == v"15"
+        @test target.air == v"2.7"
+        @test lib.file_version == v"1.2.8"
+        @test lib.platform_version == v"15"
     end
-
-    @test Metal.return_type(identity, Tuple{Int}) === Int
-    @test Metal.return_type(sin, Tuple{Float32}) === Float32
-    @test Metal.return_type(getindex, Tuple{MtlDeviceArray{Float32,1,1},Int32}) === Float32
-    @test Metal.return_type(getindex, Tuple{Base.RefValue{Integer}}) === Integer
 end
 
 
@@ -633,145 +399,10 @@ bufferSize = 8
 bufferA = MtlArray{Int,1,Metal.SharedStorage}(undef, tuple(bufferSize))
 vecA = unsafe_wrap(Vector{Int}, pointer(bufferA), tuple(bufferSize))
 
-struct EncodeFailure
-    x::Int32
-end
-
-Adapt.adapt_structure(to::Metal.Adaptor, x::EncodeFailure) =
-    to.cce === nothing ? x : error("intentional encode failure")
-
-failed_encode_kernel(x) = return
-
-function failed_batch_increment_kernel(A)
-    A[1] += Int32(1)
-    return
-end
-
 @testset "synchronization" begin
     @metal threads=(bufferSize) tester(bufferA)
     synchronize()
     @test all(vecA .== Int(5))
-end
-
-@testset "command queue batching" begin
-    function increment_kernel(A)
-        A[1] = A[1] + Int32(1)
-        return
-    end
-
-    function write_kernel(A, value)
-        A[1] = value
-        return
-    end
-
-    queue = global_queue(device())
-    A = MtlArray(Int32[0])
-    synchronize(queue)
-
-    for _ in 1:8
-        @metal threads=1 queue=queue increment_kernel(A)
-    end
-    if !Metal.command_batching() || Metal.profiling_command_buffers()
-        @test !Metal.has_open_batch(queue)
-    elseif Metal.command_batching_ops() > 1
-        @test queue.nops == 8
-    end
-    synchronize(queue)
-    @test Array(A) == Int32[8]
-    @test !Metal.has_open_batch(queue)
-
-    @metal threads=1 queue=queue submit=true increment_kernel(A)
-    @test !Metal.has_open_batch(queue)
-    synchronize(queue)
-    @test Array(A) == Int32[9]
-
-    B = MtlArray(Int32[0])
-    Metal.unsafe_copyto!(device(B), pointer(B), pointer(A), 1; queue, async=true)
-    @metal threads=1 queue=queue increment_kernel(B)
-    synchronize(queue)
-    @test Array(B) == Int32[10]
-
-    C = MtlArray{UInt8}(undef, 4)
-    Metal.unsafe_fill!(device(C), pointer(C), UInt8(3), length(C); queue, async=true)
-    synchronize(queue)
-    @test Array(C) == fill(UInt8(3), 4)
-
-    D = MtlArray(UInt8[0])
-    synchronize(queue)
-    @metal threads=1 queue=queue write_kernel(D, UInt8(1))
-    cmdbuf = MTL.MTLCommandBuffer(queue)
-    if !Metal.command_batching() || Metal.profiling_command_buffers()
-        @test !Metal.has_open_batch(queue)
-    elseif Metal.command_batching_ops() > 1
-        @test queue.nops == 1
-    end
-    @metal threads=1 queue=queue write_kernel(D, UInt8(2))
-    MTL.MTLBlitCommandEncoder(cmdbuf) do enc
-        buf = Base.unsafe_convert(MTL.MTLBuffer, D)
-        MTL.append_fillbuffer!(enc, buf, UInt8(3), sizeof(D), D.offset)
-    end
-    MTL.commit!(cmdbuf)
-    synchronize(queue)
-    @test Array(D) == UInt8[3]
-end
-
-@testset "batching policy of a queue" begin
-    function policy_increment_kernel(A)
-        A[1] = A[1] + Int32(1)
-        return
-    end
-    A = MtlArray(Int32[0])
-    batching = Metal.command_batching() && !Metal.profiling_command_buffers()
-    n = Metal.command_batching_ops() + 1
-
-    # without autoflush, the batch is committed by its owner only
-    bq = BatchedCommandQueue(MTL.MTLCommandQueue(device()); autoflush=false)
-    for _ in 1:n
-        @metal threads=1 queue=bq policy_increment_kernel(A)
-    end
-    batching && @test bq.nops == n
-    synchronize(bq)
-    @test Array(A) == Int32[n]
-    bq.autoflush = true
-    for _ in 1:n
-        @metal threads=1 queue=bq policy_increment_kernel(A)
-    end
-    @test bq.nops < n
-    synchronize(bq)
-    @test Array(A) == Int32[2n]
-
-    # with one command buffer in flight, submitting waits for the previous one
-    bq = BatchedCommandQueue(MTL.MTLCommandQueue(device()); inflight=1)
-    for _ in 1:4
-        @metal threads=1 queue=bq submit=true policy_increment_kernel(A)
-        @test Metal.pending_cleanup_count(bq) == 0
-    end
-    synchronize(bq)
-    @test Array(A) == Int32[2n + 4]
-    @test_throws ArgumentError BatchedCommandQueue(MTL.MTLCommandQueue(device()); inflight=0)
-    @test_throws ArgumentError bq.inflight = 0
-end
-
-@testset "committing an enqueued command buffer at the in-flight limit" begin
-    function enqueued_increment_kernel(A)
-        A[1] = A[1] + Int32(1)
-        return
-    end
-    # without batching, the launch itself waits for the limit, and thus for `cmdbuf`
-    if Metal.command_batching() && !Metal.profiling_command_buffers()
-        A = MtlArray(Int32[0])
-        # the batch that committing `cmdbuf` flushes is queued behind it, so it can only
-        # complete once `cmdbuf` is committed
-        bq = BatchedCommandQueue(MTL.MTLCommandQueue(device()); inflight=1, autoflush=false)
-        global_queue!(bq) do
-            cmdbuf = MTL.MTLCommandBuffer(bq.queue)
-            MTL.enqueue!(cmdbuf)
-            @metal threads=1 enqueued_increment_kernel(A)
-            MTL.commit!(cmdbuf)
-        end
-        synchronize(bq)
-        @test Array(A) == Int32[1]
-    end
 end
 
 @testset "pipelines for indirect command buffers" begin
@@ -884,176 +515,6 @@ end
     end
     kernel = @metal launch=false logging_kernel()
     @test_throws ArgumentError Metal.KernelState(kernel)
-end
-
-function inject_command_buffer_error!(queue, info)
-    key = pointer(queue)
-    Base.@lock MTL.last_committed_lock begin
-        state = get!(MTL.submission_state_per_queue, key) do
-            MTL.QueueSubmissionState()
-        end
-        if state.errors === nothing
-            state.errors = [info]
-        else
-            push!(state.errors, info)
-        end
-    end
-    return
-end
-
-@testset "command buffer error accounting" begin
-    @testset "deterministic pruning" begin
-        pending = collect(1:5)
-        errors = String[]
-        MTL._prune_completed_submissions!(pending, errors,
-                                          x -> x <= 4,
-                                          x -> iseven(x) ? "failure $x" : nothing)
-        @test pending == [5]
-        @test errors == ["failure 2", "failure 4"]
-
-        pending = collect(1:3)
-        errors = MTL._prune_completed_submissions!(pending, nothing,
-                                                   x -> x <= 2,
-                                                   _ -> nothing)
-        @test pending == [3]
-        @test errors === nothing
-    end
-
-    @testset "successful direct submissions and bounded retention" begin
-        queue = MTL.MTLCommandQueue(device())
-        for _ in 1:64
-            cmdbuf = MTL.MTLCommandBuffer(queue)
-            MTL.commit!(cmdbuf)
-            MTL.wait_completed(cmdbuf)
-            @test MTL.pending_submission_count(queue) <= 1
-        end
-        @test synchronize(queue) === nothing
-        @test MTL.pending_submission_count(queue) == 0
-    end
-
-    @testset "earlier failure and duplicate suppression" begin
-        queue = MTL.MTLCommandQueue(device())
-        queue.label = "error accounting queue"
-
-        earlier = MTL.MTLCommandBuffer(queue)
-        earlier.label = "failed earlier command buffer"
-        MTL.commit!(earlier)
-        MTL.wait_completed(earlier)
-
-        info = MTL.CommandBufferErrorInfo("MTLCommandBufferErrorDomain", 2,
-                                          "The GPU operation timed out",
-                                          String(earlier.label), String(queue.label))
-        inject_command_buffer_error!(queue, info)
-
-        later = MTL.MTLCommandBuffer(queue)
-        MTL.commit!(later)
-        err = try
-            synchronize(queue)
-            nothing
-        catch exc
-            exc
-        end
-        @test err isa Metal.CommandBufferError
-        @test only(err.errors) == info
-        message = sprint(showerror, err)
-        @test occursin("MTLCommandBufferErrorDomain", message)
-        @test occursin("code 2", message)
-        @test occursin("The GPU operation timed out", message)
-        @test occursin("failed earlier command buffer", message)
-        @test occursin("error accounting queue", message)
-
-        # The synchronization boundary claims the failure before reporting it.
-        @test synchronize(queue) === nothing
-    end
-
-    @testset "device synchronization" begin
-        queue = MTL.MTLCommandQueue(device())
-        cmdbuf = MTL.MTLCommandBuffer(queue)
-        MTL.commit!(cmdbuf)
-        info = MTL.CommandBufferErrorInfo("MTLCommandBufferErrorDomain", 8,
-                                          "Out of memory", nothing, nothing)
-        inject_command_buffer_error!(queue, info)
-        @test_throws Metal.CommandBufferError device_synchronize()
-        @test device_synchronize() === nothing
-    end
-
-    @testset "MPS intermediate submissions" begin
-        queue = MTL.MTLCommandQueue(device())
-        mpsbuf = MPS.MPSCommandBuffer(queue)
-        submitted = mpsbuf.commandBuffer
-        MPS.commitAndContinue!(mpsbuf)
-        @test MTL.last_committed(queue) == submitted
-
-        MTL.commit!(mpsbuf)
-        @test synchronize(queue) === nothing
-    end
-
-    @testset "MPS encoding failures" begin
-        # an enqueued command buffer holds up its queue until it's committed
-        queue = MTL.MTLCommandQueue(device())
-        mpsbuf = MPS.MPSCommandBuffer(queue)
-        submitted = mpsbuf.commandBuffer
-        @test_throws ErrorException MPS.commitAndContinue!(mpsbuf) do cbuf
-            error("failed to encode")
-        end
-        @test submitted.status >= MTL.MTLCommandBufferStatusCommitted
-
-        mpsbuf = MPS.MPSCommandBuffer(queue)
-        submitted = mpsbuf.commandBuffer
-        @test_throws ErrorException MTL.commit!(mpsbuf) do cbuf
-            error("failed to encode")
-        end
-        @test submitted.status >= MTL.MTLCommandBufferStatusCommitted
-        @test synchronize(queue) === nothing
-    end
-end
-
-@testset "command batching tunables" begin
-    env = "JULIA_METAL_TEST_BATCHING_TUNABLE"
-    withenv(env => nothing) do
-        @test Metal.load_command_batching_tunable("test_tunable", env, 7) == 7
-        @test_throws ArgumentError Metal.load_command_batching_tunable("test_tunable", env, 0)
-        @test_throws ArgumentError Metal.load_command_batching_tunable("test_tunable", env, "7")
-    end
-
-    withenv(env => "9") do
-        @test Metal.load_command_batching_tunable("test_tunable", env, 7) == 9
-    end
-    withenv(env => "0") do
-        @test_throws ArgumentError Metal.load_command_batching_tunable("test_tunable", env, 7)
-    end
-    withenv(env => "-1") do
-        @test_throws ArgumentError Metal.load_command_batching_tunable("test_tunable", env, 7)
-    end
-    withenv(env => "not-an-int") do
-        @test_throws ArgumentError Metal.load_command_batching_tunable("test_tunable", env, 7)
-    end
-end
-
-@testset "failed batch encoding" begin
-    queue = global_queue(device())
-    synchronize(queue)
-
-    @test_throws ErrorException @metal threads=1 queue=queue failed_encode_kernel(EncodeFailure(1))
-    @test !Metal.has_open_batch(queue)
-    @test queue.backend.encoder === nothing
-    @test queue.nops == 0
-
-    A = MtlArray(Int32[0])
-    synchronize(queue)
-    @metal threads=1 queue=queue failed_batch_increment_kernel(A)
-    @test_throws ErrorException @metal threads=1 queue=queue failed_encode_kernel(EncodeFailure(2))
-
-    if Metal.command_batching() && !Metal.profiling_command_buffers() &&
-       Metal.command_batching_ops() > 1
-        @test Metal.has_open_batch(queue)
-        @test queue.backend.encoder === nothing
-        @test queue.nops == 1
-    end
-
-    @metal threads=1 queue=queue failed_batch_increment_kernel(A)
-    synchronize(queue)
-    @test Array(A) == Int32[2]
 end
 
 @testset "kernel launch cleanup" begin
