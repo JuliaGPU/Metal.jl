@@ -139,6 +139,15 @@ end
     @test Array(xcreuse) ≈ SPD \ b rtol=1f-4
     @test Array(Xcreuse) ≈ SPD \ B rtol=1f-4
 
+    # empty systems
+    E, W, Z = MtlMatrix{T}(undef, 0, 0), MtlMatrix{T}(undef, 0, 3), MtlMatrix{T}(undef, n, 0)
+    @test size(MPS.solve_cholesky(E, W)) == (0, 3)
+    @test size(MPS.solve_cholesky(dSPD, Z)) == (n, 0)
+    # without right hand sides, the coefficient matrix is still checked
+    @test_throws PosDefException MPS.solve_cholesky(MtlMatrix(T[1 2; 2 1]),
+                                                    MtlMatrix{T}(undef, 2, 0))
+    @test_throws ArgumentError MPS.solve_cholesky(E, W; uplo='X')
+
     U = triu(A)
     L = tril(A)
     BR = rand(T, nrhs, n)
