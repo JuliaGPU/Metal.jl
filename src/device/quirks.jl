@@ -29,11 +29,9 @@ end
 end
 
 # intfuncs.jl
+# (one overlay for Base's three methods: see `Bool` below for why overlays must not shadow
+#  one another)
 @device_override @noinline Base.throw_domerr_powbysq(::Any, p) =
-    @gputhrow "DomainError" "Cannot raise an integer to a negative power"
-@device_override @noinline Base.throw_domerr_powbysq(::Integer, p) =
-    @gputhrow "DomainError" "Cannot raise an integer to a negative power"
-@device_override @noinline Base.throw_domerr_powbysq(::AbstractMatrix, p) =
     @gputhrow "DomainError" "Cannot raise an integer to a negative power"
 
 # checked.jl
@@ -49,12 +47,16 @@ end
 # the `InexactError` themselves, through its vararg `@nospecialize` constructor. On the
 # device that means boxing the arguments into a heap-allocated tuple on the throwing branch
 # (an allocation the optimizer can't remove), so route them through `@gputhrow` instead.
-for T in (Real, Float16)
-    @eval @device_override function Base.Bool(x::$T)
-        x == 0 && return false
-        x == 1 && return true
-        @gputhrow "InexactError" "Inexact conversion"
-    end
+#
+# One overlay answers both, because overlays must not shadow one another. When Julia 1.12+
+# loads a package image, it only trusts a kernel's edge to an overlay that no more specific
+# method of the same table intersects. It verifies other edges against the global method
+# table, which doesn't have the overlay, so it drops the kernel and every session compiles
+# it again (fixed by JuliaLang/julia#64727).
+@device_override function Base.Bool(x::Real)
+    x == 0 && return false
+    x == 1 && return true
+    @gputhrow "InexactError" "Inexact conversion"
 end
 
 # abstractarray.jl
