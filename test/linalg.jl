@@ -40,7 +40,7 @@ using LinearAlgebra, ScopedValues
         @test_throws ":bad is not a valid $(vec_b ? "matvecmul" : "matmul") algorithm." test_matmul(Float16, Float16; vec_b, alg=:bad)
 
         # :auto
-        @test test_matmul(Int32, Int32; vec_b)     # fallback to GPUArrays
+        @test test_matmul(Int32, Int32; vec_b)     # falls back to GPUArrays
         @test test_matmul(Int8, Float32; vec_b)    # should use MPS
         @test test_matmul(Float16, Float32; vec_b) skip=virtual # should use MPSGraph on M1/M2
 
@@ -53,23 +53,25 @@ using LinearAlgebra, ScopedValues
         @test test_matmul(Int8, Float32; vec_b, alg=:MPSGraph)
         @test test_matmul(Float16, Float32; vec_b, alg=:MPSGraph) skip=virtual
 
-        # :GPUArrays
+        # :GPUArrays (generic kernel, any eltype)
         @test test_matmul(Int32, Int32; vec_b, alg=:GPUArrays)
-        @test test_matmul(Int8, Float32; vec_b, alg=:GPUArrays)
+        @test test_matmul(Float32, Float32; vec_b, alg=:GPUArrays)
         @test test_matmul(Float16, Float32; vec_b, alg=:GPUArrays)
+        # narrow-integer inputs need a wide accumulator; the K=20 dot product overflows Int8
+        @test test_matmul(Int8,  Float32; vec_b, alg=:GPUArrays)
+        @test test_matmul(UInt8, Float32; vec_b, alg=:GPUArrays)
+        @test test_matmul(Int8,  Int32;   vec_b, alg=:GPUArrays)
+        # large values whose product overflows Int16 still accumulate into Int32
+        @test test_matmul(Int16, Int32;   vec_b, alg=:GPUArrays, range=-300:300)
+        @test test_matmul(Int32, Int32;   vec_b, alg=:scalar)   # still accepted
+
+        # :native falls back to the generic kernel for operands its own kernels don't take
+        @test test_matmul(Int32, Int32; vec_b, alg=:native)
+        @test test_matmul(Int8,  Int32; vec_b, alg=:native)
 
         # :simd (simdgroup kernel, Float16/Float32 only)
         @test test_matmul(Float32, Float32; vec_b, alg=:simd)
         @test_throws "algorithm `:simd`" test_matmul(Int32, Int32; vec_b, alg=:simd)
-        # :scalar (scalar kernel, any eltype)
-        @test test_matmul(Int32, Int32; vec_b, alg=:scalar)
-        @test test_matmul(Float32, Float32; vec_b, alg=:scalar)
-        # narrow-integer inputs need a wide accumulator; the K=20 dot product overflows Int8
-        @test test_matmul(Int8,  Float32; vec_b, alg=:scalar)
-        @test test_matmul(UInt8, Float32; vec_b, alg=:scalar)
-        @test test_matmul(Int8,  Int32;   vec_b, alg=:scalar)
-        # large values whose product overflows Int16 still accumulate into Int32
-        @test test_matmul(Int16, Int32;   vec_b, alg=:scalar, range=-300:300)
         # :tensor is matrix-only and needs tile-divisible dims; N=20 errors either way
         @test_throws Exception test_matmul(Float32, Float32; vec_b, alg=:tensor)
         end
@@ -172,7 +174,7 @@ end
         bv = view(db, :, 2:4)
 
         # Call the storage-level `mul!` directly so these exercise the native kernels and honor `matmul_alg`
-        for alg in (:auto, :simd, :scalar)
+        for alg in (:auto, :simd, :GPUArrays)
             C = MtlArray(zeros(T, 2, 5))
             @with (Metal.matmul_alg => alg) LinearAlgebra.mul!(C, 'N', 'N', av, db, true, false)
             @test Array(C) ≈ view(a, 2:3, :) * b
@@ -200,7 +202,7 @@ end
         @test Array(asv' * asv) ≈ view(as, 1:2:8, :)' * view(as, 1:2:8, :)
         @test Array(asv * dxs) ≈ view(as, 1:2:8, :) * xs
 
-        for alg in (:auto, :simd, :scalar)
+        for alg in (:auto, :simd, :GPUArrays)
             C = MtlArray(zeros(T, 4, 5))
             @with (Metal.matmul_alg => alg) LinearAlgebra.mul!(C, 'N', 'N', asv, bsv, true, false)
             @test Array(C) ≈ view(as, 1:2:8, :) * view(bs, :, 1:2:10)
@@ -211,7 +213,7 @@ end
         end
 
         # strided destination
-        for alg in (:auto, :simd, :scalar)
+        for alg in (:auto, :simd, :GPUArrays)
             cs = rand(T, 8, 5)
             dcs = MtlArray(cs)
             mul!(view(cs, 1:2:8, :), view(as, 1:2:8, :), view(bs, :, 1:2:10), 2.0f0, 1.0f0)
@@ -225,7 +227,7 @@ end
         b2 = rand(T, 3, 5)
         da2 = MtlArray(a2)
         db2 = MtlArray(b2)
-        for alg in (:auto, :simd, :scalar)
+        for alg in (:auto, :simd, :GPUArrays)
             c2 = rand(T, 4, 5)
             dc2 = MtlArray(c2)
             mul!(view(c2, 1:2, :), a2, b2)
@@ -239,7 +241,7 @@ end
     # Metal has no Float64, so the scalars must be converted before they reach a kernel
     A, B, C, x = rand(Float32, 20, 30), rand(Float32, 30, 10), rand(Float32, 20, 10), rand(Float32, 30)
     dA, dB, dC, dx = MtlArray.((A, B, C, x))
-    for alg in (:auto, :native, :simd, :scalar, :GPUArrays)
+    for alg in (:auto, :native, :simd, :GPUArrays)
         dc = copy(dC)
         @with (Metal.matmul_alg => alg) mul!(dc, dA, dB, 2, 0.5)
         @test Array(dc) ≈ 2 * A * B + C / 2
@@ -288,7 +290,7 @@ end
         ref = 2 * Array(a) * Array(b) + c / 2
         vec = c isa AbstractVector
         # Float64 scalars must not reach the kernels
-        for alg in (:auto, :native, :simd, :scalar, :GPUArrays), (α, β) in ((2f0, 0.5f0), (2, 0.5))
+        for alg in (:auto, :native, :simd, :GPUArrays), (α, β) in ((2f0, 0.5f0), (2, 0.5))
             dc, da, db = f(copy(dC), dA, dB, dx, copy(dy))
             @with (Metal.matmul_alg => alg) mul!(dc, da, db, α, β)
             @test Array(dc) ≈ ref
@@ -314,11 +316,15 @@ end
     end
     @test_throws DimensionMismatch mul!(view(copy(dy), 1:2:79), dA, view(dx, 1:2:79))
 
-    # a row of a matrix has no column view for the native kernels
-    c, a, b = view(dC, 3, 1:24), view(dA, 3:26, 1:33), view(dB, 1:33, 7)
-    @with (Metal.matmul_alg => :auto) mul!(c, a, b)
-    @test Array(c) ≈ Array(a) * Array(b)
-    @test_throws "multiplication algorithm `:scalar` is not supported" @with (Metal.matmul_alg => :scalar) mul!(c, a, b)
+    # a row of a matrix has no column view for the native kernels, so only the generic one
+    # takes it
+    for alg in (:auto, :native, :GPUArrays)
+        c, a, b = view(copy(dC), 3, 1:24), view(dA, 3:26, 1:33), view(dB, 1:33, 7)
+        @with (Metal.matmul_alg => alg) mul!(c, a, b)
+        @test Array(c) ≈ Array(a) * Array(b)
+    end
+    c, a, b = view(copy(dC), 3, 1:24), view(dA, 3:26, 1:33), view(dB, 1:33, 7)
+    @test_throws "multiplication algorithm `:simd` is not supported" @with (Metal.matmul_alg => :simd) mul!(c, a, b)
 end
 
 @testset "unambiguous view products" begin
@@ -363,17 +369,17 @@ end
         @test nativetest(T, 65, 47, 33, only(tA), only(tB), α, β; alg=:simd)   # ragged
     end
 
-    # scalar path (ComplexF32, Int32): includes conjugate transpose
+    # generic fallback of `:native` (ComplexF32, Int32): includes conjugate transpose
     @testset "$T $tA$tB" for T in (ComplexF32, Int32),
                              (tA, tB) in (("N","N"), ("N","T"), ("T","N"), ("C","N"), ("N","C"))
         α = T(2); β = T <: Integer ? T(1) : T(1) / 2
-        @test nativetest(T, 40, 24, 16, only(tA), only(tB), α, β; alg=:scalar)
-        @test nativetest(T, 41, 25, 17, only(tA), only(tB), α, β; alg=:scalar)   # ragged
+        @test nativetest(T, 40, 24, 16, only(tA), only(tB), α, β)
+        @test nativetest(T, 41, 25, 17, only(tA), only(tB), α, β)   # ragged
     end
 
     # offset views (dense MtlMatrix with offset≠0): the case MPSGraph falls back on
     @testset "offset views" begin
-        for (T, alg) in ((Float32, :simd), (ComplexF32, :scalar))
+        for (T, alg) in ((Float32, :simd), (ComplexF32, :native))
             P = MtlArray(mk(T, (40, 60))); Q = MtlArray(mk(T, (32, 50)))
             A = view(P, :, 3:34)      # 40×32, offset≠0, dense
             B = view(Q, :, 2:41)      # 32×40, offset≠0, dense
@@ -396,12 +402,12 @@ end
         end
     end
 
-    # Symmetric/Hermitian wrapper chars ('S'/'s'/'H'/'h'): the simd and scalar kernels
-    # gather through the stored triangle, so these run natively instead of through the
-    # GPUArrays fallback. The reference uses the same wrapper on the CPU, so the random
-    # data in the non-stored triangle catches any read outside the stored one. BLAS
-    # eltypes (Float32/ComplexF32) only reach Metal's storage-level `mul!` on Julia 1.12+,
-    # where GPUArrays overrides generic_matmatmul_wrapper! away from BLAS.symm!/hemm!.
+    # Symmetric/Hermitian wrapper chars ('S'/'s'/'H'/'h'): the simd kernel gathers through
+    # the stored triangle, as the generic one does for the eltypes that fall back to it.
+    # The reference uses the same wrapper on the CPU, so the random data in the non-stored
+    # triangle catches any read outside the stored one. BLAS eltypes (Float32/ComplexF32)
+    # only reach Metal's storage-level `mul!` on Julia 1.12+, where GPUArrays overrides
+    # generic_matmatmul_wrapper! away from BLAS.symm!/hemm!.
     @testset "Symmetric/Hermitian wrappers" begin
         check(T, dX, ref) = T <: Integer ? Array(dX) == ref : isapprox(Array(dX), ref; rtol=tol(T))
         @testset "$W{$T} :$uplo" for T in (Float32, Float16, ComplexF32, Int32),
@@ -434,7 +440,7 @@ end
         # forcing a specific kernel works too; the tensor kernel can't handle wrappers
         A64 = MtlArray(rand(Float32, 64, 64)); B64 = MtlArray(rand(Float32, 64, 64))
         ref = Symmetric(Array(A64)) * Array(B64)
-        for alg in (:simd, :scalar)
+        for alg in (:simd, :GPUArrays)
             C64 = MtlArray(zeros(Float32, 64, 64))
             @with (Metal.matmul_alg => alg) mul!(C64, Symmetric(A64), B64)
             @test isapprox(Array(C64), ref; rtol=tol(Float32))
