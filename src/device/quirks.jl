@@ -28,12 +28,6 @@ end
     return k - Base.exponent_bias(T)
 end
 
-# intfuncs.jl
-# (one overlay for Base's three methods: see `Bool` below for why overlays must not shadow
-#  one another)
-@device_override @noinline Base.throw_domerr_powbysq(::Any, p) =
-    @gputhrow "DomainError" "Cannot raise an integer to a negative power"
-
 # checked.jl
 @device_override @noinline Base.Checked.throw_overflowerr_binaryop(op, x, y) =
     @gputhrow "OverflowError" "Binary operation overflowed"
