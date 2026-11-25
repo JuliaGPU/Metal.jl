@@ -751,6 +751,28 @@ end
     @test_throws ArgumentError bq.inflight = 0
 end
 
+@testset "committing an enqueued command buffer at the in-flight limit" begin
+    function enqueued_increment_kernel(A)
+        A[1] = A[1] + Int32(1)
+        return
+    end
+    # without batching, the launch itself waits for the limit, and thus for `cmdbuf`
+    if Metal.command_batching() && !Metal.profiling_command_buffers()
+        A = MtlArray(Int32[0])
+        # the batch that committing `cmdbuf` flushes is queued behind it, so it can only
+        # complete once `cmdbuf` is committed
+        bq = BatchedCommandQueue(MTL.MTLCommandQueue(device()); inflight=1, autoflush=false)
+        global_queue!(bq) do
+            cmdbuf = MTL.MTLCommandBuffer(bq.queue)
+            MTL.enqueue!(cmdbuf)
+            @metal threads=1 enqueued_increment_kernel(A)
+            MTL.commit!(cmdbuf)
+        end
+        synchronize(bq)
+        @test Array(A) == Int32[1]
+    end
+end
+
 function inject_command_buffer_error!(queue, info)
     key = pointer(queue)
     Base.@lock MTL.last_committed_lock begin

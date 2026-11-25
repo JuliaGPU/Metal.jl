@@ -490,7 +490,12 @@ end
 function submit_command_buffer(f, cmdbuf, commit::Bool)
     queue = cmdbuf.commandQueue
     bq = get(task_local_storage(), batched_queue_key(queue), nothing)
-    bq === nothing || flush!(bq)
+    # without waiting for the in-flight limit: the batch may be queued behind `cmdbuf`, if
+    # that was enqueued before, and can then only complete once `cmdbuf` is committed
+    if bq !== nothing
+        commit_batch!(bq)
+        drain_cleanups!(bq)
+    end
     # the work encoded since a command buffer was enqueued executes after it
     ordered = bq !== nothing && (!commit || cmdbuf.status == MTL.MTLCommandBufferStatusNotEnqueued)
 
