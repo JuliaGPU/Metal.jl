@@ -245,7 +245,8 @@ mutable struct Metal4Backend <: CommandBackend
 end
 
 """
-    BatchedCommandQueue
+    BatchedCommandQueue(queue::MTLCommandQueue; inflight=command_batching_inflight(),
+                        autoflush=true)
 
 A command queue that batches GPU work to amortize Metal's per-command-buffer
 submission latency. Kernel launches (`@metal`) and GPU-side blit operations
@@ -262,25 +263,29 @@ as selected by the `command_api` preference.
 The open batch is committed ("flushed") when any of the following happens:
 
   * [`synchronize`](@ref) is called on the queue (or on one of its command buffers);
-  * a command buffer derived from the queue is enqueued or committed;
+  * a command buffer derived from the queue is enqueued or committed by a task whose queue
+    it is (see [`global_queue!`](@ref));
   * command batching is disabled with the `command_batching = false` preference;
   * the batch reaches `command_batching_ops()` operations or
-    `command_batching_bytes()` of blit traffic;
+    `command_batching_bytes()` of blit traffic, unless `autoflush` is `false`;
   * a GPU profiler is attached, in which case batching is disabled (each operation
     gets its own command buffer) so per-operation GPU timing is preserved;
   * an immediate submission is requested via `@metal ... submit=true`, or
     `Metal.flush!` is called explicitly.
 
 Program order is preserved across flushes: command buffers execute in commit order
-and dispatches within an encoder run serially. At most `command_batching_inflight()`
-command buffers are kept in flight; further submissions block until the GPU drains
-one. Obtain the current task's batched queue with [`global_queue`](@ref).
+and dispatches within an encoder run serially. At most `inflight` command buffers are
+kept in flight; further submissions block until the GPU drains one. `inflight` and
+`autoflush` are also fields that the owner of the queue may change, e.g., to commit a
+frame as a single command buffer. Obtain the current task's batched queue with
+[`global_queue`](@ref).
 
 `BatchedCommandQueue`s are task-local, but are only mutated while holding a global lock,
 so that other tasks can flush them too. Sharing a raw `MTLCommandQueue` across tasks is
-unsupported. Once the owning task has finished, any task's [`synchronize`](@ref) flushes
-and waits for the work it left behind, so results of a task are visible after `wait`ing
-for it. [`device_synchronize`](@ref) flushes the batches of all tasks, which supports
+unsupported. A queue is owned by the task that constructed it, or that last made it its
+queue with [`global_queue!`](@ref). Once the owning task has finished, any task's
+[`synchronize`](@ref) flushes and waits for the work it left behind, so results of a task
+are visible after `wait`ing for it. [`device_synchronize`](@ref) flushes the batches of all tasks, which supports
 `@async` work and the REPL synchronization hook.
 """
 mutable struct BatchedCommandQueue{B<:CommandBackend}
@@ -294,6 +299,9 @@ mutable struct BatchedCommandQueue{B<:CommandBackend}
     nops::Int
     nbytes::Int
     pending_ops::Vector{Any}
+    # the batching policy, which the owner may change
+    inflight::Int
+    autoflush::Bool
 end
 
 const Metal3Queue = BatchedCommandQueue{Metal3Backend}
@@ -304,7 +312,10 @@ const Metal4Queue = BatchedCommandQueue{Metal4Backend}
 # the abstract `BatchedCommandQueue`, to keep dispatch on them static.
 const ConcreteBatchedQueue = COMMAND_API === :metal4 ? Metal4Queue : Metal3Queue
 
-function BatchedCommandQueue(queue::MTLCommandQueue)
+function BatchedCommandQueue(queue::MTLCommandQueue;
+                             inflight::Integer=command_batching_inflight(),
+                             autoflush::Bool=true)
+    check_inflight(inflight)
     dev = queue.device
     backend = @static if COMMAND_API === :metal4
         Metal4Backend(queue, dev)
@@ -312,8 +323,12 @@ function BatchedCommandQueue(queue::MTLCommandQueue)
         can_use_residency_sets(dev) && install_queue_residency!(queue, dev)
         Metal3Backend()
     end
-    BatchedCommandQueue(queue, dev, current_task(), backend, Any[], 0, 0, Any[])
+    BatchedCommandQueue(queue, dev, current_task(), backend, Any[], 0, 0, Any[],
+                        Int(inflight), autoflush)
 end
+
+check_inflight(n) =
+    n > 0 || throw(ArgumentError("inflight must be positive, got $n"))
 
 # Properties that aren't our own fields (e.g. `label`) forward to the wrapped
 # queue, so a BatchedCommandQueue is a drop-in for the MTLCommandQueue it batches.
@@ -323,6 +338,7 @@ end
 end
 
 @inline function Base.setproperty!(bq::BatchedCommandQueue, name::Symbol, value)
+    name === :inflight && check_inflight(value)
     hasfield(typeof(bq), name) && return setfield!(bq, name, value)
     return setproperty!(getfield(bq, :queue), name, value)
 end
@@ -387,6 +403,51 @@ function batched_queue(queue::MTLCommandQueue)
     end::ConcreteBatchedQueue
 end
 
+"""
+    global_queue!(bq::BatchedCommandQueue)
+    global_queue!(f, bq::BatchedCommandQueue)
+
+Make `bq` the queue of the current task for `bq`'s device, i.e., what
+[`global_queue`](@ref) returns: kernel launches without a `queue` argument, array
+operations like `copyto!` and `fill!`, and MPS then use it. The second form does so only
+while `f` runs.
+
+This is for code that owns a queue, e.g. because it encodes its own command buffers with
+resources it made resident on that queue, and wants the work of the libraries it calls
+batched and ordered with its own. While `bq` is the task's queue, command buffers that the
+task commits to the underlying `MTLCommandQueue`, and synchronizing that queue, commit
+`bq`'s open batch first; ones committed to it otherwise aren't ordered against `bq`'s
+work. Work that the task submitted to another queue before is ordered against `bq` like
+work on any two queues: through the arrays that both use.
+
+The task becomes the owner of `bq`, also after `f` returns: `bq` is not adopted by other
+tasks synchronizing until this task has finished, and its errors are reported when this
+task synchronizes it.
+"""
+function global_queue!(bq::BatchedCommandQueue)
+    tls = task_local_storage()
+    tls[(:BatchedCommandQueue, bq.device)] = bq
+    tls[batched_queue_key(bq.queue)] = bq
+    # under the lock that orphaned queues are committed with, so that a task synchronizing
+    # doesn't adopt the queue after it got a new owner
+    Base.@lock submission_lock bq.owner = current_task()
+    return bq
+end
+
+function global_queue!(f, bq::BatchedCommandQueue)
+    keys = ((:BatchedCommandQueue, bq.device), batched_queue_key(bq.queue))
+    tls = task_local_storage()
+    previous = map(key -> get(tls, key, nothing), keys)
+    global_queue!(bq)
+    try
+        return f()
+    finally
+        for (key, value) in zip(keys, previous)
+            value === nothing ? delete!(tls, key) : (tls[key] = value)
+        end
+    end
+end
+
 raw_queue(bq::BatchedCommandQueue) = bq.queue
 raw_queue(queue::MTLCommandQueue) = queue
 
@@ -429,7 +490,12 @@ end
 function submit_command_buffer(f, cmdbuf, commit::Bool)
     queue = cmdbuf.commandQueue
     bq = get(task_local_storage(), batched_queue_key(queue), nothing)
-    bq === nothing || flush!(bq)
+    # without waiting for the in-flight limit: the batch may be queued behind `cmdbuf`, if
+    # that was enqueued before, and can then only complete once `cmdbuf` is committed
+    if bq !== nothing
+        commit_batch!(bq)
+        drain_cleanups!(bq)
+    end
     # the work encoded since a command buffer was enqueued executes after it
     ordered = bq !== nothing && (!commit || cmdbuf.status == MTL.MTLCommandBufferStatusNotEnqueued)
 
@@ -715,12 +781,12 @@ function pending_cleanup_count(bq::BatchedCommandQueue)
     return length(pending_commands(bq))
 end
 
-# wait until fewer than `command_batching_inflight()` command buffers are in flight
+# wait until fewer than `bq.inflight` command buffers are in flight
 function limit_inflight!(bq::BatchedCommandQueue)
     while true
         token = Base.@lock submission_lock begin
             drain_cleanups!(bq)
-            pending_cleanup_count(bq) < command_batching_inflight() && return
+            pending_cleanup_count(bq) < bq.inflight && return
             first(pending_commands(bq)).token
         end
         wait_completed!(token)
@@ -776,8 +842,8 @@ end
 function maybe_autoflush!(bq::BatchedCommandQueue)
     if !command_batching() ||
        profiling_command_buffers() ||
-       bq.nops >= command_batching_ops() ||
-       bq.nbytes >= command_batching_bytes()
+       (bq.autoflush && (bq.nops >= command_batching_ops() ||
+                         bq.nbytes >= command_batching_bytes()))
         flush!(bq)
     end
     return
