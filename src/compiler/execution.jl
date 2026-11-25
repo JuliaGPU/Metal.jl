@@ -1,6 +1,6 @@
 export @metal, metalcall
 
-@public mtlconvert, mtlfunction, HostKernel
+@public mtlconvert, mtlfunction, HostKernel, KernelState, kernel_resources
 
 
 ## high-level @metal interface
@@ -582,6 +582,10 @@ The compiler keywords of [`@metal`](@ref) are supported, and:
   testing.
 - `gpufamily`: the Apple GPU family (`MTL.MTLGPUFamilyApple<n>`) that the generated code may
   rely on (see [`apple_family`](@ref)). Defaults to the highest family the device supports.
+- `indirect`: whether to link a pipeline that the commands of an `MTLIndirectCommandBuffer`
+  can use (see [`KernelState`](@ref) for launching it that way). Defaults to `false`, because
+  with Metal's shader validation such a pipeline reads zeros from constant memory (seen on
+  macOS 27).
 - `source`: the callable before [`mtlconvert`](@ref) turned it into `f`, which is converted
   again at every launch (so it should convert to an object of the same type as `f`).
   Defaults to `f`, but should be set when `f` captures GPU arrays, so that their buffers are
@@ -631,7 +635,8 @@ end
 
 # Everything about creating a kernel object that doesn't depend on the kernel's type, kept
 # out of `mtlfunction`, which is compiled for every kernel.
-@noinline function link_kernel(mi::Core.MethodInstance; name=nothing, kwargs...)
+@noinline function link_kernel(mi::Core.MethodInstance; name=nothing, indirect::Bool=false,
+                               kwargs...)
     Base.@lock mtlfunction_lock begin
         dev = device()
         config = compiler_config(dev; name, kwargs...)::MetalCompilerConfig
@@ -641,8 +646,9 @@ end
 
         # Resolve the MTLComputePipelineState for the active device. Linear scan
         # over the session-local cache; almost always n=1, one `===` compare.
+        pipelines = indirect ? res.indirect_pipelines : res.pipelines
         pipeline = Ref{MTLComputePipelineState}()
-        @inbounds for (cached_dev, cached_pipeline) in res.pipelines
+        @inbounds for (cached_dev, cached_pipeline) in pipelines
             if cached_dev === dev
                 pipeline[] = cached_pipeline
                 break
@@ -656,12 +662,12 @@ end
             pipeline[] = link_pipeline(dev, res.air::Vector{UInt8},
                                      res.metallib::Vector{UInt8},
                                      res.entry::String, job.config.target.minthreads,
-                                     label)
+                                     label; indirect)
             # Don't cache session-local pipeline handles while precompiling: the
             # results struct is serialized into the package image along with its
             # CodeInstance, and ObjectiveC handles would come back dangling.
             if ccall(:jl_generating_output, Cint, ()) != 1
-                push!(res.pipelines, (dev, pipeline[]))
+                push!(pipelines, (dev, pipeline[]))
             end
         end
 
@@ -905,19 +911,12 @@ Base.@nospecializeinfer function launch(
     dev = kernel.device
 
     buf, buf_addr = malloc_buffer_and_gpu_address(dev)
-    buf_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, buf_addr)
     exc, exc_addr = exception_info_buffer_and_gpu_address(dev)
-    exc_ptr = reinterpret(Core.LLVMPtr{UInt8, AS.Device}, exc_addr)
     reloc = kernel.reloc_table
-    reloc_ptr = reinterpret(Core.LLVMPtr{UInt64, AS.Device},
-                            reloc === nothing ? UInt64(0) : UInt64(MTL.gpu_address(reloc)))
-    # (drawing a seed for every launch would make the host RNG stream depend on how many
-    # kernels ran, breaking reproducibility of seeded host code)
-    seed = kernel.device_rng ? Random.rand(UInt32) : UInt32(0)
-    kernel_state = KernelState(seed, kernel.exception_table, buf_ptr, exc_ptr, reloc_ptr)
+    state = make_kernel_state(kernel, buf_addr, exc_addr, launch_seed(kernel))
 
     if kernel.loggingEnabled
-        return launch_logging!(kernel, gs, ts, bq, args, kernel_state, buf, exc)
+        return launch_logging!(kernel, gs, ts, bq, args, state, buf, exc)
     end
 
     # The kernel state holds GPU addresses to per-device scratch buffers (malloc bump
@@ -932,8 +931,68 @@ Base.@nospecializeinfer function launch(
     end
 
     op = MTL.profile_metadata[] === nothing ? nothing : kernel_operation(kernel, gs, ts)
-    submit_launch!(kernel.pipeline, gs, ts, bq, kernel, kernel_state, kernel.source, args, (),
+    submit_launch!(kernel.pipeline, gs, ts, bq, kernel, state, kernel.source, args, (),
                    resources, op, submit)
+end
+
+# (drawing a seed for every launch would make the host RNG stream depend on how many
+# kernels ran, breaking reproducibility of seeded host code)
+launch_seed(kernel::HostKernel) = kernel.device_rng ? Random.rand(UInt32) : UInt32(0)
+
+function make_kernel_state(kernel::HostKernel, buf_addr::UInt64, exc_addr::UInt64,
+                           seed::UInt32)
+    reloc = kernel.reloc_table
+    reloc_addr = reloc === nothing ? UInt64(0) : UInt64(MTL.gpu_address(reloc))
+    KernelState(seed, kernel.exception_table,
+                reinterpret(Core.LLVMPtr{UInt8, AS.Device}, buf_addr),
+                reinterpret(Core.LLVMPtr{UInt8, AS.Device}, exc_addr),
+                reinterpret(Core.LLVMPtr{UInt64, AS.Device}, reloc_addr))
+end
+
+"""
+    KernelState(kernel::HostKernel; seed)
+
+The state that `kernel` takes as its first argument, for launching it in a way Metal.jl
+doesn't manage, e.g. from an `MTLIndirectCommandBuffer`. The value is opaque, and only valid
+on `kernel.device`.
+
+The kernel's parameters are bound in order, from index 0: the state, the kernel's function
+(`kernel.f`), and its arguments converted with [`mtlconvert`](@ref). Parameters whose type
+has no data, like a function without fields or a type, take no index. A pointer is bound as
+the buffer it points into, at its offset, a value that isn't `isbits` (e.g. a `Symbol`) by
+the address of the object, and other values by their bytes. Indirect commands can only bind
+these in a buffer.
+
+The state points to buffers that [`kernel_resources`](@ref) returns. The launch has to make
+these resident, and keep them and the state's buffer alive until it has completed.
+
+`seed` seeds the device-side random number generator, if the kernel uses it, and defaults to
+a random number. Every launch with the same state, e.g. replays of an indirect command
+buffer, uses the same seed. Exceptions thrown by such launches are reported by the first
+[`synchronize`](@ref) after they have completed. Kernels that log (see [`@mtlprintf`](@ref)) can't be launched this
+way, as they need Metal.jl to set up the logging state of their command buffer.
+"""
+function KernelState(kernel::HostKernel; seed::UInt32=launch_seed(kernel))
+    kernel.loggingEnabled &&
+        throw(ArgumentError("a kernel that logs can only be launched by Metal.jl"))
+    _, buf_addr = malloc_buffer_and_gpu_address(kernel.device)
+    _, exc_addr = exception_info_buffer_and_gpu_address(kernel.device)
+    make_kernel_state(kernel, buf_addr, exc_addr, seed)
+end
+
+"""
+    kernel_resources(kernel::HostKernel)::Tuple{Vararg{MTLBuffer}}
+
+The buffers that the [`KernelState`](@ref) of `kernel` points to, which a launch that
+Metal.jl doesn't manage has to make resident for reading and writing, e.g. by adding them to
+a residency set or with `useResource:usage:`. The buffers of the kernel's arguments aren't
+included.
+"""
+function kernel_resources(kernel::HostKernel)
+    buf, _ = malloc_buffer_and_gpu_address(kernel.device)
+    exc, _ = exception_info_buffer_and_gpu_address(kernel.device)
+    reloc = kernel.reloc_table
+    return reloc === nothing ? (buf, exc) : (buf, exc, reloc)
 end
 
 # check a launch configuration against the pipeline's limits (`reqthreads` all zeros when

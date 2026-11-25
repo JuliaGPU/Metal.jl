@@ -1,11 +1,29 @@
 ## gpucompiler interface implementation
 
-struct MetalCompilerParams <: AbstractCompilerParams
-    # Highest targeted MTLGPUFamilyApple<n>, or 0 if the device reports none.
-    apple_family::Int
-end
+"""
+    Metal.AbstractMetalCompilerParams
+
+The supertype of the parameters of compiler jobs that Metal.jl's implementation of
+GPUCompiler's interface applies to. A package that compiles functions of its own kind with
+Metal.jl's device library, e.g. the stages of a render pipeline, subtypes it and creates
+jobs with `GPUCompiler.CompilerConfig(Metal.compiler_config(dev; ...); params)`. It then
+only has to implement the methods of the interface for which its functions differ from
+Metal.jl's kernels, invoking Metal.jl's for the rest. Compile the jobs with
+[`compile_to_metallib`](@ref).
+
+Jobs compile to kernels that take a [`KernelState`](@ref), unless
+`GPUCompiler.kernel_state_type` returns `Nothing` for them. A thread of code without one
+that throws an exception stops without reporting it, and the code can't use the device-side
+random number generator, and keeps host addresses specific to the session.
+"""
+abstract type AbstractMetalCompilerParams <: AbstractCompilerParams end
+
+@public AbstractMetalCompilerParams, compile_to_metallib, compiler_config
+
+struct MetalCompilerParams <: AbstractMetalCompilerParams end
 const MetalCompilerConfig = CompilerConfig{MetalCompilerTarget, MetalCompilerParams}
 const MetalCompilerJob = CompilerJob{MetalCompilerTarget, MetalCompilerParams}
+const AnyMetalJob = CompilerJob{MetalCompilerTarget, <:AbstractMetalCompilerParams}
 
 """
     MetalResults
@@ -29,6 +47,8 @@ Cached compilation results for a Metal kernel job, managed by
 - `pipelines`: session-local cache of `(MTLDevice, MTLComputePipelineState)` pairs
   resulting from the host-side link of `metallib` onto a device. Never populated
   during precompilation, so package images only carry the portable fields.
+- `indirect_pipelines`: the same for pipelines that indirect command buffers can use,
+  which are linked from the same `metallib` (see `mtlfunction`'s `indirect` keyword).
 - `reloc_tables`: session-local cache of the per-device relocation-word buffers, keyed
   the same way and populated under the same rule.
 
@@ -50,27 +70,32 @@ mutable struct MetalResults
     exception_sites::Vector{GPUCompiler.ExceptionSite}
     # host-side objects (session-local)
     pipelines::Vector{Tuple{MTLDevice, MTLComputePipelineState}}
+    indirect_pipelines::Vector{Tuple{MTLDevice, MTLComputePipelineState}}
     reloc_tables::Vector{Tuple{MTLDevice, MTLBuffer}}
     MetalResults() = new(nothing, nothing, nothing, nothing, nothing, nothing,
                          GPUCompiler.ExceptionSite[],
                          Tuple{MTLDevice, MTLComputePipelineState}[],
+                         Tuple{MTLDevice, MTLComputePipelineState}[],
                          Tuple{MTLDevice, MTLBuffer}[])
 end
 
-GPUCompiler.runtime_module(::MetalCompilerJob) = Metal
-GPUCompiler.uses_exception_sites(::MetalCompilerJob) = true
+GPUCompiler.runtime_module(::AnyMetalJob) = Metal
 
-GPUCompiler.method_table(::MetalCompilerJob) = method_table
+GPUCompiler.kernel_state_type(::AnyMetalJob) = KernelState
+has_kernel_state(job::AnyMetalJob) = GPUCompiler.kernel_state_type(job) === KernelState
+
+# exceptions are reported through the kernel state (see `exception_site`)
+GPUCompiler.uses_exception_sites(job::AnyMetalJob) = has_kernel_state(job)
+
+GPUCompiler.method_table(::AnyMetalJob) = method_table
 
 # Metal supports neither double precision nor 128-bit integers, so also use GPUToolbox's
 # overrides that keep single-precision math out of Float64, and 64-bit integer math (e.g.
 # `Rational` comparisons) out of Int128. Base's exceptions with messages formatted at run
 # time don't compile, so also use the overrides that throw them with a constant message.
-GPUCompiler.method_tables(::MetalCompilerJob) =
+GPUCompiler.method_tables(::AnyMetalJob) =
     (method_table, GPUToolbox.Overlays.float64_overrides, GPUToolbox.Overlays.int128_overrides,
      GPUToolbox.Overlays.throw_overrides)
-
-GPUCompiler.kernel_state_type(job::MetalCompilerJob) = KernelState
 
 # Keep relocations symbolic. Most kernels are relocation-free, so their metallib is
 # byte-stable across sessions, which restores pkgimage persistence (`can_persist_results`)
@@ -84,30 +109,32 @@ GPUCompiler.kernel_state_type(job::MetalCompilerJob) = KernelState
 #
 # The lowering (and the box demotion it relies on) needs LLVM.jl's
 # `convert_users_to_instructions!`, available on LLVM 17+ (Julia 1.12+) only; older versions
-# fall back to session-local `:bake` resolution and forgo persistence. So do non-kernel jobs,
-# which have no kernel state to reach a table through: those exist only to be read
-# (`Metal.code_air` and friends), never launched or cached, so a session-local resolution is
-# all they need.
-GPUCompiler.relocation_lowering(@nospecialize(job::MetalCompilerJob)) =
-    (job.config.kernel && LLVM.version() >= v"17") ? (:table) : (:bake)
+# fall back to session-local `:bake` resolution and forgo persistence. So do jobs without a
+# kernel state to reach a table through (see `AbstractMetalCompilerParams`), and non-kernel
+# jobs: those exist only to be read (`Metal.code_air` and friends), never launched or cached,
+# so a session-local resolution is all they need.
+GPUCompiler.relocation_lowering(@nospecialize(job::AnyMetalJob)) =
+    (job.config.kernel && has_kernel_state(job) && LLVM.version() >= v"17") ?
+        (:table) : (:bake)
 
 # Metal 4 tensor ops (`mpp::tensor_ops`, see `device/intrinsics/tensor.jl`) lower to calls to
 # externally-defined `__tensorops_impl_*` symbols, resolved by the Metal runtime's tensor-ops
 # library at link time. They aren't `air.*` intrinsics, so whitelist them alongside the base
 # Metal prefix to keep IR validation from rejecting them as unknown functions.
-GPUCompiler.isintrinsic(@nospecialize(job::MetalCompilerJob), fn::String) =
+GPUCompiler.isintrinsic(@nospecialize(job::AnyMetalJob), fn::String) =
     invoke(GPUCompiler.isintrinsic,
            Tuple{CompilerJob{MetalCompilerTarget}, String}, job, fn) ||
     startswith(fn, "__tensorops_")
 
 
 
-function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
+function GPUCompiler.finish_module!(@nospecialize(job::AnyMetalJob),
                                     mod::LLVM.Module, entry::LLVM.Function)
     # Materialize apple_family() before GPUCompiler optimizes the linked module.
     gv = get(mod.globals, "apple_family", nothing)
     if gv !== nothing
-        gv.initializer = ConstantInt(LLVM.Int32Type(), job.config.params.apple_family)
+        family = something(job.config.target.apple_family, 0)
+        gv.initializer = ConstantInt(LLVM.Int32Type(), family)
         gv.linkage = LLVM.Linkage.Private
     end
 
@@ -126,6 +153,10 @@ function GPUCompiler.finish_module!(@nospecialize(job::MetalCompilerJob),
     # if this kernel uses our RNG, we should prime the shared state.
     # XXX: these transformations should really happen at the Julia IR level...
     if job.config.kernel && haskey(mod.globals, "global_random_keys")
+        # (its state is primed with the seed that the kernel state carries)
+        has_kernel_state(job) ||
+            error("""The device-side random number generator needs the kernel state, which
+                     jobs with $(nameof(typeof(job.config.params))) don't have.""")
         f = initialize_rng_state
         ft = typeof(f)
         tt = Tuple{}
@@ -230,7 +261,7 @@ function is_tensor_op_descriptor_constant(gv::LLVM.GlobalVariable)
 end
 
 function GPUCompiler.metal_global_constant_addrspace(
-    @nospecialize(job::MetalCompilerJob),
+    @nospecialize(job::AnyMetalJob),
     @nospecialize(gv::LLVM.GlobalVariable))
 
     if is_tensor_op_descriptor_constant(gv)
@@ -242,7 +273,7 @@ function GPUCompiler.metal_global_constant_addrspace(
                   job, gv)
 end
 
-function GPUCompiler.finish_ir!(@nospecialize(job::MetalCompilerJob),
+function GPUCompiler.finish_ir!(@nospecialize(job::AnyMetalJob),
                                     mod::LLVM.Module, entry::LLVM.Function)
     entry = invoke(GPUCompiler.finish_ir!,
                    Tuple{CompilerJob{MetalCompilerTarget}, LLVM.Module, LLVM.Function},
@@ -588,6 +619,18 @@ end
 # cache of compiler configurations, per device (but additionally configurable via kwargs)
 const _compiler_configs = Dict{UInt, MetalCompilerConfig}()
 const compiler_configs_lock = ReentrantLock()
+
+"""
+    Metal.compiler_config(dev::MTLDevice; kernel=true, name=nothing, kwargs...)
+
+The configuration that Metal.jl compiles with for device `dev`, as a
+`GPUCompiler.CompilerConfig`. The compiler keywords of [`mtlfunction`](@ref) are supported,
+except for `indirect` and `source`, and `kernel=false` compiles a function that isn't a
+kernel.
+
+To compile jobs with other parameters (see [`AbstractMetalCompilerParams`](@ref)), replace
+those of this configuration: `GPUCompiler.CompilerConfig(config; params)`.
+"""
 function compiler_config(dev; kwargs...)
     # (as a `NamedTuple`: hashing the `Pairs` boxes each value, on every launch)
     h = hash(dev, hash(values(kwargs)))
@@ -667,7 +710,7 @@ end
     # create GPUCompiler objects
     target = MetalCompilerTarget(; macos, air, metal, apple_family, minthreads, maxthreads,
                                    kwargs...)
-    params = MetalCompilerParams(something(apple_family, 0))
+    params = MetalCompilerParams()
     CompilerConfig(target, params; kernel, name, always_inline, debug_level, opt_level)
 end
 
@@ -845,7 +888,7 @@ function backend_config(config::CompilerConfig, family::Int, macos::VersionNumbe
     fields = NamedTuple{fieldnames(MetalCompilerTarget)}(
         map(f -> getfield(target, f), fieldnames(MetalCompilerTarget)))
     target = MetalCompilerTarget(; merge(fields, versions, (; apple_family=family))...)
-    return CompilerConfig(config; target, params=MetalCompilerParams(family))
+    return CompilerConfig(config; target)
 end
 
 # the descriptor that makes `applegpu-nt` compile the pipeline of function `entry`
@@ -1004,7 +1047,21 @@ end
 # Returns the per-phase artifacts as a NamedTuple so the caller can hand them
 # onto the cached `MetalResults`. All byte/string fields are session-portable.
 const compilations = Threads.Atomic{Int}(0)
-function compile_to_metallib(@nospecialize(job::CompilerJob))
+
+"""
+    compile_to_metallib(job::GPUCompiler.CompilerJob)
+
+Compile the kernel of `job`, whose parameters subtype [`AbstractMetalCompilerParams`](@ref),
+and return an object whose `metallib` field holds the bytes of the resulting Metal library.
+Its other fields are internal.
+
+Metal.jl compiles its own jobs in the world it was initialized in, so that methods defined
+later don't invalidate its compiler. Other jobs are compiled in the current world, so that
+the methods of GPUCompiler's interface a package defines for them apply.
+"""
+function compile_to_metallib(@nospecialize(job::AnyMetalJob))
+    job.config.kernel ||
+        throw(ArgumentError("only kernels can be compiled to a Metal library"))
     Threads.atomic_add!(compilations, 1)
     art = emit_metallib(job)
 
@@ -1013,10 +1070,13 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
         dump_artifacts(".ll" => art.ir, ".air" => art.air, ".metallib" => art.metallib)
     end
 
-    targets = backend_targets()
-    if !isempty(targets)
-        @signpost_interval log=log_compiler() start="" stop="" "Check back end" begin
-            check_backend(job, art, targets)
+    # (only for Metal.jl's own jobs, as the check compiles a compute pipeline)
+    if job isa MetalCompilerJob
+        targets = backend_targets()
+        if !isempty(targets)
+            @signpost_interval log=log_compiler() start="" stop="" "Check back end" begin
+                check_backend(job, art, targets)
+            end
         end
     end
 
@@ -1026,13 +1086,21 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
               art.exception_sites, relocations = isempty(art.relocations) ? nothing : art.relocations)
 end
 
+# the world to run the compiler in (see `compile_to_metallib`)
+compiler_world(::MetalCompilerJob) = initialization_world[]
+compiler_world(@nospecialize(job::AnyMetalJob)) = Base.get_world_counter()
+
 # lower the IR that GPUCompiler generated for `job` to AIR, and describe its kernel.
 # the IR is only valid while GPUCompiler's `compile` callback runs, so this returns plain data.
-function lower_to_air(@nospecialize(job::CompilerJob), mod::LLVM.Module,
+function lower_to_air(@nospecialize(job::AnyMetalJob), world::UInt, mod::LLVM.Module,
                       @nospecialize(meta::NamedTuple))
     kernel_fn = meta.entry::LLVM.Function
     relocs = meta.relocations::GPUCompiler.Relocations
-    sites = meta.exception_sites::Vector{GPUCompiler.ExceptionSite}
+    sites = if Base.invoke_in_world(world, GPUCompiler.uses_exception_sites, job)::Bool
+        meta.exception_sites::Vector{GPUCompiler.ExceptionSite}
+    else
+        GPUCompiler.ExceptionSite[]
+    end
 
     # Detect logging after optimization so dead logging calls do not enable log state.
     loggingEnabled = haskey(mod.functions, "air.os_log")
@@ -1053,8 +1121,8 @@ function lower_to_air(@nospecialize(job::CompilerJob), mod::LLVM.Module,
         # The 3-arg form would hand the lowering an empty table and strand the slots.
         local air
         air, _ = try
-            invoke_frozen(GPUCompiler.emit_asm, job, mod, relocs,
-                          LLVM.CodeGenFileType.Object)::Tuple{Vector{UInt8},Any}
+            Base.invoke_in_world(world, GPUCompiler.emit_asm, job, mod, relocs,
+                                 LLVM.CodeGenFileType.Object)::Tuple{Vector{UInt8},Any}
         catch err
             # `emit_asm` has already lowered the module in-place, so stringifying it
             # here shows exactly what the downgrader was fed
@@ -1079,14 +1147,16 @@ function lower_to_air(@nospecialize(job::CompilerJob), mod::LLVM.Module,
 end
 
 # the artifacts of compiling `job`, including its LLVM IR
-function emit_metallib(@nospecialize(job::CompilerJob))
-    lower(mod, meta) = lower_to_air(job, mod, meta)
+function emit_metallib(@nospecialize(job::AnyMetalJob))
+    # (once, so that methods defined concurrently don't apply to only part of the compilation)
+    world = compiler_world(job)
+    lower(mod, meta) = lower_to_air(job, world, mod, meta)
     # (the AIR downgrade happens within the callback, so its interval nests in this one)
     ir, air, fun, entry, loggingEnabled, device_rng, relocations, exception_sites =
         @signpost_interval log=log_compiler() start="" stop="" "Generate LLVM IR" begin
-            # (asserting the result types, which `invoke_frozen` hides, keeps the uses of
+            # (asserting the result types, which `invoke_in_world` hides, keeps the uses of
             #  the results statically dispatched, so that they're precompiled)
-            invoke_frozen(GPUCompiler.compile, lower, :llvm, job)::Tuple{
+            Base.invoke_in_world(world, GPUCompiler.compile, lower, :llvm, job)::Tuple{
                 String, Vector{UInt8}, MetalLibFunction, String, Bool, Bool,
                 GPUCompiler.Relocations, Vector{GPUCompiler.ExceptionSite}}
         end
@@ -1328,11 +1398,12 @@ function embed_sources(metallib::Vector{UInt8}, air::Vector{UInt8})
 end
 
 # link the metallib into a session-local pipeline state on the given device. `label`
-# names the library, function and pipeline in Metal's developer tools.
+# names the library, function and pipeline in Metal's developer tools. `indirect` makes a
+# pipeline that the commands of an indirect command buffer can use: they refuse others.
 function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
                                         metallib::Vector{UInt8}, entry::String,
                                         minthreads::Union{Nothing,NTuple{3,Int}},
-                                        label::String=entry)
+                                        label::String=entry; indirect::Bool=false)
     if embed_sources()
         metallib = try
             embed_sources(metallib, air)
@@ -1353,6 +1424,7 @@ function link_pipeline(dev::MTLDevice, air::Vector{UInt8},
         if minthreads !== nothing
             desc.requiredThreadsPerThreadgroup = MTLSize(minthreads)
         end
+        desc.supportIndirectCommandBuffers = indirect
         desc.label = label
         started = time()
         try

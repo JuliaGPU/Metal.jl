@@ -61,6 +61,14 @@ end
 
 report_oom(sz) = return
 
+# GPUCompiler reports exceptions through these in jobs without a kernel state (see
+# `AbstractMetalCompilerParams`), which have no mailbox to report to: the thread that threw
+# just stops
+signal_exception() = return
+report_exception(ex) = return
+report_exception_name(ex) = return
+report_exception_frame(idx, func, file, line) = return
+
 
 ## kernel state
 

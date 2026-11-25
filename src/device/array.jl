@@ -251,6 +251,16 @@ Base.@propagate_inbounds Base.getindex(A::Const,
                                        I::Union{Integer, CartesianIndex}...) =
     A[Base._to_linear_index(A, to_indices(A, I)...)]
 
+# a pointer into the array, for code that loads through one rather than by index (e.g., a
+# simdgroup matrix load, which takes a pointer and a stride). KernelAbstractions' `@Const`
+# wraps a kernel argument in `Const`. without these, `pointer` fails with a `MethodError`
+# whose message prints the type, which puts Base's `show` into the kernel. loads through
+# the pointer are ordinary loads, not `!invariant.load` ones.
+Base.pointer(C::Const) = pointer(C.a)
+Base.pointer(C::Const, i::Integer) = pointer(C.a, i)
+Base.unsafe_convert(::Type{Core.LLVMPtr{T,A}}, C::Const{T,<:Any,A}) where {T,A} =
+    Base.unsafe_convert(Core.LLVMPtr{T,A}, C.a)
+
 
 ## other
 

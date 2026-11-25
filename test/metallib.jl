@@ -1305,3 +1305,95 @@ end
         end
     end
 end
+
+# compiler jobs with parameters of their own, like those of a package that compiles the
+# stages of render pipelines with Metal.jl's device library
+struct CustomParams <: Metal.AbstractMetalCompilerParams end
+struct StatelessParams <: Metal.AbstractMetalCompilerParams end
+Metal.GPUCompiler.kernel_state_type(
+    ::Metal.GPUCompiler.CompilerJob{Metal.GPUCompiler.MetalCompilerTarget,StatelessParams}) =
+    Nothing
+
+function custom_job(f, params; kwargs...)
+    cfg = Metal.compiler_config(device(); kwargs...)
+    cfg = Metal.GPUCompiler.CompilerConfig(cfg; params)
+    src = Metal.methodinstance(typeof(f), Tuple{})
+    return Metal.GPUCompiler.CompilerJob(src, cfg)
+end
+function custom_llvm(f, params; kwargs...)
+    job = custom_job(f, params; kwargs...)
+    Metal.GPUCompiler.JuliaContext() do ctx
+        mod, meta = Metal.GPUCompiler.compile(:llvm, job)
+        nparams = length(LLVM.parameters(meta.entry))
+        return string(mod), nparams
+    end
+end
+
+# overriding a method of the interface for a job, invoking Metal.jl's
+const ParentMetalJob =
+    Metal.GPUCompiler.CompilerJob{Metal.GPUCompiler.MetalCompilerTarget,
+                                  <:Metal.AbstractMetalCompilerParams}
+const custom_finished = Ref(0)
+function Metal.GPUCompiler.finish_ir!(
+        job::Metal.GPUCompiler.CompilerJob{Metal.GPUCompiler.MetalCompilerTarget,CustomParams},
+        mod::LLVM.Module, entry::LLVM.Function)
+    entry = invoke(Metal.GPUCompiler.finish_ir!,
+                   Tuple{ParentMetalJob, LLVM.Module, LLVM.Function}, job, mod, entry)
+    custom_finished[] += 1
+    return entry
+end
+
+function custom_barrier()
+    threadgroup_barrier()
+    return
+end
+function custom_family()
+    unsafe_store!(reinterpret(Core.LLVMPtr{Int32,Metal.AS.Device}, C_NULL), Metal.apple_family())
+    return
+end
+function custom_throw(i)
+    A = MtlDeviceArray{Int32,1,Metal.AS.Device}((4,),
+                                                reinterpret(Core.LLVMPtr{Int32,1}, C_NULL))
+    A[i] = 1
+    return
+end
+custom_throw() = custom_throw(Int(thread_position_in_grid().x))
+function custom_rand()
+    unsafe_store!(reinterpret(Core.LLVMPtr{Float32,Metal.AS.Device}, C_NULL), rand(Float32))
+    return
+end
+
+@testset "compiler jobs with other parameters" begin
+    # they are compiled like Metal.jl's kernels, e.g., with intrinsics for the AIR version
+    # (2.9 added an operand to barriers)
+    for macos in (v"15", Metal.macos_version())
+        cfg = Metal.compiler_config(device(); macos)
+        ir, nparams = custom_llvm(custom_barrier, CustomParams(); macos)
+        decl = match(r"declare [^\n]*@air\.wg\.barrier\(([^)]*)\)", ir)
+        @test length(split(decl.captures[1], ',')) == (cfg.target.air >= v"2.9" ? 3 : 2)
+        @test nparams == 1  # the kernel state
+    end
+    ir, _ = custom_llvm(custom_family, CustomParams(); gpufamily=MTL.MTLGPUFamilyApple7)
+    @test contains(ir, "store i32 7")
+
+    # without a kernel state
+    _, nparams = custom_llvm(custom_barrier, StatelessParams())
+    @test nparams == 0
+    # (the thread that throws stops)
+    for debug_level in 0:2
+        ir, _ = custom_llvm(custom_throw, StatelessParams(); debug_level)
+        @test contains(ir, "@custom_throw(")
+    end
+    @test_throws "needs the kernel state" custom_llvm(custom_rand, StatelessParams())
+
+    # they are compiled with the methods defined for them, also after Metal.jl initialized
+    finished = custom_finished[]
+    art = Metal.compile_to_metallib(custom_job(custom_barrier, CustomParams()))
+    @test custom_finished[] == finished + 1
+    @test only(read(IOBuffer(art.metallib), MetalLib).functions).type ==
+          Metal.METALLIB_COMPUTE_FUNCTION
+    @test_throws ArgumentError Metal.compile_to_metallib(
+        custom_job(custom_barrier, CustomParams(); kernel=false))
+    art = Metal.compile_to_metallib(custom_job(custom_throw, StatelessParams()))
+    @test isempty(art.exception_sites)
+end
