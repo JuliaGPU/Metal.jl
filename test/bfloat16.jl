@@ -50,7 +50,13 @@ end
     f = vcat(randn(Float32, 1024), reinterpret.(Float32, rand(UInt32, 1024)),
              Float32[Inf, -Inf, 0, -0.0, floatmin(Float32), nextfloat(0f0), floatmax(Float32)],
              reinterpret.(Float32, 0x3f808000 .+ (UInt32(0):UInt32(3)) .<< 16))
-    @test isequal(Array(BFloat16.(MtlArray(f))), BFloat16.(f))
+    g, c = Array(BFloat16.(MtlArray(f))), BFloat16.(f)
+    sub = issubnormal.(f)
+    @test isequal(g[.!sub], c[.!sub])
+    # M1/M2 convert with integer rounding, which keeps subnormal inputs; M3 and later use
+    # the hardware conversion, which flushes them to a zero of either sign like other
+    # `Float32` operations (MSL §8.1 and §8.5)
+    @test all(isequal.(g[sub], c[sub]) .| iszero.(g[sub]))
     @test all(isnan, Array(BFloat16.(MtlArray(Float32[NaN, -NaN]))))
 
     # the bits of a converted value, used as 32 bits (as by the shuffles of a `BFloat16`)
