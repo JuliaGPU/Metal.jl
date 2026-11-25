@@ -1026,65 +1026,70 @@ function compile_to_metallib(@nospecialize(job::CompilerJob))
               art.exception_sites, relocations = isempty(art.relocations) ? nothing : art.relocations)
 end
 
+# lower the IR that GPUCompiler generated for `job` to AIR, and describe its kernel.
+# the IR is only valid while GPUCompiler's `compile` callback runs, so this returns plain data.
+function lower_to_air(@nospecialize(job::CompilerJob), mod::LLVM.Module,
+                      @nospecialize(meta::NamedTuple))
+    kernel_fn = meta.entry::LLVM.Function
+    relocs = meta.relocations::GPUCompiler.Relocations
+    sites = meta.exception_sites::Vector{GPUCompiler.ExceptionSite}
+
+    # Detect logging after optimization so dead logging calls do not enable log state.
+    loggingEnabled = haskey(mod.functions, "air.os_log")
+
+    # (dropping the marker, which isn't AIR, so it doesn't end up in the metallib)
+    rng_attr = StringAttribute("julia.metal.rng", "")
+    device_rng = rng_attr in collect(kernel_fn.function_attributes)
+    device_rng && delete!(kernel_fn.function_attributes, rng_attr)
+
+    @signpost_interval log=log_compiler() start="" stop="" "Downgrade to AIR" begin
+        # generate AIR, having GPUCompiler lower the IR to AIR-compatible form and
+        # invoke the LLVM downgrader (both as part of Metal's `mcgen`).
+        #
+        # Passing `meta.relocations` (the 4-arg `emit_asm`) is load-bearing: surviving
+        # relocations (interned symbols, type tags, boxed non-smalltag constants) are then
+        # rewritten into indexed loads from the kernel state's relocation table, and
+        # `meta.relocations` is finalized into the manifest the loader resolves against.
+        # The 3-arg form would hand the lowering an empty table and strand the slots.
+        local air
+        air, _ = try
+            invoke_frozen(GPUCompiler.emit_asm, job, mod, relocs,
+                          LLVM.CodeGenFileType.Object)::Tuple{Vector{UInt8},Any}
+        catch err
+            # `emit_asm` has already lowered the module in-place, so stringifying it
+            # here shows exactly what the downgrader was fed
+            ir_file, = dump_artifacts(".ll" => string(mod))
+            error("""Compilation to AIR failed: $(sprint(showerror, err))
+                     If you think this is a bug, please file an issue and attach $(ir_file)""")
+        end
+    end
+
+    # describe the function while we still have its module
+    fun = try
+        MetalLibFunction(mod, kernel_fn.name; air_module=air)
+    catch err
+        ir_file, air_file = dump_artifacts(".ll" => string(mod), ".air" => air)
+        error("""Compilation to Metal library failed: $(sprint(showerror, err))
+                 If you think this is a bug, please file an issue and attach the following files:
+                 - $(ir_file)
+                 - $(air_file)""")
+    end
+
+    return string(mod), air, fun, kernel_fn.name, loggingEnabled, device_rng, relocs, sites
+end
+
 # the artifacts of compiling `job`, including its LLVM IR
 function emit_metallib(@nospecialize(job::CompilerJob))
-    # TODO: on 1.9, this actually creates a context. cache those.
-    ir, air, fun, entry, loggingEnabled, device_rng, relocations, exception_sites = JuliaContext() do _
+    lower(mod, meta) = lower_to_air(job, mod, meta)
+    # (the AIR downgrade happens within the callback, so its interval nests in this one)
+    ir, air, fun, entry, loggingEnabled, device_rng, relocations, exception_sites =
         @signpost_interval log=log_compiler() start="" stop="" "Generate LLVM IR" begin
             # (asserting the result types, which `invoke_frozen` hides, keeps the uses of
             #  the results statically dispatched, so that they're precompiled)
-            mod, meta = invoke_frozen(GPUCompiler.compile, :llvm, job)::Tuple{LLVM.Module,NamedTuple}
+            invoke_frozen(GPUCompiler.compile, lower, :llvm, job)::Tuple{
+                String, Vector{UInt8}, MetalLibFunction, String, Bool, Bool,
+                GPUCompiler.Relocations, Vector{GPUCompiler.ExceptionSite}}
         end
-        local kernel_fn = meta.entry::LLVM.Function
-        local relocs = meta.relocations::GPUCompiler.Relocations
-        local sites = meta.exception_sites::Vector{GPUCompiler.ExceptionSite}
-
-        # the IR belongs to us: lower and inspect it, then dispose of it
-        @dispose mod=mod begin
-            # Detect logging after optimization so dead logging calls do not enable log state.
-            local loggingEnabled = haskey(mod.functions, "air.os_log")
-
-            # (dropping the marker, which isn't AIR, so it doesn't end up in the metallib)
-            local rng_attr = StringAttribute("julia.metal.rng", "")
-            local device_rng = rng_attr in collect(kernel_fn.function_attributes)
-            device_rng && delete!(kernel_fn.function_attributes, rng_attr)
-
-            @signpost_interval log=log_compiler() start="" stop="" "Downgrade to AIR" begin
-                # generate AIR, having GPUCompiler lower the IR to AIR-compatible form and
-                # invoke the LLVM downgrader (both as part of Metal's `mcgen`).
-                #
-                # Passing `meta.relocations` (the 4-arg `emit_asm`) is load-bearing: surviving
-                # relocations (interned symbols, type tags, boxed non-smalltag constants) are then
-                # rewritten into indexed loads from the kernel state's relocation table, and
-                # `meta.relocations` is finalized into the manifest the loader resolves against.
-                # The 3-arg form would hand the lowering an empty table and strand the slots.
-                local air
-                air, _ = try
-                    invoke_frozen(GPUCompiler.emit_asm, job, mod, relocs,
-                                  LLVM.CodeGenFileType.Object)::Tuple{Vector{UInt8},Any}
-                catch err
-                    # `emit_asm` has already lowered the module in-place, so stringifying it
-                    # here shows exactly what the downgrader was fed
-                    ir_file, = dump_artifacts(".ll" => string(mod))
-                    error("""Compilation to AIR failed: $(sprint(showerror, err))
-                             If you think this is a bug, please file an issue and attach $(ir_file)""")
-                end
-            end
-
-            # describe the function while we still have its module
-            local fun = try
-                MetalLibFunction(mod, kernel_fn.name; air_module=air)
-            catch err
-                ir_file, air_file = dump_artifacts(".ll" => string(mod), ".air" => air)
-                error("""Compilation to Metal library failed: $(sprint(showerror, err))
-                         If you think this is a bug, please file an issue and attach the following files:
-                         - $(ir_file)
-                         - $(air_file)""")
-            end
-
-            string(mod), air, fun, kernel_fn.name, loggingEnabled, device_rng, relocs, sites
-        end
-    end
 
     @signpost_interval log=log_compiler() start="" stop="" "Create Metal library" begin
         metallib = try
