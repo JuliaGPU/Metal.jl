@@ -18,6 +18,8 @@ random number generator, and keeps host addresses specific to the session.
 """
 abstract type AbstractMetalCompilerParams <: AbstractCompilerParams end
 
+@public AbstractMetalCompilerParams, compile_to_metallib, compiler_config
+
 struct MetalCompilerParams <: AbstractMetalCompilerParams end
 const MetalCompilerConfig = CompilerConfig{MetalCompilerTarget, MetalCompilerParams}
 const MetalCompilerJob = CompilerJob{MetalCompilerTarget, MetalCompilerParams}
@@ -617,6 +619,18 @@ end
 # cache of compiler configurations, per device (but additionally configurable via kwargs)
 const _compiler_configs = Dict{UInt, MetalCompilerConfig}()
 const compiler_configs_lock = ReentrantLock()
+
+"""
+    Metal.compiler_config(dev::MTLDevice; kernel=true, name=nothing, kwargs...)
+
+The configuration that Metal.jl compiles with for device `dev`, as a
+`GPUCompiler.CompilerConfig`. The compiler keywords of [`mtlfunction`](@ref) are supported,
+except for `indirect` and `source`, and `kernel=false` compiles a function that isn't a
+kernel.
+
+To compile jobs with other parameters (see [`AbstractMetalCompilerParams`](@ref)), replace
+those of this configuration: `GPUCompiler.CompilerConfig(config; params)`.
+"""
 function compiler_config(dev; kwargs...)
     # (as a `NamedTuple`: hashing the `Pairs` boxes each value, on every launch)
     h = hash(dev, hash(values(kwargs)))

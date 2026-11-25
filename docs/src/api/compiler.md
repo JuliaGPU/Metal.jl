@@ -28,6 +28,21 @@ Metal.KernelState
 Metal.kernel_resources
 ```
 
+## Extending the compiler
+
+Packages can compile functions of their own kind with Metal.jl's device library, e.g. the
+stages of a render pipeline. They do so with GPUCompiler jobs whose parameters subtype
+`AbstractMetalCompilerParams`, and add device functionality with Metal.jl's macros.
+
+```@docs
+Metal.AbstractMetalCompilerParams
+Metal.compiler_config
+Metal.compile_to_metallib
+Metal.@device_override
+Metal.@device_function
+Metal.AS
+```
+
 ## Inspecting generated code
 
 The `@device_code_*` macros evaluate an expression and show the code of every kernel it
