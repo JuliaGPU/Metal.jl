@@ -507,10 +507,10 @@ end
         @test_throws ArgumentError Metal.compiler_config(
             device(); gpufamily=MTL.MTLGPUFamilyMetal3)
         @test Metal.compiler_config(
-            device(); gpufamily=MTL.MTLGPUFamilyApple7).params.apple_family == 7
+            device(); gpufamily=MTL.MTLGPUFamilyApple7).target.apple_family == 7
         # newer than any device we test on, but code can still be generated for it
         @test Metal.compiler_config(
-            device(); gpufamily=MTL.MTLGPUFamilyApple11).params.apple_family == 11
+            device(); gpufamily=MTL.MTLGPUFamilyApple11).target.apple_family == 11
         @test !isempty(sprint(io->Metal.code_llvm(io, dummy, Tuple{};
                                                   gpufamily=MTL.MTLGPUFamilyApple11)))
 
