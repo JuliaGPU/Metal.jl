@@ -34,6 +34,20 @@ end
 
 export commitAndContinue!
 
+# MPS may commit the command buffer it encodes into and continue with a new one by itself
+# (MPSGraph does so for large graphs), without going through `commitAndContinue!`. Record
+# the committed command buffer so that its errors are reported when synchronizing. This only
+# compares the command buffer before and after encoding: if MPS continues more than once,
+# the ones in between are never visible, and can't be recorded.
+function record_continuation(f, cmdbuf::MPSCommandBuffer)
+    submitted = cmdbuf.commandBuffer
+    ret = f()
+    if cmdbuf.commandBuffer != submitted
+        MTL.record_committed!(submitted, pointer(submitted.commandQueue))
+    end
+    return ret
+end
+
 function commitAndContinue!(cmdbuf::MPSCommandBuffer)
     # `commitAndContinue` replaces `commandBuffer` with a fresh underlying buffer,
     # so retain and record the submitted one before asking MPS to continue.

@@ -1,20 +1,24 @@
 
 MPS.encode!(commandBuffer::MPSCommandBuffer, graph::MPSGraph, feeds::MPSGraphTensorDataDictionary, resultsDictionary::MPSGraphTensorDataDictionary) = @inline MPS.encode!(commandBuffer, graph, feeds, resultsDictionary, nil, MPSGraphExecutionDescriptor())
 function MPS.encode!(commandBuffer::MPSCommandBuffer, graph::MPSGraph, feeds::MPSGraphTensorDataDictionary, resultsDictionary::MPSGraphTensorDataDictionary, targetOperations, executionDescriptor::MPSGraphExecutionDescriptor)
-    @objc [graph::id{MPSGraph} encodeToCommandBuffer:commandBuffer::id{MPSCommandBuffer}
-                                                  feeds:feeds::id{MPSGraphTensorDataDictionary}
-                                       targetOperations:targetOperations::id{Object}
-                                      resultsDictionary:resultsDictionary::id{MPSGraphTensorDataDictionary}
-                                    executionDescriptor:executionDescriptor::id{MPSGraphExecutionDescriptor}]::Nothing
+    MPS.record_continuation(commandBuffer) do
+        @objc [graph::id{MPSGraph} encodeToCommandBuffer:commandBuffer::id{MPSCommandBuffer}
+                                                      feeds:feeds::id{MPSGraphTensorDataDictionary}
+                                           targetOperations:targetOperations::id{Object}
+                                          resultsDictionary:resultsDictionary::id{MPSGraphTensorDataDictionary}
+                                        executionDescriptor:executionDescriptor::id{MPSGraphExecutionDescriptor}]::Nothing
+    end
     return resultsDictionary
 end
 
 function MPS.encode!(commandBuffer::MPSCommandBuffer, graph::MPSGraph, feeds::MPSGraphTensorDataDictionary, targetTensors::NSArray, targetOperations=nil, executionDescriptor::MPSGraphExecutionDescriptor=MPSGraphExecutionDescriptor())
-    return @objc [graph::id{MPSGraph} encodeToCommandBuffer:commandBuffer::id{MPSCommandBuffer}
-                                                         feeds:feeds::id{MPSGraphTensorDataDictionary}
-                                                 targetTensors:targetTensors::id{NSArray}
-                                              targetOperations:targetOperations::id{Object}
-                                           executionDescriptor:executionDescriptor::id{MPSGraphExecutionDescriptor}]::MPSGraphTensorDataDictionary
+    return MPS.record_continuation(commandBuffer) do
+        @objc [graph::id{MPSGraph} encodeToCommandBuffer:commandBuffer::id{MPSCommandBuffer}
+                                                      feeds:feeds::id{MPSGraphTensorDataDictionary}
+                                              targetTensors:targetTensors::id{NSArray}
+                                           targetOperations:targetOperations::id{Object}
+                                        executionDescriptor:executionDescriptor::id{MPSGraphExecutionDescriptor}]::MPSGraphTensorDataDictionary
+    end
 end
 
 function run(graph::MPSGraph, feeds::MPSGraphTensorDataDictionary, targetTensors::NSArray, targetOperations=nil)
@@ -77,10 +81,12 @@ end
 
 function MPS.encode!(commandBuffer::MPSCommandBuffer, executable::MPSGraphExecutable,
                      inputs::NSArray, results::NSArray, executionDescriptor=nil)
-    @objc [executable::id{MPSGraphExecutable} encodeToCommandBuffer:commandBuffer::id{MPSCommandBuffer}
-                                                         inputsArray:inputs::id{NSArray}
-                                                        resultsArray:results::id{NSArray}
-                                                 executionDescriptor:executionDescriptor::id{Object}]::id{NSArray}
+    MPS.record_continuation(commandBuffer) do
+        @objc [executable::id{MPSGraphExecutable} encodeToCommandBuffer:commandBuffer::id{MPSCommandBuffer}
+                                                             inputsArray:inputs::id{NSArray}
+                                                            resultsArray:results::id{NSArray}
+                                                     executionDescriptor:executionDescriptor::id{Object}]::id{NSArray}
+    end
     return results
 end
 
