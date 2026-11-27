@@ -45,7 +45,7 @@ function compile(graph::MPSGraph, dev::MPSGraphDevice, feeds::MPSGraphTensorShap
 end
 
 function MPSGraphExecutableSerializationDescriptor()
-    return @objc [MPSGraphExecutableSerializationDescriptor alloc]::MPSGraphExecutableSerializationDescriptor
+    return @objc [MPSGraphExecutableSerializationDescriptor new]::MPSGraphExecutableSerializationDescriptor
 end
 
 serialize(graphExe::MPSGraphExecutable, url, descriptor=MPSGraphExecutableSerializationDescriptor()) = serialize(graphExe, NSFileURL(url), descriptor)

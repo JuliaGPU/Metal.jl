@@ -1,5 +1,7 @@
 using .MPS: MPSShape
-using .MPSGraphs: MPSGraph, MPSGraphDevice, MPSGraphShapedType
+using .MPSGraphs: MPSGraph, MPSGraphDevice, MPSGraphShapedType, MPSGraphExecutable,
+                  MPSGraphExecutableSerializationDescriptor, placeholderTensor,
+                  matrixMultiplicationWithPrimaryTensor
 
 graph = MPSGraph()
 @test graph isa MPSGraph
@@ -34,4 +36,41 @@ shtyp = MPSGraphShapedType(mpsh, Float32)
     before = allocated()
     batches(10)
     @test allocated() - before < 25 * sizeof(A)
+end
+
+@testset "executable serialization descriptor" begin
+    desc = MPSGraphExecutableSerializationDescriptor()
+    @test desc isa MPSGraphExecutableSerializationDescriptor
+    @test !desc.append
+    @test desc.deploymentPlatform == MPSGraphs.MPSGraphDeploymentPlatformMacOS
+    # not set on a descriptor that was allocated, but never initialized
+    @test desc.minimumDeploymentTarget isa NSString
+
+    desc.append = true
+    @test desc.append
+    desc.deploymentPlatform = MPSGraphs.MPSGraphDeploymentPlatformIOS
+    @test desc.deploymentPlatform == MPSGraphs.MPSGraphDeploymentPlatformIOS
+    desc.minimumDeploymentTarget = NSString("17.0")
+    @test string(desc.minimumDeploymentTarget) == "17.0"
+end
+
+@testset "executable serialization" begin
+    graph = MPSGraph()
+    a = placeholderTensor(graph, (4, 4), Float32)
+    c = matrixMultiplicationWithPrimaryTensor(graph, a, a)
+    feeds = NSDictionary(Dict(a => MPSGraphShapedType((4, 4), Float32)))
+    exe = MPSGraphs.compile(graph, dev, feeds, NSArray([c]))
+    @test exe isa MPSGraphExecutable
+
+    mktempdir() do dir
+        @testset "$name" for (name, target) in (("path", identity), ("URL", NSFileURL))
+            path = joinpath(dir, "default-$name.mpsgraphpackage")
+            MPSGraphs.serialize(exe, target(path))
+            @test isdir(path) && !isempty(readdir(path))
+
+            path = joinpath(dir, "descriptor-$name.mpsgraphpackage")
+            MPSGraphs.serialize(exe, target(path), MPSGraphExecutableSerializationDescriptor())
+            @test isdir(path) && !isempty(readdir(path))
+        end
+    end
 end
