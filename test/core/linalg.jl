@@ -109,8 +109,9 @@ end
             @test relerr(y, vref) < rtol
         end
     end
-    # On M5 and later GPUs, the `:tensor` kernel rounds the operands.
-    @testset "relaxed, then default, $alg" for alg in (:tensor,)
+    # The relaxed product comes first, so that a relaxed graph that was cached for the default
+    # policy would show. On M5 and later GPUs, the `:tensor` kernel rounds the operands.
+    @testset "relaxed, then default, $alg" for alg in (:tensor, :MPSGraph)
         alg === :tensor && !Metal.tensor_matmul_capable() && continue
         a2 = rand(Float32, 96, 256) .- 0.5f0; b2 = rand(Float32, 256, 128) .- 0.5f0
         ref2 = Float64.(a2) * Float64.(b2)
@@ -123,7 +124,7 @@ end
     end
     # only the operands are rounded: with an exact product of about the size of C, rounding
     # α, β or C to 10 bits of mantissa would show
-    @testset "epilogue, $alg" for alg in (:native, :tensor)
+    @testset "epilogue, $alg" for alg in (:auto, :MPSGraph, :native, :tensor)
         alg === :tensor && !Metal.tensor_matmul_capable() && continue
         ai = Float32.(rand(-2:2, 64, 8)); bi = Float32.(rand(-2:2, 8, 48))
         c0 = 1f0 .+ Float32.(rand(1:1000, 64, 48)) .* 2f0^-20

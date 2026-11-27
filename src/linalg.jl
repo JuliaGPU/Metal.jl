@@ -74,11 +74,13 @@ A `ScopedValue` that sets how precisely `LinearAlgebra.mul!` (and `*`) has to co
 
 `:relaxed` permits reduced precision, it doesn't demand it. Full precision is always a valid
 result, so whether the results change depends on the device, the element types and the
-algorithm (see [`Metal.matmul_alg`](@ref)). Currently, the `:tensor` kernel makes use of
-it, for products of `Float32` matrices on M5 and later GPUs: on an M6, large products then
-run 1.5-2.5× faster, with normwise relative errors around `7e-4` instead of `5e-7` for
-random inputs of either sign. Other element types, older GPUs and the other algorithms
-compute at full precision, and so do the matrix-vector kernels of `:native`.
+algorithm (see [`Metal.matmul_alg`](@ref)). Currently, MPSGraph (on macOS 26 and later) and
+the `:tensor` kernel make use of it, for products of `Float32` matrices on M5 and later
+GPUs: on an M6, large products then run 1.5-2.5× faster, with normwise relative errors
+around `7e-4` instead of `5e-7` for random inputs of either sign. Other element types,
+older GPUs and the other algorithms compute at full precision, and so do the matrix-vector
+kernels of `:native`. It also applies to [`MPSGraphs.matmul!`](@ref) and
+[`MPSGraphs.matvecmul!`](@ref) when they are called directly.
 
 Set it for a block of code with `with`, like `matmul_alg`:
 

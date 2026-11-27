@@ -57,23 +57,29 @@ end
 
 ## cached graphs
 
-#=
-Creates a default MPSGraphExecutionDescriptor with a MPSGraphCompilationDescriptor
- set to use optimization level 0 instead of 1. This is because level 1 causes operations
- on eltypes <= 16 bytes to be executed on the ANE instead of the GPU, leading to worse
- performance and hangs when the matrices are too big
-=#
-function default_exec_desc()
-    @memoize begin
-        compDesc = MPSGraphCompilationDescriptor()
-        # Use optimization level 0 to avoid operations being moved to the neural engine
-        compDesc.optimizationLevel = MPSGraphOptimizationLevel0
+# An execution descriptor that compiles graphs at optimization level 0 instead of 1: level 1
+# executes operations on eltypes <= 16 bytes on the neural engine instead of the GPU, which
+# performs worse and hangs when the matrices are too big. `relaxed` also allows MPSGraph to
+# round `Float32` operands to a 19-bit format (TF32's), for `Metal.matmul_precision =
+# :relaxed`; MPSGraph has this option from macOS 26 on.
+function exec_desc(relaxed::Bool)
+    compDesc = MPSGraphCompilationDescriptor()
+    compDesc.optimizationLevel = MPSGraphOptimizationLevel0
+    if relaxed && Metal.macos_version() >= v"26"
+        compDesc.reducedPrecisionFastMath =
+            MPSGraphReducedPrecisionFastMathAllowConvertingOperandsFromFP32ToFP19
+    end
 
-        execDesc = MPSGraphExecutionDescriptor()
-        execDesc.compilationDescriptor = compDesc
-        execDesc
-    end::MPSGraphExecutionDescriptor
+    execDesc = MPSGraphExecutionDescriptor()
+    execDesc.compilationDescriptor = compDesc
+    return execDesc
 end
+default_exec_desc() = @memoize begin
+    exec_desc(false)
+end::MPSGraphExecutionDescriptor
+relaxed_exec_desc() = @memoize begin
+    exec_desc(true)
+end::MPSGraphExecutionDescriptor
 
 function MPS.encode!(commandBuffer::MPSCommandBuffer, executable::MPSGraphExecutable,
                      inputs::NSArray, results::NSArray, executionDescriptor=nil)
@@ -130,12 +136,14 @@ function cached_graph(key)
 end
 
 """
-    run!(graph::CachedGraph, outputs, inputs)
+    run!(graph::CachedGraph, outputs, inputs; relaxed=false)
 
 Encode `graph` on the current task's queue, reading the arrays in `inputs` and writing those
-in `outputs`, and commit it without waiting for completion.
+in `outputs`, and commit it without waiting for completion. `relaxed` lets MPSGraph reduce
+the precision of `Float32` operands (see `exec_desc`); graphs that are run both ways
+should be cached under different keys.
 """
-function run!(cached::CachedGraph, outputs::Tuple, inputs::Tuple)
+function run!(cached::CachedGraph, outputs::Tuple, inputs::Tuple; relaxed::Bool=false)
     ninputs = length(cached.placeholders) - length(cached.constants)
     noutputs = length(cached.outputs)
     length(inputs) == ninputs && length(outputs) == noutputs ||
@@ -151,7 +159,7 @@ function run!(cached::CachedGraph, outputs::Tuple, inputs::Tuple)
     cmdbuf = MPSCommandBuffer(Metal.global_queue(device()))
     @lock cached.lock begin
         encode!(cmdbuf, cached.graph, NSDictionary(feeds), NSDictionary(results), nil,
-                default_exec_desc())
+                relaxed ? relaxed_exec_desc() : default_exec_desc())
     end
     commit!(cmdbuf)
     return
