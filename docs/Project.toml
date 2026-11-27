@@ -9,6 +9,9 @@ Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
 [extras]
 Git_jll = "f8c6e375-362e-5223-8a59-34ff63f689eb"
 
+[sources]
+KernelAbstractions = {url = "https://github.com/JuliaGPU/KernelAbstractions.jl", rev = "tb/sub-group-request"}
+
 [compat]
 Documenter = "1.9"
 DocumenterCodeBlocks = "1.3"
