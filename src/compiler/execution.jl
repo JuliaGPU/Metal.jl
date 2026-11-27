@@ -730,6 +730,8 @@ end
         res.device_rng = artifacts.device_rng
         res.relocations = artifacts.relocations
         res.exception_sites = artifacts.exception_sites
+    else
+        Threads.atomic_add!(cache_hits, 1)
     end
     return res
 end
