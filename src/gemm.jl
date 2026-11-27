@@ -8,7 +8,10 @@
 #    type combinations in `GEMM_TENSOR_ELTYPES`. Matrices, and views with contiguous columns
 #    in increasing order, are read in place, also transposed ones; Symmetric/Hermitian
 #    wrappers and other views are packed into dense copies (`gemm_tensor!`). α and β are
-#    applied by the kernel itself.
+#    applied by the kernel itself, unless C can't be written in place or the contraction is
+#    split into slices (for products with few tiles and a long one): the product, or the
+#    partial products of the slices, then go to a workspace that a second kernel adds up,
+#    scales and combines with C (`gemm_tensor!`).
 #
 #  * `gemm_simd_kernel!` is the portable fast path for `Float16`/`Float32`. It stages tiles
 #    of `op(A)`/`op(B)` into threadgroup memory (bounds-checked, so any M/N/K and
@@ -257,10 +260,15 @@ end
 # `ldb`, so views are read in place. `TRA`/`TRB` say that `A`/`B` is stored transposed, as
 # `(K, M)`/`(N, K)`; matmul2d then transposes it itself, so a transposed operand needs no copy.
 #
+# The contraction can be split over the threadgroups along z, into slices of `KS`: those with
+# z-index `z` (from 0) compute the partial product over `z·KS+1:min((z+1)·KS, K)` into the
+# `z`-th of M×N matrices that follow each other in `C`, see `gemm_tensor!`. Without a
+# split, `KS == K` and there is one threadgroup along z.
+#
 # `MODE` is what happens to the product, see `gemm_tensor_tile!`; `alpha` and `beta` are only
 # used by the modes that scale.
 function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceArray,
-                             alpha::P, beta::P, M::Int32, N::Int32, K::Int32,
+                             alpha::P, beta::P, M::Int32, N::Int32, K::Int32, KS::Int32,
                              ldc::Int32, lda::Int32, ldb::Int32,
                              ::Val{SM}, ::Val{SN}, ::Val{MODE},
                              ::Val{TRA}, ::Val{TRB}) where {P, SM, SN, MODE, TRA, TRB}
@@ -273,14 +281,20 @@ function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceA
     (m_off >= M || n_off >= N) && return
     tm = min(Int32(SM), M - m_off)
     tn = min(Int32(SN), N - n_off)
+    z = unsafe_trunc(Int32, tgid.z) - Int32(1)
+    k_off = z * KS
+    tk = min(KS, K - k_off)
 
     tA = MtlInlineTensor(A, stored_pair(Val(TRA), M, K), (Int32(1), lda))
     tB = MtlInlineTensor(B, stored_pair(Val(TRB), K, N), (Int32(1), ldb))
-    tC = MtlInlineTensor(C, (M, N), (Int32(1), ldc))
+    tC = MtlInlineTensor(C, (M, N * unsafe_trunc(Int32, threadgroups_per_grid().z)),
+                         (Int32(1), ldc))
 
-    mA = view(tA, stored_pair(Val(TRA), m_off + Int32(1), Int32(1)), stored_pair(Val(TRA), tm, K))
-    mB = view(tB, stored_pair(Val(TRB), Int32(1), n_off + Int32(1)), stored_pair(Val(TRB), K, tn))
-    mC = view(tC, (m_off + Int32(1), n_off + Int32(1)), (tm, tn))
+    mA = view(tA, stored_pair(Val(TRA), m_off + Int32(1), k_off + Int32(1)),
+              stored_pair(Val(TRA), tm, tk))
+    mB = view(tB, stored_pair(Val(TRB), k_off + Int32(1), n_off + Int32(1)),
+              stored_pair(Val(TRB), tk, tn))
+    mC = view(tC, (m_off + Int32(1), z * N + n_off + Int32(1)), (tm, tn))
 
     mode = MODE === :accumulate ? matmul2d_multiply_accumulate : matmul2d_multiply
     op = TensorOpsMatmul2D{matmul2d_descriptor(SM, SN; transpose_left = TRA,
@@ -397,6 +411,9 @@ end
         something(MTL.highest_apple_family(dev), 0)
     end::Int
 end
+
+# The number of GPU cores, for `gemm_tensor_splits`; the M1's 8 if the system doesn't say.
+gemm_tensor_cores() = (n = num_gpu_cores(); n > 0 ? n : 8)
 
 # simdgroups per threadgroup
 const GEMM_TENSOR_WM = 2
@@ -548,8 +565,11 @@ Compute `C = α·op(A)·op(B) + β·C` via `tensor_ops::matmul2d`, one simdgroup
 `tile_m × tile_n` tile of `C` (Metal 4 only). The operands must be nonempty and conform;
 callers must check [`Metal.supports_tensor_matmul`](@ref) first. Matrices, and views with contiguous columns in
 increasing order, are read in place, also when transposed; other operands are packed into
-dense copies first. `α` and `β` are applied by the kernel that computes the product, and the
-product only goes through a temporary when `C` can't be written in place.
+dense copies first. `α` and `β` are applied by the kernel that computes the product, unless
+`C` can't be written in place or the contraction is split: a long contraction of a product
+with few tiles is split into slices (see `gemm_tensor_splits`). The product, or the partial
+products of the slices, then go to a workspace that a second kernel adds up, scales and
+combines with `C`.
 `tile_*=0` selects the tiles by the rule in `gemm_tensor_tiles`; pass explicit ones to tune. Tiles
 must be multiples of 8, and at least one of them a multiple of 16.
 """
@@ -566,9 +586,107 @@ function gemm_tensor!(C::MtlMatrixOperand, A::MtlMatrixOperand, B::MtlMatrixOper
     Ad, lda, trA = tensor_operand(A, cA, (M, K))
     Bd, ldb, trB = tensor_operand(B, cB, (K, N))
 
+    plan = gemm_tensor_plan(M, N, K; family = gemm_tensor_family(), cores = gemm_tensor_cores(),
+                            narrow = max(sizeof(eltype(A)), sizeof(eltype(B))) <= 2, trA,
+                            tile_m, tile_n)
+
+    # What the kernel does with the product, see `gemm_tensor_tile!`. matmul2d can't scale,
+    # but it does all there is to do for α = 1 with β = 0 or 1; otherwise α and β are applied
+    # in the thread-local memory of a cooperative tensor. A C that can't be laid out as a
+    # tensor, and a split contraction, get the product in a workspace instead, with the
+    # partial products of the slices next to each other, which `gemm_tensor_reduce_kernel!`
+    # adds up, scales and combines with C.
+    #
+    # Scaling is done in `Tt`, `Float32` for a float destination, and converted on the store
+    # into C, like the simd kernel does. α, β and the unscaled product can be out of range for
+    # `Float16` while the result is not, and a narrow C is rounded once, after the slices have
+    # been added up. Converting the scalars on the host also keeps `Float64` values and
+    # `Bool * BFloat16` out of the kernels, which can't compile them. `matmul2d` produces
+    # `Float32` for every input combination that has a float output, and `Int32` for the
+    # others, so the product has the type `Tt` too.
+    Tt = eltype(C) <: Integer ? eltype(C) : Float32
+    α = convert(Tt, alpha)
+    β = convert(Tt, beta)
+    layout = plan.slices == 1 ? tensor_layout(C) : nothing
+    if layout === nothing
+        dest, ldc = MtlMatrix{Tt}(undef, M, N * plan.slices), M
+        mode = :overwrite
+    else
+        dest, ldc = layout
+        mode = if isone(α) && (iszero(β) || isone(β))
+            iszero(β) ? :overwrite : :accumulate
+        else
+            iszero(β) ? :scale : :scale_add
+        end
+    end
+
+    tile_m, tile_n = plan.tile
+    nthreads = GEMM_TENSOR_WM * GEMM_TENSOR_WN * 32
+    @metal threads = nthreads groups = (plan.groups..., plan.slices) gemm_tensor_kernel!(
+        dest, Ad, Bd, α, β, Int32(M), Int32(N), Int32(K), Int32(plan.ks), Int32(ldc),
+        Int32(lda), Int32(ldb), Val(Int32(tile_m)), Val(Int32(tile_n)), Val(mode), Val(trA),
+        Val(trB))
+
+    if layout === nothing
+        @metal threads = 256 groups = cld(M * N, 256) gemm_tensor_reduce_kernel!(
+            C, dest, α, β, Int32(plan.slices), Val(!iszero(β)))
+        # (the buffer is only released once the kernels that use it are done, see `free`)
+        unsafe_free!(dest)
+    end
+    return C
+end
+
+## split-K
+
+# However long the contraction, the tile decomposition gives a product with a small `C` few
+# threadgroups: 64×64×65536 makes two, which leave most of the GPU idle. Splitting the
+# contraction into slices makes more of them. The threadgroups of each slice write its partial
+# product to an M×N matrix of its own in a workspace, and a second kernel adds them up.
+
+# the contraction is split into slices of a multiple of this
+const GEMM_TENSOR_SPLIT_K = 32
+
+# The number of slices to split a contraction of length `K` into, for a product whose tile
+# decomposition gives `groups` threadgroups, on a GPU with `cores` cores; 1 to not split it.
+# `narrow` says that both inputs take at most 2 bytes per element.
+#
+# A product is split into as many slices as keep the threadgroups of all of them within five
+# per GPU core, with slices of at least 512 (but the last, which takes what remains), at most
+# 32 slices, and a workspace (4 bytes per element of each partial product) of at most 32 MiB.
+# More threadgroups don't make up for the overhead of the workspace and of the second kernel:
+# on the M1 (8 cores), 256×256×4096 has 32 threadgroups and runs 8-17% slower in 2 or 4
+# slices, while the M3 Pro (14 cores) runs 256×256×16384 (32 threadgroups) 1.1-1.2× faster
+# in 2. Some products are slower in a few slices than in one, but faster in many: on the
+# M3 Pro, 333×222×15000 (42 threadgroups) takes 0.81 ms, 1.16-1.25 ms in 2-4 slices, and
+# 0.75 ms in 8.
+#
+# Products with a 4-byte input, of 512² to 1024² elements, with a contraction of at least
+# 8192 are split into slices of about 2048 (or longer ones, to keep the workspace within its
+# bound), even when they have enough threadgroups. All of the M1, M2, M3 Pro and M6 multiply
+# such contractions more slowly per element than shorter ones: e.g. `Float32` 512×512×16384
+# runs in 6.1 ms instead of 8.2 on the M1, 3.5 instead of 7.3 on the M2, 2.3 instead of 3.7
+# on the M3 Pro, and 2.0 instead of 5.1 on the M6. Smaller products, and ones with 2-byte
+# inputs, don't gain consistently, and larger ones (e.g. 2048×1024×4096) lose.
+function gemm_tensor_splits(M::Integer, N::Integer, K::Integer, groups::Integer;
+                            cores::Integer, narrow::Bool = false)
+    maxsplits = min(32, (32 << 20) ÷ (4 * M * N), K ÷ 512)
+    splits = clamp((5 * cores) ÷ groups, 1, max(maxsplits, 1))
+    if !narrow && 512 * 512 <= M * N <= 1024 * 1024 && K >= 8192
+        splits = max(splits, min(K ÷ 2048, maxsplits))
+    end
+    return splits
+end
+
+# How `gemm_tensor!` launches an M×N×K product: the tile of `C` that a simdgroup computes, the
+# threadgroups along M and N, and the slices the contraction is split into, of length `ks`. The
+# last slice takes what remains, so there can be fewer of them than `gemm_tensor_splits` asks
+# for. `trA` says that A is read transposed, as `gemm_tensor!` prepared it; a `tile_m` or
+# `tile_n` of 0 is selected by `gemm_tensor_tiles`.
+function gemm_tensor_plan(M::Integer, N::Integer, K::Integer; family::Integer,
+                          cores::Integer, narrow::Bool, trA::Bool,
+                          tile_m::Integer = 0, tile_n::Integer = 0)
     if tile_m == 0 || tile_n == 0
-        auto_m, auto_n = gemm_tensor_tiles(M, N; family = gemm_tensor_family(), transA = trA,
-                                           narrow = max(sizeof(eltype(A)), sizeof(eltype(B))) <= 2)
+        auto_m, auto_n = gemm_tensor_tiles(M, N; family, transA = trA, narrow)
         # next to an explicit tile of 8, the selected one needs to be a multiple of 16, and
         # next to one of 64 it stays at 32, as 64×64 is always slower
         pick(given, auto) = given % 16 != 0 && auto % 16 != 0 ? 16 :
@@ -581,48 +699,35 @@ function gemm_tensor!(C::MtlMatrixOperand, A::MtlMatrixOperand, B::MtlMatrixOper
             tile_m, tile_n = auto_m, auto_n
         end
     end
+    groups = (cld(M, tile_m * GEMM_TENSOR_WM), cld(N, tile_n * GEMM_TENSOR_WN))
+    splits = gemm_tensor_splits(M, N, K, prod(groups); cores, narrow)
+    ks = splits == 1 ? K : cld(cld(K, splits), GEMM_TENSOR_SPLIT_K) * GEMM_TENSOR_SPLIT_K
+    return (; tile = (tile_m, tile_n), groups, ks, slices = cld(K, ks))
+end
 
-    # What the kernel does with the product, see `gemm_tensor_tile!`. matmul2d can't scale,
-    # but it does all there is to do for α = 1 with β = 0 or 1; otherwise α and β are applied
-    # in the thread-local memory of a cooperative tensor. A C that can't be laid out as a
-    # tensor gets the product in a temporary, which is combined with it after.
-    #
-    # Scaling is done in `Tt`, `Float32` for a float destination, and converted on the store
-    # into C, like the simd kernel does. α, β and the unscaled product can be out of range for
-    # `Float16` while the result is not. Converting the scalars on the host also keeps
-    # `Float64` values and `Bool * BFloat16` out of the kernel and the
-    # broadcasts, which can't compile them. `matmul2d` produces `Float32` for every input
-    # combination that has a float output, so the product has that type too.
-    Tt = eltype(C) <: Integer ? eltype(C) : Float32
-    α = convert(Tt, alpha)
-    β = convert(Tt, beta)
-    layout = tensor_layout(C)
-    mode = if layout === nothing
-        nothing
-    elseif isone(α) && (iszero(β) || isone(β))
-        iszero(β) ? :overwrite : :accumulate
-    else
-        iszero(β) ? :scale : :scale_add
+# Adds up the `S` partial products in `W` in the order of the slices, so the result doesn't
+# depend on the order in which they were computed, and scales the sum and adds `β·C` before
+# converting the result to C's element type once. With `β = 0`, C is not read, so whatever
+# it holds (e.g. NaN) doesn't reach the result. C is indexed as a matrix, so with `S = 1` this
+# is also how the product reaches a C that can't be laid out as a tensor.
+function gemm_tensor_reduce_kernel!(C, W, alpha::P, beta::P, S::Int32,
+                                    ::Val{BETA}) where {P, BETA}
+    M = unsafe_trunc(Int32, size(C, 1))
+    MN = M * unsafe_trunc(Int32, size(C, 2))
+    idx = unsafe_trunc(Int32, thread_position_in_grid().x) - Int32(1)
+    idx < MN || return
+    acc = @inbounds W[idx + Int32(1)]
+    z = Int32(1)
+    while z < S
+        acc += @inbounds W[z * MN + idx + Int32(1)]
+        z += Int32(1)
     end
-    direct = mode !== nothing
-    Cd, ldc = direct ? layout : (MtlMatrix{Tt}(undef, M, N), M)
-    direct || (mode = :overwrite)
-
-    wm, wn = GEMM_TENSOR_WM, GEMM_TENSOR_WN
-    groups = (cld(M, tile_m * wm), cld(N, tile_n * wn))
-    @metal threads = wm * wn * 32 groups = groups gemm_tensor_kernel!(
-        Cd, Ad, Bd, α, β, Int32(M), Int32(N), Int32(K), Int32(ldc), Int32(lda), Int32(ldb),
-        Val(Int32(tile_m)), Val(Int32(tile_n)), Val(mode),
-        Val(trA), Val(trB))
-
-    if !direct
-        if iszero(β)
-            C .= α .* Cd
-        else
-            C .= α .* Cd .+ β .* Tt.(C)
-        end
-    end
-    return C
+    j = div(idx, M)
+    i = idx - j * M
+    acc *= alpha
+    BETA && (acc += beta * convert(P, @inbounds C[i + Int32(1), j + Int32(1)]))
+    @inbounds C[i + Int32(1), j + Int32(1)] = acc
+    return
 end
 
 ## host entry points

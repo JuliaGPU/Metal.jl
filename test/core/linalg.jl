@@ -481,7 +481,7 @@ end
     @testset "tensor-ops path" begin
         # the tensor intrinsics take the operands of the targeted AIR version
         Mat = MtlDeviceMatrix{Float32, 1}
-        tt = Tuple{Mat, Mat, Mat, Float32, Float32, Int32, Int32, Int32,
+        tt = Tuple{Mat, Mat, Mat, Float32, Float32, Int32, Int32, Int32, Int32,
                    Int32, Int32, Int32,
                    Val{Int32(32)}, Val{Int32(16)}, Val{:overwrite},
                    Val{false}, Val{false}}
@@ -522,7 +522,7 @@ end
                        air26)
         ## the kernel scales in cooperative tensors
         let tt = Tuple{Mat, Mat, Mat, Float32, Float32, Int32, Int32, Int32, Int32, Int32, Int32,
-                       Val{Int32(32)}, Val{Int32(16)}, Val{:scale_add}, Val{false}, Val{false}}
+                       Int32, Val{Int32(32)}, Val{Int32(16)}, Val{:scale_add}, Val{false}, Val{false}}
             scaled(macos) = sprint() do io
                 Metal.code_air(io, Metal.gemm_tensor_kernel!, tt; kernel=true, macos,
                                dump_module=true)
@@ -784,6 +784,48 @@ end
             @test tiles(2049, 4096; family = 8) == (64, 32)
         end
 
+        @testset "split-K selection" begin
+            splits(M, N, K, groups; cores = 10, kw...) =
+                Metal.gemm_tensor_splits(M, N, K, groups; cores, kw...)
+            # the threadgroups of all slices stay within five per core
+            @test splits(64, 64, 65536, 2) == 25
+            @test splits(64, 64, 65536, 3) == 16
+            @test splits(64, 64, 65536, 2; cores = 8) == 20
+            @test splits(256, 256, 65536, 25) == 2
+            @test splits(256, 256, 65536, 26) == 1
+            # slices are at least 512 long, and there are at most 32 of them
+            @test splits(16, 16, 65536, 1) == 32
+            @test splits(64, 64, 2048, 1) == 4
+            @test splits(64, 64, 1023, 1) == 1
+            # the workspace stays within 32 MiB
+            @test splits(2048, 512, 65536, 1) == 8
+            @test splits(4096, 4096, 65536, 1) == 1
+            # products of 4-byte inputs of 512² to 1024² elements with a long contraction
+            @test splits(512, 512, 8192, 128) == 4
+            @test splits(1024, 1024, 16384, 512) == 8
+            @test splits(1024, 1024, 65536, 512) == 8
+            @test splits(1024, 1024, 8191, 512) == 1
+            @test splits(512, 511, 8192, 128) == 1
+            @test splits(1024, 1025, 8192, 512) == 1
+            @test splits(512, 512, 8192, 128; narrow = true) == 1
+            # (also when the threadgroups alone would split them less)
+            @test splits(1024, 256, 8192, 64; cores = 32) == 4
+        end
+
+        @testset "launch plan" begin
+            plan(M, N, K; kw...) =
+                Metal.gemm_tensor_plan(M, N, K; family = 11, cores = 10, narrow = false,
+                                       trA = false, kw...)
+            @test plan(4096, 4096, 4096) == (; tile = (32, 32), groups = (64, 64), ks = 4096, slices = 1)
+            # with only one of the tiles given, the other is selected to go with it
+            @test plan(300, 40, 64; tile_m = 64) == (; tile = (64, 32), groups = (3, 1), ks = 64, slices = 1)
+            # slices are a multiple of 32 long, of which the last takes what remains: 2 of 544
+            # and 481
+            @test plan(1, 1, 1025; narrow = true) == (; tile = (64, 16), groups = (1, 1), ks = 544, slices = 2)
+            # (so 16400 asks for 32 slices, but is split into 31)
+            @test plan(16, 16, 16400) == (; tile = (64, 16), groups = (1, 1), ks = 544, slices = 31)
+        end
+
         if Metal.tensor_matmul_capable()
             ttol(T) = T === Float32 ? 1.0f-3 : 1.0f-1
             # BFloat16 tensor operands need macOS 26.1
@@ -982,15 +1024,23 @@ end
                 ref = α * (Float32.(a) * Float32.(b)) + β * Float32.(c0)
                 @test Float32.(Array(C)) == ref
             end
-            # β = 0 ignores C's contents, also through the temporary
+            # β = 0 ignores C's contents
             let a = rand(Float32, 64, 32), b = rand(Float32, 32, 64)
                 C = MtlArray(fill(NaN32, 64, 64))
                 @with (Metal.matmul_alg => :tensor) mul!(C, MtlArray(a), MtlArray(b), 2, false)
                 @test isapprox(Array(C), 2 * a * b; rtol=1f-4)
             end
+            # (also a C that goes through the workspace, of which the other rows are left alone)
+            let a = rand(Float32, 100, 33), b = rand(Float32, 33, 70)
+                P = MtlArray(fill(NaN32, 200, 70))
+                Metal.gemm_tensor!(view(P, 1:2:200, :), MtlArray(a), MtlArray(b), 2, false)
+                @test isapprox(Array(P)[1:2:200, :], 2 * a * b; rtol=1f-4)
+                @test all(isnan, Array(P)[2:2:200, :])
+            end
             # α and β are applied by the kernel that computes the product, in cooperative
             # tensors, except for a C that can't be laid out as a tensor (stepped rows): the
-            # product then goes through a temporary that is scaled and combined with C after.
+            # product then goes through a workspace that a second kernel scales and combines
+            # with C.
             # The shapes have partial tiles at the edges.
             @testset "scaling $TA→$TC $M×$N×$K α=$α β=$β$(stepped ? " stepped" : "")" for
                     (TA, TC) in ((Float32, Float32), (Float16, Float16), (Float16, Float32),
@@ -1048,6 +1098,93 @@ end
                 C = MtlArray(fill(Float16(-60000), 16, 16))
                 @with (Metal.matmul_alg => :tensor) mul!(C, A, B, true, true)
                 @test all(==(20000), Array(C))
+            end
+
+            # a small C with a long contraction splits it (see `gemm_tensor_splits`): the
+            # partial products go to a workspace that is allocated per call, while an unsplit
+            # product writes to C directly
+            @testset "split-K" begin
+                # (ragged: partial tiles, and a last slice that is shorter than the others)
+                M, N, K = 65, 47, 12345
+                family = Metal.gemm_tensor_family()
+                tile_m, tile_n = Metal.gemm_tensor_tiles(M, N; family)
+                S = Metal.gemm_tensor_splits(M, N, K, cld(M, 2tile_m) * cld(N, 2tile_n);
+                                             cores = Metal.gemm_tensor_cores())
+                @test S > 1
+                slices = cld(K, cld(cld(K, S), Metal.GEMM_TENSOR_SPLIT_K) * Metal.GEMM_TENSOR_SPLIT_K)
+                A = MtlArray(rand(Float32, M, K)); B = MtlArray(rand(Float32, K, N))
+                C = MtlArray(zeros(Float32, M, N))
+                @test Metal.@allocated(Metal.gemm_tensor!(C, A, B)) == sizeof(Float32) * M * N * slices
+                @test isapprox(Array(C), Array(A) * Array(B); rtol=1f-5)
+                # (the result is reproducible)
+                C2 = MtlArray(zeros(Float32, M, N))
+                Metal.gemm_tensor!(C2, A, B)
+                @test Array(C2) == Array(C)
+                # a short contraction isn't split
+                A = MtlArray(rand(Float32, M, 64)); B = MtlArray(rand(Float32, 64, N))
+                @test Metal.@allocated(Metal.gemm_tensor!(C, A, B)) == 0
+                @test isapprox(Array(C), Array(A) * Array(B); rtol=1f-5)
+
+                # The slices are added up in their order, and the result is scaled and
+                # converted to C's element type after: 1×1×1536 is split into three slices,
+                # here with partial products 1, 2^24 and -2^24, which add up to 0 in Float32
+                # in this order, and to 1 in the reverse one.
+                a = zeros(Float32, 1, 1536); b = zeros(Float32, 1536, 1)
+                a[[1, 513, 1025]] .= 1; b[[1, 513, 1025]] .= (1, 2^24, -2^24)
+                C = MtlArray(zeros(Float32, 1, 1))
+                Metal.gemm_tensor!(C, MtlArray(a), MtlArray(b))
+                @test only(Array(C)) == 0
+                # 1×1×1025 in two slices, of 544 and 481, with partial products 2049 and -2048:
+                # the Float16 result 2·1 + 3·3 would be 9 if the partial products were rounded
+                # to Float16 (2049 to 2048)
+                a = zeros(Float16, 1, 1025); b = zeros(Float16, 1025, 1)
+                a[[1, 2, 1025]] .= 1; b[[1, 2, 1025]] .= (2048, 1, -2048)
+                C = MtlArray(fill(Float16(3), 1, 1))
+                Metal.gemm_tensor!(C, MtlArray(a), MtlArray(b), 2, 3)
+                @test only(Array(C)) == 11
+
+                @testset "$TA→$TC $tA$tB α=$α β=$β" for (TA, TC) in ((Float32, Float32), (Float16, Float16),
+                                                                  (Float16, Float32), (BFloat16, BFloat16),
+                                                                  (Int8, Int32)),
+                                                       (tA, tB) in (('N', 'N'), ('T', 'N'), ('C', 'T')),
+                                                       (α, β) in ((1, 0), (1, 1), (2, 0), (2, 3))
+                    BFloat16 in (TA, TC) && Metal.macos_version() < v"26.1" && continue
+                    a = tgen(TA, (tA == 'N' ? (M, K) : (K, M))...)
+                    b = tgen(TA, (tB == 'N' ? (K, N) : (N, K))...)
+                    # (of the same magnitude as the product, so that β·C counts)
+                    c0 = TC <: Integer ? tgen(TC, M, N) : TC.(K / 4 * rand(Float32, M, N))
+                    # (β = 0 doesn't read C)
+                    C = MtlArray(iszero(β) && TC <: AbstractFloat ? fill(TC(NaN), M, N) : c0)
+                    Metal.gemm!(C, tA, tB, MtlArray(a), MtlArray(b), α, β; kernel=:tensor)
+                    opa = tA == 'N' ? Float64.(a) : transpose(Float64.(a))
+                    opb = tB == 'N' ? Float64.(b) : transpose(Float64.(b))
+                    ref = α * (opa * opb) + β * Float64.(c0)
+                    @test isapprox(Float64.(Array(C)), ref; rtol=TC <: Integer ? 0 : ttol(TC))
+                end
+
+                # views are read and written in place, or packed (stepped rows, a Symmetric
+                # wrapper); the neighbouring elements of C's parent are left alone
+                P = rand(Float32, 2M, N + 2); a = rand(Float32, 2M, K); b = rand(Float32, K, N)
+                @testset "views $rows" for (rows, arows) in ((1:M, 2:M+1), (1:2:2M, 1:2:2M))
+                    Pc = MtlArray(P)
+                    Cv = view(Pc, rows, 2:N+1)
+                    Av = view(MtlArray(a), arows, :)
+                    @with (Metal.matmul_alg => :tensor) mul!(Cv, Av, MtlArray(b), 2, 0.5)
+                    @test isapprox(Array(Cv), 2 * a[arows, :] * b + 0.5 * P[rows, 2:N+1]; rtol=1f-5)
+                    outside = trues(2M, N + 2); outside[rows, 2:N+1] .= false
+                    @test Array(Pc)[outside] == P[outside]
+                end
+                let a = rand(Float32, 2048, 2048), b = rand(Float32, 2048, 4)
+                    C = MtlArray(zeros(Float32, 2048, 4))
+                    Metal.gemm!(C, 'S', 'N', MtlArray(a), MtlArray(b), true, false; kernel=:tensor)
+                    @test isapprox(Array(C), Symmetric(a) * b; rtol=1f-5)
+                end
+                # with explicit tiles
+                let a = rand(Float32, M, K), b = rand(Float32, K, N)
+                    C = MtlArray(zeros(Float32, M, N))
+                    Metal.gemm_tensor!(C, MtlArray(a), MtlArray(b); tile_m = 16, tile_n = 16)
+                    @test isapprox(Array(C), a * b; rtol=1f-5)
+                end
             end
         else
             @test_skip Metal.tensor_matmul_capable()
