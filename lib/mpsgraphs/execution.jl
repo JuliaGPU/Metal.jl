@@ -54,6 +54,48 @@ function serialize(graphExe::MPSGraphExecutable, url::NSURL, descriptor=MPSGraph
                               descriptor:descriptor::id{MPSGraphExecutableSerializationDescriptor}]::Nothing
 end
 
+"""
+    MPSGraphExecutable(path::AbstractString, [compilationDescriptor])
+    MPSGraphExecutable(url::NSURL, [compilationDescriptor])
+
+Load the executable that [`serialize`](@ref) wrote to an MPSGraph package.
+
+`compilationDescriptor` overrides the settings the executable was compiled with. It defaults
+to a new `MPSGraphCompilationDescriptor`.
+"""
+function MPSGraphExecutable(path::AbstractString, compilationDescriptor=MPSGraphCompilationDescriptor())
+    ispath(path) || throw(ArgumentError("No MPSGraph package at $path"))
+    return MPSGraphExecutable(NSFileURL(path), compilationDescriptor)
+end
+function MPSGraphExecutable(url::NSURL, compilationDescriptor=MPSGraphCompilationDescriptor())
+    # the default is a descriptor with default settings instead of `nil`: an executable that
+    # was loaded without a descriptor crashes in MPSGraph when it runs a matrix
+    # multiplication (seen on macOS 27.3)
+    exe = @objc [[MPSGraphExecutable alloc]::id{MPSGraphExecutable} initWithMPSGraphPackageAtURL:url::id{NSURL}
+                                                  compilationDescriptor:compilationDescriptor::id{Object}]::id{MPSGraphExecutable}
+    exe == nil && throw(ArgumentError("Could not load an MPSGraph package from $(url.path)"))
+    return MPSGraphExecutable(exe)
+end
+
+"""
+    run(executable::MPSGraphExecutable, commandQueue, inputs::NSArray, [results], [executionDescriptor])
+
+Run `executable` on `commandQueue` and wait for it to finish.
+
+`inputs` holds one `MPSGraphTensorData` for each of the executable's feed tensors, in their
+order. `results` optionally holds the `MPSGraphTensorData` to write the target tensors to;
+without it, MPSGraph allocates them. Returns the results as an `NSArray`.
+"""
+function run(executable::MPSGraphExecutable, commandQueue, inputs::NSArray, results=nil, executionDescriptor=nil)
+    Metal.flush!(commandQueue)
+    # this executes synchronously, without going through Metal.jl's submission hook
+    Metal.synchronize_pending!()
+    return @objc [executable::id{MPSGraphExecutable} runWithMTLCommandQueue:commandQueue::id{MTLCommandQueue}
+                                                                inputsArray:inputs::id{NSArray}
+                                                               resultsArray:results::id{Object}
+                                                        executionDescriptor:executionDescriptor::id{Object}]::NSArray
+end
+
 
 ## cached graphs
 
