@@ -84,10 +84,10 @@ access (see [Memory](../usage/memory.md)).
 
 ## Keep the default matrix multiplication algorithm
 
-Matrix products use Apple's MPSGraph when it supports the element types, which on the M1
-was about 2.5 times faster for `Float32` than Metal.jl's own kernels (1800 versus 750
-GFLOP/s at 2048×2048). Only change [`Metal.matmul_alg`](@ref) when you have measured a benefit
-for your sizes and types (see [Numerical operations](../usage/numerical.md)).
+Matrix products choose between Apple's MPSGraph and Metal.jl's own kernels by the element
+types, the shape and the GPU, based on measurements on M1, M2, M3 and M6 GPUs. Only change
+[`Metal.matmul_alg`](@ref) when you have measured a benefit for your sizes and types (see
+[Numerical operations](../usage/numerical.md)).
 
 ## Account for compilation
 

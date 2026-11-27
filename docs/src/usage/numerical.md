@@ -35,12 +35,21 @@ julia> Array(C)
 
 ### Choosing the implementation
 
-By default, Metal.jl uses MPSGraph when it supports the operands, and otherwise one of its
-own kernels. MPSGraph handles `Float32`, `Float16`, `BFloat16`, `ComplexF32` and
-`ComplexF16` matrices, and `Int8`/`Int16` inputs with a floating-point output (the full list
-is `MPSGraphs.MPSGRAPH_VALID_MATMUL_TYPES`). Everything else, such as integer matrices,
-`Symmetric` and `Hermitian` wrappers, strided views, and devices without MPS (e.g.
-virtualized GPUs), uses the native kernels.
+By default, Metal.jl uses its own kernels for `Float32`, `Float16` and `BFloat16` matrices
+(and the other element types of the `:tensor` kernel below) on Metal 4 devices, i.e. with
+macOS 26 or later. They were measured to be as fast as MPSGraph or faster for most shapes,
+and they have less overhead per call, so that a loop of small products runs up to 4× faster.
+For the shapes that MPSGraph multiplies faster, Metal.jl uses MPSGraph. Of the products of
+`Float32` matrices at reduced precision (see below) on M5 and later GPUs, these are the ones
+with at least 256 rows and columns. Of all other products, they are most of those with 17
+to 256 columns and at least 4× as many rows, and those of more than 64×64 elements with a
+contraction that is at least 8× as long as their larger dimension.
+
+On older systems, and for the other element types that MPSGraph supports (`ComplexF32`,
+`ComplexF16`, and `Int8`/`Int16` inputs with a floating-point output; the full list is
+`MPSGraphs.MPSGRAPH_VALID_MATMUL_TYPES`), Metal.jl uses MPSGraph. Everything else, such as
+other integer matrices, `Symmetric` and `Hermitian` wrappers, strided views, and devices
+without MPS (e.g. virtualized GPUs), uses the native kernels.
 
 To force a choice, set [`Metal.matmul_alg`](@ref) with `@with` from `Base.ScopedValues` (Julia 1.11+;
 on Julia 1.10, from the ScopedValues.jl package):
@@ -58,7 +67,7 @@ true
 
 | Value | Implementation |
 |:------|:---------------|
-| `:auto` (default) | `:MPSGraph` if supported, else `:native` |
+| `:auto` (default) | `:native` where it was measured to be faster, else `:MPSGraph` if supported, else `:native` |
 | `:MPSGraph` | [`MPSGraphs.matmul!`](@ref) |
 | `:MPS` | [`MPS.matmul!`](@ref); `Float32`, `Float16`, and `Int8`/`Int16` inputs (`MPS.MPS_VALID_MATMUL_TYPES`) |
 | `:native` | Metal.jl's kernels: `:tensor` if possible, then `:simd`, then `:GPUArrays` |

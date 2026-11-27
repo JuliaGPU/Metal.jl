@@ -41,8 +41,8 @@ using LinearAlgebra, ScopedValues
 
         # :auto
         @test test_matmul(Int32, Int32; vec_b)     # falls back to GPUArrays
-        @test test_matmul(Int8, Float32; vec_b)    # should use MPS
-        @test test_matmul(Float16, Float32; vec_b) skip=virtual # should use MPSGraph on M1/M2
+        @test test_matmul(Int8, Float32; vec_b)    # MPSGraph
+        @test test_matmul(Float16, Float32; vec_b) skip=virtual # native on Metal 4 devices, else MPSGraph
 
         # :MPS
         mpsInT = vec_b ? Float32 : Int16
@@ -79,6 +79,93 @@ using LinearAlgebra, ScopedValues
         else
             @test_throws "algorithm `:tensor`" test_matmul(Float32, Float32; vec_b, alg=:tensor)
         end
+        end
+    end
+end
+
+@testset ":auto algorithm" begin
+    pick(C, A, B; tA = 'N', tB = 'N', relaxed = false) =
+        Metal.auto_matmul_alg(C, tA, tB, A, B, true, false, relaxed)
+    mats(TA, TC, M, N, K; TB = TA) =
+        (Metal.zeros(TC, M, N), Metal.zeros(TA, M, K), Metal.zeros(TB, K, N))
+    # without MPS (e.g. on virtualized GPUs), everything goes native
+    mpsgraph = Metal.MPS.is_supported(Metal.device()) ? :MPSGraph : :native
+    fast = Metal.tensor_matmul_capable() ? :native : mpsgraph
+
+    # element types that the tensor kernel takes go native on Metal 4 devices
+    @test pick(mats(Float32, Float32, 512, 512, 512)...) === fast
+    @test pick(mats(Float16, Float16, 512, 512, 512)...) === fast
+    @test pick(mats(Float16, Float32, 512, 512, 512)...) === fast
+    @test pick(mats(Float32, Float32, 512, 512, 512)...; tA = 'T', tB = 'C') === fast
+    @test pick(Metal.zeros(Float32, 512), Metal.zeros(Float32, 512, 512),
+               Metal.zeros(Float32, 512)) === fast
+    # others go to MPSGraph if it supports them, and native otherwise
+    @test pick(mats(ComplexF32, ComplexF32, 64, 64, 64)...) === mpsgraph
+    @test pick(mats(Int8, Float32, 64, 64, 64)...) === mpsgraph
+    @test pick(mats(Int32, Int32, 64, 64, 64)...) === :native
+    @test pick(mats(Float16, Float32, 64, 64, 64; TB = Float32)...) === :native
+    # shapes that MPSGraph multiplies faster
+    @test pick(mats(Float32, Float32, 4096, 64, 4096)...) === mpsgraph
+    @test pick(mats(Float32, Float32, 4096, 64, 4096)...; tA = 'T') === fast
+    @test pick(mats(Float32, Float32, 300, 300, 12000)...) === mpsgraph
+    @test pick(mats(Float32, Float32, 64, 64, 65536)...) === fast
+    if Metal.gemm_tensor_family() >= 10
+        @test pick(mats(Float32, Float32, 1024, 1024, 1024)...; relaxed = true) === mpsgraph
+        @test pick(mats(Float32, Float32, 128, 4096, 4096)...; relaxed = true) === fast
+        @test pick(mats(Float16, Float16, 1024, 1024, 1024)...; relaxed = true) === fast
+    else
+        @test pick(mats(Float32, Float32, 1024, 1024, 1024)...; relaxed = true) === fast
+    end
+
+    # products that `:auto` sends either way compute the right result
+    relerr(C, ref) = norm(Float64.(Array(C)) .- ref) / norm(ref)
+    @testset "$M×$N×$K$(relaxed ? " relaxed" : "")" for (M, N, K, relaxed) in
+            ((256, 256, 256, true), (1024, 64, 512, false), (300, 300, 2400, false))
+        a = rand(Float32, M, K) .- 0.5f0; b = rand(Float32, K, N) .- 0.5f0
+        C = @with (Metal.matmul_precision => (relaxed ? :relaxed : :default)) MtlArray(a) * MtlArray(b)
+        @test relerr(C, Float64.(a) * Float64.(b)) < (relaxed ? 2e-3 : 1e-5)
+    end
+    # MPSGraph aborts on the M6 for this one, so it has to stay native
+    let a = rand(Float32, 65536, 256), x = rand(Float32, 256)
+        A, X = MtlArray(a), MtlArray(x)
+        @test pick(Metal.zeros(Float32, 65536), A, X) === fast
+        @test Array(A * X) ≈ a * x
+    end
+
+    # the rule itself, for every family
+    faster(M, N, K; family, narrow = false, transA = false, relaxed = false) =
+        Metal.mpsgraph_matmul_faster(M, N, K; family, narrow, transA, relaxed)
+    for family in (0, 7, 8, 9, 10, 11, 12)
+        # squares, few rows, up to 16 columns, and matrix-vector products: native
+        for n in (64, 256, 1024, 4096)
+            @test !faster(n, n, n; family)
+            @test !faster(n, n, n; family, narrow = true)
+            @test !faster(n, n, n; family, transA = true)
+        end
+        @test !faster(64, 16384, 4096; family)
+        @test !faster(16384, 16, 4096; family)
+        @test !faster(16384, 1, 4096; family)
+        @test !faster(65536, 1, 4096; family, relaxed = true)
+        # few columns, unless A is transposed; 2-byte inputs only on Apple7/8
+        @test faster(16384, 17, 4096; family)
+        @test faster(1024, 256, 4096; family)
+        @test !faster(1023, 256, 4096; family)
+        @test !faster(16384, 257, 4096; family)
+        @test !faster(16384, 64, 4096; family, transA = true)
+        @test faster(16384, 64, 4096; family, narrow = true) == (family in (7, 8))
+        # long contractions, of more than 64² elements
+        @test faster(300, 300, 2400; family)
+        @test !faster(300, 300, 2399; family)
+        @test faster(65, 64, 65536; family)
+        @test !faster(64, 64, 65536; family)
+        @test faster(200, 60, 30000; family, transA = true, narrow = true)
+        # relaxed products on Apple10+, with at least 256 rows and columns
+        @test faster(256, 4096, 4096; family, relaxed = true) == (family >= 10)
+        @test faster(4096, 512, 512; family, relaxed = true) == (family >= 10)
+        if family >= 10
+            @test !faster(255, 4096, 4096; family, relaxed = true)
+            @test !faster(4096, 128, 4096; family, relaxed = true)
+            @test !faster(128, 128, 65536; family, relaxed = true)
         end
     end
 end
