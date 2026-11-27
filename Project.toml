@@ -1,6 +1,6 @@
 name = "Metal"
 uuid = "dde4c033-4e86-420c-a63e-0dd931031962"
-version = "1.12.1"
+version = "1.13.0"
 
 [workspace]
 projects = ["test", "docs", "perf", "examples", "res/wrap"]
@@ -52,7 +52,7 @@ GPUArrays = "12.1"
 GPUCompiler = "2.24"
 GPUToolbox = "3.7"
 KernelAbstractions = "0.10"
-KernelInterface = "0.4.7"
+KernelInterface = "0.5"
 LLVM = "10.4"
 LLVMDowngrader_jll = "0.11, 0.12"
 LinearAlgebra = "1"

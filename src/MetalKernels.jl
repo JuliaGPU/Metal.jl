@@ -93,17 +93,30 @@ KI.unsafe_free!(A::MtlArray) = Metal.unsafe_free!(A)
 
 KI.argconvert(::MetalBackend, arg) = mtlconvert(arg)
 
-# The SIMD-group width is a property of the compiled pipeline (`threadExecutionWidth`), but
-# it is the same for all pipelines on Apple GPUs. `kernel_function` checks that, so that
-# `KI.sub_group_size` can promise it before compiling.
+# The SIMD-group width is a property of the compiled pipeline (`threadExecutionWidth`) that
+# can't be requested, but it is the same for all pipelines on Apple GPUs. `kernel_function`
+# checks that, so that it can be offered as the only width, and so that device code can treat
+# it as a constant.
 const SIMD_WIDTH = 32
 
-function KI.kernel_function(backend::MetalBackend, f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
+KI.sub_group_sizes(::MetalBackend)::Tuple{Vararg{Int}} = (SIMD_WIDTH,)
+
+@noinline function check_sub_group_size(width)
+    width == SIMD_WIDTH ||
+        throw(ArgumentError("Sub-group size $(repr(width)) is not supported by Metal, which only supports $((SIMD_WIDTH,))"))
+    return
+end
+
+function KI.kernel_function(backend::MetalBackend, f::F, tt::TT=Tuple{}; name=nothing,
+                            sub_group_size=nothing, kwargs...) where {F,TT}
+    # every kernel is compiled for `SIMD_WIDTH`, so a request is only checked and not passed
+    # on, which would compile another copy of the kernel
+    sub_group_size === nothing || check_sub_group_size(sub_group_size)
     # KernelInterface passes the callable unconverted: it is converted again at every launch,
     # like with `@metal`, so that the buffers it captures are declared and kept alive
     kern = mtlfunction(mtlconvert(f), tt; source=f, name, kwargs...)
     kern.exec_width == SIMD_WIDTH ||
-        error("Kernel compiled with a SIMD-group width of $(kern.exec_width), while KernelInterface.sub_group_size promises $SIMD_WIDTH")
+        error("Kernel compiled with a SIMD-group width of $(kern.exec_width), while Metal.jl only supports a width of $SIMD_WIDTH")
     KI.Kernel(backend, kern)
 end
 
@@ -139,7 +152,6 @@ end
 function KI.max_num_groups(backend::MetalBackend)::NTuple{3, Int}
     Int(typemax(UInt32)) .÷ KI.max_work_group_dims(backend)
 end
-KI.sub_group_size(::MetalBackend)::Int = SIMD_WIDTH
 function KI.multiprocessor_count(::MetalBackend)::Int
     Metal.num_gpu_cores()
 end

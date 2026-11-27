@@ -37,6 +37,22 @@ end
     @test Array(lane) == [rem(i, 32) + 1 for i in 0:n-1]
 end
 
+# Metal can't request a SIMD-group width, so the only width it offers is the one every
+# pipeline has on Apple GPUs, and requesting it compiles the same kernel as not requesting one
+@testset "requested sub-group width" begin
+    backend = MetalBackend()
+    @test KI.sub_group_sizes(backend) == (32,)
+    widths = MtlArray{UInt32}(undef, 32)
+    tt = KI.argument_types(backend, (widths, widths, widths, widths))
+    unrequested = KI.kernel_function(backend, ki_subgroup_kernel, tt)
+    @test unrequested.kern.exec_width == 32
+    @test KI.kernel_function(backend, ki_subgroup_kernel, tt; sub_group_size = 32).kern.pipeline ==
+          unrequested.kern.pipeline
+    @test KI.kernel_function(backend, ki_subgroup_kernel, tt; sub_group_size = nothing).kern.pipeline ==
+          unrequested.kern.pipeline
+    @test_throws ArgumentError KI.kernel_function(backend, ki_subgroup_kernel, tt; sub_group_size = 16)
+end
+
 @testset "copyto!" begin
     backend = MetalBackend()
 
