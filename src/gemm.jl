@@ -22,6 +22,10 @@
 # generic kernels, which work for any eltype supporting `+`/`*`, any transpose, and any
 # offset.
 #
+# Products with a single column, matrix-vector ones, are bound by memory bandwidth rather
+# than compute, and `:native`/`:auto` run them with dedicated kernels (`gemv_n_kernel!` and
+# `gemv_t_kernel!`) when the operands are real floats and A has contiguous columns.
+#
 # All honor the LinearAlgebra contract `C = α·op(A)·op(B) + β·C` with the
 # operand char in {'N','T','C'} (transpose/adjoint) or {'S','s','H','h'} (the
 # LinearAlgebra wrapper chars for Symmetric/Hermitian, upper/lowercase = upper/lower
@@ -730,6 +734,258 @@ function gemm_tensor_reduce_kernel!(C, W, alpha::P, beta::P, S::Int32,
     return
 end
 
+## matrix-vector kernels
+
+# `y = α·op(A)·x + β·y` streams A from memory once and does two flops per element, so it is
+# bound by memory bandwidth, and the GEMM kernels (built for reuse of tiles) leave most of it
+# on the table. These kernels read A in place, in the order it is stored, and accumulate in
+# `Float32`. A is a column-major matrix with column stride `ld`; x and y are vectors with
+# element strides `incx` and `incy`. All indices are 0-based and fit `Int32`.
+
+# A[i, k] for the `R` rows i0+1:i0+R of column k, at `base = i0 + k·ld`
+@inline gemv_rows(A, base, ::Val{R}) where {R} =
+    ntuple(j -> Float32(@inbounds A[base + j]), Val(R))
+# the same for the first `n < R` of them, zero for the rest
+@inline gemv_rows(A, base, n, ::Val{R}) where {R} =
+    ntuple(j -> j <= n ? Float32(@inbounds A[base + j]) : 0.0f0, Val(R))
+@inline gemv_axpy(acc, a, xk, ::Val{R}) where {R} =
+    ntuple(j -> muladd(a[j], xk, acc[j]), Val(R))
+@inline gemv_axpy(acc, as, xs, ::Val{R}, ::Val{0}) where {R} = acc
+@inline gemv_axpy(acc, as, xs, ::Val{R}, ::Val{U}) where {R, U} =
+    gemv_axpy(gemv_axpy(acc, as[U], xs[U], Val(R)), as, xs, Val(R), Val(U - 1))
+
+# U steps of the K loop at once, so that all of their loads are in flight together
+@inline function gemv_n_steps(acc, A, x, r0, k, ld, incx, ::Val{KT}, ::Val{R}, ::Val{U}) where {KT, R, U}
+    xs = ntuple(u -> Float32(@inbounds x[(k + Int32((u - 1) * KT)) * incx + Int32(1)]), Val(U))
+    as = ntuple(u -> gemv_rows(A, r0 + (k + Int32((u - 1) * KT)) * ld, Val(R)), Val(U))
+    return gemv_axpy(acc, as, xs, Val(R), Val(U))
+end
+
+@inline function gemv_store!(y, i, incy, v, alpha, beta, ::Val{BETA}) where {BETA}
+    yi = i * incy + Int32(1)
+    # β = 0 doesn't read y, so that NaNs in it don't propagate
+    @inbounds y[yi] = BETA ? alpha * v + beta * Float32(y[yi]) : alpha * v
+    return
+end
+
+# `y = α·A·x + β·y`, where y[i] = Σ_k A[i, k]·x[k] runs down the columns of A. Every thread
+# accumulates `R` consecutive rows, so a simdgroup reads a contiguous stretch of 32·R
+# elements of a column at a time. The `KT` simdgroups of a threadgroup share its 32·R rows,
+# each taking every KT-th column, and add their partial sums in threadgroup memory.
+function gemv_n_kernel!(y, A, x, alpha::Float32, beta::Float32, M::Int32, K::Int32,
+                        ld::Int32, incx::Int32, incy::Int32,
+                        ::Val{R}, ::Val{KT}, ::Val{U}, ::Val{BETA}) where {R, KT, U, BETA}
+    lane = Int32(thread_index_in_simdgroup()) - Int32(1)
+    sg = Int32(simdgroup_index_in_threadgroup()) - Int32(1)
+    tg0 = (Int32(threadgroup_position_in_grid().x) - Int32(1)) * Int32(32 * R)
+    r0 = tg0 + lane * Int32(R)
+
+    acc = ntuple(_ -> 0.0f0, Val(R))
+    k = sg
+    if r0 + Int32(R) <= M
+        while k + Int32((U - 1) * KT) < K
+            acc = gemv_n_steps(acc, A, x, r0, k, ld, incx, Val(KT), Val(R), Val(U))
+            k += Int32(U * KT)
+        end
+        while k < K
+            xk = Float32(@inbounds x[k * incx + Int32(1)])
+            acc = gemv_axpy(acc, gemv_rows(A, r0 + k * ld, Val(R)), xk, Val(R))
+            k += Int32(KT)
+        end
+    elseif r0 < M
+        while k < K
+            xk = Float32(@inbounds x[k * incx + Int32(1)])
+            acc = gemv_axpy(acc, gemv_rows(A, r0 + k * ld, M - r0, Val(R)), xk, Val(R))
+            k += Int32(KT)
+        end
+    end
+
+    if KT == 1
+        for j in 1:R
+            i = r0 + Int32(j - 1)
+            i < M && gemv_store!(y, i, incy, acc[j], alpha, beta, Val(BETA))
+        end
+    else
+        partial = MtlThreadGroupArray(Float32, (32 * R, KT))
+        for j in 1:R
+            @inbounds partial[lane * Int32(R) + Int32(j), sg + Int32(1)] = acc[j]
+        end
+        threadgroup_barrier(MemoryFlagThreadGroup)
+        t = sg * Int32(32) + lane
+        while t < Int32(32 * R)
+            v = 0.0f0
+            for q in 1:KT
+                v += @inbounds partial[t + Int32(1), q]
+            end
+            i = tg0 + t
+            i < M && gemv_store!(y, i, incy, v, alpha, beta, Val(BETA))
+            t += Int32(32 * KT)
+        end
+    end
+    return
+end
+
+# x[k:k+V-1], and the same elements of column `cb` of A (at `cb = j·ld`)
+@inline gemv_t_x(x, k, incx, ::Val{V}) where {V} =
+    ntuple(v -> Float32(@inbounds x[(k + Int32(v - 1)) * incx + Int32(1)]), Val(V))
+@inline gemv_t_a(A, cb, k, ::Val{V}) where {V} =
+    ntuple(v -> Float32(@inbounds A[cb + k + Int32(v)]), Val(V))
+# the same for the elements before K, zero after
+@inline gemv_t_x(x, k, K, incx, ::Val{V}) where {V} =
+    ntuple(v -> k + Int32(v - 1) < K ? Float32(@inbounds x[(k + Int32(v - 1)) * incx + Int32(1)]) : 0.0f0, Val(V))
+@inline gemv_t_a(A, cb, k, K, ::Val{V}) where {V} =
+    ntuple(v -> k + Int32(v - 1) < K ? Float32(@inbounds A[cb + k + Int32(v)]) : 0.0f0, Val(V))
+@inline gemv_dot(acc, a, xs, ::Val{0}) = acc
+@inline gemv_dot(acc, a, xs, ::Val{V}) where {V} =
+    gemv_dot(muladd(a[V], xs[V], acc), a, xs, Val(V - 1))
+@inline function gemv_t_step(acc, A, x, cbs, k, incx, ::Val{C}, ::Val{V}) where {C, V}
+    xs = gemv_t_x(x, k, incx, Val(V))
+    as = ntuple(c -> gemv_t_a(A, cbs[c], k, Val(V)), Val(C))
+    return ntuple(c -> gemv_dot(acc[c], as[c], xs, Val(V)), Val(C))
+end
+@inline function gemv_t_step(acc, A, x, cbs, k, K, incx, ::Val{C}, ::Val{V}) where {C, V}
+    xs = gemv_t_x(x, k, K, incx, Val(V))
+    as = ntuple(c -> gemv_t_a(A, cbs[c], k, K, Val(V)), Val(C))
+    return ntuple(c -> gemv_dot(acc[c], as[c], xs, Val(V)), Val(C))
+end
+
+@inline function simd_sum(v::Float32)
+    v += simd_shuffle_xor(v, 0x10)
+    v += simd_shuffle_xor(v, 0x08)
+    v += simd_shuffle_xor(v, 0x04)
+    v += simd_shuffle_xor(v, 0x02)
+    v += simd_shuffle_xor(v, 0x01)
+    return v
+end
+@inline simd_sum(acc::NTuple{C, Float32}) where {C} = ntuple(c -> simd_sum(acc[c]), Val(C))
+
+# `y = α·transpose(A)·x + β·y` for A stored as K×M, where y[j] is the dot product of column j
+# of A with x. A simdgroup computes `C` outputs; its lanes take `V` consecutive elements each,
+# so that it reads 32·V contiguous elements of each of its columns at a time, and it adds up
+# the lanes' sums with simdgroup shuffles. A threadgroup is a WC×WK grid of simdgroups: WC of
+# them for different columns, and WK splitting K between them, whose partial sums are added in
+# threadgroup memory.
+function gemv_t_kernel!(y, A, x, alpha::Float32, beta::Float32, M::Int32, K::Int32,
+                        ld::Int32, incx::Int32, incy::Int32,
+                        ::Val{C}, ::Val{V}, ::Val{WC}, ::Val{WK}, ::Val{BETA}) where {C, V, WC, WK, BETA}
+    lane = Int32(thread_index_in_simdgroup()) - Int32(1)
+    sg = Int32(simdgroup_index_in_threadgroup()) - Int32(1)
+    wc = sg % Int32(WC); wk = sg ÷ Int32(WC)
+    tg0 = (Int32(threadgroup_position_in_grid().x) - Int32(1)) * Int32(WC * C)
+    j0 = tg0 + wc * Int32(C)
+
+    # past the last column, read the last one again rather than branch around the loads
+    cbs = ntuple(c -> min(j0 + Int32(c - 1), M - Int32(1)) * ld, Val(C))
+    acc = ntuple(_ -> 0.0f0, Val(C))
+    k = (wk * Int32(32) + lane) * Int32(V)
+    while k + Int32(V) <= K
+        acc = gemv_t_step(acc, A, x, cbs, k, incx, Val(C), Val(V))
+        k += Int32(32 * V * WK)
+    end
+    if k < K
+        acc = gemv_t_step(acc, A, x, cbs, k, K, incx, Val(C), Val(V))
+    end
+    acc = simd_sum(acc)
+
+    if WK == 1
+        for c in 1:C
+            j = j0 + Int32(c - 1)
+            lane == Int32(c - 1) && j < M && gemv_store!(y, j, incy, acc[c], alpha, beta, Val(BETA))
+        end
+    else
+        partial = MtlThreadGroupArray(Float32, (WC * C, WK))
+        if lane == 0
+            for c in 1:C
+                @inbounds partial[wc * Int32(C) + Int32(c), wk + Int32(1)] = acc[c]
+            end
+        end
+        threadgroup_barrier(MemoryFlagThreadGroup)
+        t = sg * Int32(32) + lane
+        if t < Int32(WC * C)
+            v = 0.0f0
+            for q in 1:WK
+                v += @inbounds partial[t + Int32(1), q]
+            end
+            j = tg0 + t
+            j < M && gemv_store!(y, j, incy, v, alpha, beta, Val(BETA))
+        end
+    end
+    return
+end
+
+# Launch parameters, measured on M1, M2 and M6 over M, K = 256…65536 with `Float32` and
+# `Float16`: threads per threadgroup, threadgroups, and the kernel's parameters. Both kernels
+# reach the memory bandwidth once enough loads are in flight. For A·x, that takes 8 rows per
+# thread for tall matrices, and enough simdgroups splitting K for about 128 of them in all
+# when there are few rows. The threadgroups stay at 512 threads or fewer, which all of these
+# configurations support. The transposed kernel takes four columns per simdgroup, and splits
+# them over up to 16 simdgroups, as many as leave each simdgroup two steps of its loop.
+function gemv_config(tA::Char, M::Integer, K::Integer)
+    if tA === 'N'
+        R = M >= 4096 ? 8 : M >= 1024 ? 4 : 1
+        groups = cld(M, 32 * R)
+        KT = 1
+        while KT < min(16, 64 ÷ R) && groups * KT < 128
+            KT *= 2
+        end
+        return 32 * KT, groups, (R, KT, 4)
+    else
+        C, V, WC = 4, 4, 1
+        WK = 1
+        while WK < 16 && 2 * WK * 32 * V * 2 <= K   # 2·WK simdgroups, 2 steps of 32·V each
+            WK *= 2
+        end
+        return 32 * WC * WK, cld(M, WC * C), (C, V, WC, WK)
+    end
+end
+
+# A vector along dimension `dim` of a matrix operand, as an array starting at its first element
+# and its (positive) element stride, or `nothing`.
+function gemv_vector(X::MtlMatrixOperand{T}, dim::Int) where {T}
+    n = size(X, dim)
+    s = n == 1 ? 1 : stride(X, dim)
+    s > 0 || return nothing
+    len = (n - 1) * s + 1
+    len <= typemax(Int32) || return nothing
+    X isa MtlMatrix && return (X, s)
+    return (GPUArrays.derive(T, parent(X), (len,), Base.first_index(X) - 1), s)
+end
+
+# The operands of `C = α·op(A)·op(B) + β·C` as the matrix-vector kernels take them, with the
+# kernel for `op` and its launch configuration, or `nothing` unless C and op(B) are single
+# columns of the simd kernel's element types, A has contiguous columns, and op is a (conjugate)
+# transpose of a real matrix or none.
+function gemv_operands(C::MtlMatrixOperand, A::MtlMatrixOperand, B::MtlMatrixOperand,
+                       tA::Char, tB::Char)
+    size(C, 2) == 1 || return nothing
+    gemm_simd_eltype(eltype(A), eltype(B), eltype(C)) || return nothing
+    tA in ('N', 'T', 'C') && tB in ('N', 'T', 'C') || return nothing
+    M = size(C, 1)
+    K = length(B)
+    # the kernels' `Int32` indices step past M and K by less than a threadgroup's worth
+    max(M, K) <= typemax(Int32) ÷ 2 || return nothing
+    threads, groups, params = gemv_config(tA, M, K)
+    threads * groups <= typemax(UInt32) || return nothing
+    Al = tensor_layout(A)
+    xl = gemv_vector(B, tB === 'N' ? 1 : 2)
+    yl = gemv_vector(C, 1)
+    (Al === nothing || xl === nothing || yl === nothing) && return nothing
+    length(first(Al)) <= typemax(Int32) || return nothing
+    kernel = tA === 'N' ? gemv_n_kernel! : gemv_t_kernel!
+    return (; M, K, A = Al[1], ld = Al[2], x = xl[1], incx = xl[2], y = yl[1], incy = yl[2],
+            kernel, threads, groups, params)
+end
+supports_gemv(C, A, B, tA::Char, tB::Char) = gemv_operands(C, A, B, tA, tB) !== nothing
+
+function gemv_native!(op, alpha, beta)
+    α, β = Float32(alpha), Float32(beta)
+    args = (op.y, op.A, op.x, α, β, Int32(op.M), Int32(op.K), Int32(op.ld), Int32(op.incx),
+            Int32(op.incy), map(Val, op.params)..., Val(!iszero(β)))
+    kernel = op.kernel
+    @metal threads = op.threads groups = op.groups kernel(args...)
+    return
+end
+
 ## host entry points
 
 # The simd kernel stages A/B as Float32 and contracts in Float32, so the only eltype-specific
@@ -794,8 +1050,9 @@ Native GEMM computing `C = α·op_tA(A)·op_tB(B) + β·C` for `MtlMatrix` opera
 range-based `view`s of them (including the destination).
 `tA`/`tB ∈ {'N','T','C'}`, or one of the LinearAlgebra wrapper chars `{'S','s','H','h'}`
 applying a Symmetric/Hermitian view of the operand (upper/lowercase selects the stored
-triangle). Backs the `:native`/`:auto` matmul paths (`kernel=:auto`, picking the tensor
-or the simd kernel, or GPUArrays' generic kernels for operands that neither supports) and
+triangle). Backs the `:native`/`:auto` matmul paths (`kernel=:auto`, picking the
+matrix-vector kernels for single-column products they support, then the tensor or the simd
+kernel, or GPUArrays' generic kernels for operands that none supports) and
 the `:simd`/`:tensor` paths, which set `kernel` to force a specific kernel. Forcing a
 kernel that cannot handle the operands is the caller's responsibility (see
 `supports_simd_matmul`/`supports_tensor_matmul`). All kernels handle every operand char:
@@ -823,10 +1080,14 @@ function gemm!(C::MtlMatrixOperand, tA::Char, tB::Char,
         return C
     end
 
-    # `:auto` picks the Metal 4 tensor-ops fast path when the device and operands allow it,
-    # then the portable simdgroup kernel for floats, then GPUArrays' generic kernels; an
-    # explicit `kernel` forces one of the first two.
-    if kernel === :tensor
+    # `:auto` picks the matrix-vector kernels for products with a single column, the Metal 4
+    # tensor-ops fast path when the device and operands allow it, then the portable simdgroup
+    # kernel for floats, then GPUArrays' generic kernels; an explicit `kernel` forces the tensor
+    # or the simdgroup one.
+    gemv = kernel === :auto ? gemv_operands(C, A, B, tA, tB) : nothing
+    if gemv !== nothing
+        gemv_native!(gemv, alpha, beta)
+    elseif kernel === :tensor
         supports_tensor_matmul(C, A, B, tA, tB, alpha, beta) ||
             error("tensor-ops GEMM is not supported for these operands")
         gemm_tensor!(C, A, B, alpha, beta, tA, tB)
@@ -842,7 +1103,8 @@ function gemm!(C::MtlMatrixOperand, tA::Char, tB::Char,
     return C
 end
 
-# matrix-vector multiply as a thin N=1 GEMM
+# matrix-vector multiply as a single-column GEMM, which `gemm!` runs with the matrix-vector
+# kernels where they apply
 function gemv!(C::MtlVector, tA::Char, A::MtlMatrix, B::MtlVector,
                alpha::Number, beta::Number; kernel::Symbol = :auto)
     Cm = reshape(C, length(C), 1)

@@ -21,7 +21,9 @@ A `ScopedValue` that selects the algorithm `LinearAlgebra.mul!` (and `*`) uses f
 - `:MPSGraph`: [`MPSGraphs.matmul!`](@ref) and [`MPSGraphs.matvecmul!`](@ref).
 - `:MPS`: [`MPS.matmul!`](@ref) and [`MPS.matvecmul!`](@ref).
 - `:native`: the best of Metal.jl's own kernels for the operands, of `:tensor` and `:simd`,
-  or `:GPUArrays` for operands that neither supports.
+  or `:GPUArrays` for operands that neither supports. Matrix-vector products of `Float16`,
+  `BFloat16` and `Float32` matrices with contiguous columns take dedicated matrix-vector
+  kernels.
 - `:tensor`: a Metal 4 tensor-operations kernel, on Metal 4 devices, for `Float16`,
   `BFloat16`, `Float32`, `Int8` and `UInt8` inputs with the output types `matmul2d` supports
   for them, as listed in the [Metal Shading Language
@@ -211,8 +213,8 @@ function LinearAlgebra.mul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::Mtl
         mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C), true)
         MPSGraphs.matvecmul!(C, A, B, alpha, beta; tA)
     elseif alg === :native || alg === :auto || alg === :simd || alg === :tensor
-        # matrix-vector products go through the native gemv (a GEMM with one column); the
-        # kernel-forcing algorithms pass through to it
+        # matrix-vector products go through the native gemv; the kernel-forcing algorithms
+        # pass through to it
         cA = gemm_char(tA)
         kernel = (alg === :native || alg === :auto) ? :auto : alg
         alg === :simd && (supports_simd_matmul(C, A, B, cA, 'N', alpha, beta) ||

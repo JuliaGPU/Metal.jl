@@ -410,6 +410,77 @@ end
         end
     end
 
+    # the dedicated matrix-vector kernels, which `:native` uses for real floats
+    @testset "matrix-vector kernels" begin
+        # y = α·op(A)·x + β·y against Float64 on the host; with β = 0, y holds NaNs. Signed
+        # inputs cancel, so the error is relative to α·|op(A)|·|x| + β·|y| for each element.
+        function gemvtest(TA, TX, TY, tA, M, K, α, β)
+            a = TA.(rand(Float32, tA == 'N' ? (M, K) : (K, M)) .- 0.5f0)
+            x = TX.(rand(Float32, K) .- 0.5f0)
+            y0 = iszero(β) ? fill(TY(NaN), M) : TY.(rand(Float32, M))
+            dy = MtlArray(y0)
+            @with (Metal.matmul_alg => :native) mul!(dy, op(MtlArray(a), tA), MtlArray(x), α, β)
+            y1 = iszero(β) ? zeros(M) : Float64.(y0)
+            ref = α .* (op(Float64.(a), tA) * Float64.(x)) .+ β .* y1
+            scale = abs(α) .* (abs.(op(Float64.(a), tA)) * abs.(Float64.(x))) .+ abs(β) .* abs.(y1)
+            rtol = all(==(Float32), (TA, TX, TY)) ? 1e-5 : TY == BFloat16 ? 1e-2 : 2e-3
+            # (plus the rounding of a subnormal result)
+            all(abs.(Float64.(Array(dy)) .- ref) .<= rtol .* scale .+ nextfloat(zero(TY)))
+        end
+        @testset "$TA×$TX→$TY $tA" for (TA, TX, TY) in ((Float32, Float32, Float32),
+                                                        (Float16, Float16, Float16),
+                                                        (BFloat16, BFloat16, BFloat16),
+                                                        (Float16, Float16, Float32),
+                                                        (BFloat16, Float32, Float32)),
+                                       tA in ('N', 'T', 'C')
+            for (M, K) in ((1, 1), (7, 33), (33, 7), (1, 1000), (1000, 1), (1000, 1000)),
+                (α, β) in ((1, 0), (2, 0), (1, 1), (2, 0.5))
+                @test gemvtest(TA, TX, TY, tA, M, K, α, β)
+            end
+        end
+
+        # shapes that select other launch configurations
+        @testset "$tA $M×$K" for tA in ('N', 'T'),
+                                 (M, K) in ((256, 65536), (65536, 256), (1025, 69), (4096, 4096), (4097, 4099))
+            @test gemvtest(Float32, Float32, Float32, tA, M, K, 2, 0.5)
+        end
+
+        # views: matrices with a column stride and an offset, vectors at an offset or strided;
+        # what lies outside of the destination view stays untouched
+        P = MtlArray(rand(Float32, 70, 80)); p = MtlArray(rand(Float32, 200))
+        @testset "views $tA" for tA in ('N', 'T'), A in (view(P, 3:35, 2:41), view(P, 3:35, 2:2:80))
+            M, K = tA == 'N' ? (33, 40) : (40, 33)
+            for (x, Y, iy) in ((view(p, 5:4+K), MtlArray(rand(Float32, 200)), (7:6+M,)),
+                               (view(p, 1:3:3K), MtlArray(rand(Float32, 200)), (2:2:2M,)),
+                               (view(P, 2:1+K, 50), MtlArray(rand(Float32, 70, 3)), (1:M, 2)))
+                Y0 = Array(Y)
+                @with (Metal.matmul_alg => :native) mul!(view(Y, iy...), op(A, tA), x, 2, 0.5)
+                ref = copy(Y0)
+                ref[iy...] = 2 * op(Array(A), tA) * Array(x) + 0.5 * Y0[iy...]
+                @test Array(Y) ≈ ref
+            end
+        end
+        # single-column products of matrices, also with a strided row as op(B)
+        let A = MtlArray(rand(Float32, 50, 30)), C = MtlArray(rand(Float32, 50, 1))
+            for B in (MtlArray(rand(Float32, 1, 30)), view(P, 3:3, 2:31))
+                C0 = Array(C)
+                @with (Metal.matmul_alg => :native) mul!(C, A, transpose(B), 2, 0.5)
+                @test Array(C) ≈ 2 * Array(A) * transpose(Array(B)) + 0.5 * C0
+            end
+        end
+
+        # which operands take the kernels; the others take the GEMM ones
+        let A = MtlArray(rand(Float32, 8, 8)), x = MtlArray(rand(Float32, 8, 1)), y = MtlArray(rand(Float32, 8, 1))
+            @test Metal.supports_gemv(y, A, x, 'N', 'N')
+            @test Metal.supports_gemv(view(y, 1:4, :), view(A, 2:5, :), x, 'N', 'N')
+            @test !Metal.supports_gemv(view(y, 1:4, :), view(A, 1:2:8, :), x, 'N', 'N')  # stepped rows
+            @test !Metal.supports_gemv(y, A, x, 'S', 'N')                                 # Symmetric
+            @test !Metal.supports_gemv(MtlArray(rand(Float32, 8, 2)), A, MtlArray(rand(Float32, 8, 2)), 'N', 'N')
+            @test !Metal.supports_gemv(MtlArray(rand(ComplexF32, 8, 1)), MtlArray(rand(ComplexF32, 8, 8)),
+                                       MtlArray(rand(ComplexF32, 8, 1)), 'N', 'N')
+        end
+    end
+
     # Symmetric/Hermitian wrapper chars ('S'/'s'/'H'/'h'): the simd kernel gathers through
     # the stored triangle, as the generic one does for the eltypes that fall back to it.
     # The reference uses the same wrapper on the CPU, so the random data in the non-stored
