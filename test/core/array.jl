@@ -852,6 +852,16 @@ end
     p = Array(sortperm(MtlArray(dup_v); alg=QuickSort))
     @test dup_v[p] == sort(dup_v)
     @test_throws ArgumentError sort(MtlArray(dup_v); alg=Base.Sort.ScratchQuickSort())
+
+    # arrays MPSGraph can't sort use GPUArrays' implementation: more than 16 dimensions,
+    # element types it doesn't support
+    A17 = reshape(Float32[3, 1, 2], 3, ntuple(_ -> 1, 16)...)
+    d_A17 = MtlArray(A17)
+    @test Array(sort(d_A17; dims=1)) == sort(A17; dims=1)
+    @test Array(sortperm(d_A17; dims=1, alg=QuickSort)) == sortperm(A17; dims=1)
+    d_nothing = MtlArray{Nothing}(undef, 1)
+    @test Array(sort!(copy(d_nothing); alg=MergeSort)) == [nothing]
+    @test Array(sortperm(d_nothing; alg=QuickSort)) == [1]
 end
 
 @testset "accumulate" begin
