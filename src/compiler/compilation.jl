@@ -1051,6 +1051,61 @@ end
 pipeline_script(entry::String) =
     """{"pipelines":{"compute_pipelines":[{"compute_function":"$(escape_string(entry))"}]}}"""
 
+# The storage size of a cooperative tensor comes from a function that only Apple's runtime
+# library defines, which the OS links into a kernel when it compiles a pipeline. The offline
+# back end doesn't, and then fails to size the storage, so link those functions from the
+# host's library into the kernel ourselves.
+const TENSOROPS_RUNTIME =
+    "/System/Library/Frameworks/MetalPerformancePrimitives.framework/Versions/A/Resources/libTensorOps.rtlib"
+const TENSOROPS_RUNTIME_ONLY =
+    r"__tensorops_impl_matmul2d_op_cooperative_(?:tensor|destination)_data_size"
+
+# `art` with those functions linked into its AIR and Metal library
+function link_tensorops_runtime(art)
+    names = unique!([m.match for m in eachmatch(TENSOROPS_RUNTIME_ONLY, art.ir)])
+    isempty(names) && return art
+    isfile(TENSOROPS_RUNTIME) ||
+        error("Checking a kernel with cooperative tensors needs Apple's $TENSOROPS_RUNTIME, which was not found.")
+    tools = map(("metal-ar", "metal-opt", "metal-as", "metal-link")) do name
+        tool = apple_tool(name)
+        tool === nothing &&
+            error("Checking a kernel with cooperative tensors needs Apple's $name, which was not found.")
+        tool
+    end
+    ar, opt, as, link = tools
+    function run_checked(cmd, what)
+        proc, out = run_tool(cmd)
+        success(proc) || error("Failed to $what for the back-end check:\n$out")
+    end
+    triple_line = r"^target triple = \"[^\"]*\"$"m
+
+    air = mktempdir() do dir
+        kernel, kernel_ll = joinpath(dir, "kernel.air"), joinpath(dir, "kernel.ll")
+        write(kernel, art.air)
+        run_checked(`$opt -S $kernel -o $kernel_ll`, "disassemble the kernel")
+        # (the library is built for the newest OS, and its triple has to match the kernel's)
+        triple = match(triple_line, read(kernel_ll, String))
+        triple === nothing && error("The kernel's AIR has no target triple")
+        members = map(names) do name
+            bc, ll = joinpath(dir, "$name.bc"), joinpath(dir, "$name.ll")
+            write(bc, read(`$ar p $TENSOROPS_RUNTIME $name`))
+            run_checked(`$opt -S $bc -o $ll`, "disassemble $name")
+            write(ll, replace(read(ll, String), triple_line => triple.match))
+            run_checked(`$as $ll -o $bc`, "assemble $name")
+            bc
+        end
+        linked = joinpath(dir, "linked.air")
+        run_checked(`$link $kernel $members -o $linked`, "link the tensor operations runtime")
+        read(linked)
+    end
+
+    lib = read(IOBuffer(art.metallib), MetalLib)
+    fun = MetalLibFunction(only(lib.functions); air_module=air, layout=nothing)
+    io = IOBuffer()
+    write(io, MetalLib(lib; functions=[fun], layout=nothing, uuid=content_uuid(air)))
+    return merge(art, (; air, metallib=take!(io)))
+end
+
 # compile `job`, of which `art` are the artifacts, for each of the back-end targets, and
 # check those with Apple's back end
 function check_backend(@nospecialize(job::CompilerJob), art, targets::Vector{BackendTarget})
@@ -1076,6 +1131,8 @@ function check_backend(@nospecialize(job::CompilerJob), art, targets::Vector{Bac
         end
         (; config, ts, art=derived)
     end
+    # (also for the files that reproduce a failure)
+    compiled = map(c -> merge(c, (; art=link_tensorops_runtime(c.art))), compiled)
 
     failures = String[]
     mktempdir() do dir
