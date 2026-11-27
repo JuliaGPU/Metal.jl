@@ -731,6 +731,59 @@ end
             end
         end
 
+        @testset "tile selection" begin
+            tiles(M, N; family, kw...) = Metal.gemm_tensor_tiles(M, N; family, kw...)
+            # every selection is one that matmul2d accepts
+            legal((tm, tn)) = tm in (8, 16, 32, 64) && tn in (8, 16, 32, 64) &&
+                              (tm % 16 == 0 || tn % 16 == 0)
+            dims = (1, 2, 8, 15, 16, 17, 31, 32, 33, 63, 64, 100, 255, 256, 257, 1000, 1024,
+                    1025, 2047, 2048, 2049, 3000, 4096, 16384, 65536)
+            @test all(legal(tiles(M, N; family, narrow, transA))
+                      for M in dims, N in dims, family in (0, 7, 8, 9, 10, 11, 12),
+                          narrow in (false, true), transA in (false, true))
+
+            # families that weren't measured use the rules of the newest one, and the M3/M4
+            # only differ from it for 2-byte inputs
+            @test all(tiles(M, N; family, narrow, transA) == tiles(M, N; family = 11, narrow, transA)
+                      for M in dims, N in dims, family in (0, 6, 10, 12),
+                          narrow in (false, true), transA in (false, true))
+            @test all(tiles(M, N; family = 9, transA) == tiles(M, N; family = 11, transA)
+                      for M in dims, N in dims, transA in (false, true))
+
+            for family in (7, 8, 9, 11)
+                old = family <= 8
+                fast = family >= 10
+                small = family == 7 ? (16, 32) : (32, 16)
+                # few columns, like a matrix-vector product
+                @test tiles(4096, 16; family) == (64, 16)
+                @test tiles(4096, 1; family, transA = true) == (old ? (8, 32) : (64, 16))
+                # few rows
+                @test tiles(16, 4096; family) == (old ? (8, 16) : (16, 8))
+                @test tiles(32, 4096; family) == (old ? (32, 16) : (16, 8))
+                @test tiles(33, 4096; family) == (old ? (32, 32) : (32, 16))
+                @test tiles(256, 1024; family) == (old ? (32, 32) : (32, 16))
+                @test tiles(256, 1024; family, narrow = true) ==
+                      (old ? (32, 32) : fast ? (64, 16) : (32, 16))
+                @test tiles(257, 1024; family) == small
+                # few columns: up to 256, and at most a quarter of the rows
+                @test tiles(4096, 17; family) == (16, 64)
+                @test tiles(1024, 256; family) == (16, 64)
+                @test tiles(1024, 256; family, narrow = true) ==
+                      (old ? (32, 32) : fast ? (64, 32) : (16, 16))
+                @test tiles(1024, 256; family, transA = true) == (old ? (16, 32) : (16, 64))
+                @test tiles(1023, 256; family) == small
+                # small and large products
+                @test tiles(1024, 1024; family) == small
+                @test tiles(1024, 1025; family) == (family == 7 ? (32, 64) : (32, 32))
+                @test tiles(4096, 4096; family) ==
+                      (family == 7 ? (32, 64) : family == 8 ? (64, 32) : (32, 32))
+                @test tiles(4096, 4096; family, narrow = true) == (fast ? (64, 32) : (32, 32))
+            end
+            # the M2 only switches to 64×32 for more than 2048 rows
+            @test tiles(2048, 4096; family = 8) == (32, 32)
+            @test tiles(2049, 4096; family = 8) == (64, 32)
+        end
+
         if Metal.tensor_matmul_capable()
             ttol(T) = T === Float32 ? 1.0f-3 : 1.0f-1
             # BFloat16 tensor operands need macOS 26.1
@@ -753,17 +806,20 @@ end
             # is rejected when macOS is too old for it (BFloat16: 26.1, UInt8: 26.4)
             tgen(T, dims...) = T <: Integer ? rand(T <: Unsigned ? (T(0):T(10)) : (T(-5):T(5)), dims...) : rand(T, dims...)
             @testset "$TA × $TB → $TC" for (TA, TB, TC) in sort!(collect(Metal.GEMM_TENSOR_ELTYPES); by=string)
-                a = tgen(TA, 64, 32); b = tgen(TB, 32, 64)
-                A = MtlArray(a); B = MtlArray(b); C = MtlArray(zeros(TC, 64, 64))
-                needs = max(BFloat16 in (TA, TB, TC) ? v"26.1" : v"26", UInt8 in (TA, TB) ? v"26.4" : v"26")
-                if Metal.macos_version() >= needs
-                    @test Metal.supports_tensor_matmul(C, A, B, 'N', 'N', true, false)
-                    @with (Metal.matmul_alg => :tensor) mul!(C, A, B)
-                    # integer products are exact
-                    @test isapprox(Float64.(Array(C)), Float64.(a) * Float64.(b); rtol=TC <: Integer ? 0 : ttol(TC))
-                else
-                    @test !Metal.supports_tensor_matmul(C, A, B, 'N', 'N', true, false)
-                    @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(C, A, B))
+                # (300×40 is a shape whose tiles depend on the width of the inputs)
+                @testset "$M×$N" for (M, N) in ((64, 64), (300, 40))
+                    a = tgen(TA, M, 32); b = tgen(TB, 32, N)
+                    A = MtlArray(a); B = MtlArray(b); C = MtlArray(zeros(TC, M, N))
+                    needs = max(BFloat16 in (TA, TB, TC) ? v"26.1" : v"26", UInt8 in (TA, TB) ? v"26.4" : v"26")
+                    if Metal.macos_version() >= needs
+                        @test Metal.supports_tensor_matmul(C, A, B, 'N', 'N', true, false)
+                        @with (Metal.matmul_alg => :tensor) mul!(C, A, B)
+                        # integer products are exact
+                        @test isapprox(Float64.(Array(C)), Float64.(a) * Float64.(b); rtol=TC <: Integer ? 0 : ttol(TC))
+                    else
+                        @test !Metal.supports_tensor_matmul(C, A, B, 'N', 'N', true, false)
+                        @test_throws Exception (@with (Metal.matmul_alg => :tensor) mul!(C, A, B))
+                    end
                 end
             end
 
@@ -792,7 +848,7 @@ end
             # transposed and adjoint matrices are read in place: matmul2d applies the transpose
             @testset "transposed $T $tA$tB $M×$N×$K" for T in ttypes,
                                                         (tA, tB) in (('T', 'N'), ('N', 'T'), ('C', 'T'), ('T', 'T')),
-                                                        (M, N, K) in ((128, 64, 32), (65, 47, 33))
+                                                        (M, N, K) in ((128, 64, 32), (65, 47, 33), (300, 40, 33))
                 a = rand(T, (tA == 'N' ? (M, K) : (K, M))...)
                 b = rand(T, (tB == 'N' ? (K, N) : (N, K))...)
                 A = MtlArray(a); B = MtlArray(b); C = MtlArray(zeros(T, M, N))
@@ -803,12 +859,13 @@ end
                 @test isapprox(Float32.(Array(C)), opa * opb; rtol=ttol(T))
             end
 
-            # shapes that select each of the tile sizes, with partial tiles at the edges of C
-            # and simdgroups that lie outside of it
+            # shapes that select each of the rules of `gemm_tensor_tiles`, with partial tiles
+            # at the edges of C and simdgroups that lie outside of it
             @testset "ragged $T $M×$N×$K" for T in (Float32, Float16),
                                               (M, N, K) in ((5, 7, 3), (33, 65, 17), (100, 70, 33),
                                                             (530, 520, 40), (1, 1, 1), (70, 1, 9),
-                                                            (1, 70, 9), (2100, 2050, 3))
+                                                            (1, 70, 9), (20, 90, 5), (40, 300, 9),
+                                                            (300, 40, 9), (2100, 2050, 3))
                 a = rand(T, M, K); b = rand(T, K, N)
                 # (β = 0 overwrites whatever C held)
                 C = MtlArray(fill(T(7), M, N))
@@ -817,14 +874,28 @@ end
             end
 
             # the tile of a simdgroup can be chosen, as long as matmul2d supports it
-            @testset "tiles $tile_m×$tile_n" for (tile_m, tile_n) in ((32, 32), (16, 8), (32, 8), (8, 16))
-                a = rand(Float32, 100, 20); b = rand(Float32, 20, 90)
+            @testset "tiles $tile_m×$tile_n" for (tile_m, tile_n) in ((32, 32), (16, 8), (32, 8), (8, 16),
+                                                                    (64, 32), (32, 64), (16, 64))
+                a = rand(Float32, 100, 20); b = rand(Float32, 20, 90); c = rand(Float32, 100, 90)
                 C = MtlArray(zeros(Float32, 100, 90))
+                Metal.gemm_tensor!(C, MtlArray(a), MtlArray(b); tile_m, tile_n)
+                @test isapprox(Array(C), a * b; rtol=1f-3)
+                C = MtlArray(c)
+                Metal.gemm_tensor!(C, MtlArray(a), MtlArray(b), 2f0, 0.5f0; tile_m, tile_n)
+                @test isapprox(Array(C), 2 * a * b + c / 2; rtol=1f-3)
+            end
+            # with only one of the tiles given, the other is selected to go with it
+            @testset "tile_m=$tile_m, tile_n=$tile_n, $M×$N" for (M, N, tile_m, tile_n) in
+                    ((16, 300, 0, 8), (32, 300, 8, 0), (300, 40, 0, 8), (300, 40, 64, 0))
+                a = rand(Float32, M, 20); b = rand(Float32, 20, N)
+                C = MtlArray(zeros(Float32, M, N))
                 Metal.gemm_tensor!(C, MtlArray(a), MtlArray(b); tile_m, tile_n)
                 @test isapprox(Array(C), a * b; rtol=1f-3)
             end
             @test_throws ArgumentError Metal.gemm_tensor!(MtlArray(zeros(Float32, 8, 8)),
                 MtlArray(zeros(Float32, 8, 8)), MtlArray(zeros(Float32, 8, 8)); tile_m=8, tile_n=8)
+            @test_throws ArgumentError Metal.gemm_tensor!(MtlArray(zeros(Float32, 8, 8)),
+                MtlArray(zeros(Float32, 8, 8)), MtlArray(zeros(Float32, 8, 8)); tile_m=12)
 
             # operands outside the tensor path's element types error when it is forced
             Ai = MtlArray(rand(Int32, 64, 64)); Bi = MtlArray(rand(Int32, 64, 64))

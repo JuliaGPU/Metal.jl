@@ -389,21 +389,87 @@ end
     end::Bool
 end
 
-# The size of the tile of `C` that one simdgroup computes. Apple's guide recommends 32×32 with
-# 2×2 simdgroups per threadgroup, which is also the fastest here for large products. Smaller
-# and thin ones are faster with tiles of 16, which occupy more of the GPU, and the rows grow
-# to 32 before the columns do. A product of a few columns, like a matrix-vector one, is a
-# little faster still with tiles of 8 columns. The thresholds were measured on an M2 Max with
-# `Float32` and `Float16`; tiles of 64 are slower. matmul2d requires tiles that are multiples
-# of 8, at least one of them a multiple of 16.
+# The Apple GPU family of the device (7 for the M1, 8 for the M2, ...), or 0 if it reports
+# none, for `gemm_tensor_tiles`.
+@inline function gemm_tensor_family()
+    dev = device()
+    @memoize key=pointer(dev)::id{MTLDevice} begin
+        something(MTL.highest_apple_family(dev), 0)
+    end::Int
+end
+
+# simdgroups per threadgroup
 const GEMM_TENSOR_WM = 2
 const GEMM_TENSOR_WN = 2
 
-function gemm_tensor_tiles(M::Integer, N::Integer)
-    area = M * N
-    tm = (area >= 512 * 512 && M >= 64) ? 32 : 16
-    tn = (area >= 2048 * 2048 && N >= 64) ? 32 : N <= 8 ? 8 : 16
-    return (tm, tn)
+# The size of the tile of `C` that one simdgroup computes, with 2×2 simdgroups per
+# threadgroup. matmul2d requires tiles that are multiples of 8, at least one of them a
+# multiple of 16. `family` is the Apple GPU family (see `gemm_tensor_family`), `narrow` says
+# that both inputs take at most 2 bytes per element (only `Float16` was measured), and
+# `transA` that `A` is read transposed, as `(K, M)`.
+#
+# No single tile is good everywhere: the best one depends on the GPU generation, on the
+# shape of `C`, and for some shapes on the element type and on whether `A` is stored
+# transposed. The rules below come from timing the 14 tiles with sides of 8, 16, 32 and 64
+# that matmul2d accepts, other than 64×64 (the slowest in an earlier sweep), on an M1
+# (Apple7), M2 (Apple8), M3 Pro (Apple9) and M6 (Apple11), all on macOS 27.2: about 100
+# shapes per device and element type (`Float32` and `Float16`), covering squares from 256 to
+# 4096, rectangles, products with 1 to 256 rows or columns, sizes that are not powers of
+# two, and transposed operands, each over several fresh allocations (the median of the
+# samples per tile). Each rule's tile has about the lowest geometric-mean slowdown, relative
+# to each shape's fastest tile, over the shapes that the rule covers; close calls went to
+# the tile with the smaller worst case, or the smaller loss against the previous selection.
+# On average the result is within 3-12% of the fastest tile per device, also for a second
+# set of shapes, measured on the same devices, that weren't used to choose the rules.
+# Products with few rows or columns are the least predictable: their fastest tile changes
+# erratically with the exact sizes, so some of them still run up to 2× slower than with
+# their own best tile. The rules are checked in order, so e.g. a `C` with few rows and up to
+# 16 columns counts as one with few columns.
+#
+# On the M3 and M6, and on families that weren't measured:
+# - `C` with up to 16 columns, like a matrix-vector product, gets tall 64×16 tiles.
+# - `C` with up to 32 rows gets 16×8 tiles, so that the threadgroup doesn't extend far past it.
+# - `C` with few rows (up to 256, and at least 4× as many columns) gets 32×16 tiles, and `C`
+#   with few columns (likewise) 16×64 ones.
+# - Other products of up to 1024² elements get 32×16 tiles, which make more threadgroups.
+# - Larger ones use the 32×32 that Apple's guide recommends.
+# The M6 multiplies 2-byte inputs much faster than the M3, and larger tiles keep up with it:
+# 64×32 for large products (1.4-1.5× faster at 3000² and 4096²) and for few columns, 64×16
+# for few rows. Families other than the M3's (Apple9) are assumed to be like the M6. On the
+# M3, 2-byte inputs with few columns want 16×16.
+#
+# The M1 and M2 differ in more ways. With up to 16 rows they want 8×16 tiles, 32×16 with up
+# to 32, and 32×32 with few rows. When `A` is stored transposed, products with few columns
+# are fastest with tiles of 8 or 16 rows; otherwise 2-byte inputs with few columns want
+# 32×32. Small products want 16×32 on the M1. Large `Float32` products want tiles of 2048
+# elements, 32×64 on the M1 and 64×32 on the M2 once `M` exceeds 2048: with 32×32, a 4096²
+# product runs 2.3× (M1) and 2.8× (M2) slower, and on the M2 its time varies between 82 and
+# 177 ms over fresh allocations. Some sizes between 2048 and 6000 that aren't powers of two
+# run 10-18% faster with 32×32 on the M2, a smaller loss than the one 64×32 avoids. Large
+# 2-byte products keep 32×32.
+function gemm_tensor_tiles(M::Integer, N::Integer; family::Integer, narrow::Bool = false,
+                           transA::Bool = false)
+    few_rows = M <= 256 && N >= 4M
+    few_cols = N <= 256 && M >= 4N
+    if family == 7 || family == 8
+        N <= 16 && return transA ? (8, 32) : (64, 16)
+        M <= 16 && return (8, 16)
+        M <= 32 && return (32, 16)
+        few_rows && return (32, 32)
+        few_cols && return transA ? (16, 32) : narrow ? (32, 32) : (16, 64)
+        M * N <= 1024 * 1024 && return family == 7 ? (16, 32) : (32, 16)
+        narrow && return (32, 32)
+        family == 7 && return (32, 64)
+        return M > 2048 ? (64, 32) : (32, 32)
+    else
+        fast = narrow && family != 9
+        N <= 16 && return (64, 16)
+        M <= 32 && return (16, 8)
+        few_rows && return fast ? (64, 16) : (32, 16)
+        few_cols && return fast ? (64, 32) : narrow ? (16, 16) : (16, 64)
+        M * N <= 1024 * 1024 && return (32, 16)
+        return fast ? (64, 32) : (32, 32)
+    end
 end
 
 # A matrix with contiguous, non-overlapping columns in increasing order, as an array starting
@@ -493,15 +559,28 @@ function gemm_tensor!(C::MtlMatrixOperand, A::MtlMatrixOperand, B::MtlMatrixOper
                       tile_m::Integer = 0, tile_n::Integer = 0)
     M, N = size(C)
     K = contraction_length(cA, A)
-    auto_m, auto_n = gemm_tensor_tiles(M, N)
-    tile_m = tile_m == 0 ? auto_m : tile_m
-    tile_n = tile_n == 0 ? auto_n : tile_n
-    tile_m > 0 && tile_n > 0 && tile_m % 8 == 0 && tile_n % 8 == 0 &&
-        (tile_m % 16 == 0 || tile_n % 16 == 0) ||
+    tile_m >= 0 && tile_n >= 0 && tile_m % 8 == 0 && tile_n % 8 == 0 &&
+        (tile_m == 0 || tile_n == 0 || tile_m % 16 == 0 || tile_n % 16 == 0) ||
         throw(ArgumentError("matmul2d tiles must be multiples of 8, one of them of 16; got $tile_m×$tile_n"))
 
     Ad, lda, trA = tensor_operand(A, cA, (M, K))
     Bd, ldb, trB = tensor_operand(B, cB, (K, N))
+
+    if tile_m == 0 || tile_n == 0
+        auto_m, auto_n = gemm_tensor_tiles(M, N; family = gemm_tensor_family(), transA = trA,
+                                           narrow = max(sizeof(eltype(A)), sizeof(eltype(B))) <= 2)
+        # next to an explicit tile of 8, the selected one needs to be a multiple of 16, and
+        # next to one of 64 it stays at 32, as 64×64 is always slower
+        pick(given, auto) = given % 16 != 0 && auto % 16 != 0 ? 16 :
+                            given == 64 && auto == 64 ? 32 : auto
+        if tile_m != 0
+            tile_n = pick(tile_m, auto_n)
+        elseif tile_n != 0
+            tile_m = pick(tile_n, auto_m)
+        else
+            tile_m, tile_n = auto_m, auto_n
+        end
+    end
 
     # What the kernel does with the product, see `gemm_tensor_tile!`. matmul2d can't scale,
     # but it does all there is to do for α = 1 with β = 0 or 1; otherwise α and β are applied
