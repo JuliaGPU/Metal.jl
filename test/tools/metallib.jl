@@ -1322,10 +1322,9 @@ function custom_job(f, params; kwargs...)
 end
 function custom_llvm(f, params; kwargs...)
     job = custom_job(f, params; kwargs...)
-    Metal.GPUCompiler.JuliaContext() do ctx
-        mod, meta = Metal.GPUCompiler.compile(:llvm, job)
-        nparams = length(LLVM.parameters(meta.entry))
-        return string(mod), nparams
+    # (in the IR's context, which isn't Julia's when the job uses another LLVM library)
+    Metal.GPUCompiler.compile(:llvm, job) do mod, meta
+        return string(mod), length(LLVM.parameters(meta.entry))
     end
 end
 
