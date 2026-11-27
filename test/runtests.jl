@@ -91,12 +91,36 @@ end
 
 # filter out certain tests depending on the exact testing conditions
 if filter_tests!(testsuite, args)
-    # The GPUArrays test suite is large and slow, so it's opt-in
+    # The GPUArrays test suite is large and slow, and the stress tests need lots of memory,
+    # so they're opt-in
     if args.custom["all"] === nothing
         filter!(testsuite) do (name, _)
             !startswith(name, "gpuarrays/") &&
-                !startswith(name, "large")
+                !startswith(name, "stress/")
         end
+    end
+
+    # for some reason, the environment shenanigans done by the scripts only work when
+    # invoked from the Metal.jl CI, and not from GPUArrays.jl' reverse CI
+    if get(ENV, "BUILDKITE_PIPELINE_NAME", "") != "Metal.jl"
+        delete!(testsuite, "tools/scripts")
+    end
+
+    # the stress tests are too heavy for CI
+    if parse(Bool, get(ENV, "CI", "false"))
+        filter!(((name, _),) -> !startswith(name, "stress/"), testsuite)
+    end
+end
+
+# filter out tests the system cannot run. unlike the above, this also applies to tests
+# that were selected explicitly (e.g. `runtests.jl core`), but not to `--list`, which
+# shows every available test.
+if args.list === nothing
+    # the Metal 4 command API needs macOS 26 and a device that supports it (virtual
+    # GPUs, like the ones on hosted CI runners, don't)
+    if Metal.macos_version() < v"26" ||
+       !MTL.supports_family(Metal.device(), MTL.MTLGPUFamilyMetal4)
+        delete!(testsuite, "core/mtl/metal4")
     end
 
     if Metal.DefaultStorageMode != Metal.PrivateStorage
@@ -104,33 +128,20 @@ if filter_tests!(testsuite, args)
         delete!(testsuite, "gpuarrays/indexing scalar")
     end
 
-    # for some reason, the environment shenanigans done by the scripts only work when
-    # invoked from the Metal.jl CI, and not from GPUArrays.jl' reverse CI
-    if get(ENV, "BUILDKITE_PIPELINE_NAME", "") != "Metal.jl"
-        delete!(testsuite, "scripts")
-    end
-
-    # the Metal 4 command API needs macOS 26 and a device that supports it (virtual
-    # GPUs, like the ones on hosted CI runners, don't)
-    if Metal.macos_version() < v"26" ||
-       !MTL.supports_family(Metal.device(), MTL.MTLGPUFamilyMetal4)
-        delete!(testsuite, "mtl/metal4")
-    end
-
-    # only run large copy test on machines with >12GiB memory
-    if parse(Bool, get(ENV, "CI", "false")) || Sys.total_memory() < 12 * 2^30
-        delete!(testsuite, "largecopy")
-    end
-
-    # only run large broadcast test on machines with >12GiB memory
-    if parse(Bool, get(ENV, "CI", "false")) || Sys.total_memory() < 12 * 2^30
-        delete!(testsuite, "largebroadcast")
+    # the stress tests need a machine with more than 12GiB of memory. (they only get here
+    # when requested, so say why they don't run)
+    if Sys.total_memory() < 12 * 2^30
+        stress = sort(filter(startswith("stress/"), collect(keys(testsuite))))
+        if !isempty(stress)
+            @warn "Skipping $(join(stress, ", ")): these tests need more than 12GiB of memory"
+            foreach(name -> delete!(testsuite, name), stress)
+        end
     end
 end
 
 # workers to run tests on
 function test_worker(name, init_worker_code)
-    if name == "capturing"
+    if name == "tools/capturing"
         return addworker(; env=["METAL_CAPTURE_ENABLED"=>"1"], init_worker_code)
     end
 
@@ -274,4 +285,4 @@ end
 
 @info "System information:\n" * sprint(io->Metal.versioninfo(io))
 
-runtests(Metal, args; testsuite, init_code, init_worker_code, test_worker, serial=["largecopy", "largebroadcast"], history_key=validate ? "validation" : nothing)
+runtests(Metal, args; testsuite, init_code, init_worker_code, test_worker, serial=["stress/largecopy", "stress/largebroadcast"], history_key=validate ? "validation" : nothing)

@@ -175,7 +175,7 @@ function readobj_uuid(path)
 end
 
 ## tests begin
-metallib_dir = joinpath(@__DIR__, "metallib")
+metallib_dir = joinpath(@__DIR__, "..", "metallib")
 metallibs = String[]
 for file in readdir(metallib_dir)
     if endswith(file, ".metallib")

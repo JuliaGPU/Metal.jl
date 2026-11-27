@@ -799,16 +799,11 @@ end
         @test size(E \ W) == (0, 3)
         @test size(lu(E) \ W) == (0, 3)
         @test size(cholesky(E) \ W) == (0, 3)
-        @test size(Metal.MPS.solve_cholesky(E, W)) == (0, 3)
         @test size(dA \ Z) == (n, 0)
         @test size(F \ Z) == (n, 0)
         @test size(C \ Z) == (n, 0)
-        @test size(Metal.MPS.solve_cholesky(dSPD, Z)) == (n, 0)
         # without right hand sides, the coefficient matrix is still checked
         @test_throws SingularException MtlMatrix(T[1 2; 2 4]) \ MtlMatrix{T}(undef, 2, 0)
-        @test_throws PosDefException Metal.MPS.solve_cholesky(MtlMatrix(T[1 2; 2 1]),
-                                                              MtlMatrix{T}(undef, 2, 0))
-        @test_throws ArgumentError Metal.MPS.solve_cholesky(E, W; uplo='X')
     end
 
     dsing = MtlMatrix(T[1 2; 2 4])

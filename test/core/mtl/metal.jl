@@ -101,7 +101,7 @@ let lib = MTLLibrary(dev, "", opts)
     @test isempty(lib.functionNames)
 end
 
-metal_code = read(joinpath(@__DIR__, "..", "dummy.metal"), String)
+metal_code = read(joinpath(@__DIR__, "..", "..", "dummy.metal"), String)
 let lib = MTLLibrary(dev, metal_code, opts)
     @test lib.device == dev
     @test lib.label === nothing
@@ -111,7 +111,7 @@ let lib = MTLLibrary(dev, metal_code, opts)
     @test "kernel_2" in fns
 end
 
-binary_path = joinpath(@__DIR__, "..", "dummy.metallib")
+binary_path = joinpath(@__DIR__, "..", "..", "dummy.metallib")
 let lib = MTLLibraryFromFile(dev, binary_path)
     @test lib.device == dev
     @test lib.label === nothing
@@ -153,7 +153,7 @@ desc.specializedName = "MySpecializedKernel"
 
 
 dev = first(devices())
-lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "..", "dummy.metallib"))
+lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "..", "..", "dummy.metallib"))
 fun = MTLFunction(lib, "kernel_1")
 
 compact_str = sprint(io->show(io, fun))
@@ -400,7 +400,7 @@ end
 @testset "compute pipeline" begin
 
 dev = first(devices())
-lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "..", "dummy.metallib"))
+lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "..", "..", "dummy.metallib"))
 fun = MTLFunction(lib, "kernel_1")
 
 pipeline = MTLComputePipelineState(dev, fun)
@@ -508,7 +508,7 @@ end
 @testset "binary archive" begin
 
 dev = first(devices())
-lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "..", "dummy.metallib"))
+lib = MTLLibraryFromFile(dev, joinpath(@__DIR__, "..", "..", "dummy.metallib"))
 fun = MTLFunction(lib, "kernel_1")
 
 desc = MTLBinaryArchiveDescriptor()
