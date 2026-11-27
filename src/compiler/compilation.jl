@@ -1048,6 +1048,9 @@ end
 # onto the cached `MetalResults`. All byte/string fields are session-portable.
 const compilations = Threads.Atomic{Int}(0)
 
+# Count lookups that reuse a compiled kernel, including entries from precompilation.
+const cache_hits = Threads.Atomic{Int}(0)
+
 """
     compile_to_metallib(job::GPUCompiler.CompilerJob)
 

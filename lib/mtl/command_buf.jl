@@ -126,8 +126,13 @@ end
 
 QueueSubmissionState() = QueueSubmissionState(Submission[], nothing)
 
+mutable struct QueueTail
+    last::Submission
+    count::Int
+end
+
 const last_committed_lock = ReentrantLock()
-const last_committed_per_queue = Dict{id{MTLCommandQueue},Submission}()
+const last_committed_per_queue = Dict{id{MTLCommandQueue},QueueTail}()
 
 const submission_state_per_queue = Dict{id{MTLCommandQueue},QueueSubmissionState}()
 
@@ -188,7 +193,11 @@ function record_committed!(cmdbuf::Submission, key::id{MTLCommandQueue})
         # long-running submission workloads without explicit synchronization.
         prune_completed_submissions!(state)
         push!(state.pending, cmdbuf)
-        last_committed_per_queue[key] = cmdbuf
+        tail = get!(last_committed_per_queue, key) do
+            QueueTail(cmdbuf, 0)
+        end
+        tail.last = cmdbuf
+        tail.count += 1
     end
     return
 end
@@ -196,7 +205,8 @@ end
 function take_queue_submissions(queue::MTLCommandQueue)
     key = pointer(queue)
     @lock last_committed_lock begin
-        last = get(last_committed_per_queue, key, nothing)
+        tail = get(last_committed_per_queue, key, nothing)
+        last = tail === nothing ? nothing : tail.last
         state = pop!(submission_state_per_queue, key, nothing)
         return last, state
     end
@@ -204,7 +214,7 @@ end
 
 function take_all_submissions()
     @lock last_committed_lock begin
-        last = collect(values(last_committed_per_queue))
+        last = Submission[tail.last for tail in values(last_committed_per_queue)]
         states = isempty(submission_state_per_queue) ? nothing :
                  collect(values(submission_state_per_queue))
         empty!(submission_state_per_queue)
@@ -272,7 +282,22 @@ Return the most recently committed command buffer (or Metal 4 submission) on `qu
 function last_committed(queue::MTLCommandQueue)
     key = pointer(queue)
     @lock last_committed_lock begin
-        get(last_committed_per_queue, key, nothing)
+        tail = get(last_committed_per_queue, key, nothing)
+        return tail === nothing ? nothing : tail.last
+    end
+end
+
+"""
+    committed(queue::MTLCommandQueue) -> Int
+
+Total command buffers or Metal 4 submissions recorded for `queue`, including
+completed submissions.
+"""
+function committed(queue::MTLCommandQueue)
+    key = pointer(queue)
+    @lock last_committed_lock begin
+        tail = get(last_committed_per_queue, key, nothing)
+        return tail === nothing ? 0 : tail.count
     end
 end
 

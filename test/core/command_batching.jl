@@ -168,14 +168,17 @@ end
 
     @testset "successful direct submissions and bounded retention" begin
         queue = MTL.MTLCommandQueue(device())
-        for _ in 1:64
+        @test MTL.committed(queue) == 0
+        for n in 1:64
             cmdbuf = MTL.MTLCommandBuffer(queue)
             MTL.commit!(cmdbuf)
             MTL.wait_completed(cmdbuf)
             @test MTL.pending_submission_count(queue) <= 1
+            @test MTL.committed(queue) == n
         end
         @test synchronize(queue) === nothing
         @test MTL.pending_submission_count(queue) == 0
+        @test MTL.committed(queue) == 64
     end
 
     @testset "earlier failure and duplicate suppression" begin
@@ -230,9 +233,11 @@ end
         submitted = mpsbuf.commandBuffer
         MPS.commitAndContinue!(mpsbuf)
         @test MTL.last_committed(queue) == submitted
+        @test MTL.committed(queue) == 1
 
         MTL.commit!(mpsbuf)
         @test synchronize(queue) === nothing
+        @test MTL.committed(queue) == 2
     end
 
     @testset "MPS encoding failures" begin

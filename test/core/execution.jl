@@ -849,6 +849,33 @@ end
     @test Array(b) == ones(Float32, 4)
 end
 
+@testset "bounds checks keep a local array off the device heap" begin
+    # the bounds error of a checked `MVector` access must not make the array escape: it
+    # would then be allocated on the device heap, which a large launch exhausts
+    using StaticArrays
+    function local_array(out, ns)
+        j = thread_position_in_grid_1d()
+        s = MVector{16, Float32}(undef)
+        i = Int32(1)
+        while i <= ns[j]
+            s[i] = i
+            i += Int32(1)
+        end
+        out[j] = s[mod1(j, 16)]
+        return
+    end
+
+    tt = Tuple{MtlDeviceVector{Float32, 1}, MtlDeviceVector{Int32, 1}}
+    @test !occursin("gc_pool_alloc", sprint(io->Metal.code_llvm(io, local_array, tt; kernel=true)))
+
+    n = 32768
+    ns = MtlArray(fill(Int32(16), n))
+    out = Metal.zeros(Float32, n)
+    @metal threads=256 groups=cld(n, 256) local_array(out, ns)
+    synchronize()
+    @test Array(out) == Float32[mod1(j, 16) for j in 1:n]
+end
+
 @testset "exception reporting per debug level" begin
     # `@metal debug_level=` controls how much an exception reports, independent of the
     # session's `-g` (it's part of the compile cache key, resolved at codegen), so all three
@@ -1370,6 +1397,13 @@ end
     # a second launch hits the cache
     Base.invokelatest(launch)
     @test count() == n+1
+
+    # in a newer world the lookup runs again, and finds the kernel compiled
+    hits = Metal.cache_hits[]
+    @eval mod unrelated() = nothing
+    Base.invokelatest(launch)
+    @test count() == n+1
+    @test Metal.cache_hits[] == hits+1
 
     # jobs differing only in codegen-level settings get their own artifacts...
     Metal.mtlfunction(mod.kernel, Tuple{}; name="custom")

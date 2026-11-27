@@ -54,17 +54,19 @@ end
 end
 
 # abstractarray.jl
-@device_override @noinline Base.throw_boundserror(A, I) =
+# the overrides drop the array, as CUDA.jl's do: passed to a call that isn't inlined, a
+# local array that is indexed with bounds checks (e.g. an `MVector`) escapes, and is then
+# allocated on the device heap instead of the stack
+@device_function @noinline throw_boundserror() =
     @gputhrow "BoundsError" "Out-of-bounds array access"
+@device_override @inline Base.throw_boundserror(A, I) = throw_boundserror()
 
 # essentials.jl
 # Julia 1.14 routes indexed bounds errors through `_throw_boundserror_indices`
 # rather than `throw_boundserror`, bypassing the override above.
 @static if isdefined(Base, :_throw_boundserror_indices)
-    @device_override @noinline Base._throw_boundserror_indices(A) =
-        @gputhrow "BoundsError" "Out-of-bounds array access"
-    @device_override @noinline Base._throw_boundserror_indices(A, i1, I...) =
-        @gputhrow "BoundsError" "Out-of-bounds array access"
+    @device_override @inline Base._throw_boundserror_indices(A) = throw_boundserror()
+    @device_override @inline Base._throw_boundserror_indices(A, i1, I...) = throw_boundserror()
 end
 
 # trig.jl
