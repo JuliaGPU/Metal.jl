@@ -270,12 +270,13 @@ end
 # split, `KS == K` and there is one threadgroup along z.
 #
 # `MODE` is what happens to the product, see `gemm_tensor_tile!`; `alpha` and `beta` are only
-# used by the modes that scale.
+# used by the modes that scale. `RELAXED` lets matmul2d reduce the precision of `Float32`
+# operands, see `gemm_tensor!`.
 function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceArray,
                              alpha::P, beta::P, M::Int32, N::Int32, K::Int32, KS::Int32,
                              ldc::Int32, lda::Int32, ldb::Int32,
-                             ::Val{SM}, ::Val{SN}, ::Val{MODE},
-                             ::Val{TRA}, ::Val{TRB}) where {P, SM, SN, MODE, TRA, TRB}
+                             ::Val{SM}, ::Val{SN}, ::Val{MODE}, ::Val{TRA}, ::Val{TRB},
+                             ::Val{RELAXED}) where {P, SM, SN, MODE, TRA, TRB, RELAXED}
     wm, wn = Int32(GEMM_TENSOR_WM), Int32(GEMM_TENSOR_WN)
     tgid  = threadgroup_position_in_grid_3d()
     sgid  = unsafe_trunc(Int32, simdgroup_index_in_threadgroup()) - Int32(1)
@@ -302,7 +303,8 @@ function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceA
 
     mode = MODE === :accumulate ? matmul2d_multiply_accumulate : matmul2d_multiply
     op = TensorOpsMatmul2D{matmul2d_descriptor(SM, SN; transpose_left = TRA,
-                                               transpose_right = TRB, mode),
+                                               transpose_right = TRB, mode,
+                                               relaxed_precision = RELAXED),
                            Int32(1)}()
     gemm_tensor_tile!(op, mA, mB, mC, alpha, beta, Val(MODE))
     return
@@ -426,8 +428,9 @@ const GEMM_TENSOR_WN = 2
 # The size of the tile of `C` that one simdgroup computes, with 2×2 simdgroups per
 # threadgroup. matmul2d requires tiles that are multiples of 8, at least one of them a
 # multiple of 16. `family` is the Apple GPU family (see `gemm_tensor_family`), `narrow` says
-# that both inputs take at most 2 bytes per element (only `Float16` was measured), and
-# `transA` that `A` is read transposed, as `(K, M)`.
+# that both inputs take at most 2 bytes per element (only `Float16` was measured),
+# `transA` that `A` is read transposed, as `(K, M)`, and `relaxed` that the operands are
+# `Float32` ones that matmul2d may round (see `gemm_tensor!`).
 #
 # No single tile is good everywhere: the best one depends on the GPU generation, on the
 # shape of `C`, and for some shapes on the element type and on whether `A` is stored
@@ -468,8 +471,20 @@ const GEMM_TENSOR_WN = 2
 # 177 ms over fresh allocations. Some sizes between 2048 and 6000 that aren't powers of two
 # run 10-18% faster with 32×32 on the M2, a smaller loss than the one 64×32 avoids. Large
 # 2-byte products keep 32×32.
+#
+# With `relaxed`, the M5 and later GPUs (Apple10+) multiply `Float32` operands with the matrix
+# instruction they use for 2-byte ones, and want 64×32 tiles for all products other than those
+# with few rows or up to 16 columns or 32 rows, which keep their tiles. On the M6, the 32×32
+# tiles that are best at full precision run 2× slower relaxed than without (55 vs 28 ms at
+# 4096³), and 64×32 ones 1.5× faster (18 ms). Over 36 shapes, timed with 5-8 tiles each, the
+# selection is within 7% of the fastest tile on average and 1.3× at worst, except for one
+# product with few rows (1.9×), and on average 1.7× faster than at full precision (up to
+# 2.6×, never slower). 64×16 tiles are up to 1.3× faster for some products between 1536² and
+# 2560² elements, but 1.7× slower at 3000². Products with few rows are as erratic as at full
+# precision and keep its 32×16. Earlier families ignore `relaxed_precision`, so their tiles
+# don't depend on it.
 function gemm_tensor_tiles(M::Integer, N::Integer; family::Integer, narrow::Bool = false,
-                           transA::Bool = false)
+                           transA::Bool = false, relaxed::Bool = false)
     few_rows = M <= 256 && N >= 4M
     few_cols = N <= 256 && M >= 4N
     if family == 7 || family == 8
@@ -487,6 +502,7 @@ function gemm_tensor_tiles(M::Integer, N::Integer; family::Integer, narrow::Bool
         N <= 16 && return (64, 16)
         M <= 32 && return (16, 8)
         few_rows && return fast ? (64, 16) : (32, 16)
+        relaxed && family >= 10 && return (64, 32)
         few_cols && return fast ? (64, 32) : narrow ? (16, 16) : (16, 64)
         M * N <= 1024 * 1024 && return (32, 16)
         return fast ? (64, 32) : (32, 32)
@@ -563,7 +579,8 @@ end
 end
 
 """
-    Metal.gemm_tensor!(C, A, B, α=true, β=false, cA='N', cB='N'; tile_m=0, tile_n=0)
+    Metal.gemm_tensor!(C, A, B, α=true, β=false, cA='N', cB='N'; tile_m=0, tile_n=0,
+                       relaxed=false)
 
 Compute `C = α·op(A)·op(B) + β·C` via `tensor_ops::matmul2d`, one simdgroup per
 `tile_m × tile_n` tile of `C` (Metal 4 only). The operands must be nonempty and conform;
@@ -575,12 +592,13 @@ with few tiles is split into slices (see `gemm_tensor_splits`). The product, or 
 products of the slices, then go to a workspace that a second kernel adds up, scales and
 combines with `C`.
 `tile_*=0` selects the tiles by the rule in `gemm_tensor_tiles`; pass explicit ones to tune. Tiles
-must be multiples of 8, and at least one of them a multiple of 16.
+must be multiples of 8, and at least one of them a multiple of 16. `relaxed=true` lets
+matmul2d reduce the precision of `Float32` operands, see [`Metal.matmul_precision`](@ref).
 """
 function gemm_tensor!(C::MtlMatrixOperand, A::MtlMatrixOperand, B::MtlMatrixOperand,
                       alpha::Number = true, beta::Number = false,
                       cA::Char = 'N', cB::Char = 'N';
-                      tile_m::Integer = 0, tile_n::Integer = 0)
+                      tile_m::Integer = 0, tile_n::Integer = 0, relaxed::Bool = false)
     M, N = size(C)
     K = contraction_length(cA, A)
     tile_m >= 0 && tile_n >= 0 && tile_m % 8 == 0 && tile_n % 8 == 0 &&
@@ -590,9 +608,14 @@ function gemm_tensor!(C::MtlMatrixOperand, A::MtlMatrixOperand, B::MtlMatrixOper
     Ad, lda, trA = tensor_operand(A, cA, (M, K))
     Bd, ldb, trB = tensor_operand(B, cB, (K, N))
 
+    # Only `Float32` operands are affected by the descriptor's `relaxed_precision`: on Apple10
+    # and later GPUs (M5+), matmul2d then multiplies them with the matrix instruction that
+    # 2-byte operands always use, which rounds them to about TF32 precision first. Earlier
+    # GPUs ignore it. Other operand types aren't relaxed, which keeps their kernels shared.
+    relaxed &= eltype(A) === eltype(B) === Float32
     plan = gemm_tensor_plan(M, N, K; family = gemm_tensor_family(), cores = gemm_tensor_cores(),
                             narrow = max(sizeof(eltype(A)), sizeof(eltype(B))) <= 2, trA,
-                            tile_m, tile_n)
+                            relaxed, tile_m, tile_n)
 
     # What the kernel does with the product, see `gemm_tensor_tile!`. matmul2d can't scale,
     # but it does all there is to do for α = 1 with β = 0 or 1; otherwise α and β are applied
@@ -629,7 +652,7 @@ function gemm_tensor!(C::MtlMatrixOperand, A::MtlMatrixOperand, B::MtlMatrixOper
     @metal threads = nthreads groups = (plan.groups..., plan.slices) gemm_tensor_kernel!(
         dest, Ad, Bd, α, β, Int32(M), Int32(N), Int32(K), Int32(plan.ks), Int32(ldc),
         Int32(lda), Int32(ldb), Val(Int32(tile_m)), Val(Int32(tile_n)), Val(mode), Val(trA),
-        Val(trB))
+        Val(trB), Val(relaxed))
 
     if layout === nothing
         @metal threads = 256 groups = cld(M * N, 256) gemm_tensor_reduce_kernel!(
@@ -670,7 +693,9 @@ const GEMM_TENSOR_SPLIT_K = 32
 # such contractions more slowly per element than shorter ones: e.g. `Float32` 512×512×16384
 # runs in 6.1 ms instead of 8.2 on the M1, 3.5 instead of 7.3 on the M2, 2.3 instead of 3.7
 # on the M3 Pro, and 2.0 instead of 5.1 on the M6. Smaller products, and ones with 2-byte
-# inputs, don't gain consistently, and larger ones (e.g. 2048×1024×4096) lose.
+# inputs, don't gain consistently, and larger ones (e.g. 2048×1024×4096) lose. Neither do
+# relaxed `Float32` products on the M6, which matmul2d multiplies like 2-byte ones: 512×512×16384
+# takes 1.1 ms unsplit and 1.3 in slices of 2048, and 1024×1024×8192 2.2 and 2.6 ms.
 function gemm_tensor_splits(M::Integer, N::Integer, K::Integer, groups::Integer;
                             cores::Integer, narrow::Bool = false)
     maxsplits = min(32, (32 << 20) ÷ (4 * M * N), K ÷ 512)
@@ -684,13 +709,14 @@ end
 # How `gemm_tensor!` launches an M×N×K product: the tile of `C` that a simdgroup computes, the
 # threadgroups along M and N, and the slices the contraction is split into, of length `ks`. The
 # last slice takes what remains, so there can be fewer of them than `gemm_tensor_splits` asks
-# for. `trA` says that A is read transposed, as `gemm_tensor!` prepared it; a `tile_m` or
-# `tile_n` of 0 is selected by `gemm_tensor_tiles`.
+# for. `trA` says that A is read transposed, as `gemm_tensor!` prepared it, and `relaxed` that
+# the operands are `Float32` ones that matmul2d may round; a `tile_m` or `tile_n` of 0 is
+# selected by `gemm_tensor_tiles`.
 function gemm_tensor_plan(M::Integer, N::Integer, K::Integer; family::Integer,
-                          cores::Integer, narrow::Bool, trA::Bool,
+                          cores::Integer, narrow::Bool, trA::Bool, relaxed::Bool = false,
                           tile_m::Integer = 0, tile_n::Integer = 0)
     if tile_m == 0 || tile_n == 0
-        auto_m, auto_n = gemm_tensor_tiles(M, N; family, transA = trA, narrow)
+        auto_m, auto_n = gemm_tensor_tiles(M, N; family, transA = trA, narrow, relaxed)
         # next to an explicit tile of 8, the selected one needs to be a multiple of 16, and
         # next to one of 64 it stays at 32, as 64×64 is always slower
         pick(given, auto) = given % 16 != 0 && auto % 16 != 0 ? 16 :
@@ -704,7 +730,9 @@ function gemm_tensor_plan(M::Integer, N::Integer, K::Integer; family::Integer,
         end
     end
     groups = (cld(M, tile_m * GEMM_TENSOR_WM), cld(N, tile_n * GEMM_TENSOR_WN))
-    splits = gemm_tensor_splits(M, N, K, prod(groups); cores, narrow)
+    # (relaxed `Float32` operands are multiplied like 2-byte ones, see `gemm_tensor_splits`)
+    splits = gemm_tensor_splits(M, N, K, prod(groups); cores,
+                                narrow = narrow || relaxed && family >= 10)
     ks = splits == 1 ? K : cld(cld(K, splits), GEMM_TENSOR_SPLIT_K) * GEMM_TENSOR_SPLIT_K
     return (; tile = (tile_m, tile_n), groups, ks, slices = cld(K, ks))
 end
@@ -1044,7 +1072,7 @@ function gemm_simd!(C, A, B, alpha, beta, cA::Char, cB::Char)
 end
 
 """
-    Metal.gemm!(C, tA, tB, A, B, α, β; kernel=:auto)
+    Metal.gemm!(C, tA, tB, A, B, α, β; kernel=:auto, relaxed=false)
 
 Native GEMM computing `C = α·op_tA(A)·op_tB(B) + β·C` for `MtlMatrix` operands, or
 range-based `view`s of them (including the destination).
@@ -1057,11 +1085,13 @@ the `:simd`/`:tensor` paths, which set `kernel` to force a specific kernel. Forc
 kernel that cannot handle the operands is the caller's responsibility (see
 `supports_simd_matmul`/`supports_tensor_matmul`). All kernels handle every operand char:
 the simd kernel and the generic ones gather elementwise through `opelem`, and the tensor
-kernel packs the operands it can't read in place through it.
+kernel packs the operands it can't read in place through it. `relaxed=true` permits reduced
+`Float32` precision, as [`Metal.matmul_precision`](@ref) does; only the tensor kernel makes
+use of it, the others compute at full precision.
 """
 function gemm!(C::MtlMatrixOperand, tA::Char, tB::Char,
                A::MtlMatrixOperand, B::MtlMatrixOperand,
-               alpha::Number, beta::Number; kernel::Symbol = :auto)
+               alpha::Number, beta::Number; kernel::Symbol = :auto, relaxed::Bool = false)
     M = size(C, 1); N = size(C, 2)
     K = contraction_length(tA, A)
     alpha, beta = device_scalar(alpha), device_scalar(beta)
@@ -1090,9 +1120,9 @@ function gemm!(C::MtlMatrixOperand, tA::Char, tB::Char,
     elseif kernel === :tensor
         supports_tensor_matmul(C, A, B, tA, tB, alpha, beta) ||
             error("tensor-ops GEMM is not supported for these operands")
-        gemm_tensor!(C, A, B, alpha, beta, tA, tB)
+        gemm_tensor!(C, A, B, alpha, beta, tA, tB; relaxed)
     elseif kernel === :auto && supports_tensor_matmul(C, A, B, tA, tB, alpha, beta)
-        gemm_tensor!(C, A, B, alpha, beta, tA, tB)
+        gemm_tensor!(C, A, B, alpha, beta, tA, tB; relaxed)
     elseif kernel === :simd || (kernel === :auto && supports_simd_matmul(C, A, B, tA, tB, alpha, beta))
         gemm_simd!(C, A, B, alpha, beta, tA, tB)
     elseif kernel === :auto
@@ -1106,9 +1136,9 @@ end
 # matrix-vector multiply as a single-column GEMM, which `gemm!` runs with the matrix-vector
 # kernels where they apply
 function gemv!(C::MtlVector, tA::Char, A::MtlMatrix, B::MtlVector,
-               alpha::Number, beta::Number; kernel::Symbol = :auto)
+               alpha::Number, beta::Number; kernel::Symbol = :auto, relaxed::Bool = false)
     Cm = reshape(C, length(C), 1)
     Bm = reshape(B, length(B), 1)
-    gemm!(Cm, tA, 'N', A, Bm, alpha, beta; kernel)
+    gemm!(Cm, tA, 'N', A, Bm, alpha, beta; kernel, relaxed)
     return C
 end

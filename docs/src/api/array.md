@@ -31,6 +31,7 @@ Metal.mps_rng
 
 ```@docs
 Metal.matmul_alg
+Metal.matmul_precision
 ```
 
 ## Storage modes
