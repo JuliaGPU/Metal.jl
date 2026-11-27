@@ -105,13 +105,14 @@ function sort!(B, A; dims=nothing, rev::Bool=false)
 end
 
 function unsupported(::typeof(sort!), B, A; dims=nothing, rev::Bool=false)
-    err = unsupported_arrays(B, A)
-    err === nothing || return err
+    # the element types first: `unsupported_arrays` divides by their size
     T = eltype(A)
     eltype(B) == T ||
         return ArgumentError("MPSGraph sorting requires the output and input to have the same element type, got $(eltype(B)) and $T")
     T in MPSGRAPH_VALID_SORT_TYPES ||
         return ArgumentError("MPSGraph sorting does not support element type $T")
+    err = unsupported_arrays(B, A)
+    err === nothing || return err
     size(B) == size(A) ||
         return DimensionMismatch("output has dimensions $(size(B)), input has dimensions $(size(A))")
     err = unsupported_rank(A)
@@ -143,12 +144,13 @@ function sortperm!(I, A; dims=nothing, rev::Bool=false)
 end
 
 function unsupported(::typeof(sortperm!), I, A; dims=nothing, rev::Bool=false)
-    err = unsupported_arrays(I, A)
-    err === nothing || return err
+    # the element types first: `unsupported_arrays` divides by their size
     eltype(A) in MPSGRAPH_VALID_SORT_TYPES ||
         return ArgumentError("MPSGraph sorting does not support element type $(eltype(A))")
     eltype(I) in MPSGRAPH_SORTPERM_INDEX_TYPES ||
         return ArgumentError("MPSGraph sortperm requires Int32 or Int64 indices, got $(eltype(I))")
+    err = unsupported_arrays(I, A)
+    err === nothing || return err
     size(I) == size(A) ||
         return DimensionMismatch("index output has dimensions $(size(I)), input has dimensions $(size(A))")
     err = unsupported_rank(A)
