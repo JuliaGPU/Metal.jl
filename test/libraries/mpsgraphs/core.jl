@@ -1,7 +1,7 @@
 using .MPS: MPSShape
 using .MPSGraphs: MPSGraph, MPSGraphDevice, MPSGraphShapedType, MPSGraphExecutable,
-                  MPSGraphExecutableSerializationDescriptor, placeholderTensor,
-                  matrixMultiplicationWithPrimaryTensor
+                  MPSGraphExecutableSerializationDescriptor, MPSGraphTensorData,
+                  placeholderTensor, matrixMultiplicationWithPrimaryTensor
 
 graph = MPSGraph()
 @test graph isa MPSGraph
@@ -62,15 +62,39 @@ end
     exe = MPSGraphs.compile(graph, dev, feeds, NSArray([c]))
     @test exe isa MPSGraphExecutable
 
+    # asymmetric, so that a transposed product does not match
+    input = Float32[(i + 2j) / 16 for i in 1:4, j in 1:4]
+    function run_executable(executable)
+        A = MtlArray(input)
+        C = Metal.zeros(Float32, 4, 4)
+        results = MPSGraphs.run(executable, Metal.global_queue(dev),
+                                NSArray([MPSGraphTensorData(A)]), NSArray([MPSGraphTensorData(C)]))
+        @test length(results) == 1
+        return Array(C)
+    end
+    @test run_executable(exe) ≈ input * input
+
+    # for loading with an explicit compilation descriptor
+    compdesc = MPSGraphs.MPSGraphCompilationDescriptor()
+    compdesc.optimizationLevel = MPSGraphs.MPSGraphOptimizationLevel0
+
     mktempdir() do dir
         @testset "$name" for (name, target) in (("path", identity), ("URL", NSFileURL))
             path = joinpath(dir, "default-$name.mpsgraphpackage")
             MPSGraphs.serialize(exe, target(path))
             @test isdir(path) && !isempty(readdir(path))
+            # a package written without its original module aborts the process here
+            loaded = MPSGraphExecutable(target(path))
+            @test loaded isa MPSGraphExecutable
+            @test run_executable(loaded) ≈ input * input
 
             path = joinpath(dir, "descriptor-$name.mpsgraphpackage")
             MPSGraphs.serialize(exe, target(path), MPSGraphExecutableSerializationDescriptor())
             @test isdir(path) && !isempty(readdir(path))
+            loaded = MPSGraphExecutable(target(path), compdesc)
+            @test run_executable(loaded) ≈ input * input
         end
+
+        @test_throws ArgumentError MPSGraphExecutable(joinpath(dir, "missing.mpsgraphpackage"))
     end
 end
