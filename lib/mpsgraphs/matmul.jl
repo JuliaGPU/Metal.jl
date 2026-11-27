@@ -49,21 +49,7 @@ function build_graph(key::MatmulGraphKey{Tab, Tc}) where {Tab, Tc}
     transA = (key.transpose_a == 'T' || key.transpose_a == 'C') ? transposeTensor(graph, conjA, key.ndims_a - 2, key.ndims_a - 1, "transpose_a") : conjA
     transB = (key.transpose_b == 'T' || key.transpose_b == 'C') ? transposeTensor(graph, conjB, key.ndims_b - 2, key.ndims_b - 1, "transpose_b") : conjB
 
-    nBatchA = key.ndims_a == 2 ? 1 : key.size_a[1]
-    nBatchB = key.ndims_b == 2 ? 1 : key.size_b[1]
-
-    # for batched matmul between different sized tensors
-    broadcastA, broadcastB = if nBatchA == nBatchB
-        transA, transB
-    elseif key.ndims_a == 1
-        broadcastTensor(graph, transA, convert(MPSShape, [nBatchB, size(transA)[2:end]...])), transB
-    elseif key.ndims_b == 1
-        transA, broadcastTensor(graph, transB, convert(MPSShape, [nBatchA, size(transB)[2:end]...]))
-    else
-        transA, transB
-    end
-
-    matmul = matrixMultiplicationWithPrimaryTensor(graph, broadcastB, broadcastA)
+    matmul = matrixMultiplicationWithPrimaryTensor(graph, transB, transA)
 
     afteralpha = let
         alphatensor = if castTab <: Real
@@ -161,7 +147,11 @@ function matvecmul!(y, A, x, alpha::Number=true, beta::Number=false; tA::Abstrac
     check_supported(matvecmul!, y, A, x, alpha, beta; tA)
     isempty(y) && return y
     isempty(x) && return scale_output!(y, beta)
-    return _matmul!(y, A, x, alpha, beta, Char(tA), 'N')
+    # on some devices (M6, macOS 27.2), MPSGraph aborts the process when it multiplies a
+    # non-transposed Float32 matrix by a 1-D vector into more than 2^15 elements (#1200);
+    # multiplying by a single-column matrix avoids that and runs as fast
+    _matmul!(reshape(y, :, 1), A, reshape(x, :, 1), alpha, beta, Char(tA), 'N')
+    return y
 end
 
 function unsupported(::typeof(matvecmul!), y, A, x, alpha::Number=true,

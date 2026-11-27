@@ -116,6 +116,18 @@ end
     end
 end
 
+# MPSGraph used to abort the process on M6 for outputs of more than 2^15 elements (#1200)
+@testset "long matrix vector multiplication" begin
+    M, K = 2^15 + 1, 16
+    @testset "$tA" for tA in ('N', 'T')
+        A = rand(Float32, tA == 'N' ? (M, K) : (K, M))
+        x = rand(Float32, K)
+        y = MtlArray{Float32}(undef, M)
+        @test MPSGraphs.matvecmul!(y, MtlArray(A), MtlArray(x); tA) === y
+        @test Array(y) ≈ (tA == 'N' ? A : transpose(A)) * x
+    end
+end
+
 @testset "matmul empty and unsupported inputs" begin
     A = MtlArray(rand(Float32, 4, 3))
     B = MtlArray(rand(Float32, 3, 5))
