@@ -17,7 +17,13 @@ end
 A `ScopedValue` that selects the algorithm `LinearAlgebra.mul!` (and `*`) uses for
 `MtlArray` matrix-matrix and matrix-vector products:
 
-- `:auto` (default): MPSGraph where it supports the operands, otherwise `:native`.
+- `:auto` (default): on Metal 4 devices (macOS 26 and later), `:native` for the operands
+  that the `:tensor` kernel supports, except for the shapes that MPSGraph was measured to
+  multiply faster. Of the relaxed `Float32` products on M5 and later GPUs (see
+  [`Metal.matmul_precision`](@ref)), these are the ones with at least 256 rows and columns.
+  Of all other products, they are many with 17 to 256 columns and at least 4× as many rows,
+  and those of more than 64×64 elements with a contraction of at least 8× their larger
+  dimension. Elsewhere, MPSGraph where it supports the operands, and `:native` for the rest.
 - `:MPSGraph`: [`MPSGraphs.matmul!`](@ref) and [`MPSGraphs.matvecmul!`](@ref).
 - `:MPS`: [`MPS.matmul!`](@ref) and [`MPS.matvecmul!`](@ref).
 - `:native`: the best of Metal.jl's own kernels for the operands, of `:tensor` and `:simd`,
@@ -104,15 +110,15 @@ end
 
 # LinearAlgebra's wrapper_char only ever produces 'N'/'T'/'C' or the Symmetric/Hermitian
 # wrapper chars 'S'/'s'/'H'/'h', all of which the native GEMM kernels handle (the MPS
-# paths only the former); gemm_char normalizes an AbstractChar (e.g. a
-# LinearAlgebra.WrapperChar) to the plain Char the kernels specialize on.
+# paths only the former). The native paths take them as a `Char`, which normalizes an
+# AbstractChar (e.g. a LinearAlgebra.WrapperChar) to the plain Char the kernels specialize on.
 @inline is_ntc(t) = (t == 'N') || (t == 'T') || (t == 'C')
-@inline gemm_char(t) = Char(t)
 
 # shared native-kernel path: a forced :simd/:tensor kernel must support the operands;
-# :native/:auto let gemm! pick the kernel, or GPUArrays' generic one if neither does
+# :native (also when `:auto` picked it) lets gemm! pick the kernel, or GPUArrays' generic one
+# if neither does
 @inline function native_matmul!(C, tA, tB, A, B, alpha, beta, alg, relaxed)
-    cA = gemm_char(tA); cB = gemm_char(tB)
+    cA = Char(tA); cB = Char(tB)
     if alg === :simd
         supports_simd_matmul(C, A, B, cA, cB, alpha, beta) ||
             matmul_alg_error(alg, eltype(A), eltype(C), false)
@@ -120,7 +126,7 @@ end
         supports_tensor_matmul(C, A, B, cA, cB, alpha, beta) ||
             matmul_alg_error(alg, eltype(A), eltype(C), false)
     end
-    kernel = (alg === :native || alg === :auto) ? :auto : alg
+    kernel = alg === :native ? :auto : alg
     gemm!(C, cA, cB, A, B, alpha, beta; kernel, relaxed)
 end
 
@@ -128,6 +134,75 @@ end
 generic_matmul!(C, tA, tB, A, B, alpha, beta) =
     GPUArrays.generic_matmatmul!(C, wrap(A, tA), wrap(B, tB),
                                  device_scalar(alpha), device_scalar(beta))
+
+# The algorithm `:auto` uses for a product of dense matrices, or of a matrix and a vector:
+# Metal.jl's kernels when the tensor-ops path supports the operands (on Metal 4 devices),
+# unless `mpsgraph_matmul_faster` says MPSGraph is faster for the shape; otherwise MPSGraph
+# where it supports the operands, and the native kernels for everything else.
+function auto_matmul_alg(C, tA, tB, A, B, alpha, beta, relaxed::Bool)
+    cA = Char(tA); cB = Char(tB)
+    if supports_tensor_matmul(C, A, B, cA, cB, alpha, beta)
+        M, N = size(C, 1), size(C, 2)
+        K = contraction_length(cA, A)
+        narrow = sizeof(eltype(A)) <= 2 && sizeof(eltype(B)) <= 2
+        relaxed &= eltype(A) === Float32 && eltype(B) === Float32
+        mpsgraph_matmul_faster(M, N, K; family = gemm_tensor_family(), narrow,
+                               transA = cA !== 'N', relaxed) || return :native
+    end
+    supported = C isa AbstractVector ?
+        MPSGraphs.supports(MPSGraphs.matvecmul!, C, A, B, alpha, beta; tA) :
+        MPSGraphs.supports(MPSGraphs.matmul!, C, A, B, alpha, beta; tA, tB)
+    return supported ? :MPSGraph : :native
+end
+
+# Whether MPSGraph computes an M×N×K product (`C` is M×N, the contraction has length K)
+# reproducibly faster than the native kernels, for `auto_matmul_alg`. `family` is the Apple
+# GPU family, `narrow` says that both inputs take at most 2 bytes per element, `transA` that
+# `A` is read transposed, and `relaxed` that the operands are `Float32` ones that may be
+# rounded (see `Metal.matmul_precision`).
+#
+# The rules come from timing `mul!` end to end, with both algorithms on the same fresh
+# allocations, on an M1 (Apple7), M2 (Apple8), M3 Pro (Apple9) and M6 (Apple11) with macOS
+# 27: about 170 cases per device (squares from 64 to 4096, rectangles, products with few rows
+# or columns, long contractions, transposed operands, α/β and matrix-vector products, in
+# `Float32`, `Float16` and `BFloat16`), and 230-350 more around the cases below. Over the
+# first set, the native kernels are on average 2-5% slower than the faster of the two, and
+# MPSGraph 8-19% (geometric means of the paired ratios); with these rules, `:auto` would be
+# 1.5-2.5% slower. The native kernels are faster for most shapes. They have less host
+# overhead per call: a loop of small products runs up to 4× faster, and a single one with a
+# synchronization up to 1.4×. MPSGraph's matrix-vector products are up to 6× slower for some
+# shapes, and abort the process for `Float32` matrices with 65536 rows on the M6. MPSGraph is
+# faster for the following, checked in this order:
+# - relaxed `Float32` products on the M6 with at least 256 rows and columns, for which it
+#   schedules the reduced-precision arithmetic better: by a median of 1.25× over 91 such
+#   shapes, 1.1-1.5× for squares of 2048 to 4096, and up to 5× for some long contractions.
+#   With fewer rows or columns, the native kernel is faster (median 1.14×). The rules below
+#   don't apply to relaxed products there.
+# - products with 17 to 256 columns and at least 4× as many rows, unless `A` is transposed
+#   (then the native kernel is faster on the M1 and M2, by up to 2.7×). For `Float32`, by a
+#   median of 1.1-1.4× over 68 shapes per device, up to 2.5×. For 2-byte inputs, only on the
+#   M1 and M2 (up to 3.4×); on the M3 and M6 neither is consistently faster.
+# - products of more than 64² elements with a contraction of at least 8× their larger
+#   dimension, which the native kernel multiplies more slowly per element: by a median of
+#   1.1-1.2× over 48 shapes per device, up to 3.5-3.7× (`Float16` 700×900×10000 on the M6,
+#   `Float32` 400×120×20000 with a transposed `A` on the M2).
+#   Smaller ones split their contraction well enough to be faster with the native kernel
+#   (1.2-1.3× for 64×64×65536 on the M1, M2 and M3).
+# What the rules get wrong mostly depends erratically on the exact sizes. Some long
+# contractions of small products are up to 2× faster with the native kernel on the M1 and M2.
+# On the M6, MPSGraph is faster for relaxed products of 128 rows with a long contraction (up
+# to 2.3×), for some 2-byte products with few columns (up to 2×), and for `Float16` and
+# `BFloat16` 4096² products (1.1-1.2×). On the M3, it is faster for some matrix-vector
+# products (up to 1.6×). Families that weren't measured are assumed to be like the M6 when
+# they are Apple10 or later (M5 and later GPUs), and like the M3 otherwise.
+function mpsgraph_matmul_faster(M::Integer, N::Integer, K::Integer; family::Integer,
+                                narrow::Bool, transA::Bool, relaxed::Bool = false)
+    N == 1 && return false
+    relaxed && family >= 10 && return min(M, N) >= 256
+    few_cols = 16 < N <= 256 && M >= 4N
+    few_cols && !transA && (!narrow || family == 7 || family == 8) && return true
+    return K >= 8 * max(M, N) && M * N > 64 * 64
+end
 
 # a product with an empty dimension is finished before any backend is chosen: MPS asserts on
 # zero-sized buffers, and the result does not depend on A or B anyway. C is either empty (M or
@@ -139,41 +214,38 @@ function empty_matmul!(C, beta)
     iszero(beta) ? fill!(C, zero(eltype(C))) : (C .*= beta)
 end
 
-function LinearAlgebra.mul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix,
-                                             alpha::Number, beta::Number)
+# The dimensions (M, K, N) of `C = op(A)·op(B)`, after checking that they conform and that C
+# isn't one of the operands
+function checked_matmul_dims(C, tA, tB, A, B)
     mA, nA = LinearAlgebra.lapack_size(tA, A)
     mB, nB = LinearAlgebra.lapack_size(tB, B)
-
-    if nA != mB
+    nA == mB ||
         throw(DimensionMismatch("A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
-    end
-    if size(C) != (mA, nB)
+    size(C) == (mA, nB) ||
         throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
-    end
-
-    if C === A || B === C
+    (C === A || B === C) &&
         throw(ArgumentError("output matrix must not be aliased with input matrix"))
-    end
+    return mA, nA, nB
+end
 
-    if mA == 0 || nA == 0 || nB == 0
-        return empty_matmul!(C, beta)
-    end
+function LinearAlgebra.mul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix,
+                                             alpha::Number, beta::Number)
+    any(iszero, checked_matmul_dims(C, tA, tB, A, B)) && return empty_matmul!(C, beta)
 
     alg = selected_matmul_alg()
     relaxed = relaxed_matmul()
-    # the MPS path only handles plain transpose/adjoint operands; only probe MPSGraph
-    # support when a branch below can actually use it
-    ntc = is_ntc(tA) && is_ntc(tB)
-    mpsgraph_supported = (alg === :MPSGraph || alg === :auto) &&
-        MPSGraphs.supports(MPSGraphs.matmul!, C, A, B, alpha, beta; tA, tB)
-    # If possible, dispatch to MPSGraphs, then performance shaders
-    if alg === :MPSGraph || (alg === :auto && mpsgraph_supported)
-        mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C), false)
+    if alg === :auto
+        alg = auto_matmul_alg(C, tA, tB, A, B, alpha, beta, relaxed)
+    elseif alg === :MPSGraph
+        MPSGraphs.supports(MPSGraphs.matmul!, C, A, B, alpha, beta; tA, tB) ||
+            matmul_alg_error(alg, eltype(A), eltype(C), false)
+    end
+    if alg === :MPSGraph
         MPSGraphs.matmul!(C, A, B, alpha, beta; tA, tB)
-    elseif alg === :native || alg === :auto || alg === :simd || alg === :tensor
+    elseif alg === :native || alg === :simd || alg === :tensor
         native_matmul!(C, tA, tB, A, B, alpha, beta, alg, relaxed)
     elseif alg === :MPS
-        (ntc && supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), false)
+        (is_ntc(tA) && is_ntc(tB) && supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), false)
         MPS.matmul!(C, A, B, alpha, beta; tA, tB)
     elseif alg === :GPUArrays
         generic_matmul!(C, tA, tB, A, B, alpha, beta)
@@ -185,23 +257,7 @@ end
 function LinearAlgebra.mul!(C::MtlMatrixOperand, tA, tB,
                                              A::MtlMatrixOperand, B::MtlMatrixOperand,
                                              alpha::Number, beta::Number)
-    mA, nA = LinearAlgebra.lapack_size(tA, A)
-    mB, nB = LinearAlgebra.lapack_size(tB, B)
-
-    if nA != mB
-        throw(DimensionMismatch("A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
-    end
-    if size(C) != (mA, nB)
-        throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
-    end
-
-    if C === A || B === C
-        throw(ArgumentError("output matrix must not be aliased with input matrix"))
-    end
-
-    if mA == 0 || nA == 0 || nB == 0
-        return empty_matmul!(C, beta)
-    end
+    any(iszero, checked_matmul_dims(C, tA, tB, A, B)) && return empty_matmul!(C, beta)
 
     alg = selected_matmul_alg()
     relaxed = relaxed_matmul()
@@ -250,27 +306,26 @@ function LinearAlgebra.mul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::Mtl
 
     alg = selected_matmul_alg()
     relaxed = relaxed_matmul()
-    # the MPS path only handles plain transpose/adjoint operands; only probe MPSGraph
-    # support when a branch below can actually use it
-    ntc = is_ntc(tA)
-    mpsgraph_supported = (alg === :MPSGraph || alg === :auto) &&
-        MPSGraphs.supports(MPSGraphs.matvecmul!, C, A, B, alpha, beta; tA)
-    # If possible, dispatch to MPSGraphs, then performance shaders
-    if alg === :MPSGraph || (alg === :auto && mpsgraph_supported)
-        mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C), true)
+    if alg === :auto
+        alg = auto_matmul_alg(C, tA, 'N', A, B, alpha, beta, relaxed)
+    elseif alg === :MPSGraph
+        MPSGraphs.supports(MPSGraphs.matvecmul!, C, A, B, alpha, beta; tA) ||
+            matmul_alg_error(alg, eltype(A), eltype(C), true)
+    end
+    if alg === :MPSGraph
         MPSGraphs.matvecmul!(C, A, B, alpha, beta; tA)
-    elseif alg === :native || alg === :auto || alg === :simd || alg === :tensor
+    elseif alg === :native || alg === :simd || alg === :tensor
         # matrix-vector products go through the native gemv; the kernel-forcing algorithms
         # pass through to it
-        cA = gemm_char(tA)
-        kernel = (alg === :native || alg === :auto) ? :auto : alg
+        cA = Char(tA)
+        kernel = alg === :native ? :auto : alg
         alg === :simd && (supports_simd_matmul(C, A, B, cA, 'N', alpha, beta) ||
             matmul_alg_error(alg, eltype(A), eltype(C), true))
         alg === :tensor && (supports_tensor_matmul(C, A, B, cA, 'N', alpha, beta) ||
             matmul_alg_error(alg, eltype(A), eltype(C), true))
         gemv!(C, cA, A, B, alpha, beta; kernel, relaxed)
     elseif alg === :MPS
-        (ntc && supports_mps_matmul(A, B, C, MPS_VALID_MATVECMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), true)
+        (is_ntc(tA) && supports_mps_matmul(A, B, C, MPS_VALID_MATVECMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), true)
         MPS.matvecmul!(C, A, B, alpha, beta; tA)
     elseif alg === :GPUArrays
         generic_matmul!(C, tA, 'N', A, B, alpha, beta)
