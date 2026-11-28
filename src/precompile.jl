@@ -112,7 +112,7 @@ end
                 LinearAlgebra.mul!(similar(a), a, a)
                 synchronize()
             end
-            load_framework("MetalPerformanceShadersGraph")
+            load_mpsgraph()
             let a = MtlArray(Float32[1 2; 3 4])
                 Array(a * a)
             end

@@ -40,3 +40,7 @@
 # whether to include the precompile.jl file. This is meant
 # to improve iteration time when developing Metal.jl
 #precompile = true
+
+# whether to use Metal.jl on GPUs it doesn't support and on other architectures than
+# Apple Silicon's, e.g. with another Metal implementation such as Darling's.
+#allow_unsupported_devices = false

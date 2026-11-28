@@ -41,6 +41,45 @@ full_str = sprint(io->show(io, MIME"text/plain"(), dev))
 
 end
 
+@testset "capability probes" begin
+
+dev = device()
+@test MTL.responds_to(dev, "supportsFamily:")
+@test !MTL.responds_to(dev, "notAMetalSelector")
+@test !MTL.responds_to(dev, "supportsFamily")     # the argument is part of the selector
+
+# Apple's implementation, on hardware and paravirtualized, implements everything Metal.jl
+# probes for, so the probes don't change what Metal.jl does there. (This also catches a
+# misspelled selector, which would disable a feature without any error.)
+if Metal.is_supported(dev)
+    # (logging is rejected on paravirtualized GPUs before probing for it)
+    MTL.is_virtual(dev) || @test MTL.responds_to(dev, "newLogStateWithDescriptor:error:")
+    let cmdbuf = MTLCommandBuffer(MTLCommandQueue(dev))
+        MTLComputeCommandEncoder(cmdbuf) do cce
+            @test Metal.has_debug_groups(cce)
+        end
+    end
+end
+
+end
+
+@testset "device support" begin
+
+support(; virtual=false, supported=true, arch=:aarch64, allow=false) =
+    Metal.device_support(; virtual, supported, arch, allow)
+@test support() === :supported
+@test support(; virtual=true) === :virtual
+@test support(; supported=false) === :unsupported
+# the preference only matters where the device or the architecture isn't supported
+@test support(; allow=true) === :supported
+@test support(; virtual=true, allow=true) === :virtual
+@test support(; supported=false, allow=true) === :allowed
+@test support(; arch=:x86_64, allow=true) === :allowed
+# without it, the architecture is checked before the device (by `__init__`)
+@test support(; arch=:x86_64) === :supported
+
+end
+
 @testset "storage_type" begin
     @test convert(MTL.MTLStorageMode, Metal.SharedStorage) == MTL.MTLStorageModeShared
     @test convert(MTL.MTLStorageMode, Metal.ManagedStorage) == MTL.MTLStorageModeManaged

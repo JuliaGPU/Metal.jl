@@ -392,7 +392,16 @@ end
 # `supports_mpsgraph_matmul` / `supports_tensor_matmul`: it handles any transpose/α/β/shape/
 # offset, so it only needs a float eltype.
 @inline supports_simd_matmul(C, A, B, cA::Char, cB::Char, alpha::Number, beta::Number) =
-    gemm_simd_eltype(eltype(A), eltype(B), eltype(C))
+    gemm_simd_eltype(eltype(A), eltype(B), eltype(C)) && simd_matmul_capable()
+
+# SIMD-group matrices need an Apple7 GPU. Paravirtualized GPUs don't claim Apple7, but the
+# Apple Silicon behind them supports them.
+@inline function simd_matmul_capable()
+    dev = device()
+    @memoize key=pointer(dev)::id{MTLDevice} begin
+        MTL.supports_family(dev, MTL.MTLGPUFamilyApple7) || MTL.is_virtual(dev)
+    end::Bool
+end
 
 # tile configuration for the fast path. WM×WN simdgroups per threadgroup, each with
 # a TM×TN grid of 8x8 accumulators (keep TM·TN ≤ 16 to avoid register spilling),

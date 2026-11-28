@@ -295,6 +295,7 @@ end
 
 @inline dispatch!(be::Metal4Backend, groups::MTLSize, threads::MTLSize) =
     MTL.dispatchThreadgroups!(be.encoder::MTL4ComputeCommandEncoder, groups, threads)
+has_debug_groups(::Metal4Backend) = true
 MTL.push_debug_group!(be::Metal4Backend, label) =
     MTL.push_debug_group!(be.encoder::MTL4ComputeCommandEncoder, label)
 MTL.pop_debug_group!(be::Metal4Backend) =

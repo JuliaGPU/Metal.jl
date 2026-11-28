@@ -8,6 +8,9 @@ using LinearAlgebra, ScopedValues
     # on virtual devices; the buildkite CI still covers them on real hardware.
     virtual = Metal.is_virtual(Metal.device())
 
+    # the GPUs Metal.jl supports all have SIMD-group matrices, for the :simd kernel
+    Metal.is_supported(Metal.device()) && @test Metal.simd_matmul_capable()
+
     # test that unsupported configurations error properly
     N = 20
     function test_matmul(inT, outT; vec_b=false, alg=:auto,

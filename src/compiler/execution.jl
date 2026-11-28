@@ -849,6 +849,8 @@ Base.@nospecializeinfer function launch_logging!(
         # with a clear host error instead of surfacing that opaque `NSError`.
         error("Capturing GPU log output is not supported on virtualized GPUs.")
     end
+    MTL.responds_to(queue.device, "newLogStateWithDescriptor:error:") ||
+        error("Capturing GPU log output is not supported by $(queue.device.name).")
 
     MTLCaptureManager().isCapturing &&
         error("Logging is not supported while GPU frame capturing")
@@ -1032,7 +1034,8 @@ end
 @inline function dispatch!(ctx, pipeline::MTLComputePipelineState, gs::MTLSize, ts::MTLSize)
     if label_resources()
         label = pipeline.label
-        if label === nothing
+        # (other Metal implementations may not support debug groups)
+        if label === nothing || !has_debug_groups(ctx)
             dispatch!(ctx, gs, ts)
         else
             # the encoder gets closed after a failed launch, so keep the groups balanced

@@ -32,10 +32,18 @@ function check_supported(f, args...; kwargs...)
     return
 end
 
+"""
+    MPSGraphs.is_supported(dev::MTLDevice)
+
+Whether the MPSGraph framework is available, and supports `dev`. It is optional: Metal.jl's
+own kernels don't need it, and Metal implementations other than Apple's may lack it.
+"""
+is_supported(dev::MTLDevice) = ObjectiveC.classexists("MPSGraph") && MPS.is_supported(dev)
+
 # common requirements for the arrays passed to graph operations
 function unsupported_array(A)
     A isa MtlArray || return ArgumentError("MPSGraph operations require MtlArray arguments, got a $(typeof(A))")
-    MPS.is_supported(device(A)) ||
+    is_supported(device(A)) ||
         return ArgumentError("MPSGraph is not supported on $(device(A).name)")
     # MPS silently reads garbage at misaligned offsets
     A.offset % sizeof(eltype(A)) == 0 ||
