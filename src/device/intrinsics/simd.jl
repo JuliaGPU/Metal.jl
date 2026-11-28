@@ -202,6 +202,20 @@ end
 @device_function @inline simdgroup_size() =
     ccall("extern air.get_simdgroup_size.i32", llvmcall, Int32, ())
 
+# The SIMD-group width the kernel is compiled for (see `simd_width(::MTLDevice)`), as an
+# `Int`. Unlike `simdgroup_size()`, it is a constant during inference: kernels are compiled
+# with the method table of their width (see `GPUCompiler.method_tables`), which overlays this
+# function. The probe that determines the width compiles with a table that doesn't.
+function simd_width end
+const simd_width_tables = Dict{Int,Core.MethodTable}()
+for width in (0, 4, 8, 16, 32, 64)
+    table = Symbol(:simd_width_, width, :_table)
+    @eval Base.Experimental.@MethodTable $table
+    # (not a consistent overlay: there is no host method to match)
+    width == 0 || @eval Base.Experimental.@overlay $table @inline simd_width() = $width
+    simd_width_tables[width] = getfield(@__MODULE__, table)
+end
+
 
 ## SIMD Shuffle Up/Down
 

@@ -521,7 +521,8 @@ by calling it (see below). Its fields describe the compute pipeline Metal create
 
 - `maxthreads`: the maximum number of threads per threadgroup this kernel can be launched
   with ([`maxTotalThreadsPerThreadgroup`](https://developer.apple.com/documentation/metal/mtlcomputepipelinestate/maxtotalthreadsperthreadgroup)),
-  which can be lower than the device's limit of 1024 for kernels that use many registers.
+  which can be lower than the device's limit of 1024 for kernels that use many registers,
+  or that use the device RNG on GPUs with narrow SIMD-groups.
 - `exec_width`: the thread execution width, i.e., the number of threads in a SIMD-group
   ([`threadExecutionWidth`](https://developer.apple.com/documentation/metal/mtlcomputepipelinestate/threadexecutionwidth)).
   Threadgroup sizes that are a multiple of it use the GPU best.
@@ -607,6 +608,34 @@ function mtlfunction(f::F, tt::TT=Tuple{}; source::S=f, kwargs...) where {F,TT,S
                        l.use_residency_sets, l.reloc_table, l.exception_table)
 end
 
+# The SIMD-group width of kernels compiled for `dev`, which they are specialized for. Metal
+# only reports it per pipeline (`threadExecutionWidth`). Apple GPUs are 32 wide; on other
+# devices, a kernel is compiled to find out, and `link_kernel` checks that every kernel has
+# that width.
+function simd_width(dev::MTLDevice)
+    @memoize key=pointer(dev)::id{MTLDevice} begin
+        is_supported(dev) ? 32 : simd_width_probe(dev)
+    end::Int
+end
+
+simd_width_kernel() = return
+@noinline function simd_width_probe(dev::MTLDevice)
+    width = try
+        job = CompilerJob(methodinstance(typeof(simd_width_kernel), Tuple{}),
+                          _compiler_config(dev, 0))
+        # (not reported to the compile hook of `@device_code_*`, which may need the width)
+        art = GPUCompiler.with_compile_hook(() -> emit_metallib(job), nothing)
+        pipeline = link_pipeline(dev, art.air, art.metallib, art.entry, nothing)
+        Int(pipeline.threadExecutionWidth)
+    catch err
+        err isa InterruptException && rethrow()
+        error("Failed to determine the SIMD-group width of $(dev.name) by compiling a kernel")
+    end
+    haskey(simd_width_tables, width) && width != 0 ||
+        error("$(dev.name) has a SIMD-group width of $width, which Metal.jl does not support")
+    return width
+end
+
 # What `mtlfunction` calls when the kernel isn't cached: a callable struct rather than a
 # closure, whose type would depend on the kernel's, compiling it (and the inlined
 # `methodinstance`) again for every kernel.
@@ -671,7 +700,12 @@ end
             end
         end
 
-        # Same for the relocation words, which only a kernel referencing a host object needs.
+        width = Int(pipeline[].threadExecutionWidth)
+        width == config.params.simd_width ||
+            error("Kernel $label runs in SIMD-groups of $width threads, but was compiled for $(config.params.simd_width), the width of other kernels on $(dev.name)")
+
+        # Resolve the relocation words like the pipeline; only a kernel referencing a host
+        # object has them.
         relocations = res.relocations
         reloc_table = nothing
         if relocations !== nothing
@@ -689,15 +723,23 @@ end
             end
         end
 
+        # the device RNG keeps state per SIMD-group, for a limited number of them
+        maxthreads = Int(pipeline[].maxTotalThreadsPerThreadgroup)
+        if res.device_rng::Bool
+            maxthreads = min(maxthreads, max_simdgroups_per_threadgroup * width)
+        end
+
         # normalized by `compiler_config`; asserted to keep `link_kernel` inferable
         minthreads = job.config.target.minthreads::Union{Nothing,NTuple{3,Int}}
         reqthreads = minthreads === nothing ? MTLSize(0, 0, 0) : MTLSize(minthreads)
+        minthreads === nothing || prod(minthreads) <= maxthreads ||
+            error("Kernel $label requires $(prod(minthreads)) threads per threadgroup, but can be launched with at most $maxthreads")
 
         LinkedKernel(pipeline[], res.loggingEnabled::Bool, res.device_rng::Bool, dev,
-         Int(pipeline[].maxTotalThreadsPerThreadgroup),
+         maxthreads,
          reqthreads,
          Int(pipeline[].staticThreadgroupMemoryLength),
-         Int(pipeline[].threadExecutionWidth),
+         width,
          can_use_residency_sets(dev),
          reloc_table,
          exception_table_id(res.exception_sites))

@@ -3,7 +3,8 @@ module MetalKernels
 using ..Metal
 using ..Metal: @device_override, DefaultStorageMode, SharedStorage, metal_support,
                mtlfunction, mtlconvert, try_launch, MTL, MTLSize,
-               MTLSharedEvent, MTLCommandBuffer, encode_signal!, encode_wait!, commit!
+               MTLSharedEvent, MTLCommandBuffer, encode_signal!, encode_wait!, commit!,
+               simd_width
 
 import KernelAbstractions as KA
 import KernelInterface as KI
@@ -93,17 +94,10 @@ KI.unsafe_free!(A::MtlArray) = Metal.unsafe_free!(A)
 
 KI.argconvert(::MetalBackend, arg) = mtlconvert(arg)
 
-# The SIMD-group width is a property of the compiled pipeline (`threadExecutionWidth`), but
-# it is the same for all pipelines on Apple GPUs. `kernel_function` checks that, so that
-# `KI.sub_group_size` can promise it before compiling.
-const SIMD_WIDTH = 32
-
 function KI.kernel_function(backend::MetalBackend, f::F, tt::TT=Tuple{}; name=nothing, kwargs...) where {F,TT}
     # KernelInterface passes the callable unconverted: it is converted again at every launch,
     # like with `@metal`, so that the buffers it captures are declared and kept alive
     kern = mtlfunction(mtlconvert(f), tt; source=f, name, kwargs...)
-    kern.exec_width == SIMD_WIDTH ||
-        error("Kernel compiled with a SIMD-group width of $(kern.exec_width), while KernelInterface.sub_group_size promises $SIMD_WIDTH")
     KI.Kernel(backend, kern)
 end
 
@@ -139,7 +133,8 @@ end
 function KI.max_num_groups(backend::MetalBackend)::NTuple{3, Int}
     Int(typemax(UInt32)) .÷ KI.max_work_group_dims(backend)
 end
-KI.sub_group_size(::MetalBackend)::Int = SIMD_WIDTH
+# the width kernels are compiled for, which `mtlfunction` checks they have
+KI.sub_group_size(::MetalBackend)::Int = simd_width(device())
 function KI.multiprocessor_count(::MetalBackend)::Int
     Metal.num_gpu_cores()
 end
@@ -196,8 +191,8 @@ end
 @device_override KI.get_sub_group_size(::Type{T}) where {T} = active_simdgroup_size() % T
 
 # a constant rather than `threads_per_simdgroup()`, so that code depending on it is
-# specialized for it: `kernel_function` checks that kernels are compiled for this width
-@device_override KI.get_max_sub_group_size(::Type{T}) where {T} = SIMD_WIDTH % T
+# specialized for it
+@device_override KI.get_max_sub_group_size(::Type{T}) where {T} = simd_width() % T
 
 @device_override KI.get_num_sub_groups(::Type{T}) where {T} = simdgroups_per_threadgroup() % T
 
@@ -272,7 +267,7 @@ end
 # SIMD-group-scope fence orders threadgroup and device memory. A full `simdgroup_barrier` would
 # need every lane of the SIMD-group, including those of segments on other paths.
 @device_override @inline function KI.sub_group_barrier(width::Integer)
-    if width >= 32
+    if width >= simd_width()
         simdgroup_barrier(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup)
     else
         atomic_thread_fence(Metal.MemoryFlagDevice | Metal.MemoryFlagThreadGroup,
@@ -289,13 +284,13 @@ end
 # width before narrowing them, so that `shfl_down` and `shfl_up` by any offset past the width
 # return the work-item's own value, which Metal's shuffles do for a `delta` of 0.
 
-@inline shuffle_lane(lane::Integer) = (((lane - 1) % Int16) & Int16(SIMD_WIDTH - 1)) + Int16(1)
-@inline shuffle_mask(mask::Integer) = (mask % Int16) & Int16(SIMD_WIDTH - 1)
+@inline shuffle_lane(lane::Integer) = (((lane - 1) % Int16) & Int16(simd_width() - 1)) + Int16(1)
+@inline shuffle_mask(mask::Integer) = (mask % Int16) & Int16(simd_width() - 1)
 
 @device_override @inline KI.shfl(val::ShuffleTypes, lane::Integer) =
     simd_shuffle(val, shuffle_lane(lane))
 
-@inline shuffle_delta(offset::Integer) = ifelse(offset < SIMD_WIDTH, offset % Int16, Int16(0))
+@inline shuffle_delta(offset::Integer) = ifelse(offset < simd_width(), offset % Int16, Int16(0))
 
 @device_override @inline KI.shfl_down(val::ShuffleTypes, offset::Integer) =
     simd_shuffle_down(val, shuffle_delta(offset))
