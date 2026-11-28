@@ -1,7 +1,7 @@
 using .MPS: MPSShape
 using .MPSGraphs: MPSGraph, MPSGraphDevice, MPSGraphShapedType, MPSGraphExecutable,
                   MPSGraphExecutableSerializationDescriptor, placeholderTensor,
-                  matrixMultiplicationWithPrimaryTensor
+                  matrixMultiplicationWithPrimaryTensor, MPSGraphTensor, MPSGraphTensorData
 
 graph = MPSGraph()
 @test graph isa MPSGraph
@@ -36,6 +36,38 @@ shtyp = MPSGraphShapedType(mpsh, Float32)
     before = allocated()
     batches(10)
     @test allocated() - before < 25 * sizeof(A)
+end
+
+@testset "command buffers committed while encoding" begin
+    # MPSGraph commits the command buffer it encodes into and continues with a new one by
+    # itself when encoding large graphs (on an M1 with macOS 27, for the products we tried
+    # with 2^25 output elements or more). that command buffer needs to be recorded for its
+    # errors to be reported.
+    A = MtlArray(rand(Float32, 4096, 1))
+    B = MtlArray(rand(Float32, 1, 8192))
+    C = MtlArray{Float32}(undef, 4096, 8192)
+    graph = MPSGraph()
+    a = placeholderTensor(graph, size(A), Float32)
+    b = placeholderTensor(graph, size(B), Float32)
+    c = matrixMultiplicationWithPrimaryTensor(graph, b, a)
+    feeds = Dict{MPSGraphTensor,MPSGraphTensorData}(a => MPSGraphTensorData(A),
+                                                    b => MPSGraphTensorData(B))
+    results = Dict{MPSGraphTensor,MPSGraphTensorData}(c => MPSGraphTensorData(C))
+
+    queue = MTL.MTLCommandQueue(dev)
+    cmdbuf = MPS.MPSCommandBuffer(queue)
+    submitted = cmdbuf.commandBuffer
+    MPS.encode!(cmdbuf, graph, NSDictionary(feeds), NSDictionary(results), nil,
+                MPSGraphs.default_exec_desc())
+    if cmdbuf.commandBuffer != submitted
+        @test MTL.last_committed(queue) == submitted
+        @test MTL.pending_submission_count(queue) == 1
+    else
+        @test_skip MTL.last_committed(queue) == submitted
+    end
+    MTL.commit!(cmdbuf)
+    synchronize(queue)
+    @test Array(C[1:4, 1:4]) ≈ Array(A)[1:4, :] * Array(B)[:, 1:4]
 end
 
 @testset "executable serialization descriptor" begin
