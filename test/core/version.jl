@@ -39,8 +39,13 @@ end
 @test Metal.normalize_macos(v"15.5") == v"15.5"
 @test Metal.normalize_macos(v"26.1") == v"26.1"
 
-# paravirtualized GPUs don't expose an AGXAccelerator IOService to query the core count
-@test Metal.num_gpu_cores() > 0 broken=Metal.MTL.is_virtual(Metal.device())
+# the core count comes from the AGXAccelerator IOService, which paravirtualized GPUs don't
+# expose, and GPUs Metal.jl doesn't support may not have
+if Metal.is_supported(Metal.device())
+    @test Metal.num_gpu_cores() > 0 broken=Metal.MTL.is_virtual(Metal.device())
+else
+    @test_skip Metal.num_gpu_cores() > 0
+end
 
 # the default language version depends on the SDK Julia was linked against, and can be
 # newer than the versions we know about. that must not prevent loading Metal.jl.

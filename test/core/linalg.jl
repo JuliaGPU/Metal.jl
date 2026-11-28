@@ -2,6 +2,14 @@ using Test, Metal
 
 using LinearAlgebra, ScopedValues
 
+# MPS, MPSGraph and SIMD-group matrices are optional: tests that force an algorithm the
+# device lacks are skipped
+supported(alg) = alg === :MPS ? MPS.is_supported(Metal.device()) :
+                 alg === :MPSGraph ? MPSGraphs.is_supported(Metal.device()) :
+                 alg === :simd ? Metal.simd_matmul_capable() : true
+# in loops over algorithms: records the skip of an unsupported one
+skipped(alg) = supported(alg) ? false : (@test_skip "matmul_alg = :$alg"; true)
+
 @testset "matmul algorithm selection" begin
     # MPSGraph's Float16 matmul produces wrong results on some paravirtualized GPUs (e.g. the
     # GitHub Actions runners), even though it works on others. Skip those correctness checks
@@ -49,12 +57,12 @@ using LinearAlgebra, ScopedValues
 
         # :MPS
         mpsInT = vec_b ? Float32 : Int16
-        @test test_matmul(mpsInT, Float32; vec_b, alg=:MPS)
-        @test test_matmul(Float16, Float32; vec_b, alg=:MPS)
+        @test test_matmul(mpsInT, Float32; vec_b, alg=:MPS) skip=!supported(:MPS)
+        @test test_matmul(Float16, Float32; vec_b, alg=:MPS) skip=!supported(:MPS)
 
         # :MPSGraph
-        @test test_matmul(Int8, Float32; vec_b, alg=:MPSGraph)
-        @test test_matmul(Float16, Float32; vec_b, alg=:MPSGraph) skip=virtual
+        @test test_matmul(Int8, Float32; vec_b, alg=:MPSGraph) skip=!supported(:MPSGraph)
+        @test test_matmul(Float16, Float32; vec_b, alg=:MPSGraph) skip=virtual || !supported(:MPSGraph)
 
         # :GPUArrays (generic kernel, any eltype)
         @test test_matmul(Int32, Int32; vec_b, alg=:GPUArrays)
@@ -73,7 +81,7 @@ using LinearAlgebra, ScopedValues
         @test test_matmul(Int8,  Int32; vec_b, alg=:native)
 
         # :simd (simdgroup kernel, Float16/Float32 only)
-        @test test_matmul(Float32, Float32; vec_b, alg=:simd)
+        @test test_matmul(Float32, Float32; vec_b, alg=:simd) skip=!supported(:simd)
         @test_throws "algorithm `:simd`" test_matmul(Int32, Int32; vec_b, alg=:simd)
         # :tensor is matrix-only and needs tile-divisible dims; N=20 errors either way
         @test_throws Exception test_matmul(Float32, Float32; vec_b, alg=:tensor)
@@ -86,6 +94,7 @@ end
     B = MtlArray(rand(Float32, 8, 8))
     x = MtlArray(rand(Float32, 8))
     @testset "$alg" for alg in (:auto, :MPS, :MPSGraph, :native, :GPUArrays)
+        skipped(alg) && continue
         C = MtlArray(fill(NaN32, 8, 8))
         @with (Metal.matmul_alg => alg) mul!(C, A, B)
         @test Array(C) ≈ Array(A) * Array(B)
@@ -178,6 +187,7 @@ end
 
         # Call the storage-level `mul!` directly so these exercise the native kernels and honor `matmul_alg`
         for alg in (:auto, :simd, :GPUArrays)
+            skipped(alg) && continue
             C = MtlArray(zeros(T, 2, 5))
             @with (Metal.matmul_alg => alg) LinearAlgebra.mul!(C, 'N', 'N', av, db, true, false)
             @test Array(C) ≈ view(a, 2:3, :) * b
@@ -206,6 +216,7 @@ end
         @test Array(asv * dxs) ≈ view(as, 1:2:8, :) * xs
 
         for alg in (:auto, :simd, :GPUArrays)
+            skipped(alg) && continue
             C = MtlArray(zeros(T, 4, 5))
             @with (Metal.matmul_alg => alg) LinearAlgebra.mul!(C, 'N', 'N', asv, bsv, true, false)
             @test Array(C) ≈ view(as, 1:2:8, :) * view(bs, :, 1:2:10)
@@ -217,6 +228,7 @@ end
 
         # strided destination
         for alg in (:auto, :simd, :GPUArrays)
+            skipped(alg) && continue
             cs = rand(T, 8, 5)
             dcs = MtlArray(cs)
             mul!(view(cs, 1:2:8, :), view(as, 1:2:8, :), view(bs, :, 1:2:10), 2.0f0, 1.0f0)
@@ -231,6 +243,7 @@ end
         da2 = MtlArray(a2)
         db2 = MtlArray(b2)
         for alg in (:auto, :simd, :GPUArrays)
+            skipped(alg) && continue
             c2 = rand(T, 4, 5)
             dc2 = MtlArray(c2)
             mul!(view(c2, 1:2, :), a2, b2)
@@ -245,6 +258,7 @@ end
     A, B, C, x = rand(Float32, 20, 30), rand(Float32, 30, 10), rand(Float32, 20, 10), rand(Float32, 30)
     dA, dB, dC, dx = MtlArray.((A, B, C, x))
     for alg in (:auto, :native, :simd, :GPUArrays)
+        skipped(alg) && continue
         dc = copy(dC)
         @with (Metal.matmul_alg => alg) mul!(dc, dA, dB, 2, 0.5)
         @test Array(dc) ≈ 2 * A * B + C / 2
@@ -294,6 +308,7 @@ end
         vec = c isa AbstractVector
         # Float64 scalars must not reach the kernels
         for alg in (:auto, :native, :simd, :GPUArrays), (α, β) in ((2f0, 0.5f0), (2, 0.5))
+            skipped(alg) && continue
             dc, da, db = f(copy(dC), dA, dB, dx, copy(dy))
             @with (Metal.matmul_alg => alg) mul!(dc, da, db, α, β)
             @test Array(dc) ≈ ref
@@ -368,8 +383,8 @@ end
     @testset "$T $tA$tB α=$α β=$β" for T in (Float32, Float16, BFloat16),
                                         (tA, tB) in (("N","N"), ("N","T"), ("T","N"), ("T","T")),
                                         (α, β) in ((T(1), T(0)), (T(2), T(0)), (T(1), T(1)), (T(2), T(3)))
-        @test nativetest(T, 64, 48, 32, only(tA), only(tB), α, β; alg=:simd)   # aligned
-        @test nativetest(T, 65, 47, 33, only(tA), only(tB), α, β; alg=:simd)   # ragged
+        @test nativetest(T, 64, 48, 32, only(tA), only(tB), α, β; alg=:simd) skip=!supported(:simd)  # aligned
+        @test nativetest(T, 65, 47, 33, only(tA), only(tB), α, β; alg=:simd) skip=!supported(:simd)  # ragged
     end
 
     # generic fallback of `:native` (ComplexF32, Int32): includes conjugate transpose
@@ -383,6 +398,7 @@ end
     # offset views (dense MtlMatrix with offset≠0): the case MPSGraph falls back on
     @testset "offset views" begin
         for (T, alg) in ((Float32, :simd), (ComplexF32, :native))
+            skipped(alg) && continue
             P = MtlArray(mk(T, (40, 60))); Q = MtlArray(mk(T, (32, 50)))
             A = view(P, :, 3:34)      # 40×32, offset≠0, dense
             B = view(Q, :, 2:41)      # 32×40, offset≠0, dense
@@ -444,6 +460,7 @@ end
         A64 = MtlArray(rand(Float32, 64, 64)); B64 = MtlArray(rand(Float32, 64, 64))
         ref = Symmetric(Array(A64)) * Array(B64)
         for alg in (:simd, :GPUArrays)
+            skipped(alg) && continue
             C64 = MtlArray(zeros(Float32, 64, 64))
             @with (Metal.matmul_alg => alg) mul!(C64, Symmetric(A64), B64)
             @test isapprox(Array(C64), ref; rtol=tol(Float32))
@@ -464,11 +481,15 @@ end
 
     # differential check: native must agree with MPSGraph where MPSGraph applies
     @testset "differential vs MPSGraph" begin
-        A = MtlArray(rand(Float32, 96, 80)); B = MtlArray(rand(Float32, 80, 64))
-        Cj = MtlArray(zeros(Float32, 96, 64)); Cg = MtlArray(zeros(Float32, 96, 64))
-        @with (Metal.matmul_alg => :native) mul!(Cj, A, B)
-        @with (Metal.matmul_alg => :MPSGraph) mul!(Cg, A, B)
-        @test isapprox(Array(Cj), Array(Cg); rtol=1.0f-3)
+        if supported(:MPSGraph)
+            A = MtlArray(rand(Float32, 96, 80)); B = MtlArray(rand(Float32, 80, 64))
+            Cj = MtlArray(zeros(Float32, 96, 64)); Cg = MtlArray(zeros(Float32, 96, 64))
+            @with (Metal.matmul_alg => :native) mul!(Cj, A, B)
+            @with (Metal.matmul_alg => :MPSGraph) mul!(Cg, A, B)
+            @test isapprox(Array(Cj), Array(Cg); rtol=1.0f-3)
+        else
+            @test_skip "matmul_alg = :MPSGraph"
+        end
     end
 
     # Metal 4 tensor-ops path (`:tensor`): only fires on a capable device (macOS 26+ /
@@ -615,32 +636,40 @@ end
 end
 
 using Metal: storagemode
+
+# factorizations and solves of Float32 matrices use MPS, which is optional
+mps = MPS.is_supported(device())
+
 @testset "decompositions" begin
-    A = MtlMatrix(rand(Float32, 1024, 1024))
-    lua = lu(A)
-    @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A
+    if mps
+        A = MtlMatrix(rand(Float32, 1024, 1024))
+        lua = lu(A)
+        @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A
 
-    A = MtlMatrix(rand(Float32, 1024, 512))
-    lua = lu(A)
-    @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A
+        A = MtlMatrix(rand(Float32, 1024, 512))
+        lua = lu(A)
+        @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A
 
-    A = MtlMatrix(rand(Float32, 512, 1024))
-    lua = lu(A)
-    @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A
+        A = MtlMatrix(rand(Float32, 512, 1024))
+        lua = lu(A)
+        @test lua.L * lua.U ≈ MtlMatrix(lua.P) * A
 
-    a = rand(Float32, 1024, 1024)
-    A = MtlMatrix(a)
-    B = MtlMatrix(a)
-    lua = lu!(A)
-    @test lua.L * lua.U ≈ MtlMatrix(lua.P) * B
+        a = rand(Float32, 1024, 1024)
+        A = MtlMatrix(a)
+        B = MtlMatrix(a)
+        lua = lu!(A)
+        @test lua.L * lua.U ≈ MtlMatrix(lua.P) * B
 
-    # singular matrices report the first zero pivot, like LAPACK
-    a = Float32[1 2; 2 4]
-    A = MtlMatrix(a)
-    @test_throws SingularException(2) lu(A)
-    @test_throws SingularException(2) lu!(copy(A))
-    @test_throws SingularException(2) A \ MtlVector(Float32[1, 2])
-    @test lu(A; check=false).info == lu(a; check=false).info
+        # singular matrices report the first zero pivot, like LAPACK
+        a = Float32[1 2; 2 4]
+        A = MtlMatrix(a)
+        @test_throws SingularException(2) lu(A)
+        @test_throws SingularException(2) lu!(copy(A))
+        @test_throws SingularException(2) A \ MtlVector(Float32[1, 2])
+        @test lu(A; check=false).info == lu(a; check=false).info
+    else
+        @test_skip "Float32 LU (MPS)"
+    end
 
     # MPS only decomposes Float32 matrices, and aborts the process on others; they use
     # LinearAlgebra's generic implementation instead, which needs CPU access to the array
@@ -649,16 +678,21 @@ using Metal: storagemode
         A = MtlMatrix(a)
         lua = lu(A)
         @test Array(lua.L * lua.U) ≈ a[lua.p, :]
-        @test Array(cholesky(A).U) ≈ cholesky(a).U
+        # (cholesky promotes to Float32)
+        @test Array(cholesky(A).U) ≈ cholesky(a).U skip=!mps
         @test Array(A \ MtlVector(Float16[1, 2])) ≈ a \ Float16[1, 2]
     end
 
-    altStorage = Metal.DefaultStorageMode != Metal.SharedStorage ? Metal.SharedStorage : Metal.PrivateStorage
-    A = MtlMatrix{Float32, altStorage}(rand(Float32, 1024, 1024))
-    lua = lu(A)
-    @test storagemode(lua.factors) == storagemode(lua.ipiv) == storagemode(A)
-    lua = lu!(A)
-    @test storagemode(lua.factors) == storagemode(lua.ipiv) == storagemode(A)
+    if mps
+        altStorage = Metal.DefaultStorageMode != Metal.SharedStorage ? Metal.SharedStorage : Metal.PrivateStorage
+        A = MtlMatrix{Float32, altStorage}(rand(Float32, 1024, 1024))
+        lua = lu(A)
+        @test storagemode(lua.factors) == storagemode(lua.ipiv) == storagemode(A)
+        lua = lu!(A)
+        @test storagemode(lua.factors) == storagemode(lua.ipiv) == storagemode(A)
+    else
+        @test_skip "Float32 LU (MPS)"
+    end
 
     @testset "empty $(M)×$(N)" for (M, N) in ((0, 0), (0, 3), (3, 0))
         A = MtlMatrix{Float32}(undef, M, N)
@@ -690,32 +724,36 @@ end
     dB = MtlMatrix(B)
     dBR = MtlMatrix(BR)
 
-    @test Array(dA \ db) ≈ A \ b rtol=1f-4
-    @test Array(dA \ dB) ≈ A \ B rtol=1f-4
+    if mps
+        @test Array(dA \ db) ≈ A \ b rtol=1f-4
+        @test Array(dA \ dB) ≈ A \ B rtol=1f-4
 
-    # Regression coverage for JuliaGPU/Metal.jl#145: older MPS solve code reported
-    # blocks of NaNs for systems larger than 128x128.
-    nlarge = 160
-    Alarge = rand(T, nlarge, nlarge)
-    Alarge .+= T(nlarge) .* Matrix{T}(I, nlarge, nlarge)
-    Blarge = rand(T, nlarge, nlarge)
-    dAlarge = MtlMatrix(Alarge)
-    dBlarge = MtlMatrix(Blarge)
-    xlarge = Array(dAlarge \ dBlarge)
-    @test all(isfinite, xlarge)
-    @test xlarge ≈ Alarge \ Blarge rtol=1f-4
-    Flarge = lu(dAlarge)
-    xlarge = Array(Flarge \ dBlarge)
-    @test all(isfinite, xlarge)
-    @test xlarge ≈ Alarge \ Blarge rtol=1f-4
-    Ularge = UpperTriangular(MtlMatrix(triu(Alarge)))
-    xlarge = Array(Ularge \ dBlarge)
-    @test all(isfinite, xlarge)
-    @test xlarge ≈ UpperTriangular(triu(Alarge)) \ Blarge rtol=1f-4
-    Llarge = LowerTriangular(MtlMatrix(tril(Alarge)))
-    xlarge = Array(Llarge \ dBlarge)
-    @test all(isfinite, xlarge)
-    @test xlarge ≈ LowerTriangular(tril(Alarge)) \ Blarge rtol=1f-4
+        # Regression coverage for JuliaGPU/Metal.jl#145: older MPS solve code reported
+        # blocks of NaNs for systems larger than 128x128.
+        nlarge = 160
+        Alarge = rand(T, nlarge, nlarge)
+        Alarge .+= T(nlarge) .* Matrix{T}(I, nlarge, nlarge)
+        Blarge = rand(T, nlarge, nlarge)
+        dAlarge = MtlMatrix(Alarge)
+        dBlarge = MtlMatrix(Blarge)
+        xlarge = Array(dAlarge \ dBlarge)
+        @test all(isfinite, xlarge)
+        @test xlarge ≈ Alarge \ Blarge rtol=1f-4
+        Flarge = lu(dAlarge)
+        xlarge = Array(Flarge \ dBlarge)
+        @test all(isfinite, xlarge)
+        @test xlarge ≈ Alarge \ Blarge rtol=1f-4
+        Ularge = UpperTriangular(MtlMatrix(triu(Alarge)))
+        xlarge = Array(Ularge \ dBlarge)
+        @test all(isfinite, xlarge)
+        @test xlarge ≈ UpperTriangular(triu(Alarge)) \ Blarge rtol=1f-4
+        Llarge = LowerTriangular(MtlMatrix(tril(Alarge)))
+        xlarge = Array(Llarge \ dBlarge)
+        @test all(isfinite, xlarge)
+        @test xlarge ≈ LowerTriangular(tril(Alarge)) \ Blarge rtol=1f-4
+    else
+        @test_skip "Float32 solves (MPS)"
+    end
 
     Als = rand(T, 8, 7)
     bls = rand(T, 8)
@@ -727,64 +765,68 @@ end
         @test dAls \ dbls ≈ Als \ bls rtol=1f-4
     end
 
-    Ap = T[0 2 1; 1 1 0; 2 0 1]
-    bp = T[1, 2, 3]
-    dAp = MtlMatrix(Ap)
-    dbp = MtlVector(bp)
-    Fp = lu(dAp)
-    @test Array(Fp \ dbp) ≈ Ap \ bp rtol=1f-4
-    xp = copy(dbp)
-    ldiv!(Fp, xp)
-    @test Array(xp) ≈ Ap \ bp rtol=1f-4
-    xp = similar(dbp)
-    ldiv!(xp, Fp, dbp)
-    @test Array(xp) ≈ Ap \ bp rtol=1f-4
+    if mps
+        Ap = T[0 2 1; 1 1 0; 2 0 1]
+        bp = T[1, 2, 3]
+        dAp = MtlMatrix(Ap)
+        dbp = MtlVector(bp)
+        Fp = lu(dAp)
+        @test Array(Fp \ dbp) ≈ Ap \ bp rtol=1f-4
+        xp = copy(dbp)
+        ldiv!(Fp, xp)
+        @test Array(xp) ≈ Ap \ bp rtol=1f-4
+        xp = similar(dbp)
+        ldiv!(xp, Fp, dbp)
+        @test Array(xp) ≈ Ap \ bp rtol=1f-4
 
-    F = lu(dA)
-    @test Array(F \ db) ≈ A \ b rtol=1f-4
-    @test Array(F \ dB) ≈ A \ B rtol=1f-4
-    x = copy(db)
-    ldiv!(F, x)
-    @test Array(x) ≈ A \ b rtol=1f-4
-    x = similar(db)
-    ldiv!(x, F, db)
-    @test Array(x) ≈ A \ b rtol=1f-4
+        F = lu(dA)
+        @test Array(F \ db) ≈ A \ b rtol=1f-4
+        @test Array(F \ dB) ≈ A \ B rtol=1f-4
+        x = copy(db)
+        ldiv!(F, x)
+        @test Array(x) ≈ A \ b rtol=1f-4
+        x = similar(db)
+        ldiv!(x, F, db)
+        @test Array(x) ≈ A \ b rtol=1f-4
 
-    M = rand(T, n, n)
-    SPD = M'M + T(n) .* Matrix{T}(I, n, n)
-    dSPD = MtlMatrix(SPD)
-    C = cholesky(dSPD)
-    @test Array(C \ db) ≈ SPD \ b rtol=1f-4
+        M = rand(T, n, n)
+        SPD = M'M + T(n) .* Matrix{T}(I, n, n)
+        dSPD = MtlMatrix(SPD)
+        C = cholesky(dSPD)
+        @test Array(C \ db) ≈ SPD \ b rtol=1f-4
 
-    CS = cholesky(Symmetric(dSPD, :L))
-    @test Array(CS \ dB) ≈ SPD \ B rtol=1f-4
+        CS = cholesky(Symmetric(dSPD, :L))
+        @test Array(CS \ dB) ≈ SPD \ B rtol=1f-4
 
-    CH = cholesky(Hermitian(dSPD, :U))
-    yc = copy(db)
-    ldiv!(CH, yc)
-    @test Array(yc) ≈ SPD \ b rtol=1f-4
+        CH = cholesky(Hermitian(dSPD, :U))
+        yc = copy(db)
+        ldiv!(CH, yc)
+        @test Array(yc) ≈ SPD \ b rtol=1f-4
 
-    for (triangle, cpuA) in ((UpperTriangular, triu(A)),
-                            (LowerTriangular, tril(A)),
-                            (UnitUpperTriangular, triu(A)),
-                            (UnitLowerTriangular, tril(A)))
-        dT = triangle(MtlMatrix(cpuA))
-        cT = triangle(cpuA)
-        @test Array(dT \ db) ≈ cT \ b rtol=1f-4
-        @test Array(dT \ dB) ≈ cT \ B rtol=1f-4
-        @test Array(transpose(dT) \ db) ≈ transpose(cT) \ b rtol=1f-4
-        @test Array(transpose(dT) \ dB) ≈ transpose(cT) \ B rtol=1f-4
-        @test Array(dBR / dT) ≈ BR / cT rtol=1f-4
-        @test Array(dBR / transpose(dT)) ≈ BR / transpose(cT) rtol=1f-4
-        y = copy(db)
-        ldiv!(dT, y)
-        @test Array(y) ≈ cT \ b rtol=1f-4
-        Y = copy(dBR)
-        rdiv!(Y, dT)
-        @test Array(Y) ≈ BR / cT rtol=1f-4
-        Yt = copy(dBR)
-        rdiv!(Yt, transpose(dT))
-        @test Array(Yt) ≈ BR / transpose(cT) rtol=1f-4
+        for (triangle, cpuA) in ((UpperTriangular, triu(A)),
+                                (LowerTriangular, tril(A)),
+                                (UnitUpperTriangular, triu(A)),
+                                (UnitLowerTriangular, tril(A)))
+            dT = triangle(MtlMatrix(cpuA))
+            cT = triangle(cpuA)
+            @test Array(dT \ db) ≈ cT \ b rtol=1f-4
+            @test Array(dT \ dB) ≈ cT \ B rtol=1f-4
+            @test Array(transpose(dT) \ db) ≈ transpose(cT) \ b rtol=1f-4
+            @test Array(transpose(dT) \ dB) ≈ transpose(cT) \ B rtol=1f-4
+            @test Array(dBR / dT) ≈ BR / cT rtol=1f-4
+            @test Array(dBR / transpose(dT)) ≈ BR / transpose(cT) rtol=1f-4
+            y = copy(db)
+            ldiv!(dT, y)
+            @test Array(y) ≈ cT \ b rtol=1f-4
+            Y = copy(dBR)
+            rdiv!(Y, dT)
+            @test Array(Y) ≈ BR / cT rtol=1f-4
+            Yt = copy(dBR)
+            rdiv!(Yt, transpose(dT))
+            @test Array(Yt) ≈ BR / transpose(cT) rtol=1f-4
+        end
+    else
+        @test_skip "Float32 factorizations and solves (MPS)"
     end
 
     @testset "empty $(triangle)" for triangle in (UpperTriangular, UnitLowerTriangular)
@@ -797,31 +839,35 @@ end
         @test size(triangle(dA) \ MtlMatrix{T}(undef, n, 0)) == (n, 0)
     end
 
-    @testset "empty LU and Cholesky" begin
-        E, W, Z = MtlMatrix{T}(undef, 0, 0), MtlMatrix{T}(undef, 0, 3), MtlMatrix{T}(undef, n, 0)
-        @test size(E \ W) == (0, 3)
-        @test size(lu(E) \ W) == (0, 3)
-        @test size(cholesky(E) \ W) == (0, 3)
-        @test size(dA \ Z) == (n, 0)
-        @test size(F \ Z) == (n, 0)
-        @test size(C \ Z) == (n, 0)
-        # without right hand sides, the coefficient matrix is still checked
-        @test_throws SingularException MtlMatrix(T[1 2; 2 4]) \ MtlMatrix{T}(undef, 2, 0)
+    if mps
+        @testset "empty LU and Cholesky" begin
+            E, W, Z = MtlMatrix{T}(undef, 0, 0), MtlMatrix{T}(undef, 0, 3), MtlMatrix{T}(undef, n, 0)
+            @test size(E \ W) == (0, 3)
+            @test size(lu(E) \ W) == (0, 3)
+            @test size(cholesky(E) \ W) == (0, 3)
+            @test size(dA \ Z) == (n, 0)
+            @test size(F \ Z) == (n, 0)
+            @test size(C \ Z) == (n, 0)
+            # without right hand sides, the coefficient matrix is still checked
+            @test_throws SingularException MtlMatrix(T[1 2; 2 4]) \ MtlMatrix{T}(undef, 2, 0)
+        end
+
+        dsing = MtlMatrix(T[1 2; 2 4])
+        bsing = MtlVector(T[1, 2])
+        @test_throws SingularException dsing \ bsing
+
+        dnonposdef = MtlMatrix(T[1 2; 2 1])
+        @test_throws PosDefException cholesky(dnonposdef)
+
+        # outputs should inherit the storage mode of the inputs
+        altStorage = Metal.DefaultStorageMode != Metal.PrivateStorage ? Metal.PrivateStorage : Metal.SharedStorage
+        aA = MtlMatrix{T,altStorage}(A)
+        ab = MtlVector{T,altStorage}(b)
+        @test storagemode(aA \ ab) == altStorage
+        @test storagemode(cholesky(MtlMatrix{T,altStorage}(SPD)).factors) == altStorage
+    else
+        @test_skip "Float32 factorizations and solves (MPS)"
     end
-
-    dsing = MtlMatrix(T[1 2; 2 4])
-    bsing = MtlVector(T[1, 2])
-    @test_throws SingularException dsing \ bsing
-
-    dnonposdef = MtlMatrix(T[1 2; 2 1])
-    @test_throws PosDefException cholesky(dnonposdef)
-
-    # outputs should inherit the storage mode of the inputs
-    altStorage = Metal.DefaultStorageMode != Metal.PrivateStorage ? Metal.PrivateStorage : Metal.SharedStorage
-    aA = MtlMatrix{T,altStorage}(A)
-    ab = MtlVector{T,altStorage}(b)
-    @test storagemode(aA \ ab) == altStorage
-    @test storagemode(cholesky(MtlMatrix{T,altStorage}(SPD)).factors) == altStorage
 end
 
 @testset "derived" begin
@@ -832,55 +878,59 @@ end
     A .+= T(n) .* Matrix{T}(I, n, n)
     dA = MtlMatrix(A)
 
-    F = lu(dA)
-    cF = lu(A)
-    @test det(dA) ≈ det(A) rtol=1f-4
-    @test det(F) ≈ det(cF) rtol=1f-4
+    if mps
+        F = lu(dA)
+        cF = lu(A)
+        @test det(dA) ≈ det(A) rtol=1f-4
+        @test det(F) ≈ det(cF) rtol=1f-4
 
-    logabs, sgndet = logabsdet(dA)
-    clogabs, csgndet = logabsdet(A)
-    @test logabs ≈ clogabs rtol=1f-4
-    @test sgndet ≈ csgndet
-    flogabs, fsgndet = logabsdet(F)
-    cflogabs, fcsgndet = logabsdet(cF)
-    @test flogabs ≈ cflogabs rtol=1f-4
-    @test fsgndet ≈ fcsgndet
-    @test logdet(dA) ≈ logdet(A) rtol=1f-4
-    @test logdet(F) ≈ logdet(cF) rtol=1f-4
+        logabs, sgndet = logabsdet(dA)
+        clogabs, csgndet = logabsdet(A)
+        @test logabs ≈ clogabs rtol=1f-4
+        @test sgndet ≈ csgndet
+        flogabs, fsgndet = logabsdet(F)
+        cflogabs, fcsgndet = logabsdet(cF)
+        @test flogabs ≈ cflogabs rtol=1f-4
+        @test fsgndet ≈ fcsgndet
+        @test logdet(dA) ≈ logdet(A) rtol=1f-4
+        @test logdet(F) ≈ logdet(cF) rtol=1f-4
 
-    invA = inv(dA)
-    @test Array(invA) ≈ inv(A) rtol=1f-4
-    @test Array(inv(F)) ≈ inv(cF) rtol=1f-4
-    @test Array(invA * dA) ≈ Matrix{T}(I, n, n) rtol=1f-4
+        invA = inv(dA)
+        @test Array(invA) ≈ inv(A) rtol=1f-4
+        @test Array(inv(F)) ≈ inv(cF) rtol=1f-4
+        @test Array(invA * dA) ≈ Matrix{T}(I, n, n) rtol=1f-4
 
-    M = rand(T, n, n)
-    SPD = M'M + T(n) .* Matrix{T}(I, n, n)
-    dSPD = MtlMatrix(SPD)
-    C = cholesky(dSPD)
-    cC = cholesky(SPD)
-    @test det(C) ≈ det(cC) rtol=1f-4
-    @test logdet(C) ≈ logdet(cC) rtol=1f-4
-    clogabs, csgndet = logabsdet(C)
-    cclogabs, ccsgndet = logabsdet(cC)
-    @test clogabs ≈ cclogabs rtol=1f-4
-    @test csgndet ≈ ccsgndet
-    @test Array(inv(C)) ≈ inv(cC) rtol=1f-4
+        M = rand(T, n, n)
+        SPD = M'M + T(n) .* Matrix{T}(I, n, n)
+        dSPD = MtlMatrix(SPD)
+        C = cholesky(dSPD)
+        cC = cholesky(SPD)
+        @test det(C) ≈ det(cC) rtol=1f-4
+        @test logdet(C) ≈ logdet(cC) rtol=1f-4
+        clogabs, csgndet = logabsdet(C)
+        cclogabs, ccsgndet = logabsdet(cC)
+        @test clogabs ≈ cclogabs rtol=1f-4
+        @test csgndet ≈ ccsgndet
+        @test Array(inv(C)) ≈ inv(cC) rtol=1f-4
 
-    pivotA = T[0 1; 1 0]
-    dpivotA = MtlMatrix(pivotA)
-    @test det(dpivotA) ≈ det(pivotA)
-    _, pivotsign = logabsdet(dpivotA)
-    @test pivotsign ≈ -one(T)
+        pivotA = T[0 1; 1 0]
+        dpivotA = MtlMatrix(pivotA)
+        @test det(dpivotA) ≈ det(pivotA)
+        _, pivotsign = logabsdet(dpivotA)
+        @test pivotsign ≈ -one(T)
 
-    dsing = MtlMatrix(T[1 2; 2 4])
-    @test det(dsing) == zero(T)
+        dsing = MtlMatrix(T[1 2; 2 4])
+        @test det(dsing) == zero(T)
 
-    altStorage = Metal.DefaultStorageMode != Metal.PrivateStorage ? Metal.PrivateStorage : Metal.SharedStorage
-    aA = MtlMatrix{T,altStorage}(A)
-    aSPD = MtlMatrix{T,altStorage}(SPD)
-    @test storagemode(inv(aA)) == altStorage
-    @test storagemode(inv(lu(aA))) == altStorage
-    @test storagemode(inv(cholesky(aSPD))) == altStorage
+        altStorage = Metal.DefaultStorageMode != Metal.PrivateStorage ? Metal.PrivateStorage : Metal.SharedStorage
+        aA = MtlMatrix{T,altStorage}(A)
+        aSPD = MtlMatrix{T,altStorage}(SPD)
+        @test storagemode(inv(aA)) == altStorage
+        @test storagemode(inv(lu(aA))) == altStorage
+        @test storagemode(inv(cholesky(aSPD))) == altStorage
+    else
+        @test_skip "Float32 factorizations (MPS)"
+    end
 
     @test tr(dA) ≈ tr(A)
     @test det(UpperTriangular(dA)) ≈ det(UpperTriangular(A)) rtol=1f-4

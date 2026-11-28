@@ -139,6 +139,24 @@ if args.list === nothing
     end
 end
 
+# MPS and MPSGraph are optional, and Metal implementations other than Apple's may lack them.
+# Their tests are then recorded as skipped, also when named on the command line.
+let dev = Metal.device(),
+    mps = Metal.MPS.is_supported(dev), mpsgraph = Metal.MPSGraphs.is_supported(dev)
+    for name in collect(keys(testsuite))
+        framework = if !mpsgraph && (startswith(name, "libraries/mpsgraphs/") ||
+                                     name == "core/fft")
+            "MPSGraph"
+        elseif !mps && startswith(name, "libraries/mps/") &&
+               name != "libraries/mps/size"  # (only Julia types)
+            "MPS"
+        else
+            continue
+        end
+        testsuite[name] = :(@test_skip $("$framework is not supported on $(dev.name)"))
+    end
+end
+
 # workers to run tests on
 function test_worker(name, init_worker_code)
     if name == "tools/capturing"

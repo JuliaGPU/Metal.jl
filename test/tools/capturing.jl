@@ -1,11 +1,16 @@
 using .MTL
 
-if shader_validation
-    @warn "Skipping capturing tests; capturing is not supported with Metal Shader Validation enabled"
-else
-
 # Verify Metal capture is enabled via environment variable
 @test capturing
+
+if shader_validation
+    @warn "Skipping capturing tests; capturing is not supported with Metal Shader Validation enabled"
+elseif !Metal.is_supported(device()) &&
+       !supports_destination(MTLCaptureManager(), MTL.MTLCaptureDestinationGPUTraceDocument)
+    # other Metal implementations may not support capturing (Apple's does, so there the tests
+    # below fail instead)
+    @test_skip "capturing to a GPU trace document"
+else
 
 mktempdir() do tmpdir
 cd(tmpdir) do

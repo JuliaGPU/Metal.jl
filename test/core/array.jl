@@ -896,7 +896,13 @@ end
 
     scan_input = reshape(Float32[2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37], 3, 4)
     product_input = scan_input ./ 10
+    # MPSGraph is optional
+    mpsgraph = MPSGraphs.is_supported(device())
     for alg in (:native, :MPSGraph), dims in 1:2
+        if alg === :MPSGraph && !mpsgraph
+            @test_skip "scan_alg = :MPSGraph"
+            continue
+        end
         @with (Metal.scan_alg => alg) begin
             @test Array(accumulate(+, MtlArray(scan_input); dims)) ≈
                 accumulate(+, scan_input; dims)
@@ -916,26 +922,30 @@ end
         end
     end
 
-    @with (Metal.scan_alg => :MPSGraph) begin
-        # min, max using MPSGraph supported for Integers
-        int_input = Int32.(scan_input)
-        @test Array(accumulate(max, MtlArray(int_input); dims=1)) ≈
-            accumulate(max, int_input; dims=1)
-        @test Array(accumulate(min, MtlArray(int_input); dims=2)) ≈
-            accumulate(min, int_input; dims=2)
+    if mpsgraph
+        @with (Metal.scan_alg => :MPSGraph) begin
+            # min, max using MPSGraph supported for Integers
+            int_input = Int32.(scan_input)
+            @test Array(accumulate(max, MtlArray(int_input); dims=1)) ≈
+                accumulate(max, int_input; dims=1)
+            @test Array(accumulate(min, MtlArray(int_input); dims=2)) ≈
+                accumulate(min, int_input; dims=2)
 
-        # but not for floating point
-        nan_input = Float32[1, NaN, 0.5, 2]
-        @test_throws ArgumentError accumulate(max, MtlArray(nan_input))
-        @test_throws ArgumentError accumulate(min, MtlArray(nan_input))
+            # but not for floating point
+            nan_input = Float32[1, NaN, 0.5, 2]
+            @test_throws ArgumentError accumulate(max, MtlArray(nan_input))
+            @test_throws ArgumentError accumulate(min, MtlArray(nan_input))
 
-        # an `init` of the input's element type
-        @test Array(accumulate(+, MtlArray(scan_input); dims=1, init=1.0f0)) ≈
-            accumulate(+, scan_input; dims=1, init=1.0f0)
+            # an `init` of the input's element type
+            @test Array(accumulate(+, MtlArray(scan_input); dims=1, init=1.0f0)) ≈
+                accumulate(+, scan_input; dims=1, init=1.0f0)
 
-        # invalid eltype and kwargs
-        @test_throws ArgumentError accumulate(+, MtlArray(Complex{Int32}.(int_input)))
-        @test_throws ArgumentError accumulate(+, MtlArray(int_input); dims=1, init=1)
+            # invalid eltype and kwargs
+            @test_throws ArgumentError accumulate(+, MtlArray(Complex{Int32}.(int_input)))
+            @test_throws ArgumentError accumulate(+, MtlArray(int_input); dims=1, init=1)
+        end
+    else
+        @test_skip "scan_alg = :MPSGraph"
     end
 
     large_nan_input = ones(Float32, Metal.mpsgraph_scan_threshold + 1)
