@@ -149,6 +149,7 @@ with macOS 26.
 
 ```@docs
 MtlInlineTensor
+MtlCooperativeTensor
 TensorOpsMatmul2D
 matmul2d_descriptor
 Metal.Matmul2DMode
