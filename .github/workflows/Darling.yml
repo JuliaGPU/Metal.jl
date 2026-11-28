@@ -1,0 +1,100 @@
+name: Darling
+
+# Runs the core tests on Linux, under Darling (https://github.com/darlinghq/darling) with its
+# Metal implementation over Vulkan, on lavapipe (Mesa's CPU driver). Darling's support for
+# Metal.jl is still incomplete, so this job doesn't fail the build. The patched Darling comes
+# from https://github.com/maleadt/MetalDarling, pinned to a release: its runtime image (Darling,
+# Mesa, and the macOS x86_64 Julia) and the scripts that drive it.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  METALDARLING_COMMIT: bfc61f37da11bad4d56e3337cae26f6d940ae3d8
+  METALDARLING_IMAGE: ghcr.io/maleadt/metaldarling@sha256:40dc51fdea5e4ff217c0aac0770b8469302f510b305145065503683adfb1f084
+
+jobs:
+  core:
+    name: Core tests (lavapipe)
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: Metal.jl
+      - uses: actions/checkout@v7
+        with:
+          repository: maleadt/MetalDarling
+          ref: ${{ env.METALDARLING_COMMIT }}
+          path: metaldarling
+
+      - name: Free up disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+
+      # the image's Julia version, so that the manifest resolves the same way
+      - name: Read the Julia version
+        id: julia
+        run: python3 -I -c 'import tomllib; print("version=" + tomllib.load(open("metaldarling/stack.toml", "rb"))["julia"]["version"])' >> "$GITHUB_OUTPUT"
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: ${{ steps.julia.outputs.version }}
+
+      # Julia can't download over HTTPS under Darling, so the depot is built here, with the
+      # macOS artifacts
+      - name: Build the depot
+        run: |
+          printf '[Metal]\nallow_unsupported_devices = true\n' > Metal.jl/LocalPreferences.toml
+          julia metaldarling/scripts/make-depot.jl depot Metal.jl
+
+      - name: Pull the image
+        run: docker pull "$METALDARLING_IMAGE"
+
+      # Precompiling under Darling takes a while, and a precompile process occasionally hangs;
+      # a retry keeps what was precompiled.
+      - name: Load Metal.jl
+        run: |
+          for attempt in 1 2 3; do
+            rc=0
+            metaldarling/scripts/run-darling.sh --image "$METALDARLING_IMAGE" --container darling \
+              --gpu lavapipe --metal Metal.jl --depot depot --timeout 2400 \
+              metaldarling/scripts/load-metal.jl || rc=$?
+            [ $rc = 124 ] || exit $rc
+            echo "::warning::Loading Metal.jl timed out (attempt $attempt)"
+          done
+          exit 1
+
+      - name: Run the core tests
+        run: |
+          # run-darling.sh activates the checkout and copies in only the script itself
+          cat > runtests-darling.jl <<'EOF'
+          using Metal
+          Metal.functional() || error("Metal.jl is not functional under Darling")
+          const testdir = normpath(joinpath(@__DIR__, "..", "Metal.jl", "test"))
+          Base.set_active_project(joinpath(testdir, "Project.toml"))
+          cd(testdir)
+          include(joinpath(testdir, "runtests.jl"))
+          EOF
+          set +e
+          metaldarling/scripts/run-darling.sh --image "$METALDARLING_IMAGE" --container darling \
+            --gpu lavapipe --timeout 14400 runtests-darling.jl --jobs=2 --verbose core |
+            tee tests.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          { echo '```'; grep -A3 '^Test Summary' tests.log | tail -4; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
