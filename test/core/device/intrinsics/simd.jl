@@ -1,5 +1,9 @@
 using Metal: metal_support
 
+# the SIMD-group width kernels are compiled for: 32 on Apple GPUs, but other Metal
+# implementations can have other widths (`threadExecutionWidth`)
+const W = Metal.simd_width(device())
+
 @testset "shuffle functions" begin
     shuffle_test_types = [Float32, Float16,
                           Int32, UInt32, Int16, UInt16,
@@ -13,7 +17,7 @@ using Metal: metal_support
             return
         end
 
-        threadsPerSimdgroup = 32
+        threadsPerSimdgroup = W
 
         @testset "$T" for T in shuffle_test_types
             a = rand(T, threadsPerSimdgroup)
@@ -33,7 +37,7 @@ using Metal: metal_support
             return
         end
 
-        threadsPerSimdgroup = 32
+        threadsPerSimdgroup = W
 
         # tests that each pair of values a get swapped using sub_group_shuffle_xor
         @testset "T" for T in shuffle_test_types
@@ -45,43 +49,45 @@ using Metal: metal_support
         end
     end
 
-    @testset "$f" for (f,res_idx) in [(simd_shuffle_down, 1), (simd_shuffle_up, 32)]
+    @testset "$f" for (f,res_idx) in [(simd_shuffle_down, 1), (simd_shuffle_up, W)]
         function kernel(a::MtlDeviceVector{T}, b::MtlDeviceVector{T}) where T
             idx = thread_position_in_grid().x
             idx_in_simd = thread_index_in_simdgroup()
             simd_idx = simdgroup_index_in_threadgroup()
 
-            temp = MtlThreadGroupArray(T, 32)
+            temp = MtlThreadGroupArray(T, W)
             temp[idx] = a[idx]
             simdgroup_barrier(Metal.MemoryFlagThreadGroup)
 
             if simd_idx == 1
                 value = temp[idx_in_simd]
 
-                value = value + f(value, 16)
-                value = value + f(value,  8)
-                value = value + f(value,  4)
-                value = value + f(value,  2)
-                value = value + f(value,  1)
+                # a tree reduction over the SIMD-group
+                offset = W ÷ 2
+                while offset > 0
+                    value = value + f(value, offset)
+                    offset ÷= 2
+                end
 
                 b[idx] = value
             end
             return
         end
         @testset "$typ" for typ in shuffle_test_types
-            dev_a = Metal.zeros(typ, 32; storage=Metal.SharedStorage)
-            dev_b = Metal.zeros(typ, 32; storage=Metal.SharedStorage)
+            dev_a = Metal.zeros(typ, W; storage=Metal.SharedStorage)
+            dev_b = Metal.zeros(typ, W; storage=Metal.SharedStorage)
             synchronize()
-            a = unsafe_wrap(Array{typ}, dev_a, 32)
-            b = unsafe_wrap(Array{typ}, dev_b, 32)
+            a = unsafe_wrap(Array{typ}, dev_a, W)
+            b = unsafe_wrap(Array{typ}, dev_b, W)
 
             rand!(a, (1:4))
-            Metal.@sync @metal threads=32 kernel(dev_a, dev_b)
-            @test sum(a) ≈ b[res_idx]
+            Metal.@sync @metal threads=W kernel(dev_a, dev_b)
+            # (`reduce` rather than `sum`, which widens small integers that the kernel wraps)
+            @test reduce(+, a) ≈ b[res_idx]
         end
     end
     @testset "$f" for (f,nshift) in [(simd_shuffle_and_fill_down, -4), (simd_shuffle_and_fill_up, 2)]
-        function kernel_mod(data::MtlDeviceVector{T}, filling_data::MtlDeviceVector{T}, modulo) where T
+        function kernel_mod(data::MtlDeviceVector{T}, filling_data::MtlDeviceVector{T}, delta, modulo) where T
             idx = thread_position_in_grid().x
             idx_in_simd = thread_index_in_simdgroup() #simd_lane_id
             simd_idx = simdgroup_index_in_threadgroup() #simd_group_id
@@ -96,7 +102,7 @@ using Metal: metal_support
                 dat_value = temp_data[idx_in_simd]
                 dat_fil_value = temp_filling_data[idx_in_simd]
 
-                value = f(dat_value, dat_fil_value, abs(nshift), modulo)
+                value = f(dat_value, dat_fil_value, delta, modulo)
 
                 data[idx] = value
             end
@@ -104,20 +110,23 @@ using Metal: metal_support
         end
 
         @testset "$typ" for typ in shuffle_test_types
-            N = 16
+            # one SIMD-group
+            N = min(16, W)
             midN = N ÷ 2
+            # less than both moduli, so that no shift is the identity
+            shift = sign(nshift) * min(abs(nshift), midN - 1)
 
             data = Array{typ}(1:N)
             mtldata = MtlArray(data)
             mtlfilling = MtlArray(data)
 
-            Metal.@sync @metal threads=N kernel_mod(mtldata, mtlfilling, N)
-            @test Array(mtldata) == circshift(data, nshift)
+            Metal.@sync @metal threads=N kernel_mod(mtldata, mtlfilling, abs(shift), N)
+            @test Array(mtldata) == circshift(data, shift)
 
             mtlfilling2 = MtlArray(data)
 
-            Metal.@sync @metal threads=N kernel_mod(mtlfilling2, mtlfilling, midN)
-            @test Array(mtlfilling2) == [circshift(data[1:midN], nshift); circshift(data[midN+1:end], nshift)]
+            Metal.@sync @metal threads=N kernel_mod(mtlfilling2, mtlfilling, abs(shift), midN)
+            @test Array(mtlfilling2) == [circshift(data[1:midN], shift); circshift(data[midN+1:end], shift)]
         end
     end
 
@@ -216,9 +225,9 @@ using Metal: metal_support
             return
         end
 
-        threads_per_simdgroup = 32
+        threads_per_simdgroup = W
 
-        @testset "threshold=$threshold" for threshold in [0, 1, 8, 16, 31, 32]
+        @testset "threshold=$threshold" for threshold in [0, 1, W ÷ 4, W ÷ 2, W - 1, W]
             output = MtlArray(zeros(UInt64, threads_per_simdgroup))
             Metal.@sync @metal threads = threads_per_simdgroup ballot_kernel(output, UInt32(threshold))
 
@@ -247,15 +256,15 @@ using Metal: metal_support
             return
         end
 
-        threads_per_simdgroup = 32
+        threads_per_simdgroup = W
 
         # simd_vote_all returns true only when all bits in the ballot mask are set
-        @testset "threshold=$threshold" for threshold in [0, 16, 31, 32, 33]
+        @testset "threshold=$threshold" for threshold in [0, W ÷ 2, W - 1, W, W + 1]
             output = MtlArray(zeros(UInt8, threads_per_simdgroup))
             Metal.@sync @metal threads = threads_per_simdgroup all_kernel(output, UInt32(threshold))
 
             result = Array(output)
-            # All bits set means threshold ≥ 32 (all 32 lanes voted true)
+            # All bits set means threshold ≥ W (all lanes voted true)
             expected = threshold ≥ threads_per_simdgroup
 
             @test all(result .== expected)
@@ -278,10 +287,10 @@ using Metal: metal_support
             return
         end
 
-        threads_per_simdgroup = 32
+        threads_per_simdgroup = W
 
         # simd_vote_any returns true when any bit in the ballot mask is set
-        @testset "threshold=$threshold" for threshold in [0, 1, 16, 32]
+        @testset "threshold=$threshold" for threshold in [0, 1, W ÷ 2, W]
             output = MtlArray(zeros(UInt8, threads_per_simdgroup))
             Metal.@sync @metal threads = threads_per_simdgroup any_kernel(output, UInt32(threshold))
 
@@ -389,10 +398,14 @@ end # @testset "shuffle functions"
     # `promote_bf16_intrinsics!`. Without that pass these kernels miscompile (load/multiply throw
     # or store garbage), so every BFloat16 case here doubles as a regression test for it.
     simdgroup_types = [Float16, Float32, BFloat16]
+    # SIMD-group matrices need an Apple7 GPU (see `simd_matmul_capable`); elsewhere, the
+    # tests that launch kernels using them record a skip
+    skipped() = Metal.simd_matmul_capable() ? false : (@test_skip "SIMD-group matrices"; true)
     # bf16 carries ~3 significant bits of mantissa, so matmul results need a looser tolerance.
     sg_rtol(::Type{BFloat16}) = 0.1
     sg_rtol(::Type{T}) where {T} = sqrt(eps(T))
     @testset "load_store($typ)" for typ in simdgroup_types
+        skipped() && continue
         function kernel(a::MtlDeviceArray{T}, b::MtlDeviceArray{T},
                             origin_a=(1, 1), origin_b=(1, 1)) where {T}
             sg_a = simdgroup_load(a, origin_a)
@@ -416,6 +429,7 @@ end # @testset "shuffle functions"
     end
 
     @testset "load_store_tg($typ)" for typ in simdgroup_types
+        skipped() && continue
         function kernel(a::MtlDeviceArray{T}, b::MtlDeviceArray{T}) where {T}
             pos = thread_position_in_threadgroup()
 
@@ -440,6 +454,7 @@ end # @testset "shuffle functions"
     end
 
     @testset "load_store transpose flag ($typ)" for typ in simdgroup_types
+        skipped() && continue
         # Val(false) loads/stores the transpose of the (column-major) 8x8 block
         function kernel(a::MtlDeviceArray{T}, b::MtlDeviceArray{T}) where {T}
             m = simdgroup_load(a, (1, 1), Val(false))
@@ -453,6 +468,7 @@ end # @testset "shuffle functions"
     end
 
     @testset "mul($typ)" for typ in simdgroup_types
+        skipped() && continue
         function kernel(a::MtlDeviceArray{T}, b::MtlDeviceArray{T}, c::MtlDeviceArray{T}) where {T}
             sg_a = simdgroup_load(a)
             sg_b = simdgroup_load(b)
@@ -469,6 +485,7 @@ end # @testset "shuffle functions"
     end
 
     @testset "mad($typ)" for typ in simdgroup_types
+        skipped() && continue
         function kernel(a::MtlDeviceArray{T}, b::MtlDeviceArray{T}, c::MtlDeviceArray{T},
                     d::MtlDeviceArray{T}) where {T}
             sg_a = simdgroup_load(a)
@@ -525,8 +542,10 @@ end # @testset "shuffle functions"
         @test occursin(Regex("attributes $(attrs.captures[1]) = \\{[^}]*convergent"), asm)
 
         # the downgraded form executes correctly
-        @metal threads=(8, 8) macos=v"15" kernel(a, b)
-        @test Array(a)[3:10, 2:9] == Array(b)[2:9, 4:11]
+        if !skipped()
+            @metal threads=(8, 8) macos=v"15" kernel(a, b)
+            @test Array(a)[3:10, 2:9] == Array(b)[2:9, 4:11]
+        end
 
         # the non-transposed layout (`Val(false)`) swaps the dims/strides/origin vectors,
         # so it downgrades to an *unswapped* origin and a cleared transpose flag rather
@@ -558,10 +577,12 @@ end # @testset "shuffle functions"
             simdgroup_store(m, b, (1, 1), Val(true))
             return
         end
-        c = MtlArray(rand(Float32, 8, 8))
-        d = MtlArray(zeros(Float32, 8, 8))
-        @metal threads=32 macos=v"15" kernel_nt_exec(c, d)
-        @test Array(d) == permutedims(Array(c))
+        if !skipped()
+            c = MtlArray(rand(Float32, 8, 8))
+            d = MtlArray(zeros(Float32, 8, 8))
+            @metal threads=32 macos=v"15" kernel_nt_exec(c, d)
+            @test Array(d) == permutedims(Array(c))
+        end
     end
 
     @testset "MtlSimdgroupMatrix type" begin
@@ -572,6 +593,7 @@ end # @testset "shuffle functions"
     end
 
     @testset "MtlSimdgroupMatrix fill($T)" for T in simdgroup_types
+        skipped() && continue
         function kernel(out::MtlDeviceMatrix{T}, val::T) where {T}
             m = MtlSimdgroupMatrix{T,8,8}(val)
             simdgroup_store(m, out)
@@ -584,6 +606,7 @@ end # @testset "shuffle functions"
     end
 
     @testset "MtlSimdgroupMatrix zero($T)" for T in simdgroup_types
+        skipped() && continue
         function kernel(out::MtlDeviceMatrix{T}) where {T}
             m = zero(MtlSimdgroupMatrix{T,8,8})
             simdgroup_store(m, out)
@@ -596,6 +619,7 @@ end # @testset "shuffle functions"
     end
 
     @testset "MtlSimdgroupMatrix load_store($T)" for T in simdgroup_types
+        skipped() && continue
         function kernel(a::MtlDeviceMatrix{T}, b::MtlDeviceMatrix{T}) where {T}
             m = simdgroup_load(MtlSimdgroupMatrix{T,8,8}, a)
             simdgroup_store(m, b)
@@ -609,6 +633,7 @@ end # @testset "shuffle functions"
     end
 
     @testset "MtlSimdgroupMatrix load_store with origin($T)" for T in simdgroup_types
+        skipped() && continue
         function kernel(a::MtlDeviceMatrix{T}, b::MtlDeviceMatrix{T},
                         origin_a::NTuple{2,Int64}, origin_b::NTuple{2,Int64}) where {T}
             m = simdgroup_load(MtlSimdgroupMatrix{T,8,8}, a, origin_a)
@@ -623,6 +648,7 @@ end # @testset "shuffle functions"
     end
 
     @testset "MtlSimdgroupMatrix multiply($T)" for T in simdgroup_types
+        skipped() && continue
         function kernel(a::MtlDeviceMatrix{T}, b::MtlDeviceMatrix{T}, c::MtlDeviceMatrix{T}) where {T}
             ma = simdgroup_load(MtlSimdgroupMatrix{T,8,8}, a)
             mb = simdgroup_load(MtlSimdgroupMatrix{T,8,8}, b)
@@ -638,6 +664,7 @@ end # @testset "shuffle functions"
     end
 
     @testset "MtlSimdgroupMatrix muladd($T)" for T in simdgroup_types
+        skipped() && continue
         function kernel(a::MtlDeviceMatrix{T}, b::MtlDeviceMatrix{T},
                         c::MtlDeviceMatrix{T}, d::MtlDeviceMatrix{T}) where {T}
             ma = simdgroup_load(MtlSimdgroupMatrix{T,8,8}, a)
@@ -658,6 +685,7 @@ end # @testset "shuffle functions"
     # Composed K-loop GEMM: C(8×8) = A(8×K) * B(K×8) with K=32, accumulating
     # four 8×8×8 fragment MMAs.
     @testset "MtlSimdgroupMatrix K-loop GEMM($T)" for T in simdgroup_types
+        skipped() && continue
         function kernel(A::MtlDeviceMatrix{T}, B::MtlDeviceMatrix{T}, C::MtlDeviceMatrix{T}) where {T}
             acc = zero(MtlSimdgroupMatrix{T,8,8})
             for k in 0:3
@@ -679,6 +707,7 @@ end # @testset "shuffle functions"
     # Threadgroup-memory variant: stage tiles through threadgroup memory, then
     # load fragments from there. Mirrors how Flash Attention stages K/V tiles.
     @testset "MtlSimdgroupMatrix threadgroup load($T)" for T in simdgroup_types
+        skipped() && continue
         function kernel(a::MtlDeviceMatrix{T}, b::MtlDeviceMatrix{T}) where {T}
             pos = thread_position_in_threadgroup()
             tg = MtlThreadGroupArray(T, (8, 8))
