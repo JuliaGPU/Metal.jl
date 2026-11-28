@@ -7,8 +7,8 @@
 #    over a tile decomposition. Only available on Metal4-capable devices, for the element
 #    type combinations in `GEMM_TENSOR_ELTYPES`. Matrices, and views with contiguous columns
 #    in increasing order, are read in place, also transposed ones; Symmetric/Hermitian
-#    wrappers and other views are packed into dense copies, and α and β are applied around
-#    the kernel (`gemm_tensor!`).
+#    wrappers and other views are packed into dense copies (`gemm_tensor!`). α and β are
+#    applied by the kernel itself.
 #
 #  * `gemm_simd_kernel!` is the portable fast path for `Float16`/`Float32`. It stages tiles
 #    of `op(A)`/`op(B)` into threadgroup memory (bounds-checked, so any M/N/K and
@@ -257,13 +257,13 @@ end
 # `ldb`, so views are read in place. `TRA`/`TRB` say that `A`/`B` is stored transposed, as
 # `(K, M)`/`(N, K)`; matmul2d then transposes it itself, so a transposed operand needs no copy.
 #
-# `MODE` is what happens to the product: `:overwrite` writes it to C, and `:accumulate` adds it
-# to what C holds.
+# `MODE` is what happens to the product, see `gemm_tensor_tile!`; `alpha` and `beta` are only
+# used by the modes that scale.
 function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceArray,
-                             M::Int32, N::Int32, K::Int32,
+                             alpha::P, beta::P, M::Int32, N::Int32, K::Int32,
                              ldc::Int32, lda::Int32, ldb::Int32,
                              ::Val{SM}, ::Val{SN}, ::Val{MODE},
-                             ::Val{TRA}, ::Val{TRB}) where {SM, SN, MODE, TRA, TRB}
+                             ::Val{TRA}, ::Val{TRB}) where {P, SM, SN, MODE, TRA, TRB}
     wm, wn = Int32(GEMM_TENSOR_WM), Int32(GEMM_TENSOR_WN)
     tgid  = threadgroup_position_in_grid_3d()
     sgid  = unsafe_trunc(Int32, simdgroup_index_in_threadgroup()) - Int32(1)
@@ -286,7 +286,54 @@ function gemm_tensor_kernel!(C::MtlDeviceArray, A::MtlDeviceArray, B::MtlDeviceA
     op = TensorOpsMatmul2D{matmul2d_descriptor(SM, SN; transpose_left = TRA,
                                                transpose_right = TRB, mode),
                            Int32(1)}()
-    op(mA, mB, mC)
+    gemm_tensor_tile!(op, mA, mB, mC, alpha, beta, Val(MODE))
+    return
+end
+
+# `out[i] = α·acc[i] + β·old[i]` for the slots of this thread that hold an element, or
+# `α·acc[i]` without `old`; `out` can be `acc` or `old`, as the slots line up
+@inline scaled(acc, ::Nothing, i, alpha::P, beta::P) where {P} = alpha * acc[i]
+@inline scaled(acc, old, i, alpha::P, beta::P) where {P} = alpha * acc[i] + beta * convert(P, old[i])
+@inline function scale_slots!(out, acc, old, alpha, beta)
+    n = length(acc)
+    i = Int32(1)
+    while i <= n
+        isassigned(acc, i) && (out[i] = scaled(acc, old, i, alpha, beta))
+        i += Int32(1)
+    end
+    return
+end
+
+# One tile of `C`, in one of four modes:
+#
+#  * `:overwrite`, `C = A·B`, and `:accumulate`, `C += A·B`: matmul2d writes to `C`.
+#  * `:scale`, `C = α·A·B`, and `:scale_add`, `C = α·A·B + β·C`: matmul2d writes the product
+#    to a cooperative tensor, which keeps it in thread-local memory. Each thread scales its
+#    share of the elements there, and adds its share of `C`, before the result is stored to
+#    `C` once. This is what Apple's guide calls postfix fusion.
+#
+# The scaling is done in `P`, the type of `α` and `β`, and converted for the store, see
+# `gemm_tensor!`.
+@inline function gemm_tensor_tile!(op, mA, mB, mC::MtlInlineTensor{T}, alpha::P, beta::P,
+                                   ::Val{MODE}) where {T, P, MODE}
+    if MODE === :overwrite || MODE === :accumulate
+        op(mA, mB, mC)
+        return
+    end
+
+    acc = MtlCooperativeTensor{P}(op, mA, mB)
+    op(mA, mB, acc)
+    # (the result is stored from a tensor that has the element type of `C`)
+    if MODE === :scale_add
+        old = MtlCooperativeTensor{T}(op, mA, mB)
+        copyto!(old, mC)
+        out = T === P ? acc : old
+        scale_slots!(out, acc, old, alpha, beta)
+    else
+        out = T === P ? acc : MtlCooperativeTensor{T}(op, mA, mB)
+        scale_slots!(out, acc, nothing, alpha, beta)
+    end
+    copyto!(mC, out)
     return
 end
 
@@ -435,8 +482,8 @@ Compute `C = α·op(A)·op(B) + β·C` via `tensor_ops::matmul2d`, one simdgroup
 `tile_m × tile_n` tile of `C` (Metal 4 only). The operands must be nonempty and conform;
 callers must check [`Metal.supports_tensor_matmul`](@ref) first. Matrices, and views with contiguous columns in
 increasing order, are read in place, also when transposed; other operands are packed into
-dense copies first. The product goes through a temporary when `α ≠ 1`, when `C` can't be
-written in place, or when a `Float16`/`BFloat16` `C` is scaled by `β ≠ 0, 1`.
+dense copies first. `α` and `β` are applied by the kernel that computes the product, and the
+product only goes through a temporary when `C` can't be written in place.
 `tile_*=0` selects the tiles by the rule in `gemm_tensor_tiles`; pass explicit ones to tune. Tiles
 must be multiples of 8, and at least one of them a multiple of 16.
 """
@@ -456,31 +503,27 @@ function gemm_tensor!(C::MtlMatrixOperand, A::MtlMatrixOperand, B::MtlMatrixOper
     Ad, lda, trA = tensor_operand(A, cA, (M, K))
     Bd, ldb, trB = tensor_operand(B, cB, (K, N))
 
-    # matmul2d can't scale, so α and β are applied around it. With α = 1 the product goes
-    # straight into C, added to the β-scaled C unless β = 0. Otherwise, or when C can't be
-    # laid out as a tensor, it goes into a temporary that is combined with C after. So does
-    # it for a narrow C (`Float16`, `BFloat16`) with β ≠ 0, 1: storing β·C would round it to
-    # C's precision, or overflow, before the product is added.
+    # What the kernel does with the product, see `gemm_tensor_tile!`. matmul2d can't scale,
+    # but it does all there is to do for α = 1 with β = 0 or 1; otherwise α and β are applied
+    # in the thread-local memory of a cooperative tensor. A C that can't be laid out as a
+    # tensor gets the product in a temporary, which is combined with it after.
     #
     # Scaling is done in `Tt`, `Float32` for a float destination, and converted on the store
     # into C, like the simd kernel does. α, β and the unscaled product can be out of range for
     # `Float16` while the result is not. Converting the scalars on the host also keeps
-    # `Float64` values and `Bool * BFloat16` out of the broadcasts, which
-    # can't compile them. `matmul2d` produces `Float32` for every input combination that has
-    # a float output, so the temporary has that type too.
+    # `Float64` values and `Bool * BFloat16` out of the kernel and the
+    # broadcasts, which can't compile them. `matmul2d` produces `Float32` for every input
+    # combination that has a float output, so the product has that type too.
     Tt = eltype(C) <: Integer ? eltype(C) : Float32
     α = convert(Tt, alpha)
     β = convert(Tt, beta)
     layout = tensor_layout(C)
     mode = if layout === nothing
         nothing
-    elseif isone(alpha) && (iszero(beta) || isone(beta))
-        iszero(beta) ? :overwrite : :accumulate
-    elseif isone(alpha) && eltype(C) === Tt
-        C .= β .* Tt.(C)
-        :accumulate
+    elseif isone(α) && (iszero(β) || isone(β))
+        iszero(β) ? :overwrite : :accumulate
     else
-        nothing
+        iszero(β) ? :scale : :scale_add
     end
     direct = mode !== nothing
     Cd, ldc = direct ? layout : (MtlMatrix{Tt}(undef, M, N), M)
@@ -489,7 +532,7 @@ function gemm_tensor!(C::MtlMatrixOperand, A::MtlMatrixOperand, B::MtlMatrixOper
     wm, wn = GEMM_TENSOR_WM, GEMM_TENSOR_WN
     groups = (cld(M, tile_m * wm), cld(N, tile_n * wn))
     @metal threads = wm * wn * 32 groups = groups gemm_tensor_kernel!(
-        Cd, Ad, Bd, Int32(M), Int32(N), Int32(K), Int32(ldc), Int32(lda), Int32(ldb),
+        Cd, Ad, Bd, α, β, Int32(M), Int32(N), Int32(K), Int32(ldc), Int32(lda), Int32(ldb),
         Val(Int32(tile_m)), Val(Int32(tile_n)), Val(mode),
         Val(trA), Val(trB))
 
