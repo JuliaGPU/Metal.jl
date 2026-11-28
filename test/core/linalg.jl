@@ -83,6 +83,75 @@ using LinearAlgebra, ScopedValues
     end
 end
 
+@testset "matmul precision" begin
+    @test Metal.matmul_precision[] === :default
+    @with (Metal.matmul_precision => :relaxed) @test Metal.matmul_precision[] === :relaxed
+    @test Metal.matmul_precision[] === :default
+
+    # signed inputs, compared normwise against a Float64 product: errors are about 5e-7 at
+    # full precision, and 7e-4 with operands rounded like TF32 (on an M6)
+    M, N, K = 300, 200, 512
+    a = rand(Float32, M, K) .- 0.5f0; b = rand(Float32, K, N) .- 0.5f0; x = rand(Float32, K) .- 0.5f0
+    A, B, X = MtlArray(a), MtlArray(b), MtlArray(x)
+    ref = Float64.(a) * Float64.(b)
+    vref = Float64.(a) * Float64.(x)
+    relerr(C, ref) = norm(Float64.(Array(C)) .- ref) / norm(ref)
+    @testset "$alg" for alg in (:auto, :MPSGraph, :MPS, :native, :tensor, :simd, :GPUArrays)
+        alg === :tensor && !Metal.tensor_matmul_capable() && continue
+        @testset "$precision" for (precision, rtol) in ((:default, 1e-5), (:relaxed, 2e-3))
+            C = @with (Metal.matmul_alg => alg) (Metal.matmul_precision => precision) A * B
+            @test relerr(C, ref) < rtol
+            # with α and β, and as a matrix-vector product
+            C = MtlArray(fill(1f0, M, N))
+            @with (Metal.matmul_alg => alg) (Metal.matmul_precision => precision) mul!(C, A, B, 2f0, 0.5f0)
+            @test relerr(C, 2 .* ref .+ 0.5) < rtol
+            y = @with (Metal.matmul_alg => alg) (Metal.matmul_precision => precision) A * X
+            @test relerr(y, vref) < rtol
+        end
+    end
+    # The relaxed product comes first, so that a relaxed graph that was cached for the default
+    # policy would show. On M5 and later GPUs, the `:tensor` kernel rounds the operands.
+    @testset "relaxed, then default, $alg" for alg in (:tensor, :MPSGraph)
+        alg === :tensor && !Metal.tensor_matmul_capable() && continue
+        a2 = rand(Float32, 96, 256) .- 0.5f0; b2 = rand(Float32, 256, 128) .- 0.5f0
+        ref2 = Float64.(a2) * Float64.(b2)
+        A2, B2 = MtlArray(a2), MtlArray(b2)
+        Cr = @with (Metal.matmul_alg => alg) (Metal.matmul_precision => :relaxed) A2 * B2
+        Cd = @with (Metal.matmul_alg => alg) A2 * B2
+        @test relerr(Cr, ref2) < 2e-3
+        @test relerr(Cd, ref2) < 1e-5
+        alg === :tensor && Metal.gemm_tensor_family() >= 10 && @test relerr(Cr, ref2) > 1e-5
+    end
+    # only the operands are rounded: with an exact product of about the size of C, rounding
+    # α, β or C to 10 bits of mantissa would show
+    @testset "epilogue, $alg" for alg in (:auto, :MPSGraph, :native, :tensor)
+        alg === :tensor && !Metal.tensor_matmul_capable() && continue
+        ai = Float32.(rand(-2:2, 64, 8)); bi = Float32.(rand(-2:2, 8, 48))
+        c0 = 1f0 .+ Float32.(rand(1:1000, 64, 48)) .* 2f0^-20
+        α, β = 1f0 + 2f0^-14, 1f0 + 2f0^-12
+        C = MtlArray(c0)
+        @with (Metal.matmul_alg => alg) (Metal.matmul_precision => :relaxed) mul!(C, MtlArray(ai), MtlArray(bi), α, β)
+        r = Float64(α) .* (Float64.(ai) * Float64.(bi)) .+ Float64(β) .* Float64.(c0)
+        @test relerr(C, r) < 1e-6
+    end
+    # other element types are never relaxed
+    @testset "Float16" begin
+        a16 = Float16.(a); b16 = Float16.(b)
+        C = @with (Metal.matmul_alg => :native) (Metal.matmul_precision => :relaxed) MtlArray(a16) * MtlArray(b16)
+        C0 = @with (Metal.matmul_alg => :native) MtlArray(a16) * MtlArray(b16)
+        @test Array(C) == Array(C0)
+    end
+
+    @testset "invalid value" begin
+        err = ":bad is not a valid matmul precision"
+        @testset "$alg" for alg in (:auto, :native, :GPUArrays)
+            @test_throws err @with (Metal.matmul_alg => alg) (Metal.matmul_precision => :bad) A * B
+            @test_throws err @with (Metal.matmul_alg => alg) (Metal.matmul_precision => :bad) A * X
+            @test_throws err @with (Metal.matmul_alg => alg) (Metal.matmul_precision => :bad) view(A, :, 1:K) * view(X, 1:K)
+        end
+    end
+end
+
 @testset "β = 0 ignores the output's contents" begin
     A = MtlArray(rand(Float32, 8, 8))
     B = MtlArray(rand(Float32, 8, 8))
@@ -555,7 +624,7 @@ end
         tt = Tuple{Mat, Mat, Mat, Float32, Float32, Int32, Int32, Int32, Int32,
                    Int32, Int32, Int32,
                    Val{Int32(32)}, Val{Int32(16)}, Val{:overwrite},
-                   Val{false}, Val{false}}
+                   Val{false}, Val{false}, Val{false}}
         air(macos) = sprint() do io
             Metal.code_air(io, Metal.gemm_tensor_kernel!, tt; kernel=true, macos,
                            dump_module=true)
@@ -578,6 +647,17 @@ end
                        air27)
         @test occursin("!{i32 0, %\"struct.mpp::tensor_ops::matmul2d_descriptor\" undef, i32 1, i8 undef, i32 8, i8 undef, i32 15, i8 undef}",
                        air27)
+        # the descriptor (Apple's N×M, K, the transposes, relaxed_precision, the mode), which
+        # only permits reduced precision when the kernel is specialized for it
+        @test occursin("constant { i32, i32, i32, i8, i8, i8, i32 } { i32 16, i32 32, i32 -1, i8 0, i8 0, i8 0, i32 0 }",
+                       air27)
+        relaxed_air = sprint() do io
+            Metal.code_air(io, Metal.gemm_tensor_kernel!,
+                           Tuple{tt.parameters[1:end-1]..., Val{true}}; kernel=true,
+                           macos=v"27", dump_module=true)
+        end
+        @test occursin("constant { i32, i32, i32, i8, i8, i8, i32 } { i32 16, i32 32, i32 -1, i8 0, i8 0, i8 1, i32 0 }",
+                       relaxed_air)
         # the descriptors are allocated with a size the back end computes, like Apple's
         # front end does it
         let ir = air27, m = match(r"(%\d+) = call i64 @metal\.tensor_descriptor_size\.r2\(\)", ir)
@@ -593,7 +673,7 @@ end
                        air26)
         ## the kernel scales in cooperative tensors
         let tt = Tuple{Mat, Mat, Mat, Float32, Float32, Int32, Int32, Int32, Int32, Int32, Int32,
-                       Int32, Val{Int32(32)}, Val{Int32(16)}, Val{:scale_add}, Val{false}, Val{false}}
+                       Int32, Val{Int32(32)}, Val{Int32(16)}, Val{:scale_add}, Val{false}, Val{false}, Val{false}}
             scaled(macos) = sprint() do io
                 Metal.code_air(io, Metal.gemm_tensor_kernel!, tt; kernel=true, macos,
                                dump_module=true)
@@ -853,6 +933,23 @@ end
             # the M2 only switches to 64×32 for more than 2048 rows
             @test tiles(2048, 4096; family = 8) == (32, 32)
             @test tiles(2049, 4096; family = 8) == (64, 32)
+
+            # relaxed `Float32` only changes the tiles where matmul2d makes use of it, on the M5
+            # and later
+            @test all(tiles(M, N; family, transA, relaxed = true) == tiles(M, N; family, transA)
+                      for M in dims, N in dims, family in (0, 6, 7, 8, 9), transA in (false, true))
+            for family in (10, 11, 12)
+                @test all(legal(tiles(M, N; family, transA, relaxed = true))
+                          for M in dims, N in dims, transA in (false, true))
+                @test tiles(4096, 4096; family, relaxed = true) == (64, 32)
+                @test tiles(1024, 1024; family, relaxed = true) == (64, 32)
+                @test tiles(4096, 256; family, relaxed = true) == (64, 32)
+                @test tiles(4096, 256; family, transA = true, relaxed = true) == (64, 32)
+                # few rows, and products like a matrix-vector one, keep their tiles
+                @test tiles(256, 4096; family, relaxed = true) == tiles(256, 4096; family)
+                @test tiles(32, 4096; family, relaxed = true) == tiles(32, 4096; family)
+                @test tiles(4096, 16; family, relaxed = true) == tiles(4096, 16; family)
+            end
         end
 
         @testset "split-K selection" begin
@@ -1191,6 +1288,42 @@ end
                 C2 = MtlArray(zeros(Float32, M, N))
                 Metal.gemm_tensor!(C2, A, B)
                 @test Array(C2) == Array(C)
+                # the slices of a relaxed product are relaxed too: with signed inputs, its
+                # error against a Float64 product exceeds that of a full-precision one on the
+                # M5 and later
+                let as = rand(Float32, M, K) .- 0.5f0, bs = rand(Float32, K, N) .- 0.5f0
+                    local cr, das, dbs, tr, sr
+                    ref = Float64.(as) * Float64.(bs)
+                    das, dbs = MtlArray(as), MtlArray(bs)
+                    cr = MtlArray(zeros(Float32, M, N))
+                    tr = Metal.gemm_tensor_tiles(M, N; family, relaxed = true)
+                    sr = Metal.gemm_tensor_splits(M, N, K, cld(M, 2tr[1]) * cld(N, 2tr[2]);
+                                                  cores = Metal.gemm_tensor_cores(),
+                                                  narrow = family >= 10)
+                    @test sr > 1
+                    @test Metal.@allocated(Metal.gemm_tensor!(cr, das, dbs; relaxed = true)) ==
+                          sizeof(Float32) * M * N *
+                          cld(K, cld(cld(K, sr), Metal.GEMM_TENSOR_SPLIT_K) * Metal.GEMM_TENSOR_SPLIT_K)
+                    err = norm(Float64.(Array(cr)) .- ref) / norm(ref)
+                    @test err < 2e-3
+                    family >= 10 && @test err > 1e-5
+                end
+                # on the M5 and later, they are split like products of 2-byte inputs, so a
+                # 512² product isn't split for the length of its contraction alone
+                let m = 512, k = 8192
+                    local a, b, c, tm, tn, s, nslices
+                    a = MtlArray(rand(Float32, m, k)); b = MtlArray(rand(Float32, k, m))
+                    c = MtlArray(zeros(Float32, m, m))
+                    tm, tn = Metal.gemm_tensor_tiles(m, m; family, relaxed = true)
+                    s = Metal.gemm_tensor_splits(m, m, k, cld(m, 2tm) * cld(m, 2tn);
+                                                 cores = Metal.gemm_tensor_cores(),
+                                                 narrow = family >= 10)
+                    family >= 10 || @test s > 1
+                    nslices = s == 1 ? 0 : cld(k, cld(cld(k, s), Metal.GEMM_TENSOR_SPLIT_K) * Metal.GEMM_TENSOR_SPLIT_K)
+                    @test Metal.@allocated(Metal.gemm_tensor!(c, a, b; relaxed = true)) ==
+                          sizeof(Float32) * m * m * nslices
+                    @test isapprox(Array(c), Array(a) * Array(b); rtol=2f-3)
+                end
                 # a short contraction isn't split
                 A = MtlArray(rand(Float32, M, 64)); B = MtlArray(rand(Float32, 64, N))
                 @test Metal.@allocated(Metal.gemm_tensor!(C, A, B)) == 0

@@ -70,6 +70,23 @@ Forcing an unsupported algorithm throws an error. Keep `:auto` unless measuremen
 another choice: which of MPSGraph, MPS and the native kernels is fastest depends on the
 device.
 
+### Reduced precision
+
+`Float32` products can run faster when the inputs may be rounded to a format with less
+precision, like the TF32 format of other GPUs. This is opt-in, through
+[`Metal.matmul_precision`](@ref):
+
+```julia
+julia> C = @with Metal.matmul_precision => :relaxed A * B;
+```
+
+`:relaxed` permits, but doesn't require, the reduced precision, so the result can also be
+the same as with the default. On M5 and later GPUs, MPSGraph (macOS 26 and later) and the
+`:tensor` kernel then run large `Float32` products 1.5-2.5× faster: on an M6, a 4096×4096
+product takes 12 ms instead of 28 with MPSGraph, and 18 ms with the `:tensor` kernel. The
+normwise relative error of the result grows from about `5e-7` to `7e-4`. On earlier GPUs,
+for other element types, and with the other algorithms, the results don't change.
+
 ## Factorizations and solves
 
 LU and Cholesky factorizations, and solves with them, run on the GPU through MPS.

@@ -9,16 +9,19 @@ struct MatmulGraphKey{Tab<: Number, Tc <: Number}
     beta::Tc
     transpose_a::Char
     transpose_b::Char
+    # whether MPSGraph may reduce the precision of `Float32` operands
+    relaxed::Bool
 end
 # Build graph key from matmul parameters
 function MatmulGraphKey(a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb}, c::MtlArray{Tc},
                           alpha::Number, beta::Number,
-                          transpose_a, transpose_b) where {Tc, Tab, Na, Nb}
+                          transpose_a, transpose_b, relaxed::Bool) where {Tc, Tab, Na, Nb}
     MatmulGraphKey{Tab, Tc}(
         size(a), size(b), size(c),
         Na, Nb,
         Tab(alpha), Tc(beta),
-        transpose_a, transpose_b
+        transpose_a, transpose_b,
+        relaxed && Tab === Float32
     )
 end
 
@@ -98,9 +101,10 @@ end
 function _matmul!(c::MtlArray{Tc}, a::MtlArray{Tab, Na}, b::MtlArray{Tab, Nb},
                   alpha::Number, beta::Number,
                   transpose_a, transpose_b) where {Tc, Tab, Na, Nb}
-    key = MatmulGraphKey(a, b, c, alpha, beta, transpose_a, transpose_b)
+    key = MatmulGraphKey(a, b, c, alpha, beta, transpose_a, transpose_b,
+                         Metal.relaxed_matmul())
     inputs = iszero(key.beta) ? (a, b) : (a, b, c)
-    run!(cached_graph(key), (c,), inputs)
+    run!(cached_graph(key), (c,), inputs; key.relaxed)
     return c
 end
 
@@ -116,6 +120,9 @@ which together with that of `C` is one of the combinations in
 `MPSGraphs.MPSGRAPH_VALID_MATMUL_TYPES`; integer inputs are multiplied in the output
 type. `α` and `β` are converted to the element types of `A` and `C`. As with BLAS, `C` is
 not read when `β` is zero. `C` must not overlap `A` or `B`.
+
+With [`Metal.matmul_precision`](@ref) set to `:relaxed`, MPSGraph may round `Float32`
+operands to TF32 precision (macOS 26 and later).
 
 The multiplication executes asynchronously, ordered with the other work submitted from the
 current task. Use [`MPSGraphs.supports`](@ref) to check whether a call is supported

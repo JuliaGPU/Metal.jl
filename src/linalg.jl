@@ -58,6 +58,50 @@ function selected_matmul_alg()
     return alg === :scalar ? :GPUArrays : alg
 end
 
+@public matmul_precision
+
+"""
+    Metal.matmul_precision
+
+A `ScopedValue` that sets how precisely `LinearAlgebra.mul!` (and `*`) has to compute
+`MtlArray` matrix-matrix and matrix-vector products:
+
+- `:default`: every algorithm computes at the precision of its operands.
+- `:relaxed`: implementations may reduce the precision of `Float32` operands to speed up the
+  product, to 10 bits of mantissa instead of 23, like the TF32 format of other GPUs. Only
+  `A` and `B` are rounded: the product is accumulated, and scaled by α and β, as precisely
+  as with `:default`.
+
+`:relaxed` permits reduced precision, it doesn't demand it. Full precision is always a valid
+result, so whether the results change depends on the device, the element types and the
+algorithm (see [`Metal.matmul_alg`](@ref)). Currently, MPSGraph (on macOS 26 and later) and
+the `:tensor` kernel make use of it, for products of `Float32` matrices on M5 and later
+GPUs: on an M6, large products then run 1.5-2.5× faster, with normwise relative errors
+around `7e-4` instead of `5e-7` for random inputs of either sign. Other element types,
+older GPUs and the other algorithms compute at full precision, and so do the matrix-vector
+kernels of `:native`. It also applies to [`MPSGraphs.matmul!`](@ref) and
+[`MPSGraphs.matvecmul!`](@ref) when they are called directly.
+
+Set it for a block of code with `with`, like `matmul_alg`:
+
+```julia
+using LinearAlgebra, Base.ScopedValues
+A = Metal.rand(Float32, 4096, 4096); B = Metal.rand(Float32, 4096, 4096)
+C = with(Metal.matmul_precision => :relaxed) do
+    A * B
+end
+```
+"""
+const matmul_precision = ScopedValue(:default)
+
+# whether products may reduce the precision of `Float32` operands
+function relaxed_matmul()
+    precision = matmul_precision[]
+    precision === :relaxed && return true
+    precision === :default && return false
+    error(":$precision is not a valid matmul precision. Options are: `:default`, `:relaxed`")
+end
+
 # LinearAlgebra's wrapper_char only ever produces 'N'/'T'/'C' or the Symmetric/Hermitian
 # wrapper chars 'S'/'s'/'H'/'h', all of which the native GEMM kernels handle (the MPS
 # paths only the former); gemm_char normalizes an AbstractChar (e.g. a
@@ -67,7 +111,7 @@ end
 
 # shared native-kernel path: a forced :simd/:tensor kernel must support the operands;
 # :native/:auto let gemm! pick the kernel, or GPUArrays' generic one if neither does
-@inline function native_matmul!(C, tA, tB, A, B, alpha, beta, alg)
+@inline function native_matmul!(C, tA, tB, A, B, alpha, beta, alg, relaxed)
     cA = gemm_char(tA); cB = gemm_char(tB)
     if alg === :simd
         supports_simd_matmul(C, A, B, cA, cB, alpha, beta) ||
@@ -77,7 +121,7 @@ end
             matmul_alg_error(alg, eltype(A), eltype(C), false)
     end
     kernel = (alg === :native || alg === :auto) ? :auto : alg
-    gemm!(C, cA, cB, A, B, alpha, beta; kernel)
+    gemm!(C, cA, cB, A, B, alpha, beta; kernel, relaxed)
 end
 
 # GPUArrays' generic kernels, which need α and β converted like the native kernels do
@@ -116,6 +160,7 @@ function LinearAlgebra.mul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix,
     end
 
     alg = selected_matmul_alg()
+    relaxed = relaxed_matmul()
     # the MPS path only handles plain transpose/adjoint operands; only probe MPSGraph
     # support when a branch below can actually use it
     ntc = is_ntc(tA) && is_ntc(tB)
@@ -126,7 +171,7 @@ function LinearAlgebra.mul!(C::MtlMatrix, tA, tB, A::MtlMatrix, B::MtlMatrix,
         mpsgraph_supported || matmul_alg_error(alg, eltype(A), eltype(C), false)
         MPSGraphs.matmul!(C, A, B, alpha, beta; tA, tB)
     elseif alg === :native || alg === :auto || alg === :simd || alg === :tensor
-        native_matmul!(C, tA, tB, A, B, alpha, beta, alg)
+        native_matmul!(C, tA, tB, A, B, alpha, beta, alg, relaxed)
     elseif alg === :MPS
         (ntc && supports_mps_matmul(A, B, C, MPS_VALID_MATMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), false)
         MPS.matmul!(C, A, B, alpha, beta; tA, tB)
@@ -159,8 +204,9 @@ function LinearAlgebra.mul!(C::MtlMatrixOperand, tA, tB,
     end
 
     alg = selected_matmul_alg()
+    relaxed = relaxed_matmul()
     if alg === :native || alg === :auto || alg === :simd || alg === :tensor
-        native_matmul!(C, tA, tB, A, B, alpha, beta, alg)
+        native_matmul!(C, tA, tB, A, B, alpha, beta, alg, relaxed)
     elseif alg === :GPUArrays
         generic_matmul!(C, tA, tB, A, B, alpha, beta)
     elseif alg === :MPS || alg === :MPSGraph
@@ -203,6 +249,7 @@ function LinearAlgebra.mul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::Mtl
     end
 
     alg = selected_matmul_alg()
+    relaxed = relaxed_matmul()
     # the MPS path only handles plain transpose/adjoint operands; only probe MPSGraph
     # support when a branch below can actually use it
     ntc = is_ntc(tA)
@@ -221,7 +268,7 @@ function LinearAlgebra.mul!(C::MtlVector, tA::AbstractChar, A::MtlMatrix, B::Mtl
             matmul_alg_error(alg, eltype(A), eltype(C), true))
         alg === :tensor && (supports_tensor_matmul(C, A, B, cA, 'N', alpha, beta) ||
             matmul_alg_error(alg, eltype(A), eltype(C), true))
-        gemv!(C, cA, A, B, alpha, beta; kernel)
+        gemv!(C, cA, A, B, alpha, beta; kernel, relaxed)
     elseif alg === :MPS
         (ntc && supports_mps_matmul(A, B, C, MPS_VALID_MATVECMUL_TYPES)) || matmul_alg_error(alg, eltype(A), eltype(C), true)
         MPS.matvecmul!(C, A, B, alpha, beta; tA)
@@ -273,6 +320,7 @@ function view_matvecmul!(C, tA, A, B, alpha, beta)
     (mA == 0 || nA == 0) && return empty_matmul!(C, beta)
 
     alg = selected_matmul_alg()
+    relaxed_matmul() # (only to reject invalid values on every path)
     if alg === :native || alg === :auto || alg === :simd || alg === :tensor
         Cm, Bm = as_column(C), as_column(B)
         if Cm !== nothing && Bm !== nothing
